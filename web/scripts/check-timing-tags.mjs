@@ -6,14 +6,16 @@
 // A test measures elapsed time when its body, or a helper function it calls (of the file, or
 // imported from another file under e2e/; the mock API it drives is not the test), subtracts
 // from the clock, reads performance.now() or process.hrtime(t0), or checks the clock against a
-// deadline (a clock read plus or minus a budget, or a call of a function that returns one:
-// expect(Date.now()).toBeLessThan(until), if (Date.now() > by(50)) throw ...). A deadline check
-// that only stops a poll (a loop's condition, or an if that neither throws, calls expect() nor
-// sets a variable that is then asserted, as in if (Date.now() > d) late = true; expect(late)
-// .toBe(false)) waits; it does not measure.
+// deadline (a clock read plus or minus a budget, or a call of a function that returns one,
+// awaited or not: expect(Date.now()).toBeLessThan(until), if (Date.now() > await by(50)) throw
+// ...). A deadline check that only stops a poll (a loop's condition, or an if that neither
+// throws, calls expect() nor sets a variable that is then asserted, also through a property or
+// a push, as in if (Date.now() > d) late = true; expect(late).toBe(false), or state.late = true,
+// or late.push(1)) waits; it does not measure.
 // The clock is Date.now(), performance.now(), process.hrtime() / .bigint(), new Date().getTime()
-// / .valueOf(), +new Date(), however spelt (Date["now"](), globalThis.Date.now(), D.now() with
-// const D = Date, now() with const { now } = Date), a variable set from one of them in its own
+// / .valueOf(), +new Date(), however spelt (Date["now"](), globalThis.Date.now(), Date.now.call(
+// null), D.now() with const D = Date wherever D is set, now() with const { now } = Date, hrtime()
+// with const { hrtime } = process), a variable set from one of them in its own
 // scope ("end - start" with const end = Date.now()), a call of a function that returns one
 // (const now = () => Date.now()) or of one under another name (const clock = Date.now); new
 // Date() counts only when another clock read is taken from it ("new Date() - t0"), never in
@@ -23,7 +25,8 @@
 // variable or is the subject of a bound (expect(ms).toBeLessThan, toBeLessThanOrEqual,
 // toBeGreaterThan) that is a literal of at least 1000 ms, with at least one such bound, and
 // each bound's subject is an elapsed time in ms as measured (Date.now() - t0, or a helper that
-// returns one unscaled), never one scaled ((performance.now() - t0) * 100), in ns, or a timestamp.
+// returns one unscaled), never one scaled ((performance.now() - t0) * 100) or moved by an offset
+// ((Date.now() + 0) - t0), in ns, or a timestamp.
 //
 //   node scripts/check-timing-tags.mjs              self-test, then every e2e spec (not e2e/real)
 //   node scripts/check-timing-tags.mjs --self-test  the self-test only
@@ -54,32 +57,63 @@ function clockObject(n, clocks) {
   return CLOCK_OBJECTS.includes(name) && ts.isIdentifier(of) && GLOBALS.includes(of.text) ? name : null;
 }
 
-/** `performance.now()`, however spelt (window.performance["now"]()). */
+/** `performance.now()`, however spelt (window.performance["now"](), clock() with const { now: clock } = performance). */
 function isPerformanceNow(n, clocks) {
-  return ts.isCallExpression(n) && isClockRef(n.expression, clocks) && clockObject(skipParens(n.expression).expression, clocks) === "performance";
+  return calledClock(n, clocks)?.object === "performance";
 }
 
-/** `Date.now`, `performance.now`, `process.hrtime` or `process.hrtime.bigint`, uncalled, however spelt (Date["now"], globalThis.Date.now, D.now with const D = Date). */
-function isClockRef(n, clocks) {
+/**
+ * The clock `n` is, uncalled: { object, name } for `Date.now`, `performance.now`, `process.hrtime`
+ * or `process.hrtime.bigint`, however spelt (Date["now"], globalThis.Date.now, D.now with const
+ * D = Date, now with const { now } = Date, hrtime with const { hrtime } = process, clock with
+ * const clock = Date.now); or null.
+ */
+function clockRef(n, clocks) {
   n = skipParens(n);
+  if (ts.isIdentifier(n)) return clocks?.refs.get(symbolOf(n, clocks)) ?? null;
   const name = memberName(n);
-  if (!name) return false;
-  const of = clockObject(n.expression, clocks);
-  if (of) return (name === "now" && of !== "process") || (name === "hrtime" && of === "process");
-  const inner = skipParens(n.expression);
-  return name === "bigint" && memberName(inner) === "hrtime" && clockObject(inner.expression, clocks) === "process";
+  return name ? memberClock(n.expression, name, clocks) : null;
+}
+
+/** The clock `of.name` is (clockRef), or null. */
+function memberClock(of, name, clocks) {
+  const object = clockObject(of, clocks);
+  if (object) return (name === "now" && object !== "process") || (name === "hrtime" && object === "process") ? { object, name } : null;
+  return name === "bigint" && clockRef(of, clocks)?.name === "hrtime" ? { object: "process", name } : null;
+}
+
+function isClockRef(n, clocks) {
+  return !!clockRef(n, clocks);
+}
+
+/** The clock the call `n` reads, also through .call(), .apply() or .bind()(): { object, name, args }, args being those the clock gets; or null. */
+function calledClock(n, clocks) {
+  if (!ts.isCallExpression(n)) return null;
+  const e = skipParens(n.expression);
+  const ref = clockRef(e, clocks);
+  if (ref) return { ...ref, args: n.arguments };
+  const how = memberName(e);
+  const by = how === "call" || how === "apply" ? clockRef(e.expression, clocks) : null;
+  if (by) {
+    const list = n.arguments[1] && skipParens(n.arguments[1]);
+    const args = how === "call" ? n.arguments.slice(1) : !list ? [] : ts.isArrayLiteralExpression(list) ? list.elements : [list];
+    return { ...by, args };
+  }
+  const bound = ts.isCallExpression(e) && memberName(skipParens(e.expression)) === "bind" ? clockRef(skipParens(e.expression).expression, clocks) : null;
+  return bound ? { ...bound, args: n.arguments } : null;
 }
 
 /** `process.hrtime(t0)`: the time since t0, a measure in itself. */
 function isHrtimeSince(n, clocks) {
-  return ts.isCallExpression(n) && n.arguments.length > 0 && isClockRef(n.expression, clocks) && memberName(skipParens(n.expression)) === "hrtime";
+  const c = calledClock(n, clocks);
+  return c?.name === "hrtime" && c.args.length > 0;
 }
 
 /** `process.hrtime()` or `process.hrtime.bigint()` (or an item of one): a read in ns or [s, ns], not ms. */
 function isHrtimeRead(n, clocks) {
   n = skipParens(n);
   if (ts.isElementAccessExpression(n)) return isHrtimeRead(n.expression, clocks);
-  return ts.isCallExpression(n) && isClockRef(n.expression, clocks) && ["hrtime", "bigint"].includes(memberName(skipParens(n.expression)));
+  return ["hrtime", "bigint"].includes(calledClock(n, clocks)?.name);
 }
 
 /** `new Date()`, no arguments (also new D() with const D = Date). */
@@ -99,8 +133,8 @@ const WEAK = 1;
  * `clocks` holds the file's checker and its clock variables and functions, by declaration.
  */
 function clockKind(node, clocks) {
-  const n = skipParens(node);
-  if (ts.isCallExpression(n) && isClockRef(n.expression, clocks)) return isHrtimeSince(n, clocks) ? 0 : STRONG;
+  const n = inner(node);
+  if (calledClock(n, clocks)) return isHrtimeSince(n, clocks) ? 0 : STRONG;
   if (isNewDate(n, clocks)) return WEAK;
   if (ts.isElementAccessExpression(n)) return clockKind(n.expression, clocks); // process.hrtime()[0]
   if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.PlusToken)
@@ -155,13 +189,13 @@ function returnKind(fn, clocks) {
 
 /**
  * `sf`'s clock variables (const end = Date.now(); t0 = performance.now()), clock functions
- * (const now = () => Date.now(); const clock = Date.now; const { now } = Date), clock objects
- * (const D = Date), deadlines (const until = Date.now() + 3000) and functions that return one
+ * (const now = () => Date.now()), clocks under other names (const clock = Date.now; const { now }
+ * = Date; const { hrtime } = process), clock objects (const D = Date; also set later: D = Date), deadlines (const until = Date.now() + 3000) and functions that return one
  * (const by = (ms) => Date.now() + ms), each by its declaration, so a name in another scope is
  * not one.
  */
 function findClocks(sf) {
-  const clocks = { sf, checker: checkerFor(sf), vars: new Map(), fns: new Map(), deadlines: new Map(), deadlineFns: new Map(), objects: new Map() };
+  const clocks = { sf, checker: checkerFor(sf), vars: new Map(), fns: new Map(), deadlines: new Map(), deadlineFns: new Map(), objects: new Map(), refs: new Map() };
   let grew = true;
   const raise = (map, id, kind) => {
     const s = kind && symbolOf(id, clocks);
@@ -171,35 +205,43 @@ function findClocks(sf) {
     }
   };
   const returnsDeadline = (fn) => (returned(fn.body).some((x) => isDeadline(x, clocks)) ? STRONG : 0);
+  const name = (map, id, value) => {
+    const s = value && symbolOf(id, clocks);
+    if (s && !map.has(s)) {
+      map.set(s, value);
+      grew = true;
+    }
+  };
+  // A clock object or a clock under another name set into `id` (const D = Date; D = Date; const clock = Date.now): whether it is one.
+  const alias = (id, value) => {
+    const object = clockObject(value, clocks);
+    const ref = !object && clockAlias(value, clocks);
+    name(clocks.objects, id, object);
+    name(clocks.refs, id, ref);
+    return !!(object || ref);
+  };
   const visit = (n) => {
     if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
       const init = skipParens(n.initializer);
-      const object = clockObject(init, clocks);
       if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) {
         raise(clocks.fns, n.name, returnKind(init, clocks));
         raise(clocks.deadlineFns, n.name, returnsDeadline(init));
-      } else if (isClockAlias(init, clocks)) raise(clocks.fns, n.name, STRONG);
-      else if (object) {
-        const s = symbolOf(n.name, clocks);
-        if (s && !clocks.objects.has(s)) {
-          clocks.objects.set(s, object);
-          grew = true;
-        }
-      } else {
+      } else if (!alias(n.name, init)) {
         raise(clocks.vars, n.name, clockKind(init, clocks));
         raise(clocks.deadlines, n.name, isDeadline(init, clocks) ? STRONG : 0);
       }
-    } else if (ts.isVariableDeclaration(n) && ts.isObjectBindingPattern(n.name) && n.initializer && ["Date", "performance"].includes(clockObject(n.initializer, clocks))) {
-      // const { now } = Date; const { now: clock } = performance
+    } else if (ts.isVariableDeclaration(n) && ts.isObjectBindingPattern(n.name) && n.initializer) {
+      // const { now } = Date; const { now: clock } = performance; const { hrtime } = process; const { bigint } = process.hrtime
       for (const el of n.name.elements) {
         const key = el.propertyName ?? el.name;
-        if (ts.isIdentifier(el.name) && (ts.isIdentifier(key) || ts.isStringLiteral(key)) && key.text === "now") raise(clocks.fns, el.name, STRONG);
+        if (!ts.isIdentifier(el.name) || !(ts.isIdentifier(key) || ts.isStringLiteral(key))) continue;
+        name(clocks.refs, el.name, memberClock(n.initializer, key.text, clocks));
       }
     } else if (ts.isFunctionDeclaration(n) && n.name) {
       raise(clocks.fns, n.name, returnKind(n, clocks));
       raise(clocks.deadlineFns, n.name, returnsDeadline(n));
     }
-    else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(n.left)) {
+    else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(n.left) && !alias(n.left, skipParens(n.right))) {
       raise(clocks.vars, n.left, clockKind(n.right, clocks));
       raise(clocks.deadlines, n.left, isDeadline(n.right, clocks) ? STRONG : 0);
     }
@@ -212,16 +254,16 @@ function findClocks(sf) {
   return clocks;
 }
 
-/** `Date.now` or `performance.now.bind(performance)`: a clock under another name. */
-function isClockAlias(n, clocks) {
+/** `Date.now` or `performance.now.bind(performance)`: a clock under another name, as clockRef gives it; or null. */
+function clockAlias(n, clocks) {
   n = skipParens(n);
-  if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === "bind") n = n.expression.expression;
-  return isClockRef(n, clocks);
+  if (ts.isCallExpression(n) && memberName(skipParens(n.expression)) === "bind") n = skipParens(n.expression).expression;
+  return clockRef(n, clocks);
 }
 
-/** A deadline: a timestamp plus or minus a budget (Date.now() + 3000, t0 - 50), a variable set to one, or a call of a function that returns one (by(50)). */
+/** A deadline: a timestamp plus or minus a budget (Date.now() + 3000, t0 - 50), a variable set to one, or a call of a function that returns one (by(50), await by(50)). */
 function isDeadline(node, clocks) {
-  const n = skipParens(node);
+  const n = inner(node);
   if (ts.isIdentifier(n)) return clocks.deadlines.has(symbolOf(n, clocks));
   if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) return clocks.deadlineFns.has(symbolOf(n.expression, clocks));
   if (!ts.isBinaryExpression(n)) return false;
@@ -264,24 +306,46 @@ function assertedVars(clocks) {
 }
 
 const INCREMENTS = [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken];
+// Methods that put a value into what they are called on: late.push(1), seen.add(id).
+const ADDS = ["push", "unshift", "splice", "add", "set"];
 
-/** Whether `n` sets a variable that is then asserted (if (Date.now() > d) late = true; expect(late).toBe(false)). */
+/** The variable `n` sets into: `x` of x, x.late, x[0] or x.a.b; or null. */
+function rootOf(n) {
+  n = skipParens(n);
+  while (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) n = skipParens(n.expression);
+  return ts.isIdentifier(n) ? n : null;
+}
+
+/** The variable a call puts its arguments into (late of late.push(...)), or null. */
+function addedTo(call) {
+  const e = skipParens(call.expression);
+  return ADDS.includes(memberName(e)) ? rootOf(e.expression) : null;
+}
+
+/** Whether `target` (an identifier or null) is a variable that is asserted somewhere (assertedVars). */
+function isAsserted(target, clocks) {
+  return !!target && assertedVars(clocks).has(symbolOf(target, clocks));
+}
+
+/** Whether `n` sets a variable that is then asserted, also through a property or a push (if (Date.now() > d) late = true; expect(late).toBe(false)). */
 function setsAsserted(n, clocks) {
   if (!n) return false;
   let target = null;
-  if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment) target = skipParens(n.left);
-  else if ((ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) && INCREMENTS.includes(n.operator)) target = skipParens(n.operand);
-  else if (ts.isVariableDeclaration(n) && n.initializer) target = n.name;
-  if (target && ts.isIdentifier(target) && assertedVars(clocks).has(symbolOf(target, clocks))) return true;
+  if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment) target = rootOf(n.left);
+  else if ((ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) && INCREMENTS.includes(n.operator)) target = rootOf(n.operand);
+  else if (ts.isVariableDeclaration(n) && n.initializer && ts.isIdentifier(n.name)) target = n.name;
+  else if (ts.isCallExpression(n)) target = addedTo(n);
+  if (isAsserted(target, clocks)) return true;
   return !!ts.forEachChild(n, (c) => setsAsserted(c, clocks));
 }
 
-/** Whether the value of `n` is set into a variable that is then asserted (const late = Date.now() > d ? 1 : 0). */
+/** Whether the value of `n` is set into a variable that is then asserted, also through a property or a push (const late = Date.now() > d ? 1 : 0). */
 function setIntoAsserted(n, clocks) {
   const v = valueOf(n);
   const p = v.parent;
-  const target = ts.isVariableDeclaration(p) && p.initializer === v ? p.name : ts.isBinaryExpression(p) && p.right === v && p.operatorToken.kind === ts.SyntaxKind.EqualsToken ? skipParens(p.left) : null;
-  return !!target && ts.isIdentifier(target) && assertedVars(clocks).has(symbolOf(target, clocks));
+  if (ts.isVariableDeclaration(p) && p.initializer === v) return ts.isIdentifier(p.name) && isAsserted(p.name, clocks);
+  if (ts.isBinaryExpression(p) && p.right === v && p.operatorToken.kind === ts.SyntaxKind.EqualsToken) return isAsserted(rootOf(p.left), clocks);
+  return ts.isCallExpression(p) && p.arguments.includes(v) && isAsserted(addedTo(p), clocks);
 }
 
 /**
@@ -318,7 +382,8 @@ function calleeName(call) {
 /**
  * Whether the node `n` is itself a measure (not counting what is inside it). `helpers` names
  * the functions that measure (`fn`, `ns.fn`); `clocks` is the file's clock reads (findClocks).
- * A clock read less anything ("now() - start") measures; a deadline less the clock ("until -
+ * A clock read less anything ("now() - start"), also one moved by an offset ("(Date.now() + 0)
+ * - start"), measures; a deadline less the clock ("until - Date.now()", "(t0 + 3000) -
  * Date.now()") does not. The clock checked against a deadline measures (expect(Date.now())
  * .toBeLessThan(until), if (Date.now() > until) throw ...), unless the check only stops a poll.
  */
@@ -326,7 +391,7 @@ function measureAt(n, helpers, clocks) {
   if (ts.isBinaryExpression(n)) {
     const op = n.operatorToken.kind;
     if (op === ts.SyntaxKind.MinusToken) {
-      const left = clockKind(n.left, clocks);
+      const left = clockKind(n.left, clocks) || movedRead(n.left, clocks);
       if (left === STRONG || (left && clockKind(n.right, clocks))) return true;
     } else if (op === ts.SyntaxKind.PlusToken) {
       // -start + Date.now()
@@ -351,6 +416,16 @@ function measureAt(n, helpers, clocks) {
   return false;
 }
 
+/** How surely `node` is a clock read called right there and moved by an offset ((Date.now() + 0), now() - 50), as clockKind; else 0. */
+function movedRead(node, clocks) {
+  const n = inner(node);
+  if (!ts.isBinaryExpression(n) || ![ts.SyntaxKind.PlusToken, ts.SyntaxKind.MinusToken].includes(n.operatorToken.kind)) return 0;
+  const called = (x) => (ts.isCallExpression(inner(x)) ? clockKind(x, clocks) : movedRead(x, clocks));
+  const [l, r] = [called(n.left), n.operatorToken.kind === ts.SyntaxKind.PlusToken && called(n.right)];
+  if (l && !clockKind(n.right, clocks)) return l;
+  return r && !clockKind(n.left, clocks) ? r : 0;
+}
+
 /** The values set into the variable `id` names: its initializer and every assignment to it (`ms *= 100` as such). */
 function valuesSet(id, clocks) {
   const s = symbolOf(id, clocks);
@@ -372,7 +447,6 @@ function valuesSet(id, clocks) {
   return clocks.sets.get(s) ?? [];
 }
 
-const SCALES = [ts.SyntaxKind.AsteriskToken, ts.SyntaxKind.SlashToken, ts.SyntaxKind.PercentToken, ts.SyntaxKind.AsteriskAsteriskToken, ts.SyntaxKind.LessThanLessThanToken, ts.SyntaxKind.GreaterThanGreaterThanToken, ts.SyntaxKind.GreaterThanGreaterThanGreaterThanToken];
 const ROUNDS = ["Math.round", "Math.floor", "Math.ceil", "Math.trunc", "Math.abs"];
 
 /** `n` past parentheses, await, `as`, `satisfies` and `!`. */
@@ -383,21 +457,21 @@ function inner(n) {
   }
 }
 
-/** Whether `n` is a reading in ms, not scaled: not maths with * / % ** or shifts, not an hrtime read (ns), nor a variable set to one. */
+/**
+ * Whether `n` is a reading in ms as read: no maths on it at all (not scaled with * / % ** or
+ * shifts, nor moved by an offset: Date.now() + 1400, t0 - 1400, t0 -= 1400), not a literal, not
+ * an hrtime read (ns), nor a variable set to anything else (a 0 placeholder aside).
+ */
 function unscaledReading(node, clocks, seen = new Set()) {
   const n = inner(node);
-  if (isHrtimeRead(n, clocks)) return false;
-  if (ts.isBinaryExpression(n)) {
-    const op = n.operatorToken.kind;
-    if (SCALES.includes(op) || (op >= ts.SyntaxKind.FirstAssignment && op <= ts.SyntaxKind.LastAssignment && op !== ts.SyntaxKind.EqualsToken && op !== ts.SyntaxKind.PlusEqualsToken && op !== ts.SyntaxKind.MinusEqualsToken)) return false;
-    return unscaledReading(n.left, clocks, seen) && unscaledReading(n.right, clocks, seen);
-  }
-  if (ts.isPrefixUnaryExpression(n)) return unscaledReading(n.operand, clocks, seen);
+  if (isHrtimeRead(n, clocks) || ts.isBinaryExpression(n) || ts.isLiteralExpression(n)) return false;
+  if (ts.isPrefixUnaryExpression(n)) return n.operator === ts.SyntaxKind.PlusToken && unscaledReading(n.operand, clocks, seen); // +new Date()
   if (ts.isIdentifier(n)) {
     const s = symbolOf(n, clocks);
     if (!s || seen.has(s)) return true;
     seen.add(s);
-    return valuesSet(n, clocks).every((v) => unscaledReading(v, clocks, seen));
+    const values = valuesSet(n, clocks);
+    return !values.length || (values.every((v) => isZero(v) || unscaledReading(v, clocks, seen)) && !values.every(isZero));
   }
   return true;
 }
@@ -766,7 +840,7 @@ function selfTest() {
     ["coarse marker, tight budget", `test("parses", () => { const t0 = Date.now(); // ${COARSE}\n parse(big); expect(Date.now() - t0).toBeLessThan(50); });`, 1],
     ["coarse marker in a string, not a comment", `test("parses", () => { const t0 = Date.now(); parse("${COARSE}"); expect(Date.now() - t0).toBeLessThan(1500); });`, 1],
     ["coarse marker, budget through a helper", `async function paint() { const t0 = performance.now(); await draw(); return performance.now() - t0; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 0],
-    ["coarse marker, tight budget in a variable", `async function paint() { const t0 = performance.now(); return 1; }\ntest("draws", async () => { // ${COARSE}\n const ms = await paint(); expect(ms).toBeLessThanOrEqual(200); });`, 1],
+    ["coarse marker, tight budget in a variable", `async function paint() { const t0 = performance.now(); await draw(); return performance.now() - t0; }\ntest("draws", async () => { // ${COARSE}\n const ms = await paint(); expect(ms).toBeLessThanOrEqual(200); });`, 1],
     ["a clock name from another function", `function a() { const start = Date.now(); return start; }\ntest("offsets", () => { const start = 10; expect(start - 1).toBe(9); });`, 0],
     ["a clock name from another test", `test("a", () => { const start = Date.now(); expect(start).toBeGreaterThan(0); });\ntest("b", () => { const start = 10; expect(start - 1).toBe(9); });`, 0],
     ["new Date() in plain date maths", `test("dates", () => { const d = new Date(); const other = new Date(2026, 0, 1); expect(d - other).toBeGreaterThan(0); });`, 0],
@@ -829,6 +903,31 @@ function selfTest() {
     ["coarse, a timestamp bounded", `test("draws", async () => { // ${COARSE}\n await draw(); expect(performance.now()).toBeLessThan(1500); });`, 1],
     ["coarse, nanoseconds bounded", `test("draws", async () => { // ${COARSE}\n const t0 = process.hrtime.bigint(); await draw(); const ns = process.hrtime.bigint() - t0; expect(ns).toBeLessThan(1500); });`, 1],
     ["coarse, a helper's measure through another helper", `async function paint() { const t0 = Date.now(); await draw(); const ms = Date.now() - t0; return ms; }\nasync function twice() { return Math.round(await paint()); }\ntest("draws", async () => { // ${COARSE}\n expect(await twice()).toBeLessThan(1500); });`, 0],
+    // A deadline from an async helper, awaited.
+    ["await on a deadline helper", `async function by(ms) { return Date.now() + ms; }\ntest("parses", async () => { parse(big); if (Date.now() > await by(50)) throw new Error("slow"); });`, 1],
+    ["await on a deadline helper, in a variable", `async function after(ms) { return Date.now() + ms; }\ntest("parses", async () => { const until = await after(50); parse(big); expect(Date.now()).toBeLessThan(until); });`, 1],
+    // A flag set through a property or pushed into an array, then asserted.
+    ["a flag set through a property past a deadline", `test("parses", () => { const t = Date.now() + 50; const state = { late: false }; parse(big); if (Date.now() > t) state.late = true; expect(state.late).toBe(false); });`, 1],
+    ["a flag set through a property by ?:", `test("parses", () => { const t = Date.now() + 50; const state = { late: 0 }; parse(big); state.late = Date.now() > t ? 1 : 0; expect(state.late).toBe(0); });`, 1],
+    ["a flag pushed into an array past a deadline", `test("parses", () => { const t = Date.now() + 50; const late = []; parse(big); if (Date.now() > t) late.push("parse"); expect(late).toEqual([]); });`, 1],
+    ["a flag pushed into an array by ?:", `test("parses", () => { const t = Date.now() + 50; const late = []; parse(big); late.push(Date.now() > t ? 1 : 0); expect(late).toEqual([0]); });`, 1],
+    ["a property flag that only stops a poll", `test("waits", async () => { const d = Date.now() + 5000; const state = { gaveUp: false }; while (!state.gaveUp) { if (await done()) break; if (Date.now() > d) state.gaveUp = true; await sleep(100); } expect(await done()).toBe(true); });`, 0],
+    ["a pushed flag never asserted", `test("waits", async () => { const d = Date.now() + 5000; const log = []; for (;;) { if (await done()) break; if (Date.now() > d) { log.push("gave up"); break; } await sleep(100); } expect(await done()).toBe(true); });`, 0],
+    // A hidden offset inside a subtraction is no elapsed time as measured.
+    ["an offset inside the subtraction", `test("parses", () => { const start = Date.now(); parse(big); expect((Date.now() + 0) - start).toBeLessThan(1500); });`, 1],
+    ["coarse, an offset inside the subtraction", `test("parses", () => { // ${COARSE}\n const start = Date.now(); parse(big); expect((Date.now() + 0) - start).toBeLessThan(1500); });`, 1],
+    ["coarse, a helper with an offset inside its subtraction", `async function paint() { const t0 = performance.now(); await draw(); return (performance.now() + 1400) - t0; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 1],
+    ["coarse, a helper with an offset on its start", `async function paint() { const t0 = performance.now(); await draw(); return performance.now() - (t0 - 1400); }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 1],
+    ["coarse, a helper whose start is moved", `async function paint() { let t0 = performance.now(); t0 -= 1400; await draw(); return performance.now() - t0; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 1],
+    ["a deadline less the clock, inline", `test("waits", async () => { const opened = Date.now(); await wait((opened + 3000) - Date.now()); });`, 0],
+    // Still more spellings of the clock.
+    ["const { hrtime } = process", `test("parses", () => { const { hrtime } = process; const t0 = hrtime(); parse(big); const [s] = hrtime(t0); expect(s).toBeLessThan(2); });`, 1],
+    ["const { bigint } = process.hrtime", `test("parses", () => { const { bigint } = process.hrtime; const t0 = bigint(); parse(big); expect(Number(bigint() - t0)).toBeLessThan(1.5e9); });`, 1],
+    ["a Date alias set after its use", `let D;\ntest("parses", () => { const t0 = D.now(); parse(big); expect(D.now() - t0).toBeLessThan(1500); });\nD = Date;`, 1],
+    ["Date.now.call(null)", `test("parses", () => { const t0 = Date.now.call(null); parse(big); expect(Date.now.call(null) - t0).toBeLessThan(1500); });`, 1],
+    ["Date.now.bind(null)()", `test("parses", () => { const t0 = Date.now(); parse(big); expect(Date.now.bind(null)() - t0).toBeLessThan(1500); });`, 1],
+    ["Date.now.apply(null)", `test("parses", () => { const t0 = Date.now(); parse(big); expect(Date.now.apply(null) - t0).toBeLessThan(1500); });`, 1],
+    ["process.hrtime.call(process, t0)", `test("parses", () => { const t0 = process.hrtime(); parse(big); const [s] = process.hrtime.call(process, t0); expect(s).toBeLessThan(2); });`, 1],
   ];
   // Imported helpers: a spec at /e2e/a.spec.ts and the files it imports.
   const files = {
