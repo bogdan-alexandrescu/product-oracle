@@ -6118,7 +6118,9 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
 function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsContext {
   const guided = db.roadmap?.two_roadmaps && db.baseline.entities.find((e) => e.type === "feature" && e.key === "f.guided-setup");
   if (guided) seedTwoRoadmaps(db, (db.plan_edits ??= emptyPlanEdits()), guided.id);
-  let codes: Record<string, string> | undefined;
+  // Read again once propose stores a version's items, as the API flushes them before it reads the codes.
+  let codes: { stored: number; by: Record<string, string> } | undefined;
+  const stored = () => Object.values(db.plan_edits?.versions ?? {}).reduce((n, by) => n + Object.keys(by).length, 0);
   return {
     userId: me.id,
     role: me.role,
@@ -6130,7 +6132,12 @@ function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsCont
     // The roadmap mock's flag (ensureRoadmap ran before the change-set routes), not the scenario read again.
     seededItems: (slug, version) => seededPlanItems(slug, version, db.roadmap?.section_code),
     // codes.feature_codes: a feature's key when it is a code, else its published PRD item's section's (prd_by_key).
-    featureCode: (id) => (codes ??= featureCodes(db.baseline.entities.filter((e) => e.type === "feature"), db.roadmap?.section_code, db.plan_edits))[id] ?? null,
+    featureCode: (id) => {
+      if (codes?.stored !== stored()) {
+        codes = { stored: stored(), by: featureCodes(db.baseline.entities.filter((e) => e.type === "feature"), db.roadmap?.section_code, db.plan_edits, db) };
+      }
+      return codes.by[id] ?? null;
+    },
     // The Plan mock's usage-alerts-roadmap v1 is its approved plan (./roadmap.ts, ALERTS_APPROVED).
     seededApproved: (slug) => (slug === ALERTS_ROADMAP_SLUG ? 1 : null),
     newVersion: (doc, base, body) => {

@@ -1666,18 +1666,30 @@ const FEATURE_CODE = /^[A-Z]{1,3}-\d+[a-j]?$/;
 /**
  * Each Ground Truth feature's code by its id, as codes._by_feature reads it: in the features' creation order, its key when that
  * is a code (F-12), else the PRD code of the section its first published item came from (codes.prd_by_key: an item of
- * usage-alerts-roadmap v1 or of a version a change set proposed); a key whose code an older feature has reads it with a digit
- * (F-31.2), a PRD code taken already gives none. ``sectionCode``: the roadmap mock's RoadmapDb.section_code.
+ * usage-alerts-roadmap v1 or of a version a change set proposed, made with its version: codes.feature_reads orders them by
+ * creation across roadmaps); a key whose code an older feature has reads it with a digit (F-31.2), a PRD code taken already gives
+ * none. ``sectionCode``: the roadmap mock's RoadmapDb.section_code; ``ctx``: the versions' rows, for when each was made.
  */
 export function featureCodes(
   features: { id: string; key: string; created_at: string }[],
   sectionCode?: RoadmapDb["section_code"],
   edits?: PlanEditsDb,
+  ctx?: Pick<RoadmapContext, "documents" | "versions">,
 ): Record<string, string> {
-  const published = [
-    ...(seededPlanItems(ALERTS_ROADMAP_SLUG, 1, sectionCode) ?? []),
-    ...Object.values(edits?.versions ?? {}).flatMap((by) => Object.keys(by).map(Number).sort((a, b) => a - b).flatMap((n) => by[n])),
+  const stored = [
+    { slug: ALERTS_ROADMAP_SLUG, number: 1, items: seededPlanItems(ALERTS_ROADMAP_SLUG, 1, sectionCode) ?? [] },
+    ...Object.entries(edits?.versions ?? {}).flatMap(([slug, by]) => Object.keys(by).map(Number).map((number) => ({ slug, number, items: by[number] }))),
   ];
+  // A version's row: when it was made, then its place among the rows (made in that order).
+  const made = ({ slug, number }: { slug: string; number: number }): [string, number] => {
+    const doc = ctx?.documents.find((d) => d.slug === slug);
+    const at = ctx?.versions.findIndex((v) => v.document_id === doc?.id && v.number === number) ?? -1;
+    return [(at < 0 ? null : ctx?.versions[at].created_at) ?? "", at];
+  };
+  const published = stored
+    .map((v) => ({ ...v, made: made(v) }))
+    .sort((a, b) => a.made[0].localeCompare(b.made[0]) || a.made[1] - b.made[1])
+    .flatMap((v) => v.items);
   const prd = new Map<string, string>();
   for (const i of published) {
     const code = prdCode(i.section);
