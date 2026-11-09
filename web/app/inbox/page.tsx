@@ -321,20 +321,8 @@ function InboxTabs({
           size="sm"
           tabs={STATE_TABS.map((t) => {
             const n = (counted && count(t.id)) || null;
-            // counts-failed-part: a partial count carries the mark in its name and tooltip, drawn as the tab bar draws a count.
-            return partial && n
-              ? {
-                  id: t.id,
-                  label: (
-                    <>
-                      {t.label}
-                      <span className={`tnum text-[13px] font-bold ${t.id === tab ? "text-accent-ink" : "text-text2"}`}>
-                        <Partial words={String(n)} partial />
-                      </span>
-                    </>
-                  ),
-                }
-              : { id: t.id, label: t.label, count: n };
+            // counts-failed-part: a partial count carries the mark in its name and tooltip.
+            return { id: t.id, label: t.label, count: n, countLabel: partial && n ? partialWords(String(n)) : undefined };
           })}
           value={tab}
           onChange={pick}
@@ -385,12 +373,18 @@ function InboxTabs({
   );
 }
 
-/** counts-failed-part: a count missing a part whose read failed says so in its accessible name and tooltip (no visible words). */
+/** counts-failed-part: a count's words when a part it adds up could not load. */
+const partialWords = (words: string) => `${words}; a part could not load`;
+
+/**
+ * counts-failed-part: a count missing a part whose read failed says so in its accessible name and
+ * tooltip (no visible words), on an element with a role so assistive tech reads it.
+ */
 function Partial({ words, partial }: { words: string; partial: boolean }) {
   if (!partial) return <>{words}</>;
-  const said = `${words}; a part could not load`;
+  const said = partialWords(words);
   return (
-    <span aria-label={said} title={said}>
+    <span role="img" aria-label={said} title={said}>
       {words}
     </span>
   );

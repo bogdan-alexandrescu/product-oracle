@@ -70,13 +70,29 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   const seq = useRef<Record<string, number>>({});
   const inflight = useRef(0);
   const tries = useRef(0);
+  // The re-read waiting to run (its cancel), and the reads' abort on unmount.
+  const pending = useRef<(() => void) | null>(null);
+  const aborts = useRef(new AbortController());
   const [settled, setSettled] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
-  const read = useCallback((parts: Part[]) => {
+  useEffect(() => {
+    const ctrl = (aborts.current = new AbortController());
+    return () => ctrl.abort();
+  }, []);
+  // fresh: a page change or a change to what waits (not a re-read of a failed part): it drops the
+  // re-read waiting to run, so no part is read twice at once, and starts the back-off again.
+  const read = useCallback((parts: Part[], fresh: boolean) => {
+    if (fresh) {
+      pending.current?.();
+      pending.current = null;
+      tries.current = 0;
+    }
+    const { signal } = aborts.current;
     const mine = parts.map((p) => (seq.current[p] = (seq.current[p] ?? 0) + 1));
     inflight.current += 1;
-    void Promise.allSettled(parts.map((p) => PART_READS[p]())).then((results) => {
+    void Promise.allSettled(parts.map((p) => PART_READS[p](signal))).then((results) => {
       inflight.current -= 1;
+      if (signal.aborted) return;
       const next: Got = {};
       results.forEach((r, i) => {
         const p = parts[i]!;
@@ -95,11 +111,11 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   // counts-wait review: each read settles on its own, so one that fails marks the counts it adds to
   // and the rest still show.
   useEffect(() => {
-    if (enabled) read(["waiting", "roadmap", "inbox", "questions", "goals"]);
+    if (enabled) read(["waiting", "roadmap", "inbox", "questions", "goals"], true);
   }, [enabled, pathname, changes, read]);
   const meetingsPath = pathname.startsWith("/simple/meetings") ? pathname : "";
   useEffect(() => {
-    if (enabled) read(["meetings"]);
+    if (enabled) read(["meetings"], true);
   }, [enabled, changes, meetingsPath, read]);
   // counts-failed-part: while a part failed, read that part again once the reads have finished, after
   // a wait that doubles each time (15 s, 30 s, 60 s, ... up to 5 min) and never while the tab is hidden.
@@ -110,10 +126,17 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   useEffect(() => {
     if (!enabled || !failedParts || inflight.current > 0) return;
     let onShow: (() => void) | null = null;
-    const again = () => {
-      tries.current += 1;
-      read(failedParts.split(",") as Part[]);
+    const cancel = () => {
+      clearTimeout(t);
+      if (onShow) document.removeEventListener("visibilitychange", onShow);
     };
+    const again = () => {
+      pending.current = null;
+      tries.current += 1;
+      read(failedParts.split(",") as Part[], false);
+    };
+    // A hidden tab holds the read back until it is shown again, while the wait keeps counting:
+    // a tab hidden past its wait reads at once when shown.
     const t = setTimeout(() => {
       if (!document.hidden) return again();
       onShow = () => {
@@ -123,9 +146,10 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
       };
       document.addEventListener("visibilitychange", onShow);
     }, retryWait(tries.current));
+    pending.current = cancel;
     return () => {
-      clearTimeout(t);
-      if (onShow) document.removeEventListener("visibilitychange", onShow);
+      cancel();
+      if (pending.current === cancel) pending.current = null;
     };
   }, [enabled, failedParts, settled, read]);
   // counts-wait: no count (nor More's sum) shows until every read has answered, so none jumps.
@@ -184,15 +208,19 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   };
 }
 
-/** The parts the rail's counts add up, each read on its own. */
+/**
+ * The parts the rail's counts add up, each read on its own. The rail's own reads stop when it
+ * unmounts (`signal`); the reads it shares with the page (the one list, the Inbox and the questions,
+ * lib/waiting) run on for the page, and the rail only drops their answers.
+ */
 const PART_READS = {
   waiting: () => loadWaiting(),
   // A failed light count falls back to the one list (never a failed part).
-  roadmap: () => unwrap(api.GET("/v1/simple/roadmap/waiting")).catch(() => null),
+  roadmap: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/roadmap/waiting", { signal })).catch(() => null),
   inbox: () => loadInbox(),
   questions: () => loadMyQuestions(),
-  goals: () => unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } } })),
-  meetings: () => unwrap(api.GET("/v1/simple/meetings")),
+  goals: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } }, signal })),
+  meetings: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/meetings", { signal })),
 };
 type Part = keyof typeof PART_READS;
 type Reads = { [P in Part]: Awaited<ReturnType<(typeof PART_READS)[P]>> };
@@ -359,6 +387,8 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
       <span
         id={id}
         data-testid={id}
+        // A count's words are its name: on an element with a role, so assistive tech reads them.
+        role="img"
         aria-label={failed ? failedWords(words, n) : words}
         title={failed ? failedWords(words, n) : words}
         className={`simple-count simple-count-tab tnum${quiet || n === 0 ? " simple-count-quiet" : ""}`}
@@ -402,7 +432,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               <Icon name={d.icon} stroke={1.7} />
               <span className="min-w-0 flex-1 truncate">{d.label}</span>
               {(n > 0 || failed) && (
-                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={words} title={words} className={`simple-count tnum ${(d.label === "Meetings" && !counts?.["Meetings live"]) || n === 0 ? "simple-count-quiet" : ""}`}>
+                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} role="img" aria-label={words} title={words} className={`simple-count tnum ${(d.label === "Meetings" && !counts?.["Meetings live"]) || n === 0 ? "simple-count-quiet" : ""}`}>
                   {n > 0 ? n : <Icon name="alert" size={16} />}
                 </span>
               )}
