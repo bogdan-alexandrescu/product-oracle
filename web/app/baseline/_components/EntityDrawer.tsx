@@ -1291,6 +1291,12 @@ function EditForm({
     if (isGoal) {
       // A stored value left as the form showed it ("1e-7", a number or text) saves untouched, not rewritten; a changed
       // Value, Start value or Weight takes only what a number holds exactly, as a new number field does.
+      // Text the Weight box cannot read ("1e") reads as "": it is refused as an unreadable Value is, not saved as emptied.
+      const weightBox = e.currentTarget instanceof HTMLFormElement ? e.currentTarget.elements.namedItem("weight") : null;
+      if (weightBox instanceof HTMLInputElement && weightBox.validity.badInput) {
+        setInvalid("Weight must be a number.");
+        return;
+      }
       const shown = goalDraft(entity.attrs ?? {});
       const patch = goalPatch(goal, entity.attrs ?? {});
       for (const [label, key] of [["Value", "target"], ["Start value", "start"], ["Weight", "weight"]] as const) {

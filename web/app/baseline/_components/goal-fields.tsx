@@ -462,6 +462,7 @@ export function GoalFields({
         </span>
         <input
           className={INPUT}
+          name="weight"
           type="number"
           min={0.1}
           max={10}
