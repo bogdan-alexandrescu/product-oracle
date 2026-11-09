@@ -98,3 +98,36 @@ test("the PRD's owner, not a company owner, declines on Home an ask whose milest
   await expect(asks.filter({ hasText: "Nov 5," })).toHaveCount(1);
   await expect(gone).toHaveCount(0);
 });
+
+test("the PRD's owner, not a company owner, declines in the roadmap's Needs a decision an ask whose milestone is gone", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page, "/simple/roadmap", "approver@example.com");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  const tray = page.getByTestId("decision-tray");
+  const proposals = tray.getByTestId("tray-proposal");
+  const gone = proposals.filter({ hasText: "PRD milestone ‘Routing by team’: change a milestone" });
+  const digest = proposals.filter({ hasText: "PRD milestone ‘Digest for all teams’: change a milestone" });
+  await page.getByTestId("needs-decision").click();
+  await expect(tray).toBeVisible();
+  await expect(gone).toHaveCount(1);
+  await expect(digest).toHaveCount(2);
+  // Accepting it is refused, in words, and it stays.
+  await gone.getByRole("button", { name: "Accept" }).click();
+  await expect(page.getByText("The milestone is gone")).toBeVisible();
+  await expect(gone).toHaveCount(1);
+  await gone.getByRole("button", { name: "Decline" }).click();
+  await expect(page.getByText("Declined", { exact: true })).toBeVisible();
+  await expect(gone).toHaveCount(0);
+  await expect(digest).toHaveCount(2);
+  // It stays gone after a reload, on the roadmap and on Home.
+  await page.reload();
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.getByTestId("needs-decision").click();
+  await expect(tray).toBeVisible();
+  await expect(digest).toHaveCount(2);
+  await expect(gone).toHaveCount(0);
+  await page.goto("/simple");
+  const home = page.getByTestId("home-proposals").getByTestId("home-proposal");
+  await expect(home.filter({ hasText: "Nov 5," })).toHaveCount(1);
+  await expect(home.filter({ hasText: "Nov 3," })).toHaveCount(0);
+});
