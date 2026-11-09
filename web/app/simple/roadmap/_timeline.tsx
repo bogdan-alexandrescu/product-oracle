@@ -5,6 +5,7 @@ import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState
 
 import { FeatureMarks, pillWord, type FeatureState } from "@/components/current-state/CurrentState";
 import { calendarDay } from "@/lib/dates";
+import { rm1Band } from "./_milestones"; // MOCK-HOOK
 import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
 
 import {
@@ -489,7 +490,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     // dates, not by date).
     return placeMarks([...list].sort((a, b) => a.x - b.x), chartW, flags);
   }, [data, sc, chartW, compact, flags]);
-  const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1)));
+  const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1))) + (format === "gantt" ? rm1Band(compact) : 0); // MOCK-HOOK + RM1 band
   // qa4-simple-roadmap-16: a phone's waterfall wraps its goals' names and gives each warning a band under its bar.
   const wrapRows = compact && format === "waterfall";
   // The names wrap beside the Current-state pill after them: the pill's width, by item.
@@ -729,9 +730,10 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     <div className="isolate flex border border-line bg-surface" data-testid="simple-chart" data-format={format} data-unit={format === "gantt" ? unit : undefined} data-weeks={weeks ? "true" : undefined}>
       <div className="min-w-0 flex-none border-r border-line" style={{ width: l.labelW }} data-testid="chart-labels">
         {/* fix4 qa-simple-roadmap-34: the grouping as the Group by names it ("PRD", "Goal"), not in capitals. */}
-        <div style={{ height: l.top }} className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2">
+        <div style={{ height: l.top - (format === "gantt" ? rm1Band(compact) : 0) /* MOCK-HOOK */ }} className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2">
           {laneWord ?? LANE_WORDS[lane]}
         </div>
+        {format === "gantt" && rm1Band(compact) > 0 && <div style={{ height: rm1Band(compact) }} className="flex items-center border-t border-line px-3 text-xs font-semibold text-text2">Milestones</div> /* MOCK-HOOK */}
         {l.rows.map((r, n) =>
           r.kind === "group" ? (
             <div

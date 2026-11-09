@@ -10,6 +10,7 @@
 import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { Button } from "@/components/ds";
+import { GoalNumbers } from "@/components/simple/GoalOrder"; // MOCK-HOOK
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { addDays, calendarDay } from "@/lib/dates";
 
@@ -17,6 +18,27 @@ import { decide as decideChange, shortDay, type Item, type Roadmap } from "./_li
 import { msEdge, msFill, msInk } from "./_timeline";
 
 export type GoalMilestone = Schemas["SimpleGoalMilestone"];
+
+/** MOCK-HOOK RM1 "Milestones across the roadmap": the proposal picked by ?rm1=a|b|c|d (none: as built). */
+export const rm1 = (): "a" | "b" | "c" | "d" | null => { // MOCK-HOOK
+  const v = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("rm1"); // MOCK-HOOK
+  return v === "a" || v === "b" || v === "c" || v === "d" ? v : null; // MOCK-HOOK
+}; // MOCK-HOOK
+/** MOCK-HOOK RM1 A, C, D: the milestone band's height under the date axis (two rows of labels; 0: no band). */
+export const rm1Band = (phone = false): number => (rm1() && rm1() !== "b" ? (phone ? 30 : 54) : 0); // MOCK-HOOK
+const RM1_ROW = 24; // MOCK-HOOK
+/** MOCK-HOOK RM1 C: codes by date across the whole roadmap (two on one date share a number, a/b). */
+export function rm1Renum(list: GoalMilestone[], goalNums: Map<string, number>): Map<string, string> { // MOCK-HOOK
+  const renum = new Map<string, string>(); // MOCK-HOOK
+  const all = list.filter((m) => m.date).sort((a, b) => a.date!.localeCompare(b.date!) || (goalNums.get(a.goal_id ?? "") ?? 99) - (goalNums.get(b.goal_id ?? "") ?? 99)); // MOCK-HOOK
+  let n = 0; // MOCK-HOOK
+  all.forEach((m, i) => { // MOCK-HOOK
+    const same = all.filter((o) => o.date === m.date); // MOCK-HOOK
+    if (i === 0 || all[i - 1].date !== m.date) n += 1; // MOCK-HOOK
+    renum.set(m.id, same.length > 1 ? `M${n}${"abcdef"[same.indexOf(m)]}` : `M${n}`); // MOCK-HOOK
+  }); // MOCK-HOOK
+  return renum; // MOCK-HOOK
+} // MOCK-HOOK
 export type MsRow = { id: string; title: string; lane: string; y: number; h: number; start: string; end: string };
 export type MsLane = { key: string; title: string; y0: number; y1: number };
 
@@ -266,6 +288,8 @@ export interface MsLayerProps {
   keepOff?: [number, number][];
   /** The axis' part in sight (layer pixels): the Timeline's track between the names column and the chart's right edge. */
   span?: [number, number];
+  /** MOCK-HOOK RM1: the band's top (layer pixels), under the date axis. */
+  bandTop?: number; // MOCK-HOOK
 }
 
 /** The day under a point of the track: x is monotonic, so a halving search over days finds it. */
@@ -286,6 +310,9 @@ function dayAt(x: (d: string) => number, px: number, from: string): string {
 export function MsLayer(props: MsLayerProps) {
   const ms = useMsCtl();
   const ref = useRef<HTMLDivElement>(null);
+  const v = rm1(); // MOCK-HOOK
+  const goalNums = useContext(GoalNumbers); // MOCK-HOOK
+  const [rmTip, setRmTip] = useState<{ id: string; left: number; top: number } | null>(null); // MOCK-HOOK
   // A label keeps all its words inside the chart's visible part: it sits right of its diamond when it
   // fits there, else left of it, else after the label it meets, on one line (cut short when the row runs
   // out). The names column (the Timeline's sticky one) counts as an edge, and a label whose
@@ -363,6 +390,10 @@ export function MsLayer(props: MsLayerProps) {
   const laneOf = (g: string | null | undefined) => lanes.find((l) => l.key === (g ?? "none"));
   const rowOf = (id: string) => rows.find((r) => r.id === id);
   const out: ReactNode[] = [];
+  // MOCK-HOOK RM1 C: one numbering by date across the roadmap (two on one date share it, a/b).
+  const renum = rm1Renum(ms.list, goalNums); // MOCK-HOOK
+  const rmCode = (m: GoalMilestone) => (v === "c" ? (renum.get(m.id) ?? m.code) : m.code); // MOCK-HOOK
+  const rmWords = (m: GoalMilestone) => `${rmCode(m)} ${m.name}`; // MOCK-HOOK
   const own = ms.list.filter((m) => !m.prd && m.date);
   const prd = ms.list.filter((m) => m.prd && m.date);
   const shown = own.map((m) => (ms.moving?.id === m.id ? { ...m, date: ms.moving.date } : m));
@@ -456,13 +487,17 @@ export function MsLayer(props: MsLayerProps) {
             <span className="sr-only"> on {day(date)}</span>
           </span>,
         );
-      out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={m.code} title={`${words(m)}, ${fullDay(date)}`} onPointerDown={grab(m)} />);
+      out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={rmCode(m)} title={`${words(m)}, ${fullDay(date)}`} onPointerDown={grab(m)} />); // MOCK-HOOK
     }
+    if (v) { // MOCK-HOOK
+      out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(rmCode(m))}` }} />); // MOCK-HOOK
+      if (v === "b" && lane) out.push(<Chip key={`f-${m.id}`} testid="ms-label" mx={mx} title={`${words(m)} · ${day(date)}`} onClick={() => ms.edit(m)} style={{ ...at.get(m.id), background: msFill(m.code), color: msInk(m.code), border: `1px solid ${msEdge(m.code)}` }}>{words(m)} · {day(date)}</Chip>); // MOCK-HOOK
+    } // MOCK-HOOK
     if (!lane) continue;
     // A line across the goal's own rows, its words in the goal's header row.
-    out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px solid ${msEdge(m.code)}` }} />);
-    out.push(<div key={`s-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: lane.y0 - axisY - 6, borderLeft: `1px dotted ${msEdge(m.code)}`, opacity: 0.6 }} />);
-    out.push(
+    if (!v) out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px solid ${msEdge(m.code)}` }} />); // MOCK-HOOK
+    if (!v) out.push(<div key={`s-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: lane.y0 - axisY - 6, borderLeft: `1px dotted ${msEdge(m.code)}`, opacity: 0.6 }} />); // MOCK-HOOK
+    if (!v) out.push( // MOCK-HOOK: as built
       <Chip key={`f-${m.id}`} testid="ms-label" mx={mx} title={`${words(m)} · ${day(date)}`} onClick={() => ms.edit(m)} style={{ ...at.get(m.id), background: msFill(m.code), color: msInk(m.code), border: `1px solid ${msEdge(m.code)}` }}>
         {words(m)} · {day(date)}
       </Chip>,
@@ -477,7 +512,7 @@ export function MsLayer(props: MsLayerProps) {
       if (!late && ex < mx) out.push(<div key={`g-${m.id}-${id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: ex + 2, top: cy - 1, width: mx - ex - 2, borderTop: `2px dotted ${msEdge(m.code)}` }} />);
       out.push(<i key={`gd-${m.id}-${id}`} aria-hidden className="pointer-events-none absolute z-[13] h-2 w-2 rounded-full" style={{ left: (late ? mx : ex) - 4, top: cy - 4, background: late ? "var(--crit)" : msEdge(m.code) }} />);
       if (late) {
-        const t = `Ends after ${words(m)}`;
+        const t = `Ends after ${rmWords(m)}`; // MOCK-HOOK rmWords (C: the new code)
         const w = Math.min(textW(t), phone ? 220 : 360);
         out.push(
           <Chip key={`late-${m.id}-${id}`} testid="ms-late" className="border border-crit bg-crit-bg text-crit" style={{ left: Math.max(left + 4, mx - 10 - w), top: cy - 10, maxWidth: w }}>
@@ -496,10 +531,12 @@ export function MsLayer(props: MsLayerProps) {
     const live = ms.moving?.id === m.id ? ms.moving.date : null;
     const asked = live ?? m.pending?.date ?? null;
     const to = asked && asked !== date ? X(asked) : null;
-    out.push(<Diamond key={`p-${m.id}`} x={mx} y={axisY} code={m.code} hollow title={`${words(m)} (from the PRD ${m.prd!.title})`} testid="ms-prd-diamond" onPointerDown={grab(m)} />);
+    if (v) out.push(<div key={`pv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px ${v === "b" ? "dashed" : "solid"} ${msEdge(rmCode(m))}` }} />); // MOCK-HOOK
+    if (v && v !== "b") out.push(<Diamond key={`p-${m.id}`} x={mx} y={axisY} code={rmCode(m)} title={`${words(m)} (from the PRD ${m.prd!.title})`} testid="ms-prd-diamond" onPointerDown={grab(m)} />); // MOCK-HOOK
+    else out.push(<Diamond key={`p-${m.id}`} x={mx} y={axisY} code={m.code} hollow title={`${words(m)} (from the PRD ${m.prd!.title})`} testid="ms-prd-diamond" onPointerDown={grab(m)} />); // MOCK-HOOK
     if (!lane) continue;
-    out.push(<div key={`pv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px dashed ${msEdge(m.code)}`, opacity: to != null ? 0.4 : 1 }} />);
-    out.push(
+    if (!v) out.push(<div key={`pv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px dashed ${msEdge(m.code)}`, opacity: to != null ? 0.4 : 1 }} />); // MOCK-HOOK
+    if (!v || v === "b") out.push( // MOCK-HOOK: A, C, D draw it in the band
       <Chip key={`pc-${m.id}`} testid="ms-prd-label" mx={mx} title={`PRD · ${words(m)}`} onClick={() => ms.edit(m)} className="border" style={{ background: "var(--surface)", ...at.get(m.id), borderStyle: "dashed", color: msInk(m.code), borderColor: msEdge(m.code), opacity: to != null ? 0.5 : 1 }}>
         <span className="font-normal text-text2">PRD · </span>
         {words(m)}
@@ -609,6 +646,79 @@ export function MsLayer(props: MsLayerProps) {
       if (r) out.push(<div key={`pk-${id}`} data-testid="ms-picked" aria-hidden className="pointer-events-none absolute z-[11]" style={{ left: X(r.start) - 3, top: r.y + 3, width: Math.max(30, X(r.end) - X(r.start) + 6), height: r.h - 6, outline: "2px solid var(--accent)", borderRadius: 8 }} />);
     }
   }
+
+  // MOCK-HOOK RM1 A, C, D: every label in one band under the date axis; close ones stack (two rows), then fold into a count.
+  const band = rm1Band(phone); // MOCK-HOOK
+  if (band && props.bandTop != null) { // MOCK-HOOK
+    const rows = phone ? 1 : 2; // MOCK-HOOK
+    const goalOf = (m: GoalMilestone) => lanes.find((l) => l.key === (m.goal_id ?? "none")); // MOCK-HOOK
+    const list = ms.list.filter((m) => m.date).sort((a, b) => a.date!.localeCompare(b.date!) || (goalNums.get(a.goal_id ?? "") ?? 99) - (goalNums.get(b.goal_id ?? "") ?? 99)); // MOCK-HOOK
+    type Placed = { m: GoalMilestone; left: number; w: number; row: number; more: GoalMilestone[] }; // MOCK-HOOK
+    const placed: Placed[] = []; // MOCK-HOOK
+    const last: (Placed | null)[] = Array(rows).fill(null); // MOCK-HOOK
+    const MIN = v === "d" ? 78 : 62; // MOCK-HOOK
+    for (const m of list) { // MOCK-HOOK
+      const mx = X(m.date!); // MOCK-HOOK
+      const num = v === "d" ? 22 : 0; // MOCK-HOOK
+      const w = Math.min(textW(rmWords(m)) + num, phone ? 150 : 230); // MOCK-HOOK
+      let l = mx + 6; // MOCK-HOOK
+      if (l + MIN > props.width - 4) l = mx - 6 - Math.min(w, MIN + 40); // MOCK-HOOK
+      const row = last.findIndex((p) => !p || p.left + MIN + (p.more.length ? 30 : 0) <= l - 4); // MOCK-HOOK
+      if (row < 0) { // MOCK-HOOK
+        const host = last.reduce((a, b) => (b && (!a || b.left > a.left) ? b : a), null as Placed | null)!; // MOCK-HOOK
+        host.more.push(m); // MOCK-HOOK
+        continue; // MOCK-HOOK
+      } // MOCK-HOOK
+      const prev = last[row]; // MOCK-HOOK
+      if (prev) prev.w = Math.min(prev.w, l - 4 - prev.left - (prev.more.length ? 30 : 0)); // MOCK-HOOK
+      const p = { m, left: l, w, row, more: [] }; // MOCK-HOOK
+      placed.push(p); // MOCK-HOOK
+      last[row] = p; // MOCK-HOOK
+    } // MOCK-HOOK
+    for (const p of placed) p.w = Math.min(p.w, props.width - 4 - p.left - (p.more.length ? 30 : 0)); // MOCK-HOOK
+    out.push(<div key="rm-band" data-testid="rm1-band" aria-hidden className="pointer-events-none absolute z-[11] border-b border-line bg-surface2/60" style={{ left, top: props.bandTop, width: props.width - left, height: band }} />); // MOCK-HOOK
+    const tipFor = (m: GoalMilestone) => { // MOCK-HOOK
+      const g = goalOf(m)?.title ?? "No goal"; // MOCK-HOOK
+      const n = goalNums.get(m.goal_id ?? ""); // MOCK-HOOK
+      return { // MOCK-HOOK
+        head: `${rmWords(m)} · ${fullDay(m.date!)}`, // MOCK-HOOK
+        goal: `Advances ${n ? `goal ${n}, ` : ""}${g}`, // MOCK-HOOK
+        prd: m.prd ? `From the PRD ${m.prd.title}` : null, // MOCK-HOOK
+        was: v === "c" && rmCode(m) !== m.code ? `Was ${m.code} in ${g}` : null, // MOCK-HOOK
+      }; // MOCK-HOOK
+    }; // MOCK-HOOK
+    for (const p of placed) { // MOCK-HOOK
+      const m = p.m; // MOCK-HOOK
+      const top = props.bandTop + (phone ? 5 : 4 + p.row * RM1_ROW); // MOCK-HOOK
+      const n = goalNums.get(m.goal_id ?? "") ?? goalNums.get(goalOf(m)?.title ?? ""); // MOCK-HOOK
+      const show = () => setRmTip({ id: m.id, left: p.left, top: top + 24 }); // MOCK-HOOK
+      out.push( // MOCK-HOOK
+        <span key={`rb-${m.id}`} data-testid="rm1-label" data-prd={m.prd ? "" : undefined} role="button" tabIndex={0} aria-label={`${tipFor(m).head}. ${tipFor(m).goal}`} onPointerEnter={show} onFocus={show} onPointerLeave={() => setRmTip(null)} onBlur={() => setRmTip(null)} onClick={() => ms.edit(m)} className="absolute z-[14] flex cursor-pointer items-center gap-1 overflow-hidden rounded-full px-1.5 text-xs leading-5 font-semibold whitespace-nowrap" style={{ left: p.left, top, maxWidth: Math.max(p.w, 40), background: msFill(rmCode(m)), color: msInk(rmCode(m)), border: `1px solid ${msEdge(rmCode(m))}` }}> {/* MOCK-HOOK */}
+          {v === "d" && n ? <span aria-label={`Goal ${n}`} className="goal-num tnum" style={{ marginRight: 0, marginLeft: -3, height: 16, minWidth: 16, padding: "0 4px", fontSize: 11, background: "var(--surface)", color: "var(--text)" }}>{n}</span> : null} {/* MOCK-HOOK: the goal headers' number chip */}
+          <span className="min-w-0 overflow-hidden text-ellipsis">{rmWords(m)}</span> {/* MOCK-HOOK */}
+        </span>, // MOCK-HOOK
+      ); // MOCK-HOOK
+      if (p.more.length) // MOCK-HOOK
+        out.push( // MOCK-HOOK
+          <span key={`rbm-${m.id}`} data-testid="rm1-more" title={p.more.map((o) => `${rmWords(o)} · ${day(o.date!)}`).join(", ")} className="absolute z-[14] h-5 rounded-full border border-line-strong bg-surface px-1.5 text-xs leading-[18px] font-semibold text-text" style={{ left: p.left + Math.max(p.w, 40) + 3, top }}> {/* MOCK-HOOK */}
+            +{p.more.length} {/* MOCK-HOOK */}
+          </span>, // MOCK-HOOK
+        ); // MOCK-HOOK
+    } // MOCK-HOOK
+    const tm = rmTip && list.find((m) => m.id === rmTip.id); // MOCK-HOOK
+    if (rmTip && tm) { // MOCK-HOOK
+      const t = tipFor(tm); // MOCK-HOOK
+      out.push( // MOCK-HOOK
+        <span key="rm-tip" data-testid="rm1-tip" role="tooltip" className="pointer-events-none absolute z-40 flex max-w-80 flex-col rounded bg-tip px-2 py-1 text-xs text-tip-text" style={{ left: Math.min(rmTip.left, props.width - 300), top: rmTip.top }}> {/* MOCK-HOOK */}
+          <b>{t.head}</b> {/* MOCK-HOOK */}
+          {t.prd && <span>{t.prd}</span>} {/* MOCK-HOOK */}
+          <span>{t.goal}</span> {/* MOCK-HOOK */}
+          {t.was && <span>{t.was}</span>} {/* MOCK-HOOK */}
+          <span>Waits on {tm.item_ids.length} {tm.item_ids.length === 1 ? "item" : "items"}</span> {/* MOCK-HOOK */}
+        </span>, // MOCK-HOOK
+      ); // MOCK-HOOK
+    } // MOCK-HOOK
+  } // MOCK-HOOK
 
   return (
     <div

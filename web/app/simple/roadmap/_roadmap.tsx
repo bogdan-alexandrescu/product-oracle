@@ -27,7 +27,7 @@ import { useQuery } from "@/lib/use-query";
 import { QuickAdd } from "./_add";
 import { RemovedButton } from "./_removed";
 import { TracksButton } from "./_tracks";
-import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
+import { MsCard, MsKey, MsLayer, MsProvider, MsToast, rm1, rm1Band, useMilestones, type MsLane, type MsRow } from "./_milestones"; // MOCK-HOOK rm1Band
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
 import { FeatureContextMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
@@ -1046,7 +1046,16 @@ export function SimpleRoadmap() {
   );
   // build-goal-order-control: each goal's number (1 to n, Home's order) on its card and its lane.
   const goalList = useQuery("simple-roadmap-goal-order", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
-  const numbers = useMemo(() => goalNumbers(goalList.data ?? []), [goalList.data]);
+  const numbers0 = useMemo(() => goalNumbers(goalList.data ?? []), [goalList.data]); // MOCK-HOOK numbers0
+  // MOCK-HOOK RM1: the scenario's goals have no order in the mock: number its goal groups in their order.
+  const numbers = useMemo(() => { // MOCK-HOOK
+    const rmData = roadmap.data; // MOCK-HOOK
+    if (!rm1() || !rmData) return numbers0; // MOCK-HOOK
+    const m = new Map<string, number>(); // MOCK-HOOK
+    let n = 0; // MOCK-HOOK
+    for (const g of rmData.groups) if (g.key !== "none") m.set(g.key, ++n); // MOCK-HOOK
+    return m; // MOCK-HOOK
+  }, [numbers0, roadmap.data]); // MOCK-HOOK
   // kr-in-goal-card: only top-level goals are goals here; a key result sits in its goal's card.
   const krs = useMemo(() => keyResults(goalList.data ?? []), [goalList.data]);
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
@@ -2267,5 +2276,6 @@ function GanttMilestones({ l, sc, data, phone, keepOff }: { l: Layout; sc: Chart
     }
   }
   // pre-demo QA S-12: "+ Milestone" steps past the key dates' and milestones' names over the axis.
-  return <MsLayer view="gantt" x={(d) => sc.x(d) + sc.px / 2} top={l.top} axisY={l.top - 2} height={l.height} width={sc.width} rows={rows} lanes={lanes} phone={phone} keepOff={keepOff} />;
+  const band = rm1Band(phone); // MOCK-HOOK
+  return <MsLayer view="gantt" x={(d) => sc.x(d) + sc.px / 2} top={l.top} axisY={l.top - 2 - band /* MOCK-HOOK */} height={l.height} width={sc.width} rows={rows} lanes={lanes} phone={phone} keepOff={keepOff} bandTop={l.top - band /* MOCK-HOOK */} />;
 }

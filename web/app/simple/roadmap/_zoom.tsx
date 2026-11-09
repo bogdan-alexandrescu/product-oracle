@@ -3,7 +3,7 @@
 // state has its own look with the key on top (QR2 A), broken links sit in a panel above the
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
-import { MsLayer, type MsLane, type MsRow } from "./_milestones";
+import { MsLayer, rm1, rm1Band, rm1Renum, useMsCtl, type MsLane, type MsRow } from "./_milestones"; // MOCK-HOOK rm1, rm1Band, rm1Renum, useMsCtl
 import {
   memo,
   useContext,
@@ -45,7 +45,7 @@ import {
   type Roadmap,
   whereAttr,
 } from "./_lib";
-import { DRAG_PX, grabAt, LONG_PRESS_MS, planned } from "./_timeline";
+import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from "./_timeline"; // MOCK-HOOK msEdge, msInk
 
 type Zoom = "3m" | "6m" | "1y" | "all";
 /** Days in sight at each zoom (All fits the whole plan). */
@@ -868,6 +868,11 @@ function DayChart(props: TimelineProps) {
               ))}
             </div>
           </div>
+          {rm1Band(phone) > 0 && ( // MOCK-HOOK RM1: the milestone band's row under the date axis
+            <div className="flex" style={{ height: rm1Band(phone) }}> {/* MOCK-HOOK */}
+              <div className="sticky left-0 z-20 flex flex-none items-center border-r border-b border-line bg-surface px-3 text-xs font-semibold text-text2" style={{ width: labelW }}>Milestones</div> {/* MOCK-HOOK */}
+            </div> // MOCK-HOOK
+          )} {/* MOCK-HOOK */}
           <div
             className="pointer-events-none absolute top-11 bottom-0 z-10"
             style={{ left: labelW + xt, width: 2, background: TODAY }}
@@ -1134,7 +1139,7 @@ function DayChart(props: TimelineProps) {
 
 /** build-milestones-on-roadmap: each row's place, for the milestone layer over the Timeline. */
 function TimelineMilestones({ rows, moved, x, labelW, trackW, phone, span, keepOff }: { rows: Row[]; moved: Record<string, [string, string]>; x: (d: string) => number; labelW: number; trackW: number; phone: boolean; span: [number, number]; keepOff: [number, number][] }) {
-  let y = 44;
+  let y = 44 + rm1Band(phone); // MOCK-HOOK
   const out: MsRow[] = [];
   const lanes: MsLane[] = [];
   for (const r of rows) {
@@ -1148,7 +1153,7 @@ function TimelineMilestones({ rows, moved, x, labelW, trackW, phone, span, keepO
     y += ROW_H;
     if (lanes.length) lanes[lanes.length - 1].y1 = y;
   }
-  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} span={span} keepOff={keepOff} />;
+  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} span={span} keepOff={keepOff} bandTop={44} /* MOCK-HOOK */ />;
 }
 
 const NO_WARN: string[] = [];
@@ -1385,6 +1390,32 @@ const TimelineRow = memo(function TimelineRow({
   );
 });
 
+/** MOCK-HOOK RM1 A, C, D on a phone: the quarter's milestones across the roadmap, one line each, by date. */
+function Rm1QuarterMilestones({ from, to }: { from: string; to: string }) { // MOCK-HOOK
+  const ms = useMsCtl(); // MOCK-HOOK
+  const nums = useContext(GoalNumbers); // MOCK-HOOK
+  if (!ms) return null; // MOCK-HOOK
+  const v = rm1(); // MOCK-HOOK
+  const renum = rm1Renum(ms.list, nums); // MOCK-HOOK
+  const list = ms.list.filter((m) => m.date && from <= m.date && m.date <= to).sort((a, b) => a.date!.localeCompare(b.date!) || (nums.get(a.goal_id ?? "") ?? 99) - (nums.get(b.goal_id ?? "") ?? 99)); // MOCK-HOOK
+  if (!list.length) return null; // MOCK-HOOK
+  return ( // MOCK-HOOK
+    <ul data-testid="rm1-quarter-milestones" className="border-b border-line/60 bg-surface2/60 px-3 py-1.5 text-xs"> {/* MOCK-HOOK */}
+      {list.map((m) => { // MOCK-HOOK
+        const code = v === "c" ? (renum.get(m.id) ?? m.code) : m.code; // MOCK-HOOK
+        return ( // MOCK-HOOK
+          <li key={m.id} className="flex items-center gap-1.5 py-0.5"> {/* MOCK-HOOK */}
+            <i aria-hidden className="h-2 w-2 flex-none rotate-45 rounded-[1px]" style={{ background: msEdge(code) }} /> {/* MOCK-HOOK */}
+            {v === "d" && <GoalNum n={nums.get(m.goal_id ?? "")} />} {/* MOCK-HOOK */}
+            <span className="min-w-0 truncate font-semibold" style={{ color: msInk(code) }}>{code} {m.name}</span> {/* MOCK-HOOK */}
+            <span className="ml-auto flex-none text-text2">{shortDay(m.date!)}</span> {/* MOCK-HOOK */}
+          </li> // MOCK-HOOK
+        ); // MOCK-HOOK
+      })} {/* MOCK-HOOK */}
+    </ul> // MOCK-HOOK
+  ); // MOCK-HOOK
+} // MOCK-HOOK
+
 /** A phone's Timeline: a list by quarter; an item sits in the quarter it starts in (or in
  * this one, when it started before and runs on). */
 function QuarterList(props: TimelineProps) {
@@ -1444,6 +1475,7 @@ function QuarterList(props: TimelineProps) {
                   {m.done_when.length > 0 && ` · counts when ${m.done_when.join("; ")}`}
                 </p>
               ))}
+            {rm1() && rm1() !== "b" && <Rm1QuarterMilestones from={q.start} to={q.end} />} {/* MOCK-HOOK */}
             <ul className="divide-y divide-line/60">
               {items.map((i) => {
                 const lk = lookOf(i);

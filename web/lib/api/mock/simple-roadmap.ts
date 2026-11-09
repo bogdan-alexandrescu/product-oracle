@@ -314,6 +314,8 @@ const ROADMAP_DOC_SLUG: Record<string, string> = { "alerts-roadmap": "usage-aler
 /** The Simple roadmap whose items a roadmap document holds (its own slug, or alerts-roadmap for usage-alerts-roadmap). */
 export const roadmapKeyOf = (docSlug: string): string => Object.keys(ROADMAP_DOC_SLUG).find((k) => ROADMAP_DOC_SLUG[k] === docSlug) ?? docSlug;
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
+let rm1PmOwned = false; // MOCK-HOOK
+export const setRm1PmOwned = (on: boolean) => (rm1PmOwned = on); // MOCK-HOOK
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
 /** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
 export const TALK_GOALS: Record<string, string> = { reliability: "Reliability", growth: "Growth", activation: "Activation", revenue: "Revenue" };
@@ -1585,7 +1587,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const prdRank = prdRanker();
   for (const i of shown) {
     const ref = group === "goal" ? laneGoal(i) : group === "track" ? i.track : i.prd;
-    const none = { goal: "No goal", track: "No track", prd: "No PRD" }[group];
+    const none = rm1PmOwned && group === "goal" ? "PM-owned" : { goal: "No goal", track: "No track", prd: "No PRD" }[group]; // MOCK-HOOK
     const key = ref?.id ?? "none";
     // goal-order: goal groups in the one goal order (then by key); prd-order: PRD groups in the company PRD order; No goal last.
     const sort = !ref
