@@ -151,7 +151,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb, draftItemsRunRetried } from "./draft-roadmap";
-import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, PLAN_SAME_KEY_SCENARIO, PLAN_SECTION_CODE_SCENARIO, PLAN_SECTION_LINKED_SCENARIO, PLAN_SECTION_FEATURE_SCENARIO, SECTION_LINK_FEATURE, featureCodes, SAME_KEY_ITEM, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, PLAN_SAME_KEY_SCENARIO, PLAN_SECTION_CODE_SCENARIO, PLAN_SECTION_LINKED_SCENARIO, PLAN_SECTION_FEATURE_SCENARIO, SECTION_LINK_FEATURE, featureCodes, seedTwoRoadmaps, SAME_KEY_ITEM, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -6231,6 +6231,9 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
 
 /** #346: the change-set mock's view of the db; a proposal imports the next version, copied from its base. */
 function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsContext {
+  const guided = db.roadmap?.two_roadmaps && db.baseline.entities.find((e) => e.type === "feature" && e.key === "f.guided-setup");
+  // Seeded lazily, on the first change-set request: a page opened before Edit plan shows usage-alerts-roadmap v1 not yet approved.
+  if (guided) seedTwoRoadmaps(db, (db.plan_edits ??= emptyPlanEdits()), guided.id);
   let codes: Record<string, string> | undefined;
   return {
     userId: me.id,
@@ -6243,7 +6246,7 @@ function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsCont
     // The roadmap mock's flag (ensureRoadmap ran before the change-set routes), not the scenario read again.
     seededItems: (slug, version) => seededPlanItems(slug, version, db.roadmap?.section_code),
     // codes.feature_codes: a feature's key when it is a code, else its published PRD item's section's (prd_by_key).
-    featureCode: (id) => (codes ??= featureCodes(db.baseline.entities.filter((e) => e.type === "feature"), db.roadmap?.section_code, db.plan_edits))[id] ?? null,
+    featureCode: (id) => (codes ??= featureCodes(db.baseline.entities.filter((e) => e.type === "feature"), db.roadmap?.section_code, db.plan_edits, db))[id] ?? null,
     // The Plan mock's usage-alerts-roadmap v1 is its approved plan (./roadmap.ts, ALERTS_APPROVED).
     seededApproved: (slug) => (slug === ALERTS_ROADMAP_SLUG ? 1 : null),
     newVersion: (doc, base, body) => {
