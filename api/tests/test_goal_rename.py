@@ -25,8 +25,9 @@ Test cards (protects / fails_when / no_claim):
   API answers pydantic's "at least 1 character" detail.
 - test_without_placeholders: protects=the placeholder guard drops the forms an import writes
   ("[n]", "[n] of [n]", "[n] out of [n]", "[x]", "[#]", "[?]", "[tbd]", lowercase), with a "%",
-  "/", "Of" or "Out Of" whose only operand it was, and tidies the spaces; fails_when=a
-  placeholder, a stray "%", "/" or "Of", or a double space is left; no_claim=placeholders
+  "/", "of" or "out of" (any case) whose only operand it was ("3/[n]" -> "3"), and tidies the
+  spaces and an emptied "( )", also with a non-breaking space inside; fails_when=a
+  placeholder, a stray "%", "/", "OF" or "( )", or a double space is left; no_claim=placeholders
   without square brackets.
 - test_a_real_bracketed_word_stays_in_a_goal_name: protects=a capitalised or other bracketed
   word ("Project [X]", "Price [Value]", "Launch [beta]") is kept; fails_when=it is stripped.
@@ -241,6 +242,14 @@ def test_without_placeholders():
         goals.without_placeholders("Grow 10% to [n] users, 3/4 done")
         == "Grow 10% to users, 3/4 done"
     )
+    # The "/" of a real figure whose other operand was a placeholder goes too; "of" and "out
+    # of" go in any case; an emptied "( )" goes with a non-breaking space inside.
+    assert goals.without_placeholders("3/[n] done") == "3 done"
+    assert goals.without_placeholders("[n]/4 done") == "4 done"
+    assert goals.without_placeholders("KR [n] OF [n] AGENTS") == "KR AGENTS"
+    assert goals.without_placeholders("Reach [x] OUT OF [x] teams") == "Reach teams"
+    assert goals.without_placeholders("Ship it (\u00a0[n]\u00a0) soon") == "Ship it soon"
+    assert goals.without_placeholders("Ship it (\u00a0) [n] soon") == "Ship it soon"
     assert goals.without_placeholders(None) is None
 
 

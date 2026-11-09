@@ -5,9 +5,10 @@
  * word ("Project [X]", "Price [Value]") is a real name and stays.
  */
 const ONE = String.raw`\[(?:n|x|#|\?|tbd)\]%?`;
-/** A "%", "/" or "Of" whose only operand was a placeholder ("[n]%", "[n]/[n]", "[n] Of [n]") goes with it. */
-const JOIN = String.raw`\s*/\s*|\s+(?:[Oo]f|[Oo]ut [Oo]f)\s+`;
-const PLACEHOLDER = new RegExp(String.raw`${ONE}(?:(?:${JOIN})${ONE})?`, "g");
+/** A "%", "/" or "of" (any case) whose only operand was a placeholder ("[n]%", "[n]/[n]", "[n] OF [n]", "3/[n]") goes with it. */
+const SLASH = String.raw`\s*/\s*`;
+const JOIN = String.raw`${SLASH}|\s+(?:[Oo][Ff]|[Oo][Uu][Tt] [Oo][Ff])\s+`;
+const PLACEHOLDER = new RegExp(String.raw`(?:${SLASH})?${ONE}(?:(?:${JOIN})${ONE})?(?:${SLASH})?`, "g");
 
 /** Whether `text` holds an unfilled placeholder. */
 export function hasPlaceholder(text: unknown): boolean {
@@ -19,9 +20,10 @@ export function withoutPlaceholders<T extends string | null | undefined>(text: T
   if (!text || !hasPlaceholder(text)) return text;
   const out = text
     .replace(PLACEHOLDER, "")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/[ \t]+([,.;:!?)])/g, "$1")
-    .replace(/\([ \t]*\)/g, "");
+    // Spaces include a non-breaking one; an emptied "( )" goes before the spaces are tidied.
+    .replace(/\([ \t\u00a0]*\)/g, "")
+    .replace(/[ \t\u00a0]{2,}/g, " ")
+    .replace(/[ \t\u00a0]+([,.;:!?)])/g, "$1");
   return out
     .split("\n")
     .map((line) => line.trim())
