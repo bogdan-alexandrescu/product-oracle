@@ -177,6 +177,21 @@ test("qa4-shell-4: a missing meeting, template or report gets the not-found page
   }
 });
 
+test("qa4-shell-4: a meeting address with a well-formed unknown id is not found; a failed load says so", async ({ page }) => {
+  await login(page);
+  const unknown = "/company/rituals/00000000-0000-4000-8000-000000000000";
+  await page.goto(unknown);
+  await expect(page.getByRole("heading", { level: 1, name: "Meeting not found" })).toBeVisible();
+  await page.getByRole("link", { name: "Back to Rituals" }).click();
+  await expect(page).toHaveURL(/\/company\/rituals$/);
+  // Any other error is not "not found": the page says it could not load the meeting.
+  await failGets(page, "/v1/ritual-occurrences/00000000-0000-4000-8000-000000000000");
+  await page.goto(unknown);
+  await expect(page.getByTestId("load-error")).toContainText("Could not load this meeting.");
+  await expect(page.getByRole("heading", { name: "Meeting not found" })).toHaveCount(0);
+  await stopFailing(page);
+});
+
 test("qa4-shell-5: Simple from New roadmap opens Simple's Roadmap", async ({ page }) => {
   await login(page);
   await page.goto("/documents/new?kind=roadmap");
