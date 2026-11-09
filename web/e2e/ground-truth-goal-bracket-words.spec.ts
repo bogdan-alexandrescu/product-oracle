@@ -10,8 +10,9 @@ import { login } from "./helpers";
  * Test cards (protects / fails_when / no_claim):
  * - "bracketed words": protects=a goal renamed to a name with a real bracketed word ("Project [X]", "Price [Value]",
  *   "Launch [beta]") keeps it in the panel and the Goals row, and only an import's placeholder form ("[n] of [n]") is
- *   dropped, with a "%", "/" or "Of" whose only operand it was ("[n]%", "[n]/[n]", "[n] Of [n]"); fails_when="[X]",
- *   "[Value]" or "[beta]" is stripped, or "[n]" or a stray "%", "/" or "Of" shows; no_claim=the API's guard
+ *   dropped, with a "%", "/" or "Of" whose only operand it was ("[n]%", "[n]/[n]", "[n] Of [n]", "3/[n]", "[n] OF
+ *   [n]") and an emptied "( )" (also with a non-breaking space); fails_when="[X]", "[Value]" or "[beta]" is
+ *   stripped, or "[n]" or a stray "%", "/", "Of", "OF" or "( )" shows; no_claim=the API's guard
  *   (api tests/test_goal_rename.py).
  * - "rename tooltip": protects=the desktop Rename button, which reads Rename, has no tooltip, while the phone's pencil
  *   still says Rename; fails_when=the desktop button carries a title or the pencil has none.
@@ -46,6 +47,10 @@ test("bracketed words: a real bracketed word stays in a goal's name; an import's
   await rename(page, row, "Cut churn by [n]% this year", "Cut churn by this year");
   await rename(page, row, "Close [n]/[n] tickets", "Close tickets");
   await rename(page, row, "KR [n] Of [n] Agents", "KR Agents");
+  // So does the "/" of a real figure, "OF" in capitals, and a "( )" left with a non-breaking space inside.
+  await rename(page, row, "Close 3/[n] tickets", "Close 3 tickets");
+  await rename(page, row, "KR [n] OF [n] AGENTS", "KR AGENTS");
+  await rename(page, row, "Ship it (\u00a0[n]\u00a0) soon", "Ship it soon");
   await expect(row.getByRole("button").filter({ hasText: "[n]" })).toHaveCount(0);
 });
 
