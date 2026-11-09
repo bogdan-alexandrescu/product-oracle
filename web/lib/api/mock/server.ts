@@ -4099,34 +4099,44 @@ function load(): Db {
                 ? () => {
                     // build-milestones-on-roadmap: the roadmaps' own milestones per goal; with a PRD's (Usage alerts).
                     const db = seed();
-                    (db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
+                    const rm = (db.simple_roadmap = seedSimpleRoadmap());
+                    rm.goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
+                    if (scenario === "simple-prd-milestones") {
+                      // Usage alerts' owner (drafts.who: its track's owner) is Nora Vance, an invented approver.
+                      const nora = { email: "nora.vance@example.com", name: "Nora Vance", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid("member/nora.vance@example.com"), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                      db.members.push(nora);
+                      rm.track_owners = { alerts: nora.id };
+                    }
                     return db;
                   }
               : scenario === "simple-prd-milestone-stuck" || scenario === "simple-prd-milestones-gone" || scenario === "simple-prd-milestone-track-owner"
                 ? () => {
                     // stuck-milestone-decline: a PRD milestone's ask that its milestone no longer waits on.
-                    // Usage alerts' required reviewer is commenter@example.com; its asks go to its owner, approver@example.com.
+                    // Usage alerts' required reviewer is commenter@example.com; its asks go to its owner (its track's),
+                    // approver@example.com.
                     const db = seed();
                     const at = (email: string) => db.members.find((m) => m.email === email)!.id;
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
                     const ms = (rm.goal_milestones = seedPrdMilestones());
+                    rm.track_owners = { alerts: at("approver@example.com") };
                     if (scenario === "simple-prd-milestone-track-owner") {
-                      // stuck-ask-minors: Rowan Pike (an invented approver) owns Usage alerts' track, and a
-                      // second member shares its named owner's name (Priya Raman).
+                      // stuck-ask-minors: Rowan Pike (an invented approver) owns Usage alerts' track instead, and a
+                      // second member shares approver@example.com's name (Priya Raman). Jun Park owns the welcome
+                      // track, where Alert routing by team moves: the PRD's second owner, after Rowan Pike by id.
                       const join = (email: string, name: string) => {
-                        const m = { email, name, role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                        const m = { email, name, role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid(`member/${email}`), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
                         db.members.push(m);
                         return m.id;
                       };
-                      rm.track_owners = { alerts: join("rowan.pike@example.com", "Rowan Pike") };
+                      rm.items.find((s) => s.key === "alert-sso")!.track = "welcome";
+                      rm.track_owners = { alerts: join("rowan.pike@example.com", "Rowan Pike"), welcome: join("jun.park@example.com", "Jun Park") };
                       join("priya.r@example.com", "Priya Raman");
                     }
-                    rm.changes = seedStuckPrdAsk(ms, at("approver@example.com"), (slug) => prdOwnerIdsOf(rm, slug));
+                    rm.changes = seedStuckPrdAsk(ms, (slug) => prdOwnerIdsOf(rm, slug), (id) => db.members.find((m) => m.id === id)?.name ?? null);
                     rm.prd_reviewers = { "usage-alerts": [at("commenter@example.com")] };
                     if (scenario === "simple-prd-milestones-gone") {
                       // stuck-ask-minors: every Usage alerts milestone is gone; approver@example.com owns its track.
                       rm.goal_milestones = ms.filter((m) => !m.prd);
-                      rm.track_owners = { alerts: at("approver@example.com") };
                     }
                     return db;
                   }

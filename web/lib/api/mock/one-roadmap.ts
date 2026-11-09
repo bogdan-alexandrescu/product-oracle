@@ -73,8 +73,8 @@ export function seedCompanyRoadmap(db: SimpleDb): SimpleDb {
  * Invented data only.
  */
 export function seedItemMilestones(): MockMilestone[] {
-  const safety = { slug: AREA_PRDS[0][0], title: AREA_PRDS[0][1], owner: "Nora Vance" };
-  const scale = { slug: AREA_PRDS[1][0], title: AREA_PRDS[1][1], owner: "Theo Marsh" };
+  const safety = { slug: AREA_PRDS[0][0], title: AREA_PRDS[0][1] };
+  const scale = { slug: AREA_PRDS[1][0], title: AREA_PRDS[1][1] };
   const at = (prd: typeof safety, code: string, name: string, date: string): MockMilestone => ({
     id: stableUuid(`simple-gm/item-milestone/${prd.slug}/${code}`), roadmap: COMPANY_SLUG, code, name, date, goal: null, gates: [], counts_when: "", progress: "not_started", prd,
   });

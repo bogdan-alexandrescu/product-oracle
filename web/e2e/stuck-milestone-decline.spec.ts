@@ -12,7 +12,8 @@ import { expect, test, type Page } from "./test";
  * (no date), so the stuck one is the second, and the refused Accept says which it is.
  *
  * The scenario also has an ask (Nov 3) on M4 Routing by team, whose milestone is gone; Usage
- * alerts is owned there by Priya Raman (approver@example.com), who is not a company owner.
+ * alerts is owned there by its track's owner, Priya Raman (approver@example.com), who is not a
+ * company owner.
  *
  * fails_when: Decline is refused or the stuck ask stays on Home or in Needs a decision, Accept
  * goes through, or the milestone's newer ask goes with it; the PRD's owner is not shown, or may

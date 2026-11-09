@@ -1,21 +1,25 @@
+import { MOCK_NOW } from "../lib/api/mock/clock";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, signOut } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /**
  * stuck-ask-minors: the changes asked of a PRD's milestone ("asks"), as the mock makes, sends and
- * shows them, driven through the UI (scenarios "simple-prd-milestones": Usage alerts owned by Nora
- * Vance, who is not a member; "simple-prd-milestone-stuck": owned by Priya Raman
- * (approver@example.com), Theo Brandt (commenter@example.com) its required reviewer, asks on Nov 3,
- * 4 and 5 waiting; "simple-prd-milestones-gone": the same with every Usage alerts milestone gone
- * and Priya Raman owning its track; "simple-prd-milestone-track-owner": the stuck one with Rowan
- * Pike (rowan.pike@example.com) owning its track and a second member also named Priya Raman).
+ * shows them, driven through the UI. A PRD's owners are its tracks' owners only (drafts.who), in
+ * person id order (scenarios "simple-prd-milestones": Usage alerts' track owned by Nora Vance;
+ * "simple-prd-milestone-stuck": owned by Priya Raman (approver@example.com), Theo Brandt
+ * (commenter@example.com) its required reviewer, asks on Nov 3, 4 and 5 waiting;
+ * "simple-prd-milestones-gone": the same with every Usage alerts milestone gone;
+ * "simple-prd-milestone-track-owner": the stuck one with Rowan Pike (rowan.pike@example.com) owning
+ * its track instead, Jun Park a second of its tracks, and a second member also named Priya Raman).
  *
  * fails_when: a second ask of one date shares the first's id, so it cannot be declined; asking
  * again closes the older ask; an ask names no one it waits for; the PRD's required reviewer does
  * not see an ask decided; the PRD's owner may not decline an ask once all its milestones are gone;
- * an ask is sent to the member named as the PRD's owner (both of one name) and not to its track's
- * owner; the PRD's track owner may not decide a live milestone's ask;
+ * an ask is sent to someone who owns none of the PRD's tracks, or not to its track owners in id
+ * order; the milestone names an owner other than the PRD's first track owner by id; the scenario's
+ * members take new ids on each seed, so which owner it names changes from one browser to the next;
+ * the PRD's track owner may not decide a live milestone's ask;
  * no_claim: the API's own rules (api/tests/test_simple_goal_milestones_api.py).
  */
 
@@ -117,18 +121,41 @@ test("the PRD's owner declines an ask on Home when all its milestones are gone",
   await expect(gone).toHaveCount(0);
 });
 
-test("an ask is sent to the PRD's owners: its named owner and its track's owner", async ({ page }) => {
+test("an ask is sent to the PRD's track owners only, and the milestone names the first of them", async ({ page }) => {
   await open(page, "simple-prd-milestone-track-owner", "/simple/roadmap", "commenter@example.com");
-  await ask(page, "2027-01-20");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.getByTestId("ms-prd-label").filter({ hasText: "M2 Digest for all teams" }).click();
+  const prd = page.getByTestId("ms-prd-card");
+  await expect(prd).toContainText("From the PRD Usage alerts · owned by Rowan Pike");
+  await expect(prd).toContainText("A change here goes to Rowan Pike as a change to the PRD");
+  await prd.getByLabel("Date").fill("2027-01-20");
+  await prd.getByRole("button", { name: "Ask to change it" }).click();
+  await expect(page.getByTestId("ms-toast")).toContainText("Asked Rowan Pike to move M2 Digest for all teams to Jan 20 in the PRD");
+  await page.keyboard.press("Escape");
   await page.goto("/simple");
   const proposals = page.getByTestId("home-proposals");
   await expect(proposals.getByRole("heading", { name: "Your proposals waiting" })).toBeVisible();
   await expect(proposals.getByTestId("home-proposal")).toHaveCount(1);
-  await expect(proposals.getByTestId("home-proposal")).toContainText("Waiting for Rowan Pike, Priya Raman");
-  await expect(proposals.getByTestId("home-proposal")).not.toContainText("Priya Raman, Priya Raman");
+  // Its tracks' owners in id order; not Priya Raman (approver@example.com), who owns none of them.
+  await expect(proposals.getByTestId("home-proposal")).toContainText("Waiting for Rowan Pike, Jun Park");
+  await expect(proposals.getByTestId("home-proposal")).not.toContainText("Priya Raman");
 });
 
-test("the PRD's track owner, not its named owner, declines a live milestone's ask on Home", async ({ page }) => {
+test("each new browser seeds the same owners: the milestone names Rowan Pike every time", async ({ browser }) => {
+  // The scenario's members keep their ids from one seed to the next, so the first owner by id does too.
+  for (let n = 0; n < 5; n++) {
+    const context = await browser.newContext();
+    await context.clock.install({ time: MOCK_NOW });
+    const page = await context.newPage();
+    await open(page, "simple-prd-milestone-track-owner", "/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await page.getByTestId("ms-prd-label").filter({ hasText: "M2 Digest for all teams" }).click();
+    await expect(page.getByTestId("ms-prd-card")).toContainText("owned by Rowan Pike");
+    await context.close();
+  }
+});
+
+test("the PRD's track owner, not a company owner, declines a live milestone's ask on Home", async ({ page }) => {
   await open(page, "simple-prd-milestone-track-owner", "/simple", "rowan.pike@example.com");
   const proposals = page.getByTestId("home-proposals");
   await expect(proposals.getByRole("heading", { name: "Proposals on your items" })).toBeVisible();
