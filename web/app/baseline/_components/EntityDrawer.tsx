@@ -1329,10 +1329,10 @@ function EditForm({
 }
 
 /** A small icon button in the Edit form: adds or removes a list entry, an object field or an attribute. */
-function EditIcon({ icon, name, onClick }: { icon: "plus" | "x"; name: string; onClick: () => void }) {
+function EditIcon({ icon, name, onClick, className = "self-start" }: { icon: "plus" | "x"; name: string; onClick: () => void; className?: string }) {
   // Named by its title, in words that never hold the field's own name, so a field or a button found by its name (a
   // field "Saved replies", the Save button) never also finds this one; where it sits says which it adds to or removes.
-  return <Button variant="ghost" icon={icon} title={name} className="h-7 flex-none self-start px-1.5" onClick={onClick} />;
+  return <Button variant="ghost" icon={icon} title={name} className={`h-7 flex-none px-1.5 ${className}`} onClick={onClick} />;
 }
 
 /**
@@ -1365,8 +1365,10 @@ function DraftField({
 }) {
   const lines = useRef<HTMLTextAreaElement>(null);
   const label = `flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2${attr ? "" : " pl-3"}`;
-  const remove = onRemove && <EditIcon icon="x" name={removeName} onClick={onRemove} />;
-  if (d.kind === "object" || d.kind === "entries") {
+  // Beside a group's name, or beside a field's input.
+  const grouped = d.kind === "object" || d.kind === "entries";
+  const remove = onRemove && <EditIcon icon="x" name={removeName} onClick={onRemove} className={grouped ? "self-start" : "mb-1 self-end"} />;
+  if (grouped) {
     const parts: [string, string, Draft, boolean][] =
       d.kind === "object"
         ? d.fields.map(([k, p, fresh], i) => [fresh ? `new-${i}` : k, fresh ? "" : attrLabel(k), p, !!fresh])
