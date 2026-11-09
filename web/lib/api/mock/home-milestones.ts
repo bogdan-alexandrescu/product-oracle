@@ -177,3 +177,32 @@ export function seedHomeMilestoneTracks(): SimpleDb {
   for (const key of ["partner-invites", "price-seats", "price-discounts", "price-refunds", "alert-snooze"]) rm.ids[key] = stableUuid(`simple-item/${key}`);
   return rm;
 }
+
+export const HOME_MILESTONE_TWIN_TRACKS_SCENARIO = "home-milestones-twin-tracks";
+
+/**
+ * home-milestones-twin-tracks (review of PR 1453): two tracks share a code. The Guided setup
+ * track's "M1 · Measured" (Health log, Onboarding; Alert snooze, Alerts) and the Welcome media
+ * track's "M1 · Other" (Welcome tips, Onboarding; Alert sounds, Alerts) are on both roadmaps.
+ * On Onboarding, Usage report (Usage alerts track, which has no M1) and Setup FAQ (no track)
+ * type "M1", and Onboarding has no M1 of its own. On Alerts, Alert badges (Pricing track, no M1)
+ * types "M1", and Alerts has its own M1 of no goal, "M1 · First alerts" (Alert rules engine).
+ */
+export function seedHomeMilestoneTwinTracks(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  TRACKS.pricing ??= "Pricing track";
+  rm.goal_milestones = [
+    { id: stableUuid("simple-gm/twin-first"), roadmap: "alerts-roadmap", code: "M1", name: "First alerts", date: null, goal: null, gates: ["alert-rules"], counts_when: "", progress: "not_started" },
+  ];
+  rm.items.push(
+    { key: "welcome-tips", title: "Welcome tips", horizon: "next", roadmap: "onboarding-roadmap", track: "welcome", confidence: "medium", record: "M1 · Other" },
+    { key: "usage-report", title: "Usage report", horizon: "next", roadmap: "onboarding-roadmap", track: "alerts", confidence: "medium", milestone: { name: "M1", day: null } },
+    { key: "setup-faq", title: "Setup FAQ", horizon: "next", roadmap: "onboarding-roadmap", confidence: "medium", milestone: { name: "M1", day: null } },
+    { key: "alert-snooze", title: "Alert snooze", horizon: "next", roadmap: "alerts-roadmap", track: "onboarding", confidence: "medium", record: "M1 · Measured" },
+    { key: "alert-sounds", title: "Alert sounds", horizon: "next", roadmap: "alerts-roadmap", track: "welcome", confidence: "medium", record: "M1 · Other" },
+    { key: "alert-badges", title: "Alert badges", horizon: "next", roadmap: "alerts-roadmap", track: "pricing", confidence: "medium", milestone: { name: "M1", day: null } },
+  );
+  for (const key of ["welcome-tips", "usage-report", "setup-faq", "alert-snooze", "alert-sounds", "alert-badges"]) rm.ids[key] = stableUuid(`simple-item/${key}`);
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured" } : s));
+  return rm;
+}

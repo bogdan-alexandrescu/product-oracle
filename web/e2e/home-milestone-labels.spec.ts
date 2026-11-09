@@ -1,4 +1,4 @@
-import { HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
+import { HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -205,6 +205,28 @@ test("an item typed M1 whose goal has none sits under its roadmap's own M1, not 
   expect(loose).not.toContain("Usage report");
   expect(loose).not.toContain("Usage map");
   for (const other of ["M1 · First run in a day · 1 item", "M1 · Return pilot · 2 items"]) expect((await itemsOf(page, other))[0]).not.toContain("Usage report");
+});
+
+/*
+ * Card home-milestone-twin-tracks (review of PR 1453), on the mock's "home-milestones-twin-tracks"
+ * scenario: protects = an item typed "M1" whose own track has no M1 (or that has no track), on a
+ * roadmap where two other tracks each have an M1 ("M1 · Measured" and "M1 · Other"), is never put
+ * under one of them by a guess: it sits under its roadmap's own M1 of no goal when there is one
+ * (Alerts' "M1 · First alerts"), else under "Not in a milestone"; fails_when = Usage report, Setup
+ * FAQ or Alert badges sits under "M1 · Measured" or "M1 · Other".
+ */
+test("an item typed M1 never lands on a guessed track M1 when two tracks have one", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_TWIN_TRACKS_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(await itemsOf(page, "M1 · Measured · 2 items")).toEqual([["Alert snooze", "Health log"]]);
+  expect(await itemsOf(page, "M1 · Other · 2 items")).toEqual([["Alert sounds", "Welcome tips"]]);
+  // Alerts has its own M1 of no goal: Alert badges is there.
+  expect(await itemsOf(page, "M1 · First alerts · 2 items")).toEqual([["Alert badges", "Alert rules engine"]]);
+  // Onboarding has none: Usage report (its track has no M1) and Setup FAQ (no track) are in no milestone.
+  const none = labels.find((l) => l.startsWith("Not in a milestone"));
+  expect(none, labels.join(" / ")).toBeTruthy();
+  const [loose] = await itemsOf(page, none!);
+  expect(loose).toEqual(expect.arrayContaining(["Usage report", "Setup FAQ"]));
 });
 
 /*
