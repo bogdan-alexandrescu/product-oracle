@@ -1,3 +1,4 @@
+import { stableUuid } from "../lib/api/mock/ids";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { PRIORITIES_PLAN_KEY_RESULTS_SCENARIO } from "../lib/api/mock/simple-priorities";
 import { THEME_KEY } from "../lib/theme";
@@ -19,7 +20,7 @@ import { expect, test, type Page } from "./test";
  * Card kr-legend: protects = the Value / effort chart's legend lists the goal once and no key result, and the key
  * result's feature draws with its goal's shape; fails_when = a key result is a legend entry or a shape of its own.
  * Card kr-ranked: protects = the Ranked list names the goal on a key result's feature, and a key result's list
- * (?goal=<its key>) lists its features; fails_when = that list is empty.
+ * (the Goal map's "Open the goal" on it, not on the map yet) lists its features; fails_when = that list is empty.
  */
 
 const KR1 = "Half of new teams set up in one day";
@@ -107,7 +108,16 @@ test("Ranked: a key result's feature names its goal, and the key result's list f
   const row = page.getByTestId("prio-row").filter({ hasText: FEATURE });
   await expect(row).toHaveCount(1);
   await expect(row.getByTestId("prio-goal")).toHaveText(/Faster activation$/);
-  // A link to the key result's list (as the Goal map's "Open the goal").
-  await page.goto(`/simple/priorities?goal=kr-setup-day&name=${encodeURIComponent(`KR 1 ${KR1}`)}`);
-  await expect(page.getByTestId("prio-row").filter({ hasText: FEATURE })).toHaveCount(1);
+  // The Goal map opened on the key result (as Home's "Goal map" opens it on a goal): not on the map yet, its
+  // "Open the goal" leads to its list.
+  await page.goto(`/simple/goals?goal=${stableUuid("simple-goal/kr-setup-day")}`);
+  const off = page.getByTestId("gm-off-map");
+  await expect(off).toContainText(KR1);
+  await off.getByRole("link", { name: "Open the goal" }).click();
+  await expect(page).toHaveURL(/\/simple\/priorities\?goal=kr-setup-day/);
+  await expect(page.getByTestId("simple-priorities")).toBeVisible();
+  // Wait for the row lifted to its top goal (the key results loaded), so the count tests ?goal's match, not the raw rows.
+  const listed = page.getByTestId("prio-row").filter({ hasText: FEATURE });
+  await expect(listed.getByTestId("prio-goal")).toHaveText(/Faster activation$/);
+  await expect(listed).toHaveCount(1);
 });

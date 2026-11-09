@@ -16,7 +16,7 @@ type GoalRef = { key: string; title: string; position?: number | null };
 /** A row's goal as Priorities reads it: its top-level goal, and the key result it names (`kr_key`), if any. */
 type PlacedGoal = GoalRef & { kr_key?: string };
 
-/** A row's own goal key and, when that goal is a key result, its top-level goal's: a goal's list (?goal=) matches either. */
+/** A row's top-level goal key and, when the row names a key result, that key result's own: a goal's list (?goal=) matches either. */
 export const goalKeysOf = (g: GoalRef): string[] => [g.key, ...((g as PlacedGoal).kr_key ? [(g as PlacedGoal).kr_key!] : [])];
 
 /** A goal's key result as its bucket lists it: its name (with its code) and its target line, if it has one. */
