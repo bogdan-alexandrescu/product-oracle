@@ -6,7 +6,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
-import { stableUuid } from "./ids";
+import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
 import { GOALS, goalPositionOf, goalRank, goalInTrash, roadmapGoal, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
@@ -301,9 +301,24 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, 
   return row;
 }
 
+/**
+ * kr-in-priorities, the "goal-key-results" scenario (server.ts): as the API lists them, every goal its roadmap's items
+ * serve, KR 1 among them with its own measure and target, and each item's feature linked to its goal, so the key
+ * result's feature has its weeks and grip in its goal's bucket. Invented data.
+ */
+function goalKeyResultsBuckets(simple: { items?: { key: string; title: string; goal?: string; draft?: boolean }[] }): GoalBucketsDb | undefined {
+  if (typeof localStorage === "undefined" || localStorage.getItem(MOCK_SCENARIO_KEY) !== "goal-key-results" || !simple.items) return undefined;
+  const items = simple.items.filter((i) => !i.draft && i.goal);
+  const name = (k: string) => GOALS[k] ?? k;
+  const db = seedGoalBucketsWith(seedGoalBuckets(), [...new Set(items.map((i) => name(i.goal!)))], items.map((i) => ({ key: i.key, title: i.title, goals: [name(i.goal!)] })));
+  const kr = db.goals.find((g) => g.title === name("kr-setup-day"));
+  if (kr) Object.assign(kr, { measure: "New teams set up in one day", target: "50%", due: "2027-01-29" });
+  return db;
+}
+
 /** The goal buckets' db, its seeded owners matched to the members by email. */
-export function goalBucketsDb(simple: { goal_buckets?: GoalBucketsDb }, people: GoalPeople = []): GoalBucketsDb {
-  const db = (simple.goal_buckets ??= seedGoalBuckets());
+export function goalBucketsDb(simple: { goal_buckets?: GoalBucketsDb; items?: { key: string; title: string; goal?: string; draft?: boolean }[] }, people: GoalPeople = []): GoalBucketsDb {
+  const db = (simple.goal_buckets ??= goalKeyResultsBuckets(simple) ?? seedGoalBuckets());
   for (const g of db.goals) {
     if (g.owner_email && g.owner_id === undefined) g.owner_id = people.find((x) => x.email === g.owner_email)?.id ?? null;
   }

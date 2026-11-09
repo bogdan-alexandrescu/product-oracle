@@ -14,12 +14,14 @@ import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { FeatureMarks, MarkFor, ShowFilter, showsAs, useFeatureMarks, type ShowKind } from "@/components/current-state/CurrentState";
 import { useSetParams } from "@/lib/use-set-params";
+import { topGoalSuggestions } from "@/lib/key-results";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
 import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
+import { goalKeysOf, KeyResultList, liftedMoves, topGoalBuckets, topGoalPlan, topGoalPriorities, usePriorityKeyResults, type PriorityKeyResults } from "./key-results";
 import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan, weeksWords } from "./plan-buckets";
 import { CrowdMark, CrowdSheet, MARK_R, markLayout, type Box, type Crowd } from "./mark-counts";
@@ -179,7 +181,9 @@ export function Priorities() {
     setParams({ line: key === "now" ? null : key });
     void api.PATCH("/v1/me/preferences", { body: { priorities_line: key } });
   };
-  const data = q.data;
+  // kr-in-priorities: a key result's features read, count and draw as its goal's.
+  const kr = usePriorityKeyResults();
+  const data = useMemo(() => topGoalPriorities(q.data, kr.krs), [q.data, kr.krs]);
   // Running today: each feature's word pill, and the Show filter that counts each kind.
   const marks = useFeatureMarks();
   const [show, setShow] = useState<ShowKind | null>(null);
@@ -195,7 +199,9 @@ export function Priorities() {
   // Roles through can() and the rows' own fields: the API says who applies and who proposes.
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
   // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
-  const suggestions = useGoalSuggestions(() => q.reload());
+  const allSuggestions = useGoalSuggestions(() => q.reload());
+  // kr-in-priorities: a key result's suggested features are under its goal's bucket.
+  const suggestions = useMemo(() => ({ ...allSuggestions, data: topGoalSuggestions(allSuggestions.data, kr.krs) }), [allSuggestions, kr.krs]);
   useItemChanged(q.reload);
   // The item just moved (dragged, re-estimated or moved with the keys) and its rank before, kept
   // until the next move or leaving the page: highlighted with "moved #a → #b".
@@ -370,7 +376,7 @@ export function Priorities() {
           <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} featureOpen={!!rowOpen} />
         </OpenRow.Provider>
       )}
-      {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} reload={q.reload} />}
+      {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} reload={q.reload} kr={kr} />}
       </div>
     </div>
   );
@@ -526,7 +532,8 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
   const open = useContext(OpenRow);
   const goal = params.get("goal");
   const goalName = params.get("name") ?? goal;
-  const rows = byLine(data).filter((r) => !goal || (r.goal ? r.goal.key === goal : goalOfRow(data)(r) === goalName));
+  // kr-in-priorities: a key result's list finds its rows too (each row reads its top-level goal).
+  const rows = byLine(data).filter((r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : goalOfRow(data)(r) === goalName));
   const setParams = useSetParams();
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
@@ -2147,10 +2154,10 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
 
 // --------------------------------------------------------------------------- goal buckets
 
-function Buckets({ data, suggestions, reload }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown> }) {
+function Buckets({ data, suggestions, reload, kr }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown>; kr: PriorityKeyResults }) {
   // plan-charts: with a dated plan, where each goal's work lands milestone by milestone.
-  if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} reload={reload} />;
-  return <UndatedBuckets data={data} suggestions={suggestions} reload={reload} />;
+  if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} reload={reload} kr={kr} />;
+  return <UndatedBuckets data={data} suggestions={suggestions} reload={reload} kr={kr} />;
 }
 
 const sameGoal = (a: string, b: string) => goalLabel(a).name.toLowerCase() === goalLabel(b).name.toLowerCase();
@@ -2160,11 +2167,13 @@ const sameGoal = (a: string, b: string) => goalLabel(a).name.toLowerCase() === g
  * you can change as in the dated view: drag one to another goal by its grip (pointer, touch or
  * keys), add one in place, edit or cut one, each with Undo.
  */
-function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown> }) {
+function UndatedBuckets({ data, suggestions, reload, kr }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown>; kr: PriorityKeyResults }) {
   const { can } = useMe();
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
   const bucketsQ = useGoalBuckets();
-  const gb = bucketsQ.data;
+  // kr-in-priorities: top-level goals only; a feature linked to a key result is under its goal.
+  const read = bucketsQ.data;
+  const gb = useMemo(() => topGoalBuckets(read, kr.krs), [read, kr.krs]);
   const [note, setNote] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
   const reloadAll = async () => {
@@ -2172,7 +2181,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
   };
   const writes = useBucketWrites(reloadAll, setNote, setError);
   const rights = useBucketRights(gb);
-  const drag = useBucketDrag({ gb, writes });
+  const drag = useBucketDrag({ gb, writes: liftedMoves(writes, read) });
   const tasks = useBucketTasks({ rows: data.rows, plan: null, may: rights.task, reload: reloadAll, setNote, setError });
   // EG1 a without a dated plan: each goal's ⋯ (Edit goal, Move up and down, Archive, Delete, or
   // the asks), its owner, its form in place, the note with Undo and the Archived goals fold.
@@ -2316,6 +2325,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                     </span>
                   </p>
                 )}
+                {!b.no_goal && <KeyResultList list={kr.of([rec?.id, b.key, b.title], read)} goal={b.title} />}
                 </>
               )}
               <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface2">
@@ -2433,12 +2443,14 @@ function suggestionGoal(api: GoalSuggestionsApi, goal: string): Schemas["SimpleG
 }
 
 /** plan-charts (the owner's pick B): the plan's header, then a card per goal listing each feature with its milestone chips. */
-function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown> }) {
+function PlanBuckets({ data, plan: read, suggestions, reload, kr }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown>; kr: PriorityKeyResults }) {
   const { can } = useMe();
   const bucketsQ = useGoalBuckets();
-  const gb = bucketsQ.data;
+  // kr-in-priorities: top-level goals only; a feature linked to a key result is under its goal.
+  const readGb = bucketsQ.data;
+  const gb = useMemo(() => topGoalBuckets(readGb, kr.krs), [readGb, kr.krs]);
   // mk-goalbuckets: each feature under the first goal its links name, the goals in the owner's order.
-  const plan = placedPlan(read, gb);
+  const plan = placedPlan(topGoalPlan(read, kr.top), gb);
   const goals = planGoals(plan);
   const noGoal = plan.slices.some((x) => !x.goal);
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
@@ -2504,7 +2516,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
   const goalOf = (title: string) => gb?.goals.find((g) => g.title === title);
   const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
   // GB3 a: a feature carried by its grip, by pointer or by keyboard.
-  const drag = useBucketDrag({ gb, writes });
+  const drag = useBucketDrag({ gb, writes: liftedMoves(writes, readGb) });
   // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine;
   // its preview shows a code only once it has one people know.
   const draftGrip = (t: Task, from: string | null) => {
@@ -2631,6 +2643,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                       </span>
                     </p>
                   )}
+                  <KeyResultList list={kr.of([rec?.id, g], readGb)} goal={goalLabel(g).name} className={rec ? "pl-8" : ""} />
                 </>
               )}
               <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move || rights.task} lifted={drag.lifted} onGrip={featureGrip} onOpen={setOpened} {...taskRows(g, rec)} />

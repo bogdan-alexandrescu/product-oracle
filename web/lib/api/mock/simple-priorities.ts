@@ -16,6 +16,7 @@ import { flowFor } from "./simple-visuals";
 import { madeOrder } from "./made-order";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 import { COMPANY_TITLE } from "./one-roadmap";
+import { seedGoalBuckets } from "./goal-buckets";
 
 type Row = Schemas["SimplePriorityRow"];
 type Item = Schemas["SimpleRoadmapItem"];
@@ -46,6 +47,8 @@ const FEATURES: Record<string, { value: number; effort: number; code?: string }>
   "setup-import": { value: 6, effort: 3, code: "F-12" },
   "setup-video": { value: 0, effort: 1 },
   "price-tiers": { value: 0, effort: 3 },
+  // kr-in-priorities: the "goal-key-results" scenario's feature on a key result (server.ts).
+  "kr-setup-list": { value: 5, effort: 3 },
 };
 /**
  * The "priorities-goal-no-value" scenario's invented feature: it serves a goal, but Oracle has no goal value for it (as
@@ -101,6 +104,21 @@ export const PRIORITIES_PLAN_GOAL_TWINS_SCENARIO = "priorities-plan-goal-twins";
 export function seedPlanGoalTwins(db: SimpleDb): void {
   if (!db.plan) throw new Error(`${PRIORITIES_PLAN_GOAL_TWINS_SCENARIO}: the seed has no plan to name Activation twice`);
   db.plan.twin_goals = true;
+}
+
+/**
+ * kr-in-priorities, the "priorities-plan-key-results" scenario: "simple-plan" whose Ground Truth holds Growth as a goal
+ * and Activation, a plan goal, as its key result (a subgoal); Help center search (F-20, an Activation slice) is not a
+ * goal-bucket feature yet, so only its slice names its goal. Invented data.
+ */
+export const PRIORITIES_PLAN_KEY_RESULTS_SCENARIO = "priorities-plan-key-results";
+export function seedPlanKeyResults<E extends { id: string; key: string; title: string; type: string; status: string; parent_id?: string | null; attrs?: Record<string, unknown> | null }>(entities: E[], db: SimpleDb): void {
+  const template = entities.find((e) => e.type === "goal" && e.status === "confirmed");
+  if (!template || !db.plan) throw new Error(`${PRIORITIES_PLAN_KEY_RESULTS_SCENARIO}: the seed has no goal or no plan`);
+  const growth = { ...template, id: stableUuid("simple-goal/plan-growth"), key: "plan-growth", title: "Growth", parent_id: null, attrs: { metric: "Weekly active teams", weight: 1 } };
+  entities.push(growth, { ...template, id: stableUuid("simple-goal/plan-activation"), key: "plan-activation", title: "Activation", parent_id: growth.id, attrs: { metric: "Teams that finish setup in a day", weight: 1 } });
+  const gb = (db.goal_buckets = seedGoalBuckets());
+  gb.features = gb.features.filter((f) => f.key !== "F-20");
 }
 
 /** The "simple-plan" scenario's existing items the plan names (server.ts seedSimplePlanScenario). */
