@@ -790,6 +790,11 @@ function DecisionTray({
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">
         {!asked(c) && !ms(c) && !kd(c)?.name && byId.get(String(c.target.item_id)) ? named(byId.get(String(c.target.item_id))!) : title(c)}: {asks(c)} · <span className="text-text2">{c.by_name}</span>
+        {/* Two on one milestone read alike: each says the day it was proposed, month first, as Home does. */}
+        <span className="text-text2" data-testid="tray-proposal-day">
+          {" · "}
+          {formatInZone(c.at, displayZone(), { month: "short", day: "numeric" })}
+        </span>
         {c.op === "remove_dependency" && waitsFor && waitsFor(c) && <span className="text-text2"> · waits for {waitsFor(c)}</span>}
         {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
       </span>
