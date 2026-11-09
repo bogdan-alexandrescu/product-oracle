@@ -50,6 +50,8 @@ import { DRAG_PX, grabAt, LONG_PRESS_MS, planned } from "./_timeline";
 type Zoom = "3m" | "6m" | "1y" | "all";
 /** Days in sight at each zoom (All fits the whole plan). */
 const ZOOM_DAYS: Record<Exclude<Zoom, "all">, number> = { "3m": 91, "6m": 182, "1y": 365 };
+/** The owner (Nov 9): every zoom reaches at least the end of Q1 2027, item or not. */
+const REACH = "2027-03-31";
 
 const MONTHS = [
   "Jan",
@@ -248,7 +250,7 @@ const MS_CHIP_W = 30;
 const fullDay = (d: string) => calendarDay(d, { month: "short", day: "numeric", year: "numeric" });
 const ROW_H = 34;
 
-/** The Timeline (QR1 A): six months around today, one row per item, names fixed on the left;
+/** The Timeline (QR1 A): three months from just before today, one row per item, names fixed on the left;
  * a phone gets a list by quarter. The key and the broken links sit above it; an open item
  * sits in a panel at its right (a sheet on a phone). */
 export function ZoomTimeline(props: TimelineProps) {
@@ -429,13 +431,14 @@ export function ConflictPanel({
   );
 }
 
-/** A desktop's chart: one row per item, days to scale, zoomed to six months around today. */
+/** A desktop's chart: one row per item, days to scale, zoomed to three months from just before today. */
 function DayChart(props: TimelineProps) {
   const { data, phone, openKey, onOpen } = props;
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
   const rows = useMemo(() => rowsOf(data), [data]);
-  const [zoom, setZoom] = useState<Zoom>("6m");
+  // The owner (Nov 9): the Timeline opens on 3 months; a person's pick holds for the visit.
+  const [zoom, setZoom] = useState<Zoom>("3m");
   const fit = zoom === "all";
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(1000);
@@ -455,7 +458,8 @@ function DayChart(props: TimelineProps) {
     .concat(data.today)
     .sort();
   const t0 = addDays(days[0].slice(0, 8) + "01", 0);
-  const t1 = addDays(days[days.length - 1], 20);
+  const last = addDays(days[days.length - 1], 20);
+  const t1 = last > REACH ? last : REACH;
   const span = daysBetween(t0, t1);
   const visible = Math.max(200, w - labelW - 2);
   const ppd = fit ? visible / span : visible / ZOOM_DAYS[zoom];
