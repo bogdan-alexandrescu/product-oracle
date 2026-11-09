@@ -35,8 +35,11 @@ NOUN = re.compile(r"[a-z][a-z -]{0,23}")
 # An unfilled template placeholder in a goal's name or description, as an import writes one:
 # lowercase "[n]", "[x]", "[#]", "[?]", "[tbd]", and "[n] of [n]" / "[n] out of [n]" as one. A
 # capitalised or other bracketed word ("Project [X]", "Price [Value]") is a real name and stays.
-_PLACEHOLDER = r"\[(?:n|x|#|\?|tbd)\]"
-PLACEHOLDER = re.compile(rf"{_PLACEHOLDER}(?:\s+(?:of|out of)\s+{_PLACEHOLDER})?")
+# A "%", "/" or "Of" whose only operand was a placeholder ("[n]%", "[n]/[n]", "[n] Of [n]")
+# goes with it.
+_PLACEHOLDER = r"\[(?:n|x|#|\?|tbd)\]%?"
+_JOIN = r"\s*/\s*|\s+(?:[Oo]f|[Oo]ut [Oo]f)\s+"
+PLACEHOLDER = re.compile(rf"{_PLACEHOLDER}(?:(?:{_JOIN}){_PLACEHOLDER})?")
 STALE_DAYS = 45
 
 MESSAGES = {
