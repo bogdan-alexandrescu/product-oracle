@@ -342,6 +342,13 @@ export const MAP_GOALS: Record<string, string> = {};
  * goal-map-editing: an item's own goal named by a confirmed goal's id (goal-ladder's), as the API's
  * goal_ids; none while that goal is in Trash or unknown (service.load leaves it out).
  */
+/** tracks-goal (service.load): the live company goal a track is tied to (the Tracks sheet's track_state), by id and name. */
+export function trackGoal(db: SimpleDb, track: string): { goal_id: string | null; goal_name: string | null } {
+  const id = (db as SimpleDb & { track_state?: Record<string, { goal?: string | null }> }).track_state?.[track]?.goal;
+  const g = id ? db.goal_buckets?.goals.find((x) => x.id === id && !x.archived && !x.trashed) : undefined;
+  return { goal_id: g?.id ?? null, goal_name: g?.title ?? null };
+}
+
 export function mapGoalRef(db: Pick<SimpleDb, "goal_buckets">, id: string): Schemas["SimpleGoalRef"] | null {
   if (!(id in MAP_GOALS) || db.goal_buckets?.goals.some((g) => g.id === id && g.trashed)) return null;
   return { id, key: id, title: MAP_GOALS[id], metric: null, position: null, target: null, due: null, current: null, unit: null };
@@ -1522,7 +1529,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       prd: ownPrd(s),
       // service.load: the first goal it is linked to directly (goal_ids) that is not in Trash, else its Goal map goal.
       goal: linked(s) ? { id: stableUuid(`simple-goal/${linked(s)}`), key: linked(s)!, ...roadmapGoal(reader.full, linked(s)!), position: goalPositionOf(linked(s)!), ...READINGS[linked(s)!] } : s.map_goal ? mapGoalRef(reader.full, s.map_goal) : (reader.full.map_goals?.[db.ids[s.key]] ?? null),
-      track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
+      track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track], ...trackGoal(db, s.track) } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
       draft: !!s.draft,

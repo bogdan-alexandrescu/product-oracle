@@ -10,7 +10,7 @@ import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { seedGoalBuckets } from "./goal-buckets";
 import { stableUuid } from "./ids";
-import { canDecideItem, canEditRoadmap, closed, deciderIds, GOALS, ROADMAPS, TRACKS, type SimpleDb } from "./simple-roadmap";
+import { canDecideItem, canEditRoadmap, closed, deciderIds, GOALS, ROADMAPS, TRACKS, trackGoal, type SimpleDb } from "./simple-roadmap";
 import type { MockMilestone } from "./simple-milestones";
 import type { TrashEntryRow } from "./trash";
 
@@ -26,7 +26,10 @@ export interface RemovedCtx {
 type Log = Record<string, { at: string; by: string }>;
 interface TrackState {
   status: Status;
+  /** Its PRD's title; "" when it has none (tracks-goal: a track's PRD is optional). */
   prd: string;
+  /** tracks-goal: the company goal it is tied to (a goal bucket's id). */
+  goal?: string | null;
 }
 type Db = SimpleDb & {
   removed_log?: Log;
@@ -39,6 +42,14 @@ type Db = SimpleDb & {
   /** Track names as Simple changed them (TRACKS is the module's; it is rebuilt on a reload). */
   track_titles?: Record<string, string>;
   trashed_tracks?: Record<string, { title: string; state: TrackState; owner?: string; items: string[] }>;
+};
+
+/** The company's goals a track may be tied to: neither archived nor in Trash, in their order. */
+const liveGoals = (db: Db) => (db.goal_buckets ??= seedGoalBuckets()).goals.filter((g) => !g.archived && !g.trashed).sort((a, b) => a.order - b.order);
+/** A free PRD's title by id (as free_prds: accepted, with no track, one in Trash too). */
+const freePrd = (db: Db, states: Record<string, TrackState>, id: string): string | undefined => {
+  const taken = new Set([...Object.keys(TRACKS).map((k) => states[k].prd), ...Object.values(db.trashed_tracks ?? {}).map((x) => x.state.prd)]);
+  return [...new Set(Object.values(ROADMAPS).map((r) => r.prd))].find((t) => prdId(t) === id && !taken.has(t));
 };
 
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
@@ -159,16 +170,18 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
       const own = db.track_owners?.[k];
       const decides = owner || (own === ctx.id && RANK[ctx.role] >= RANK.approver);
       const st = states[k];
-      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: prdId(st.prd), prd_title: st.prd || null, can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: db.items.filter((s) => s.track === k && !closed(s)).length, moves_count: db.items.filter((s) => s.track === k).length };
+      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: st.prd ? prdId(st.prd) : null, prd_title: st.prd || null, ...trackGoal(db, k), can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: db.items.filter((s) => s.track === k && !closed(s)).length, moves_count: db.items.filter((s) => s.track === k).length };
     });
     // As free_prds: only PRDs with no track (one in Trash takes its PRD too).
-    const taken = new Set([...Object.keys(TRACKS).map((k) => states[k].prd), ...Object.values(db.trashed_tracks ?? {}).map((x) => x.state.prd)]);
+    const taken = new Set([...Object.keys(TRACKS).map((k) => states[k].prd), ...Object.values(db.trashed_tracks ?? {}).map((x) => x.state.prd)].filter(Boolean));
     const prds = [...new Set(Object.values(ROADMAPS).map((r) => r.prd))]
       .filter((t) => !taken.has(t))
       .sort()
       .map((t) => ({ id: prdId(t), title: t }));
     const people = Object.entries(ctx.names).map(([id, n]) => ({ id, name: n }));
-    return json(200, { tracks, can_add: owner, add_decider_name: owner ? null : deciderName, people, prds });
+    // tracks-goal: the company's live goals a track may be tied to (goal_buckets._goals).
+    const goals = liveGoals(db).map((g) => ({ id: g.id, name: g.title }));
+    return json(200, { tracks, can_add: owner, add_decider_name: owner ? null : deciderName, people, prds, goals });
   }
   if (p[2] === "changes" && m === "POST" && p[4] === "undo" && db.plan_done?.[p[3]]) {
     const after = db.plan_done[p[3]]() ?? {};
@@ -215,13 +228,15 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
   if (body.op === "add_track") {
     const title = (a.title ?? "").trim();
     if (!title) return json(422, { detail: "A track needs a name" });
-    const prd = Object.values(ROADMAPS).find((r) => prdId(r.prd) === a.prd_id)?.prd;
-    if (!prd) return json(422, { detail: "Pick the track's PRD" });
+    // tracks-goal: its PRD and goal are optional; a PRD has at most one track.
+    const prd = a.prd_id ? freePrd(db, states, a.prd_id) : "";
+    if (prd === undefined) return json(409, { detail: "That PRD has a track already, or is not accepted yet" });
+    if (a.goal_id && !liveGoals(db).some((g) => g.id === a.goal_id)) return json(422, { detail: "after.goal_id: not one of this company's goals" });
     let added = "";
     if (owner) {
       const k = (added = `added-${Object.keys(TRACKS).length + 1}`);
       setTitle(db, k, title);
-      states[k] = { status: "active", prd };
+      states[k] = { status: "active", prd, goal: a.goal_id || null };
       if (a.owner_id) (db.track_owners ??= {})[k] = a.owner_id;
     }
     // Undo removes the track while it holds nothing; one that anything references since goes to Trash.
@@ -248,17 +263,34 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     });
   }
   if (body.op === "edit_track") {
+    // tracks-goal: a PRD set is a free one; a goal a live one.
+    const prd = a.prd_id ? freePrd(db, states, a.prd_id) : "";
+    if ("prd_id" in a && prd === undefined && a.prd_id !== prdId(states[k].prd)) return json(409, { detail: "That PRD has a track already, or is not accepted yet" });
+    const goal = a.goal_id ? liveGoals(db).find((g) => g.id === a.goal_id) : undefined;
+    if (a.goal_id && !goal) return json(422, { detail: "after.goal_id: not one of this company's goals" });
     const words =
-      a.title != null ? `renamed the track ${title} to ${a.title}` : a.status != null ? `${a.status === "active" ? "resumed" : a.status === "paused" ? "paused" : "closed"} the track ${title}` : `set ${title}'s owner to ${name(a.owner_id ?? undefined) ?? "no one"}`;
-    const was = { title, status: states[k].status, owner: own };
+      a.title != null
+        ? `renamed the track ${title} to ${a.title}`
+        : a.status != null
+          ? `${a.status === "active" ? "resumed" : a.status === "paused" ? "paused" : "closed"} the track ${title}`
+          : "goal_id" in a
+            ? goal ? `tied ${title} to the goal ${goal.title}` : `took the goal off ${title}`
+            : "prd_id" in a
+              ? prd ? `set ${title}'s PRD to ${prd}` : `took the PRD off ${title}`
+              : `set ${title}'s owner to ${name(a.owner_id ?? undefined) ?? "no one"}`;
+    const was = { title, status: states[k].status, owner: own, prd: states[k].prd, goal: states[k].goal ?? null };
     const back = () => {
       if (!(k in TRACKS)) return;
       setTitle(db, k, was.title);
       states[k].status = was.status;
+      states[k].prd = was.prd;
+      states[k].goal = was.goal;
       if (was.owner) (db.track_owners ??= {})[k] = was.owner;
       else delete db.track_owners?.[k];
     };
     if (decides) {
+      if ("goal_id" in a) states[k].goal = goal?.id ?? null;
+      if ("prd_id" in a && prd !== undefined) states[k].prd = prd;
       if (a.title != null && a.title.trim()) setTitle(db, k, a.title.trim());
       if (a.status != null) states[k].status = a.status as Status;
       if ("owner_id" in a) {

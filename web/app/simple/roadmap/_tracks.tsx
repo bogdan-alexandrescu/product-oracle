@@ -20,6 +20,8 @@ const ROW = "grid grid-cols-[84px_minmax(0,1fr)] items-center gap-2 py-1";
 function asking(after: Record<string, string | null>): string {
   if ("title" in after) return "Rename";
   if ("owner_id" in after) return "Owner change";
+  if ("goal_id" in after) return "Goal change";
+  if ("prd_id" in after) return "PRD change";
   return after.status === "paused" ? "Pause" : after.status === "closed" ? "Close" : "Resume";
 }
 
@@ -134,7 +136,7 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
                   </div>
                   {expanded && (
                     <div className="mt-1">
-                      <TrackFields t={t} may={canChange} people={data?.people ?? []} onEdit={(after, done) => edit(t, after, done)} />
+                      <TrackFields t={t} may={canChange} people={data?.people ?? []} prds={data?.prds ?? []} goals={data?.goals ?? []} onEdit={(after, done) => edit(t, after, done)} />
                       {canChange && t.can_decide && trashing !== t.id && (
                         <button
                           type="button"
@@ -177,7 +179,7 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
   );
 }
 
-function TrackFields({ t, may, people, onEdit }: { t: Track; may: boolean; people: Schemas["SimplePerson"][]; onEdit: (after: Record<string, string | null>, done: string) => Promise<boolean> }) {
+function TrackFields({ t, may, people, prds, goals, onEdit }: { t: Track; may: boolean; people: Schemas["SimplePerson"][]; prds: Schemas["SimplePrdRef"][]; goals: Schemas["SimpleTrackGoal"][]; onEdit: (after: Record<string, string | null>, done: string) => Promise<boolean> }) {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(t.title);
   const word = t.can_decide ? "Save" : "Propose";
@@ -249,31 +251,70 @@ function TrackFields({ t, may, people, onEdit }: { t: Track; may: boolean; peopl
       </div>
       <div className={ROW}>
         <dt className="text-sm text-text2">PRD</dt>
-        <dd>{t.prd_title ?? "None"}</dd>
+        <dd>
+          {/* tracks-goal: its PRD is optional; a PRD has one track, so only free ones are offered. */}
+          {may ? (
+            <select aria-label="PRD" value={t.prd_id ?? ""} onChange={(e) => void onEdit({ prd_id: e.target.value || null }, `${t.title}'s PRD is now ${prds.find((p) => p.id === e.target.value)?.title ?? "none"}`)} className={FIELD}>
+              <option value="">No PRD</option>
+              {t.prd_id && <option value={t.prd_id}>{t.prd_title ?? "This PRD"}</option>}
+              {prds.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
+          ) : (
+            (t.prd_title ?? "No PRD")
+          )}
+        </dd>
+      </div>
+      <div className={ROW}>
+        <dt className="text-sm text-text2">Goal</dt>
+        <dd>
+          {may ? (
+            <GoalSelect label="Goal" value={t.goal_id ?? ""} goals={goals} onChange={(v) => void onEdit({ goal_id: v || null }, `${t.title}'s goal is now ${goals.find((g) => g.id === v)?.name ?? "none"}`)} />
+          ) : (
+            (t.goal_name ?? "No goal")
+          )}
+        </dd>
       </div>
     </dl>
   );
 }
 
-function AddTrack({ data, onAdd, onCancel }: { data: Schemas["SimpleTracks"]; onAdd: (after: { title: string; prd_id: string; owner_id: string | null }) => Promise<unknown>; onCancel: () => void }) {
+/** tracks-goal: "No goal" and the company's goals by their names. */
+function GoalSelect({ label, value, goals, onChange }: { label: string; value: string; goals: Schemas["SimpleTrackGoal"][]; onChange: (v: string) => void }) {
+  return (
+    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={FIELD}>
+      <option value="">No goal</option>
+      {goals.map((g) => (
+        <option key={g.id} value={g.id}>
+          {g.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function AddTrack({ data, onAdd, onCancel }: { data: Schemas["SimpleTracks"]; onAdd: (after: { title: string; prd_id: string | null; owner_id: string | null; goal_id: string | null }) => Promise<unknown>; onCancel: () => void }) {
   const [title, setTitle] = useState("");
+  // tracks-goal: a track's PRD is optional ("No PRD" when none is free); a PRD has one track, so only PRDs with none are offered.
   const [prd, setPrd] = useState(data.prds[0]?.id ?? "");
   const [owner, setOwner] = useState("");
+  const [goal, setGoal] = useState("");
+  const why = title.trim() ? undefined : "Name the track";
   return (
     <div className="mb-2 grid gap-1.5 rounded-lg border border-line p-2" data-testid="track-new">
       <input aria-label="New track name" autoFocus placeholder="Track name" value={title} onChange={(e) => setTitle(e.target.value)} className={FIELD} />
-      {/* A PRD has one track: only PRDs with none are offered. */}
-      {data.prds.length ? (
-        <select aria-label="PRD" value={prd} onChange={(e) => setPrd(e.target.value)} className={FIELD}>
-          {data.prds.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.title}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <p className="text-sm text-text2">Every PRD has a track</p>
-      )}
+      <select aria-label="New track PRD" value={prd} onChange={(e) => setPrd(e.target.value)} className={FIELD}>
+        <option value="">No PRD</option>
+        {data.prds.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.title}
+          </option>
+        ))}
+      </select>
+      <GoalSelect label="New track goal" value={goal} goals={data.goals ?? []} onChange={setGoal} />
       <select aria-label="New track owner" value={owner} onChange={(e) => setOwner(e.target.value)} className={FIELD}>
         <option value="">No owner</option>
         {data.people.map((p) => (
@@ -283,7 +324,7 @@ function AddTrack({ data, onAdd, onCancel }: { data: Schemas["SimpleTracks"]; on
         ))}
       </select>
       <div className="flex gap-1.5">
-        <button type="button" className={PRIMARY} disabled={!title.trim() || !prd} onClick={() => void onAdd({ title: title.trim(), prd_id: prd, owner_id: owner || null })}>
+        <button type="button" className={PRIMARY} disabled={!!why} title={why} onClick={() => void onAdd({ title: title.trim(), prd_id: prd || null, owner_id: owner || null, goal_id: goal || null })}>
           {data.can_add ? "Add" : "Propose"}
         </button>
         <Button className="!h-8" onClick={onCancel}>
