@@ -69,7 +69,7 @@ test("edit: attributes read in words, the parent goal is picked by name, one lis
   await expect(form.getByLabel("Parent goal")).toHaveValue("g.paid-conversion");
   await expect(form.getByLabel("Parent goal").locator("option:checked")).toHaveText("Grow paid conversion");
   const open = form.getByLabel("Open values");
-  await expect(open).toHaveValue("live helpers\n50 replied threads a day\n% of threads answered within an hour");
+  await expect(open).toHaveValue("live helpers\n50 replied threads a day\nof threads answered within an hour");
   const split = form.getByRole("group", { name: "Reply split" });
   await expect(split.getByLabel("Email threads")).toHaveValue("60");
   await expect(split.getByLabel("Chat threads")).toHaveValue("");
@@ -88,7 +88,7 @@ test("edit: attributes read in words, the parent goal is picked by name, one lis
     for (const v of values) plain(v);
   }
 
-  await open.fill("live helpers\n60 replied threads a day\n% of threads answered within an hour");
+  await open.fill("live helpers\n60 replied threads a day\nof threads answered within an hour");
   await split.getByLabel("Chat threads").fill("40");
   await form.getByRole("button", { name: "Save" }).click();
   await expect(panel.getByRole("status")).toContainText("Saved");
