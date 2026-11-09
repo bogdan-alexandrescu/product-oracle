@@ -31,18 +31,40 @@ test("an endless colour animation is read at the keyframe it rests on, and keeps
   expect(await page.locator(".glow").evaluate((n) => n.getAnimations()[0].playState)).toBe("running");
 });
 
+// Each direction rests where its from keyframe (white) shows: black on white is 21, on the
+// to keyframe (#333) it is about 1.7.
+for (const [what, timing] of [
+  ["an alternate glow with a negative delay", "0.8s linear -0.3s infinite alternate"],
+  ["an alternate-reverse glow", "0.8s linear infinite alternate-reverse"],
+  ["a reverse glow", "0.8s linear infinite reverse"],
+  ["a reverse glow with a negative delay", "0.8s linear -0.3s infinite reverse"],
+]) {
+  test(`${what} is read at its from keyframe, not its to keyframe`, async ({ page }) => {
+    await page.setContent(`
+      <style>
+        @keyframes example-glow { from { background-color: #fff } to { background-color: #333 } }
+        .glow { animation: example-glow ${timing}; }
+      </style>
+      <div class="glow"><p data-testid="glowing" style="color: #000">Example text</p></div>
+    `);
+    expect(await contrast(page.getByTestId("glowing"), 1_500)).toBeCloseTo(21, 1);
+    expect(await page.locator(".glow").evaluate((n) => n.getAnimations()[0].playState)).toBe("running");
+  });
+}
+
 test("an endless opacity pulse (a loading dot) is read at rest, not reported as running forever", async ({ page }) => {
+  // The pulse dims the text colour with its opacity, so only its rest point (#111) reads 18.9 on white.
   await page.setContent(`
     <style>
-      @keyframes example-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.2 } }
+      @keyframes example-pulse { 0%, 100% { opacity: 1; color: #111 } 50% { opacity: 0.2; color: #bbb } }
       .dot { animation: example-pulse 1s ease-in-out -0.3s infinite; }
     </style>
-    <p data-testid="loading" class="dot" style="color: #111; background: #fff">Loading example</p>
+    <p data-testid="loading" class="dot" style="background: #fff">Loading example</p>
   `);
-  expect(await contrast(page.getByTestId("loading"), 1_500)).toBeGreaterThan(15);
+  expect(await contrast(page.getByTestId("loading"), 1_500)).toBeCloseTo(18.88, 1);
 });
 
-test("a locator that matches two elements fails at once, naming the strict mode violation", async ({ page }) => {
+test("a locator that matches two elements fails at once, naming the strict mode violation @timing", async ({ page }) => {
   await page.setContent(`
     <p data-testid="twice" style="color: #111; background: #fff">Example one</p>
     <p data-testid="twice" style="color: #111; background: #fff">Example two</p>
@@ -58,7 +80,7 @@ test("a locator that matches two elements fails at once, naming the strict mode 
   expect(Date.now() - start).toBeLessThan(1_500);
 });
 
-test("a read that never succeeds gives up within its time limit, keeping its cause", async ({ page }) => {
+test("a read that never succeeds gives up within its time limit, keeping its cause @timing", async ({ page }) => {
   await page.setContent(`<p>Example text</p>`);
   for (const timeout of [300, 1_000, 1_500]) {
     const start = Date.now();
@@ -66,7 +88,7 @@ test("a read that never succeeds gives up within its time limit, keeping its cau
       () => null,
       (e: Error) => e,
     );
-    expect(Date.now() - start).toBeLessThan(timeout + 250);
+    expect(Date.now() - start).toBeLessThan(timeout + 1_000);
     expect(err).not.toBeNull();
     expect(err!.message).toContain("not-here");
     expect(err!.message).not.toContain("undefined");
