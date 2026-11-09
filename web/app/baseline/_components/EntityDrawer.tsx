@@ -1289,18 +1289,19 @@ function EditForm({
       out[f.key] = v === GONE ? null : v; // null removes the key
     }
     if (isGoal) {
-      // A stored number shown as it reads ("1e-7") saves untouched; Value and Start value take only what a number holds exactly.
-      for (const [label, key, exact] of [["Value", "target", true], ["Start value", "start", true], ["Weight", "weight", false]] as const) {
+      // A stored value left as the form showed it ("1e-7", a number or text) saves untouched, not rewritten; a changed
+      // Value, Start value or Weight takes only what a number holds exactly, as a new number field does.
+      const shown = goalDraft(entity.attrs ?? {});
+      const patch = goalPatch(goal, entity.attrs ?? {});
+      for (const [label, key] of [["Value", "target"], ["Start value", "start"], ["Weight", "weight"]] as const) {
         const raw = goal[key].trim();
-        const was = entity.attrs?.[key];
-        if (!raw || (typeof was === "number" && raw === String(was))) continue;
-        const n = decimalOf(raw);
-        if (n === undefined || (exact && digitsOf(String(n)) !== digitsOf(raw))) {
+        if (raw === shown[key].trim()) delete patch[key];
+        else if (raw && exactOf(raw) === undefined) {
           setInvalid(`${label} must be a number.`);
           return;
         }
       }
-      Object.assign(out, goalPatch(goal, entity.attrs ?? {}));
+      Object.assign(out, patch);
     }
     if (!title.trim()) {
       setInvalid("Title cannot be empty.");
