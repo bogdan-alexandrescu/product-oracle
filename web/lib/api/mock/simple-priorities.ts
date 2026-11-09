@@ -47,6 +47,14 @@ const FEATURES: Record<string, { value: number; effort: number; code?: string }>
   "setup-video": { value: 0, effort: 1 },
   "price-tiers": { value: 0, effort: 3 },
 };
+/**
+ * The "priorities-goal-no-value" scenario's invented feature: it serves a goal, but Oracle has no goal value for it (as
+ * the API sends when the feature's goal has none), so it has no score and is drawn at goal value 0.
+ */
+const GOAL_NO_VALUE: SeedItem = { key: "alert-quiet-hours", title: "Quiet hours for alerts", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium" };
+export const PRIORITIES_GOAL_NO_VALUE_SCENARIO = "priorities-goal-no-value";
+const INVENTED: Record<string, { value: number | null; effort: number }> = { [GOAL_NO_VALUE.key]: { value: null, effort: 1 } };
+
 /** The "simple-plan" scenario's existing items the plan names (server.ts seedSimplePlanScenario). */
 const PLAN_EXISTING: Record<string, string> = { "setup-checklist": "F-01", "setup-import": "F-02" };
 
@@ -199,7 +207,7 @@ function stored(db: SimpleDb, itemId: string): Values {
 }
 
 /** A person's estimates, else the feature's: [goal value, effort, whether the value is a person's]. */
-export function estimates(db: SimpleDb, key: string, itemId: string): { value: number; effort: number | null; valueEstimated: boolean } {
+export function estimates(db: SimpleDb, key: string, itemId: string): { value: number | null; effort: number | null; valueEstimated: boolean } {
   // An item added for another's feature (SeedItem.feature) reads that feature's estimates, its own over them.
   const base = featureOf(db, key);
   if (base !== key) {
@@ -208,7 +216,8 @@ export function estimates(db: SimpleDb, key: string, itemId: string): { value: n
     const value = typeof s.goal_value === "number" ? s.goal_value : null;
     return { value: value ?? was.value, effort: typeof s.effort === "number" ? s.effort : was.effort, valueEstimated: value !== null || was.valueEstimated };
   }
-  const own = FEATURES[key] ?? planFeature(key) ?? { value: 0, effort: 1 };
+  // A feature the mock does not list has no effort until a person estimates it (the API reads none, not 1 week).
+  const own = FEATURES[key] ?? planFeature(key) ?? INVENTED[key] ?? { value: 0, effort: null };
   // With a plan, an existing item the plan names takes the plan's engineer-weeks (one effort on every tab).
   const code = db.plan ? PLAN_EXISTING[key] : undefined;
   const f = code ? { ...own, effort: planWeeks(code) ?? own.effort } : own;
@@ -221,13 +230,11 @@ export function estimates(db: SimpleDb, key: string, itemId: string): { value: n
 }
 
 /**
- * service.efforts: an item's effort for its estimated start, as estimates reads it, but null for a
- * feature the mock does not list that no person estimated (the API reads no effort, not 1 week).
+ * service.efforts: an item's effort for its estimated start, as estimates reads it (null for a
+ * feature the mock does not list that no person estimated: the API reads no effort, not 1 week).
  */
 export function startEffort(db: SimpleDb, key: string, itemId: string): number | null {
-  const base = featureOf(db, key);
-  const estimated = typeof stored(db, itemId).effort === "number" || (base !== key && typeof stored(db, db.ids[base]).effort === "number");
-  return estimated || FEATURES[base] || planFeature(base) ? estimates(db, key, itemId).effort : null;
+  return estimates(db, key, itemId).effort;
 }
 
 /** targets.py's `before` of estimate_feature and override_priority, as stored now. */
@@ -390,6 +397,10 @@ export function prioritiesOut(
   lineKey: string | null = null,
 ): Schemas["SimplePrioritiesOut"] {
   const today = companyToday();
+  if (typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === PRIORITIES_GOAL_NO_VALUE_SCENARIO && !db.items.some((s) => s.key === GOAL_NO_VALUE.key)) {
+    db.items.push({ ...GOAL_NO_VALUE });
+    db.ids[GOAL_NO_VALUE.key] = stableUuid(`simple-item/${GOAL_NO_VALUE.key}`);
+  }
   const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
   const { lines, same } = linesOf(read);
   const line = pickLine(lineKey, lines, same);
@@ -415,7 +426,8 @@ export function prioritiesOut(
   for (const i of ranked) {
     const e = estimates(db, keyOf(i), i.id);
     // No effort (PM-owned work): no score (scoring.py's missing_inputs), ranked after the scored.
-    if (e.effort) score.set(i.id, round((e.value * (CONFIDENCE[i.confidence ?? ""] ?? 0.5)) / e.effort));
+    // No goal value (a goal Oracle has none for): no score either.
+    if (e.effort && e.value != null) score.set(i.id, round((e.value * (CONFIDENCE[i.confidence ?? ""] ?? 0.5)) / e.effort));
   }
   const sc = (id: string): number => score.get(id) ?? -1;
   const sorted = [...ranked].sort((a, b) => Number(!a.goal) - Number(!b.goal) || sc(b.id) - sc(a.id) || a.title.localeCompare(b.title));

@@ -262,7 +262,7 @@ test.describe("QA pass 3: simple-plan, a dated plan", () => {
     const referral = rowByTitle(page, "Referral link");
     await expect(referral.getByTestId("prio-own-key")).toHaveText("F-12");
     await expect(referral.getByTestId("prio-goal")).toHaveText("Growth");
-    await expect(rowByTitle(page, "Setup checklist").getByTestId("prio-numbers")).toContainText("3 wk");
+    await expect(rowByTitle(page, "Setup checklist").getByTestId("prio-numbers")).toContainText("3 weeks");
     // PM-owned work: no engineer-weeks, no score.
     const pricing = rowByTitle(page, "Pricing page words");
     await expect(pricing.getByTestId("prio-pm-owned")).toContainText("PM-owned");
