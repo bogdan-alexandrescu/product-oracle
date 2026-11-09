@@ -638,6 +638,13 @@ test("the check catches the old names and spares the ids and the starting values
   ]) {
     expect(saysOld("slack/pings.py", said), said).toBe(true);
   }
+  // fails_when = the prompt line's wording is spared in every Python module, not only in runs/flows.py.
+  for (const said of [
+    'text you write, never "baseline" (except a starting value)',
+    'Your roadmap is never "baseline" (except when imported).',
+  ]) {
+    expect(saysOld("slack/pings.py", said), said).toBe(true);
+  }
   // fails_when = the 'never "baseline"' allowance spares any shown message, not only the agents' prompt line.
   for (const said of ['This is never "baseline" data.', 'This is never \\"baseline\\" data.', "Never 'baseline' here"]) {
     expect(saysOld("runs/flows.py", said), said).toBe(true);
@@ -665,8 +672,8 @@ test("the check catches the old names and spares the ids and the starting values
   }
   // An id written as code in the Python's text for agents: the citation ref, a CLI command, a word to avoid.
   for (const kept of [
-    'text you write, never "baseline" (except a starting value)',
-    'text you write, never \\"baseline\\" (except a starting value)',
+    'text you write, never "baseline" (except a goal\'s or key result\'s starting value).',
+    'text you write, never \\"baseline\\" (except a goal\'s or key result\'s starting value).',
     'e.g. "baseline decision <key>": an identifier Oracle reads',
     "as get_baseline and `oracle baseline pull` give it",
     "write it to `baseline.yaml`",
