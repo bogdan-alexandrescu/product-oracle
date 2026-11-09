@@ -361,6 +361,8 @@ const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowe
  * home-milestones-own-roadmap (production regression from PR 1439): a typed code is its own
  * goal's milestone, else its track's, else its roadmap's own (a track one there, or one of no
  * goal), as Priorities shows the item in that code; never another goal's while one of these is.
+ * Another track's only when it is the one track of the roadmap with that code (review of PR 1453:
+ * of two tracks' "M1", never a guess).
  */
 export function homePlanInputs(data: Roadmap): PlanInput[] {
   const goals = data.goal_milestones ?? [];
@@ -409,7 +411,8 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
       // company roadmap's), never another roadmap's: its own goal's (codes are numbered per goal),
       // else its track's, else its roadmap's own (a track one there, or one of no goal); a code
       // another goal has is that goal's only when nothing else of the code is there and no other
-      // goal has it too (never a guess); a whole name names its one milestone.
+      // goal has it too (never a guess); another track's only when no other track of the roadmap
+      // has it too (never a guess); a whole name names its one milestone.
       const byCode = !!codeOf(text.trim().split(" (")[0].split(";")[0]);
       for (const roadmap of new Set([i.roadmap.id, ...(data.roadmap ? [data.roadmap.id] : [])])) {
         const on = goals.filter((m) => m.roadmap_id === roadmap && named(text, goalCode(m), restOf(m.name)));
@@ -417,7 +420,10 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
         const g = on.find((m) => !!i.goal && m.goal_id === i.goal.id) ?? (byCode ? undefined : only);
         if (g) return { gm: g };
         const here = tracks.filter((m) => named(text, codeOf(m.name), restOf(m.name)));
-        const t = (i.track ? here.find((m) => m.track_id === i.track!.id) : undefined) ?? here.find((m) => !!roadmapsOf.get(m.track_id)?.has(roadmap));
+        // Another track's is its only when it is the one of the roadmap's tracks that has it: of two
+        // ("M1 · Measured" and "M1 · Other"), never a guess (review of PR 1453).
+        const there = here.filter((m) => !!roadmapsOf.get(m.track_id)?.has(roadmap));
+        const t = (i.track ? here.find((m) => m.track_id === i.track!.id) : undefined) ?? (there.length === 1 ? there[0] : undefined);
         if (t) return { tm: t, roadmap: i.roadmap.id };
         const r = on.find((m) => !m.goal_id) ?? only;
         if (r) return { gm: r };
