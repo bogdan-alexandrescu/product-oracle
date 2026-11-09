@@ -136,16 +136,32 @@ def _feature_codes_sync(session: Session) -> dict[uuid.UUID, str]:
 
 
 def clash(
-    code: str, key: str, feature_id: Any, others: list[Any], by_feature: dict[uuid.UUID, str]
+    code: str,
+    key: str,
+    feature_id: Any,
+    others: list[Any],
+    by_feature: dict[uuid.UUID, str],
+    section: str | None = None,
 ) -> Any:
     """The first of ``others`` (items: ``item_key``, ``title``, ``feature_id``,
     ``prd_section_key``) that shows ``code``, other than the item ``key`` and the slices of
-    its feature."""
+    its feature: an item of the same feature, or, when the item's feature or PRD section
+    (``feature_id``, ``section``) gives it ``code``, an item whose own feature or PRD section
+    gives it ``code`` too, unless the two are linked to different features."""
+    own = code_of(SimpleNamespace(feature_id=feature_id, prd_section_key=section), by_feature)
+    part = (own or "").upper() == code.upper()
     for o in others:
         if o.item_key == key or (feature_id is not None and o.feature_id == feature_id):
             continue
-        if (shown(o, by_feature) or "").upper() == code.upper():
-            return o
+        if (shown(o, by_feature) or "").upper() != code.upper():
+            continue
+        if (
+            part
+            and (code_of(o, by_feature) or "").upper() == code.upper()
+            and (feature_id is None or o.feature_id is None)
+        ):
+            continue  # a slice of the same feature, by its code
+        return o
     return None
 
 
@@ -237,7 +253,8 @@ def check_flush(session: Session) -> None:
             live = [*stored, *(o for o in pending if _owner(o) == owner and id(o) not in seen)]
             by_owner[owner] = [o for o in live if o not in gone and o.deleted_at is None]
         others = [o for o in by_owner[owner] if o is not row]
-        hit = clash(code, row.item_key, row.feature_id, others, by_feature)
+        hit = clash(code, row.item_key, row.feature_id, others, by_feature,
+                    row.prd_section_key)  # fmt: skip
         if hit is not None:
             raise CodeTaken(code, named(hit, by_feature))
 
