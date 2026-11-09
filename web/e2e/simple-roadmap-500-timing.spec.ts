@@ -186,6 +186,8 @@ for (const [where, use] of [
           const card = page.locator('[data-testid="board-card"][data-horizon="now"]').first();
           end = phone ? await touchDrag(page, card, card, 0, 120) : await mouseDrag(page, card, 400, 40);
         } else if (view === "timeline") {
+          // At 6 months the first movable bar is in sight (the Timeline opens on 3 months).
+          await page.getByTestId("zoom-6m").click();
           // A bar the viewer may move (its label says the arrows move it); its live dates show.
           const bar = page.locator('[data-testid="timeline-bar"][aria-label*="Arrows move it"]').first();
           end = await mouseDrag(page, bar, 160);
