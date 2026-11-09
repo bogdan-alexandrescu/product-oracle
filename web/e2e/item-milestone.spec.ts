@@ -173,14 +173,15 @@ test("each PRD milestone on the company roadmap names its owner", async ({ page 
   test.setTimeout(90_000);
   await page.setViewportSize(DESKTOP.viewport);
   await open(page);
-  const label = (name: string) => page.getByTestId("ms-prd-label").filter({ hasText: new RegExp(`^PRD · ${name}$`) });
+  // roadmap-milestone-codes: each label reads its roadmap code ("M<n> name"), the two PRDs' "Ready for launch" one each.
+  const label = (name: string) => page.getByTestId("ms-prd-label").filter({ hasText: new RegExp(`^M\\d+ ${name}$`) });
   for (const [name, nth, prdTitle] of [
-    ["M1 Reports reach a person", 0, "User Safety"],
-    ["M2 Blocks hold everywhere", 0, "User Safety"],
-    ["M1 Load measured", 0, "Scale"],
-    ["M2 Twice the load", 0, "Scale"],
-    // Both M3s (one day, one name) share one label.
-    ["M3 Ready for launch", 0, null],
+    ["Reports reach a person", 0, "User Safety"],
+    ["Blocks hold everywhere", 0, "User Safety"],
+    ["Load measured", 0, "Scale"],
+    ["Twice the load", 0, "Scale"],
+    ["Ready for launch", 0, null],
+    ["Ready for launch", 1, null],
   ] as const) {
     await label(name).nth(nth).click();
     const prd = page.getByTestId("ms-prd-card");
@@ -212,7 +213,7 @@ test("the Scale track keeps its own PRD in the Tracks sheet and its owner is not
   await page.getByRole("button", { name: "Close" }).first().click();
   await expect(sheet).toHaveCount(0);
 
-  await page.getByTestId("ms-prd-label").filter({ hasText: /^PRD · M1 Reports reach a person$/ }).first().click();
+  await page.getByTestId("ms-prd-label").filter({ hasText: /^M\d+ Reports reach a person$/ }).first().click();
   const prd = page.getByTestId("ms-prd-card");
   await expect(prd).toContainText("From the PRD User Safety · owned by Marta Moss");
   await expect(prd).not.toContainText("Priya Raman");
