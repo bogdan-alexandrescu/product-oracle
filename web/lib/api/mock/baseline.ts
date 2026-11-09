@@ -329,6 +329,8 @@ export function seedBaseline(uuid: () => string): BaselineState {
               { step: "Write the reply", hours: 2 },
             ],
             saved_replies: ["Thanks for writing in.\nWe will reply within a day.", "Closed after a week"],
+            // A list of objects of one field each: emptying that field keeps the entry (gt-goal-attr-add-remove).
+            handoffs: [{ team: "Front desk" }, { team: "Night shift" }],
             spare_note: null,
             old_tags: [],
           }
