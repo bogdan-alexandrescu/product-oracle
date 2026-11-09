@@ -258,8 +258,8 @@ async def test_tracks_add_edit_delete_and_restore_from_trash(client):
     assert seen["can_add"] is False and seen["add_decider_name"] == name(ctx, "owner")
     assert seen["tracks"][0]["can_decide"] is False
 
-    # add_track needs a PRD (a track is its PRD's).
-    await change(client, ctx, "owner", "add_track", {}, {"title": "Gift boxes"}, code=422)
+    # add_track needs a name (tracks-goal: its PRD is optional).
+    await change(client, ctx, "owner", "add_track", {}, {"prd_id": ids["prd_id"]}, code=422)
     await change(client, ctx, "viewer", "add_track", {},
                  {"title": "Gift boxes", "prd_id": ids["prd_id"]}, code=403)  # fmt: skip
     prop = (await change(client, ctx, "approver", "add_track", {},
