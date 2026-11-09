@@ -290,16 +290,19 @@ for (const v of VIEWS) {
       expect(Math.abs((await centreX(mark(page, "alert-sso"))) - xs[2])).toBeLessThan(4);
 
       // The quadrants at the medians, each with its name and count (P-1: 22 with the Goal map's 12 features, ranked as on Priorities).
-      await expect(page.getByTestId("vxe-quadrant")).toHaveText(["Quick wins · 5", "Big bets · 6", "Fill-ins · 6", "Later · 5"]);
+      await expect(page.getByTestId("vxe-quadrant")).toHaveText(["Quick wins · 4", "Big bets · 7", "Fill-ins · 7", "Later · 4"]);
       const plot = (await page.getByTestId("vxe-plot").boundingBox())!;
       const split = (await page.getByTestId("vxe-median-effort").boundingBox())!;
-      // The effort median is 1 week (P-1: with the Goal map's 12 features; 2 weeks without): the line runs through the 1 wk tick, not the plot's middle.
-      expect(Math.abs(split.x + split.width / 2 - xs[1])).toBeLessThan(4);
+      // The effort median is PM-owned work's spot, left of the 0.5 week tick (P-1: the Goal map's 12 features and Health log
+      // have no effort, as the API reads a feature the mock does not list): the line is not the plot's middle.
+      expect(split.x + split.width / 2).toBeLessThan(xs[0] - 4);
       expect(Math.abs(split.x + split.width / 2 - (plot.x + plot.width / 2))).toBeGreaterThan(10);
 
-      // PV-1 One count per spot: the 15 features at value 0, effort 1 (alert-export and setup-video among them) are one count.
-      const count = page.locator('[data-testid="vxe-crowd"][data-count="15"]');
-      await expect(count).toHaveAccessibleName(/^15 features at effort 1 week · goal value 0 or no goal: AHE Alert history export, .* and 12 more; show them$/);
+      // PV-1 One count per spot: the 13 features at value 0 with no effort (setup-health-log among them) are one count, and
+      // alert-export and setup-video (value 0, effort 1) another.
+      const count = page.locator('[data-testid="vxe-crowd"][data-count="13"]');
+      await expect(count).toHaveAccessibleName(/^13 features at PM-owned, no effort · goal value 0 or no goal: F-110 Annual plan offer, .* and 10 more; show them$/);
+      await expect(page.getByRole("button", { name: "2 features at effort 1 week · goal value 0 · no goal: AHE Alert history export, WV Welcome video; show them" })).toBeVisible();
       for (const code of ["alert-export", "setup-video", "setup-health-log"]) await expect(mark(page, code)).toHaveCount(0);
       // The median lines say what they are ("middle effort", "middle value"), never under a mark or a count.
       const marks = await page.locator('[data-testid="vxe-point"], [data-testid="vxe-crowd"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
@@ -313,7 +316,9 @@ for (const v of VIEWS) {
       // A feature with no goal is never a cross: a neutral dashed circle, named in the legend (in a count's sheet too).
       await expect(mark(page, "price-tiers")).toHaveAttribute("data-shape", "none");
       await expect((await countRowOf(page, "alert-export")).getByTestId("vxe-crowd-code")).toHaveText("AHE");
-      for (const code of ["alert-export", "setup-video", "setup-health-log"]) await expect(page.locator(`[data-testid="vxe-crowd-row"][data-code="${code}"]`)).toHaveAttribute("data-shape", "none");
+      for (const code of ["alert-export", "setup-video"]) await expect(page.locator(`[data-testid="vxe-crowd-row"][data-code="${code}"]`)).toHaveAttribute("data-shape", "none");
+      await page.keyboard.press("Escape");
+      await expect(await countRowOf(page, "setup-health-log")).toHaveAttribute("data-shape", "none");
       await page.keyboard.press("Escape");
       // On a phone Alert rules engine shares a count with Sample data import.
       if (v.phone) {

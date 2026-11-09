@@ -1046,7 +1046,7 @@ function proposalWords(p: Proposal): string {
   if (p.op === "confirm_item") return `${p.by_name} proposes confirming it`;
   // S7: a Merge is a merge_item change (train T's was a cut with this note).
   if (p.op === "cut" || p.op === "merge_item") return `${p.by_name} proposes merging it: “${p.reason ?? ""}”`;
-  const parts = [a.goal_value != null ? `goal value ${a.goal_value}` : null, a.effort != null ? `effort ${a.effort} wk` : null].filter(Boolean);
+  const parts = [a.goal_value != null ? `goal value ${a.goal_value}` : null, a.effort != null ? `effort ${weeksWords(Number(a.effort))}` : null].filter(Boolean);
   return `${p.by_name} proposes ${parts.join(" and ")}`;
 }
 
@@ -1651,7 +1651,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
         />
         <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 pl-6 text-[15px] leading-[22px] text-text2" aria-label="Legend">
           {[...shapes.entries()].map(([k, s]) => (
-            <li key={k} className="flex items-center gap-1">
+            <li key={k} className="flex items-center gap-1" data-shape={s.shape}>
               <LegendMark shape={s.shape} />
               {s.name}
             </li>
@@ -1896,18 +1896,24 @@ function goalOfRow(data: Out): (r: Row) => string | null {
 }
 
 /**
- * The key of a row's goal, as goalOfRow picks it: the item's goal's own key; a goal only the plan gives (by name) takes
- * the key of a ranked row's goal of that name, else its name, any case.
+ * The key of a row's goal, as goalOfRow picks it: the item's goal's own key; a goal only the plan gives, the plan goal's
+ * own (its code, else its place in the plan's goals), never a name, so a goal record and a plan goal with one name keep
+ * two keys (the owner, Nov 8), as do two plan goals with their own codes. A slice names its plan goal by its words
+ * only, so two plan goals with one name and no code cannot be told apart: a slice takes the first one's place.
  */
 function goalKeyOfRow(data: Out): (r: Row) => string | null {
-  const goalOf = goalOfRow(data);
-  const byName = new Map<string, string>();
-  for (const r of data.rows) if (r.goal && !byName.has(r.goal.title.trim().toLowerCase())) byName.set(r.goal.title.trim().toLowerCase(), r.goal.key);
-  return (r) => {
-    if (r.goal) return r.goal.key;
-    const g = goalOf(r)?.trim().toLowerCase();
-    return g ? (byName.get(g) ?? `name:${g}`) : null;
-  };
+  const place = new Map<string, number>();
+  (data.plan?.goals ?? []).forEach((g, at) => !place.has(g.name) && place.set(g.name, at));
+  const planKey = new Map(
+    (data.plan?.slices ?? [])
+      .filter((x) => x.goal)
+      .map((x) => {
+        const code = goalLabel(x.goal!).code;
+        const at = place.get(x.goal!);
+        return [x.feature_code, code ? `plan:${code}` : at != null ? `plan:${at}` : `plan-goal:${x.goal}`];
+      }),
+  );
+  return (r) => r.goal?.key ?? planKey.get(r.short_code) ?? null;
 }
 
 /**
@@ -2031,7 +2037,7 @@ function Numbers({ r, mayChange = false, changed }: { r: Row; mayChange?: boolea
         ]
       : [
           <span key="confidence" data-testid="prio-confidence" title={SCORE_WORDS}>confidence {fmt(r.confidence, 2)}</span>,
-          <span key="weeks">{fmt(r.effort)} wk</span>,
+          <span key="weeks">{weeksWords(r.effort)}</span>,
           <span key="score">
             score{" "}
             <span className="font-semibold text-text" data-testid="prio-score" title={SCORE_WORDS}>
@@ -2106,7 +2112,7 @@ function EffortEdit({ r, changed }: { r: Row; changed: Changed }) {
             } else if (e.key === "Escape") setEditing(false);
           }}
         />
-        <span>wk</span>
+        <span>weeks</span>
       </label>
       <Button type="button" onClick={() => void save()} disabled={!ok || busy}>
         Save
