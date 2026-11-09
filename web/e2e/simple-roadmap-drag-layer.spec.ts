@@ -195,6 +195,8 @@ test.describe("a dragged Timeline bar, desktop", () => {
     await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
     const rows = page.getByTestId("timeline-row");
     await expect(rows).toHaveCount(500, { timeout: 15_000 });
+    // At 6 months the first movable bar is in sight (the Timeline opens on 3 months).
+    await page.getByTestId("zoom-6m").click();
     const bar = page.locator('[data-testid="timeline-bar"][aria-label*="Arrows move it"]').first();
     await bar.scrollIntoViewIfNeeded();
     const box = (await bar.boundingBox())!;

@@ -2015,7 +2015,7 @@ export function SimpleRoadmap() {
             onGoal={openGoal}
           />
         ) : format === "timeline" ? (
-          // mk-qa4-roadmap QR1 A..QR4 A: six months around today, the key and the broken links
+          // mk-qa4-roadmap QR1 A..QR4 A: three months from just before today, the key and the broken links
           // above, an open item in a panel at the right (a sheet on a phone).
           <ZoomTimeline
             data={goalLaned ?? data}

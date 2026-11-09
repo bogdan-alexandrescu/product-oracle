@@ -6,7 +6,7 @@ import { expect, test, type Locator, type Page } from "./test";
 /*
  * The owner (Nov 4): "on the roadmap we also need to see the next 3 months not just the next
  * 6. add a button for that". The Timeline's Show control leads with 3 months: the next three
- * months from today, weeks marked; 6 months stays the default. Driven against the mock's
+ * months from today, weeks marked; 6 months stayed the default till the owner's Nov 9 pick of 3 months. Driven against the mock's
  * invented data, with the mock clock pinned at Oct 22, 2026.
  *
  * The review's follow-ups (Nov 5): a week mark reads without a hover (each month's first one
@@ -235,16 +235,17 @@ async function monthsInView(page: Page) {
 test.describe("desktop", () => {
   test.use(DESKTOP);
 
-  test("3 months leads the Show buttons, 6 months stays the default", async ({ page }) => {
+  test("3 months leads the Show buttons and is the default", async ({ page }) => {
     await open(page);
     const show = page.getByRole("group", { name: "Show" });
     await expect(show.getByRole("button")).toHaveText(["3 months", "6 months", "1 year", "All 3 years"]);
-    await expect(page.getByTestId("zoom-6m")).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("zoom-6m")).toHaveAttribute("aria-pressed", "false");
   });
 
   test("3 months shows Oct to Jan with weeks marked, and an item starting soon in sight", async ({ page }) => {
     await open(page);
+    await page.getByTestId("zoom-6m").click();
     // 6 months reaches well past January.
     await expect.poll(() => monthsInView(page)).toContain("Mar");
 
