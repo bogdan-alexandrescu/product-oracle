@@ -519,11 +519,18 @@ export function GoalLadder(props: LadderProps) {
         const read = await unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } }));
         const now = read.items.find((i) => i.id === feature)?.goal?.id ?? null;
         // kr-in-goal-map: an item already serving the goal dropped on, or one of its key results, keeps
-        // what it serves (off a key result's milestone it stays on that key result, the one its item
-        // serves, whichever milestones it was on); otherwise it serves the goal itself.
-        // "Not on a key result" never puts an item onto a key result.
+        // what it serves: "Not on a key result" never moves it onto a key result. An item serving
+        // no goal or another one, taken off a key result's milestone into its own goal, serves that
+        // key result: the one first by code when it was on milestones of two (not the first listed).
         const folds = (props.topOf?.(now) ?? now) === goal;
-        const c = folds ? null : (await propose({ op: "set_goal", target: { item_id: feature }, before: { goal_id: now }, after: { goal_id: goal } })).change;
+        const lines = goal ? (props.keyResults?.get(goal) ?? []) : [];
+        const code = (id: string) => lines.find((k) => k.id === id)?.code ?? "￿";
+        const kr = x.f.milestones
+          .map((id) => map.milestones.find((m) => m.id === id) as (GmMilestone & { kr?: string }) | undefined)
+          .flatMap((m) => (m?.kr && m.goal === goal ? [m.kr] : []))
+          .sort((a, b) => code(a).localeCompare(code(b), undefined, { numeric: true }) || a.localeCompare(b))[0];
+        const want = kr ?? goal;
+        const c = folds ? null : (await propose({ op: "set_goal", target: { item_id: feature }, before: { goal_id: now }, after: { goal_id: want } })).change;
         await reload();
         setFresh(feature);
         toast({
