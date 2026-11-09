@@ -118,6 +118,37 @@ const heldIssues = (input: unknown) =>
     (o) => ("decision_ids" in o && !Array.isArray(o.decision_ids) ? { type: "list_type", loc: ["body", "decision_ids"], msg: "Input should be a valid list", input: o.decision_ids } : null),
   ]);
 
+const HYPHENATED = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const UUID_FORMS = new RegExp(`^(?:[0-9a-f]{32}|${HYPHENATED}|\\{${HYPHENATED}\\}|urn:uuid:${HYPHENATED})$`, "i");
+
+/**
+ * A uuid.UUID path parameter: null when Pydantic parses it, else its uuid_parsing issue, the
+ * error worded as Pydantic words it (checked against FastAPI's test client).
+ */
+function idIssue(id: string, name: "ritual_id" | "occurrence_id"): Issue | null {
+  if (UUID_FORMS.test(id)) return null;
+  const issue = (error: string): Issue => ({ type: "uuid_parsing", loc: ["path", name], msg: `Input should be a valid UUID, ${error}`, input: id, ctx: { error } });
+  const len = new TextEncoder().encode(id).length;
+  if (len > 45) return issue(`invalid length: found ${len}`);
+  // 32 or 36 bytes are read whole; a braced 38 or urn 45 counts a bad character's place
+  // within the braces or after the prefix; any other length within the whole input.
+  const plain = len === 32 || len === 36;
+  const braced = !plain && id.length >= 2 && id.startsWith("{") && id.endsWith("}");
+  const [s, offset, simple] = plain ? [id, 0, true] : braced ? [id.slice(1, -1), len === 38 ? 0 : 1, false] : id.startsWith("urn:uuid:") ? [id.slice(9), len === 45 ? 0 : 9, false] : [id, 0, true];
+  const bounds: number[] = [];
+  for (const [i, c] of [...s].entries()) {
+    if (c === "-") bounds.push(i);
+    else if (!/[0-9a-f]/i.test(c)) return issue(`invalid character: found \`${c}\` at ${i + offset}`);
+  }
+  if (!bounds.length && simple) return issue(`invalid length: found ${len}`);
+  if (bounds.length !== 4) return issue(`invalid group count: expected 5, found ${bounds.length + 1}`);
+  const starts = [0, 9, 14, 19, 24];
+  const sizes = [8, 4, 4, 4, 12];
+  const group = bounds.findIndex((b, i) => b !== starts[i + 1] - 1);
+  if (group >= 0) return issue(`invalid group length in group ${group}: expected ${sizes[group]}, found ${bounds[group] - starts[group]}`);
+  return issue(`invalid group length in group 4: expected 12, found ${len - 24}`);
+}
+
 // --- schedule maths (schedule.py) -----------------------------------------------------------
 
 const DAY_MS = 86_400_000;
@@ -796,24 +827,27 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
         return json(201, ritualOut(db, r, ctx));
       }
     }
-    // As FastAPI: PATCH's owner role (a dependency), then its body (RitualPatch), then the
-    // service finds the ritual.
+    // As FastAPI: the owner role (a dependency), then the id and PATCH's body (RitualPatch) in
+    // one 422, then the service finds the ritual.
+    const ownerOnly = (p.length === 3 && (m === "PATCH" || m === "DELETE")) || (p.length === 4 && m === "POST" && ["pause", "resume", "prepare"].includes(p[3]));
+    const known = ownerOnly || (p.length === 3 && m === "GET") || (p.length === 4 && m === "GET" && p[3] === "occurrences");
+    if (ownerOnly && !owner) return notOwner();
+    const badId = known ? idIssue(p[2], "ritual_id") : null;
     let patch: Schemas["RitualPatch"] | null = null;
     if (p.length === 3 && m === "PATCH") {
-      if (!owner) return notOwner();
       const raw = await body<unknown>();
       const bad = issuesOf(raw, [(o) => (!("lock_version" in o) ? { type: "missing", loc: ["body", "lock_version"], msg: "Field required", input: o } : null)]);
-      if (bad.length) return invalid(bad);
+      if (badId || bad.length) return invalid(badId ? [badId, ...bad] : bad);
       patch = raw as Schemas["RitualPatch"];
       if (patch.duration_min != null && (patch.duration_min < 5 || patch.duration_min > 480)) return fail(422, "duration_min: between 5 and 480 minutes");
       if (patch.prep_hours != null && (patch.prep_hours < 0 || patch.prep_hours > 168)) return fail(422, "prep_hours: between 0 and 168 hours");
     }
+    if (badId) return invalid([badId]);
     const r = db.rituals.find((x) => x.id === p[2]);
     if (!r) return fail(404, "Ritual not found");
     if (p.length === 3) {
       if (m === "GET") return json(200, ritualOut(db, r, ctx));
       if (m === "DELETE") {
-        if (!owner) return notOwner();
         if (r.builtin) return fail(409, "Built-in rituals pause; they are not deleted");
         db.rituals = db.rituals.filter((x) => x !== r);
         db.occurrences = db.occurrences.filter((o) => o.ritual_id !== r.id);
@@ -844,7 +878,6 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
       }
     }
     if (p.length === 4 && m === "POST" && (p[3] === "pause" || p[3] === "resume")) {
-      if (!owner) return notOwner();
       r.status = p[3] === "pause" ? "paused" : "active";
       // A person's Pause or Resume: the first goal leaves it as it is.
       r.waits_for_goal = false;
@@ -853,7 +886,6 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
       return json(200, ritualOut(db, r, ctx));
     }
     if (p.length === 4 && m === "POST" && p[3] === "prepare") {
-      if (!owner) return notOwner();
       // Retry a failed one, or build the next occurrence's pre-read now.
       const failed = db.occurrences.find((o) => o.ritual_id === r.id && o.status === "failed");
       const due = failed ? new Date(failed.due_at) : new Date(r.next_due_at ?? nextOccurrence(r.schedule, now()).toISOString());
@@ -884,12 +916,18 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
   }
 
   // As the API's SkipIn and HeldIn (a reason kept as typed): FastAPI checks the body before the
-  // service finds the occurrence, checks the owner and the status.
+  // service finds the occurrence, checks the owner and the status. The summary's approver role
+  // (a dependency) comes first; a bad id joins the body's issues in one 422.
   const isSkip = p.length === 4 && p[3] === "skip" && (m === "POST" || m === "PATCH");
   const isHeld = p.length === 4 && p[3] === "held" && m === "POST";
+  const isSummary = p.length === 4 && m === "POST" && p[3] === "summary";
+  if (isSummary && !atLeast(role, "approver")) return fail(403, "Requires the approver role");
+  const known =
+    isSkip || isHeld || isSummary || (p.length === 3 && m === "GET") || (p.length === 4 && ((m === "GET" && p[3] === "pre-read.md") || (m === "POST" && p[3] === "read") || (m === "DELETE" && p[3] === "skip")));
   const raw = isSkip || isHeld ? await body<unknown>() : null;
+  const badId = known ? idIssue(p[2], "occurrence_id") : null;
   const bad = isSkip ? skipIssues(raw) : isHeld ? heldIssues(raw) : [];
-  if (bad.length) return invalid(bad);
+  if (badId || bad.length) return invalid(badId ? [badId, ...bad] : bad);
   const skipIn = raw as Schemas["SkipIn"] | null;
   const heldIn = raw as Schemas["HeldIn"] | null;
   const o = db.occurrences.find((x) => x.id === p[2]);
@@ -945,8 +983,7 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
     }
     return json(200, occurrenceOut(ctx, r, o));
   }
-  if (p.length === 4 && m === "POST" && p[3] === "summary") {
-    if (!atLeast(role, "approver")) return fail(403, "Requires the approver role");
+  if (isSummary) {
     // The API's order (oracle.rituals.summaries.on_demand): readiness, a run under way, a
     // Baseline rebuild, then Observe.
     if (!["ready", "held", "missed", "skipped"].includes(o.status) || !o.pre_read) return fail(409, "The pre-read is not ready yet");
