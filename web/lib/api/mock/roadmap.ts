@@ -1686,7 +1686,7 @@ export function featureCodes(
   const made = ({ slug, number }: { slug: string; number: number }): [string | null, number] => {
     const doc = ctx?.documents.find((d) => d.slug === slug);
     const at = ctx?.versions.findIndex((v) => v.document_id === doc?.id && v.number === number) ?? -1;
-    return at < 0 ? [null, Infinity] : [ctx!.versions[at].created_at, at];
+    return at < 0 ? [null, Infinity] : [ctx!.versions[at].created_at ?? null, at];
   };
   const published = stored
     .map((v) => ({ ...v, made: made(v) }))
