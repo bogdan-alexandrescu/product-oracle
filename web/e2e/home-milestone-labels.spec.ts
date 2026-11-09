@@ -1,4 +1,4 @@
-import { HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
+import { HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -263,6 +263,93 @@ test("a roadmap's own milestone of another name folds into the track's row of it
   await expect(line.getByRole("tooltip")).toContainText("Also: M1 Measured and mapped");
   await page.keyboard.press("Escape");
   expect(await itemsOf(page, "M1 · Return pilot · 1 item")).toEqual([["Welcome video"]]);
+});
+
+/*
+ * Card home-milestone-prd-fold (the owner's "One M1 row, as after train AX"), on
+ * "home-milestones-prd-fold": protects = a PRD's own milestone of no goal folds into the track
+ * milestone of its code whatever its name: one row "M1 · Measured and mapped" with the PRD's date
+ * (Nov 20), its (i) listing both milestones' items and naming the PRD's ("Also: M1 Measured");
+ * fails_when = "M1 · Measured" is a row of its own, or the PRD's name shows nowhere.
+ */
+test("a PRD's own milestone of another name folds into the track's row of its code", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_PRD_FOLD_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(labels.filter((l) => l.startsWith("M1"))).toEqual(["M1 · Measured and mapped · 3 items"]);
+  expect(await itemsOf(page, "M1 · Measured and mapped · 3 items")).toEqual([["Health log", "Sample data import", "Setup checklist"]]);
+  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M1 · Measured and mapped · 3 items$/ }) });
+  await expect(line).toContainText("Nov 20");
+  await line.getByTestId("home-strip-items-tip").click();
+  await expect(line.getByRole("tooltip")).toContainText("Also: M1 Measured");
+});
+
+/*
+ * Card home-milestone-prds-fold (review of PR 1489), on "home-milestones-prds-fold": protects =
+ * every PRD's own milestone of no goal joins the track milestone of its code, whatever its name:
+ * one row "M1 · Measured and mapped", dated the earliest joined date (Nov 12), its (i) naming
+ * both PRDs' names; fails_when = two PRDs' M1 keep rows of their own, or the row reads Nov 20.
+ */
+test("two PRDs' own milestones of no goal fold into the one track row of their code", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_PRDS_FOLD_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(labels.filter((l) => l.startsWith("M1"))).toEqual(["M1 · Measured and mapped · 3 items"]);
+  expect(await itemsOf(page, "M1 · Measured and mapped · 3 items")).toEqual([["Health log", "Sample data import", "Setup checklist"]]);
+  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M1 · Measured and mapped · 3 items$/ }) });
+  await expect(line).toContainText("Nov 12");
+  await expect(line).not.toContainText("Nov 20");
+  await line.getByTestId("home-strip-items-tip").click();
+  await expect(line.getByRole("tooltip")).toContainText("M1 Measured");
+  await expect(line.getByRole("tooltip")).toContainText("M1 Mapped");
+});
+
+/*
+ * Card home-milestone-plain-fold (review of PR 1489, a regression against main), on
+ * "home-milestones-plain-fold": protects = the roadmap's own M1 of no goal still joins the track's
+ * M1 beside a PRD's M1 of no goal, and so does the PRD's: one M1 row; fails_when = any of the
+ * three is a row of its own.
+ */
+test("the roadmap's own and a PRD's milestones of no goal fold into the one track row of their code", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_PLAIN_FOLD_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(labels.filter((l) => l.startsWith("M1"))).toEqual(["M1 · Measured and mapped · 3 items"]);
+  expect(await itemsOf(page, "M1 · Measured and mapped · 3 items")).toEqual([["Health log", "Sample data import", "Setup checklist"]]);
+});
+
+/*
+ * Card home-milestone-prd-goal-fold (the owner's "One M1 row" and "Keep joining when names
+ * match"), on "home-milestones-prd-goal-fold": protects = a PRD's own milestone under a goal
+ * joins the track milestone of its code when one name's words lead the other's ("Measured",
+ * "Measured and mapped"): one row "M1 · Measured and mapped", its (i) naming the PRD's ("Also: M1
+ * Measured"); a goal's "M3 · Daily scoreboard" beside the track's "M3 · 200 replied threads"
+ * keeps its own row; fails_when = "M1 · Measured" is a row of its own, or the two M3 rows join.
+ */
+test("a PRD's own goal milestone whose name leads the track's folds into the track's row", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(labels.filter((l) => l.startsWith("M1"))).toEqual(["M1 · Measured and mapped · 3 items"]);
+  expect(await itemsOf(page, "M1 · Measured and mapped · 3 items")).toEqual([["Health log", "Sample data import", "Setup checklist"]]);
+  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M1 · Measured and mapped · 3 items$/ }) });
+  await line.getByTestId("home-strip-items-tip").click();
+  await expect(line.getByRole("tooltip")).toContainText("Also: M1 Measured");
+  expect(labels.filter((l) => l.startsWith("M3")).sort()).toEqual(["M3 · 200 replied threads · 1 item", "M3 · Daily scoreboard · 1 item"]);
+});
+
+/*
+ * Card home-milestone-goals-fold (the owner's "Join whenever names match"), on
+ * "home-milestones-goals-fold": protects = a PRD's own M1 "Measured" under a goal joins the
+ * track's "M1 · Measured and mapped" though another goal's "M1 · First wins" is on the roadmap
+ * too, which keeps its own row: two M1 rows; fails_when = "M1 · Measured" is a row of its own, or
+ * "M1 · First wins" joins the track's row.
+ */
+test("a goal milestone whose name matches joins the track's row beside another goal's of its code", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_GOALS_FOLD_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(labels.filter((l) => l.startsWith("M1")).sort()).toEqual(["M1 · First wins · 1 item", "M1 · Measured and mapped · 3 items"]);
+  expect(await itemsOf(page, "M1 · Measured and mapped · 3 items")).toEqual([["Health log", "Sample data import", "Setup checklist"]]);
+  expect(await itemsOf(page, "M1 · First wins · 1 item")).toEqual([["Welcome video"]]);
+  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M1 · Measured and mapped · 3 items$/ }) });
+  await line.getByTestId("home-strip-items-tip").click();
+  await expect(line.getByRole("tooltip")).toContainText("Also: M1 Measured");
 });
 
 /*
