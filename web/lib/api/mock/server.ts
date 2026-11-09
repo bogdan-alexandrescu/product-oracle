@@ -178,12 +178,14 @@ import {
   PRIORITIES_PLAN_GOAL_CODES_SCENARIO,
   PRIORITIES_PLAN_GOAL_NAMES_SCENARIO,
   PRIORITIES_PLAN_GOAL_TWINS_SCENARIO,
+  PRIORITIES_PLAN_KEY_RESULTS_SCENARIO,
   PRIORITIES_PLAN_ONE_WEEK_SCENARIO,
   prioritiesOut,
   seedGoalNoValue,
   seedPlanGoalCodes,
   seedPlanGoalNames,
   seedPlanGoalTwins,
+  seedPlanKeyResults,
   seedPlanOneWeek,
 } from "./simple-priorities";
 import { restoreTrack, routeRemoved } from "./simple-removed";
@@ -4120,6 +4122,12 @@ function load(): Db {
                 ? () => {
                     const db = seedSimplePlanScenario();
                     seedPlanGoalTwins(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_PLAN_KEY_RESULTS_SCENARIO
+                ? () => {
+                    const db = seedSimplePlanScenario();
+                    seedPlanKeyResults(db.baseline.entities, db.simple_roadmap!);
                     return db;
                   }
               : scenario === PRIORITIES_GOAL_NO_VALUE_SCENARIO
