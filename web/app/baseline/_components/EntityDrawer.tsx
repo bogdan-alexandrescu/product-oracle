@@ -1119,6 +1119,9 @@ const GONE = Symbol("gone");
 /** A label inside its group, for an error: "Reply targets: Hours". */
 const within = (group: string | undefined, label: string) => (group ? `${group}: ${label}` : label);
 
+/** A number as a person types one: plain decimal digits, no hex ("0x10") or exponent ("1e3"). */
+const DECIMAL = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
+
 /** A typed number, or the error its field shows. */
 function numberOf(typed: string, label: string): number {
   const n = Number(typed);
@@ -1168,14 +1171,18 @@ function storedOf(d: Draft, label: string, group?: string): unknown {
   if (typed === d.start.trim()) return d.was === undefined ? GONE : d.was;
   if (!typed) return GONE;
   if (d.kind === "bool") return typed === "yes";
-  if (d.loose) return Number.isFinite(Number(typed)) ? Number(typed) : typed;
+  if (d.loose) return DECIMAL.test(typed) ? Number(typed) : typed;
   return d.kind === "number" ? numberOf(typed, within(group, label)) : typed;
 }
 
-/** A list entry the person emptied (an object with no field left, a list with no entry) is left out. */
+/** A list entry the person emptied (an object or a list with nothing left in it, at any depth) is left out. */
 function emptied(d: Draft, v: unknown): unknown {
-  if (v === d.was || v == null || typeof v !== "object") return v;
-  return Object.keys(v).length ? v : GONE;
+  return v !== d.was && hollow(v) ? GONE : v;
+}
+
+/** An object or a list holding no value but empty objects and lists. */
+function hollow(v: unknown): boolean {
+  return v != null && typeof v === "object" && Object.values(v).every(hollow);
 }
 
 /**
