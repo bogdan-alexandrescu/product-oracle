@@ -31,6 +31,7 @@ from oracle.members.leads import DateRights, date_rights, engineering_leads, lea
 from oracle.roadmap import (
     alerts,
     changeset,
+    company,
     diff_views,
     draft_items,
     links,
@@ -253,8 +254,11 @@ async def import_roadmap_items(
     """Store ``roadmap_items.yaml`` as a roadmap version's items (the file a
     ``prd_to_roadmap`` run writes), replacing any it had. Refused (422, with the
     problems) on any problem, a date without a verified basis included; an approved
-    version's items cannot be replaced (409)."""
+    version's items cannot be replaced (409); nor a history roadmap's, a replaced PRD's
+    (409, replaced-prd-history)."""
     document = await _document(db, doc, "roadmap")
+    if why := await company.read_only(db, document):
+        raise HTTPException(status.HTTP_409_CONFLICT, why)
     version = await _version(db, document, n)
     if version.source_version_id is None:
         raise HTTPException(

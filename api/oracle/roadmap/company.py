@@ -31,9 +31,24 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import DateTime, String, Uuid, and_, func, literal, or_, select, true, union_all
+from sqlalchemy import (
+    DateTime,
+    String,
+    Uuid,
+    and_,
+    any_,
+    event,
+    exists,
+    func,
+    literal,
+    or_,
+    select,
+    true,
+    union_all,
+)
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import ORMExecuteState, Session, aliased
 
 from oracle import audit, company_time
 from oracle.auth.deps import Principal
@@ -41,7 +56,7 @@ from oracle.baseline.goal_order import goal_sort_key
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap import codes
-from oracle.roadmap.models import RoadmapItem, ScheduleBasis
+from oracle.roadmap.models import ProductTrack, RoadmapItem, ScheduleBasis
 
 TITLE = "Product roadmap"
 SLUG = "product-roadmap"
@@ -94,19 +109,162 @@ async def ensure(db: AsyncSession, principal: Principal) -> tuple[Document, bool
 async def feeding_ids(db: AsyncSession, roadmap_ids: list[uuid.UUID]) -> list[uuid.UUID]:
     """Of ``roadmap_ids``, those that feed Simple: the company roadmap alone while there is
     one (older per-PRD roadmaps are history), else all of them."""
+    # replaced-prd-history: a replaced PRD's own roadmap is history too, never fed.
+    history = await history_roadmaps(db)
+    roadmap_ids = [i for i in roadmap_ids if i not in history]
     company = await active(db)
     if company is None:
         return roadmap_ids
     return [i for i in roadmap_ids if i == company.id]
 
 
-async def replaced_prd_ids(db: AsyncSession) -> set[uuid.UUID]:
-    """The PRDs a person marked replaced: their items no longer feed the roadmap."""
-    return set(
-        await db.scalars(
-            select(Document.id).where(Document.kind == "prd", Document.replaced_by != [])
-        )
+@dataclass(frozen=True)
+class History:
+    """replaced-prd-history (the owner, Nov 7): the replaced PRDs, their roadmaps and their
+    tracks, read-only history. One rule everywhere: a PRD is history only while a live PRD
+    (not in Trash) replaces it; when every replacement is in Trash it is live again."""
+
+    # A replaced PRD -> the live PRDs that replace it.
+    prds: dict[uuid.UUID, list[uuid.UUID]]
+    # Each roadmap of replaced PRDs alone (built from their versions, or their track's
+    # roadmap), never the company roadmap -> the live PRDs that replaced them.
+    roadmaps: dict[uuid.UUID, list[uuid.UUID]]
+    # The tracks of a replaced PRD or of its roadmap.
+    tracks: frozenset[uuid.UUID]
+
+    @property
+    def ids(self) -> set[uuid.UUID]:
+        return set(self.prds) | set(self.roadmaps)
+
+
+NO_HISTORY = History({}, {}, frozenset())
+_CACHE = "replaced_prd_history"
+
+
+@event.listens_for(Session, "after_flush")
+@event.listens_for(Session, "after_commit")
+@event.listens_for(Session, "after_rollback")
+@event.listens_for(Session, "after_soft_rollback")
+def _forget(session: Session, *_: Any) -> None:
+    session.info.pop(_CACHE, None)
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _forget_on_write(state: ORMExecuteState) -> None:
+    if not state.is_select:
+        state.session.info.pop(_CACHE, None)
+
+
+async def history(db: AsyncSession) -> History:
+    """The read-only history, read once per session (one request: the Inbox's Simple
+    approvals and track alerts share it) until the session writes or ends."""
+    info = db.sync_session.info
+    if (cached := info.get(_CACHE)) is None:
+        cached = info[_CACHE] = await _read_history(db)
+    return cached
+
+
+def _live_replacement(by: Any, prd: Any = Document) -> Any:
+    """``by`` is a live PRD (not in Trash) replacing ``prd``: the one history rule."""
+    return and_(by.id == any_(prd.replaced_by), by.deleted_at.is_(None))
+
+
+def replaced_now(prd: Any = Document) -> Any:
+    """SQL: ``prd`` (Document or an alias of it) is a PRD a live PRD replaces
+    (:class:`History`), for a query that cannot spare a read of :func:`history`."""
+    by = aliased(Document)
+    return exists().where(_live_replacement(by, prd)).correlate(prd)
+
+
+async def _read_history(db: AsyncSession) -> History:
+    by = aliased(Document)
+    live = (
+        select(func.array_agg(by.id))
+        .where(_live_replacement(by))
+        .correlate(Document)
+        .scalar_subquery()
     )
+    replaced: dict[uuid.UUID, list[uuid.UUID]] = {
+        prd: [i for i in raw if i in set(alive or [])]
+        for prd, raw, alive in (
+            await db.execute(
+                select(Document.id, Document.replaced_by, live).where(
+                    Document.kind == "prd", Document.replaced_by != []
+                )
+            )
+        ).all()
+        if alive
+    }
+    if not replaced:
+        return NO_HISTORY
+    built = aliased(DocumentVersion)
+    roadmap = and_(Document.kind == "roadmap", Document.company_roadmap.is_(False))
+    sources = await db.execute(
+        select(DocumentVersion.document_id, built.document_id)
+        .join(built, built.id == DocumentVersion.source_version_id)
+        .join(Document, Document.id == DocumentVersion.document_id)
+        .where(roadmap)
+    )
+    tracks = (
+        await db.execute(
+            select(
+                ProductTrack.id,
+                ProductTrack.roadmap_document_id,
+                ProductTrack.prd_document_id,
+                roadmap,
+            ).outerjoin(Document, Document.id == ProductTrack.roadmap_document_id)
+        )
+    ).all()
+    prds: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for rm, prd in [*sources.all(), *((t[1], t[2]) for t in tracks if t[1] and t[3])]:
+        prds.setdefault(rm, set()).add(prd)
+    roadmaps = {
+        rm: list(dict.fromkeys(i for p in sorted(ps, key=str) for i in replaced[p]))
+        for rm, ps in prds.items()
+        if ps <= replaced.keys()
+    }
+    ids = replaced.keys() | roadmaps.keys()
+    return History(
+        replaced,
+        roadmaps,
+        frozenset(t[0] for t in tracks if t[2] in ids or t[1] in ids),
+    )
+
+
+async def replaced_prd_ids(db: AsyncSession) -> set[uuid.UUID]:
+    """The PRDs a live PRD replaces (:class:`History`): their items no longer feed the
+    roadmap."""
+    return set((await history(db)).prds)
+
+
+async def history_roadmaps(db: AsyncSession) -> dict[uuid.UUID, list[uuid.UUID]]:
+    """Each roadmap of replaced PRDs alone -> the PRDs that replaced them (:class:`History`):
+    read-only history, as its PRD: no working draft, track or Inbox row in Simple, and every
+    edit, approve and publish refused."""
+    return (await history(db)).roadmaps
+
+
+async def history_ids(db: AsyncSession) -> set[uuid.UUID]:
+    """The replaced PRDs and their roadmaps (:class:`History`): read-only history."""
+    return (await history(db)).ids
+
+
+async def history_track_ids(db: AsyncSession) -> set[uuid.UUID]:
+    """The tracks of a replaced PRD or of its roadmap: history, never in Simple's Tracks."""
+    return set((await history(db)).tracks)
+
+
+async def read_only(db: AsyncSession, doc: Document) -> str | None:
+    """Why ``doc`` takes no edit, approval or publication (a replaced PRD or its roadmap),
+    in plain words; None when it does."""
+    if doc.kind not in ("prd", "roadmap") or (doc.kind == "prd" and not doc.replaced_by):
+        return None
+    found = await history(db)
+    if doc.kind == "prd" and doc.id in found.prds:
+        return f"{doc.title} is replaced and read-only"
+    if doc.kind == "roadmap" and doc.id in found.roadmaps:
+        return f"{doc.title} is the roadmap of a replaced PRD and read-only"
+    return None
 
 
 async def refs(db: AsyncSession, ids: list[uuid.UUID]) -> list[dict[str, Any]]:
@@ -240,7 +398,7 @@ async def features_on_roadmap(db: AsyncSession) -> dict[str, OnRoadmap]:
                 and_(
                     Document.kind == "prd",
                     Document.deleted_at.is_(None),
-                    Document.replaced_by == [],
+                    ~replaced_now(),
                 ),
             ),
         )
@@ -905,7 +1063,7 @@ async def replace(
             raise Invalid(f"'{slug}' is not a PRD")
         if doc.id == prd.id:
             raise Invalid("a PRD cannot replace itself")
-        if doc.replaced_by:
+        if doc.id in await replaced_prd_ids(db):
             raise Invalid(f"{doc.title} is itself replaced")
         by.append(doc)
     before = list(prd.replaced_by or [])
@@ -922,7 +1080,8 @@ async def carry_bases(db: AsyncSession, old: Document) -> list[ScheduleBasis]:
     the replacing PRD it sits under on the company roadmap (the latest version with items),
     once each: same reference, kind, date and item, still verified, with the note
     ``carried from <old title>``. The old PRD keeps its own."""
-    if not old.replaced_by:
+    by = (await history(db)).prds.get(old.id, [])
+    if not by:
         return []
     company = await active(db)
     version = await _items_version(db, company.id) if company else None
@@ -932,7 +1091,7 @@ async def carry_bases(db: AsyncSession, old: Document) -> list[ScheduleBasis]:
     for r in await db.scalars(
         select(RoadmapItem).where(
             RoadmapItem.roadmap_version_id == version.id,
-            RoadmapItem.prd_document_id.in_(old.replaced_by),
+            RoadmapItem.prd_document_id.in_(by),
         )
     ):
         under.setdefault(r.item_key, r.prd_document_id)

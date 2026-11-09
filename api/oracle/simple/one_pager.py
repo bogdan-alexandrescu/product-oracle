@@ -802,8 +802,9 @@ async def _document(
     if current and d.replaced_by:
         from oracle.roadmap import company
 
-        by = [{**r, "id": str(r["id"])} for r in await company.refs(db, list(d.replaced_by))]
-        raise ChangeError(404, {"message": "This PRD was replaced", "replaced_by": by})
+        if live := (await company.history(db)).prds.get(d.id):
+            by = [{**r, "id": str(r["id"])} for r in await company.refs(db, live)]
+            raise ChangeError(404, {"message": "This PRD was replaced", "replaced_by": by})
     return d
 
 

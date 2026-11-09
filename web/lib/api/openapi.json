@@ -33856,7 +33856,7 @@
           "roadmaps"
         ],
         "summary": "Import Roadmap Items",
-        "description": "Store ``roadmap_items.yaml`` as a roadmap version's items (the file a\n``prd_to_roadmap`` run writes), replacing any it had. Refused (422, with the\nproblems) on any problem, a date without a verified basis included; an approved\nversion's items cannot be replaced (409).",
+        "description": "Store ``roadmap_items.yaml`` as a roadmap version's items (the file a\n``prd_to_roadmap`` run writes), replacing any it had. Refused (422, with the\nproblems) on any problem, a date without a verified basis included; an approved\nversion's items cannot be replaced (409); nor a history roadmap's, a replaced PRD's\n(409, replaced-prd-history).",
         "operationId": "import_roadmap_items",
         "security": [
           {
@@ -74178,6 +74178,25 @@
             "type": "array",
             "title": "Replaced By",
             "default": []
+          },
+          "replaces": {
+            "items": {
+              "$ref": "#/components/schemas/PrdRef"
+            },
+            "type": "array",
+            "title": "Replaces",
+            "default": []
+          },
+          "read_only": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read Only"
           },
           "changes_in_review": {
             "type": "integer",
