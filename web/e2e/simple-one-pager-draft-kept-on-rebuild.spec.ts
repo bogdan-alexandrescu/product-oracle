@@ -10,7 +10,9 @@ import { expect, test } from "./test";
  * published): an owner edits a line on version 1's page, approves version 2, and reloads.
  *
  * fails_when = the rebuild drops the page's working draft, so the line reads as published and
- * its note and the "Working draft" status are gone; no_claim = a submitted draft's approval.
+ * its note and the "Working draft" status are gone; or a draft sent for approval is not its own
+ * version after the run's (drafts._submit_sections), so the run's version 2 is approved and the
+ * draft dropped (drafts.on_version_approved settles only the draft submitted as that version).
  */
 
 const EDIT = "An example alert digest sent once a day";
@@ -49,4 +51,49 @@ test("a working draft's note stays when the page is built again from a newer ver
   await expect(line).toHaveAttribute("data-state", "edited");
   await expect(line).toContainText(EDIT);
   await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+});
+
+test("a draft sent for approval stays in review when the run's version is approved", async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "run-review"] as const);
+  await login(page);
+  await page.goto("/simple/one-pagers");
+  await page.getByRole("link", { name: "Usage alerts PRD" }).first().click();
+  const meta = page.getByTestId("one-pager-meta");
+  await expect(meta).toContainText("In review");
+
+  const edit = page.getByRole("button", { name: /^Edit “Fewer support tickets/ });
+  const id = await page.locator("[data-line]").filter({ has: edit }).getAttribute("data-line");
+  const line = page.locator(`[data-line="${id}"]`);
+  await line.hover();
+  await edit.click();
+  await page.getByLabel("New wording for").fill(EDIT);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(line).toContainText(EDIT);
+
+  // Sent for approval: the draft becomes a version of its own, after the run's version 2.
+  const bar = page.getByRole("status", { name: "Working draft" });
+  await bar.getByRole("button", { name: "Send for approval…" }).click();
+  await page.getByTestId("send-for-approval").getByRole("button", { name: "Send for approval" }).click();
+  const waits = bar.getByTestId("draft-waits-on");
+  await expect(waits).toContainText("Sent for approval · waiting on");
+  const reviewers = (await waits.textContent()) ?? "";
+
+  // Approving the run's version 2 (not the version the draft was sent as) is refused, as the
+  // API's publish gate refuses any PRD version but the latest: the draft's version 3.
+  const step = page.getByRole("region", { name: "The run's PRD review" });
+  await step.getByRole("button", { name: "Approve", exact: true }).click();
+  const box = step.getByRole("dialog", { name: "Approve the review" });
+  await box.getByRole("button", { name: "Approve review" }).click();
+  await step.getByRole("button", { name: "Approve the PRD" }).click();
+  await expect(step).toContainText("v3 exists: only the latest version can be published");
+  await expect(step).not.toContainText("You approved the PRD");
+
+  // Still in review: version 1 stays published, the draft waits on the same reviewers.
+  await page.reload();
+  await expect(meta).toContainText("draft in progress");
+  await expect(meta).toContainText("Version 1");
+  await expect(waits).toHaveText(reviewers);
+  await expect(line).toHaveAttribute("data-state", "edited");
+  await expect(line).toContainText(EDIT);
+  await expect(bar).toContainText("1 change");
 });
