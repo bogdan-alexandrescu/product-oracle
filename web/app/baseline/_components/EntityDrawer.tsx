@@ -1289,6 +1289,7 @@ function EditForm({
           onChange={(d) => setDrafts((a) => ({ ...a, [f.key]: d }))}
           parents={(current) => parentOptions(graph, entity, current)}
           onRemove={drafts[f.key].kind === "object" || drafts[f.key].kind === "entries" ? () => removeAttr(f.key) : undefined}
+          removeName="Remove attribute"
           missing={
             holdsPlaceholder(entity.attrs?.[f.key]) && (
               <Chip kind="warn" className="ml-1.5">
@@ -1329,7 +1330,8 @@ function EditForm({
 
 /** A small icon button in the Edit form: adds or removes a list entry, an object field or an attribute. */
 function EditIcon({ icon, name, onClick }: { icon: "plus" | "x"; name: string; onClick: () => void }) {
-  // Named by its title, not aria-label, so a field found by its label never also finds the button beside it.
+  // Named by its title, in words that never hold the field's own name, so a field or a button found by its name (a
+  // field "Saved replies", the Save button) never also finds this one; where it sits says which it adds to or removes.
   return <Button variant="ghost" icon={icon} title={name} className="h-7 flex-none self-start px-1.5" onClick={onClick} />;
 }
 
@@ -1346,7 +1348,8 @@ function DraftField({
   parents,
   missing,
   onRemove,
-  removeName = `Remove ${name}`,
+  removeName = "Remove field",
+  part,
 }: {
   /** The top-level attribute's key; none for a field or an entry in one. */
   attr?: string;
@@ -1357,6 +1360,8 @@ function DraftField({
   missing?: ReactNode;
   onRemove?: () => void;
   removeName?: string;
+  /** The field's key, or the entry's number, in its object or list: marks the field with its controls. */
+  part?: string;
 }) {
   const lines = useRef<HTMLTextAreaElement>(null);
   const label = `flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2${attr ? "" : " pl-3"}`;
@@ -1411,7 +1416,7 @@ function DraftField({
                 value={"text" in p ? p.text : ""}
                 onChange={(e) => "text" in p && set(i, { ...p, text: e.target.value })}
               />
-              <EditIcon icon="x" name="Remove new field" onClick={() => drop(i)} />
+              <EditIcon icon="x" name="Remove field" onClick={() => drop(i)} />
             </div>
           ) : (
             <DraftField
@@ -1421,15 +1426,16 @@ function DraftField({
               onChange={(next) => set(i, next)}
               parents={parents}
               onRemove={() => drop(i)}
-              removeName={d.kind === "entries" ? `Remove entry ${partLabel}` : undefined}
+              removeName={d.kind === "entries" ? "Remove entry" : undefined}
+              part={d.kind === "entries" ? partLabel : k}
             />
           ),
         )}
-        <EditIcon icon="plus" name={`${d.kind === "object" ? "Add field to" : "Add entry to"} ${name}`} onClick={add} />
+        <EditIcon icon="plus" name={d.kind === "object" ? "Add field" : "Add entry"} onClick={add} />
       </fieldset>
     );
     return remove ? (
-      <div className="flex items-start gap-1">
+      <div className="flex items-start gap-1" data-attr-part={part ?? attr}>
         {group}
         {remove}
       </div>
@@ -1485,12 +1491,12 @@ function DraftField({
   );
   if (!wrapped) return field;
   return (
-    <div className={`flex flex-col gap-1${attr ? "" : " pl-3"}`}>
+    <div className={`flex flex-col gap-1${attr ? "" : " pl-3"}`} data-attr-part={part ?? attr}>
       <div className="flex items-end gap-1">
         <div className="flex min-w-0 flex-1 flex-col">{field}</div>
         {remove}
       </div>
-      {d.kind === "lines" && <EditIcon icon="plus" name={`Add entry to ${name}`} onClick={addLine} />}
+      {d.kind === "lines" && <EditIcon icon="plus" name="Add entry" onClick={addLine} />}
     </div>
   );
 }
