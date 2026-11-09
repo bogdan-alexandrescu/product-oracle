@@ -151,6 +151,9 @@ interface Acts {
   refuse: (why: string) => void;
 }
 
+/** kr-in-goal-map: a key result as its goal's card lists it: its name and its number to aim at. */
+export type KrLine = { id: string; code: string | null; name: string; current: number | null; target: number | null; unit: string };
+
 export interface LadderProps {
   map: GoalMap;
   setMap: (m: GoalMap) => void;
@@ -166,6 +169,8 @@ export interface LadderProps {
   onPrd: ((milestone: string) => void) | null;
   /** The goal a link opened the map on (Home's goal cards). */
   picked: string | null;
+  /** kr-in-goal-map: each goal's key results, by goal id (shown in its card, never as goals). */
+  keyResults?: Map<string, KrLine[]>;
   /** The page's title block, and the guardrail strip under the header. */
   head: ReactNode;
   guardrail: ReactNode;
@@ -528,7 +533,8 @@ export function GoalLadder(props: LadderProps) {
             label: "Undo",
             onClick: () =>
               void (async () => {
-                if (goal !== m.goal) await unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } }, body: { goal_id: m.goal } }));
+                // kr-in-goal-map: back onto its own goal (a key result's milestone, onto the key result).
+                if (goal !== m.goal) await unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } }, body: { goal_id: (m as GmMilestone & { kr?: string }).kr ?? m.goal } }));
                 await putBack(was, [...from, ...ids.filter((x) => !from.includes(x))]);
               })().then(reload, failed),
           },
@@ -909,6 +915,7 @@ function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
   const draws = [...new Set(v.ms.filter((m) => m.goal === g.id).flatMap((m) => m.areas))].map((a) => v.map.areas.find((x) => x.id === a)?.name).filter(Boolean);
   const key = `goal:${g.id}`;
   const live = v.live?.id === g.id ? v.live : null;
+  const krs = p.keyResults?.get(g.id) ?? [];
   return (
     <div
       data-ld-goal={g.id}
@@ -944,6 +951,25 @@ function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
         <span data-testid="ld-goal-status" className={`ml-auto leading-5 font-semibold whitespace-nowrap ${KR[g.status]}`}>{KR_WORD[g.status]}</span>
       </span>
       <Reading g={g} canEdit={v.canChange} onPick={p.onMetric} />
+      {krs.length > 0 && (
+        <div data-testid="ld-goal-krs" className="flex flex-col gap-0.5 border-t border-line pt-1">
+          <span className="flex items-center gap-1 text-[12px] font-bold tracking-wide text-text2 uppercase">
+            Key results
+            <InfoTip label={`${g.name}'s key results`}>Its subgoals. Their milestones and the work behind them sit in this column.</InfoTip>
+          </span>
+          <ul className="flex flex-col gap-0.5">
+            {krs.map((k) => (
+              <li key={k.id} data-testid="ld-goal-kr" className="flex items-baseline justify-between gap-2 text-[13px] leading-[17px]">
+                <span className="min-w-0">
+                  {k.code && <span className="simple-code mr-1">{k.code}</span>}
+                  {k.name}
+                </span>
+                <span className="whitespace-nowrap text-text2">{k.target === null ? "No target yet" : <><b className="text-text">{num(k.current, k.unit)}</b> of {num(k.target, k.unit)}</>}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {draws.length > 0 && <span className="text-[12px] leading-4 text-text2">Draws on: {draws.join(", ")}</span>}
       {v.menu === key && (
         <MenuList

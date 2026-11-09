@@ -17,10 +17,11 @@ import { NewPrdSheet, useCanStartPrd } from "@/components/simple/NewPrd";
 import { api, unwrap } from "@/lib/api/client";
 import type { GmArea, GmFeature, GmGoal, GoalMap } from "@/lib/api/mock/goal-map";
 import { formatCount } from "@/lib/format";
+import { keyResults, type KeyResults } from "@/lib/key-results";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { GoalLadder } from "./_ladder";
+import { GoalLadder, type KrLine } from "./_ladder";
 import { FeaturePanel, type Placement } from "./_panel";
 
 /** one-feature-panel: each feature's code (its roadmap item's), shown before its name. */
@@ -163,7 +164,41 @@ function emptyDraft(map: GoalMap): Draft {
   return { name: "", goal: map.goals[0]?.id ?? "", threshold: "", areas: [], after: "", target: "", feature: "", search: "", milestone: "", areaName: "", area: "", expected: "", confirm: false, metric: "" };
 }
 
-/* ---------- The page ---------- */
+/**
+ * kr-in-goal-map: the map as Simple shows it. Only top-level goals are goals; a key result (a
+ * subgoal of a goal on the map) is a line in its goal's card, and its milestones and work sit
+ * under that goal (each milestone keeps its own goal as `kr`, for an Undo).
+ */
+function withKeyResults(raw: GoalMap, krs: KeyResults, entities: { id: string; attrs?: Record<string, unknown> }[]): { map: GoalMap; lines: Map<string, KrLine[]>; top: (id: string | null) => string | null } {
+  const onMap = new Set(raw.goals.map((g) => g.id));
+  const top = (id: string | null) => {
+    const p = krs.parentOf(id);
+    return p && onMap.has(p.id) ? p.id : id;
+  };
+  const goals = raw.goals.filter((g) => top(g.id) === g.id);
+  const lines = new Map(
+    goals.map((g) => [
+      g.id,
+      krs.of(g.id).map((k): KrLine => {
+        const own = raw.goals.find((x) => x.id === k.id);
+        const a = entities.find((e) => e.id === k.id)?.attrs ?? {};
+        return { ...k, current: own?.current ?? null, target: own?.target ?? (typeof a.target === "number" ? a.target : null), unit: own?.unit ?? (typeof a.unit === "string" ? a.unit : "") };
+      }),
+    ]),
+  );
+  return {
+    map: {
+      ...raw,
+      goals,
+      milestones: raw.milestones.map((m) => (top(m.goal) === m.goal ? m : { ...m, goal: top(m.goal)!, kr: m.goal })),
+      unplaced: raw.unplaced.map((u) => (top(u.goal ?? null) === (u.goal ?? null) ? u : { ...u, goal: top(u.goal ?? null) })),
+      off_map: raw.off_map.filter((g) => top(g.id) === g.id),
+    },
+    lines,
+    top,
+  };
+}
+
 /* ---------- The page ---------- */
 
 export function GoalMapPage() {
@@ -175,14 +210,18 @@ export function GoalMapPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [panel, setPanel] = useState<GmFeature | null>(null);
   const [prd, setPrd] = useState<{ name: string; problem: string } | null>(null);
-  const map = q.data;
+  // kr-in-goal-map: the goals' parents, read before the map is drawn so no key result shows as a goal.
+  const goalList = useQuery("simple-goal-map-goal-tree", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
+  const krs = useMemo(() => keyResults(goalList.data ?? []), [goalList.data]);
+  const folded = useMemo(() => (q.data && (goalList.data || goalList.error) ? withKeyResults(q.data, krs, goalList.data ?? []) : null), [q.data, goalList.data, goalList.error, krs]);
+  const map = folded?.map;
   // Read after the map: its features are roadmap items once the map is read.
   const roadmap = useQuery(`simple-roadmap:goal-map-codes:${map ? 1 : 0}`, () => (map ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })) : Promise.resolve(null)));
   const codes = useMemo(() => new Map((roadmap.data?.items ?? []).flatMap((i) => (i.code ? [[i.id, i.code] as [string, string]] : []))), [roadmap.data]);
   const units = useMemo(() => new Map((map?.milestones ?? []).map((m) => [m.id, m.unit])), [map]);
   // goal-map-scoreboard: a Home goal card opens the map on its goal (by id; else by its name).
   const params = useSearchParams();
-  const asked = params.get("goal");
+  const asked = folded?.top(params.get("goal")) ?? params.get("goal");
   const askedName = params.get("name");
   const picked = map?.goals.find((g) => g.id === asked)?.id ?? map?.goals.find((g) => !!askedName && g.name.toLowerCase() === askedName.toLowerCase())?.id ?? null;
   // A goal left off the map (no number to aim at): a line names it and why, never the top in silence.
@@ -312,6 +351,7 @@ export function GoalMapPage() {
         onMetric={(goal) => open("metric", goal)}
         onPrd={canPrd ? (m) => open("prd", undefined, m) : null}
         picked={picked}
+        keyResults={folded?.lines}
         head={
           <div className="flex flex-col gap-1">
             <h1 className="simple-h1 max-[600px]:sr-only">Goal map</h1>
