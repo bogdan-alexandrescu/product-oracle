@@ -15,13 +15,14 @@ import { expect, test, type Locator, type Page } from "./test";
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
+// Each goal's first, second and third milestone, read by its roadmap-wide code (roadmap-milestone-codes).
 const SAFETY_M1 = "M1 Reports reach a person (User Safety)";
-const SAFETY_M2 = "M2 Blocks hold everywhere (User Safety)";
-const SAFETY_M3 = "M3 Ready for launch (User Safety)";
-const SCALE_M1 = "M1 Load measured (Scale)";
-const SCALE_M2 = "M2 Twice the load (Scale)";
-// The same code and name as User Safety's M3: told apart by id, never by name.
-const SCALE_M3 = "M3 Ready for launch (Scale)";
+const SAFETY_M2 = "M3 Blocks hold everywhere (User Safety)";
+const SAFETY_M3 = "M6 Ready for launch (User Safety)";
+const SCALE_M1 = "M2 Load measured (Scale)";
+const SCALE_M2 = "M4 Twice the load (Scale)";
+// The same name as User Safety's third: told apart by id, never by name.
+const SCALE_M3 = "M5 Ready for launch (Scale)";
 const ITEM = "read-replicas";
 
 async function open(page: Page, email: string = ADMIN.email) {
