@@ -18,6 +18,11 @@ import { login } from "./helpers";
  * - "stored text": protects=a Value, Start value or Weight stored as text ("1e-7", 20 digits) saves again untouched,
  *   as stored; fails_when=the form says "Value must be a number." for a value the person did not change, or rewrites
  *   it; no_claim=how an import stores such text (the stored goal is set up in the mock's data).
+ * gt-goal-edit-minors-7:
+ * - "unreadable weight": protects=text the Weight box cannot read ("1e", "--") refuses to save with "Weight must be a
+ *   number.", as an unreadable Value does; fails_when=it saves and the stored weight is removed; no_claim=Position.
+ * - "emptied weight": protects=an emptied Weight still removes the weight; fails_when=it is kept or refused;
+ *   no_claim=how the weight counts in the score.
  */
 
 const NAME = "KR 1.1 live helpers averaging 50 replied threads a day in March 2027";
@@ -127,4 +132,30 @@ test("stored text: a Value, Start value and Weight stored as text save again unt
   await save(panel, form);
   await expect(panel.getByRole("heading", { name: `${NAME} (kept)` })).toBeVisible();
   expect(await stored(page)).toMatchObject(kept);
+});
+
+test("unreadable weight: text the Weight box cannot read refuses to save and keeps the weight", async ({ page }) => {
+  await openGoal(page, { weight: 2 });
+  const form = await openEdit(page);
+  const before = await stored(page);
+  const { weight } = boxes(page, form);
+  await expect(weight).toHaveValue("2");
+  // A number box takes the keys "1e" and "--" but cannot read them: its value then reads as "".
+  for (const t of ["1e", "--"]) {
+    await weight.clear();
+    await weight.pressSequentially(t);
+    await form.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(form.getByText("Weight must be a number.", { exact: true })).toBeVisible();
+    expect(await stored(page)).toEqual(before);
+  }
+  expect(before).toMatchObject({ weight: 2 });
+});
+
+test("emptied weight: an emptied Weight box removes the weight", async ({ page }) => {
+  const panel = await openGoal(page, { weight: 2 });
+  const form = await openEdit(page);
+  const { weight } = boxes(page, form);
+  await weight.clear();
+  await save(panel, form);
+  expect(await stored(page)).not.toHaveProperty("weight");
 });
