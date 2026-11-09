@@ -20,7 +20,8 @@ Test cards (protects / fails_when / no_claim):
   milestone directly, or accepting it does not write the date; no_claim=declining (same
   shape as accept, exercised by the change engine's own tests).
 - test_a_proposal_whose_milestone_moved_on_is_declined_not_accepted,
-  test_a_proposal_whose_milestone_is_gone_is_declined_not_accepted: a stuck proposal is
+  test_a_proposal_whose_milestone_is_gone_is_declined_not_accepted,
+  test_a_proposal_whose_milestone_is_in_the_trash_is_declined_not_accepted: a stuck proposal is
   declined, never accepted (cards on the tests).
 """
 
@@ -439,3 +440,34 @@ async def test_a_proposal_whose_milestone_is_gone_is_declined_not_accepted(clien
     assert r.status_code == 200, r.text
     assert r.json()["change"]["status"] == "declined"
     await assert_declined(ctx, change_id)
+
+
+async def test_a_proposal_whose_milestone_is_in_the_trash_is_declined_not_accepted(client):
+    """protects=a PRD milestone in the Trash (``deleted_at`` set) whose ``pending_change``
+    still names the proposal refuses Accept with "The milestone is gone" (404) and the date
+    stays; Decline closes the proposal (audited) and clears ``pending_change``, like a
+    hard-deleted milestone's; fails_when=accepting writes the date onto the trashed
+    milestone, or declining is refused (it waits forever); no_claim=the web."""
+    ctx = await make_ctx()
+    m1, change_id = await propose_m1(client, ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(TrackMilestone, uuid.UUID(m1["id"]))
+        row.deleted_at = NOW
+        await s.commit()
+    r = await client.post(f"{CHANGES}/{change_id}/accept", headers=ctx.as_("prdowner"))
+    assert r.status_code == 404, r.text
+    assert "The milestone is gone" in r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(TrackMilestone, uuid.UUID(m1["id"]))
+        assert str(row.target_date) == "2026-11-27"
+        assert row.pending_change["change_id"] == change_id
+        assert (await s.get(SimpleChange, uuid.UUID(change_id))).status == "proposed"
+    r = await client.post(f"{CHANGES}/{change_id}/decline", json={"reason": "Out of date"},
+                          headers=ctx.as_("prdowner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert r.json()["change"]["status"] == "declined"
+    await assert_declined(ctx, change_id)
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(TrackMilestone, uuid.UUID(m1["id"]))
+        assert row.pending_change is None
+        assert str(row.target_date) == "2026-11-27"

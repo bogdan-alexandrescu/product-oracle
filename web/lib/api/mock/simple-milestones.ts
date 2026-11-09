@@ -146,14 +146,20 @@ function prdAsk(m: MockMilestone, id: string, after: { date: string | null; coun
 /**
  * stuck-milestone-decline ("simple-prd-milestone-stuck" scenario): M2's first ask (Jan 5, Nov 4)
  * still waits though the milestone now waits on a second (Jan 12): only declining closes it.
+ * M4 Routing by team is gone (its row deleted) with an ask on it (Mar 15, Nov 3) still waiting.
+ * Here Usage alerts is owned by Priya Raman (approver@example.com), who is not a company owner.
  */
 export function seedStuckPrdAsk(milestones: MockMilestone[]): Schemas["SimpleChangeOut"][] {
   const m = milestones.find((x) => x.id === stableUuid("simple-gm/p2"))!;
+  m.prd!.owner = "Priya Raman";
   const by = stableUuid("simple-user/sam-lee");
   const stuck = prdAsk(m, stableUuid("simple-gm-change/stuck/first"), { date: "2027-01-05", counts_when: m.counts_when }, by, "Sam Lee", "2026-11-04T17:00:00Z");
   const next = prdAsk(m, stableUuid("simple-gm-change/stuck/second"), { date: "2027-01-12", counts_when: m.counts_when }, by, "Sam Lee", "2026-11-05T17:00:00Z");
   m.pending = { date: "2027-01-12", counts_when: null, asked_of: m.prd!.owner, change_id: next.id, can_decide: false };
-  return [stuck, next];
+  const at = milestones.findIndex((x) => x.id === stableUuid("simple-gm/p4"));
+  const [gone] = milestones.splice(at, 1);
+  const orphan = prdAsk(gone, stableUuid("simple-gm-change/stuck/gone"), { date: "2027-03-15", counts_when: gone.counts_when }, by, "Sam Lee", "2026-11-03T17:00:00Z");
+  return [orphan, stuck, next];
 }
 
 /** roadmap-decide: whether the reader decides a change asked of the milestone's PRD (its owner, or a company owner). */
@@ -266,10 +272,10 @@ export async function routeMilestones(
       // A change to the PRD's milestone asks its owner (a proposed change to the PRD); it stays put.
       m.pending = b.date === m.date && !b.counts_when ? null : { date: b.date ?? m.date, counts_when: b.counts_when ?? null, asked_of: m.prd.owner, change_id: stableUuid(`simple-gm-change/${m.id}/${b.date}`), can_decide: false };
       // roadmap-decide: the ask is a proposed change on the PRD (goal_milestones.create), the PRD owner's to decide.
+      // As goal_milestones._propose_prd_change, an older ask on it stays proposed (it waits no more: only declining closes it).
       if (m.pending) {
         const changes = (db.changes ??= []);
         const id = m.pending.change_id!;
-        for (const c of changes) if (c.op === "edit_goal_milestone" && c.status === "proposed" && c.target.milestone_id === m.id) c.status = "declined";
         changes.push(prdAsk(m, id, { date: m.pending.date ?? null, counts_when: m.pending.counts_when ?? m.counts_when }, me.id ?? "", (me.id && me.names?.[me.id]) || me.name || "someone", new Date().toISOString()));
       }
       return json(200, milestoneOut(m, db.ids, true, false, me));

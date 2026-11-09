@@ -594,7 +594,8 @@ async def decide(db: AsyncSession, principal: Any, c: SimpleChange, action: str,
     """Wired from ``oracle.simple.changes.decide``: the PRD owner accepts or declines a
     goal milestone's proposed date/counts_when. Accepting writes it onto the milestone and
     clears ``pending_change``; declining only clears it (or, when the milestone is gone or
-    its ``pending_change`` names another change, only closes the proposal)."""
+    its ``pending_change`` names another change, only closes the proposal). A milestone in the
+    Trash counts as gone: it is declined, never accepted."""
     from oracle.simple.changes import ChangeError, one_out
 
     if c.status != "proposed":
@@ -610,10 +611,10 @@ async def decide(db: AsyncSession, principal: Any, c: SimpleChange, action: str,
     row = await db.get(TrackMilestone, milestone_id, with_for_update=True)
     pending = (row.pending_change if row is not None else None) or {}
     waits = str(pending.get("change_id")) == str(c.id)
-    # A proposal whose milestone is gone or moved on to another change is still declined
-    # (only the proposal closes; the milestone and its other change are left as they are),
-    # so it never waits forever; accepting it is refused.
-    if action == "accept" and row is None:
+    # A proposal whose milestone is gone (or in the Trash) or moved on to another change is
+    # still declined (only the proposal closes; the milestone and its other change are left
+    # as they are), so it never waits forever; accepting it is refused.
+    if action == "accept" and (row is None or row.deleted_at is not None):
         raise ChangeError(404, "The milestone is gone")
     if action == "accept" and not waits:
         raise ChangeError(409, {"message": "This proposal no longer waits on this milestone",

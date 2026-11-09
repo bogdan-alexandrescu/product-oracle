@@ -11,14 +11,18 @@ import { expect, test, type Page } from "./test";
  * The Simple roadmap's Needs a decision panel lists both asks, newest first, in the same words
  * (no date), so the stuck one is the second, and the refused Accept says which it is.
  *
+ * The scenario also has an ask (Nov 3) on M4 Routing by team, whose milestone is gone; Usage
+ * alerts is owned there by Priya Raman (approver@example.com), who is not a company owner.
+ *
  * fails_when: Decline is refused or the stuck ask stays on Home or in Needs a decision, Accept
- * goes through, or the milestone's newer ask goes with it; no_claim: the API's own rules
+ * goes through, or the milestone's newer ask goes with it; the PRD's owner is not shown, or may
+ * not decline, an ask whose milestone is gone; no_claim: the API's own rules
  * (api/tests/test_simple_goal_milestones_api.py).
  */
 
-async function open(page: Page, path: string) {
+async function open(page: Page, path: string, email?: string) {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-prd-milestone-stuck"] as const);
-  await login(page);
+  await login(page, email);
   await page.goto(path);
 }
 
@@ -71,4 +75,25 @@ test("the company's owner declines a stuck milestone ask in the roadmap's Needs 
   const home = page.getByTestId("home-proposals").getByTestId("home-proposal");
   await expect(home.filter({ hasText: "Nov 5," })).toHaveCount(1);
   await expect(home.filter({ hasText: "Nov 4," })).toHaveCount(0);
+});
+
+test("the PRD's owner, not a company owner, declines on Home an ask whose milestone is gone", async ({ page }) => {
+  await open(page, "/simple", "approver@example.com");
+  const proposals = page.getByTestId("home-proposals");
+  await expect(proposals.getByRole("heading", { name: "Proposals on your items" })).toBeVisible();
+  const asks = proposals.getByTestId("home-proposal");
+  const gone = asks.filter({ hasText: "Nov 3," });
+  await expect(gone).toHaveCount(1);
+  // Accepting it is refused, in words, and it stays.
+  await gone.getByRole("button", { name: "Accept" }).click();
+  await expect(page.getByText("The milestone is gone")).toBeVisible();
+  await expect(gone).toHaveCount(1);
+  await gone.getByRole("button", { name: "Decline" }).click();
+  await expect(page.getByText("Declined", { exact: true })).toBeVisible();
+  await expect(gone).toHaveCount(0);
+  await expect(asks.filter({ hasText: "Nov 5," })).toHaveCount(1);
+  // It stays gone after a reload.
+  await page.reload();
+  await expect(asks.filter({ hasText: "Nov 5," })).toHaveCount(1);
+  await expect(gone).toHaveCount(0);
 });
