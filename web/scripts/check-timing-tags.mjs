@@ -6,18 +6,24 @@
 // A test measures elapsed time when its body, or a helper function it calls (of the file, or
 // imported from another file under e2e/; the mock API it drives is not the test), subtracts
 // from the clock, reads performance.now() or process.hrtime(t0), or checks the clock against a
-// deadline (a clock read plus or minus a budget: expect(Date.now()).toBeLessThan(until),
-// if (Date.now() > until) throw ...). A deadline check that only stops a poll (a loop's
-// condition, or an if that neither throws nor calls expect()) waits; it does not measure.
+// deadline (a clock read plus or minus a budget, or a call of a function that returns one:
+// expect(Date.now()).toBeLessThan(until), if (Date.now() > by(50)) throw ...). A deadline check
+// that only stops a poll (a loop's condition, or an if that neither throws, calls expect() nor
+// sets a variable that is then asserted, as in if (Date.now() > d) late = true; expect(late)
+// .toBe(false)) waits; it does not measure.
 // The clock is Date.now(), performance.now(), process.hrtime() / .bigint(), new Date().getTime()
-// / .valueOf(), +new Date(), a variable set from one of them in its own scope ("end - start"
-// with const end = Date.now()), a call of a function that returns one (const now = () =>
-// Date.now()) or of one under another name (const clock = Date.now); new Date() counts only
-// when another clock read is taken from it ("new Date() - t0"), never in plain date maths.
+// / .valueOf(), +new Date(), however spelt (Date["now"](), globalThis.Date.now(), D.now() with
+// const D = Date, now() with const { now } = Date), a variable set from one of them in its own
+// scope ("end - start" with const end = Date.now()), a call of a function that returns one
+// (const now = () => Date.now()) or of one under another name (const clock = Date.now); new
+// Date() counts only when another clock read is taken from it ("new Date() - t0"), never in
+// plain date maths.
 // A coarse guard meant for the parallel shards says so with a "timing-check: coarse" comment
 // in the test; it passes only when every use of a measured value in it is set whole into a
 // variable or is the subject of a bound (expect(ms).toBeLessThan, toBeLessThanOrEqual,
-// toBeGreaterThan) that is a literal of at least 1000 ms, with at least one such bound.
+// toBeGreaterThan) that is a literal of at least 1000 ms, with at least one such bound, and
+// each bound's subject is an elapsed time in ms as measured (Date.now() - t0, or a helper that
+// returns one unscaled), never one scaled ((performance.now() - t0) * 100), in ns, or a timestamp.
 //
 //   node scripts/check-timing-tags.mjs              self-test, then every e2e spec (not e2e/real)
 //   node scripts/check-timing-tags.mjs --self-test  the self-test only
@@ -29,34 +35,56 @@ import ts from "typescript";
 const TAG = "@timing";
 const COARSE = "timing-check: coarse";
 
-function isNowCall(node, objects = ["Date", "performance"]) {
-  return (
-    ts.isCallExpression(node) &&
-    ts.isPropertyAccessExpression(node.expression) &&
-    node.expression.name.text === "now" &&
-    ts.isIdentifier(node.expression.expression) &&
-    objects.includes(node.expression.expression.text)
-  );
+const CLOCK_OBJECTS = ["Date", "performance", "process"];
+const GLOBALS = ["globalThis", "window", "self", "global"];
+
+/** The member `a.b` or `a["b"]` names: b, or null. */
+function memberName(n) {
+  if (ts.isPropertyAccessExpression(n)) return n.name.text;
+  if (ts.isElementAccessExpression(n) && ts.isStringLiteralLike(n.argumentExpression)) return n.argumentExpression.text;
+  return null;
 }
 
-/** `Date.now`, `performance.now`, `process.hrtime` or `process.hrtime.bigint`, uncalled. */
-function isClockRef(n) {
+/** The clock object `n` is ("Date", "performance" or "process"), also as globalThis.Date and the like or a variable set to one (const D = Date); or null. */
+function clockObject(n, clocks) {
   n = skipParens(n);
-  if (!ts.isPropertyAccessExpression(n)) return false;
-  const of = skipParens(n.expression);
-  const name = n.name.text;
-  if (ts.isIdentifier(of)) return (name === "now" && ["Date", "performance"].includes(of.text)) || (name === "hrtime" && of.text === "process");
-  return name === "bigint" && ts.isPropertyAccessExpression(of) && of.name.text === "hrtime" && ts.isIdentifier(of.expression) && of.expression.text === "process";
+  if (ts.isIdentifier(n)) return CLOCK_OBJECTS.includes(n.text) ? n.text : (clocks?.objects.get(symbolOf(n, clocks)) ?? null);
+  const name = memberName(n);
+  const of = name && skipParens(n.expression);
+  return CLOCK_OBJECTS.includes(name) && ts.isIdentifier(of) && GLOBALS.includes(of.text) ? name : null;
+}
+
+/** `performance.now()`, however spelt (window.performance["now"]()). */
+function isPerformanceNow(n, clocks) {
+  return ts.isCallExpression(n) && isClockRef(n.expression, clocks) && clockObject(skipParens(n.expression).expression, clocks) === "performance";
+}
+
+/** `Date.now`, `performance.now`, `process.hrtime` or `process.hrtime.bigint`, uncalled, however spelt (Date["now"], globalThis.Date.now, D.now with const D = Date). */
+function isClockRef(n, clocks) {
+  n = skipParens(n);
+  const name = memberName(n);
+  if (!name) return false;
+  const of = clockObject(n.expression, clocks);
+  if (of) return (name === "now" && of !== "process") || (name === "hrtime" && of === "process");
+  const inner = skipParens(n.expression);
+  return name === "bigint" && memberName(inner) === "hrtime" && clockObject(inner.expression, clocks) === "process";
 }
 
 /** `process.hrtime(t0)`: the time since t0, a measure in itself. */
-function isHrtimeSince(n) {
-  return ts.isCallExpression(n) && n.arguments.length > 0 && isClockRef(n.expression) && skipParens(n.expression).name.text === "hrtime";
+function isHrtimeSince(n, clocks) {
+  return ts.isCallExpression(n) && n.arguments.length > 0 && isClockRef(n.expression, clocks) && memberName(skipParens(n.expression)) === "hrtime";
 }
 
-/** `new Date()`, no arguments. */
-function isNewDate(n) {
-  return ts.isNewExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === "Date" && !n.arguments?.length;
+/** `process.hrtime()` or `process.hrtime.bigint()` (or an item of one): a read in ns or [s, ns], not ms. */
+function isHrtimeRead(n, clocks) {
+  n = skipParens(n);
+  if (ts.isElementAccessExpression(n)) return isHrtimeRead(n.expression, clocks);
+  return ts.isCallExpression(n) && isClockRef(n.expression, clocks) && ["hrtime", "bigint"].includes(memberName(skipParens(n.expression)));
+}
+
+/** `new Date()`, no arguments (also new D() with const D = Date). */
+function isNewDate(n, clocks) {
+  return ts.isNewExpression(n) && clockObject(n.expression, clocks) === "Date" && !n.arguments?.length;
 }
 
 // How surely a value is a clock read: a timestamp, or a `new Date()` that is one only when
@@ -72,14 +100,14 @@ const WEAK = 1;
  */
 function clockKind(node, clocks) {
   const n = skipParens(node);
-  if (ts.isCallExpression(n) && isClockRef(n.expression)) return isHrtimeSince(n) ? 0 : STRONG;
-  if (isNewDate(n)) return WEAK;
+  if (ts.isCallExpression(n) && isClockRef(n.expression, clocks)) return isHrtimeSince(n, clocks) ? 0 : STRONG;
+  if (isNewDate(n, clocks)) return WEAK;
   if (ts.isElementAccessExpression(n)) return clockKind(n.expression, clocks); // process.hrtime()[0]
   if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.PlusToken)
-    return isNewDate(skipParens(n.operand)) ? STRONG : clockKind(n.operand, clocks);
+    return isNewDate(skipParens(n.operand), clocks) ? STRONG : clockKind(n.operand, clocks);
   if (ts.isCallExpression(n) && !n.arguments.length && ts.isPropertyAccessExpression(n.expression) && ["getTime", "valueOf"].includes(n.expression.name.text)) {
     const of = skipParens(n.expression.expression);
-    return isNewDate(of) ? STRONG : clockKind(of, clocks);
+    return isNewDate(of, clocks) ? STRONG : clockKind(of, clocks);
   }
   if (ts.isIdentifier(n)) return clocks.vars.get(symbolOf(n, clocks)) ?? 0;
   if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) return clocks.fns.get(symbolOf(n.expression, clocks)) ?? 0;
@@ -106,27 +134,34 @@ function checkerFor(sf) {
   return ts.createProgram({ rootNames: [sf.fileName], options: { noLib: true, noResolve: true, types: [] }, host }).getTypeChecker();
 }
 
-/** The clock reads `fn` returns (the surest of them), or 0. */
-function returnKind(fn, clocks) {
-  if (!fn.body) return 0;
-  if (!ts.isBlock(fn.body)) return clockKind(fn.body, clocks);
-  let kind = 0;
+/** What a function with this `body` returns: its expression body, or its return statements' values. */
+function returned(body) {
+  if (!body) return [];
+  if (!ts.isBlock(body)) return [body];
+  const out = [];
   const visit = (n) => {
     if (ts.isFunctionLike(n)) return;
-    if (ts.isReturnStatement(n) && n.expression) kind = Math.max(kind, clockKind(n.expression, clocks));
+    if (ts.isReturnStatement(n) && n.expression) out.push(n.expression);
     ts.forEachChild(n, visit);
   };
-  ts.forEachChild(fn.body, visit);
-  return kind;
+  ts.forEachChild(body, visit);
+  return out;
+}
+
+/** The clock reads `fn` returns (the surest of them), or 0. */
+function returnKind(fn, clocks) {
+  return Math.max(0, ...returned(fn.body).map((x) => clockKind(x, clocks)));
 }
 
 /**
  * `sf`'s clock variables (const end = Date.now(); t0 = performance.now()), clock functions
- * (const now = () => Date.now(); const clock = Date.now) and deadlines (const until = Date.now()
- * + 3000), each by its declaration, so a name in another scope is not one.
+ * (const now = () => Date.now(); const clock = Date.now; const { now } = Date), clock objects
+ * (const D = Date), deadlines (const until = Date.now() + 3000) and functions that return one
+ * (const by = (ms) => Date.now() + ms), each by its declaration, so a name in another scope is
+ * not one.
  */
 function findClocks(sf) {
-  const clocks = { checker: checkerFor(sf), vars: new Map(), fns: new Map(), deadlines: new Map() };
+  const clocks = { sf, checker: checkerFor(sf), vars: new Map(), fns: new Map(), deadlines: new Map(), deadlineFns: new Map(), objects: new Map() };
   let grew = true;
   const raise = (map, id, kind) => {
     const s = kind && symbolOf(id, clocks);
@@ -135,16 +170,35 @@ function findClocks(sf) {
       grew = true;
     }
   };
+  const returnsDeadline = (fn) => (returned(fn.body).some((x) => isDeadline(x, clocks)) ? STRONG : 0);
   const visit = (n) => {
     if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
       const init = skipParens(n.initializer);
-      if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) raise(clocks.fns, n.name, returnKind(init, clocks));
-      else if (isClockAlias(init)) raise(clocks.fns, n.name, STRONG);
-      else {
+      const object = clockObject(init, clocks);
+      if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) {
+        raise(clocks.fns, n.name, returnKind(init, clocks));
+        raise(clocks.deadlineFns, n.name, returnsDeadline(init));
+      } else if (isClockAlias(init, clocks)) raise(clocks.fns, n.name, STRONG);
+      else if (object) {
+        const s = symbolOf(n.name, clocks);
+        if (s && !clocks.objects.has(s)) {
+          clocks.objects.set(s, object);
+          grew = true;
+        }
+      } else {
         raise(clocks.vars, n.name, clockKind(init, clocks));
         raise(clocks.deadlines, n.name, isDeadline(init, clocks) ? STRONG : 0);
       }
-    } else if (ts.isFunctionDeclaration(n) && n.name) raise(clocks.fns, n.name, returnKind(n, clocks));
+    } else if (ts.isVariableDeclaration(n) && ts.isObjectBindingPattern(n.name) && n.initializer && ["Date", "performance"].includes(clockObject(n.initializer, clocks))) {
+      // const { now } = Date; const { now: clock } = performance
+      for (const el of n.name.elements) {
+        const key = el.propertyName ?? el.name;
+        if (ts.isIdentifier(el.name) && (ts.isIdentifier(key) || ts.isStringLiteral(key)) && key.text === "now") raise(clocks.fns, el.name, STRONG);
+      }
+    } else if (ts.isFunctionDeclaration(n) && n.name) {
+      raise(clocks.fns, n.name, returnKind(n, clocks));
+      raise(clocks.deadlineFns, n.name, returnsDeadline(n));
+    }
     else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(n.left)) {
       raise(clocks.vars, n.left, clockKind(n.right, clocks));
       raise(clocks.deadlines, n.left, isDeadline(n.right, clocks) ? STRONG : 0);
@@ -159,16 +213,17 @@ function findClocks(sf) {
 }
 
 /** `Date.now` or `performance.now.bind(performance)`: a clock under another name. */
-function isClockAlias(n) {
+function isClockAlias(n, clocks) {
   n = skipParens(n);
   if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === "bind") n = n.expression.expression;
-  return isClockRef(n);
+  return isClockRef(n, clocks);
 }
 
-/** A deadline: a timestamp plus or minus a budget (Date.now() + 3000, t0 - 50), or a variable set to one. */
+/** A deadline: a timestamp plus or minus a budget (Date.now() + 3000, t0 - 50), a variable set to one, or a call of a function that returns one (by(50)). */
 function isDeadline(node, clocks) {
   const n = skipParens(node);
   if (ts.isIdentifier(n)) return clocks.deadlines.has(symbolOf(n, clocks));
+  if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) return clocks.deadlineFns.has(symbolOf(n.expression, clocks));
   if (!ts.isBinaryExpression(n)) return false;
   const [l, r] = [clockKind(n.left, clocks), clockKind(n.right, clocks)];
   if (n.operatorToken.kind === ts.SyntaxKind.PlusToken) return (l === STRONG && !r) || (r === STRONG && !l);
@@ -184,12 +239,58 @@ function asserts(n) {
   return !!ts.forEachChild(n, asserts);
 }
 
+/** Whether the identifier `id` is asserted where it is read: in an expect(), a throw, or the condition of an if (or ?:) that asserts. */
+function assertedAt(id) {
+  for (let c = id, p = id.parent; p && !ts.isFunctionLike(p); [c, p] = [p, p.parent]) {
+    if (ts.isThrowStatement(p) || (ts.isCallExpression(p) && expected(p) !== null)) return true;
+    if (ts.isIfStatement(p) && p.expression === c) return asserts(p.thenStatement) || asserts(p.elseStatement);
+    if (ts.isConditionalExpression(p) && p.condition === c) return asserts(p.whenTrue) || asserts(p.whenFalse);
+    if (ts.isStatement(p)) return false;
+  }
+  return false;
+}
+
+/** The variables of `clocks`' file that are asserted somewhere (assertedAt), by declaration. */
+function assertedVars(clocks) {
+  if (!clocks.asserted) {
+    clocks.asserted = new Set();
+    const visit = (n) => {
+      if (ts.isIdentifier(n) && assertedAt(n)) clocks.asserted.add(symbolOf(n, clocks));
+      ts.forEachChild(n, visit);
+    };
+    visit(clocks.sf);
+  }
+  return clocks.asserted;
+}
+
+const INCREMENTS = [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken];
+
+/** Whether `n` sets a variable that is then asserted (if (Date.now() > d) late = true; expect(late).toBe(false)). */
+function setsAsserted(n, clocks) {
+  if (!n) return false;
+  let target = null;
+  if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment) target = skipParens(n.left);
+  else if ((ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) && INCREMENTS.includes(n.operator)) target = skipParens(n.operand);
+  else if (ts.isVariableDeclaration(n) && n.initializer) target = n.name;
+  if (target && ts.isIdentifier(target) && assertedVars(clocks).has(symbolOf(target, clocks))) return true;
+  return !!ts.forEachChild(n, (c) => setsAsserted(c, clocks));
+}
+
+/** Whether the value of `n` is set into a variable that is then asserted (const late = Date.now() > d ? 1 : 0). */
+function setIntoAsserted(n, clocks) {
+  const v = valueOf(n);
+  const p = v.parent;
+  const target = ts.isVariableDeclaration(p) && p.initializer === v ? p.name : ts.isBinaryExpression(p) && p.right === v && p.operatorToken.kind === ts.SyntaxKind.EqualsToken ? skipParens(p.left) : null;
+  return !!target && ts.isIdentifier(target) && assertedVars(clocks).has(symbolOf(target, clocks));
+}
+
 /**
  * Whether a comparison of the clock with a deadline only waits: it is the condition of a loop,
- * or of an if (or ?:) none of whose branches throws or calls expect(), so it stops a poll
- * rather than failing the test on the time.
+ * or of an if (or ?:) none of whose branches throws, calls expect() or sets a variable that is
+ * then asserted (a flag: if (Date.now() > d) late = true; expect(late).toBe(false)), and a ?:
+ * whose value is not set into one, so it stops a poll rather than failing the test on the time.
  */
-function onlyWaits(cmp) {
+function onlyWaits(cmp, clocks) {
   let c = cmp;
   let p = c.parent;
   const passes = (x) =>
@@ -200,8 +301,9 @@ function onlyWaits(cmp) {
   if (!p) return false;
   if ((ts.isWhileStatement(p) || ts.isDoStatement(p)) && p.expression === c) return true;
   if (ts.isForStatement(p) && p.condition === c) return true;
-  if (ts.isIfStatement(p) && p.expression === c) return !asserts(p.thenStatement) && !asserts(p.elseStatement);
-  if (ts.isConditionalExpression(p) && p.condition === c) return !asserts(p.whenTrue) && !asserts(p.whenFalse);
+  const quiet = (...branches) => branches.every((b) => !asserts(b) && !setsAsserted(b, clocks));
+  if (ts.isIfStatement(p) && p.expression === c) return quiet(p.thenStatement, p.elseStatement);
+  if (ts.isConditionalExpression(p) && p.condition === c) return quiet(p.whenTrue, p.whenFalse) && !setIntoAsserted(p, clocks);
   return false;
 }
 
@@ -232,12 +334,12 @@ function measureAt(n, helpers, clocks) {
       if ((negated(n.left) && clockKind(n.right, clocks)) || (negated(n.right) && clockKind(n.left, clocks))) return true;
     } else if (COMPARISONS.includes(op)) {
       const vs = (a, b) => clockKind(a, clocks) && isDeadline(b, clocks);
-      if ((vs(n.left, n.right) || vs(n.right, n.left)) && !onlyWaits(n)) return true;
+      if ((vs(n.left, n.right) || vs(n.right, n.left)) && !onlyWaits(n, clocks)) return true;
     }
     return false;
   }
   if (!ts.isCallExpression(n)) return false;
-  if (isNowCall(n, ["performance"]) || isHrtimeSince(n) || helpers.has(calleeName(n))) return true;
+  if (isPerformanceNow(n, clocks) || isHrtimeSince(n, clocks) || helpers.has(calleeName(n))) return true;
   // expect(Date.now()).toBeLessThan(until), expect.poll(() => Date.now())..., expect(t0 + 50).toBeGreaterThan(Date.now())
   if (ts.isPropertyAccessExpression(n.expression) && [...BOUNDS, "toBeGreaterThanOrEqual"].includes(n.expression.name.text) && n.arguments[0]) {
     const x = expected(n);
@@ -247,6 +349,101 @@ function measureAt(n, helpers, clocks) {
     return !!((subject && isDeadline(b, clocks)) || (isDeadline(x, clocks) && clockKind(b, clocks)));
   }
   return false;
+}
+
+/** The values set into the variable `id` names: its initializer and every assignment to it (`ms *= 100` as such). */
+function valuesSet(id, clocks) {
+  const s = symbolOf(id, clocks);
+  if (!s) return [];
+  if (!clocks.sets) {
+    clocks.sets = new Map();
+    const add = (target, value) => {
+      const t = ts.isIdentifier(target) && symbolOf(target, clocks);
+      if (t) clocks.sets.set(t, [...(clocks.sets.get(t) ?? []), value]);
+    };
+    const visit = (n) => {
+      if (ts.isVariableDeclaration(n) && n.initializer) add(n.name, n.initializer);
+      else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken) add(skipParens(n.left), n.right);
+      else if (ts.isBinaryExpression(n) && n.operatorToken.kind > ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment) add(skipParens(n.left), n);
+      ts.forEachChild(n, visit);
+    };
+    visit(clocks.sf);
+  }
+  return clocks.sets.get(s) ?? [];
+}
+
+const SCALES = [ts.SyntaxKind.AsteriskToken, ts.SyntaxKind.SlashToken, ts.SyntaxKind.PercentToken, ts.SyntaxKind.AsteriskAsteriskToken, ts.SyntaxKind.LessThanLessThanToken, ts.SyntaxKind.GreaterThanGreaterThanToken, ts.SyntaxKind.GreaterThanGreaterThanGreaterThanToken];
+const ROUNDS = ["Math.round", "Math.floor", "Math.ceil", "Math.trunc", "Math.abs"];
+
+/** `n` past parentheses, await, `as`, `satisfies` and `!`. */
+function inner(n) {
+  for (;;) {
+    if (ts.isParenthesizedExpression(n) || ts.isAwaitExpression(n) || ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isNonNullExpression(n) || ts.isTypeAssertionExpression(n)) n = n.expression;
+    else return n;
+  }
+}
+
+/** Whether `n` is a reading in ms, not scaled: not maths with * / % ** or shifts, not an hrtime read (ns), nor a variable set to one. */
+function unscaledReading(node, clocks, seen = new Set()) {
+  const n = inner(node);
+  if (isHrtimeRead(n, clocks)) return false;
+  if (ts.isBinaryExpression(n)) {
+    const op = n.operatorToken.kind;
+    if (SCALES.includes(op) || (op >= ts.SyntaxKind.FirstAssignment && op <= ts.SyntaxKind.LastAssignment && op !== ts.SyntaxKind.EqualsToken && op !== ts.SyntaxKind.PlusEqualsToken && op !== ts.SyntaxKind.MinusEqualsToken)) return false;
+    return unscaledReading(n.left, clocks, seen) && unscaledReading(n.right, clocks, seen);
+  }
+  if (ts.isPrefixUnaryExpression(n)) return unscaledReading(n.operand, clocks, seen);
+  if (ts.isIdentifier(n)) {
+    const s = symbolOf(n, clocks);
+    if (!s || seen.has(s)) return true;
+    seen.add(s);
+    return valuesSet(n, clocks).every((v) => unscaledReading(v, clocks, seen));
+  }
+  return true;
+}
+
+/**
+ * Whether `node` is an elapsed time in ms as measured, not scaled: a difference of unscaled
+ * readings (Date.now() - t0, seen[seen.length - 1] - seen[0]) or -t0 + Date.now(); a ?: of
+ * such and 0; a whole rounding of one (Math.round); a variable set only to one (or 0); or a call of a
+ * function `raw` names, one that returns one. Not a timestamp, nor a measure in ns or scaled.
+ */
+function unscaledElapsed(node, clocks, raw, seen = new Set()) {
+  const n = inner(node);
+  const reading = (x) => unscaledReading(x, clocks);
+  if (ts.isBinaryExpression(n)) {
+    const op = n.operatorToken.kind;
+    const negated = (x) => ((x = skipParens(x)), ts.isPrefixUnaryExpression(x) && x.operator === ts.SyntaxKind.MinusToken && reading(x.operand));
+    if (op === ts.SyntaxKind.MinusToken) return reading(n.left) && reading(n.right);
+    if (op === ts.SyntaxKind.PlusToken) return (negated(n.left) && reading(n.right)) || (negated(n.right) && reading(n.left));
+    return false;
+  }
+  // Each of these, or 0 (a placeholder), and not all 0.
+  const elapsedOrZero = (values) => values.every((x) => isZero(x) || unscaledElapsed(x, clocks, raw, seen)) && !values.every(isZero);
+  if (ts.isConditionalExpression(n)) return elapsedOrZero([n.whenTrue, n.whenFalse]);
+  if (ts.isCallExpression(n)) {
+    const name = calleeName(n);
+    if (ROUNDS.includes(name)) return n.arguments.length === 1 && unscaledElapsed(n.arguments[0], clocks, raw, seen);
+    return raw.has(name);
+  }
+  if (ts.isIdentifier(n)) {
+    const s = symbolOf(n, clocks);
+    if (!s || seen.has(s)) return false;
+    seen.add(s);
+    return elapsedOrZero(valuesSet(n, clocks));
+  }
+  return false;
+}
+
+function isZero(n) {
+  n = inner(n);
+  return ts.isNumericLiteral(n) && Number(n.text) === 0;
+}
+
+/** Whether a function with this `body` returns an unscaled elapsed time in ms, and nothing else (unscaledElapsed). */
+function returnsUnscaled(body, clocks, raw) {
+  const values = returned(body);
+  return values.length > 0 && values.every((v) => unscaledElapsed(v, clocks, raw));
 }
 
 /** Whether `node`, or anything in it, measures time (measureAt). */
@@ -294,31 +491,37 @@ function resolveImport(spec, fromFile, read, root) {
 }
 
 /**
- * One file's view of what measures: its named functions that do (local name -> true), those
- * it exports (exported name -> true), and the imported ones it may call.
+ * One file's view of what measures: its named functions that do and the imported ones it may
+ * call (`helpers`, by local name), those of them that return an unscaled elapsed time in ms
+ * (`raw`), and those it exports (`exports`: exported name -> whether it is raw).
  */
 function analyse(sf, fileName, read, root, cache) {
   // Imported functions that measure, under their local names.
   const helpers = new Set();
+  const raw = new Set();
+  const addHelper = (local, isRaw) => {
+    helpers.add(local);
+    if (isRaw) raw.add(local);
+  };
   const exportedFrom = (spec) => {
     const p = resolveImport(spec, fileName, read, root);
-    return p ? measuringExports(p, read, root, cache) : new Set();
+    return p ? measuringExports(p, read, root, cache) : new Map();
   };
-  const reexports = new Set();
+  const reexports = new Map();
   for (const st of sf.statements) {
     if (ts.isImportDeclaration(st) && ts.isStringLiteral(st.moduleSpecifier) && st.importClause && !st.importClause.isTypeOnly) {
       const exp = exportedFrom(st.moduleSpecifier.text);
       if (!exp.size) continue;
       const c = st.importClause;
-      if (c.name && exp.has("default")) helpers.add(c.name.text);
+      if (c.name && exp.has("default")) addHelper(c.name.text, exp.get("default"));
       const b = c.namedBindings;
-      if (b && ts.isNamespaceImport(b)) for (const e of exp) helpers.add(`${b.name.text}.${e}`);
-      else if (b) for (const el of b.elements) if (exp.has((el.propertyName ?? el.name).text)) helpers.add(el.name.text);
+      if (b && ts.isNamespaceImport(b)) for (const [e, isRaw] of exp) addHelper(`${b.name.text}.${e}`, isRaw);
+      else if (b) for (const el of b.elements) if (exp.has((el.propertyName ?? el.name).text)) addHelper(el.name.text, exp.get((el.propertyName ?? el.name).text));
     } else if (ts.isExportDeclaration(st) && st.moduleSpecifier && ts.isStringLiteral(st.moduleSpecifier) && !st.isTypeOnly) {
       const exp = exportedFrom(st.moduleSpecifier.text);
       if (!st.exportClause) {
-        for (const e of exp) if (e !== "default") reexports.add(e);
-      } else if (ts.isNamedExports(st.exportClause)) for (const el of st.exportClause.elements) if (exp.has((el.propertyName ?? el.name).text)) reexports.add(el.name.text);
+        for (const [e, isRaw] of exp) if (e !== "default") reexports.set(e, isRaw);
+      } else if (ts.isNamedExports(st.exportClause)) for (const el of st.exportClause.elements) if (exp.has((el.propertyName ?? el.name).text)) reexports.set(el.name.text, exp.get((el.propertyName ?? el.name).text));
     }
   }
 
@@ -353,9 +556,22 @@ function analyse(sf, fileName, read, root, cache) {
       grew = true;
     }
   }
-  const exports = new Set(reexports);
-  for (const [name, local] of exported) if (helpers.has(local)) exports.add(name);
-  return { helpers, clocks, exports };
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const [name, body] of fns) {
+      if (raw.has(name) || !helpers.has(name) || !returnsUnscaled(body, clocks, raw)) continue;
+      raw.add(name);
+      grew = true;
+    }
+  }
+  const exports = new Map(reexports);
+  for (const [name, local] of exported) if (helpers.has(local)) exports.set(name, raw.has(local));
+  return { helpers, raw, clocks, exports };
+}
+
+/** How much of `exports` (an analyse() result's) is known: its names, and its raw ones. */
+function grown(exports) {
+  return exports.size + [...exports.values()].filter(Boolean).length;
 }
 
 // Per cache, the files being read (a stack), what each exports so far, the lowest file on the
@@ -363,7 +579,8 @@ function analyse(sf, fileName, read, root, cache) {
 const walks = new WeakMap();
 
 /**
- * The exported names of the file at `path` that measure. A file in an import cycle is read
+ * The exported names of the file at `path` that measure, each with whether it returns an
+ * unscaled elapsed time in ms (analyse's `exports`). A file in an import cycle is read
  * again until what it exports stops growing; one that reaches back to a file still being read
  * below it is not cached, since what it saw of that file was partial.
  */
@@ -376,23 +593,23 @@ function measuringExports(path, read, root, cache) {
     const top = walk.stack.length - 1;
     walk.low[top] = Math.min(walk.low[top], at);
     walk.back[at] = true;
-    return walk.partial.get(path) ?? new Set();
+    return walk.partial.get(path) ?? new Map();
   }
   const source = read(path);
   if (source === null) {
-    cache.set(path, new Set());
+    cache.set(path, new Map());
     return cache.get(path);
   }
   const sf = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const me = walk.stack.push(path) - 1;
   walk.low[me] = me;
-  let exports = new Set();
+  let exports = new Map();
   for (;;) {
     walk.back[me] = false;
-    const before = exports.size;
+    const before = grown(exports);
     ({ exports } = analyse(sf, path, read, root, cache));
     walk.partial.set(path, exports);
-    if (!walk.back[me] || exports.size === before) break;
+    if (!walk.back[me] || grown(exports) === before) break;
   }
   walk.stack.pop();
   walk.partial.delete(path);
@@ -448,11 +665,13 @@ function valueOf(n) {
  * Whether a test's `body` is a coarse guard: a "timing-check: coarse" comment (not text in a
  * string), and every use of a measured value in it is one of: set whole into a variable
  * (const ms = Date.now() - t0; ms = await paint(page)), which is then measured too; or the
- * subject of a bound that is a literal of at least 1000 ms (expect(ms).toBeLessThan(1500)).
- * At least one such bound. Anything else (maths on it, a comparison, a throw, a poll, a bound
- * it is the argument of, a deadline check) makes the test not coarse.
+ * subject of a bound that is a literal of at least 1000 ms (expect(ms).toBeLessThan(1500)),
+ * the subject an elapsed time in ms as measured (unscaledElapsed: Date.now() - t0, or a helper
+ * that returns one; not one scaled, in ns, or a timestamp). At least one such bound. Anything
+ * else (maths on it, a comparison, a throw, a poll, a bound it is the argument of, a deadline
+ * check) makes the test not coarse.
  */
-function coarseGuard(body, sf, helpers, clocks) {
+function coarseGuard(body, sf, helpers, raw, clocks) {
   if (!comments(body, sf).some((c) => c.includes(COARSE))) return false;
   const measured = new Set(); // variables set from a measure: const ms = await paint(page)
   const isMeasured = (n) => ts.isIdentifier(n) && measured.has(symbolOf(n, clocks));
@@ -467,7 +686,7 @@ function coarseGuard(body, sf, helpers, clocks) {
       const m = p.parent;
       if (ts.isPropertyAccessExpression(m) && m.expression === p && BOUNDS.includes(m.name.text) && ts.isCallExpression(m.parent) && m.parent.expression === m) {
         const b = m.parent.arguments[0] && skipParens(m.parent.arguments[0]);
-        if (b && ts.isNumericLiteral(b) && Number(b.text.replace(/_/g, "")) >= COARSE_MIN_MS) return "bound";
+        if (b && ts.isNumericLiteral(b) && Number(b.text.replace(/_/g, "")) >= COARSE_MIN_MS && unscaledElapsed(n, clocks, raw)) return "bound";
       }
     }
     return null;
@@ -501,7 +720,7 @@ function coarseGuard(body, sf, helpers, clocks) {
  */
 export function untaggedTimingTests(source, fileName = "spec.ts", { root = dirname(resolve(fileName)), read = readSource, cache = new Map() } = {}) {
   const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-  const { helpers, clocks } = analyse(sf, resolve(fileName), read, resolve(root), cache);
+  const { helpers, raw, clocks } = analyse(sf, resolve(fileName), read, resolve(root), cache);
 
   const out = [];
   const walk = (n, tagged) => {
@@ -511,7 +730,7 @@ export function untaggedTimingTests(source, fileName = "spec.ts", { root = dirna
       const isTagged = tagged || title.includes(TAG);
       const body = n.arguments[n.arguments.length - 1];
       if (kind === "test") {
-        const coarse = body && coarseGuard(body, sf, helpers, clocks);
+        const coarse = body && coarseGuard(body, sf, helpers, raw, clocks);
         if (!isTagged && !coarse && body && measures(body, helpers, clocks)) out.push({ line: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, title });
         return;
       }
