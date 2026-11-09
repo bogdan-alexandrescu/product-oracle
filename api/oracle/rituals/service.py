@@ -892,6 +892,44 @@ async def skip(db: AsyncSession, principal: Principal, occ_id: uuid.UUID, reason
     return occ, ritual
 
 
+def _skipped(occ: RitualOccurrence) -> None:
+    if occ.status != "skipped":
+        raise RitualError(409, f"This occurrence is {occ.status}")
+
+
+async def edit_skip_reason(db: AsyncSession, principal: Principal, occ_id: uuid.UUID, reason: str):
+    occ, ritual = await get_occurrence(db, occ_id, lock=True)
+    _owner_only(principal, ritual)
+    _skipped(occ)
+    if reason == occ.skip_reason:
+        return occ, ritual
+    before, occ.skip_reason = occ.skip_reason, reason
+    await audit.record(db, principal, "ritual.skip_reason_changed", "ritual_occurrence", occ.id,
+                       {"from": before, "to": reason})  # fmt: skip
+    await db.commit()
+    return occ, ritual
+
+
+async def unskip(db: AsyncSession, principal: Principal, occ_id: uuid.UUID):
+    """Undo skip: the occurrence as it was before, as the ticker would have left it: ready
+    (missed a week after its end), or failed when its pre-read was never built (a paused
+    ritual skips its failed occurrences)."""
+    occ, ritual = await get_occurrence(db, occ_id, lock=True)
+    _owner_only(principal, ritual)
+    _skipped(occ)
+    if not occ.pre_read_built_at:
+        occ.status = "failed"
+    elif occ.ends_at + MISSED_AFTER <= clock.now():
+        occ.status = "missed"
+    else:
+        occ.status = "ready"
+    reason, occ.skip_reason = occ.skip_reason, None
+    await audit.record(db, principal, "ritual.unskipped", "ritual_occurrence", occ.id,
+                       {"reason": reason})  # fmt: skip
+    await db.commit()
+    return occ, ritual
+
+
 # --- the Inbox ---------------------------------------------------------------------------
 
 

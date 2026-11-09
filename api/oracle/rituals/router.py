@@ -222,6 +222,34 @@ async def skip_ritual_occurrence(
         raise _call(e) from e
 
 
+@router.patch(
+    "/ritual-occurrences/{occurrence_id}/skip", response_model=OccurrenceOut, responses=ERRORS
+)
+async def edit_ritual_occurrence_skip(
+    occurrence_id: uuid.UUID, body: SkipIn, db: TenantDB, principal: ViewerNow
+) -> OccurrenceOut:
+    """The ritual's owner: Edit the reason of a skipped occurrence."""
+    try:
+        occ, ritual = await service.edit_skip_reason(db, principal, occurrence_id, body.reason)
+        return await service.occurrence_out(db, principal, occ, ritual)
+    except service.RitualError as e:
+        raise _call(e) from e
+
+
+@router.delete(
+    "/ritual-occurrences/{occurrence_id}/skip", response_model=OccurrenceOut, responses=ERRORS
+)
+async def undo_ritual_occurrence_skip(
+    occurrence_id: uuid.UUID, db: TenantDB, principal: ViewerNow
+) -> OccurrenceOut:
+    """The ritual's owner: Undo skip, back to its state before (ready, missed or failed)."""
+    try:
+        occ, ritual = await service.unskip(db, principal, occurrence_id)
+        return await service.occurrence_out(db, principal, occ, ritual)
+    except service.RitualError as e:
+        raise _call(e) from e
+
+
 @router.post(
     "/ritual-occurrences/{occurrence_id}/summary",
     response_model=RunOut,

@@ -183,7 +183,7 @@ export function OccurrenceDetail({ id }: { id: string }) {
             )}
           </div>
         )}
-        {(occ.status === "held" || occ.status === "skipped") && !recordable && <Recorded occ={occ} />}
+        {(occ.status === "held" || occ.status === "skipped") && !recordable && <Recorded occ={occ} canEdit={isOwner} onChanged={reload} />}
         {recordable && <RecordForm occ={occ} onChanged={reload} />}
       </div>
     </>
@@ -458,12 +458,74 @@ function RebuildCard({ occ, blocks, canBuild }: { occ: Occurrence; blocks: Block
   );
 }
 
-function Recorded({ occ }: { occ: Occurrence }) {
+/** A held occurrence's notes, or a skipped one's reason: the owner edits the reason or undoes the skip (as the skip, theirs). */
+function Recorded({ occ, canEdit, onChanged }: { occ: Occurrence; canEdit: boolean; onChanged: () => Promise<void> }) {
   const text = occ.status === "held" ? occ.notes : occ.skip_reason;
+  const skipped = occ.status === "skipped";
+  const [editing, setEditing] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const path = { params: { path: { occurrence_id: occ.id } } };
+  async function act(call: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await call();
+      setEditing(false);
+      invalidateWaiting();
+      await onChanged();
+      waitingChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <section data-testid="occurrence-notes" className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
       <h2 className="mb-1 font-display text-[17px] font-bold">{occ.status === "held" ? "Notes" : "Skipped"}</h2>
-      <p className="text-[15px] whitespace-pre-wrap">{text ? <span data-user-content>{text}</span> : "No notes"}</p>
+      {skipped && canEdit && editing ? (
+        <div className="flex flex-col gap-2">
+          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
+            Why it was skipped
+            <input className={INPUT} maxLength={2000} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="solid"
+              disabled={busy || !reason.trim()}
+              onClick={() => act(() => unwrap(api.PATCH("/v1/ritual-occurrences/{occurrence_id}/skip", { ...path, body: { reason: reason.trim() } })))}
+            >
+              Save
+            </Button>
+            <Button disabled={busy} onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-start gap-2">
+          <p className="min-w-0 flex-1 text-[15px] whitespace-pre-wrap">{text ? <span data-user-content>{text}</span> : "No notes"}</p>
+          {skipped && canEdit && (
+            <>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  setReason(occ.skip_reason ?? "");
+                  setEditing(true);
+                }}
+              >
+                Edit
+              </Button>
+              <Button disabled={busy} onClick={() => act(() => unwrap(api.DELETE("/v1/ritual-occurrences/{occurrence_id}/skip", path)))}>
+                Undo skip
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+      {error && <ErrorNote>{error}</ErrorNote>}
       {occ.status === "held" && occ.decisions.length > 0 && (
         <div data-testid="occurrence-decisions" className="mt-3">
           <h3 className="mb-1 text-sm font-semibold text-text2">Decisions</h3>
