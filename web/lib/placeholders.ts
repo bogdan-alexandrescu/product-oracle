@@ -1,14 +1,17 @@
 /**
- * Unfilled template placeholders ("[n]", "[N]", "[X]", "[TBD]", "[?]", "[#]", "[number]"; "[n] of [n]" as one), as
- * the API's oracle.baseline.goals.PLACEHOLDER reads them: a goal's name or description is never written with one,
- * and a value holding one reads as missing.
+ * Unfilled template placeholders as an import writes them (lowercase "[n]", "[x]", "[#]", "[?]", "[tbd]"; "[n] of
+ * [n]" and "[n] out of [n]" as one), as the API's oracle.baseline.goals.PLACEHOLDER reads them: a goal's name or
+ * description is never written with one, and a value holding one reads as missing. A capitalised or other bracketed
+ * word ("Project [X]", "Price [Value]") is a real name and stays.
  */
-const ONE = String.raw`\[(?:n|x|#|\?|tbd|number|num|value)\]`;
-const PLACEHOLDER = new RegExp(String.raw`${ONE}(?:\s+(?:of|out of)\s+${ONE})?`, "gi");
+const ONE = String.raw`\[(?:n|x|#|\?|tbd)\]%?`;
+/** A "%", "/" or "Of" whose only operand was a placeholder ("[n]%", "[n]/[n]", "[n] Of [n]") goes with it. */
+const JOIN = String.raw`\s*/\s*|\s+(?:[Oo]f|[Oo]ut [Oo]f)\s+`;
+const PLACEHOLDER = new RegExp(String.raw`${ONE}(?:(?:${JOIN})${ONE})?`, "g");
 
 /** Whether `text` holds an unfilled placeholder. */
 export function hasPlaceholder(text: unknown): boolean {
-  return typeof text === "string" && new RegExp(PLACEHOLDER.source, "i").test(text);
+  return typeof text === "string" && new RegExp(PLACEHOLDER.source).test(text);
 }
 
 /** `text` with no unfilled placeholder, as goals.without_placeholders: "[n] of [n] live helpers" -> "live helpers". */

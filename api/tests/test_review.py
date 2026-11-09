@@ -114,10 +114,11 @@ async def feedback(client, ctx: Ctx, **params) -> list[dict]:
 
 
 async def actions(ctx: Ctx) -> list[str]:
+    """The tenant's audit actions, request by request. Events one request writes share its
+    transaction's created_at (now()), and ids are random, so a tie reads by action name."""
     async with tenant_session(ctx.tenant_id) as s:
-        return list(
-            (await s.scalars(select(AuditEvent.action).order_by(AuditEvent.created_at))).all()
-        )
+        query = select(AuditEvent.action).order_by(AuditEvent.created_at, AuditEvent.action)
+        return list((await s.scalars(query)).all())
 
 
 # --- Comments ----------------------------------------------------------------------------

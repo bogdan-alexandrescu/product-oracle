@@ -61,7 +61,8 @@ class ORM(BaseModel):
 class EntityCreate(BaseModel):
     type: EntityType
     key: str = Field(min_length=1, max_length=120, pattern=CREATE_KEY_PATTERN)
-    title: str = Field(min_length=1)
+    # Not blank: a goal's refused in plain words (service._goal_words), any other's in the router.
+    title: str
     body: str | None = None
     attrs: dict[str, Any] = {}
     # Goals always start proposed and go through POST .../confirm.
@@ -87,7 +88,8 @@ class EntityCreate(BaseModel):
 
 
 class EntityPatch(BaseModel):
-    title: str | None = Field(default=None, min_length=1)
+    # Not blank, as EntityCreate.title.
+    title: str | None = None
     body: str | None = None
     # Merged into the current attrs; a null value removes the key.
     attrs: dict[str, Any] | None = None
