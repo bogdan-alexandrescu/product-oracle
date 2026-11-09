@@ -31,8 +31,9 @@ import { expect, test } from "./test";
  * ("align-items: baseline"). In the Python only, an id written as code in a sentence: a
  * backtick span that is one lowercase id holding "_ . / : < {" ("`baseline.yaml`") or a command
  * starting "oracle " ("`oracle baseline pull`"), a quoted id with a <placeholder>
- * ('"baseline decision <key>"'), or, in the agents' prompt line in runs/flows.py only, one named as a
- * word to avoid ('never "baseline" (except a goal's or key result's starting value)').
+ * ('"baseline decision <key>"'), or, in api/oracle/runs/flows.py only, these exact words in any of
+ * its strings: 'never "baseline" (except a goal's or key result's starting value)', the quotes
+ * escaped or not (the rest of the string is still read).
  * 'Open the "baseline" page', "Read `Baseline` first", "`build the baseline.`",
  * 'Saved to "baseline {q}"', 'not "baseline"' and 'This is never "baseline" data.' are caught.
  */
@@ -60,8 +61,8 @@ const isCode = (span: string) =>
   /^[a-z0-9_./:<>{}-]*[_./:<{][a-z0-9_./:<>{}-]*$/.test(span) || /^oracle(?: [a-z0-9_./:<>{}-]+)+$/.test(span);
 /**
  * ... or a quoted id with a <placeholder> ('"baseline decision <key>"', a citation's ref; an f-string's fill
- * is no placeholder), or named as a word to avoid in the agents' prompt line, runs/flows.py's GROUND_TRUTH_LINE,
- * by its exact wording and in that file only: any other 'never "baseline"' is shown text.
+ * is no placeholder), or, in api/oracle/runs/flows.py only, the exact words of PROMPT_LINE_AVOID in any of its
+ * strings (the quotes escaped or not; the rest of the string is still read): any other 'never "baseline"' is shown text.
  */
 const QUOTED_ID = /\\?(["'])[a-z][a-z0-9_]*(?: [a-z][a-z0-9_]*)* <\w+>\\?\1/g;
 const PROMPT_LINE_FILE = "runs/flows.py";
