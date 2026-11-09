@@ -151,7 +151,9 @@ function useFittingLabels(track: React.RefObject<HTMLDivElement | null>, width: 
 function GoalBar({ plan, goal, code, parts, total, max }: { plan: Plan; goal: string; code: string | null; parts: { milestone: string; weeks: number }[]; total: number; max: number }) {
   const [track, width] = useWidth<HTMLDivElement>();
   // mk-goalbuckets: a segment names its milestone ("M2 Fleet care · 4 weeks"), never the code alone.
-  const label = (p: { milestone: string; weeks: number }) => `${p.milestone} ${plan.milestones.find((x) => x.code === p.milestone)?.name ?? ""} · ${weeksWords(p.weeks)}`.replace("  ", " ");
+  // A milestone's code and name; its code alone when it has no name.
+  const named = (code: string) => [code, plan.milestones.find((x) => x.code === code)?.name].filter(Boolean).join(" ");
+  const label = (p: { milestone: string; weeks: number }) => `${named(p.milestone)} · ${weeksWords(p.weeks)}`;
   const fitting = useFittingLabels(track, width, parts.map(label).join("|"));
   return (
     <li data-testid="goal-bar" data-goal={goal} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 py-1.5 sm:grid-cols-[170px_1fr_90px]">
@@ -161,14 +163,13 @@ function GoalBar({ plan, goal, code, parts, total, max }: { plan: Plan; goal: st
       </div>
       <div ref={track} data-testid="goal-bar-track" className="col-span-2 row-start-2 flex min-w-0 sm:col-span-1 sm:row-start-auto">
         {parts.map((p) => {
-          const m = plan.milestones.find((x) => x.code === p.milestone);
           const shown = !!fitting?.has(p.milestone);
           return (
             <div
               key={p.milestone}
               data-testid="goal-bar-segment"
               data-milestone={p.milestone}
-              title={`${p.milestone} ${m?.name ?? ""}: ${engineerWeeks(p.weeks)}`}
+              title={`${named(p.milestone)}: ${engineerWeeks(p.weeks)}`}
               className="relative flex h-[30px] flex-none items-center justify-center overflow-hidden border-r-2 border-surface text-[13px] font-[650] text-on-accent tabular-nums"
               style={{ width: `${(p.weeks / max) * 100}%`, background: milestoneColour(plan, p.milestone).bar }}
             >

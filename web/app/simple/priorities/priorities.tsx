@@ -2266,7 +2266,8 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
       <p aria-live="assertive" className="sr-only" data-testid="bucket-live">
         {drag.said}
       </p>
-      <ul className="mt-3 grid items-start gap-[var(--simple-gap)] sm:grid-cols-2">
+      {/* As with a dated plan: two columns only where a feature's row fits a card (31rem). */}
+      <ul className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,31rem),1fr))] items-start gap-[var(--simple-gap)]">
         {buckets.map((b, k) => {
           const rec = goalOf(b);
           const over = !!rec && drag.over === rec.id;
