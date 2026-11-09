@@ -100,7 +100,8 @@ test.describe("Simple roadmap: key results sit inside their goal's card", () => 
     await expect(page.getByText("First alert wizard").first()).toBeVisible();
     // Listed under its goal, it still names the key result it serves.
     const panel = page.getByTestId("goal-panel");
-    await panel.getByTestId("goal-suggestion").filter({ hasText: "First alert wizard" }).getByRole("button", { name: "Reject", exact: true }).click();
+    await expect(panel.getByText("First alert wizard")).toBeVisible();
+    await panel.getByRole("button", { name: "Reject", exact: true }).click();
     const reject = page.getByRole("dialog", { name: "Reject First alert wizard" });
     await expect(reject).toContainText(`Oracle will not suggest it again for KR 2 ${KR2}`);
   });
