@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import type { Schemas } from "@/lib/api/client";
 
 import { DragGhost, featureOf, type useBucketWrites } from "./goal-buckets";
-import { planFeatures, wk } from "./plan-buckets";
+import { planFeatures, weeksWords } from "./plan-buckets";
 
 type Buckets = Schemas["GoalBucketsOut"];
 type Feature = ReturnType<typeof planFeatures>[number];
@@ -163,7 +163,7 @@ export function useBucketDrag({ gb, writes }: { gb: Buckets | undefined; writes:
       <DragGhost
         code={carried.own ? carried.own.code : carried.f.code}
         name={carried.f.name}
-        weeks={carried.f.weeks != null ? `${wk(carried.f.weeks)} wk` : carried.own?.draft ? "Draft" : "PM-owned"}
+        weeks={carried.f.weeks != null ? weeksWords(carried.f.weeks) : carried.own?.draft ? "Draft" : "PM-owned"}
         className={phone ? "!left-4 w-[calc(100%-32px)] max-w-none" : ""}
         style={{ left: phone ? undefined : carried.x - 24, top: carried.y - 18 }}
       />

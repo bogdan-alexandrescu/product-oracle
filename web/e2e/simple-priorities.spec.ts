@@ -294,8 +294,8 @@ test.describe("desktop", () => {
     await admin.getByRole("tab", { name: "Goal buckets" }).click();
     await expect(admin.getByTestId("bucket-bar")).toBeVisible();
     const b = (key: string) => admin.locator(`[data-testid="goal-bucket"][data-key="${key}"]`);
-    await expect(b("grow-retention")).toContainText("9 wk · 64%");
-    await expect(b("faster-activation")).toContainText("5 wk · 36%");
+    await expect(b("grow-retention")).toContainText("9 weeks · 64%");
+    await expect(b("faster-activation")).toContainText("5 weeks · 36%");
     // Nothing this quarter serves no goal: no warning card.
     await expect(b("none")).toHaveCount(0);
   });

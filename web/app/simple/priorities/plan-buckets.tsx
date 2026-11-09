@@ -11,6 +11,8 @@ type Slice = Schemas["SimpleSlice"];
 
 /** Engineer-weeks as the rest of the page writes them: "4", "5.5" (no trailing ".0"). */
 export const wk = (n: number): string => Number(n.toFixed(1)).toString();
+/** Engineer-weeks in words, as the Value / effort chart and the Ranked tab say them: "1 week", "4 weeks", "5.5 weeks". */
+export const weeksWords = (n: number): string => `${wk(n)} ${wk(n) === "1" ? "week" : "weeks"}`;
 
 const NUMBER_WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const count = (n: number, one: string, many: string) => `${NUMBER_WORDS[n] ?? n} ${n === 1 ? one : many}`;
@@ -36,10 +38,10 @@ export function milestoneColour(plan: Plan, code: string): { bar: string; tag: s
   return { bar: `var(--simple-m${k}-bar)`, tag: `var(--simple-m${k}-tag)`, ink: `var(--simple-m${k}-tag-ink)` };
 }
 
-/** "Nov 2 – Nov 27" and "13.0 of 16.0 wk" (no dates or capacity: left out). */
+/** "Nov 2 – Nov 27" and "13 of 16 weeks" (no dates or capacity: left out). */
 function legendParts(m: Milestone): { dates: string | null; full: string } {
   const dates = m.start_date && m.end_date ? `${day(m.start_date)} – ${day(m.end_date)}` : null;
-  const full = m.effort_weeks != null ? `${wk(m.planned_weeks ?? 0)} of ${wk(m.effort_weeks)} wk` : `${wk(m.planned_weeks ?? 0)} wk planned`;
+  const full = m.effort_weeks != null ? `${wk(m.planned_weeks ?? 0)} of ${weeksWords(m.effort_weeks)}` : `${weeksWords(m.planned_weeks ?? 0)} planned`;
   return { dates, full };
 }
 
@@ -142,8 +144,8 @@ function useFittingLabels(track: React.RefObject<HTMLDivElement | null>, width: 
 
 function GoalBar({ plan, goal, code, parts, total, max }: { plan: Plan; goal: string; code: string | null; parts: { milestone: string; weeks: number }[]; total: number; max: number }) {
   const [track, width] = useWidth<HTMLDivElement>();
-  // mk-goalbuckets: a segment names its milestone ("M2 Fleet care · 4 wk"), never the code alone.
-  const label = (p: { milestone: string; weeks: number }) => `${p.milestone} ${plan.milestones.find((x) => x.code === p.milestone)?.name ?? ""} · ${wk(p.weeks)} wk`.replace("  ", " ");
+  // mk-goalbuckets: a segment names its milestone ("M2 Fleet care · 4 weeks"), never the code alone.
+  const label = (p: { milestone: string; weeks: number }) => `${p.milestone} ${plan.milestones.find((x) => x.code === p.milestone)?.name ?? ""} · ${weeksWords(p.weeks)}`.replace("  ", " ");
   const fitting = useFittingLabels(track, width, parts.map(label).join("|"));
   return (
     <li data-testid="goal-bar" data-goal={goal} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 py-1.5 sm:grid-cols-[170px_1fr_90px]">
@@ -173,7 +175,7 @@ function GoalBar({ plan, goal, code, parts, total, max }: { plan: Plan; goal: st
         })}
       </div>
       <b data-testid="goal-bar-total" className="text-right text-[16px] font-[650] tabular-nums">
-        {wk(total)} wk
+        {weeksWords(total)}
       </b>
     </li>
   );

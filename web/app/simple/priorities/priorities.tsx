@@ -95,7 +95,7 @@ const VE_WORDS = (data: Out, mayChange: boolean, phone: boolean): string => {
 const BUCKETS_WORDS = (data: Out): string => {
   // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
   const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
-  return `${dated ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line." : "No dated plan yet, so the work is not placed by milestone."}${data.weeks_total > 0 ? ` Engineer-weeks per confirmed goal this quarter: ${fmt(data.weeks_total)} wk in all.` : ""}`;
+  return `${dated ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line." : "No dated plan yet, so the work is not placed by milestone."}${data.weeks_total > 0 ? ` Engineer-weeks per confirmed goal this quarter: ${weeksWords(data.weeks_total)} in all.` : ""}`;
 };
 
 /** The calendar quarter a date falls in, as people say it: "Q4 2026". */
@@ -2218,11 +2218,11 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
   // An empty "No goal" bucket warns about nothing: it is left out.
   const buckets: Bucket[] = all.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0)).map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
   const percent = sharePercents(buckets.map((b) => b.weeks));
-  const weeksOf = (r: Row) => (r.effort == null ? "" : `${fmt(r.effort)} wk`);
+  const weeksOf = (r: Row) => (r.effort == null ? "" : weeksWords(r.effort));
   // A goal's features as Archive counts them: its bucket's.
   const featuresOf: GoalFeatures = (title) => (buckets.find((b) => !b.no_goal && sameGoal(b.title, title))?.codes ?? []).map((c) => ({ code: c, name: rowOf.get(c)?.title ?? c, slices: [] }));
   const acts = useGoalActs({ gb, plan: null, featuresOf, writes, rights });
-  // Round 6: no work this quarter is said in words, not as "0 wk" over an empty chart.
+  // Round 6: no work this quarter is said in words, not as "0 weeks" over an empty chart.
   const planned = data.weeks_total > 0;
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
@@ -2240,7 +2240,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                 <div
                   key={b.key}
                   data-testid="bucket-segment"
-                  title={`${b.title}: ${fmt(b.weeks)} wk · ${percent[k]}%`}
+                  title={`${b.title}: ${weeksWords(b.weeks)} · ${percent[k]}%`}
                   style={{ width: `${b.share * 100}%` }}
                   // V-5: neighbouring goals alternate the soft and mid accent fills, so two segments never read as one (dark included).
                   data-fill={b.no_goal ? "warn" : k % 2 ? "mid" : "soft"}
@@ -2298,7 +2298,7 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="min-w-0 flex-1 font-semibold">{b.title}</h3>
                   <span className="tabular-nums">
-                    {fmt(b.weeks)} wk · <span data-testid="bucket-share">{percent[k]}%</span>
+                    {weeksWords(b.weeks)} · <span data-testid="bucket-share">{percent[k]}%</span>
                   </span>
                   {rights.edit(rec) && (
                     <button type="button" aria-label={`Edit ${b.title}`} title="Edit goal" className={`${ICON_BTN} self-center`} onClick={() => setEditingGoal(rec!.id)} disabled={!!editingGoal}>
@@ -2721,7 +2721,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                       </button>
                     </span>
                   ))}
-                  <span className="whitespace-nowrap text-text2"> · {fmt(rows.reduce((n, r) => n + (r.effort ?? 0), 0))}{"\u00a0"}wk</span>
+                  <span className="whitespace-nowrap text-text2"> · {weeksWords(rows.reduce((n, r) => n + (r.effort ?? 0), 0)).replace(" ", "\u00a0")}</span>
                 </li>
               ))}
             </ul>

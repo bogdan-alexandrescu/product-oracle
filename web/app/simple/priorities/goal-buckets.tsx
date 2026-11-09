@@ -9,7 +9,7 @@ import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CodeTag, goalLabel, milestoneColour, planFeatures, wk } from "./plan-buckets";
+import { CodeTag, goalLabel, milestoneColour, planFeatures, weeksWords } from "./plan-buckets";
 
 /*
  * Goal buckets you can change (the owner's picks of mk-goalbuckets: GB1 a "Pencil, form in place",
@@ -401,7 +401,7 @@ export function FeatureRows({
                 const c = milestoneColour(plan, code);
                 const name = plan.milestones.find((m) => m.code === code)?.name ?? "";
                 const of = f.slices.filter((x) => x.milestone === code);
-                const weeks = of.every((x) => x.pm_owned || x.effort_weeks == null) ? "PM-owned" : `${wk(of.reduce((n, x) => n + (x.effort_weeks ?? 0), 0))} wk`;
+                const weeks = of.every((x) => x.pm_owned || x.effort_weeks == null) ? "PM-owned" : weeksWords(of.reduce((n, x) => n + (x.effort_weeks ?? 0), 0));
                 return (
                   <span key={code} data-testid="plan-chip" title={`${code} ${name}: ${weeks}`} className="inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-2 text-[12px] font-[650]" style={{ background: c.tag, color: c.ink }}>
                     <span>{code}</span> <span>{name}</span>
@@ -415,7 +415,7 @@ export function FeatureRows({
               )}
             </span>
             <span data-testid="plan-feature-total" className="min-w-[56px] flex-none text-right text-[15px] tabular-nums text-text2">
-              {f.weeks == null ? "PM-owned" : `${wk(f.weeks)} wk`}
+              {f.weeks == null ? "PM-owned" : weeksWords(f.weeks)}
             </span>
             {task?.actions(f)}
           </li>

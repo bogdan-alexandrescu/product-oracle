@@ -11,15 +11,15 @@ import { countRowOf } from "./vxe-counts";
  * it. Driven through the UI on a desktop (1366x820) and a phone (390x844), light and dark.
  *
  * Goal buckets run on the mock's "simple-plan" scenario (invented: Guided setup's plan, M1 Prove
- * it 2 Nov - 27 Nov 13 of 16 wk, M2 Scale volume 30 Nov - 25 Dec 15 of 16 wk, M3 Open to all
- * 28 Dec - 12 Feb 23 of 24 wk; Reliability 4 + 3 + 4, Growth 3 + 7 + 6, Activation 6 + 3 + 4,
+ * it 2 Nov - 27 Nov 13 of 16 weeks, M2 Scale volume 30 Nov - 25 Dec 15 of 16 weeks, M3 Open to all
+ * 28 Dec - 12 Feb 23 of 24 weeks; Reliability 4 + 3 + 4, Growth 3 + 7 + 6, Activation 6 + 3 + 4,
  * Revenue 0 + 2 + 9). Value / effort runs on the default company (nine features: values 0-6,
  * efforts 1-4 weeks; alert-export and setup-video both at value 0, effort 1).
  *
  * Card plan-charts-buckets: protects = the header reads "Where each goal's work lands", the
  * plan's capacity, planned and spare weeks in one line, a legend entry per milestone (B: a
  * swatch, the code, its dates "Nov 2 – Nov 27" and how full it is, its name in the title), one
- * stacked bar per goal in B's strong milestone colours with a segment per milestone ("M1 · 4 wk",
+ * stacked bar per goal in B's strong milestone colours with a segment per milestone ("M1 · 4 weeks",
  * blank when too narrow) and its total, B's footnote, every total equal to the plan's, goal
  * cards as B (the name, "n features in the plan", a row per feature: code, name, a chip per
  * milestone, its weeks or PM-owned) with "+ Suggest a feature" and "✦ Ask Oracle to suggest"
@@ -72,10 +72,10 @@ async function setUp(page: Page, scheme: "light" | "dark", scenario: string | nu
 }
 
 const GOALS = [
-  { goal: "Reliability", parts: ["M1 Prove it · 4 wk", "M2 Scale volume · 3 wk", "M3 Open to all · 4 wk"], total: "11 wk" },
-  { goal: "Growth", parts: ["M1 Prove it · 3 wk", "M2 Scale volume · 7 wk", "M3 Open to all · 6 wk"], total: "16 wk" },
-  { goal: "Activation", parts: ["M1 Prove it · 6 wk", "M2 Scale volume · 3 wk", "M3 Open to all · 4 wk"], total: "13 wk" },
-  { goal: "Revenue", parts: ["M2 Scale volume · 2 wk", "M3 Open to all · 9 wk"], total: "11 wk" },
+  { goal: "Reliability", parts: ["M1 Prove it · 4 weeks", "M2 Scale volume · 3 weeks", "M3 Open to all · 4 weeks"], total: "11 weeks" },
+  { goal: "Growth", parts: ["M1 Prove it · 3 weeks", "M2 Scale volume · 7 weeks", "M3 Open to all · 6 weeks"], total: "16 weeks" },
+  { goal: "Activation", parts: ["M1 Prove it · 6 weeks", "M2 Scale volume · 3 weeks", "M3 Open to all · 4 weeks"], total: "13 weeks" },
+  { goal: "Revenue", parts: ["M2 Scale volume · 2 weeks", "M3 Open to all · 9 weeks"], total: "11 weeks" },
 ];
 
 /** The labels whose text reads under 4.5:1 on their own background (the nearest painted one). */
@@ -129,11 +129,11 @@ for (const v of VIEWS) {
       await expect(head.getByTestId("buckets-summary")).toHaveText(
         "This plan, Nov 2 – Feb 12: 56 engineer-weeks over three milestones (51 planned + 5 spare). Bars are engineer-weeks.",
       );
-      // B's legend: a swatch, the code in bold, its dates and how full ("M1 Oct 19 – Nov 13 · 14 of 14 wk").
+      // B's legend: a swatch, the code in bold, its dates and how full ("M1 Oct 19 – Nov 13 · 14 of 14 weeks").
       await expect(head.getByTestId("milestone-chip")).toHaveText([
-        "M1 Nov 2 – Nov 27 · 13 of 16 wk",
-        "M2 Nov 30 – Dec 25 · 15 of 16 wk",
-        "M3 Dec 28 – Feb 12 · 23 of 24 wk",
+        "M1 Nov 2 – Nov 27 · 13 of 16 weeks",
+        "M2 Nov 30 – Dec 25 · 15 of 16 weeks",
+        "M3 Dec 28 – Feb 12 · 23 of 24 weeks",
       ]);
       // The milestone's name is in its title (hover), not its words.
       await expect(head.getByTestId("milestone-chip").nth(1)).toHaveAttribute("title", "M2 Scale volume");
@@ -159,7 +159,7 @@ for (const v of VIEWS) {
       const fills = await head.getByTestId("goal-bar-segment").evaluateAll((els) => [...new Set(els.map((e) => getComputedStyle(e).backgroundColor))]);
       expect(fills).toHaveLength(3);
       // A label shows only where it fits (B leaves a narrow segment blank, its words in its title);
-      // named labels ("M2 Scale volume · 3 wk") fit fewer segments than the code alone did.
+      // named labels ("M2 Scale volume · 3 weeks") fit fewer segments than the code alone did.
       await nothingCut(head.locator('[data-testid="goal-bar-label"], [data-testid="milestone-chip"]'));
       // The rule, at whatever width the text draws: a label shows only where it fits its segment
       // with the frame's own margin (8 px a letter and 12 px over, the picked frames' look) and,
@@ -185,7 +185,7 @@ for (const v of VIEWS) {
         for (const g of all) {
           expect(g.shown, `"${g.label}" shows only where it fits`).toBe(g.fits);
           if (g.shown) expect(g.inside, `"${g.label}" is not cut`).toBe(true);
-          else expect(g.title, `"${g.label}"'s words are in its title`).toBe(g.label.replace(/ · ([\d.]+) wk$/, ": $1 engineer-weeks"));
+          else expect(g.title, `"${g.label}"'s words are in its title`).toBe(g.label.replace(/ · ([\d.]+) weeks?$/, ": $1 engineer-weeks"));
         }
         return all.filter((g) => g.shown).map((g) => g.label);
       };
@@ -211,8 +211,8 @@ for (const v of VIEWS) {
       const invites = growth.locator('[data-testid="plan-feature"][data-code="F-05"]');
       await expect(invites).toContainText("F-05 Team invites");
       await expect(invites.getByTestId("plan-chip")).toHaveText(["M1 Prove it", "M2 Scale volume"]);
-      await expect(invites.getByTestId("plan-chip").first()).toHaveAttribute("title", "M1 Prove it: 3 wk");
-      await expect(invites.getByTestId("plan-feature-total")).toHaveText("5 wk");
+      await expect(invites.getByTestId("plan-chip").first()).toHaveAttribute("title", "M1 Prove it: 3 weeks");
+      await expect(invites.getByTestId("plan-feature-total")).toHaveText("5 weeks");
       const launch = growth.locator('[data-testid="plan-feature"][data-code="F-10"]');
       await expect(launch.getByTestId("plan-chip")).toHaveText(["M2 Scale volume"]);
       await expect(launch.getByTestId("plan-feature-total")).toHaveText("PM-owned");
