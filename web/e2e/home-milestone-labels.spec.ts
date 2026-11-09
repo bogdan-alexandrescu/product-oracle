@@ -154,8 +154,8 @@ test("two goals' M1 on one roadmap are two rows, a track milestone across roadma
   expect(await itemsOf(page, "M1 · First run in a day · 1 item")).toEqual([["Setup checklist"]]);
   expect(await itemsOf(page, "M1 · Return pilot · 2 items")).toEqual([["Sample data import", "Welcome video"]]);
   // The Alerts track's "M2 · Launch (beta)" holds an item from each of two roadmaps: one row.
-  expect(labels.filter((l) => l.startsWith("M2 · Launch"))).toEqual(["M2 · Launch (beta) · 2 items"]);
-  expect(await itemsOf(page, "M2 · Launch (beta) · 2 items")).toEqual([["Alert history export", "Partner invite links"]]);
+  expect(labels.filter((l) => l.startsWith("M2 · Launch"))).toEqual(["M2 · Launch (beta) · 3 items"]);
+  expect(await itemsOf(page, "M2 · Launch (beta) · 3 items")).toEqual([["Alert history export", "Alert sound settings", "Partner invite links"]]);
   // Alerts' own M3 (no name) and the track's "M3 · Rules ready": one row, the track's name kept.
   expect(labels.filter((l) => l.startsWith("M3"))).toEqual(["M3 · Rules ready · 2 items"]);
   expect(await itemsOf(page, "M3 · Rules ready · 2 items")).toEqual([["Alert rules engine", "Mobile alert push"]]);
@@ -176,19 +176,96 @@ test("a track milestone is one row across roadmaps, two goals' M3 beside it two 
   // Alerts' own "[Launch (beta)]" M2 is Alerts' only M2: it joins the track's row, which holds Onboarding's item too.
   expect(labels.filter((l) => l.startsWith("M2 · Launch"))).toEqual(["M2 · Launch (beta) · 4 items"]);
   expect(await itemsOf(page, "M2 · Launch (beta) · 4 items")).toEqual([["Alert history export", "Alert routing by team", "Partner invite links", "Weekly alert digest"]]);
-  // Onboarding's two PRDs' M2 stay their own rows.
-  expect(labels.filter((l) => l.startsWith("M2 · Pilot"))).toEqual(["M2 · Pilot · 2 items", "M2 · Pilot · 2 items"]);
   // Pricing: two goals' M3 (no names) and the track's "M3 · Prices live": three rows, none borrowing the track's name.
   expect(labels.filter((l) => l.startsWith("M3 · Prices live"))).toEqual(["M3 · Prices live · 2 items"]);
   expect(await itemsOf(page, "M3 · Prices live · 2 items")).toEqual([["Annual billing", "Usage meter"]]);
-  expect(await itemsOf(page, "M3 · 1 item")).toEqual([["Seat bundles"], ["Volume discounts"]]);
-  // The two look-alike M3 rows sound different, even for a goal no loaded item carries.
+  expect((await itemsOf(page, "M3 · 1 item")).flat().sort()).toEqual(["Refund rules", "Seat bundles", "Volume discounts"]);
+  // The look-alike M3 rows sound different, even for a goal no loaded item carries.
   const lines = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M3 · 1 item$/ }) });
-  await expect(lines).toHaveCount(2);
-  const links = await Promise.all([0, 1].map((k) => lines.nth(k).getByTestId("home-strip-row").getAttribute("aria-label")));
-  const tips = await Promise.all([0, 1].map((k) => lines.nth(k).getByTestId("home-strip-items-tip").getAttribute("aria-label")));
-  expect(new Set(links).size, links.join(" / ")).toBe(2);
-  expect(new Set(tips).size, tips.join(" / ")).toBe(2);
+  await expect(lines).toHaveCount(3);
+  const links = await Promise.all([0, 1, 2].map((k) => lines.nth(k).getByTestId("home-strip-row").getAttribute("aria-label")));
+  const tips = await Promise.all([0, 1, 2].map((k) => lines.nth(k).getByTestId("home-strip-items-tip").getAttribute("aria-label")));
+  expect(new Set(links).size, links.join(" / ")).toBe(3);
+  expect(new Set(tips).size, tips.join(" / ")).toBe(3);
+});
+
+/*
+ * Card home-milestone-own-roadmap (production regression from PR 1439), on the mock's
+ * "home-milestones-goals" scenario: protects = an item typed "M1" (or a stored "M1 Measured and
+ * mapped") whose own goal has no M1, on a roadmap where two other goals each have one, sits under
+ * its roadmap's own track milestone of that code ("M1 · Measured"), as Priorities shows it in M1,
+ * even when that track is not the item's own; fails_when = it lands in "Not in a milestone" or
+ * under another goal's M1.
+ */
+test("an item typed M1 whose goal has none sits under its roadmap's own M1, not in no milestone", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_GOALS_SCENARIO);
+  expect(await itemsOf(page, "M1 · Measured · 3 items")).toEqual([["Health log", "Usage map", "Usage report"]]);
+  const loose = (await itemsOf(page, "Not in a milestone · 17 items"))[0];
+  expect(loose).not.toContain("Usage report");
+  expect(loose).not.toContain("Usage map");
+  for (const other of ["M1 · First run in a day · 1 item", "M1 · Return pilot · 2 items"]) expect((await itemsOf(page, other))[0]).not.toContain("Usage report");
+});
+
+/*
+ * Card home-milestone-names-kept (reviews of PR 1439), on "home-milestones-goals": protects = a
+ * roadmap's only milestone of a code joins a track's row only when their whole names match or one
+ * has none, so Alerts' "M2 · Fleet pilot" stays its own row beside the track's "M2 · Launch (beta)";
+ * an item whose own goal has no M2 (Alert sound settings) stays on its track's row, never joining
+ * the one other goal's; fails_when = "Fleet pilot" shows nowhere on Home, or Alert sound settings
+ * sits under it.
+ */
+test("a roadmap milestone of another name keeps its own row; a typed code never joins another goal's", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_GOALS_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(labels.filter((l) => l.startsWith("M2")).sort()).toEqual(["M2 · Fleet pilot · 1 item", "M2 · Launch (beta) · 3 items"]);
+  expect(await itemsOf(page, "M2 · Fleet pilot · 1 item")).toEqual([["Alert routing by team"]]);
+  expect((await itemsOf(page, "M2 · Launch (beta) · 3 items"))[0]).toContain("Alert sound settings");
+});
+
+/*
+ * Card home-next-milestone-whole (review of PR 1439), on "home-milestones-goals": protects = "What
+ * the next milestone delivers" names the next milestone as the quarter plan's rows do (Alerts'
+ * "[Fleet pilot]" M2, Nov 18, reads "M2 · Fleet pilot"); fails_when = it reads "M2 · [Fleet pilot]"
+ * or a bare "M2 · ".
+ */
+test("the next milestone card reads the milestone's whole name, as the plan rows do", async ({ page }) => {
+  await home(page, 1440, "viewer@example.com", HOME_MILESTONE_GOALS_SCENARIO);
+  const next = page.getByTestId("home-next-milestone").getByTestId("home-milestone-row");
+  await expect(next).toHaveCount(1);
+  await expect(next).toContainText("Alert routing by team");
+  await expect(next).toContainText("M2 · Fleet pilot ·");
+  await expect(next).not.toContainText("[");
+  await expect(page.getByTestId("home-strip-label").filter({ hasText: /^M2 · Fleet pilot · 1 item$/ })).toBeVisible();
+});
+
+/*
+ * Card home-nameless-track-names-kept (reviews of PR 1439), on "home-milestones-tracks": protects =
+ * a nameless track milestone ("M3", holding items on Onboarding and Alerts) takes the name of a
+ * roadmap milestone that joins it, but a second roadmap's of another name keeps its own row:
+ * Onboarding's "M3 · Guided tour" joins it, Alerts' "M3 · Quiet hours" stays apart; fails_when =
+ * "Quiet hours" shows nowhere on Home.
+ */
+test("a nameless track milestone takes one joined name; another roadmap's other name keeps its row", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_TRACKS_SCENARIO);
+  expect(await itemsOf(page, "M3 · Guided tour · 3 items")).toEqual([["Alert snooze", "Health log", "Setup reminders"]]);
+  expect(await itemsOf(page, "M3 · Quiet hours · 1 item")).toEqual([["Mobile alert push"]]);
+});
+
+/*
+ * Card home-twin-rows-no-whose (review of PR 1439), on "home-milestones-tracks": protects = two
+ * rows that read alike and whose goal no loaded item names (Keep alerts quiet's and Fewer refunds'
+ * nameless M3) are told apart by their first item; fails_when = both sound the same.
+ */
+test("two look-alike rows with no known goal sound apart by their first item", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_TRACKS_SCENARIO);
+  const lines = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M3 · 1 item$/ }) });
+  await expect(lines).toHaveCount(3);
+  const links = await Promise.all([0, 1, 2].map((k) => lines.nth(k).getByTestId("home-strip-row").getAttribute("aria-label")));
+  const tips = await Promise.all([0, 1, 2].map((k) => lines.nth(k).getByTestId("home-strip-items-tip").getAttribute("aria-label")));
+  expect(links.some((l) => l?.includes("Volume discounts")), links.join(" / ")).toBe(true);
+  expect(links.some((l) => l?.includes("Refund rules")), links.join(" / ")).toBe(true);
+  expect(tips.some((l) => l?.includes("Volume discounts")), tips.join(" / ")).toBe(true);
+  expect(tips.some((l) => l?.includes("Refund rules")), tips.join(" / ")).toBe(true);
 });
 
 /*
