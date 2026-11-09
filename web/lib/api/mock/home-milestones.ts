@@ -224,3 +224,21 @@ export function seedHomeMilestoneFold(): SimpleDb {
   rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured" } : s.key === "setup-video" ? { ...s, goal: "grow-retention" } : s));
   return rm;
 }
+
+export const HOME_MILESTONE_PRD_FOLD_SCENARIO = "home-milestones-prd-fold";
+
+/**
+ * home-milestones-prd-fold (the owner's "One M1 row, as after train AX"): the Setup guide PRD's
+ * own dated M1 of no goal, "Measured" (Nov 20), holds Setup checklist and Sample data import,
+ * beside the Guided setup track's undated "M1 · Measured and mapped" (Health log): one row, the
+ * track's name and the PRD's date, the PRD's name in its (i).
+ */
+export function seedHomeMilestonePrdFold(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  const prd = { slug: "setup-guide", title: "Setup guide", owner: "Nora Vance" };
+  rm.goal_milestones = [
+    { id: stableUuid("simple-gm/prd-fold-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: "2026-11-20", goal: null, gates: ["setup-checklist", "setup-import"], counts_when: "", progress: "not_started", prd },
+  ];
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s));
+  return rm;
+}
