@@ -268,3 +268,43 @@ export function seedHomeMilestonePrdGoalFold(): SimpleDb {
   rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s));
   return rm;
 }
+
+export const HOME_MILESTONE_PRDS_FOLD_SCENARIO = "home-milestones-prds-fold";
+
+/**
+ * home-milestones-prds-fold (review of PR 1489): two PRDs' own M1 of no goal on Onboarding, Setup
+ * guide's "Measured" (Nov 20, Setup checklist) and Import guide's "Mapped" (Nov 12, Sample data
+ * import), beside the Guided setup track's undated "M1 · Measured and mapped" (Health log): one
+ * row, the track's name, the earliest date (Nov 12), both other names in its (i).
+ */
+export function seedHomeMilestonePrdsFold(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  const plain = (id: string, name: string, date: string, gate: string, slug: string, title: string): MockMilestone => ({
+    id: stableUuid(`simple-gm/prds-fold-${id}`),
+    roadmap: "onboarding-roadmap",
+    code: "M1",
+    name,
+    date,
+    goal: null,
+    gates: [gate],
+    counts_when: "",
+    progress: "not_started",
+    prd: { slug, title, owner: "Nora Vance" },
+  });
+  rm.goal_milestones = [plain("measured", "Measured", "2026-11-20", "setup-checklist", "setup-guide", "Setup guide"), plain("mapped", "Mapped", "2026-11-12", "setup-import", "import-guide", "Import guide")];
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s));
+  return rm;
+}
+
+export const HOME_MILESTONE_PLAIN_FOLD_SCENARIO = "home-milestones-plain-fold";
+
+/**
+ * home-milestones-plain-fold (review of PR 1489): Onboarding's own M1 of no goal, "Measured"
+ * (Setup checklist), and the Setup guide PRD's M1 of no goal, "Mapped" (Sample data import),
+ * beside the Guided setup track's "M1 · Measured and mapped" (Health log): one row.
+ */
+export function seedHomeMilestonePlainFold(): SimpleDb {
+  const rm = seedHomeMilestonePrdsFold();
+  rm.goal_milestones = rm.goal_milestones!.map((m, k) => (k === 0 ? { ...m, prd: null } : m));
+  return rm;
+}
