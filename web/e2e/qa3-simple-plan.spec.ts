@@ -271,7 +271,7 @@ test.describe("QA pass 3: simple-plan, a dated plan", () => {
     await page.getByRole("tab", { name: "Goal buckets" }).click();
     const reliability = page.locator('[data-testid="plan-goal"]').filter({ hasText: "Reliability" }).first();
     await expect(reliability.locator('[data-testid="plan-feature"][data-code="F-06"]')).toContainText("Setup error report");
-    await expect(page.locator('[data-testid="plan-feature"][data-code="F-01"]').getByTestId("plan-feature-total")).toHaveText("3 wk");
+    await expect(page.locator('[data-testid="plan-feature"][data-code="F-01"]').getByTestId("plan-feature-total")).toHaveText("3 weeks");
     // Codes drawn as chips (never grey monospace).
     const chip = page.locator('[data-testid="plan-feature"]').first().getByTestId("prio-code");
     expect(await chip.evaluate((e) => getComputedStyle(e).fontFamily)).not.toMatch(/mono/i);
@@ -280,7 +280,7 @@ test.describe("QA pass 3: simple-plan, a dated plan", () => {
     if ((await outside.count()) > 0) await expect(outside).not.toContainText("F-06 Weekly alert digest");
   });
 
-  /* qa-simple-plan-37, -39: 'M1 · 4 wk'; one heading; on a phone the weeks keep their unit. */
+  /* qa-simple-plan-37, -39: 'M1 · 4 weeks'; one heading; on a phone the weeks keep their unit. */
   test("plan buckets read weeks with their unit and say the heading once", async ({ page }) => {
     await setUp(page, { scenario: "simple-plan", phone: true, scheme: "dark" });
     await open(page, "?tab=buckets");
@@ -288,9 +288,9 @@ test.describe("QA pass 3: simple-plan, a dated plan", () => {
     await expect(page.getByTestId("prio-subtitle")).toHaveText("Q4 2026");
     // Demo 9: the intro is behind the (i).
     await expect(page.locator("#prio-about-text")).toHaveText("Where the engineer-weeks go, goal by goal.");
-    for (const l of await page.getByTestId("goal-bar-segment").locator("[data-label]").allTextContents()) expect(l).toMatch(/^M\d [A-Z][\w ]* · [\d.]+ wk$/);
+    for (const l of await page.getByTestId("goal-bar-segment").locator("[data-label]").allTextContents()) expect(l).toMatch(/^M\d [A-Z][\w ]* · [\d.]+ weeks?$/);
     const outside = page.getByTestId("plan-outside-goal").first();
-    if ((await outside.count()) > 0) await expect(outside).toContainText(/\d wk/);
+    if ((await outside.count()) > 0) await expect(outside).toContainText(/\d weeks?\b/);
   });
 });
 

@@ -179,9 +179,9 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await expect(page.getByTestId("buckets-intro")).toHaveText(/^\s*Grouped by goal for this quarter/);
   await page.keyboard.press("Escape");
   for (const title of GONE) await expect(buckets.getByText(title, { exact: true })).toHaveCount(0);
-  // Round 6: with no work this quarter the tab says so in words, never "0 wk in all" over an empty chart.
+  // Round 6: with no work this quarter the tab says so in words, never "0 weeks in all" over an empty chart.
   await expect(buckets.getByText("Nothing planned this quarter.")).toBeVisible();
-  await expect(buckets.getByText(/0 wk in all/)).toHaveCount(0);
+  await expect(buckets.getByText(/0 (wk|weeks) in all/)).toHaveCount(0);
   await expect(buckets.getByText("Share of engineer-weeks by goal")).toHaveCount(0);
   // Round 7: "this quarter" is the calendar quarter, never the replaced plan's span
   // (service.build's span is over the shown PRDs' plans only; priorities.plan_quarter).
