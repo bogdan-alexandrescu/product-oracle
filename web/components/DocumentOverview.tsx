@@ -492,23 +492,28 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 </>
               }
             />
-            {/* one-roadmap-many-prds: a PRD replaced by area PRDs is read-only and names them at its top. */}
+            {/* one-roadmap-many-prds: a PRD replaced by area PRDs is read-only and names them at its top,
+                in one short line. replaced-prd-history: its roadmap shows a short Read-only tick (the
+                reason in its tooltip) beside the same names. */}
             {replaced && (
-              <p data-testid="replaced-by" className="mb-3 flex flex-wrap items-center gap-2 text-sm text-text2">
-                {/* A short status tick; the reason sits in its tooltip (no visible prose). */}
-                <InfoTip
-                  label="read-only"
-                  align="start"
-                  testId="read-only-tick"
-                  trigger={
-                    <Chip kind="na">
-                      <Icon name="lock" size={16} />
-                      Read-only
-                    </Chip>
-                  }
-                >
-                  {d.read_only ?? "Read-only"}. Its items no longer feed the roadmap.
-                </InfoTip>
+              <p data-testid="replaced-by" className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
+                {d.kind !== "prd" && (
+                  <>
+                    <InfoTip
+                      label="read-only"
+                      align="start"
+                      testId="read-only-tick"
+                      trigger={
+                        <Chip kind="na">
+                          <Icon name="lock" size={16} />
+                          Read-only
+                        </Chip>
+                      }
+                    >
+                      {d.read_only ?? "Read-only"}.
+                    </InfoTip>{" "}
+                  </>
+                )}
                 <span>
                   Replaced by{" "}
                   {d.replaced_by!.map((r, i, all) => (
@@ -519,6 +524,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
                       </Link>
                     </span>
                   ))}
+                  {d.kind === "prd" && ". Read-only: its items no longer feed the roadmap."}
                 </span>
               </p>
             )}
