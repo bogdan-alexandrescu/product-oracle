@@ -92,7 +92,7 @@ const SPAN = /^(\d{4}-\d{2}-\d{2})(?:\s*(?:\.\.\.?|\/|–|—)\s*|\s+(?:to|-)\s+
 
 /** An attribute's key in words, capitalized: "status" -> "Status", "priority_note" -> "Priority note". */
 function attrLabel(key: string): string {
-  if (ATTR_LABEL[key]) return ATTR_LABEL[key];
+  if (Object.prototype.hasOwnProperty.call(ATTR_LABEL, key)) return ATTR_LABEL[key];
   const words = key.replace(/_/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }

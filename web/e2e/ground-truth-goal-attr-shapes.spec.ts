@@ -140,15 +140,15 @@ test("types: each edited value is saved as its stored type; untouched values sta
   await expect(form.getByText("Hours must be a number.")).toBeVisible();
   expect((await stored(page, "kr-1-1")).attrs.reply_targets).toEqual(before.reply_targets);
   await targets.getByLabel("Hours", { exact: true }).fill("5");
-  await targets.getByLabel("Weekends", { exact: true }).selectOption({ label: "Yes" });
+  await targets.getByRole("combobox", { name: "Weekends" }).selectOption({ label: "Yes" });
 
   const steps = form.getByRole("group", { name: "Review steps" });
   await expect(steps.getByRole("group", { name: "1" }).getByLabel("Step", { exact: true })).toHaveValue("Read the thread");
   await steps.getByRole("group", { name: "2" }).getByLabel("Hours", { exact: true }).fill("3");
 
   const replies = form.getByRole("group", { name: "Saved replies" });
-  await expect(replies.getByLabel("1", { exact: true })).toHaveValue("Thanks for writing in.\nWe will reply within a day.");
-  await replies.getByLabel("2", { exact: true }).fill("Closed after two weeks");
+  await expect(replies.locator('[data-attr-part="1"]').getByRole("textbox")).toHaveValue("Thanks for writing in.\nWe will reply within a day.");
+  await replies.locator('[data-attr-part="2"]').getByRole("textbox").fill("Closed after two weeks");
 
   await form.getByRole("button", { name: "Save", exact: true }).click();
   await expect(panel.getByRole("status")).toContainText("Saved");

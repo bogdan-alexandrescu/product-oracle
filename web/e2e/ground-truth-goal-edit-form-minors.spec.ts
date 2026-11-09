@@ -94,7 +94,7 @@ test("focus: Add field and Add entry put the cursor in the new input; a new mult
 
   const replies = form.getByRole("group", { name: "Saved replies" });
   await addTo(replies).click();
-  const third = replies.getByLabel("3", { exact: true });
+  const third = replies.locator('[data-attr-part="3"]').getByRole("textbox");
   await expect(third).toBeFocused();
   await expect(third).toHaveJSProperty("tagName", "TEXTAREA");
   await page.keyboard.type("Thanks.\nWe are on it.");
