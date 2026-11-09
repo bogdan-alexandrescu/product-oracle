@@ -1327,10 +1327,24 @@ export function draftChanges(db: SimpleDb, id: string): number {
   return cs.filter((c) => ["applied", "accepted"].includes(c.status) && (c.draft_ids ?? []).includes(id) && !cs.some((u) => u.undoes_id === c.id)).length;
 }
 
+/**
+ * drafts.who: the owners of a draft's roadmap's tracks, read from its track rows as the API reads
+ * ProductTrack.roadmap_document_id: a track the Tracks sheet keeps for the roadmap's PRD
+ * (track_state), an added roadmap's own track, else a track its published items are on; never a
+ * track an item was moved onto in the draft.
+ */
+export function roadmapTrackOwnerIds(db: SimpleDb, d: MockDraft): string[] {
+  const prd = ROADMAPS[d.roadmap]?.prd ?? db.extra_roadmaps?.[d.roadmap]?.prd;
+  const state = (db as SimpleDb & { track_state?: Record<string, { prd: string }> }).track_state ?? {};
+  const published = new Set(d.published.items.filter((s) => s.roadmap === d.roadmap).flatMap((s) => (s.track ? [s.track] : [])));
+  const ofRoadmap = (k: string) => (state[k] ? !!prd && state[k].prd === prd : db.extra_roadmaps?.[d.roadmap]?.track === k || published.has(k));
+  return Object.entries(db.track_owners ?? {}).flatMap(([k, id]) => (ofRoadmap(k) ? [id] : []));
+}
+
 /** Who sees a draft in the mock: owners, its people, the roadmap's decider and its required reviewers. */
 export function seesDraft(d: MockDraft, me: { id: string; role: Role }, db?: SimpleDb): boolean {
   // drafts.sees: whoever it waits on, its roadmap's required reviewers and the owners of its roadmap's tracks read it too.
-  const ownsTrack = !!db?.items.some((s) => s.roadmap === d.roadmap && !!s.track && db.track_owners?.[s.track] === me.id);
+  const ownsTrack = !!db && roadmapTrackOwnerIds(db, d).includes(me.id);
   return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id) || db?.deciders?.[d.roadmap] === me.id || (d.out.waiting_on ?? []).includes(me.id) || (db?.reviewers?.[d.roadmap] ?? []).includes(me.id) || ownsTrack;
 }
 
