@@ -5,7 +5,7 @@ import { expect, test, type Page } from "./test";
 
 /*
  * PV-1 One count per spot (BGD's pick, Nov 7), on Simple's Priorities, Value / effort, phone (390) and desktop (1440),
- * on the mock's default company (15 features at effort 1 week, goal value 0) and its "simple-plan" scenario (the dated
+ * on the mock's default company (13 features with no effort at goal value 0, 2 at effort 1 week) and its "simple-plan" scenario (the dated
  * plan, 40 features): marks that would cover each other are one dark count mark; no two marks overlap (a count is a
  * mark); every mark and count sits within half a mark of its real values (or just clear of a corner's name); a count
  * opens a sheet listing its features by rank, a row opens the one feature panel, and a lone mark opens it too.
@@ -171,7 +171,7 @@ for (const [size, viewport] of [["phone", PHONE], ["desktop", DESKTOP]] as const
       await expect(sheet).toBeVisible();
       const rows = sheet.getByTestId("vxe-crowd-row");
       await expect(rows).toHaveCount(n);
-      await expect(sheet.getByRole("dialog")).toHaveAccessibleName(new RegExp(`^${n} features · effort`));
+      await expect(sheet.getByRole("dialog")).toHaveAccessibleName(new RegExp(`^${n} features · (effort|PM-owned)`));
       const ranks = (await rows.allInnerTexts()).map((t) => Number(/^\s*(\d+)/.exec(t)![1]));
       expect(ranks, "by rank").toEqual([...ranks].sort((a, b) => a - b));
       // A row names its feature with its code; a tap opens its one feature panel.
@@ -199,15 +199,16 @@ for (const [size, viewport] of [["phone", PHONE], ["desktop", DESKTOP]] as const
   }
 }
 
-test("phone, the default company: the 15 features at effort 1 week, goal value 0 are one count of 15, listed by rank", async ({ page }) => {
+test("phone, the default company: the 13 features with no effort, goal value 0 are one count of 13, listed by rank", async ({ page }) => {
   await open(page, PHONE, null);
-  const count = page.locator('[data-testid="vxe-crowd"][data-count="15"]');
-  await expect(count).toHaveAccessibleName("15 features at effort 1 week · goal value 0 or no goal: AHE Alert history export, F-110 Annual plan offer, F-104 Complaint early warning and 12 more; show them");
+  // The features the mock does not list have no effort (as the API reads them): PM-owned.
+  const count = page.locator('[data-testid="vxe-crowd"][data-count="13"]');
+  await expect(count).toHaveAccessibleName("13 features at PM-owned, no effort · goal value 0 or no goal: F-110 Annual plan offer, F-104 Complaint early warning, F-109 Guided first week and 10 more; show them");
   await count.click();
   const sheet = page.getByTestId("vxe-crowd-sheet");
-  await expect(sheet.getByRole("heading")).toHaveText("15 features · effort 1 week · goal value 0 or no goal");
+  await expect(sheet.getByRole("heading")).toHaveText("13 features · PM-owned, no effort · goal value 0 or no goal");
   // Every feature there has the same numbers, so the title says them and the rows do not.
-  await expect(sheet.getByTestId("vxe-crowd-row").first()).toHaveText(/^6\s*AHE\s*Alert history export$/);
+  await expect(sheet.getByTestId("vxe-crowd-row").first()).toHaveText(/^\d+\s*F-110\s*Annual plan offer$/);
   // Escape closes the sheet; the chart is as it was.
   await page.keyboard.press("Escape");
   await expect(sheet).toHaveCount(0);
@@ -239,7 +240,7 @@ test("desktop: a mark moved onto another's spot with the arrow keys joins its co
   await sc.focus();
   await page.keyboard.press("ArrowDown");
   await expect(sc).toHaveCount(0);
-  const count = page.locator('[data-testid="vxe-crowd"][data-count="2"]');
+  const count = page.getByRole("button", { name: /^2 features at effort 2 weeks · goal value 3: / });
   await expect(count).toHaveAccessibleName("2 features at effort 2 weeks · goal value 3: SC Setup checklist, ARB Alert routing by team; show them");
   await expect(count).toBeFocused();
   await page.keyboard.press("Enter");
