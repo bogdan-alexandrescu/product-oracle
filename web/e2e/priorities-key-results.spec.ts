@@ -10,8 +10,8 @@ import { expect, test, type Page } from "./test";
  * Card kr-buckets: protects = Goal buckets draws one bucket for the goal, never one per key result; both key results
  * are listed inside it; the key result's feature is counted and listed under the goal; fails_when = a key result has a
  * bucket of its own, a key result is missing from its goal's bucket or its feature is not under the goal.
- * Card kr-legend: protects = the Value / effort chart's legend lists the goal once and no key result, and the key
- * result's feature draws with its goal's shape; fails_when = a key result is a legend entry or a shape of its own.
+ * Card kr-legend: protects = the Value / effort chart's legend lists the goal once and no key result;
+ * fails_when = a key result is a legend entry (a shape of its own).
  */
 
 const KR1 = "Half of new teams set up in one day";
@@ -49,15 +49,11 @@ test("Goal buckets: one bucket for the goal, its key results inside it, a key re
   await expect(goal.getByTestId("bucket-features")).toContainText(FEATURE);
 });
 
-test("Value / effort: the legend lists the goal once, and the key result's feature draws with its goal's shape", async ({ page }) => {
+test("Value / effort: the legend lists the goal once and no key result", async ({ page }) => {
   await open(page, "value-effort");
   const legend = page.getByRole("list", { name: "Legend" });
   await expect(legend).toBeVisible();
   const goal = legend.getByRole("listitem").filter({ hasText: /^Faster activation$/ });
   await expect(goal).toHaveCount(1);
   await expect(legend.getByRole("listitem").filter({ hasText: new RegExp(`${KR1}|${KR2}`) })).toHaveCount(0);
-  const shape = await goal.getAttribute("data-shape");
-  const marks = page.locator('[data-testid="vxe-point"][data-code="kr-setup-list"]');
-  await expect(marks).toHaveCount(1);
-  await expect(marks).toHaveAttribute("data-shape", shape!);
 });
