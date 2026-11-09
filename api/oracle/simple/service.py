@@ -1315,6 +1315,23 @@ def _milestone_out(m: TrackMilestone, keyed: dict, ids: set, view: Any) -> Simpl
     return out
 
 
+async def _roadmap_codes(
+    db: AsyncSession, goal_ms: list, track_ms: list[SimpleMilestone], items: list
+) -> None:
+    """roadmap-milestone-codes: each milestone's one code across the read, goals in the one
+    goal order (oracle.simple.roadmap_codes)."""
+    from oracle.simple import roadmap_codes
+
+    goal_ids = {m.goal_id for m in goal_ms if m.goal_id is not None}
+    goals = (
+        (await db.execute(select(Entity).where(Entity.id.in_(goal_ids)))).scalars().all()
+        if goal_ids
+        else []
+    )
+    rank = {g.id: n for n, g in enumerate(sorted(goals, key=goal_sort_key))}
+    roadmap_codes.assign(goal_ms, track_ms, items, rank)
+
+
 def _goal_target(goal: Entity) -> str | None:
     """one-feature-panel: the goal's target as the goal bucket edit reads it."""
     from oracle.simple.goal_buckets import _target  # goal_buckets imports the router
@@ -1529,6 +1546,11 @@ async def build(
         gm = live.get(it.milestone.id) if it.milestone is not None and it.milestone.id else None
         if gm is not None:
             it.milestone.name = " ".join(f"{gm.code} {gm.name}".split())
+    track_outs = [
+        _milestone_out(m, keyed, ids, views.get(track_prd.get(m.track_id)))  # type: ignore[arg-type]
+        for m in read.milestones
+    ]
+    await _roadmap_codes(db, shown_goal_milestones, track_outs, items)
     shown_prds = {e.prd.id for e in shown if e.prd}
     span = plans.current_span([v for p, v in views.items() if p in shown_prds], read.today)
     return SimpleRoadmapOut(
@@ -1539,10 +1561,7 @@ async def build(
         ),
         groups=[SimpleGroup(key=k, title=t, item_ids=i) for k, (_, t, i) in ordered],
         items=items,
-        milestones=[
-            _milestone_out(m, keyed, ids, views.get(track_prd.get(m.track_id)))  # type: ignore[arg-type]
-            for m in read.milestones
-        ],
+        milestones=track_outs,
         goal_milestones=shown_goal_milestones,
         old_milestones=await old_milestones.preview(db, principal),
         span=span,

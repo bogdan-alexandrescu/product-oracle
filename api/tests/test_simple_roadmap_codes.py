@@ -32,10 +32,10 @@ from oracle.simple.schemas import (
     SimpleMilestone,
     SimpleRoadmapItem,
 )
+from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.test_simple_goal_milestones_api import MILESTONES, get_roadmap, seed_roadmap
 from tests.test_simple_roadmap_api import NOW, Seed
-from oracle.tenancy import tenant_session
 
 RM = uuid.uuid4()
 G1, G2 = uuid.uuid4(), uuid.uuid4()
