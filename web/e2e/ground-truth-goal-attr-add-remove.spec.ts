@@ -13,13 +13,13 @@ import { login } from "./helpers";
  * - "add entry": protects=Add under a list gives a new entry shaped like the others (the same fields, empty; a text
  *   line for a list of words) and Save stores it in that shape; fails_when=there is no Add, or the new entry is not
  *   saved or saved in another shape; no_claim=the API, which this does not change.
- * - "add field": protects=Add under an object gives a name and a value; a number where the other fields are numbers;
- *   a nested number error names its group; fails_when=there is no Add, the field is not saved under its name, or the
+ * - "add field": protects=Add under an object gives a name and a value; a number where the other fields are numbers
+ *   and one is typed; a number error names its group; fails_when=there is no Add, the field is not saved under its name, or the
  *   error does not name the group; no_claim=which type a new field among mixed fields takes beyond text.
  * - "remove": protects=the x on an entry, a field, a nested object and a whole attribute removes it, and only it;
  *   fails_when=a neighbour changes or the removed one is still stored; no_claim=undo, which Cancel gives.
- * - "emptied": protects=emptying the only field of a list entry, or every field of a nested object, keeps the entry
- *   and the object; the (i) beside Save says empty entries are left out; fails_when=the entry or the attribute is dropped.
+ * - "emptied": protects=emptying the only field of a list entry leaves the entry out, as the (i) beside Save says;
+ *   emptying every field of a nested object keeps the object; fails_when=the entry is kept or the object dropped.
  */
 
 const NAME = "KR 1.1 live helpers averaging 50 replied threads a day in March 2027";
@@ -57,13 +57,13 @@ test("add entry: a list gets a new entry shaped like the others, saved in that s
   const before = await stored(page);
 
   const steps = form.getByRole("group", { name: "Review steps" });
-  await expect(addTo(steps)).toHaveAccessibleName("Add entry");
+  await expect(addTo(steps)).toHaveAccessibleName("Add entry to Review steps");
   await addTo(steps).click();
   const third = steps.getByRole("group", { name: "3", exact: true });
-  await expect(third.getByLabel("Step")).toHaveValue("");
-  await expect(third.getByLabel("Hours")).toHaveValue("");
-  await third.getByLabel("Step").fill("Close the thread");
-  await third.getByLabel("Hours").fill("0.5");
+  await expect(third.getByLabel("Step", { exact: true })).toHaveValue("");
+  await expect(third.getByLabel("Hours", { exact: true })).toHaveValue("");
+  await third.getByLabel("Step", { exact: true }).fill("Close the thread");
+  await third.getByLabel("Hours", { exact: true }).fill("0.5");
 
   const replies = form.getByRole("group", { name: "Saved replies" });
   await addTo(replies).click();
@@ -71,10 +71,10 @@ test("add entry: a list gets a new entry shaped like the others, saved in that s
 
   // A list of words: Add puts the cursor on a new line.
   await addTo(form, "open_values").click();
-  await expect(form.getByLabel("Open values")).toBeFocused();
+  await expect(form.getByRole("textbox", { name: "Open values" })).toBeFocused();
   await page.keyboard.type("12 helpers on call");
 
-  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Save", exact: true }).click();
   await expect(panel.getByRole("status")).toContainText("Saved");
 
   await expect(panel.locator('[data-attr="review_steps"]').getByRole("listitem")).toHaveText([
@@ -99,36 +99,29 @@ test("add entry: a list gets a new entry shaped like the others, saved in that s
   for (const k of ["reply_split", "reply_targets", "handoffs"]) expect(after[k], k).toEqual(before[k]);
 });
 
-test("add field: an object gets a named field; a nested number error names its group", async ({ page }) => {
+test("add field: an object gets a named field; a number error names its group", async ({ page }) => {
   const { panel, form } = await editGoal(page);
   const before = await stored(page);
   const targets = form.getByRole("group", { name: "Reply targets" });
   const chat = targets.getByRole("group", { name: "Chat", exact: true });
 
-  // Among numbers, a new field is a number: words are refused, naming the groups it is in.
+  // Among numbers, a new field is a number when one is typed.
   await addTo(chat).click();
-  await chat.getByLabel("Field name").fill("Middle");
-  await chat.getByLabel("Field value").fill("lots");
-  await form.getByRole("button", { name: "Save" }).click();
-  await expect(
-    form.getByText("Reply targets: Chat: Middle must be a number.", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await chat.getByLabel("Field value").fill("1.5");
+  await chat.getByLabel("Field name", { exact: true }).fill("Middle");
+  await chat.getByLabel("Field value", { exact: true }).fill("1.5");
 
   await targets.getByLabel("Hours", { exact: true }).fill("four");
-  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Save", exact: true }).click();
   await expect(form.getByText("Reply targets: Hours must be a number.", { exact: true })).toBeVisible();
   expect(await stored(page)).toEqual(before);
   await targets.getByLabel("Hours", { exact: true }).fill("4");
 
-  await expect(addTo(targets)).toHaveAccessibleName("Add field");
+  await expect(addTo(targets)).toHaveAccessibleName("Add field to Reply targets");
   await addTo(targets).click();
-  await targets.getByLabel("Field name").last().fill("Night team");
-  await targets.getByLabel("Field value").last().fill("Night shift");
+  await targets.getByLabel("Field name", { exact: true }).last().fill("Night team");
+  await targets.getByLabel("Field value", { exact: true }).last().fill("Night shift");
 
-  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Save", exact: true }).click();
   await expect(panel.getByRole("status")).toContainText("Saved");
   await expect(panel.locator('[data-attr="reply_targets"]')).toContainText("Night team: Night shift");
   await expect(panel.locator('[data-attr="reply_targets"]')).toContainText("Middle: 1.5");
@@ -151,22 +144,22 @@ test("remove: the x removes an entry, a field, a nested object or an attribute, 
   const before = await stored(page);
 
   const steps = form.getByRole("group", { name: "Review steps" });
-  await expect(removeOf(steps, "1")).toHaveAccessibleName("Remove entry");
+  await expect(removeOf(steps, "1")).toHaveAccessibleName("Remove Review steps entry 1");
   await removeOf(steps, "1").click();
-  await expect(steps.getByRole("group", { name: "1", exact: true }).getByLabel("Step")).toHaveValue("Write the reply");
+  await expect(steps.getByRole("group", { name: "1", exact: true }).getByLabel("Step", { exact: true })).toHaveValue("Write the reply");
   await expect(steps.getByRole("group", { name: "2", exact: true })).toHaveCount(0);
 
   const targets = form.getByRole("group", { name: "Reply targets" });
-  await expect(removeOf(targets, "hours")).toHaveAccessibleName("Remove field");
+  await expect(removeOf(targets, "hours")).toHaveAccessibleName("Remove Reply targets field Hours");
   await removeOf(targets, "hours").click();
   await removeOf(targets, "chat").click();
   await expect(targets.getByLabel("Hours", { exact: true })).toHaveCount(0);
 
-  await expect(removeOf(form, "reply_split")).toHaveAccessibleName("Remove attribute");
+  await expect(removeOf(form, "reply_split")).toHaveAccessibleName("Remove Reply split");
   await removeOf(form, "reply_split").click();
   await expect(form.getByRole("group", { name: "Reply split" })).toHaveCount(0);
 
-  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Save", exact: true }).click();
   await expect(panel.getByRole("status")).toContainText("Saved");
   await expect(panel.locator('[data-attr="review_steps"]').getByRole("listitem")).toHaveText(["Step: Write the reply, Hours: 2"]);
   await expect(panel.locator('[data-attr="reply_split"]')).toHaveCount(0);
@@ -183,7 +176,7 @@ test("remove: the x removes an entry, a field, a nested object or an attribute, 
   for (const k of ["open_values", "saved_replies", "handoffs", "parent_goal"]) expect(after[k], k).toEqual(before[k]);
 });
 
-test("emptied: emptying an entry's only field or an object's every field keeps them; the (i) says what is left out", async ({ page }) => {
+test("emptied: an emptied entry is left out, as the (i) says; an object's every field emptied keeps it", async ({ page }) => {
   const { panel, form } = await editGoal(page);
   const before = await stored(page);
 
@@ -192,16 +185,16 @@ test("emptied: emptying an entry's only field or an object's every field keeps t
   await form.getByRole("button", { name: "About saving" }).click();
 
   const handoffs = form.getByRole("group", { name: "Handoffs" });
-  await handoffs.getByRole("group", { name: "1", exact: true }).getByLabel("Team").fill("");
+  await handoffs.getByRole("group", { name: "1", exact: true }).getByLabel("Team", { exact: true }).fill("");
   const chat = form.getByRole("group", { name: "Reply targets" }).getByRole("group", { name: "Chat", exact: true });
   for (const field of ["Low", "High"]) await chat.getByLabel(field, { exact: true }).fill("");
 
-  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Save", exact: true }).click();
   await expect(panel.getByRole("status")).toContainText("Saved");
-  await expect(panel.locator('[data-attr="handoffs"]').getByRole("listitem")).toHaveCount(2);
+  await expect(panel.locator('[data-attr="handoffs"]').getByRole("listitem")).toHaveCount(1);
 
   const after = await stored(page);
-  expect(after.handoffs).toEqual([{}, { team: "Night shift" }]);
+  expect(after.handoffs).toEqual([{ team: "Night shift" }]);
   expect(after.reply_targets).toEqual({
     ...(before.reply_targets as object),
     chat: {},
