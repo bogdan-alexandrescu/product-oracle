@@ -313,7 +313,7 @@ const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => 
 
 /** Whether the caller applies (or accepts) this change: a key date's by the roadmap's rule
  * (drafts.can_edit), an add_item's by its roadmap's editors, else the item's deciders. */
-function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after" | "before">>): boolean {
+function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after" | "before" | "document_id">>): boolean {
   // Review major (changes.decides_all): a cut with its dependents needs rights on every item it cuts.
   if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
   // A goal ask is decided by the owners it is sent to (goal_asks.may_decide).
@@ -321,7 +321,10 @@ function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op"
   // roadmap-decide: a change asked of a PRD's milestone (before.date) is the PRD owner's (or a company owner's).
   if (c.op === "edit_goal_milestone" && c.before && !("milestone" in c.before)) {
     const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
-    return !!m && decidesAsk(m, { role: ctx.role, name: ctx.names[ctx.id] });
+    // A milestone that is gone: its PRD's owner (looked up from the change's document, as
+    // drafts.who) or the company's owner still declines it (goal_milestones.decide).
+    const prd = m ?? (db.goal_milestones ?? []).find((x) => !!x.prd && stableUuid(`simple-doc/${x.prd.slug}`) === c.document_id);
+    return prd ? decidesAsk(prd, { role: ctx.role, name: ctx.names[ctx.id] }) : ctx.role === "owner";
   }
   if (KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP) {
     const rm = roadmapOfDoc(db, c.target.document_id);
@@ -1629,9 +1632,14 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     applyS7(db, c);
   } else if (c.op === "edit_goal_milestone") {
     // roadmap-decide: accepting writes the PRD milestone's date and rule; either way it waits no more.
+    // As goal_milestones.decide: one whose milestone is gone or waits on another change is only
+    // declined (the milestone left as it is); accepting it is refused.
     const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
+    const waits = !!m && m.pending?.change_id === c.id;
+    if (p[4] === "accept" && !m) return json(404, { detail: "The milestone is gone" });
+    if (p[4] === "accept" && !waits) return json(409, { detail: { message: "This proposal no longer waits on this milestone", current: null, changed_by: null, changed_at: null } });
     if (m && p[4] === "accept") Object.assign(m, { date: (c.after.date as string | null) ?? m.date, counts_when: (c.after.counts_when as string | null) ?? m.counts_when });
-    if (m) m.pending = null;
+    if (m && waits) m.pending = null;
   } else if (p[4] === "decline" && c.op === "add_item") reopenSuggestion(db, c);
   else if (p[4] === "accept" && GOAL_ASK_OPS.includes(c.op)) {
     const err = applyGoalAsk(db, ctx, c);

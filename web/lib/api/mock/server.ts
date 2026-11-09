@@ -189,7 +189,7 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
-import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
+import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
 import { openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
@@ -4075,6 +4075,14 @@ function load(): Db {
                     // build-milestones-on-roadmap: the roadmaps' own milestones per goal; with a PRD's (Usage alerts).
                     const db = seed();
                     (db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
+                    return db;
+                  }
+              : scenario === "simple-prd-milestone-stuck"
+                ? () => {
+                    // stuck-milestone-decline: a PRD milestone's ask that its milestone no longer waits on.
+                    const db = seed();
+                    const ms = ((db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = seedPrdMilestones());
+                    db.simple_roadmap.changes = seedStuckPrdAsk(ms);
                     return db;
                   }
               : scenario === ROADMAP_MILESTONES_HARD_SCENARIO

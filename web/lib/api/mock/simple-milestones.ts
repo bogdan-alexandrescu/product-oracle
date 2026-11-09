@@ -131,6 +131,31 @@ export function seedPrdMilestones(): MockMilestone[] {
   ];
 }
 
+/** roadmap-decide: a change asked of a PRD's milestone (goal_milestones._propose_prd_change), waiting on the PRD's owner. */
+function prdAsk(m: MockMilestone, id: string, after: { date: string | null; counts_when: string | null }, by: string, byName: string, at: string): Schemas["SimpleChangeOut"] {
+  return {
+    id, session_id: null, document_id: stableUuid(`simple-doc/${m.prd!.slug}`), op: "edit_goal_milestone", draft_ids: [],
+    target: { milestone_id: m.id, roadmap_id: stableUuid(`simple-doc/${m.roadmap}`), name: m.name },
+    before: { date: m.date, counts_when: m.counts_when }, after,
+    status: "proposed", by, by_name: byName, at,
+    decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [], undoes_id: null, undone: false,
+    can_decide: false, can_undo: false, words: "", from_meeting: null, off_agenda: false,
+  } as unknown as Schemas["SimpleChangeOut"];
+}
+
+/**
+ * stuck-milestone-decline ("simple-prd-milestone-stuck" scenario): M2's first ask (Jan 5, Nov 4)
+ * still waits though the milestone now waits on a second (Jan 12): only declining closes it.
+ */
+export function seedStuckPrdAsk(milestones: MockMilestone[]): Schemas["SimpleChangeOut"][] {
+  const m = milestones.find((x) => x.id === stableUuid("simple-gm/p2"))!;
+  const by = stableUuid("simple-user/sam-lee");
+  const stuck = prdAsk(m, stableUuid("simple-gm-change/stuck/first"), { date: "2027-01-05", counts_when: m.counts_when }, by, "Sam Lee", "2026-11-04T17:00:00Z");
+  const next = prdAsk(m, stableUuid("simple-gm-change/stuck/second"), { date: "2027-01-12", counts_when: m.counts_when }, by, "Sam Lee", "2026-11-05T17:00:00Z");
+  m.pending = { date: "2027-01-12", counts_when: null, asked_of: m.prd!.owner, change_id: next.id, can_decide: false };
+  return [stuck, next];
+}
+
 /** roadmap-decide: whether the reader decides a change asked of the milestone's PRD (its owner, or a company owner). */
 export const decidesAsk = (m: Pick<MockMilestone, "prd">, me: { role: string; name?: string } | undefined): boolean =>
   !!m.prd && !!me && (me.role === "owner" || me.name === m.prd.owner);
@@ -245,14 +270,7 @@ export async function routeMilestones(
         const changes = (db.changes ??= []);
         const id = m.pending.change_id!;
         for (const c of changes) if (c.op === "edit_goal_milestone" && c.status === "proposed" && c.target.milestone_id === m.id) c.status = "declined";
-        changes.push({
-          id, session_id: null, document_id: stableUuid(`simple-doc/${m.prd.slug}`), op: "edit_goal_milestone", draft_ids: [],
-          target: { milestone_id: m.id, roadmap_id: stableUuid(`simple-doc/${m.roadmap}`), name: m.name },
-          before: { date: m.date, counts_when: m.counts_when }, after: { date: m.pending.date, counts_when: m.pending.counts_when ?? m.counts_when },
-          status: "proposed", by: me.id ?? "", by_name: (me.id && me.names?.[me.id]) || me.name || "someone", at: new Date().toISOString(),
-          decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [], undoes_id: null, undone: false,
-          can_decide: false, can_undo: false, words: "", from_meeting: null, off_agenda: false,
-        } as unknown as Schemas["SimpleChangeOut"]);
+        changes.push(prdAsk(m, id, { date: m.pending.date ?? null, counts_when: m.pending.counts_when ?? m.counts_when }, me.id ?? "", (me.id && me.names?.[me.id]) || me.name || "someone", new Date().toISOString()));
       }
       return json(200, milestoneOut(m, db.ids, true, false, me));
     }
