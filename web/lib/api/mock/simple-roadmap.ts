@@ -355,11 +355,14 @@ const GOAL_ORDER_GOALS: Record<string, string> = {
   // kr-in-goal-card: "goal-key-results"'s two key results (subgoals) of Faster activation.
   "kr-setup-day": "KR 1 Half of new teams set up in one day",
   "kr-first-alert": "KR 2 New teams send a first alert in week one",
+  "kr-first-report": "Teams share a first report",
+  "kr-setup-ten": "Setup takes ten minutes",
 };
 let goalOrderAdded: string[] = [];
 export function knowGoalOrderGoals(entities: { key: string; status: string }[]): void {
   const scenario = entities.some((e) => e.key === "support-load");
-  const want = Object.keys(GOAL_ORDER_GOALS).filter((k) => scenario && entities.some((e) => e.key === k && e.status === "confirmed"));
+  // kr-fold: a proposed key result's work names it too (its parent's lane holds it).
+  const want = Object.keys(GOAL_ORDER_GOALS).filter((k) => scenario && entities.some((e) => e.key === k && e.status !== "rejected"));
   for (const k of goalOrderAdded) if (!want.includes(k)) delete GOALS[k];
   goalOrderAdded = goalOrderAdded.filter((k) => want.includes(k));
   for (const k of want)
@@ -378,11 +381,21 @@ let companyGoals: (OrderedGoal & { key: string })[] = [];
 export function knowCompanyGoals(goals: (OrderedGoal & { key: string })[]): void {
   companyGoals = sortGoals(goals);
 }
-/** kr-in-goal-card: each key result's (a subgoal's) confirmed parent goal key, by its key (service._parent_goals). */
+/** kr-in-goal-card: each key result's (a subgoal's) top confirmed parent goal key, by its key, up its
+ * confirmed parents at any depth (service._parent_goals, service._lane_goal). */
 let goalParents = new Map<string, string>();
 export function knowGoalParents(goals: { id: string; key: string; type: string; status: string; parent_id?: string | null }[]): void {
-  const parents = new Map(goals.filter((g) => g.type === "goal" && g.status === "confirmed").map((g) => [g.id, g.key]));
-  goalParents = new Map(goals.flatMap((g) => (g.type === "goal" && g.parent_id && parents.has(g.parent_id) ? [[g.key, parents.get(g.parent_id)!] as const] : [])));
+  type G = (typeof goals)[number];
+  const parents = new Map(goals.filter((g) => g.type === "goal" && g.status === "confirmed").map((g) => [g.id, g]));
+  const top = (g: G): G => {
+    const seen = new Set([g.id]);
+    while (g.parent_id && parents.has(g.parent_id) && !seen.has(g.parent_id)) {
+      g = parents.get(g.parent_id)!;
+      seen.add(g.id);
+    }
+    return g;
+  };
+  goalParents = new Map(goals.flatMap((g) => (g.type === "goal" && g.parent_id && parents.has(g.parent_id) ? [[g.key, top(g).key] as const] : [])));
 }
 /** A goal's place in the one goal order (by key). */
 export function goalRank(key: string): number {
