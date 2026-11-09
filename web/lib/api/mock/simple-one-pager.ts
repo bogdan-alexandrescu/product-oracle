@@ -52,7 +52,7 @@ export interface OnePagerCtx {
   decider?: string | null;
   trackOwners?: string[];
   /** A submitted draft's next version, its sections as the draft has them (drafts.submit imports it). */
-  imported?: (sections: { key: string; heading: string; body: string }[], version: number) => void;
+  imported?: (sections: { key: string; heading: string; body: string }[], version: number) => number | void;
   /** Writes one Inbox notification, as oracle.review.collab.notify. */
   notify: (userId: string, kind: "review_reminder", title: string, data: Record<string, unknown>, version: number) => void;
   /** prd-timeline: the PRD's dated plan's milestones ("M1 Prove it"): the PDF prints the timeline, then one page each. */
@@ -97,6 +97,8 @@ export interface OnePagerDb {
     /** A heading's count fixed (owner, Nov 5, 'Fix the heading too'): the API's overlay["headings"]. */
     headings?: Record<string, string>;
     status?: "working" | "submitted"; waiting_on?: string[]; reminders?: Record<string, string>;
+    /** The version number it was submitted as (the API's simple_drafts.version_id): only that version's approval settles it. */
+    submitted_as?: number;
   };
   changes: (Change & { session_open: boolean; in_meeting: boolean; meeting_title?: string | null })[];
   /** S10: the visuals (./simple-visuals.ts), shared with the roadmap's. */
@@ -1140,8 +1142,9 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     db.draft.waiting_on = [...new Set([...ctx.reviewers, ...added])];
     db.draft.reminders = {};
     db.changes.forEach((c) => (c.session_open = false));
-    ctx.imported?.(db.sections.map((x) => ({ key: x.key, heading: headingNow(db, x.key), body: sectionNow(db, x.key) })), db.version + 1);
-    return json(200, { id: db.draft.id, status: "submitted", version: db.version + 1, waiting_on: db.draft.waiting_on });
+    const as = ctx.imported?.(db.sections.map((x) => ({ key: x.key, heading: headingNow(db, x.key), body: sectionNow(db, x.key) })), db.version + 1) ?? db.version + 1;
+    db.draft.submitted_as = as;
+    return json(200, { id: db.draft.id, status: "submitted", version: as, waiting_on: db.draft.waiting_on });
   }
   if (p[2] === "one-pagers" && p[4] === "remind" && m === "POST") {
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
