@@ -78,6 +78,46 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 const fail = (status: number, detail: string) => json(status, { detail });
 const now = () => new Date();
 
+// --- body checks (FastAPI's 422: after the role dependency, before the route's own checks) ---
+
+type Issue = { type: string; loc: (string | number)[]; msg: string; input: unknown; ctx?: Record<string, unknown> };
+const invalid = (detail: Issue[]) => json(422, { detail });
+
+/** A required body model: none, empty or null is missing; anything but an object is refused. */
+function bodyIssue(input: unknown): Issue | null {
+  if (input === null) return { type: "missing", loc: ["body"], msg: "Field required", input: null };
+  if (typeof input !== "object" || Array.isArray(input)) return { type: "model_attributes_type", loc: ["body"], msg: "Input should be a valid dictionary or object to extract fields from", input };
+  return null;
+}
+
+/** A str Field(min_length, max_length), counted in code points as Pydantic does; null when it passes. */
+function strIssue(obj: Record<string, unknown>, key: string, { min, max, required }: { min?: number; max?: number; required: boolean }): Issue | null {
+  if (!(key in obj)) return required ? { type: "missing", loc: ["body", key], msg: "Field required", input: obj } : null;
+  const v = obj[key];
+  if (typeof v !== "string") return { type: "string_type", loc: ["body", key], msg: "Input should be a valid string", input: v };
+  const n = [...v].length;
+  if (min != null && n < min) return { type: "string_too_short", loc: ["body", key], msg: `String should have at least ${min} character${min === 1 ? "" : "s"}`, input: v, ctx: { min_length: min } };
+  if (max != null && n > max) return { type: "string_too_long", loc: ["body", key], msg: `String should have at most ${max} character${max === 1 ? "" : "s"}`, input: v, ctx: { max_length: max } };
+  return null;
+}
+
+/** The body's issues against `fields` (in the model's order); an empty list when it passes. */
+function issuesOf(input: unknown, fields: ((obj: Record<string, unknown>) => Issue | null)[]): Issue[] {
+  const whole = bodyIssue(input);
+  if (whole) return [whole];
+  return fields.map((f) => f(input as Record<string, unknown>)).filter((x): x is Issue => x !== null);
+}
+
+/** SkipIn: reason, 1 to 2,000 characters. */
+const skipIssues = (input: unknown) => issuesOf(input, [(o) => strIssue(o, "reason", { min: 1, max: 2000, required: true })]);
+
+/** HeldIn: notes up to 10,000 characters (default ""), decision_ids a list (default []). */
+const heldIssues = (input: unknown) =>
+  issuesOf(input, [
+    (o) => strIssue(o, "notes", { max: 10_000, required: false }),
+    (o) => ("decision_ids" in o && !Array.isArray(o.decision_ids) ? { type: "list_type", loc: ["body", "decision_ids"], msg: "Input should be a valid list", input: o.decision_ids } : null),
+  ]);
+
 // --- schedule maths (schedule.py) -----------------------------------------------------------
 
 const DAY_MS = 86_400_000;
@@ -710,9 +750,13 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
     if (p[2] === "summaries" && p.length === 3) {
       if (m === "PUT") {
         if (!owner) return notOwner();
-        const { mode } = await body<{ mode: string }>();
-        if (mode !== "on_demand" && mode !== "always") return fail(422, "mode is on_demand or always");
-        db.mode = mode;
+        const input = await body<unknown>();
+        const expected = "'on_demand' or 'always'";
+        const bad = issuesOf(input, [
+          (o) => (!("mode" in o) ? { type: "missing", loc: ["body", "mode"], msg: "Field required", input: o } : o.mode !== "on_demand" && o.mode !== "always" ? { type: "literal_error", loc: ["body", "mode"], msg: `Input should be ${expected}`, input: o.mode, ctx: { expected } } : null),
+        ]);
+        if (bad.length) return invalid(bad);
+        db.mode = (input as Schemas["SummarySettingsIn"]).mode;
       }
       return json(200, { mode: db.mode, estimate: estimate(db) });
     }
@@ -723,7 +767,10 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
       }
       if (m === "POST") {
         if (!owner) return notOwner();
-        const input = await body<Schemas["RitualCreate"]>();
+        const raw = await body<unknown>();
+        const whole = bodyIssue(raw);
+        if (whole) return invalid([whole]);
+        const input = raw as Schemas["RitualCreate"];
         if (input.kind !== "custom") return fail(422, "kind: the mock adds custom rituals only");
         if (!input.title?.trim()) return fail(422, "title: give the ritual a title");
         // A zone sent with the rule is not read: every ritual is in the Company time zone.
@@ -749,6 +796,18 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
         return json(201, ritualOut(db, r, ctx));
       }
     }
+    // As FastAPI: PATCH's owner role (a dependency), then its body (RitualPatch), then the
+    // service finds the ritual.
+    let patch: Schemas["RitualPatch"] | null = null;
+    if (p.length === 3 && m === "PATCH") {
+      if (!owner) return notOwner();
+      const raw = await body<unknown>();
+      const bad = issuesOf(raw, [(o) => (!("lock_version" in o) ? { type: "missing", loc: ["body", "lock_version"], msg: "Field required", input: o } : null)]);
+      if (bad.length) return invalid(bad);
+      patch = raw as Schemas["RitualPatch"];
+      if (patch.duration_min != null && (patch.duration_min < 5 || patch.duration_min > 480)) return fail(422, "duration_min: between 5 and 480 minutes");
+      if (patch.prep_hours != null && (patch.prep_hours < 0 || patch.prep_hours > 168)) return fail(422, "prep_hours: between 0 and 168 hours");
+    }
     const r = db.rituals.find((x) => x.id === p[2]);
     if (!r) return fail(404, "Ritual not found");
     if (p.length === 3) {
@@ -760,12 +819,9 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
         db.occurrences = db.occurrences.filter((o) => o.ritual_id !== r.id);
         return new Response(null, { status: 204 });
       }
-      if (m === "PATCH") {
-        if (!owner) return notOwner();
-        const input = await body<Schemas["RitualPatch"]>();
+      if (patch) {
+        const input = patch;
         if (input.lock_version !== r.lock_version) return fail(409, "This ritual changed since you opened it. Reload to see the change.");
-        if (input.duration_min != null && (input.duration_min < 5 || input.duration_min > 480)) return fail(422, "duration_min: between 5 and 480 minutes");
-        if (input.prep_hours != null && (input.prep_hours < 0 || input.prep_hours > 168)) return fail(422, "prep_hours: between 0 and 168 hours");
         if (input.attendee_ids?.some((id) => !memberIds.has(id))) return fail(422, "attendee_ids: every attendee is a member");
         if (input.owner_id && !memberIds.has(input.owner_id)) return fail(422, "owner_id: the owner is a member");
         if (input.schedule) {
@@ -827,13 +883,15 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
     return fail(404, "Route not found");
   }
 
-  // As the API's SkipIn (1 to 2,000 characters, counted in code points as Pydantic does, kept
-  // as typed): FastAPI checks the body before the service finds the occurrence, checks the
-  // owner and the status.
+  // As the API's SkipIn and HeldIn (a reason kept as typed): FastAPI checks the body before the
+  // service finds the occurrence, checks the owner and the status.
   const isSkip = p.length === 4 && p[3] === "skip" && (m === "POST" || m === "PATCH");
-  const skipIn = isSkip ? await body<Schemas["SkipIn"] | null>() : null;
-  const reasonLength = typeof skipIn?.reason === "string" ? [...skipIn.reason].length : 0;
-  if (isSkip && !(reasonLength >= 1 && reasonLength <= 2000)) return fail(422, "reason: say why it was skipped, in at most 2,000 characters");
+  const isHeld = p.length === 4 && p[3] === "held" && m === "POST";
+  const raw = isSkip || isHeld ? await body<unknown>() : null;
+  const bad = isSkip ? skipIssues(raw) : isHeld ? heldIssues(raw) : [];
+  if (bad.length) return invalid(bad);
+  const skipIn = raw as Schemas["SkipIn"] | null;
+  const heldIn = raw as Schemas["HeldIn"] | null;
   const o = db.occurrences.find((x) => x.id === p[2]);
   if (!o) return fail(404, "Occurrence not found");
   const r = db.rituals.find((x) => x.id === o.ritual_id)!;
@@ -865,8 +923,7 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
     const heldByMeeting = p[3] === "held" && o.status === "held" && !o.notes && !(o.decision_ids ?? []).length;
     if (o.status !== "ready" && o.status !== "missed" && !heldByMeeting) return fail(409, `This occurrence is ${o.status}`);
     if (p[3] === "held") {
-      const input = await body<Schemas["HeldIn"]>();
-      if ((input.notes ?? "").length > 10_000) return fail(422, "notes: at most 10,000 characters");
+      const input = heldIn!;
       const decisions = decisionsOf(ctx, o, input.decision_ids ?? []);
       const unknown = (input.decision_ids ?? []).filter((id) => !decisions.some((d) => d.id === id));
       if (unknown.length) return fail(422, `decision_ids: no such decision: ${unknown.join(", ")}`);
