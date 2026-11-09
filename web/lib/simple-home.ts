@@ -153,8 +153,9 @@ export function brokenLinks(roadmap: Roadmap | undefined): BrokenLink[] {
 
 const DAY = 86_400_000;
 
-/** `of` (Home only): whose a row's milestone is, for its accessible name when two rows read alike. */
-export type PlanStrip = Omit<Schemas["SimplePlanStrip"], "rows"> & { rows: (Schemas["SimplePlanStrip"]["rows"][number] & { of?: string | null })[] };
+/** `of` (Home only): whose a row's milestone is, for its accessible name when two rows read alike;
+ * `also` (Home only): the other names of the milestones folded into its row ("M1 Measured and mapped"). */
+export type PlanStrip = Omit<Schemas["SimplePlanStrip"], "rows"> & { rows: (Schemas["SimplePlanStrip"]["rows"][number] & { of?: string | null; also?: string[] })[] };
 export type PlanInput = {
   start: string;
   end: string;
@@ -165,8 +166,9 @@ export type PlanInput = {
   milestoneStart?: string | null;
   /** The milestone record the item links (a track milestone), when any: its row; `label`, when
    * given, is the row's name as is (Home: the current milestone's code and name, whole); `of`,
-   * whose it is (its PRD's or goal's name), tells two rows that read alike apart to a screen reader. */
-  record?: { id: string; name: string | null; label?: string; of?: string | null } | null;
+   * whose it is (its PRD's or goal's name), tells two rows that read alike apart to a screen reader;
+   * `also`, the other names folded into its row (Home). */
+  record?: { id: string; name: string | null; label?: string; of?: string | null; also?: string[] } | null;
   /** The roadmap item it reads (the one-pager lists a row's items by it). */
   id?: string | null;
 };
@@ -228,7 +230,7 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
     const [key, label] = i.record ? [`record:${i.record.id}`, i.record.label ?? milestoneOf(i.record.name)[1]] : milestoneOf(i.milestone);
     keyed.set(key, [...(keyed.get(key) ?? []), { label, i }]);
   }
-  const groups = new Map<string, { name: string; date: string | null; begins: string | null; of: PlanInput[]; whose: string | null }>();
+  const groups = new Map<string, { name: string; date: string | null; begins: string | null; of: PlanInput[]; whose: string | null; also: string[] }>();
   for (const [key, of] of keyed) {
     const counts = new Map<string, number>();
     for (const x of of) counts.set(x.label, (counts.get(x.label) ?? 0) + 1);
@@ -240,7 +242,8 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
     const starts = of.flatMap((x) => (x.i.milestoneStart ? [x.i.milestoneStart] : []));
     // A record's row is its own (two PRDs' "M1 · Launch" on one date are two rows); texts by name and date.
     const whose = of.find((x) => x.i.record?.of)?.i.record?.of ?? null;
-    groups.set(key.startsWith("record:") ? key : `${name}|${date ?? ""}`, { name, date, begins: starts.length ? minOf(starts) : null, of: of.map((x) => x.i), whose });
+    const also = [...new Set(of.flatMap((x) => x.i.record?.also ?? []))];
+    groups.set(key.startsWith("record:") ? key : `${name}|${date ?? ""}`, { name, date, begins: starts.length ? minOf(starts) : null, of: of.map((x) => x.i), whose, also });
   }
   const dated = [...groups.values()].flatMap((g) => (g.date ? [g.date] : []));
   const committed = items.filter((i) => !i.estimated).map((i) => i.end);
@@ -258,7 +261,7 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
   }
   const months = Array.from({ length: n }, (_, k) => addMonths(start, k));
   const end = new Date(Date.parse(`${addMonths(months.at(-1)!, 1)}T00:00:00Z`) - DAY).toISOString().slice(0, 10);
-  const row = (name: string, date: string | null, of: PlanInput[], milestone: boolean, begins: string | null = null, whose: string | null = null): PlanStrip["rows"][number] => ({
+  const row = (name: string, date: string | null, of: PlanInput[], milestone: boolean, begins: string | null = null, whose: string | null = null, also: string[] = []): PlanStrip["rows"][number] => ({
     name,
     date,
     items: of.length,
@@ -269,10 +272,11 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
     past_edge: !!date && date > end,
     item_ids: [...new Set(of.flatMap((i) => (i.id ? [i.id] : [])))],
     ...(whose ? { of: whose } : {}),
+    ...(also.length ? { also } : {}),
   });
   const rows = [...groups.values()]
     .sort((a, b) => (a.date === null) !== (b.date === null) ? (a.date === null ? 1 : -1) : byCodePoint(a.date ?? "", b.date ?? "") || byCodePoint(a.name, b.name))
-    .map((g) => row(g.name, g.date, g.of, true, g.begins, g.whose));
+    .map((g) => row(g.name, g.date, g.of, true, g.begins, g.whose, g.also));
   if (loose.length) rows.push(row("No milestone", null, loose, false));
   return {
     start,
@@ -354,7 +358,9 @@ const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowe
  * home-milestones-whole (reviews of PRs 1424 and 1439): one row per milestone: a roadmap's own
  * milestones of one goal, code (and PRD) are one row; a track milestone is one row wherever its
  * items sit, and a roadmap's own milestone joins it only when it is that roadmap's only one of
- * its code, and their whole names match or one has none (no name is ever hidden); a typed text
+ * its code, and their whole names match or one has none (no name is ever hidden); one of no goal
+ * (nor PRD) joins it whatever its name, the row keeping the track's name and date and its (i)
+ * the other name ("Also: M1 Measured and mapped"; the owner's of Nov 9); a typed text
  * or bare code is read on the item's own roadmap (the read's roadmap's when its own has none),
  * never the first roadmap that has it, nor a guess between two goals'.
  *
@@ -448,23 +454,30 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
     const at = `${h.roadmap}|${code}`;
     if (code && !(holding.get(at) ?? []).includes(h.tm)) holding.set(at, [...(holding.get(at) ?? []), h.tm]);
   }
-  // It joins only when their whole names match or one of them has none (no name is ever hidden):
-  // a nameless track milestone reads the name of the first that joins it, and one of another
-  // name keeps its own row ("M3 · Billing beta" beside "M3 · Prices live").
+  // A goal's (or PRD's) joins only when their whole names match or one of them has none (no name
+  // is ever hidden): a nameless track milestone reads the name of the first that joins it, and one
+  // of another name keeps its own row ("M3 · Billing beta" beside "M3 · Prices live"). The
+  // roadmap's own of no goal joins whatever its name (the owner's of Nov 9: production showed
+  // "M1 · Measured" and "M1 · Measured and mapped"), its name kept in the row's (i).
+  const plain = (g: Gm) => !g.goal_id && !g.prd;
   const into = new Map<Gm, Tm>();
   const folded = new Map<Tm, Gm[]>();
   const rowName = new Map<Tm, string>();
+  const also = new Map<Tm, string[]>();
   for (const gm of goals) {
     const code = goalCode(gm);
     if (!code) continue;
-    const alike = new Set(goals.filter((g) => g.roadmap_id === gm.roadmap_id && goalCode(g) === code).map(goalKey));
+    // A goal's M1 beside it never stops the roadmap's own M1 joining (it keeps its own row).
+    const alike = new Set(goals.filter((g) => g.roadmap_id === gm.roadmap_id && goalCode(g) === code && (!plain(gm) || plain(g))).map(goalKey));
     const there = holding.get(`${gm.roadmap_id}|${code}`) ?? [];
     if (alike.size !== 1 || there.length !== 1) continue;
     const tm = there[0];
     const name = goalMilestoneName(gm);
     const at = rowName.get(tm) ?? wholeName(code, restOf(tm.name));
-    if (name !== code && at !== code && !sameWords(name, at)) continue;
-    if (at === code) rowName.set(tm, name);
+    const differs = name !== code && at !== code && !sameWords(name, at);
+    if (differs && !plain(gm)) continue;
+    if (differs) also.set(tm, [...(also.get(tm) ?? []), name.replace(" · ", " ")]);
+    else if (at === code) rowName.set(tm, name);
     into.set(gm, tm);
     folded.set(tm, [...(folded.get(tm) ?? []), gm]);
   }
@@ -473,18 +486,18 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
     const own = folded.get(tm) ?? [];
     // Its own whole name; with none, the name of a roadmap milestone that joins it ("M3" never hides a joined "M3 · Rules ready").
     const name = rowName.get(tm) ?? wholeName(codeOf(tm.name), restOf(tm.name));
-    return { key: `track:${tm.id}`, name, date: tm.date ?? own.find((g) => g.date)?.date ?? null, of: trackTitles.get(tm.track_id) ?? null };
+    return { key: `track:${tm.id}`, name, date: tm.date ?? own.find((g) => g.date)?.date ?? null, of: trackTitles.get(tm.track_id) ?? null, also: also.get(tm) };
   };
   const ofGoal = (gm: Gm) => {
     const tm = into.get(gm);
     if (tm) return ofTrack(tm);
-    return { key: goalKey(gm), name: goalMilestoneName(gm), date: gm.date ?? null, of: gm.prd?.title ?? (gm.goal_id ? goalTitles.get(gm.goal_id) : undefined) ?? null };
+    return { key: goalKey(gm), name: goalMilestoneName(gm), date: gm.date ?? null, of: gm.prd?.title ?? (gm.goal_id ? goalTitles.get(gm.goal_id) : undefined) ?? null, also: undefined };
   };
   return kept.map((i) => {
     const base: PlanInput = { start: i.start.date, end: i.end.date, estimated: i.estimated, milestone: null, milestoneDate: null, id: i.id };
     const h = hits.get(i.id);
     const m = h ? ("gm" in h ? ofGoal(h.gm) : ofTrack(h.tm)) : null;
-    return m ? { ...base, milestone: m.name, milestoneDate: m.date, record: { id: m.key, name: m.name, label: m.name, of: m.of } } : base;
+    return m ? { ...base, milestone: m.name, milestoneDate: m.date, record: { id: m.key, name: m.name, label: m.name, of: m.of, ...(m.also ? { also: m.also } : {}) } } : base;
   });
 }
 

@@ -256,6 +256,8 @@ export function PlanByMonth({
                               </li>
                             ))}
                           </ul>
+                          {/* The other names of milestones folded into this row (the owner's of Nov 9). */}
+                          {r.also?.length ? <p className="mt-1 break-words">Also: {r.also.join(", ")}</p> : null}
                         </InfoTip>
                       )}
                     </span>

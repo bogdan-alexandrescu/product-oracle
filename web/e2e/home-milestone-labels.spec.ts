@@ -1,4 +1,4 @@
-import { HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
+import { HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -231,8 +231,8 @@ test("an item typed M1 never lands on a guessed track M1 when two tracks have on
 
 /*
  * Card home-milestone-names-kept (reviews of PR 1439), on "home-milestones-goals": protects = a
- * roadmap's only milestone of a code joins a track's row only when their whole names match or one
- * has none, so Alerts' "M2 · Fleet pilot" stays its own row beside the track's "M2 · Launch (beta)";
+ * goal's milestone, its roadmap's only one of a code, joins a track's row only when their whole
+ * names match or one has none (one of no goal joins whatever its name: home-milestone-fold), so Alerts' "M2 · Fleet pilot" stays its own row beside the track's "M2 · Launch (beta)";
  * an item whose own goal has no M2 (Alert sound settings) stays on its track's row, never joining
  * the one other goal's; fails_when = "Fleet pilot" shows nowhere on Home, or Alert sound settings
  * sits under it.
@@ -243,6 +243,26 @@ test("a roadmap milestone of another name keeps its own row; a typed code never 
   expect(labels.filter((l) => l.startsWith("M2")).sort()).toEqual(["M2 · Fleet pilot · 1 item", "M2 · Launch (beta) · 3 items"]);
   expect(await itemsOf(page, "M2 · Fleet pilot · 1 item")).toEqual([["Alert routing by team"]]);
   expect((await itemsOf(page, "M2 · Launch (beta) · 3 items"))[0]).toContain("Alert sound settings");
+});
+
+/*
+ * Card home-milestone-fold (the owner's of Nov 9), on "home-milestones-fold": protects = a
+ * roadmap's own milestone of no goal folds into the track milestone of its code whatever its name:
+ * one row with the track's name ("M1 · Measured"), its (i) listing every item and naming the
+ * folded one ("Also: M1 Measured and mapped"); a goal's milestone of that code ("M1 · Return
+ * pilot") keeps its own row; fails_when = "M1 · Measured and mapped" is a row of its own, the
+ * folded name shows nowhere, or the goal's M1 joins the track's row.
+ */
+test("a roadmap's own milestone of another name folds into the track's row of its code; a goal's stays apart", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_FOLD_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(labels.filter((l) => l.startsWith("M1")).sort()).toEqual(["M1 · Measured · 3 items", "M1 · Return pilot · 1 item"]);
+  expect(await itemsOf(page, "M1 · Measured · 3 items")).toEqual([["Health log", "Sample data import", "Setup checklist"]]);
+  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M1 · Measured · 3 items$/ }) });
+  await line.getByTestId("home-strip-items-tip").click();
+  await expect(line.getByRole("tooltip")).toContainText("Also: M1 Measured and mapped");
+  await page.keyboard.press("Escape");
+  expect(await itemsOf(page, "M1 · Return pilot · 1 item")).toEqual([["Welcome video"]]);
 });
 
 /*

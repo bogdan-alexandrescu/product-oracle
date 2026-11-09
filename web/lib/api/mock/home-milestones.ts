@@ -206,3 +206,21 @@ export function seedHomeMilestoneTwinTracks(): SimpleDb {
   rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured" } : s));
   return rm;
 }
+
+export const HOME_MILESTONE_FOLD_SCENARIO = "home-milestones-fold";
+
+/**
+ * home-milestones-fold (the owner's of Nov 9): Onboarding's own M1 of no goal, "M1 Measured and
+ * mapped", holds Setup checklist and Sample data import, beside the Guided setup track's
+ * "M1 · Measured" (Health log): one row, the track's name and date, the other name in its (i).
+ * Grow retention's "M1 · Return pilot" (Welcome video) is a goal's milestone: its own row.
+ */
+export function seedHomeMilestoneFold(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  rm.goal_milestones = [
+    { id: stableUuid("simple-gm/fold-mapped"), roadmap: "onboarding-roadmap", code: "M1", name: "M1 Measured and mapped", date: null, goal: null, gates: ["setup-checklist", "setup-import"], counts_when: "", progress: "not_started" },
+    { id: stableUuid("simple-gm/fold-pilot"), roadmap: "onboarding-roadmap", code: "M1", name: "Return pilot", date: null, goal: "grow-retention", gates: ["setup-video"], counts_when: "", progress: "not_started" },
+  ];
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured" } : s.key === "setup-video" ? { ...s, goal: "grow-retention" } : s));
+  return rm;
+}
