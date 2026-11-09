@@ -344,3 +344,54 @@ async def test_submit_copies_codes_from_the_version_the_draft_is_on(client):
             RoadmapItem.roadmap_version_id == v3.id)))  # fmt: skip
     assert {"F-31 Night digest", "F-31 Day digest"} <= titles, titles
     assert v3.base_number == 1
+
+
+async def test_submit_lets_slices_of_one_feature_share_its_code(client):
+    """protects=(every-field) a submitted draft's items of one feature share its code: one item
+    shows F-31 by its PRD section, the draft links a second to feature F-31, and submit makes
+    the version; a draft whose title alone claims F-31 for the second is refused (409) and
+    nothing is submitted; fails_when=the two parts of F-31 are refused as a clash, or the
+    title claim is stored."""
+    from sqlalchemy import update
+
+    from oracle.baseline.models import Entity
+    from oracle.simple.models import SimpleDraft
+
+    w = await world()
+    assert (await edit_title(client, w, "decider")).status_code == 201
+    one, two = (uuid.UUID(w.ids[k]) for k in ("move_dates-a", "move_dates-b"))
+    async with tenant_session(w.ctx.tenant_id) as s:
+        feature = Entity(type="feature", key="F-31", title="Launch flow", status="confirmed",
+                         origin="user", attrs={})  # fmt: skip
+        s.add(feature)
+        await s.flush()
+        fid = feature.id
+        await s.execute(update(RoadmapItem).where(RoadmapItem.id == one)
+                        .values(feature_id=None, prd_section_key="f-31"))  # fmt: skip
+        await s.commit()
+    d = await the_draft(client, w)
+
+    async def overlay(values: dict) -> None:
+        async with tenant_session(w.ctx.tenant_id) as s:
+            draft = await s.get(SimpleDraft, uuid.UUID(d["id"]))
+            draft.overlay = {**(draft.overlay or {}), str(two): values}
+            await s.commit()
+
+    await overlay({"title": "F-31 Day digest"})
+    r = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=w.ctx.as_("decider"))
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"].startswith("F-31 is already the code of F-31 "), r.text
+    await overlay({"feature_id": str(fid)})
+    r = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        version = await s.scalar(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == uuid.UUID(w.roadmap_id),
+                DocumentVersion.number == r.json()["version"],
+            )
+        )
+        rows = list(await s.scalars(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == version.id)))  # fmt: skip
+    assert fid in {r.feature_id for r in rows}
+    assert "f-31" in {r.prd_section_key for r in rows}
