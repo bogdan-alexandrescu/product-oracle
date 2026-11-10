@@ -160,7 +160,9 @@ for (const scheme of ["light", "dark"] as const) {
       // in their goal lanes too they keep two rows and start order.
       expect(await groupOf(page, "Setup checklist")).toBe("Activation");
       expect(await groupOf(page, "Sample data import")).toBe("Activation");
-      expect(Math.abs((await bar(page, "setup-checklist").boundingBox())!.y - (await bar(page, "setup-import").boundingBox())!.y)).toBeGreaterThanOrEqual(1);
+      const [gc, gs] = [(await bar(page, "setup-checklist").boundingBox())!, (await bar(page, "setup-import").boundingBox())!];
+      // Two rows apart, not just a pixel: the one bar clears the other's height.
+      expect(Math.abs(gc.y - gs.y)).toBeGreaterThanOrEqual(gc.height - 1);
       expect(await groupOf(page, "Setup failure alerts")).toBe("Reliability");
       expect(await groupOf(page, "Setup error report")).toBe("Reliability");
       expect((await bar(page, "plan-f-03").boundingBox())!.y).toBeLessThan((await bar(page, "plan-f-06").boundingBox())!.y);
@@ -253,6 +255,8 @@ for (const scheme of ["light", "dark"] as const) {
       await open(page, scheme);
       await expect(page.getByTestId("group-milestone")).toHaveCount(0);
       await format(page, "gantt");
+      // tb-mk: the Gantt's Group by lists Track first.
+      await expect(page.getByRole("group", { name: "Group by" }).getByRole("button")).toHaveText(["Track", "Goal", "PRD", "Milestone"]);
       await page.getByTestId("group-milestone").click();
       await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
       for (const t of ["M1 Prove it", "M2 Scale volume", "M3 Open to all"]) await expect(group(page, t)).toHaveCount(1);
@@ -269,7 +273,7 @@ for (const scheme of ["light", "dark"] as const) {
           .poll(async () => {
             const [gc, gs] = [await groupOf(page, "Setup checklist"), await groupOf(page, "Sample data import")];
             const [c, s] = [(await bar(page, "setup-checklist").boundingBox())!, (await bar(page, "setup-import").boundingBox())!];
-            return gc === title && gs === title && Math.abs(c.y - s.y) >= 1 ? "one group, two rows" : `${gc}:${c.y} ${gs}:${s.y} want ${title}`;
+            return gc === title && gs === title && Math.abs(c.y - s.y) >= c.height - 1 ? "one group, two rows" : `${gc}:${c.y} ${gs}:${s.y} want ${title}`;
           }, { message: `${g}: Setup checklist and Sample data import share ${title} on two rows` })
           .toBe("one group, two rows");
         await expect(group(page, "PM-owned")).toHaveCount(0);
