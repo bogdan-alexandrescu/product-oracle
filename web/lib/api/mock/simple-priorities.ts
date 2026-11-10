@@ -11,7 +11,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
-import { closed, codedTitle, companyToday, goalRank, prdCode, roadmapOut, trackPrdTitles, TRACKS, type SeedItem, type SimpleDb } from "./simple-roadmap";
+import { canDecideItem, closed, codedTitle, ROADMAPS, companyToday, goalRank, prdCode, roadmapOut, trackPrdTitles, TRACKS, type SeedItem, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
 import { madeOrder } from "./made-order";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
@@ -111,7 +111,7 @@ export function seedPrioritiesTwinsTrace(db: SimpleDb): void {
 }
 
 /** qa-prio-twins (priorities.same_name): two names are the same, case and spacing aside. */
-const sameName = (t: string | null | undefined): string => (t ?? "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+export const sameName = (t: string | null | undefined): string => (t ?? "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
 
 /**
  * The "priorities-plan-goal-names" scenario (the owner, Nov 8: a plan goal and a goal record with one name are two
@@ -217,6 +217,27 @@ const featureOf = (db: SimpleDb, key: string): string => {
 };
 /** An item's feature id: one per feature, whichever roadmap's item stands for it. */
 const featureOfItem = (db: SimpleDb, i: { key: string; id: string }): string => featureId(db.ids[featureOf(db, i.key)] ?? i.id);
+
+/** qa-prio-twins (priorities._items_of over every roadmap): the open items of the feature `key` stands for, on every
+ * roadmap, the older ones beside the company roadmap too. */
+export const itemsOfFeature = (db: SimpleDb, key: string): SeedItem[] => db.items.filter((x) => !closed(x) && !x.trashed && featureOf(db, x.key) === key);
+
+/**
+ * priorities._twin_block: why the caller (`may`: whether they decide an item) may not merge the twin feature `source`
+ * into `kept` (keys of the items standing for them), its items re-linked first, else null: an item on a roadmap they
+ * do not decide, or a confirmed item where the kept feature has a confirmed item of its own (merge those first).
+ */
+export function twinBlock(db: SimpleDb, may: (s: SeedItem) => boolean, source: string, kept: string, keptTitle: string): string | null {
+  const theirs = itemsOfFeature(db, source);
+  const title = (x: SeedItem) => ROADMAPS[x.roadmap]?.title ?? x.roadmap;
+  const no = theirs.find((x) => !may(x));
+  if (no) return `Only the decider of ${title(no)} links ${no.title} (${no.key}) to another feature: ask them to merge it`;
+  for (const x of theirs.filter((y) => !y.draft)) {
+    const d = itemsOfFeature(db, kept).find((y) => y.roadmap === x.roadmap && !y.draft);
+    if (d) return `${keptTitle} already has ${d.title} (${d.key}) on ${title(x)}: merge ${x.title} (${x.key}) into it first`;
+  }
+  return null;
+}
 
 /** The key of the item standing for the feature `fid`, undefined for no such feature. */
 export function featureItem(db: SimpleDb, fid: string): string | undefined {
@@ -678,11 +699,15 @@ export function prioritiesOut(
       const mine = !!r.item_id && !!l.item_id && readItems.get(r.item_id)!.roadmap.id === readItems.get(l.item_id)!.roadmap.id;
       // No item, an item on another roadmap, or a lead with only a draft: the Ground Truth's Merge into….
       const merge = !can ? null : mine ? ("item" as const) : ("entity" as const);
-      // priorities.merge_twin re-links each of its items first: an approver who decides every one.
-      const theirs = live.filter((i) => featureOfItem(db, i) === r.feature_id);
+      // priorities.merge_twin re-links each of its items first, on every roadmap: an approver who decides every one,
+      // none beside a confirmed item of the kept feature; else why not (blocked).
+      const approver = ctx.role === "owner" || ctx.role === "approver";
+      const source = featureItem(db, r.feature_id);
+      const keptKey = featureItem(db, l.feature_id);
+      const blocked = merge === "entity" && approver && source && keptKey ? twinBlock(db, (x) => canDecideItem(db, x, ctx), source, keptKey, l.title) : null;
       (l.twins ??= []).push({
         feature_id: r.feature_id, item_id: r.item_id, code: r.code, title: r.title, goal: r.goal, rank: r.rank, merge,
-        into_id: merge === "item" ? l.item_id : null, applies: merge === "item" ? decides(r.item_id!) : merge === "entity" && (ctx.role === "owner" || ctx.role === "approver") && theirs.every((i) => decides(i.id)),
+        into_id: merge === "item" ? l.item_id : null, applies: merge === "item" ? decides(r.item_id!) : merge === "entity" && approver && !blocked, blocked,
       });
     }
   }

@@ -100,6 +100,9 @@ interface SeedItem {
   /** qa-prio-twins: a draft linked only by its trace's source feature (priorities.link): the key of the item
    * standing for that feature; no feature of its own until a move confirms it. */
   trace_feature?: string;
+  /** qa-prio-twins: the Ground Truth feature this item stands for is locked (a person edited it) or a PRD section
+   * links it: baseline.merge_entity refuses to merge it away (409). */
+  gt_lock?: "locked" | "linked";
   /** feature-parts: the key of the feature it is a part of (RoadmapItem.parent_key). */
   parent?: string;
   /** S7: the Ground Truth feature (with no item) this draft was linked to by a merge. */

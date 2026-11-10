@@ -1341,6 +1341,12 @@ function Twins({ r, proposals, mayChange, changed }: { r: Row; proposals: Propos
                 </Button>
               )}
             </div>
+            {/* Why an approver's Merge into… is not offered: whose roadmap it needs, or the item to merge first. */}
+            {mayChange && t.blocked && (
+              <p className="mt-1 text-text2" data-testid="prio-twin-blocked">
+                {t.blocked}
+              </p>
+            )}
             {merging === id && (
               <form
                 className="mt-2 flex flex-wrap items-center gap-2"
