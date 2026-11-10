@@ -44,6 +44,8 @@ export function InfoTip({
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const root = useRef<HTMLSpanElement>(null);
+  // A tap (no hover to leave) opens and closes the tip with each tap on the (i).
+  const touch = useRef(false);
   const tip = useRef<HTMLSpanElement>(null);
   const shown = open || pinned;
   // The open tip is fixed to the window, placed beside its (i), so a cell or panel that cuts
@@ -128,7 +130,14 @@ export function InfoTip({
         data-testid={testId}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        onClick={() => setPinned((p) => !p)}
+        onPointerDown={(e) => {
+          touch.current = e.pointerType !== "mouse";
+        }}
+        onClick={() => {
+          if (!touch.current) return setPinned((p) => !p);
+          setPinned(!pinned);
+          setOpen(!pinned);
+        }}
         // A 24 px hit area round the 20 px (i) (qa-company-49), 44 px on a phone (an invisible
         // pad); never stretched by a row or a touch sheet's 44 px min-height (qa-shell-21).
         className={

@@ -14,7 +14,7 @@ export type MkKind = Gm["kind"];
 export type MkStatus = Gm["status"];
 
 export const MK_KINDS: { kind: MkKind; name: string; tip: string }[] = [
-  { kind: "goal", name: "Goal", tip: "A measured goal that must be hit, from a baseline to a target" },
+  { kind: "goal", name: "Goal", tip: "A measured goal that must be hit, from a start to a target" },
   { kind: "sub_goal", name: "Sub-goal", tip: "A measured step that builds toward a goal" },
   { kind: "delivery", name: "Delivery", tip: "Features shipped together by a date; done when shipped" },
   { kind: "decision", name: "Decision", tip: "By its date the team knows something and decides; done when the answer is recorded" },
@@ -100,7 +100,7 @@ export function MkLegend() {
   );
 }
 
-/** What it is done by, in one line (a measure: baseline to target). */
+/** What it is done by, in one line (a measure: its start to its target). */
 export function doneLine(m: Pick<Gm, "measure" | "baseline" | "target" | "current" | "done_when_line" | "kind">): string {
   if (isMeasured(m.kind) && m.measure) return `${m.measure}: ${m.baseline ?? "?"} → ${m.target ?? "?"}${m.current != null ? ` (now ${m.current})` : ""}`;
   return m.done_when_line ? `Done when ${m.done_when_line.charAt(0).toLowerCase()}${m.done_when_line.slice(1)}` : "";

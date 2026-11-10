@@ -74,6 +74,26 @@ const kindFields = (m: GoalMilestone): KindFields => ({
 });
 const NO_KIND: Omit<KindFields, "kind"> = { status_set: null, status_reason: null, done_when_line: "", measure: null, baseline: null, target: null, current: null, sub_goal_of_id: null, home_track_id: null, from_track_id: null, to_track_id: null };
 
+/** What a save sends of the kind fields: those the kind shows; a field only another kind shows is
+ * cleared, and a reason only goes with a person's At risk or Missed. */
+const forKind = (k: KindFields): KindFields => {
+  const measured = isMeasured(k.kind);
+  const why = k.status_set === "at_risk" || k.status_set === "missed";
+  return {
+    ...k,
+    status_reason: why ? k.status_reason : null,
+    done_when_line: measured ? "" : k.done_when_line,
+    measure: measured ? k.measure : null,
+    baseline: measured ? k.baseline : null,
+    target: measured ? k.target : null,
+    current: measured ? k.current : null,
+    sub_goal_of_id: k.kind === "sub_goal" ? k.sub_goal_of_id : null,
+    home_track_id: k.kind === "handoff" ? null : k.home_track_id,
+    from_track_id: k.kind === "handoff" ? k.from_track_id : null,
+    to_track_id: k.kind === "handoff" ? k.to_track_id : null,
+  };
+};
+
 type Draft = { id: string | null; code: string; name: string; date: string; goal_id: string | null; item_ids: string[]; counts_when: string; second: boolean; prd: boolean; k: KindFields | null };
 type Toast = { words: string; undo: (() => Promise<unknown>) | null };
 
@@ -232,12 +252,12 @@ export function useMilestones({
       }
       if (d.id) {
         const was = list.find((x) => x.id === d.id)!;
-        await patch(d.id, { name: d.name, date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when, ...(d.k ?? {}) });
+        await patch(d.id, { name: d.name, date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when, ...(d.k ? forKind(d.k) : {}) });
         setDraft(null);
         await done({ words: `${words({ code: d.code, name: d.name })} saved`, undo: () => patch(was.id, { name: was.name, date: was.date, goal_id: was.goal_id, item_ids: was.item_ids, counts_when: was.counts_when, ...kindFields(was) }) });
         return;
       }
-      const made = await unwrap(api.POST("/v1/simple/roadmap/milestones", { body: { roadmap_id: roadmapOf(d.goal_id)!, name: d.name.trim() || "New milestone", date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when, ...(d.k ?? { kind: "delivery" as const, ...NO_KIND }) } }));
+      const made = await unwrap(api.POST("/v1/simple/roadmap/milestones", { body: { roadmap_id: roadmapOf(d.goal_id)!, name: d.name.trim() || "New milestone", date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when, ...(d.k ? forKind(d.k) : { kind: "delivery" as const, ...NO_KIND }) } }));
       const late = lateOf(d.item_ids, d.date);
       setDraft(again ? { ...fresh(addDays(d.date, 28), d.goal_id, true), k: d.k ? { ...d.k, ...NO_KIND, home_track_id: d.k.home_track_id } : null } : null);
       await done({
@@ -257,7 +277,7 @@ export function useMilestones({
       const m = draft?.id ? list.find((x) => x.id === draft.id) : null;
       if (!draft || !m) return;
       const before = { name: m.name, date: m.date ?? null, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, ...kindFields(m) };
-      const after = remove ? null : { name: draft.name.trim() || m.name, date: draft.date, goal_id: draft.goal_id, item_ids: draft.item_ids, counts_when: draft.counts_when, ...(draft.k ?? {}) };
+      const after = remove ? null : { name: draft.name.trim() || m.name, date: draft.date, goal_id: draft.goal_id, item_ids: draft.item_ids, counts_when: draft.counts_when, ...(draft.k ? forKind(draft.k) : {}) };
       await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: m.id }, before: { milestone: before }, after: { milestone: after } } }));
       setDraft(null);
       await done({ words: `${remove ? `Proposed removing ${words(m)}` : `Proposed a change to ${words(m)}`} · it waits in Needs a decision`, undo: null });
@@ -286,12 +306,14 @@ export function useMilestones({
 }
 
 /** One milestone's mark: a diamond on the time axis. */
-function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title, testid = "ms-diamond", color, onPointerDown, onClick }: { x: number; y: number; code: string; size?: number; hollow?: boolean; dashed?: boolean; title: string; testid?: string; color?: string; onPointerDown?: (e: ReactPointerEvent) => void; onClick?: () => void }) {
+function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title, testid = "ms-diamond", color, kind, day: on, onPointerDown, onClick }: { x: number; y: number; code: string; size?: number; hollow?: boolean; dashed?: boolean; title: string; testid?: string; color?: string; kind?: MkKind | null; day?: string; onPointerDown?: (e: ReactPointerEvent) => void; onClick?: () => void }) {
   const edge = color ?? msEdge(code);
   const hit = onClick || onPointerDown;
   return (
     <span
       data-testid={testid}
+      data-kind={kind ?? undefined}
+      data-day={on}
       title={title}
       aria-label={hit ? title : undefined}
       role={hit ? "button" : undefined}
@@ -573,7 +595,7 @@ export function MsLayer(props: MsLayerProps) {
   const at = new Map<string, { left: number; top: number; maxWidth: number }>();
   for (const { key, date, m, text } of labels.sort((a, b) => a.date.localeCompare(b.date))) {
     const lane = laneOf(m.goal_id);
-    if (lane) at.set(key, labelAt(lane.key, X(date), lane.y0, text));
+    at.set(key, labelAt(lane?.key ?? "", X(date), lane?.y0 ?? axisY + 6, text));
   }
   // A drag on a diamond moves it; a click (no move) opens it.
   const grab = (m: GoalMilestone) => (e: ReactPointerEvent) => {
@@ -659,7 +681,7 @@ export function MsLayer(props: MsLayerProps) {
               ))}
           </ul>,
         );
-      out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={msCode(m)} title={`${words(m)}, ${fullDay(date)}`} onPointerDown={grab(m)} />);
+      out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={msCode(m)} title={`${words(m)}, ${fullDay(date)}`} kind={m.kind ?? "delivery"} day={date} onPointerDown={grab(m)} />);
     }
     // A line through every group, its words in the band under the date axis.
     out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(msCode(m))}` }} />);
@@ -693,21 +715,22 @@ export function MsLayer(props: MsLayerProps) {
     const asked = live ?? m.pending?.date ?? null;
     const to = asked && asked !== date ? X(asked) : null;
     out.push(<div key={`pv-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(msCode(m))}`, opacity: to != null ? 0.4 : 1 }} />);
-    out.push(<Diamond key={`p-${m.id}`} x={mx} y={axisY} code={msCode(m)} title={`${words(m)} (from the PRD ${m.prd!.title})`} testid="ms-prd-diamond" onPointerDown={grab(m)} />);
-    if (!lane) continue;
+    out.push(<Diamond key={`p-${m.id}`} x={mx} y={axisY} code={msCode(m)} title={`${words(m)} (from the PRD ${m.prd!.title})`} testid="ms-prd-diamond" kind={m.kind ?? "delivery"} day={date} onPointerDown={grab(m)} />);
+    // The asked day's chip sits in the first band; its dashed line runs through every band.
+    const y0 = lane?.y0 ?? axisY + 6;
     if (to != null) {
       out.push(<Diamond key={`pp-${m.id}`} x={to} y={axisY} code={msCode(m)} hollow dashed color="var(--warn)" title={`Asked: ${fullDay(asked!)}`} testid="ms-proposed" />);
-      out.push(<div key={`ppv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: to - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: "1.5px dashed var(--warn)" }} />);
+      out.push(<div key={`ppv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" data-testid="ms-asked-line" style={{ left: to - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: "1.5px dashed var(--warn)" }} />);
       // roadmap-decide: the PRD's owner gets the ask as an action: the chip opens Approve / Decline in place.
       const mine = !live && !!m.pending?.can_decide;
       out.push(
-        <Chip key={`ppc-${m.id}`} testid="ms-asked" mx={to} title={askWords(m, asked!, !!live)} className="border border-warn bg-warn-bg text-warn" onClick={mine ? () => ms.setAsking(ms.asking === m.id ? null : m.id) : undefined} style={{ left: to + 6, top: lane.y0 + 5, ...at.get(`ask-${m.id}`) }}>
+        <Chip key={`ppc-${m.id}`} testid="ms-asked" mx={to} title={askWords(m, asked!, !!live)} className="border border-warn bg-warn-bg text-warn" onClick={mine ? () => ms.setAsking(ms.asking === m.id ? null : m.id) : undefined} style={{ left: to + 6, top: y0 + 5, ...at.get(`ask-${m.id}`) }}>
           {askWords(m, asked!, !!live)}
         </Chip>,
       );
       if (mine && ms.asking === m.id)
         out.push(
-          <span key={`ppd-${m.id}`} role="group" aria-label={`Decide the change to ${words(m)}`} data-testid="ms-asked-decide" className="absolute z-[17] flex gap-1.5 rounded-lg border border-line bg-surface p-1.5 shadow-tip" style={{ left: at.get(`ask-${m.id}`)?.left ?? to + 6, top: lane.y0 + 30 }}>
+          <span key={`ppd-${m.id}`} role="group" aria-label={`Decide the change to ${words(m)}`} data-testid="ms-asked-decide" className="absolute z-[17] flex gap-1.5 rounded-lg border border-line bg-surface p-1.5 shadow-tip" style={{ left: at.get(`ask-${m.id}`)?.left ?? to + 6, top: y0 + 30 }}>
             <Button variant="solid" className="!h-7 !px-2 !text-xs" onClick={() => void ms.decide(m, "accept")}>
               Approve
             </Button>
@@ -791,9 +814,9 @@ export function MsLayer(props: MsLayerProps) {
   // The day chosen (a dashed diamond and line in its goal); the bars it waits on are outlined.
   if (d && !d.prd) {
     const nx = X(d.date);
-    const lane = laneOf(d.goal_id);
     if (!d.id) out.push(<Diamond key="new" x={nx} y={axisY} code={d.code} hollow dashed title="New milestone" testid="ms-new" />);
-    if (lane && !d.id) out.push(<div key="new-l" aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: nx - 0.5, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: "1.5px dashed var(--accent-ink)" }} />);
+    // Its dashed line runs through every band, as a saved one's does.
+    if (!d.id) out.push(<div key="new-l" data-testid="ms-new-line" aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: nx - 0.5, top: axisY + 6, height: height - axisY - 6, borderLeft: "1.5px dashed var(--accent-ink)" }} />);
     for (const id of d.item_ids) {
       const r = rowOf(id);
       if (r) out.push(<div key={`pk-${id}`} data-testid="ms-picked" aria-hidden className="pointer-events-none absolute z-[11]" style={{ left: X(r.start) - 3, top: r.y + 3, width: Math.max(30, X(r.end) - X(r.start) + 6), height: r.h - 6, outline: "2px solid var(--accent)", borderRadius: 8 }} />);
@@ -983,6 +1006,54 @@ const Btn = ({ children, onClick, primary = false, className = "", testid, title
   </button>
 );
 
+/** The kinds to pick from: a listbox, one tab stop; the arrow keys, Home and End move along it
+ * (two columns: Left and Right step, Up and Down skip a row), Enter or Space picks. */
+function KindList({ onPick }: { onPick: (kind: MkKind) => void }) {
+  const [at, setAt] = useState(0);
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const go = (n: number) => {
+    const i = Math.max(0, Math.min(MK_KINDS.length - 1, n));
+    setAt(i);
+    refs.current[i]?.focus();
+  };
+  return (
+    <div
+      role="listbox"
+      aria-label="Kind"
+      className="grid grid-cols-2 gap-1.5"
+      onKeyDown={(e) => {
+        const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 2, ArrowUp: -2 }[e.key];
+        if (step != null) go(at + step);
+        else if (e.key === "Home") go(0);
+        else if (e.key === "End") go(MK_KINDS.length - 1);
+        else return;
+        e.preventDefault();
+      }}
+    >
+      {MK_KINDS.map((k, i) => (
+        <button
+          key={k.kind}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
+          type="button"
+          role="option"
+          aria-selected={i === at}
+          tabIndex={i === at ? 0 : -1}
+          title={k.tip}
+          data-testid="ms-kind-option"
+          data-kind={k.kind}
+          onFocus={() => setAt(i)}
+          onClick={() => onPick(k.kind)}
+          className="flex items-center gap-2 rounded-lg border border-line-strong px-2.5 text-left text-sm leading-9 font-semibold hover:border-accent hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+        >
+          <MkIcon kind={k.kind} size={14} color="var(--accent-ink)" /> {k.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** The milestone's card: in the chart's top corner (a sheet on a phone). */
 export function MsCard() {
   const ms = useMsCtl();
@@ -1069,24 +1140,20 @@ export function MsCard() {
           <h2 className="text-[15px] font-semibold">{head}</h2>
           <span className="text-xs text-text2">{fullDay(d.date)}</span>
         </div>
-        <span className="text-xs font-semibold text-text2">Kind</span>
-        <div role="listbox" aria-label="Kind" className="grid grid-cols-2 gap-1.5">
-          {MK_KINDS.map((k) => (
-            <button
-              key={k.kind}
-              type="button"
-              role="option"
-              aria-selected={false}
-              title={k.tip}
-              data-testid="ms-kind-option"
-              data-kind={k.kind}
-              onClick={() => set({ k: { kind: k.kind, ...NO_KIND, from_track_id: k.kind === "handoff" ? (ms.tracks[0]?.id ?? null) : null, to_track_id: k.kind === "handoff" ? (ms.tracks[1]?.id ?? null) : null } })}
-              className="flex items-center gap-2 rounded-lg border border-line-strong px-2.5 text-left text-sm leading-9 font-semibold hover:border-accent hover:bg-accent-soft"
-            >
-              <MkIcon kind={k.kind} size={14} color="var(--accent-ink)" /> {k.name}
-            </button>
-          ))}
-        </div>
+        <span className="flex items-center gap-1 text-xs font-semibold text-text2">
+          Kind
+          {/* Each kind's meaning, on a tap as well as a hover. */}
+          <InfoTip label="Kind" align="start" side="bottom" testId="ms-kind-tip">
+            <span className="flex flex-col gap-1" data-testid="ms-kind-tips">
+              {MK_KINDS.map((k) => (
+                <span key={k.kind}>
+                  <b>{k.name}</b>: {k.tip}
+                </span>
+              ))}
+            </span>
+          </InfoTip>
+        </span>
+        <KindList onPick={(kind) => set({ k: { kind, ...NO_KIND, from_track_id: kind === "handoff" ? (ms.tracks[0]?.id ?? null) : null, to_track_id: kind === "handoff" ? (ms.tracks[1]?.id ?? null) : null } })} />
         <div className="flex gap-2 pt-1">
           <button type="button" className="px-1 text-sm leading-8 text-text2" onClick={() => ms.setDraft(null)}>
             Cancel
@@ -1155,6 +1222,12 @@ export function MsCard() {
                   </option>
                 ))}
               </select>
+              {/* Oracle's reason for the status it decided, on a tap or focus as well as a hover. */}
+              {!k.status_set && own?.status_reason && (
+                <InfoTip label={`Status: ${MK_STATUS[own.status ?? "on_track"]}`} align="end" side="bottom" testId="ms-status-why">
+                  {own.status_reason}
+                </InfoTip>
+              )}
             </Field>
           </div>
         )}
@@ -1173,7 +1246,7 @@ export function MsCard() {
         {k && isMeasured(k.kind) && (
           <div className="grid grid-cols-[1fr_72px_72px] gap-2" data-testid="ms-measure">
             {text("Measure", k.measure, (v) => setK({ measure: v || null }), "What is counted")}
-            {text("Baseline", k.baseline, (v) => setK({ baseline: num(v) }))}
+            {text("Start", k.baseline, (v) => setK({ baseline: num(v) }))}
             {text("Target", k.target, (v) => setK({ target: num(v) }))}
           </div>
         )}
@@ -1181,7 +1254,7 @@ export function MsCard() {
         {/* tb-mk (the pick): Builds toward and, for a sub-goal, Sub-goal of beside it. */}
         <div className={k?.kind === "sub_goal" ? "grid grid-cols-2 gap-2" : ""} data-testid="ms-toward-row">
           <Field label="Builds toward">
-            <select aria-label="Goal" value={d.goal_id ?? ""} onChange={(e) => set({ goal_id: e.target.value || null })} className={bare}>
+            <select aria-label="Builds toward" value={d.goal_id ?? ""} onChange={(e) => set({ goal_id: e.target.value || null })} className={bare}>
               {ms.goals.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.title}
