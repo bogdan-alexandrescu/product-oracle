@@ -313,6 +313,7 @@ export function MsLayer(props: MsLayerProps) {
   const ref = useRef<HTMLDivElement>(null);
   const goalNums = useContext(GoalNumbers);
   const [bandTip, setBandTip] = useState<{ id: string; left: number; top: number } | null>(null);
+  const [bandMore, setBandMore] = useState<string | null>(null);
   // A label keeps all its words inside the chart's visible part: it sits right of its diamond when it
   // fits there, else left of it, else after the label it meets, on one line (cut short when the row runs
   // out). The names column (the Timeline's sticky one) counts as an edge, and a label whose
@@ -737,11 +738,42 @@ export function MsLayer(props: MsLayerProps) {
           <span className="min-w-0 overflow-hidden text-ellipsis">{words(m)}</span>
         </span>,
       );
+      // The milestones folded into "+N": its list on hover, focus or a click, each opening its card.
       if (p.more.length)
         out.push(
-          <span key={`rbm-${m.id}`} data-testid="ms-band-more" data-days={p.more.map((o) => o.date).join(",")} title={p.more.map((o) => `${words(o)} · ${day(o.date!)}`).join(", ")} className="absolute z-[14] h-5 rounded-full border border-line-strong bg-surface px-1.5 text-xs leading-[18px] font-semibold text-text" style={{ left: p.left + Math.max(p.w, 40) + 3, top }}>
-            +{p.more.length}
-          </span>,
+          <div key={`rbm-${m.id}`} className="group absolute z-[15]" style={{ left: p.left + Math.max(p.w, 40) + 3, top }}>
+            <button
+              type="button"
+              data-testid="ms-band-more"
+              data-days={p.more.map((o) => o.date).join(",")}
+              aria-label={`${p.more.length} more ${p.more.length === 1 ? "milestone" : "milestones"}: ${p.more.map((o) => `${words(o)} · ${fullDay(o.date!)}`).join(", ")}`}
+              aria-expanded={bandMore === m.id}
+              onClick={() => setBandMore((o) => (o === m.id ? null : m.id))}
+              className="block h-5 cursor-pointer rounded-full border border-line-strong bg-surface px-1.5 text-xs leading-[18px] font-semibold text-text hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+            >
+              +{p.more.length}
+            </button>
+            <div className={`absolute top-full left-0 z-40 pt-1 ${bandMore === m.id ? "block" : "hidden group-focus-within:block group-hover:block"}`}>
+              <ul data-testid="ms-band-list" aria-label="More milestones here" className="min-w-48 rounded-lg border border-line bg-surface py-1 shadow-lg">
+                {p.more.map((o) => (
+                  <li key={o.id}>
+                    <button
+                      type="button"
+                      data-testid="ms-band-entry"
+                      data-prd={o.prd ? "" : undefined}
+                      onClick={() => {
+                        setBandMore(null);
+                        ms.edit(o);
+                      }}
+                      className="block w-full px-3 py-1 text-left text-xs whitespace-nowrap text-text hover:bg-surface2 focus-visible:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+                    >
+                      {words(o)} · {day(o.date!)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>,
         );
     }
     const tm = bandTip && list.find((m) => m.id === bandTip.id);

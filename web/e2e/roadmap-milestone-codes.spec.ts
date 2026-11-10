@@ -14,6 +14,11 @@ import { expect, test, type Locator, type Page } from "./test";
  * a code repeats, has a suffix or is out of date order.
  * Card roadmap-milestone-renumber: protects = moving a milestone earlier gives it the earlier
  * code and renumbers the ones it passed; fails_when = it keeps its old code.
+ * Card roadmap-filter-codes: protects = a Roadmap filter keeps every shown milestone's code (they
+ * are numbered over every roadmap, as Home and the Goal map read them); fails_when = the codes are
+ * numbered from the filtered read and shift.
+ * Card roadmap-band-more: protects = a milestone folded into the band's "+N" is listed by name and
+ * day on hover, focus or a click, and its entry opens its card; fails_when = "+N" only has a title.
  * Card home-roadmap-codes: protects = Home's "The plan this quarter" rows read a milestone by
  * the code the roadmap shows; fails_when = Home shows a goal's own code.
  */
@@ -37,7 +42,8 @@ async function bandCodes(page: Page): Promise<[string, string][]> {
   for (const l of await labels(page).all()) shown.push({ day: (await l.getAttribute("data-day")) ?? "", words: (await l.innerText()).trim() });
   for (const more of await page.getByTestId("ms-band-more").all()) {
     const days = ((await more.getAttribute("data-days")) ?? "").split(",");
-    ((await more.getAttribute("title")) ?? "").split(", ").forEach((t, k) => shown.push({ day: days[k] ?? "", words: t.split(" · ")[0].trim() }));
+    const entries = await more.locator("xpath=..").getByTestId("ms-band-entry").allTextContents();
+    entries.forEach((t, k) => shown.push({ day: days[k] ?? "", words: t.split(" · ")[0].trim() }));
   }
   // By day; on one day, by code (the band may stack or fold a day's labels in any order).
   const num = (w: string) => Number(/^M(\d+)/.exec(w)?.[1] ?? 0);
@@ -127,4 +133,41 @@ test("Home's plan rows read each milestone by the code the roadmap shows", async
     matched += 1;
   }
   expect(matched).toBeGreaterThan(0);
+});
+
+test("a Roadmap filter keeps each shown milestone's code", async ({ page }) => {
+  await open(page);
+  const whole = new Map((await bandCodes(page)).map(([c, name]) => [name, c]));
+  const pick = page.getByTestId("filter-roadmap");
+  const values = (await pick.locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))).filter(Boolean);
+  expect(values.length).toBeGreaterThan(1);
+  let compared = 0;
+  for (const v of values) {
+    await pick.selectOption(v);
+    await expect(pick).toHaveValue(v);
+    await page.waitForLoadState("networkidle");
+    if (!(await page.getByTestId("ms-band").isVisible())) continue;
+    for (const [code, name] of await bandCodes(page)) {
+      expect(code, `${name} keeps its code`).toBe(whole.get(name));
+      compared += 1;
+    }
+  }
+  expect(compared).toBeGreaterThan(0);
+});
+
+test("the band's +N lists the milestones it folds by name and day, and each opens its card", async ({ page }) => {
+  await open(page);
+  await page.getByTestId("zoom-all").click();
+  const more = page.getByTestId("ms-band-more").first();
+  await expect(more).toBeVisible();
+  const list = more.locator("xpath=..").getByTestId("ms-band-list");
+  await expect(list).toBeHidden();
+  await more.focus();
+  await expect(list).toBeVisible();
+  const entry = list.locator('[data-testid="ms-band-entry"]:not([data-prd])').first();
+  await expect(entry).toHaveText(/^M\d+ .+ · [A-Z][a-z]{2} \d{1,2}$/);
+  const name = (await entry.innerText()).split(" · ")[0].replace(/^M\d+ /, "");
+  await more.click();
+  await entry.click();
+  await expect(page.getByTestId("ms-card").getByLabel("Name")).toHaveValue(name);
 });
