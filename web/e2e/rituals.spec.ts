@@ -109,9 +109,11 @@ test("12b: an attendee follows Pre-read ready to the occurrence; Tracks and Date
 });
 
 test("12c: after the end time the owner records notes and marks it held; the Record notes row is gone", async ({ page }) => {
-  // protects=AC12c, the owner's Record notes row after the end and Mark held; fails_when=no
-  // Record notes row after the end, the notes are not saved, the chip does not read Held, or
-  // the row stays; no_claim=Record decision (H1's form).
+  // protects=AC12c, the owner's Record notes row after the end and Mark held; inbox-ritual-seen:
+  // the row stays New through visits to the Inbox and is Seen once the owner opened it;
+  // fails_when=no Record notes row after the end, it is Seen before the owner opened it, the
+  // notes are not saved, the chip does not read Held, or the row stays; no_claim=Record
+  // decision (H1's form).
   await withRituals(page);
   await login(page);
   await page.goto("/inbox");
@@ -119,9 +121,19 @@ test("12c: after the end time the owner records notes and marks it held; the Rec
   await expect(ritualNeed(page, "Record notes")).toHaveCount(0);
   // The meeting ends Tue Nov 3 11:00 UTC; a day later:
   await page.clock.setSystemTime(new Date("2026-11-04T12:00:00Z"));
+  const notes = ritualNeed(page, "Record notes · Monthly roadmap refresh");
+  // Opening the Inbox, twice, leaves it New: only opening it makes it Seen.
+  for (let visit = 0; visit < 2; visit++) {
+    await page.goto("/inbox");
+    await tab(page, "New").click();
+    await expect(page.getByTestId("inbox-tab-new")).toBeVisible();
+    await expect(notes).toHaveCount(1);
+  }
+  await notes.getByRole("link", { name: "Open" }).click();
+  await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
+  await expect(page.getByTestId("occurrence-state")).toBeVisible();
   await page.goto("/inbox");
   await tab(page, "Seen").click();
-  const notes = ritualNeed(page, "Record notes · Monthly roadmap refresh");
   await expect(notes).toHaveCount(1);
   await notes.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);

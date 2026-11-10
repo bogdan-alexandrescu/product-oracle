@@ -8326,10 +8326,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     const questionRows = db.simple_meetings?.questions
       ? questionInboxRows({ me: { id: me.id, role: me.role }, members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })) }, db.simple_meetings.questions, seenBefore)
       : { proposals: [], decisions: [] };
-    const onePagerRows = onePagerInboxRows([...(db.simple_one_pager ? [db.simple_one_pager] : []), ...Object.values(db.simple_one_pagers ?? {})], { id: me.id, role: me.role }, seenBefore);
+    const onePagerRows = onePagerInboxRows([...(db.simple_one_pager ? [db.simple_one_pager] : []), ...Object.values(db.simple_one_pagers ?? {})], { id: me.id, role: me.role }, seenBefore, {
+      // As routeOnePager's context: Guided setup's decider is Dana Decider.
+      deciderOf: (d) => (d.doc.slug === "guided-setup" ? (db.members.find((x) => x.email === "dana.decider@example.com")?.id ?? null) : null),
+      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+    });
     const newest = (a: Schemas["InboxSimpleChange"], b: Schemas["InboxSimpleChange"]) => ((b.decided_at ?? b.at) > (a.decided_at ?? a.at) ? 1 : -1);
     simpleRows.simple_proposals = [...simpleRows.simple_proposals, ...questionRows.proposals, ...onePagerRows.proposals];
     simpleRows.simple_decisions = [...simpleRows.simple_decisions, ...questionRows.decisions, ...onePagerRows.decisions].sort(newest);
+    simpleRows.simple_approvals = [...simpleRows.simple_approvals, ...onePagerRows.approvals].sort((a, b) => ((a.submitted_at ?? "") < (b.submitted_at ?? "") ? -1 : 1));
     Object.assign(inbox, simpleRows);
     // inbox-meeting-proposals fix: Oracle's open date suggestions and goals' open suggestions I may decide.
     const simpleCtx = {

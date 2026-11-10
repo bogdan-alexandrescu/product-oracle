@@ -309,6 +309,18 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
     landed.current = true;
     requestAnimationFrame(() => document.getElementById(`prd-sec-${section}`)?.scrollIntoView({ block: "start" }));
   }, [pageRead, prdRead, sessionId]);
+  // inbox-prd-approval-open: ?draft= (the Inbox's Open on a PRD draft waiting on me) brings the
+  // draft's banner into sight, its Approve focused, once the page is read.
+  const draftId = q.data?.draft?.id;
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("draft");
+    if (!pageRead || landed.current || !id || id !== draftId || sessionId) return;
+    landed.current = true;
+    requestAnimationFrame(() => {
+      document.querySelector('[role="status"][aria-label="Working draft"]')?.scrollIntoView({ block: "center" });
+      document.querySelector<HTMLElement>('[data-testid="one-pager-approve"]')?.focus({ preventScroll: true });
+    });
+  }, [pageRead, draftId, sessionId]);
   // C-15: a code in Needs a look reads with the roadmap's name for it, when the roadmap has one.
   const codeNames = new Map((codesQ.data?.items ?? []).flatMap((i) => (i.code ? [[i.code, i.title] as const] : [])));
 
@@ -386,6 +398,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
     act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: n.change_id } }, body: sessionId ? { session_id: sessionId } : {} })), true);
   const submit = (reviewerIds: string[]) =>
     act(() => unwrap(api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: v.draft!.id } }, body: { reviewer_ids: reviewerIds } })));
+  // inbox-prd-approval-open: a submitted draft waiting on me is approved here, as on the roadmap.
+  const approve = () => act(() => unwrap(api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: v.draft!.id } } })), true);
   // Remind (owner, 2026-10-26): each waiting reviewer gets an Inbox nudge, once a day at most.
   const remind = () =>
     act(() => unwrap(api.POST("/v1/simple/one-pagers/{doc}/remind", { params: { path: { doc } } })));
@@ -586,6 +600,11 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
           )}
           {v.draft.can_submit && (
             <Button variant="primary" disabled={busy} onClick={() => setSending(true)}>Send for approval…</Button>
+          )}
+          {v.draft.can_approve && (
+            <Button variant="primary" data-testid="one-pager-approve" disabled={busy} onClick={() => void approve()}>
+              Approve
+            </Button>
           )}
           {v.draft.status === "submitted" && v.draft.waiting_on.length > 0 && (v.draft.can_remind || v.draft.reminded_at) && (
             <span className="flex items-center gap-2">

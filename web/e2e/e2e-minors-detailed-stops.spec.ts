@@ -104,6 +104,8 @@ for (const [name, viewport] of [
       await bar(page).getByRole("textbox", { name: "Note to the architect" }).fill("Write the briefs file again, one brief per feature.");
       await sendBack.click();
       await expect(page).toHaveURL(new RegExp(`/runs/${ENG_CHECK_RUN}$`));
+      // inbox-eng-send-back: the run page confirms it was sent back, and to whom.
+      await expect(page.getByRole("status").filter({ hasText: "Sent back to the architect" })).toBeVisible();
     });
 
     test("send back: Send back to architect is an enabled quiet ghost button, as the frame draws it", async ({ page }) => {
