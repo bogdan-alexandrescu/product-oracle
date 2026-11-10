@@ -179,7 +179,7 @@ async def flows_of_bets(
     the key of the bet at its place before (a bet added above shifted every flow by one), so
     the stored key alone never puts a flow on another bet. A bet with no flow whose key
     holds another bet's flow is drawn on ``own_subject``, built from its key so it stays
-    the bet's when the bet is reworded; a flow still keyed by a bet's words
+    the bet's when the bet is reworded (and shown before a flow left at its key); a flow still keyed by a bet's words
     (0092_bet_flow_line_key left it) is read by a bet with those words and none."""
     keyed = [line_subject(document_id, k) for k, _ in bets]
     own = [own_subject(document_id, k) for k, _ in bets]
@@ -209,7 +209,7 @@ async def flows_of_bets(
     paired = pair_alike(drawn, [w for _, w in bets], by_person)
     on = {j: keyed[i] for j, i in paired.items()}
     for i, s in enumerate(keyed):
-        if s in flows and i not in on and s not in on.values():
+        if s in flows and i not in on and s not in on.values() and own[i] not in flows:
             on[i] = s  # drawn from words like no bet's now: it stays on its own
     out = [
         on.get(j) or (own[j] if own[j] in flows or keyed[j] in flows else keyed[j])

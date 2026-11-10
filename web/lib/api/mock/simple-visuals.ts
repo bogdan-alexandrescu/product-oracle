@@ -120,7 +120,8 @@ function pairAlike(old: string[][], now: string[][], kept: Set<number> = new Set
 /** As visuals.flows_of_bets (vqa one-pager 1): each bet's flow subject and flow. A flow keyed to a
  * bet's line (`key`, a position) shows on the bet its brief reads most like, else on its own, so a
  * bet added above never shifts the flows; a bet with no flow whose key holds another bet's is
- * drawn on a subject built from its key (visuals.own_subject), so it keeps it when reworded. */
+ * drawn on a subject built from its key (visuals.own_subject), so it keeps it when reworded, and it
+ * shows that one before a flow left at its key. */
 export function flowsOfBets(db: VisualsDb | undefined, prefix: string, bets: { key: string; text: string }[]): { subject: string; flow: Flow | null }[] {
   const keyed = bets.map((b) => betSubject(b.key));
   const has = (s: string) => !!flowFor(db, "one_pager_line", s);
@@ -131,7 +132,7 @@ export function flowsOfBets(db: VisualsDb | undefined, prefix: string, bets: { k
   const on = new Map<number, string>();
   for (const [j, i] of pairAlike(drawn, bets.map((b) => [b.text]), kept)) on.set(j, keyed[i]);
   const taken = new Set(on.values());
-  keyed.forEach((s, i) => { if (has(s) && !on.has(i) && !taken.has(s)) on.set(i, s); });
+  keyed.forEach((s, i) => { if (has(s) && !on.has(i) && !taken.has(s) && !has(own[i])) on.set(i, s); });
   return bets.map((b, j) => {
     const words = wordsSubject(prefix, b.text);
     // A flow still keyed by a bet's words is read by a bet with those words and none.

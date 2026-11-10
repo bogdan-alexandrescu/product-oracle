@@ -874,11 +874,26 @@ async def carry_keys(
     d = await db.scalar(select(SimpleDraft).where(SimpleDraft.version_id == v.id))
     if d is not None:
         edited = (d.overlay or {}).get("lines") or {}
+    # Each earlier bet's key is the key of the flow it showed (visuals.flows_of_bets): on a
+    # page whose keys were shifted, a bet's flow is under another bet's key or its own
+    # (``visuals.own_subject``), so the next page carries the flow, never the stored key.
+    keys = [visuals.bet_key(x) for x in old]
+    by_subject = {visuals.line_subject(document.id, k): k for k in keys}
+    by_subject |= {visuals.own_subject(document.id, k): k + "/own" for k in keys}
+    showed = await visuals.flows_of_bets(
+        db,
+        document.id,
+        [
+            (k, [t for t in (x.get("text"), edited.get(x.get("id"))) if t])
+            for k, x in zip(keys, old, strict=True)
+        ],
+    )
+    keys = [by_subject.get(sid, k) for k, (sid, _) in zip(keys, showed, strict=True)]
     words: dict[str, str] = {}
-    for x in old:
+    for x, k in zip(old, keys, strict=True):
         for t in (edited.get(x.get("id")), x.get("text")):
             if t:
-                words.setdefault(_said(t), visuals.bet_key(x))
+                words.setdefault(_said(t), k)
     used: set[str] = set()
     for x in new:
         key = words.get(_said(x["text"]))
@@ -887,17 +902,19 @@ async def carry_keys(
             used.add(key)
     # Reworded (Oracle words each build its own way): the earlier bet it reads most like.
     was = [
-        []
-        if visuals.bet_key(x) in used
-        else [t for t in (edited.get(x.get("id")), x.get("text")) if t]
-        for x in old
+        [] if k in used else [t for t in (edited.get(x.get("id")), x.get("text")) if t]
+        for x, k in zip(old, keys, strict=True)
     ]
     now = [[] if "flow_key" in x else [x["text"]] for x in new]
     for j, i in visuals.pair_alike(was, now).items():
-        new[j]["flow_key"] = visuals.bet_key(old[i])
+        new[j]["flow_key"] = keys[i]
         used.add(new[j]["flow_key"])
-    by_place = {str(x.get("id")): visuals.bet_key(x) for x in old} if len(old) == len(new) else {}
-    taken = {visuals.bet_key(x) for x in old}
+    by_place = (
+        {str(x.get("id")): k for x, k in zip(old, keys, strict=True)}
+        if len(old) == len(new)
+        else {}
+    )
+    taken = set(keys) | {visuals.bet_key(x) for x in old}
     for x in new:
         if "flow_key" not in x:
             key = by_place.get(x["id"])
