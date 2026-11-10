@@ -12,6 +12,11 @@ Test cards (protects / fails_when / no_claim):
   then it appears); viewers get 403; an empty title is 422; undo removes the item;
   fails_when=a proposer's add writes, a viewer adds, or undo leaves the item;
   no_claim=the web's drag.
+- test_proposed_add_item_carries_its_track: protects=a commenter's quick add on a track band
+  stores the band's track as the proposal's ``after.track_id``, and once the decider
+  accepts, the new item reads that track (not the roadmap's first); an unknown, trashed or
+  history track is 422; fails_when=the track is dropped or the item lands on the first
+  track; no_claim=the web's quick add.
 - test_set_goals_moves_an_item_to_another_goal: protects=set_goals makes the goal an item
   serves another (the bucket a just-added task is dragged to): applied for the owner with
   Undo, which puts its goal back; a stale ``before``, an unknown goal or a viewer is
@@ -85,6 +90,7 @@ from sqlalchemy import select
 
 from oracle import company_time
 from oracle.baseline.models import Entity
+from oracle.docs.models import Document
 from oracle.jobs.models import LlmJob
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import RoadmapItem
@@ -190,6 +196,41 @@ async def test_add_item_per_role(client):
     assert c["target"]["item_id"] not in await w.items(client)
     async with tenant_session(w.ctx.tenant_id) as s:
         assert await s.get(RoadmapItem, uuid.UUID(c["target"]["item_id"])) is None
+
+
+async def test_proposed_add_item_carries_its_track(client):
+    w = await World().build()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        rm = await s.get(Document, uuid.UUID(w.roadmap_id))
+        ledger = await seed.doc("ledger-prd")
+        band = await seed.track(await seed.version(ledger), rm, title="Ledger band")
+        gone_doc = await seed.doc("gone-prd")
+        gone = await seed.track(await seed.version(gone_doc), rm, title="Gone band")
+        gone.deleted_at = NOW
+        old = await seed.doc("old-ledger-prd")
+        old.replaced_by = [ledger.id]
+        past = await seed.track(await seed.version(old), rm, title="Old band")
+        await s.commit()
+        band_id, gone_id, past_id = str(band.id), str(gone.id), str(past.id)
+
+    async def propose(track_id: str, status: int = 201) -> dict:
+        r = await client.post(CHANGES, headers=w.as_("commenter"), json={
+            "op": "add_item", "target": {"roadmap_id": w.roadmap_id,
+                                         "where": {"kind": "horizon", "value": "next"}},
+            "before": {}, "after": {"title": "Ledger export", "track_id": track_id}})  # fmt: skip
+        assert r.status_code == status, r.text
+        return r.json()
+
+    for bad in (str(uuid.uuid4()), gone_id, past_id, "not-a-track"):
+        await propose(bad, status=422)
+    c = (await propose(band_id))["change"]
+    assert c["status"] == "proposed" and c["after"]["track_id"] == band_id
+    assert c["target"]["item_id"] not in await w.items(client, "decider")
+    r = await client.post(f"{CHANGES}/{c['id']}/accept", headers=w.as_("decider"), json={})
+    assert r.status_code == 200, r.text
+    item = (await w.items(client, "decider"))[c["target"]["item_id"]]
+    assert item["track"]["id"] == band_id and item["title"] == "Ledger export"
 
 
 async def test_set_goals_moves_an_item_to_another_goal(client):
