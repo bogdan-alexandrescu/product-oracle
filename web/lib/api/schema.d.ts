@@ -28303,6 +28303,11 @@ export interface components {
              */
             simple_goal_suggestions: components["schemas"]["InboxSimpleGoalSuggestion"][];
             /**
+             * Simple Track Suggestions
+             * @default []
+             */
+            simple_track_suggestions: components["schemas"]["InboxSimpleTrackSuggestion"][];
+            /**
              * Simple Minutes
              * @default []
              */
@@ -28787,6 +28792,37 @@ export interface components {
             sent_at: string | null;
             /** Decisions */
             decisions: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open";
+        };
+        /**
+         * InboxSimpleTrackSuggestion
+         * @description tracks-goal (owner Nov 9): a newly accepted PRD of mine on no track. Oracle suggests
+         *     the existing track that fits it best (``track``; none fits: null); Confirm puts the PRD
+         *     on it, Pick a track on one of ``tracks``, New track starts one (each through the change
+         *     engine: ``edit_track`` with ``add_prd_id``, ``add_track``).
+         */
+        InboxSimpleTrackSuggestion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            prd: components["schemas"]["SimplePrdRef"];
+            track?: components["schemas"]["SimpleTrackChoice"] | null;
+            /**
+             * Tracks
+             * @default []
+             */
+            tracks: components["schemas"]["SimpleTrackChoice"][];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
             /**
              * State
              * @enum {string}
@@ -36859,6 +36895,11 @@ export interface components {
              */
             status: "active" | "paused";
             prd: components["schemas"]["ReportPrd"];
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["ReportPrd"][];
             /** Link */
             link: string;
             /** Health */
@@ -44478,6 +44519,16 @@ export interface components {
              */
             late: boolean;
         };
+        /** SimpleTrackChoice */
+        SimpleTrackChoice: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
         /** SimpleTrackGoal */
         SimpleTrackGoal: {
             /**
@@ -44487,6 +44538,23 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+        };
+        /**
+         * SimpleTrackPrdChoice
+         * @description tracks-goal: an accepted PRD a track can take, with the track it is on now.
+         */
+        SimpleTrackPrdChoice: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Track Id */
+            track_id?: string | null;
+            /** Track Title */
+            track_title?: string | null;
         };
         /** SimpleTrackRef */
         SimpleTrackRef: {
@@ -44524,6 +44592,11 @@ export interface components {
             prd_id?: string | null;
             /** Prd Title */
             prd_title?: string | null;
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["SimplePrdRef"][];
             /** Goal Id */
             goal_id?: string | null;
             /** Goal Name */
@@ -44560,7 +44633,7 @@ export interface components {
             /** People */
             people: components["schemas"]["SimplePerson"][];
             /** Prds */
-            prds: components["schemas"]["SimplePrdRef"][];
+            prds: components["schemas"]["SimpleTrackPrdChoice"][];
             /**
              * Goals
              * @default []
@@ -47902,6 +47975,11 @@ export interface components {
             /** Owner Id */
             owner_id: string | null;
             prd: components["schemas"]["DocumentRef"] | null;
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["DocumentRef"][];
             /** Started Version */
             started_version: number | null;
             /** Current Version */
@@ -47969,6 +48047,11 @@ export interface components {
             /** Owner Id */
             owner_id: string | null;
             prd: components["schemas"]["DocumentRef"] | null;
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["DocumentRef"][];
             /** Started Version */
             started_version: number | null;
             /** Current Version */
