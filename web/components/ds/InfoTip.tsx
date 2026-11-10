@@ -18,6 +18,7 @@ export function InfoTip({
   testId = "info-tip",
   id: given,
   lazy = false,
+  shrink = false,
 }: {
   /** What the tip is about; the button's name is "About <label>". */
   label: string;
@@ -35,6 +36,8 @@ export function InfoTip({
   id?: string;
   /** Renders the tip's text only while it shows, so the text round it (a band's header) reads without it. */
   lazy?: boolean;
+  /** Its trigger may shrink in a narrow row (its text then ends in an ellipsis). */
+  shrink?: boolean;
 }) {
   const own = useId();
   const id = given ?? own;
@@ -113,7 +116,7 @@ export function InfoTip({
   return (
     <span
       ref={root}
-      className="relative inline-flex flex-none self-center align-middle"
+      className={`relative inline-flex self-center align-middle ${shrink ? "min-w-0" : "flex-none"}`}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
@@ -130,7 +133,7 @@ export function InfoTip({
         // pad); never stretched by a row or a touch sheet's 44 px min-height (qa-shell-21).
         className={
           trigger
-            ? "relative inline-flex min-h-0! flex-none self-center rounded-full before:absolute before:inset-0 before:rounded-full before:content-[''] max-[600px]:before:-inset-y-2.5"
+            ? `relative inline-flex min-h-0! ${shrink ? "min-w-0 max-w-full" : "flex-none"} self-center rounded-full before:absolute before:inset-0 before:rounded-full before:content-[''] max-[600px]:before:-inset-y-2.5`
             : "relative grid size-6 min-h-6! flex-none place-items-center self-center rounded-full before:absolute before:inset-0 before:rounded-full before:content-[''] max-[600px]:before:-inset-2.5"
         }
       >

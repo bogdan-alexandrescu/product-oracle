@@ -44,11 +44,13 @@ export interface MockKindFields {
   target: number | null;
   current: number | null;
   sub_goal_of_id: string | null;
+  /** tb-mk (migration 0126): the track it sits on, the panel's Track. */
+  home_track_id: string | null;
   from_track_id: string | null;
   to_track_id: string | null;
 }
-const KIND_KEYS = ["kind", "done_when_line", "status_set", "status_reason", "measure", "baseline", "target", "current", "sub_goal_of_id", "from_track_id", "to_track_id"] as const;
-const kindDefaults = (m: MockMilestone): MockKindFields => ({ kind: m.prd ? "delivery" : m.goal ? "sub_goal" : "delivery", status_set: null, status_reason: null, done_when_line: "", measure: null, baseline: null, target: null, current: null, sub_goal_of_id: null, from_track_id: null, to_track_id: null, ...m.k });
+const KIND_KEYS = ["kind", "done_when_line", "status_set", "status_reason", "measure", "baseline", "target", "current", "sub_goal_of_id", "home_track_id", "from_track_id", "to_track_id"] as const;
+const kindDefaults = (m: MockMilestone): MockKindFields => ({ kind: m.prd ? "delivery" : m.goal ? "sub_goal" : "delivery", status_set: null, status_reason: null, done_when_line: "", measure: null, baseline: null, target: null, current: null, sub_goal_of_id: null, home_track_id: null, from_track_id: null, to_track_id: null, ...m.k });
 /** Writes the kind fields a body names (a status_set of null clears the override and its reason). */
 export function writeKind(m: MockMilestone, b: Record<string, unknown>): void {
   for (const key of KIND_KEYS) if (key in b) (m.k ??= {})[key] = b[key] as never;
@@ -87,7 +89,7 @@ export function withKindStatus(
       reason = `${late.title} ends ${md(late.end)}, after its date ${md(k.date!)}`;
     }
   }
-  return { ...out, status, status_reason: reason, from_track_name: k.from_track_id ? trackTitle(k.from_track_id) : null, to_track_name: k.to_track_id ? trackTitle(k.to_track_id) : null, sub_goal_ids: all.filter((x) => x.sub_goal_of_id === out.id).map((x) => x.id) };
+  return { ...out, status, status_reason: reason, home_track_name: k.home_track_id ? trackTitle(k.home_track_id) : null, from_track_name: k.from_track_id ? trackTitle(k.from_track_id) : null, to_track_name: k.to_track_id ? trackTitle(k.to_track_id) : null, sub_goal_ids: all.filter((x) => x.sub_goal_of_id === out.id).map((x) => x.id) };
 }
 
 /** What the old-milestones read and routes need of the roadmap db (./simple-roadmap.ts). */

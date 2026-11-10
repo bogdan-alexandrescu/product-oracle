@@ -46,14 +46,15 @@ export function TrackHead({ data, laneKey, title, stack = false }: { data: Roadm
   const prds = t.prds.map((p) => p.title).join(", ");
   const words = `${t.title}${t.goal_name ? ` · ${t.goal_name}` : ""} ${t.health === "on_track" ? "✓ On track" : "⚠ Needs a look"}`;
   const nameTip = (
-    <InfoTip label={t.title} align="start" side="bottom" testId="track-name-tip" trigger={name} lazy>
+    <InfoTip label={t.title} align="start" side="bottom" testId="track-name-tip" trigger={name} lazy shrink>
       <span className="block font-semibold">{t.title}</span>
       <span className="block">Owner: {t.owner_name ?? "none"}</span>
       <span className="block">PRD: {prds || "none"}</span>
     </InfoTip>
   );
+  // A long name ends in an ellipsis; the health mark stays in sight after it.
   const health = (
-    <span data-testid="track-health" data-health={t.health}>
+    <span data-testid="track-health" data-health={t.health} className="flex-none">
       <InfoTip label={t.health === "on_track" ? "On track" : "Needs a look"} align="start" side="bottom" testId="track-health-tip" trigger={<Mark t={t} />} lazy>
         {t.health_reason}
       </InfoTip>
