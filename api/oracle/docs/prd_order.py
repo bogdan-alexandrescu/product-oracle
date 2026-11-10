@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from oracle.baseline.goal_order import sort_goals
-from oracle.baseline.models import Entity
 from oracle.docs.models import Document
 
 
@@ -27,12 +26,13 @@ async def main_goals(db: AsyncSession, prd_ids: Iterable[uuid.UUID]) -> dict[uui
     most of its roadmap items serve, each item's goal as Simple › Roadmap reads it (a goal
     linked to the item first, else the one its feature supports)."""
     from oracle.roadmap.models import RoadmapItem
+    from oracle.simple import goal_reads
     from oracle.simple.service import _goals
 
     ids = list(prd_ids)
     if not ids:
         return {}
-    goals = sort_goals(await db.scalars(select(Entity).where(Entity.type == "goal")))
+    goals = sort_goals(await goal_reads.all_goals(db))
     rank = {g.id: n for n, g in enumerate(goals)}
     rows = (
         await db.execute(

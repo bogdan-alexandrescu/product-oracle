@@ -53,7 +53,7 @@ from oracle.roadmap.models import (
     TrackerRecord,
     TrackMilestone,
 )
-from oracle.simple import approved_roadmap, constraints, dates, plan_strip
+from oracle.simple import approved_roadmap, constraints, dates, goal_reads, plan_strip
 from oracle.simple.models import MilestoneFeature, RoadmapDateSuggestion, SimpleVisual
 from oracle.simple.schemas import (
     DateSuggestionOut,
@@ -404,15 +404,12 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     }
     track_of_prd = {p: t for t in tracks.values() for p in t.prd_ids}
     # tracks-goal: the company goal each track is tied to (a live one).
+    # tb-mk: the goals are read once per read (oracle.simple.goal_reads).
+    every_goal = await goal_reads.goals_by_id(db)
     track_goals = {
         g.id: g
-        for g in await db.scalars(
-            select(Entity).where(
-                Entity.id.in_({t.goal_id for t in tracks.values() if t.goal_id}),
-                Entity.type == "goal",
-                Entity.status != "rejected",
-            )
-        )
+        for g in (every_goal.get(t.goal_id) for t in tracks.values() if t.goal_id)
+        if g is not None and g.status != "rejected"
     }
     milestones = list(
         await db.scalars(
@@ -448,12 +445,8 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     # S7: the goals items are linked to directly (dropped on, suggested for).
     linked = {
         g.id: g
-        for g in await db.scalars(
-            select(Entity).where(
-                Entity.id.in_({g for r in rows for g in r.goal_ids or []}),
-                Entity.type == "goal",
-            )
-        )
+        for g in (every_goal.get(i) for i in {g for r in rows for g in r.goal_ids or []})
+        if g is not None
     }
     blockers = await _blockers(db, {b for r in rows for b in r.blocker_ids or []})
     cut = await _cut(db, roadmap_ids)
@@ -809,19 +802,17 @@ async def _goals(db: AsyncSession, features: set[uuid.UUID]) -> dict[uuid.UUID, 
     out: dict[uuid.UUID, Entity] = {}
     if not features:
         return out
-    found = (
-        await db.execute(
-            select(Edge.src_id, Entity)
-            .join(Entity, Entity.id == Edge.dst_id)
-            .where(
-                Edge.type == "supports",
-                Edge.status != "rejected",
-                Edge.src_id.in_(features),
-                Entity.type == "goal",
-                Entity.status == "confirmed",
-            )
+    goals = await goal_reads.goals_by_id(db)
+    edges = await db.execute(
+        select(Edge.src_id, Edge.dst_id).where(
+            Edge.type == "supports", Edge.status != "rejected", Edge.src_id.in_(features)
         )
-    ).all()
+    )
+    found = [
+        (src, g)
+        for src, dst in edges.all()
+        if (g := goals.get(dst)) is not None and g.status == "confirmed"
+    ]
     for edge_src, goal in sorted(found, key=lambda row: goal_sort_key(row[1])):
         out.setdefault(edge_src, goal)
     return out
@@ -833,20 +824,21 @@ async def _ladder_goals(db: AsyncSession, items: set[uuid.UUID]) -> dict[uuid.UU
     out: dict[uuid.UUID, Entity] = {}
     if not items:
         return out
-    found = (
-        await db.execute(
-            select(MilestoneFeature.item_id, Entity)
-            .join(TrackMilestone, TrackMilestone.id == MilestoneFeature.milestone_id)
-            .join(Entity, Entity.id == TrackMilestone.goal_id)
-            .where(
-                MilestoneFeature.item_id.in_(items),
-                TrackMilestone.deleted_at.is_(None),
-                TrackMilestone.status != "dropped",
-                Entity.type == "goal",
-                Entity.status == "confirmed",
-            )
+    goals = await goal_reads.goals_by_id(db)
+    links = await db.execute(
+        select(MilestoneFeature.item_id, TrackMilestone.goal_id)
+        .join(TrackMilestone, TrackMilestone.id == MilestoneFeature.milestone_id)
+        .where(
+            MilestoneFeature.item_id.in_(items),
+            TrackMilestone.deleted_at.is_(None),
+            TrackMilestone.status != "dropped",
         )
-    ).all()
+    )
+    found = [
+        (item_id, g)
+        for item_id, goal_id in links.all()
+        if (g := goals.get(goal_id)) is not None and g.status == "confirmed"
+    ]
     for item_id, goal in sorted(found, key=lambda row: goal_sort_key(row[1])):
         out.setdefault(item_id, goal)
     return out
@@ -1347,11 +1339,7 @@ async def _roadmap_codes(
     from oracle.simple import roadmap_codes
 
     goal_ids = {m.goal_id for m in goal_ms if m.goal_id is not None}
-    goals = (
-        (await db.execute(select(Entity).where(Entity.id.in_(goal_ids)))).scalars().all()
-        if goal_ids
-        else []
-    )
+    goals = [g for g in await goal_reads.all_goals(db) if g.id in goal_ids]
     rank = {g.id: n for n, g in enumerate(sorted(goals, key=goal_sort_key))}
     roadmap_codes.assign(goal_ms, track_ms, items, rank)
 

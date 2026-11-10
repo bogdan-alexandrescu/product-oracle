@@ -184,10 +184,9 @@ def _due(attrs: dict[str, Any]) -> date | None:
 
 
 async def _goals(db: AsyncSession) -> list[Entity]:
-    rows = await db.scalars(
-        select(Entity).where(Entity.type == "goal", Entity.status != "rejected")
-    )
-    return sort_goals(list(rows))
+    from oracle.simple import goal_reads
+
+    return sort_goals(g for g in await goal_reads.all_goals(db) if g.status != "rejected")
 
 
 def _owner_id(attrs: dict[str, Any]) -> uuid.UUID | None:
