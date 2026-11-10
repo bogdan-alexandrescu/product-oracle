@@ -42273,6 +42273,10 @@ export interface components {
              * @default []
              */
             sub_goal_ids: string[];
+            /** Home Track Id */
+            home_track_id?: string | null;
+            /** Home Track Name */
+            home_track_name?: string | null;
             /** From Track Id */
             from_track_id?: string | null;
             /** To Track Id */
@@ -42338,6 +42342,8 @@ export interface components {
             current?: number | null;
             /** Sub Goal Of Id */
             sub_goal_of_id?: string | null;
+            /** Home Track Id */
+            home_track_id?: string | null;
             /** From Track Id */
             from_track_id?: string | null;
             /** To Track Id */
@@ -42373,6 +42379,8 @@ export interface components {
             current?: number | null;
             /** Sub Goal Of Id */
             sub_goal_of_id?: string | null;
+            /** Home Track Id */
+            home_track_id?: string | null;
             /** From Track Id */
             from_track_id?: string | null;
             /** To Track Id */

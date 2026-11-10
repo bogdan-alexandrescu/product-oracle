@@ -126032,6 +126032,29 @@
             "title": "Sub Goal Ids",
             "default": []
           },
+          "home_track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Track Id"
+          },
+          "home_track_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Track Name"
+          },
           "from_track_id": {
             "anyOf": [
               {
@@ -126242,6 +126265,18 @@
               }
             ],
             "title": "Sub Goal Of Id"
+          },
+          "home_track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Track Id"
           },
           "from_track_id": {
             "anyOf": [
@@ -126457,6 +126492,18 @@
               }
             ],
             "title": "Sub Goal Of Id"
+          },
+          "home_track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Track Id"
           },
           "from_track_id": {
             "anyOf": [

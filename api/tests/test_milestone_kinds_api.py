@@ -269,17 +269,17 @@ async def test_tracks_served_in_order_with_health(client):
 async def test_a_milestone_has_its_own_track(client):
     ctx = await make_ctx()
     ids = await seed(ctx)
-    m = await make(client, ctx, ids, name="Checkout beta", track_id=ids["checkout"])
-    assert (m["track_id"], m["track_name"]) == (ids["checkout"], "Checkout")
+    m = await make(client, ctx, ids, name="Checkout beta", home_track_id=ids["checkout"])
+    assert (m["home_track_id"], m["home_track_name"]) == (ids["checkout"], "Checkout")
     r = await client.patch(f"{MILESTONES}/{m['id']}", headers=ctx.as_("owner"),
-                           json={"track_id": ids["search"]})  # fmt: skip
+                           json={"home_track_id": ids["search"]})  # fmt: skip
     assert r.status_code == 200, r.text
-    assert (r.json()["track_id"], r.json()["track_name"]) == (ids["search"], "Search")
-    assert by_id(await read(client, ctx))[m["id"]]["track_name"] == "Search"
+    assert (r.json()["home_track_id"], r.json()["home_track_name"]) == (ids["search"], "Search")
+    assert by_id(await read(client, ctx))[m["id"]]["home_track_name"] == "Search"
     r = await client.patch(f"{MILESTONES}/{m['id']}", headers=ctx.as_("owner"),
-                           json={"track_id": None})  # fmt: skip
+                           json={"home_track_id": None})  # fmt: skip
     assert r.status_code == 200, r.text
-    assert (r.json()["track_id"], r.json()["track_name"]) == (None, None)
+    assert (r.json()["home_track_id"], r.json()["home_track_name"]) == (None, None)
     r = await client.patch(f"{MILESTONES}/{m['id']}", headers=ctx.as_("owner"),
-                           json={"track_id": str(uuid.uuid4())})  # fmt: skip
+                           json={"home_track_id": str(uuid.uuid4())})  # fmt: skip
     assert r.status_code == 422, r.text

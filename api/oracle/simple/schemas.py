@@ -556,6 +556,9 @@ class SimpleGoalMilestone(BaseModel):
     # A sub-goal: the measured-goal milestone it builds toward; a goal: its sub-goals.
     sub_goal_of_id: uuid.UUID | None = None
     sub_goal_ids: list[uuid.UUID] = []
+    # tb-mk: the track it sits on (the panel's Track).
+    home_track_id: uuid.UUID | None = None
+    home_track_name: str | None = None
     # A hand-off: from one track to another.
     from_track_id: uuid.UUID | None = None
     to_track_id: uuid.UUID | None = None
@@ -582,6 +585,7 @@ class SimpleGoalMilestoneIn(BaseModel):
     target: float | None = None
     current: float | None = None
     sub_goal_of_id: uuid.UUID | None = None
+    home_track_id: uuid.UUID | None = None
     from_track_id: uuid.UUID | None = None
     to_track_id: uuid.UUID | None = None
 
@@ -602,6 +606,7 @@ class SimpleGoalMilestonePatch(BaseModel):
     target: float | None = None
     current: float | None = None
     sub_goal_of_id: uuid.UUID | None = None
+    home_track_id: uuid.UUID | None = None
     from_track_id: uuid.UUID | None = None
     to_track_id: uuid.UUID | None = None
 

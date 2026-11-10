@@ -79,8 +79,9 @@ async def _company_owners(db: AsyncSession) -> list[uuid.UUID]:
 MEASURED = frozenset({"goal", "sub_goal"})
 # The fields a person writes on a roadmap's own milestone beyond name/date/goal/items/counts.
 KIND_FIELDS = ("kind", "done_when_line", "status_set", "status_reason", "measure", "baseline",
-               "target", "current", "sub_goal_of_id", "from_track_id", "to_track_id")  # fmt: skip
-_UUID_FIELDS = ("sub_goal_of_id", "from_track_id", "to_track_id")
+               "target", "current", "sub_goal_of_id", "home_track_id", "from_track_id",
+               "to_track_id")  # fmt: skip
+_UUID_FIELDS = ("sub_goal_of_id", "home_track_id", "from_track_id", "to_track_id")
 _NUMBERS = ("baseline", "target", "current")
 
 
@@ -208,7 +209,9 @@ async def _out(
         prd_owner=prd_owner, pending=pending, can_change=can_change, can_propose=can_propose,
         kind=row.kind, done_when_line=row.done_when_line or "", status=st, status_reason=why,
         status_set=row.status_set, status_set_by_name=set_by, measure=row.measure, **numbers,
-        sub_goal_of_id=row.sub_goal_of_id, from_track_id=row.from_track_id,
+        sub_goal_of_id=row.sub_goal_of_id, home_track_id=row.home_track_id,
+        home_track_name=look.get(row.home_track_id) if row.home_track_id else None,
+        from_track_id=row.from_track_id,
         to_track_id=row.to_track_id,
         from_track_name=look.get(row.from_track_id) if row.from_track_id else None,
         to_track_name=look.get(row.to_track_id) if row.to_track_id else None,
@@ -218,7 +221,7 @@ async def _out(
 async def _lookups(db: AsyncSession, rows: list[TrackMilestone]) -> dict[uuid.UUID, str]:
     """The names a milestone shows by id: who set its status, and a hand-off's tracks."""
     users = {r.status_set_by for r in rows if r.status_set_by}
-    tracks = {t for r in rows for t in (r.from_track_id, r.to_track_id) if t}
+    tracks = {t for r in rows for t in (r.home_track_id, r.from_track_id, r.to_track_id) if t}
     out: dict[uuid.UUID, str] = {}
     if users:
         for u in await db.scalars(select(User).where(User.id.in_(users))):
@@ -442,7 +445,7 @@ async def _check_refs(db: AsyncSession, body: Any, fields: set[str]) -> None:
         to = await db.get(TrackMilestone, body.sub_goal_of_id)
         if to is None or to.roadmap_id is None or to.deleted_at is not None:
             raise _error(422, "sub_goal_of_id: no such milestone")
-    for k in ("from_track_id", "to_track_id"):
+    for k in ("home_track_id", "from_track_id", "to_track_id"):
         if k in fields and getattr(body, k) is not None:
             if await db.get(ProductTrack, getattr(body, k)) is None:
                 raise _error(422, f"{k}: no such track")
