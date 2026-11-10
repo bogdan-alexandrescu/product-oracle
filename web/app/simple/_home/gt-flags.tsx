@@ -4,9 +4,10 @@
 // Nov 5 rule "define and enforce Ground Truth"), switched by the local-only ?gtf=a|b|c|d (and
 // ?gtn=30 for the hard case). Not a product change: nothing renders without ?gtf.
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 
 import { GroundTruthFlags } from "@/app/baseline/_components/GroundTruthFlags";
+import { HomeCard } from "@/app/simple/_home/cards";
 import { Dialog } from "@/components/ds/Dialog";
 import { Icon } from "@/components/ds/Icon";
 import { InfoTip } from "@/components/ds/InfoTip";
@@ -56,7 +57,8 @@ function padTo(check: Check, n: number): Check {
     const k = EXTRA_KINDS[i % EXTRA_KINDS.length];
     const name = EXTRA_NAMES[i % EXTRA_NAMES.length];
     const ref = { id: `mock-gt-${i}`, code: null, name };
-    const where = { roadmap: { id: "mock-roadmap", title: "Example roadmap" }, prd: { id: "mock-prd", title: "Example PRD" } };
+    // Rows read "PRD <title>" and "<roadmap title>": invented names, never "PRD Example PRD".
+    const where = { roadmap: { id: "mock-roadmap", title: "Growth roadmap" }, prd: { id: "mock-prd", title: "Growth" } };
     flags.push({
       kind: k.kind,
       item: k.kind === "unlinked_item" ? ref : null,
@@ -72,15 +74,16 @@ function padTo(check: Check, n: number): Check {
   return { flags, counts, total: flags.length };
 }
 
+const noSubscribe = () => () => {};
+
 /** MOCK-HOOK: the check, the graph and open proposals, read once for Home's variant. */
 export function useGt(perm: { canWrite: boolean; canPropose: boolean; canChangeRoadmap: boolean }): Gt {
-  // Read after paint from the address: local-only, no Suspense boundary needed on Home.
-  const [{ variant, pad }, setUrl] = useState<{ variant: GtVariant | null; pad: number }>({ variant: null, pad: 0 });
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const raw = params.get("gtf");
-    setUrl({ variant: raw === "a" || raw === "b" || raw === "c" || raw === "d" ? raw : null, pad: Number(params.get("gtn") ?? 0) });
-  }, []);
+  // Read from the address once hydrated (the server's snapshot is empty): local-only, no Suspense boundary needed on Home.
+  const search = useSyncExternalStore(noSubscribe, () => window.location.search, () => "");
+  const params = new URLSearchParams(search);
+  const raw = params.get("gtf");
+  const variant: GtVariant | null = raw === "a" || raw === "b" || raw === "c" || raw === "d" ? raw : null;
+  const pad = Number(params.get("gtn") ?? 0);
   const on = variant !== null;
   const check = useQuery(`home-gt-check-${on}`, () => (on ? unwrap(api.GET("/v1/baseline/check")) : Promise.resolve(undefined)));
   const graph = useQuery(`home-gt-graph-${on}`, () => (on ? unwrap(api.GET("/v1/baseline/graph")) : Promise.resolve(undefined)));
@@ -128,14 +131,18 @@ function Sheet({ gt, check, title, onClose }: { gt: Gt; check: Check; title: str
   return (
     <Dialog title={`${title} · ${check.total}`} onClose={onClose} testId="gtf-sheet" phoneSheet scrollBody closeButton cancelLabel="Close">
       {/* The sheet's title holds the band's heading and total: the band drops its own, and its frame. */}
-      <div className={BARE}>{check.total === 0 ? <p className="simple-small">No flags</p> : <List gt={gt} check={check} />}</div>
+      <div className={BARE}>
+        {check.total === 0 && <p className="simple-small">No flags</p>}
+        {/* Kept mounted with no flags left (the band hides at a total of 0), so the last fix's Undo stays. */}
+        <List gt={gt} check={check.total === 0 ? { ...check, total: 1 } : check} />
+      </div>
     </Dialog>
   );
 }
 
 const BARE = "[&_[data-testid=gt-band]]:m-0 [&_[data-testid=gt-band]]:border-0 [&_[data-testid=gt-band]]:p-0 [&_[data-testid=gt-band]>div:first-child]:hidden";
-/** (b)'s card: the band's frame is the card's. */
-const IN_CARD = "[&_[data-testid=gt-band]]:m-0 [&_[data-testid=gt-band]]:border-0 [&_[data-testid=gt-band]]:p-0";
+/** (b)'s card: Home's card header holds the band's heading and total; the band drops its own, and its frame. */
+const IN_CARD = `mt-3 ${BARE}`;
 
 const flagsWord = (n: number) => (n === 1 ? "Ground Truth flag" : "Ground Truth flags");
 
@@ -145,15 +152,18 @@ export function GtWaitingLine({ gt }: { gt: Gt }) {
   if (gt.variant !== "a" || !gt.check || (gt.check.total === 0 && !open)) return null;
   return (
     <>
-      <p data-testid="gtf-a-line" className="simple-small mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-line pt-2">
-        <Icon name="flag" size={16} />
-        <button type="button" className="simple-link" data-testid="gtf-open" onClick={() => setOpen(true)}>
-          <span className="tnum">{gt.check.total}</span> {flagsWord(gt.check.total)}
-        </button>
-        <InfoTip label="Ground Truth flags" align="start">
-          Anything that breaks the Ground Truth is allowed, and flagged here with its fix.
-        </InfoTip>
-      </p>
+      {/* At 0 the count goes and its open sheet stays, with the last fix's Undo. */}
+      {gt.check.total > 0 && (
+        <p data-testid="gtf-a-line" className="simple-small mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-line pt-2">
+          <Icon name="flag" size={16} />
+          <button type="button" className="simple-link" data-testid="gtf-open" onClick={() => setOpen(true)}>
+            <span className="tnum">{gt.check.total}</span> {flagsWord(gt.check.total)}
+          </button>
+          <InfoTip label="Ground Truth flags" align="start">
+            Anything that breaks the Ground Truth is allowed, and flagged here with its fix.
+          </InfoTip>
+        </p>
+      )}
       {open && <Sheet gt={gt} check={gt.check} title="Ground Truth flags" onClose={() => setOpen(false)} />}
     </>
   );
@@ -163,9 +173,23 @@ export function GtWaitingLine({ gt }: { gt: Gt }) {
 export function GtCard({ gt }: { gt: Gt }) {
   if (gt.variant !== "b" || !gt.check || gt.check.total === 0) return null;
   return (
-    <section aria-label="Ground Truth" data-testid="gtf-b-card" className={`simple-card ${IN_CARD}`}>
-      <List gt={gt} check={gt.check} />
-    </section>
+    <div data-testid="gtf-b-card">
+      <HomeCard
+        id="gtf-ground-truth"
+        icon="flag"
+        title="Ground Truth flags"
+        count={gt.check.total}
+        info={
+          <InfoTip label="Ground Truth flags" align="start">
+            Anything that breaks the Ground Truth is allowed, and flagged here with its fix.
+          </InfoTip>
+        }
+      >
+        <div className={IN_CARD}>
+          <List gt={gt} check={gt.check} />
+        </div>
+      </HomeCard>
+    </div>
   );
 }
 
@@ -176,10 +200,12 @@ export function GtGoalChip({ gt, goalId, goalName }: { gt: Gt; goalId: string; g
   if (gt.variant !== "c" || !mine || (mine.total === 0 && !open)) return null;
   return (
     <>
-      <button type="button" data-testid="gtf-c-chip" onClick={() => setOpen(true)} className="simple-small inline-flex items-center gap-1 rounded-full bg-crit-bg px-2 py-0.5 font-semibold text-crit" aria-label={`${mine.total} ${flagsWord(mine.total)}: ${goalName}`}>
-        <Icon name="flag" size={16} />
-        <span className="tnum">{mine.total}</span>
-      </button>
+      {mine.total > 0 && (
+        <button type="button" data-testid="gtf-c-chip" onClick={() => setOpen(true)} className="simple-small inline-flex items-center gap-1 rounded-full bg-crit-bg px-2 py-0.5 font-semibold text-crit" aria-label={`${mine.total} ${flagsWord(mine.total)}: ${goalName}`}>
+          <Icon name="flag" size={16} />
+          <span className="tnum">{mine.total}</span>
+        </button>
+      )}
       {open && <Sheet gt={gt} check={mine} title={goalName} onClose={() => setOpen(false)} />}
     </>
   );
@@ -192,15 +218,17 @@ export function GtNoGoalLine({ gt, goalIds }: { gt: Gt; goalIds: string[] }) {
   if (gt.variant !== "c" || !rest || (rest.total === 0 && !open)) return null;
   return (
     <>
-      <p data-testid="gtf-c-rest" className="simple-small mt-2 flex items-center gap-1.5">
-        <Icon name="flag" size={16} />
-        <button type="button" className="simple-link" onClick={() => setOpen(true)}>
-          <span className="tnum">{rest.total}</span> with no goal
-        </button>
-        <InfoTip label="Ground Truth flags" align="start">
-          Anything that breaks the Ground Truth is allowed, and flagged with its fix.
-        </InfoTip>
-      </p>
+      {rest.total > 0 && (
+        <p data-testid="gtf-c-rest" className="simple-small mt-2 flex items-center gap-1.5">
+          <Icon name="flag" size={16} />
+          <button type="button" className="simple-link" onClick={() => setOpen(true)}>
+            <span className="tnum">{rest.total}</span> {flagsWord(rest.total)} with no goal
+          </button>
+          <InfoTip label="Ground Truth flags" align="start">
+            Anything that breaks the Ground Truth is allowed, and flagged with its fix.
+          </InfoTip>
+        </p>
+      )}
       {open && <Sheet gt={gt} check={rest} title="No goal" onClose={() => setOpen(false)} />}
     </>
   );
@@ -212,17 +240,19 @@ export function GtTitleBadge({ gt }: { gt: Gt }) {
   if (gt.variant !== "d" || !gt.check || (gt.check.total === 0 && !open)) return null;
   return (
     <>
-      <button
-        type="button"
-        data-testid="gtf-d-badge"
-        onClick={() => setOpen(true)}
-        title={`${gt.check.total} ${flagsWord(gt.check.total)}`}
-        aria-label={`${gt.check.total} ${flagsWord(gt.check.total)}`}
-        className="inline-flex h-7 items-center gap-1 rounded-full border border-line-strong px-2 text-[13px] font-semibold text-crit hover:bg-surface2"
-      >
-        <Icon name="flag" size={16} />
-        <span className="tnum">{gt.check.total}</span>
-      </button>
+      {gt.check.total > 0 && (
+        <button
+          type="button"
+          data-testid="gtf-d-badge"
+          onClick={() => setOpen(true)}
+          title={`${gt.check.total} ${flagsWord(gt.check.total)}`}
+          aria-label={`${gt.check.total} ${flagsWord(gt.check.total)}`}
+          className="inline-flex h-7 items-center gap-1 rounded-full bg-crit-bg px-2.5 text-[13px] font-semibold text-crit hover:opacity-90"
+        >
+          <Icon name="flag" size={16} />
+          <span className="tnum">{gt.check.total}</span>
+        </button>
+      )}
       {open && <Sheet gt={gt} check={gt.check} title="Ground Truth flags" onClose={() => setOpen(false)} />}
     </>
   );
