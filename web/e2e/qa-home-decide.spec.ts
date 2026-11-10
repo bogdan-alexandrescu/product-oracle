@@ -54,9 +54,10 @@ for (const phone of [false, true]) {
       await page.goto("/simple/decisions");
       const mine = page.getByTestId("questions-mine");
       await expect(mine).toBeVisible({ timeout: 10_000 });
-      // The rail's read answered with the page's own list: no second 3 s wait for it.
-      await expect(mine.getByText("Loading what waits on you…")).toHaveCount(0, { timeout: 1_500 });
-      await expect(mine.getByRole("listitem").first()).toBeVisible();
+      // The rail's read answered with the page's own list: its rows (the run stops, dates, ...)
+      // show with no second 3 s wait for it.
+      await expect(mine.getByTestId("waiting-item").first()).toBeVisible({ timeout: 1_500 });
+      await expect(mine.getByText("Loading what waits on you…")).toHaveCount(0);
     });
 
     test("unique-codes: every decision on the list has a code unique in the list, upper case, beside its name", async ({ page }) => {
