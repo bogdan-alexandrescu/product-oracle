@@ -17,17 +17,25 @@ Test cards (protects / fails_when / no_claim):
   the row's (the baseline's merge), the draft shows on the row (not linked) with the row's
   item first to merge into; none merged or deleted; fails_when=the feature shows as two rows
   (one above the line, one below) or the draft as its own; or the read merges or deletes.
+- test_a_move_confirms_a_trace_linked_draft: protects=a move of a feature whose only item is a
+  draft linked by its trace's source feature (no ``feature_id``) confirms that draft and links
+  it (``feature_id``); fails_when=the move adds a second item (review of #1503).
+- test_a_draft_on_another_roadmap_is_not_on_the_company_roadmap: protects=while there is a
+  company roadmap, only its drafts put a feature on it; fails_when=a draft elsewhere reads as on
+  the company roadmap.
 """
 
 import uuid
+from types import SimpleNamespace
 
 from sqlalchemy import select
 
 from oracle.baseline.models import Entity
 from oracle.roadmap.models import RoadmapItem
+from oracle.simple import priorities
 from oracle.tenancy import tenant_session
-from tests.test_simple_changes_api import clock, make_people  # noqa: F401
-from tests.test_simple_priorities_company_roadmap_api import by_feature, company_world
+from tests.test_simple_changes_api import CHANGES, clock, make_people  # noqa: F401
+from tests.test_simple_priorities_company_roadmap_api import REASON, by_feature, company_world
 from tests.test_simple_roadmap_api import Seed
 from tests.test_simple_targets_api import no_llm  # noqa: F401
 
@@ -114,3 +122,41 @@ async def test_same_named_records_show_as_one_row(client):
     async with tenant_session(w.ctx.tenant_id) as s:
         assert await s.get(Entity, uuid.UUID(w.ids["ledger-copy"])) is not None
         assert (await s.get(RoadmapItem, uuid.UUID(w.ids["pay-8"]))).merged_into is None
+
+
+async def test_a_move_confirms_a_trace_linked_draft(client):
+    w = await company_world()
+    trace = [{"target": "feature", "id": w.ids["insights"], "via": "section_link"}]
+    await _add_item(w, "pay-8", title="Night digest", draft=True, trace=trace)
+    row = by_feature(await w.read(client), w)["insights"]
+    assert row["on_roadmap"] is True and row["draft_item_id"] == w.ids["pay-8"]
+    body = {"op": "override_priority", "target": {"feature_id": w.ids["insights"]},
+            "before": {"override": None},
+            "after": {"position": 1, "reason": REASON, "confirm": True}}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=w.ctx.as_("owner"))
+    assert r.status_code in (200, 201), r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        added = (
+            await s.scalars(
+                select(RoadmapItem).where(RoadmapItem.feature_id == uuid.UUID(w.ids["insights"]))
+            )
+        ).all()
+        assert [str(i.id) for i in added] == [w.ids["pay-8"]], "a second item was added"
+        assert added[0].draft is False
+    row = by_feature(await w.read(client), w)["insights"]
+    assert row["item_id"] == w.ids["pay-8"] and row["draft_item_id"] is None
+
+
+def test_a_draft_on_another_roadmap_is_not_on_the_company_roadmap():
+    company, other = uuid.uuid4(), uuid.uuid4()
+    fid = str(uuid.uuid4())
+
+    def draft(key, roadmap):
+        row = SimpleNamespace(draft=True, item_key=key, feature_id=fid, trace=None)
+        return SimpleNamespace(row=row, status="planned", roadmap=SimpleNamespace(id=roadmap))
+
+    elsewhere, here = draft("a-1", other), draft("b-1", company)
+    read_ = SimpleNamespace(entries=[elsewhere, here])
+    assert priorities._held(read_, company)[fid] is here
+    assert priorities._held(SimpleNamespace(entries=[elsewhere]), company) == {}
+    assert priorities._held(read_, None)[fid] is elsewhere, "no company roadmap: every draft"
