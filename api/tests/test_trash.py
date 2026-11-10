@@ -148,10 +148,76 @@ async def test_dependents_name_the_roadmap_items_and_tracks_a_prd_feeds(client, 
         }
     assert features and len(tracks) == 1
     body = (await client.get(f"/v1/documents/{PRD}/dependents", headers=auth)).json()
-    fed = body["feeds"]
+    # Its own roadmap goes with it, so these go too (the next test): named all the same.
+    fed = [*body["feeds"], *body["feeds_going"]]
     assert {i["title"] for i in fed if i["type"] == "feature"} == features
     assert [i["title"] for i in fed if i["type"] == "track"] == tracks
     assert len({(i["type"], i["title"]) for i in fed}) == len(fed)
+
+
+@pytest.mark.parametrize("shared_track", [False, True])
+async def test_what_delete_prd_says_stays_stays_and_what_goes_goes(
+    client, owner, runtime, shared_track
+):
+    """delete-prd-simple review: the PRD's own roadmap goes to Trash with it, so its items (and
+    a track holding no other PRD) go too: the dialog lists them under what goes, never under what
+    stays. After the delete, each item it said stays is still read and each it said goes is not;
+    Restore brings those back."""
+    tenant_id, auth, _ = await _world(client, owner, runtime)
+    async with tenant_session(tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == PRD))
+        built = {
+            i.title
+            for i in await s.scalars(
+                select(RoadmapItem).where(RoadmapItem.prd_document_id == prd.id)
+            )
+        }
+        other = Document(slug="spare-parts-prd", title="Spare parts PRD", kind="prd")
+        plan = Document(slug="company-plan", title="Company plan", kind="roadmap")
+        s.add_all([other, plan])
+        await s.flush()
+        md = "# Company plan {#title}\n"
+        v1 = DocumentVersion(document_id=plan.id, number=1, markdown=md,
+                             content_hash=hashlib.sha256(md.encode()).hexdigest())  # fmt: skip
+        s.add(v1)
+        await s.flush()
+        # An item of this PRD on a roadmap not built from it: it stays.
+        s.add(RoadmapItem(roadmap_document_id=plan.id, roadmap_version_id=v1.id,
+                          prd_document_id=prd.id,
+                          item_key="kept-feature", position=0, title="Kept feature",
+                          horizon="now"))  # fmt: skip
+        track = await s.scalar(
+            select(ProductTrack)
+            .join(TrackPrd, TrackPrd.track_id == ProductTrack.id)
+            .where(TrackPrd.prd_document_id == prd.id)
+        )
+        if shared_track:
+            s.add(TrackPrd(prd_document_id=other.id, track_id=track.id, state="linked"))
+        await s.commit()
+        track_id = track.id
+    body = (await client.get(f"/v1/documents/{PRD}/dependents", headers=auth)).json()
+    stays, goes = body["feeds"], body["feeds_going"]
+    assert {i["title"] for i in stays if i["type"] == "feature"} == {"Kept feature"}
+    assert built and {i["title"] for i in goes if i["type"] == "feature"} == built
+    tracks = {i["id"] for i in (stays if shared_track else goes) if i["type"] == "track"}
+    assert tracks == {str(track_id)}
+    assert not {i["id"] for i in stays} & {i["id"] for i in goes}
+
+    async def readable(item: dict) -> bool:
+        kind = RoadmapItem if item["type"] == "feature" else ProductTrack
+        async with tenant_session(tenant_id) as s:
+            return await s.scalar(select(kind.id).where(kind.id == uuid.UUID(item["id"])))
+
+    resp = await client.request("DELETE", f"/v1/documents/{PRD}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    for item in stays:
+        assert await readable(item), item
+    for item in goes:
+        assert not await readable(item), item
+    restored = await client.post(f"/v1/trash/{resp.json()['id']}/restore", headers=auth)
+    assert restored.status_code == 200, restored.text
+    for item in [*stays, *goes]:
+        assert await readable(item), item
 
 
 async def test_trash_names_each_run_as_the_delete_dialog_did(client, owner, runtime):
