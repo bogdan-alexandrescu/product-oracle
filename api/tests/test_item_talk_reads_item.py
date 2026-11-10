@@ -99,8 +99,8 @@ def reader(calls: list[dict], knows: str, said: str):
 
 async def run_reader(w: World, ask) -> None:
     async with tenant_session(w.ctx.tenant_id) as s:
-        ids = list(await s.scalars(
-            select(LlmJob.id).where(LlmJob.kind == "chat_reader", LlmJob.status == "queued")))  # fmt: skip
+        queued = select(LlmJob.id).where(LlmJob.kind == "chat_reader", LlmJob.status == "queued")
+        ids = list(await s.scalars(queued))
     assert ids
     for i in ids:
         async with tenant_session(w.ctx.tenant_id) as s:

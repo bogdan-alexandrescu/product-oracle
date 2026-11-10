@@ -820,6 +820,54 @@ async def undo(db: AsyncSession, principal: Any, c: Any) -> None:
 
 # --------------------------------------------------------------------------- the reader
 
+# item-talk-reads: the params a Ground Truth record's id goes in.
+RECORD_PARAMS = ("entity_id",)
+# A linked item in the roadmap's read of an item's talk: what names it and when.
+LINKED_FIELDS = ("id", "key", "code", "title", "status", "start", "end", "milestone")
+
+
+def _names_item(c: Any, value: Any) -> bool:
+    """Whether a read's value names the talk's item: its id, key, code or name."""
+    from oracle.simple import roadmap_talk
+
+    e = getattr(c, "item", None)
+    if e is None or not isinstance(value, str):
+        return False
+    names = {str(e.row.id), e.row.item_key, e.code, e.row.title, roadmap_talk.label(e)}
+    return value.strip().lower() in {n.lower() for n in names if n}
+
+
+def _on_item(c: Any, action: Action, args: dict[str, Any]) -> tuple[dict[str, Any], Any]:
+    """item-talk-reads: in an item's talk, a read naming the item (its roadmap id, key, code
+    or name) where the route takes a record's id reads the item's Ground Truth feature; an
+    item with none reads as itself (the talk's item, as its panel shows it). Returns the
+    args and, for that item, what the read returns in place of the route."""
+    from oracle.simple import roadmap_talk
+
+    ref = [k for k in action.params if k in RECORD_PARAMS and _names_item(c, args.get(k))]
+    if not ref:
+        return args, None
+    f = getattr(c, "item_feature", None)
+    if f is None:
+        return args, roadmap_talk.item_context(c)
+    return {**args, **{k: str(f.id) for k in ref}}, None
+
+
+def _focus(c: Any, action: Action, data: Any) -> Any:
+    """item-talk-reads: the roadmap's read in an item's talk puts the item first and then
+    the items it is linked to (by name and dates), so the cut at ``RESULT_MAX`` keeps them."""
+    e = getattr(c, "item", None)
+    items = data.get("items") if isinstance(data, dict) else None
+    if e is None or action.name != "get_simple_roadmap" or not isinstance(items, list):
+        return data
+    own = str(e.row.id)
+    near = {str(i) for i in [*e.depends_on, *e.needed_by]}
+    first = [x for x in items if isinstance(x, dict) and x.get("id") == own]
+    linked = [{k: x.get(k) for k in LINKED_FIELDS} for x in items
+              if isinstance(x, dict) and x.get("id") in near - {own}]  # fmt: skip
+    rest = [x for x in items if not (isinstance(x, dict) and x.get("id") in near | {own})]
+    return {"items": [*first, *linked, *rest], **{k: v for k, v in data.items() if k != "items"}}
+
 
 async def calls(c: Any, answer: dict[str, Any]) -> tuple[list[dict], list[dict], list[str]]:
     """The reader's ``calls``: reads run now (their results), writes as cards, refusals. A
@@ -855,12 +903,13 @@ async def calls(c: Any, answer: dict[str, Any]) -> tuple[list[dict], list[dict],
                 refused.append(f"{action.summary}: not in this meeting's chat, as everyone "
                                "here reads the answer.")  # fmt: skip
                 continue
+            args, own = _on_item(c, action, args)
             try:
-                data = await run(c.db, c.principal, action, args)
+                data = own if own is not None else await run(c.db, c.principal, action, args)
             except tools.ToolError as e:
                 refused.append(f"I couldn't read that: {chat.plain(str(e))}")
                 continue
-            text = json.dumps(data, default=str)
+            text = json.dumps(_focus(c, action, data), default=str)
             results.append({"action": name, "does": action.summary, "result": text[:RESULT_MAX]})
         else:
             try:

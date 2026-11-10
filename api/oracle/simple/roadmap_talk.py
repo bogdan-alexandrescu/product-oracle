@@ -74,6 +74,9 @@ async def load(c: Any) -> None:
     )
     iid = item_of(c.page)
     c.item = c.read.by_id().get(iid) if iid is not None else None
+    # item-talk-reads: the item's Ground Truth feature, the record the API's reads take.
+    fid = c.item.row.feature_id if c.item is not None else None
+    c.item_feature = await c.db.get(Entity, fid) if fid is not None else None
 
 
 def label(e: service.Entry) -> str:
@@ -468,15 +471,35 @@ def links_of(citations: list[dict[str, Any]] | None) -> list[dict[str, str]]:
             if isinstance(x, dict) and x.get("kind") == "simple_link"]  # fmt: skip
 
 
+def _measure(g: Entity | None) -> dict[str, Any] | None:
+    """How the item's goal is measured, as its panel shows it."""
+    if g is None:
+        return None
+    due = service._goal_due(g)
+    return {"metric": service._metric(g), "current": service._goal_current(g),
+            "target": service._goal_target(g), "due": due.isoformat() if due else None}  # fmt: skip
+
+
 def item_context(c: Any) -> dict[str, Any] | None:
-    """The talk's item for the reader: "it" means this item."""
+    """The talk's item for the reader: "it" means this item. item-talk-reads: everything its
+    panel shows (its key and Ground Truth feature, its track, what it depends on and what
+    depends on it, its goal and how that is measured), so a question about it needs no read
+    of the API."""
     e = c.item
     if e is None:
         return None
     r = e.resolved
     names = {u.id: display_name(u.email, u.name) for u in c.people}
+    by_id = c.read.by_id()
+    f = getattr(c, "item_feature", None)
     return {
-        "id": str(e.row.id), "code": getattr(e, "code", None), "title": e.row.title,
+        "id": str(e.row.id), "key": e.row.item_key, "code": getattr(e, "code", None),
+        "title": e.row.title, "status": e.status,
+        "feature": {"id": str(f.id), "code": f.key, "title": f.title} if f is not None else None,
+        "track": e.track.title if e.track is not None else None,
+        "depends_on": [label(by_id[i]) for i in e.depends_on if i in by_id],
+        "needed_by": [label(by_id[i]) for i in e.needed_by if i in by_id],
+        "goal_measure": _measure(e.goal),
         "outcome": e.row.outcome, "start": r.start.date.isoformat(),
         "end": r.end.date.isoformat(), "estimated": r.undated,
         "milestone": e.milestone.name if e.milestone else None,
