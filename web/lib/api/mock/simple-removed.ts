@@ -46,8 +46,6 @@ type Db = SimpleDb & {
   trashed_tracks?: Record<string, { title: string; state: TrackState; owner?: string; items: string[] }>;
   /** tracks-goal: the PRD Oracle suggests a track for in the Inbox ("" none). */
   track_suggestion?: string;
-  /** tracks-goal (owner Nov 9): a proposed track change's accept, by change id (it puts on or takes off only its PRD). */
-  track_accept?: Record<string, () => void>;
 };
 
 /** tracks-goal (owner Nov 9): the open proposed track change that puts this PRD (an id) on a track, if any (as plan_changes.waiting_for). */
@@ -242,8 +240,12 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     db.plan_proposed.splice(db.plan_proposed.indexOf(p[3]), 1);
     return json(200, { change: { id: p[3], status: "declined" }, flags: [] });
   }
-  if (p[2] !== "changes" || m !== "POST" || p[3]) return null;
-  const body = (await req.clone().json().catch(() => ({}))) as Schemas["SimpleChangeIn"];
+  // tracks-goal (owner Nov 9): accepting a proposed track change (in the decider's Inbox) applies it as it is then, putting on or
+  // taking off only its PRD; ./simple-changes.ts then marks it accepted.
+  const proposal = p[2] === "changes" && m === "POST" && p[4] === "accept" ? (db.changes ?? []).find((c) => c.id === p[3] && c.status === "proposed" && (c.op === "add_track" || c.op === "edit_track")) : undefined;
+  if (proposal && ctx.role !== "owner" && !proposal.routed_to.includes(ctx.id)) return null;
+  if (!proposal && (p[2] !== "changes" || m !== "POST" || p[3])) return null;
+  const body = (proposal ? { op: proposal.op, target: proposal.target, before: {}, after: proposal.after } : await req.clone().json().catch(() => ({}))) as Schemas["SimpleChangeIn"];
   if (!OPS.has(body.op)) return null;
   if (ctx.role === "viewer") return json(403, { detail: "Requires the commenter role" });
   const t = (body.target ?? {}) as Record<string, string>;
@@ -267,14 +269,11 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     setPrds(states[k], titles);
     for (const s of db.items) if (!s.track && titles.includes(prdOfItem(s))) s.track = k;
   };
-  const done = (res: Schemas["SimpleChangeResult"], back: () => Record<string, unknown> | void, accept?: () => void) => {
+  const done = (res: Schemas["SimpleChangeResult"], back: () => Record<string, unknown> | void, waits = false) => {
     if (res.change.status === "applied") (db.plan_done ??= {})[res.change.id] = back;
     else (db.plan_proposed ??= []).push(res.change.id);
-    if (res.change.status === "proposed" && accept) {
-      // tracks-goal (owner Nov 9): it waits in its decider's Inbox; accepting it there applies it as it is then.
-      (db.changes ??= []).push(res.change);
-      (db.track_accept ??= {})[res.change.id] = accept;
-    }
+    // tracks-goal (owner Nov 9): it waits in its decider's Inbox (simple_proposals), to accept or decline there.
+    if (res.change.status === "proposed" && waits) (db.changes ??= []).push(res.change);
     return json(201, res);
   };
   /** A track to Settings › Trash: its features go to no track, kept for a restore (as the API's Trash list, no item ids and no items of its own). */
@@ -307,7 +306,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     const titles = want.map((id) => takeablePrd(db, id));
     if (titles.some((x) => x === undefined)) return json(409, { detail: "That PRD is not accepted yet, or its track is in Trash" });
     if (a.goal_id && !liveGoals(db).some((g) => g.id === a.goal_id)) return json(422, { detail: "after.goal_id: not one of this company's goals" });
-    if (!owner && asked(db, want)) return json(409, { detail: "A change to that PRD's track waits for a decision already" });
+    if (!proposal && !owner && asked(db, want)) return json(409, { detail: "A change to that PRD's track waits for a decision already" });
     let added = "";
     const putBack = snapshot();
     const make = () => {
@@ -317,6 +316,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
       putPrds(k, titles as string[]);
       if (a.owner_id) (db.track_owners ??= {})[k] = a.owner_id;
     };
+    if (proposal) return (make(), null);
     if (owner) make();
     // Undo removes the track while it holds nothing; one that anything references since goes to Trash.
     return done(change(ctx, body, owner, ctx.owners, `added the track ${title}`), () => {
@@ -327,7 +327,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
       delete db.track_titles?.[added];
       delete states[added];
       delete db.track_owners?.[added];
-    }, titles.length ? make : undefined);
+    }, titles.length > 0);
   }
   const k = keyOf(t.track_id ?? "");
   if (!k) return json(404, { detail: "No such track" });
@@ -347,17 +347,13 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     const adding = !!ids.add_prd_id;
     const prd = takeablePrd(db, (ids.add_prd_id ?? (a as { remove_prd_id?: string }).remove_prd_id)!);
     if (!prd) return json(409, { detail: "That PRD is not accepted yet, or its track is in Trash" });
-    if (adding === prdsOf(states[k]).includes(prd)) return json(422, { detail: `that PRD is ${adding ? "on" : "not on"} the track already` });
+    if (adding === prdsOf(states[k]).includes(prd)) return json(proposal ? 409 : 422, { detail: proposal ? "outdated: that PRD's track changed since" : `that PRD is ${adding ? "on" : "not on"} the track already` });
+    if (proposal) return (putPrds(k, adding ? [...prdsOf(states[k]), prd] : prdsOf(states[k]).filter((x) => x !== prd)), null);
     if (!decides && asked(db, [prdId(prd)])) return json(409, { detail: "A change to that PRD's track waits for a decision already" });
-    const write = () => {
-      const now_ = prdsOf(states[k]);
-      if (adding === now_.includes(prd)) return;
-      putPrds(k, adding ? [...now_, prd] : now_.filter((x) => x !== prd));
-    };
     const putBack = snapshot();
-    if (decides) write();
+    if (decides) putPrds(k, adding ? [...prdsOf(states[k]), prd] : prdsOf(states[k]).filter((x) => x !== prd));
     const res = change(ctx, { ...body, target: { ...t, title, prd_titles: { [prdId(prd)]: prd } } }, decides, route, `${adding ? "put" : "took"} ${prd} ${adding ? "on" : "off"} ${title}`);
-    return done(res, putBack, write);
+    return done(res, putBack, true);
   }
   if (body.op === "edit_track") {
     // tracks-goal: a PRD set is a free one; a goal a live one.
