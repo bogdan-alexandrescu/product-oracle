@@ -8,8 +8,11 @@ each PRD's) and the track milestones. A goal milestone that is the same mileston
 track milestone is folded into it and shares its code (the one place of that rule; Home's
 plan reads it as one row): the track milestone is the one of that code holding items on the
 goal milestone's roadmap, and either the goal milestone has no goal (a PRD's or the
-roadmap's own) or it is the roadmap's only milestone of that code with a name that matches
-(one's words lead the other's, or one has none).
+roadmap's own) and it is the one such track, or their names match (one's words lead the
+other's, or one has none), whatever else of the code the roadmap holds (the owner's "Join
+whenever names match", Nov 9). A goal's milestone whose name matches a PRD's (or the roadmap's
+own) milestone of its code on its roadmap is that milestone too. No name is hidden: each
+surface shows the longer name and lists the other ("Also: ...").
 
 Codes go by date (undated last); on one date by goal order (``oracle.baseline.goal_order``,
 no goal last), then by name. No suffixes, no repeats: a milestone added or moved earlier
@@ -78,24 +81,40 @@ def assign(
     groups: dict[uuid.UUID, list[SimpleGoalMilestone | SimpleMilestone]] = {
         tm.id: [tm] for tm in tracks
     }
-    for gm in goal_ms:
+    # Join whenever names match (the owner, Nov 9): a goal milestone is the same milestone as a
+    # track milestone (or a PRD's, or the roadmap's own, milestone) of its code on its roadmap
+    # whose name it leads or follows, whatever else of the code the roadmap holds.
+    into: dict[uuid.UUID, uuid.UUID] = {}
+
+    def best(gm: SimpleGoalMilestone, of: list) -> uuid.UUID | None:
+        name = split(gm.name)[1]
+        hits = [m for m in of if _match(name, split(m.name)[1])]
+        hits.sort(key=lambda m: (_words(split(m.name)[1]) != _words(name), str(m.id)))
+        return hits[0].id if hits else None
+
+    for gm in sorted(goal_ms, key=lambda g: (g.goal_id is not None, str(g.id))):
         code = _gm_code(gm)
         there = [
             tm
             for tm in tracks
             if code and split(tm.name)[0] == code and gm.roadmap_id in held.get(tm.id, ())
         ]
-        alike = {
-            (g.goal_id, g.prd.id if g.prd else None)
-            for g in goal_ms
-            if g.roadmap_id == gm.roadmap_id and _gm_code(g) == code
-        }
-        plain = gm.goal_id is None
-        same = len(alike) == 1 and len(there) == 1 and _match(gm.name, split(there[0].name)[1])
-        if len(there) == 1 and (plain or same):
-            groups[there[0].id].append(gm)
+        if gm.goal_id is None and len(there) == 1:
+            to: uuid.UUID | None = there[0].id
         else:
+            plain = [
+                g
+                for g in goal_ms
+                if code and g.goal_id is None and g is not gm
+                and g.roadmap_id == gm.roadmap_id and _gm_code(g) == code
+            ]  # fmt: skip
+            to = best(gm, there) or (best(gm, plain) if gm.goal_id is not None else None)
+        if to is None:
             groups[gm.id] = [gm]
+            continue
+        to = into.get(to, to)
+        into[gm.id] = to
+        groups.setdefault(to, []).append(gm)
     far = len(goal_rank) + 1
 
     def key(members: list[SimpleGoalMilestone | SimpleMilestone]) -> tuple:
