@@ -823,7 +823,7 @@ function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackO
   const when = nextName ? ` Next milestone: ${nextName}${nextDate ? `, ${calendarDay(nextDate)}` : ""}.` : "";
   const headline = trackHeadline(health, counts, when, prdMoved ? latestApproved : null);
   const out: Schemas["TrackOverview"] = {
-    id: t.id, title: t.title, status: t.status, owner_id: t.owner_id, prd: docRef(prd), started_version: t.started_version,
+    id: t.id, title: t.title, status: t.status, owner_id: t.owner_id, prd: docRef(prd), prds: [docRef(prd)], started_version: t.started_version,
     current_version: t.current_version, latest_approved_version: latestApproved,
     roadmap: roadmap ? docRef(roadmap, rv) : null, lock_version: t.lock_version, created_at: t.created_at, monitored_at: t.monitored_at,
     health, headline, counts,

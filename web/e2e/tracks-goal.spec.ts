@@ -44,8 +44,8 @@ test.describe("Tracks: a track's PRD and goal", () => {
     await page.getByTestId("tracks-open").click();
     await sheet(page).getByRole("button", { name: "Change Account Management" }).click();
     const added = row(page, "Account Management");
-    await expect(added.getByLabel("PRD", { exact: true })).toHaveValue("");
-    await expect(added.getByLabel("PRD", { exact: true }).locator("option:checked")).toHaveText("No PRD");
+    await expect(added.getByTestId("track-prds")).toContainText("No PRD");
+    await expect(added.getByTestId("track-prd")).toHaveCount(0);
     await expect(added.getByLabel("Goal", { exact: true }).locator("option:checked")).toHaveText("No goal");
     await sheet(page).getByRole("button", { name: "Change Guided setup track" }).click();
     await expect(row(page, "Guided setup track").getByLabel("Goal", { exact: true }).locator("option:checked")).toHaveText("Growth");
