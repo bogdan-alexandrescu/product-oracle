@@ -104,10 +104,9 @@ for (const phone of [false, true]) {
           await setUp(page, scheme, EMAILS[role]);
           await page.goto("/simple/prds/guided-setup");
           const strip = page.getByLabel("Timeline strip");
-          // roadmap-milestone-codes (owner Nov 10): a row reads its milestone's roadmap code, the one
-          // Home and the Roadmap show (Beta launch is M5, after M1 Beta and the goals' targets); the
-          // PRD's written M1 and M2 name no roadmap milestone, so those rows read their names alone.
-          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["Measure it, make it safe · 3 roadmap items", "Ship to beta · 2 roadmap items", "M5 · Beta launch · 3 roadmap items", "No milestone · 1 roadmap item"]);
+          // roadmap-milestone-codes (owner Nov 10): the PRD's written M1 and M2 name no roadmap
+          // milestone, so those rows read their names alone, never the PRD's own code.
+          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["Measure it, make it safe · 3 roadmap items", "Ship to beta · 2 roadmap items", "Beta launch · 3 roadmap items", "No milestone · 1 roadmap item"]);
           await expect(strip).not.toContainText("M1 · Measure it");
           await expect(strip).not.toContainText("dry run");
 
