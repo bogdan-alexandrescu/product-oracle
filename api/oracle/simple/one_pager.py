@@ -416,6 +416,13 @@ def roadmap_codes_of(read: Any, prd_id: uuid.UUID) -> Callable[..., str | None]:
             if k and (k not in own or int(m.roadmap_code[1:]) < int(own[k][1:])):
                 own[k] = m.roadmap_code
 
+    by_name: dict[str, str] = {}
+    for m in read.milestones:
+        k = " ".join((m.name or "").split()).casefold()
+        code = m.roadmap_code
+        if k and code and (k not in by_name or int(code[1:]) < int(by_name[k][1:])):
+            by_name[k] = code
+
     def of(text: str | None, *ids: uuid.UUID | None) -> str | None:
         for i in ids:
             if i is not None and by_id.get(i):
@@ -424,7 +431,12 @@ def roadmap_codes_of(read: Any, prd_id: uuid.UUID) -> Callable[..., str | None]:
             return None
         key, label = plan_strip.milestone_of(text)
         name = label.split(" · ", 1)[1] if " · " in label else ""
-        return own.get(key) or own.get(" ".join(name.split()).casefold())
+        return (
+            own.get(key)
+            or own.get(" ".join(name.split()).casefold())
+            # A track milestone the text names ("Beta launch"), as Home and the Roadmap read it.
+            or by_name.get(" ".join((name or label).split()).casefold())
+        )
 
     return of
 

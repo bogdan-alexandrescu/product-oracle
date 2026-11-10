@@ -665,12 +665,18 @@ function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem
       if (k && (!own.has(k) || Number(m.roadmap_code.slice(1)) < Number(own.get(k)!.slice(1)))) own.set(k, m.roadmap_code);
     }
   }
+  const byName = new Map<string, string>();
+  for (const m of (out?.milestones ?? []) as { name?: string | null; roadmap_code?: string | null }[]) {
+    const k = (m.name ?? "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+    if (k && m.roadmap_code && (!byName.has(k) || Number(m.roadmap_code.slice(1)) < Number(byName.get(k)!.slice(1)))) byName.set(k, m.roadmap_code);
+  }
   const codeOf = (text: string | null, ...ids: (string | null | undefined)[]): string | null => {
     for (const i of ids) if (i && byId.get(i)) return byId.get(i)!;
     if (!text) return null;
     const [key, label] = milestoneOf(text);
     const name = label.includes(" · ") ? label.split(" · ").slice(1).join(" · ") : "";
-    return own.get(key) ?? own.get(name.split(/\s+/).filter(Boolean).join(" ").toLowerCase()) ?? null;
+    // A track milestone the text names ("Beta launch"), as Home and the Roadmap read it.
+    return own.get(key) ?? own.get(name.split(/\s+/).filter(Boolean).join(" ").toLowerCase()) ?? byName.get((name || label).split(/\s+/).filter(Boolean).join(" ").toLowerCase()) ?? null;
   };
   const items = (out?.items ?? [])
     .filter((i) => i.prd?.slug === db.doc.slug || i.prd?.id === db.doc.id || (!!featureCode(i.code) && codes.has(featureCode(i.code)!)))
