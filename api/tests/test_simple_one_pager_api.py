@@ -726,6 +726,27 @@ async def test_a_prd_draft_waiting_on_me_opens_on_its_one_pager_to_approve(clien
     assert after is None or after["can_approve"] is False
 
 
+async def test_a_one_pager_read_reuses_its_who_for_can_approve(client):
+    """protects=review minor (inbox-prd-approval-open): a one-pager GET with a draft reads
+    the PRD's review policy within its budget: ``can_approve`` reuses the page's ``who``;
+    fails_when=each GET runs drafts.who as well; no_claim=can_approve's rule (above)."""
+    from tests.coverage_helpers import count_statements
+
+    ctx = await world(client)
+    view = await get(client, ctx, "decider")
+    r = await edit(client, ctx, "decider", view, "bets-2", "Invite suggestions from contacts")
+    assert r.status_code == 201, r.text
+    for who in ("decider", "owner"):
+        with count_statements() as seen:
+            draft = (await get(client, ctx, who))["draft"]
+        assert draft is not None and draft["status"] == "working"
+        assert draft["can_approve"] is False
+        # The read budget: the policy as one_pager.who and drafts.sees/counts read it;
+        # can_approve reuses the page's own who, never reads it again.
+        policy = [x for x in seen if "FROM document_review_policies" in x]
+        assert len(policy) <= 4, len(policy)
+
+
 async def test_remind_needs_a_submitted_draft(client):
     ctx = await world(client)
     view = await get(client, ctx, "decider")

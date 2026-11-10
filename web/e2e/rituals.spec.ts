@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_RITUALS_KEY } from "../lib/api/mock/rituals";
 
 import { mockName } from "../lib/api/mock/people";
 
@@ -314,4 +315,29 @@ test("One zone: a ritual has no Time zone field; the inspector names the Company
   await form.getByRole("button", { name: "Add" }).click();
   await ritualRow(page, "Pricing sync").click();
   await expect(inspector(page).getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles) for now");
+});
+
+test("12h: a ritual that failed to prepare stays New through Inbox visits and is Seen once an owner opened it", async ({ page }) => {
+  // protects=review minor (inbox-ritual-seen), the owners' failed-to-prepare row: New until an
+  // owner opens the occurrence after it failed; fails_when=it is Seen as soon as it shows or
+  // after a visit to the Inbox; no_claim=a failed Retry (api test_rituals_ticker).
+  await page.addInitScript((key) => localStorage.setItem(key, "prepare-failed"), MOCK_RITUALS_KEY);
+  await withRituals(page);
+  await login(page);
+  const failed = ritualNeed(page, "Ritual failed to prepare · Quarterly goals review");
+  for (let visit = 0; visit < 2; visit++) {
+    await page.goto("/inbox");
+    await tab(page, "New").click();
+    await expect(failed).toHaveCount(1);
+  }
+  await openRituals(page);
+  await ritualRow(page, "Quarterly goals review").click();
+  await inspector(page).getByTestId("ritual-occurrences").getByRole("link").first().click();
+  await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
+  await expect(page.getByTestId("occurrence-state")).toBeVisible();
+  await page.goto("/inbox");
+  await tab(page, "Seen").click();
+  await expect(failed).toHaveCount(1);
+  await tab(page, "New").click();
+  await expect(failed).toHaveCount(0);
 });
