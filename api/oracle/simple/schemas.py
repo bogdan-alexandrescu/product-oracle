@@ -1105,6 +1105,25 @@ class SimplePriorityOverride(BaseModel):
     at: dt.datetime | None = None
 
 
+class SimplePriorityTwin(BaseModel):
+    """qa-prio-twins: another ranked record of a row's feature, not linked to it (a baseline
+    feature of the same name), shown on that row, never as a row of its own: a person merges it
+    into the row's record (``merge``) or keeps both; Oracle never merges it."""
+
+    feature_id: str | None = None
+    item_id: uuid.UUID | None = None
+    code: str
+    title: str
+    goal: SimplePriorityGoal | None = None
+    # How it merges into the row's record: ``item`` (merge_item into ``into_id``), ``feature``
+    # (merge_item of its item into the row's item), ``entity`` (the baseline's Merge into… of
+    # one feature into the row's); None: no merge the caller may start.
+    merge: Literal["item", "entity"] | None = None
+    into_id: uuid.UUID | None = None
+    # The caller's merge applies (else it is proposed).
+    applies: bool = False
+
+
 class SimplePriorityRow(BaseModel):
     rank: int
     # Oracle's rank (the formula and dependencies, before people's overrides).
@@ -1162,6 +1181,11 @@ class SimplePriorityRow(BaseModel):
     parts: "list[SimplePartRef]" = Field(default_factory=list)
     # The feature's active override as override_priority's ``before.override`` wants it.
     before_override: dict[str, Any] | None = None
+    # qa-prio-twins: the feature's draft item on the roadmap when it has no other (it is on the
+    # roadmap, not yet confirmed: a move confirms it, never adds a second item).
+    draft_item_id: uuid.UUID | None = None
+    # qa-prio-twins: the same feature's other ranked records, not linked to it (same name).
+    twins: list[SimplePriorityTwin] = Field(default_factory=list)
 
 
 class SimpleFlowScreen(BaseModel):
@@ -1315,8 +1339,13 @@ class SimplePriorityDraft(BaseModel):
     goal: SimplePriorityGoal | None = None
     roadmap: SimpleDocRef
     applies: bool = False
-    # Non-draft items of the same roadmap, same goal first (at most 8).
+    # Non-draft items of the same roadmap, same goal first (at most 8); its row's item first.
     merge_into: list[SimplePriorityMerge] = []
+    # qa-prio-twins: the ranked row it shows on, not as a draft of its own: its feature's (by
+    # its link: feature_id, else its trace's source feature), else a row of its name's.
+    row_feature_id: str | None = None
+    # Linked to that row's feature (else only named as it: Merge into… its item).
+    linked: bool = False
 
 
 class SimplePriorityUnranked(BaseModel):
