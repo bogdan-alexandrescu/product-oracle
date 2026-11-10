@@ -18,6 +18,9 @@ Test cards (protects / fails_when):
   goal milestone, and on_roadmap false (the goal edit) takes it off; fails_when=it does not.
 - test_codes_unique_and_by_date_with_goal_targets: codes stay one per milestone, by date;
   fails_when=a code repeats or goes out of date order.
+- test_a_milestone_has_its_own_track: the panel's Track (tb-mk fidelity, the pick's Track field)
+  is written on create and patch, read back with its name, cleared by null, and an unknown
+  track is a 422; fails_when=the track is lost, misnamed or not cleared.
 - test_tracks_served_in_order_with_health: the read's track bands, in the Tracks order,
   each with its health and reason; fails_when=order, health or reason is wrong.
 """
@@ -261,3 +264,22 @@ async def test_tracks_served_in_order_with_health(client):
         f"At risk: Quick search ends Dec 4, after {code} Search ready on Nov 27"
     )
     uuid.UUID(search["id"])
+
+
+async def test_a_milestone_has_its_own_track(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    m = await make(client, ctx, ids, name="Checkout beta", track_id=ids["checkout"])
+    assert (m["track_id"], m["track_name"]) == (ids["checkout"], "Checkout")
+    r = await client.patch(f"{MILESTONES}/{m['id']}", headers=ctx.as_("owner"),
+                           json={"track_id": ids["search"]})  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert (r.json()["track_id"], r.json()["track_name"]) == (ids["search"], "Search")
+    assert by_id(await read(client, ctx))[m["id"]]["track_name"] == "Search"
+    r = await client.patch(f"{MILESTONES}/{m['id']}", headers=ctx.as_("owner"),
+                           json={"track_id": None})  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert (r.json()["track_id"], r.json()["track_name"]) == (None, None)
+    r = await client.patch(f"{MILESTONES}/{m['id']}", headers=ctx.as_("owner"),
+                           json={"track_id": str(uuid.uuid4())})  # fmt: skip
+    assert r.status_code == 422, r.text
