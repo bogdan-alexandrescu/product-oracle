@@ -270,6 +270,36 @@ for (const scheme of ["light", "dark"] as const) {
     });
 
     /**
+     * Card tb-mk-track-drop-proposer: protects = an approver's quick add dropped on a track band is
+     * a proposal that keeps the band's track (after.track_id), so the owner's Accept lands it in
+     * that band, not the roadmap's first track; fails_when = the accepted item sits in Usage alerts
+     * track (the Alerts roadmap's first); no_claim = an owner's own drop (above).
+     */
+    test("an approver's quick add on a track band keeps its track once the owner accepts it", async ({ page }) => {
+      test.skip(page.viewportSize()!.width <= 640, "a phone's Timeline is a list by quarter, with no band to drop on");
+      await openRoadmap(page, "approver@example.com");
+      await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
+      await dragAdd(page, "Rule import from a file", page.getByTestId("chart-group").filter({ hasText: "Guided setup track" }));
+      await expect(toastWith(page, "Proposed Rule import from a file (Guided setup track): it waits for the roadmap's owner in Needs a decision")).toBeVisible();
+      await expect(bar(page, "rule-import-from-a-file")).toHaveCount(0);
+
+      await switchTo(page, "admin@example.com");
+      await page.getByTestId("format-gantt").click();
+      await expect(bar(page, "alert-rules")).toBeVisible();
+      await page.getByTestId("needs-decision").click();
+      const tray = page.getByTestId("decision-tray");
+      const p = tray.getByTestId("tray-proposal").filter({ hasText: "Rule import from a file" });
+      await p.getByRole("button", { name: "Accept" }).click();
+      await expect(toastWith(page, "Accepted: it is in your working draft")).toBeVisible();
+      await tray.getByRole("button", { name: "Close" }).click();
+      await expect(bar(page, "rule-import-from-a-file")).toBeVisible();
+      await expect.poll(() => groupOf(page, "Rule import from a file")).toBe("Guided setup track");
+      // The Timeline's band too.
+      await page.getByTestId("format-timeline").click();
+      await expect.poll(() => bandOf(page, "rule-import-from-a-file")).toBe("Guided setup track");
+    });
+
+    /**
      * Card simple-additions-suggestions-owner: protects = the tray's "Suggested features"
      * shows Oracle's suggestions with outcome, why, evidence with confidence and a flow;
      * Accept adds the feature as a draft on its goal (the empty goal gets its first item)

@@ -2041,14 +2041,16 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
     db.ids[key] = id;
     const added: SeedItem = {
       key, title: String(a.title), horizon: a.horizon as SeedItem["horizon"], roadmap, goal: goalKey,
-      // tb-mk: the band's track (after.track_id), else the roadmap's first track.
-      track: Object.keys(TRACKS).find((k) => !!a.track_id && stableUuid(`simple-track/${k}`) === a.track_id) ?? db.items.find((x) => x.roadmap === roadmap && x.track)?.track, draft: true, outcome: typeof a.outcome === "string" ? a.outcome : null,
+      track: db.items.find((x) => x.roadmap === roadmap && x.track)?.track, draft: true, outcome: typeof a.outcome === "string" ? a.outcome : null,
       drafting_until: mockNowMs() + draftingMs(), quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
       ...(a.milestone ? { milestone: { name: String((a.milestone as Values).name), day: dayIn(a.horizon as SeedItem["horizon"], (a.milestone as Values).date) } } : {}),
       looks_like: lookalikes(db, String(a.title), roadmap),
     };
     // simple-replaced-prds: never filed under a replaced PRD, which Simple leaves out.
     fileUnderCurrentPrd(db, added);
+    // tb-mk (additions: track_id): the band's track (after.track_id), its PRD left as filed.
+    const band = Object.keys(TRACKS).find((k) => !!a.track_id && stableUuid(`simple-track/${k}`) === a.track_id);
+    if (band) added.track = band;
     db.items.push(added);
     return;
   }

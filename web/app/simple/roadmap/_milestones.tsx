@@ -1318,6 +1318,7 @@ export function MsCard() {
         <span className="flex items-center gap-1 text-xs font-semibold text-text2">
           Work that serves it
           {/* tb-mk (owner Nov 10): the hint is visible text, the owner's picked copy (data-owner-copy). */}
+          {!reads && " "}
           {!reads && (
             <span className="font-normal" data-owner-copy data-testid="ms-waits-hint">
               · tap bars on the chart to add

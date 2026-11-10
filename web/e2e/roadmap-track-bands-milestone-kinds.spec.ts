@@ -349,7 +349,10 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     await expect(c.getByLabel("Baseline")).toHaveCount(0);
     await expect(c.getByTestId("ms-toward-row").locator("select").first()).toHaveAccessibleName("Builds toward");
     await expect(c).not.toContainText("Baseline");
-    await expect(c.getByTestId("ms-waits-on")).toContainText("Work that serves it");
+    // The owner's picked copy (Nov 10): the hint is visible text after the heading, not a tip.
+    await expect(c.getByTestId("ms-waits-on")).toContainText("Work that serves it · tap bars on the chart to add");
+    await expect(c.getByTestId("ms-waits-hint")).toBeVisible();
+    await expect(c.getByTestId("ms-waits-tip")).toHaveCount(0);
     await expect(c.getByTestId("ms-waits-chip")).toHaveCount(1);
     await expect(c.getByTestId("ms-waits-chip")).toContainText("Alert rules engine");
     await c.getByLabel("Sub-goal of").selectOption({ label: (await c.getByLabel("Sub-goal of").locator("option", { hasText: "Teams set 3 rules in week 1" }).textContent())!.trim() });

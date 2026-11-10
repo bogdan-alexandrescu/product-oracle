@@ -83,7 +83,7 @@ test.describe("desktop", () => {
     await login(page);
     await page.goto("/simple/prds/guided-setup");
     const strip = page.getByLabel("Timeline strip");
-    const row = strip.getByTestId("plan-strip-row").filter({ hasText: "M1 · Measure it, make it safe · 3 roadmap items" });
+    const row = strip.getByTestId("plan-strip-row").filter({ hasText: "Measure it, make it safe · 3 roadmap items" });
     const label = row.getByTestId("plan-strip-label");
     await expect(label).toBeVisible();
     const { height, lineHeight, cut } = await label.evaluate((el) => ({
@@ -95,7 +95,7 @@ test.describe("desktop", () => {
     const tip = row.getByTestId("plan-strip-label-tip");
     if (cut) {
       await tip.click();
-      await expect(row.getByRole("tooltip")).toHaveText("M1 · Measure it, make it safe · 3 roadmap items");
+      await expect(row.getByRole("tooltip")).toHaveText("Measure it, make it safe · 3 roadmap items");
       await page.keyboard.press("Escape");
       await expect(row.getByRole("tooltip")).toBeHidden();
     } else {
@@ -114,7 +114,7 @@ test.describe("desktop", () => {
     await page.goto("/simple/prds/guided-setup");
     const labels = page.getByLabel("Timeline strip").getByTestId("plan-strip-label");
     await expect(labels.first()).toBeVisible();
-    await expect(page.getByLabel("Timeline strip").getByTestId("plan-strip-row").filter({ hasText: "M1 · Measure it, make it safe · 3 roadmap items" })).toHaveCount(1);
+    await expect(page.getByLabel("Timeline strip").getByTestId("plan-strip-row").filter({ hasText: "Measure it, make it safe · 3 roadmap items" })).toHaveCount(1);
     for (const label of await labels.all()) {
       const text = (await label.textContent())!;
       expect(text).toMatch(/ · \d+ roadmap items?$/);

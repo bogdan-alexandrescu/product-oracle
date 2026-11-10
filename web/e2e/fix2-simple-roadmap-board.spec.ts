@@ -118,6 +118,9 @@ for (const [where, use] of [
      */
     test("a goal with no suggestions shows no chip", async ({ page }) => {
       await openBoard(page);
+      // The goal chips sit on goal bands: Group by Goal.
+      await page.getByTestId("group-goal").click();
+      await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
       await expect(group(page, "now", "Grow retention").getByTestId("goal-suggestions-open")).toContainText("✦ 1 suggested feature");
       await expect(group(page, "now", "Faster activation").getByTestId("goal-suggestions-open")).toHaveCount(0);
     });

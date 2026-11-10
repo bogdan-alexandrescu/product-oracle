@@ -693,7 +693,8 @@ function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem
         milestone: i.milestone?.date ? [i.milestone.name ?? "Milestone", i.milestone.date] as [string, string] : null,
         ...(i.milestone?.record_id ? { record: { id: i.milestone.record_id, name: i.milestone.record_name ?? "Milestone" } } : {}),
         ...(i.milestone?.start_date ? { milestoneStart: i.milestone.start_date } : {}),
-        code: i.milestone ? codeOf(i.milestone.name ?? null, i.milestone.id, i.milestone.record_id) : null,
+        // The track milestone naming it is its record (the API's milestone.record_id), its items' list or its own.
+        code: i.milestone ? codeOf(i.milestone.record_name ?? i.milestone.name ?? null, i.milestone.id, i.milestone.record_id, ((out?.milestones ?? []) as { id: string; item_ids?: string[] }[]).find((m) => m.item_ids?.includes(i.id))?.id) : null,
       }];
     });
   // A dated plan's span is the one its timeline draws.
