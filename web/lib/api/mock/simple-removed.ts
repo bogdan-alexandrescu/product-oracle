@@ -324,7 +324,10 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
       if (a.owner_id) (db.track_owners ??= {})[k] = a.owner_id;
     };
     if (proposal) return (make(), null);
-    if (owner) (make(), closeAsked(db, ctx.id, want));
+    if (owner) {
+      make();
+      closeAsked(db, ctx.id, want);
+    }
     // Undo removes the track while it holds nothing; one that anything references since goes to Trash.
     return done(change(ctx, body, owner, ctx.owners, `added the track ${title}`), () => {
       if (!(added in TRACKS)) return;
