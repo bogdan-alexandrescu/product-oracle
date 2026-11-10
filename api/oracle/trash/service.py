@@ -283,6 +283,32 @@ def preview(resolved: Resolved) -> dict[str, Any]:
     }
 
 
+async def feeds(db: AsyncSession, resolved: Resolved) -> list[dict[str, Any]]:
+    """delete-prd-simple: the roadmap items and tracks the PRDs of a delete feed, each once
+    (an item on several roadmaps by its key). They stay; the delete dialog names them."""
+    from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackPrd
+
+    ids = {d.id for d in resolved.documents if d.kind == "prd"}
+    if not ids:
+        return []
+    items = await db.scalars(
+        select(RoadmapItem)
+        .where(RoadmapItem.prd_document_id.in_(ids))
+        .order_by(RoadmapItem.title, RoadmapItem.id)
+    )
+    tracks = await db.scalars(
+        select(ProductTrack)
+        .join(TrackPrd, TrackPrd.track_id == ProductTrack.id)
+        .where(TrackPrd.prd_document_id.in_(ids), TrackPrd.state == "linked")
+        .order_by(ProductTrack.title, ProductTrack.id)
+    )
+    out: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in [*items, *tracks]:
+        said = describe(row)
+        out.setdefault((said["type"], said["slug"] or said["id"]), said)
+    return list(out.values())
+
+
 async def _actor_name(db: AsyncSession, principal: Principal) -> str | None:
     from oracle.auth.models import ApiToken, User
 
