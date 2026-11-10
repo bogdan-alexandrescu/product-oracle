@@ -953,6 +953,9 @@ export function MsCard() {
   const reads = rights === "read";
   const head = !d.id ? (d.second ? "Next milestone" : "New milestone") : reads ? `${d.code} ${d.name}` : `Edit ${d.code}`;
   const late = (id: string) => (ms.items.get(id)?.end.date ?? "") > d.date;
+  // Join whenever names match (the owner, Nov 9): the joined milestone's other names, each once.
+  const joined = d.id ? ms.joined.get(d.code) : undefined;
+  const others = joined ? [`${d.code} ${joined.name}`, ...joined.also].filter((n) => n.toLowerCase() !== `${d.code} ${d.name.trim()}`.toLowerCase()) : [];
   return (
     <div data-testid="ms-card" data-rights={rights} role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
       {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
@@ -960,6 +963,11 @@ export function MsCard() {
         <h2 className="text-[15px] font-semibold">{head}</h2>
         <span className="text-xs text-text2">{`${goalTitle} · ${day(d.date)}`}</span>
       </div>
+      {others.length > 0 && (
+        <span data-testid="ms-card-also" className="-mt-1.5 text-xs text-text2">
+          Also: {others.join(", ")}
+        </span>
+      )}
       <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
         <Field label="Name">
           <span className="font-semibold" style={{ color: msInk(d.code) }}>
