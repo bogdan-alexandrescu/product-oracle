@@ -853,6 +853,8 @@ function DayChart(props: TimelineProps) {
         ref={box}
         data-testid="timeline-scroll"
         onScroll={(e) => setSl(e.currentTarget.scrollLeft)}
+        // A bar brought into sight (Tab to it, a scroll to it) clears the sticky names column, never under it.
+        style={{ scrollPaddingLeft: labelW }}
         className="relative overflow-x-auto"
       >
         <div className="relative" style={{ width: labelW + trackW }}>

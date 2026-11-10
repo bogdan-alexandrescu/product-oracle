@@ -1045,8 +1045,10 @@ export function SimpleRoadmap() {
   const svg = useRef<SVGSVGElement | null>(null);
 
   const qs = useMemo(() => {
-    // Group by Milestone reads the goal grouping and regroups by the items' slices (lanes()).
-    const q: Record<string, string> = { group: f.group === "milestone" ? "goal" : f.group };
+    // Group by Milestone reads the goal grouping and regroups by the items' slices (lanes()); Group by
+    // Track reads it too and draws the Timeline's track bands (trackLaned), so picking a format, which
+    // starts it at Track, reads nothing again and draws its items once, never once more on a reply.
+    const q: Record<string, string> = { group: f.group === "milestone" || f.group === "track" ? "goal" : f.group };
     for (const k of ["roadmap", "prd", "goal", "track", "from", "to"] as const) if (f[k]) q[k] = f[k];
     return q;
   }, [f]);
@@ -1239,9 +1241,9 @@ export function SimpleRoadmap() {
   const data = useMemo(() => (all ? { ...all, items: all.items.filter((i) => i.status !== "done") } : undefined), [all]);
   const doneItems = useMemo(() => (all?.items ?? []).filter((i) => i.status === "done"), [all]);
   // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
-  const laned = useMemo(() => (data ? oneLane(lanes(data, f.group), f.group) : null), [data, f.group]);
-  // tb-mk: the Timeline and the Gantt always draw track bands, in the tracks' order, then No track.
+  // tb-mk: the Timeline always draws track bands, in the tracks' order, then No track; Group by Track the same bands.
   const goalLaned = useMemo(() => (data ? oneLane(trackLaned(data), "track") : null), [data]);
+  const laned = useMemo(() => (!data ? null : f.group === "track" ? goalLaned : oneLane(lanes(data, f.group), f.group)), [data, f.group, goalLaned]);
   const planPrds = useMemo(() => [...new Set((data?.items ?? []).flatMap((i) => (i.slices.length && i.prd ? [i.prd.slug] : [])))].sort(), [data]);
   // A plan the reader cannot open (404) leaves the other plans' no-work weeks.
   const plans = useQuery(`simple-plan-no-work:${planPrds.join(",")}`, async () =>
@@ -2133,7 +2135,7 @@ export function SimpleRoadmap() {
             }}
           />
           <Chart
-            data={(format === "gantt" && f.group === "track" ? goalLaned : laned) ?? data}
+            data={laned ?? data}
             lane={f.group}
             trackBands={f.group === "track"}
             noWork={noWork}
@@ -2162,7 +2164,7 @@ export function SimpleRoadmap() {
               setCard(null);
               setPop({ id: item.id, ...anchorOf(item.id) });
             }}
-            overlay={(l, sc, keepOff) => <GanttMilestones l={l} sc={sc} data={(format === "gantt" && f.group === "track" ? goalLaned : laned) ?? data} phone={phone} keepOff={keepOff} />}
+            overlay={(l, sc, keepOff) => <GanttMilestones l={l} sc={sc} data={laned ?? data} phone={phone} keepOff={keepOff} />}
           />
           </>
         )}
