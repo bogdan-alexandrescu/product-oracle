@@ -133,7 +133,9 @@ test("12c: after the end time the owner records notes and marks it held; the Rec
   await notes.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
   await expect(page.getByTestId("occurrence-state")).toBeVisible();
-  await page.goto("/inbox");
+  // Back to the Inbox from the app's nav, as a person goes (a reload could cut the open short).
+  await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
+  await expect(page).toHaveURL(/\/inbox$/);
   await tab(page, "Seen").click();
   await expect(notes).toHaveCount(1);
   await notes.getByRole("link", { name: "Open" }).click();
@@ -317,7 +319,7 @@ test("One zone: a ritual has no Time zone field; the inspector names the Company
   await expect(inspector(page).getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles) for now");
 });
 
-test("12h: a ritual that failed to prepare stays New through Inbox visits and is Seen once an owner opened it", async ({ page }) => {
+test("12i: a ritual that failed to prepare stays New through Inbox visits and is Seen once an owner opened it", async ({ page }) => {
   // protects=review minor (inbox-ritual-seen), the owners' failed-to-prepare row: New until an
   // owner opens the occurrence after it failed; fails_when=it is Seen as soon as it shows or
   // after a visit to the Inbox; no_claim=a failed Retry (api test_rituals_ticker).
@@ -335,9 +337,14 @@ test("12h: a ritual that failed to prepare stays New through Inbox visits and is
   await inspector(page).getByTestId("ritual-occurrences").getByRole("link").first().click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
   await expect(page.getByTestId("occurrence-state")).toBeVisible();
-  await page.goto("/inbox");
-  await tab(page, "Seen").click();
-  await expect(failed).toHaveCount(1);
+  await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
+  await expect(page).toHaveURL(/\/inbox$/);
+  // The open is recorded as the meeting page loads; the Inbox shows it once it reads it again.
+  await expect(async () => {
+    await page.reload();
+    await tab(page, "Seen").click();
+    await expect(failed).toHaveCount(1, { timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
   await tab(page, "New").click();
   await expect(failed).toHaveCount(0);
 });
