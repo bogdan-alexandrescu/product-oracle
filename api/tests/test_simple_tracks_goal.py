@@ -17,11 +17,23 @@ Test cards (protects / fails_when / no_claim):
 - test_a_prd_keeps_one_track: protects=a PRD with a track is neither added to nor set on
   another track (409), and a PRD taken off a track is free again; fails_when=two tracks
   share a PRD; no_claim=a PRD's track in Trash (tests.test_simple_removed_tracks).
+- test_a_prd_set_on_a_track_adopts_its_issues_and_roadmap: protects=``edit_track`` setting a
+  PRD on a track does what ``ensure_track`` does for a new one: the PRD's linked issues with
+  no track join it and a track with no roadmap takes the PRD's latest; fails_when=either is
+  left unset; no_claim=a PRD's issues already on another track.
+- test_a_feature_on_a_track_with_no_prd_reads_everywhere: protects=a feature on a track with
+  no PRD reads in track health, the track monitor, the Plan, priorities and the weekly
+  alignment report (each 200, naming the feature), with no SQLAlchemy "fully NULL primary
+  key" warning; fails_when=any read fails or looks up a Document with no id; no_claim=the
+  web.
 """
 
 import pytest
+from sqlalchemy import select
 
 from oracle import company_time
+from oracle.docs.models import DocumentVersion
+from oracle.roadmap.models import ProductTrack, TrackerRecord
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 from tests.test_simple_removed_tracks import read_tracks
@@ -169,3 +181,56 @@ async def test_a_prd_keeps_one_track(client):
     assert row(out, "Second")["prd_id"] == ids["own_prd_id"]
     assert row(out, "Guided setup")["prd_id"] is None
     assert ids["own_prd_id"] not in [p["id"] for p in out["prds"]]
+
+
+async def test_a_prd_set_on_a_track_adopts_its_issues_and_roadmap(client):
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        sd = Seed(s)
+        prd = await sd.doc("gift-boxes-prd")
+        pv = await sd.version(prd)
+        rm = await sd.doc("gift-boxes", "roadmap")
+        await sd.add(
+            DocumentVersion(document_id=rm.id, number=1, markdown="# gift-boxes\n",
+                            content_hash="gift-boxes-1", source_version_id=pv.id)
+        )  # fmt: skip
+        record = await sd.add(
+            TrackerRecord(tracker="linear", external_ref="EX-7", prd_document_id=prd.id,
+                          item_key="f-02", state="todo", observed_at=NOW)
+        )  # fmt: skip
+        await s.commit()
+        prd_id, rm_id, record_id = str(prd.id), rm.id, record.id
+    added = await change(client, ctx, "owner", "add_track", {}, {"title": "Gift Boxes"})
+    tid = added["change"]["after"]["track_id"]
+    await change(client, ctx, "owner", "edit_track", {"track_id": tid}, {"prd_id": prd_id})
+    async with tenant_session(ctx.tenant_id) as s:
+        track = await s.scalar(select(ProductTrack).where(ProductTrack.id == tid))
+        assert str(track.prd_document_id) == prd_id
+        assert track.roadmap_document_id == rm_id
+        record = await s.scalar(select(TrackerRecord).where(TrackerRecord.id == record_id))
+        assert str(record.track_id) == tid
+
+
+@pytest.mark.filterwarnings("error:.*fully NULL primary key")
+async def test_a_feature_on_a_track_with_no_prd_reads_everywhere(client):
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        sd = Seed(s)
+        rm = await sd.doc("accounts", "roadmap")
+        rv = await sd.version(rm)
+        track = await sd.add(ProductTrack(title="Account Management", status="active",
+                                          roadmap_document_id=rm.id))  # fmt: skip
+        await sd.item(rv, None, "f-03", title="Saved addresses", track_id=track.id)
+        await s.commit()
+        tid = track.id
+    owner = ctx.as_("owner")
+    reads = [
+        await client.get(f"/v1/tracks/{tid}", headers=owner),
+        await client.post(f"/v1/tracks/{tid}/monitor", headers=owner),
+        await client.get("/v1/plan", headers=owner),
+        await client.get("/v1/simple/priorities", headers=owner),
+        await client.post("/v1/alignment-reports", json={}, headers=owner),
+    ]
+    for r in reads:
+        assert r.status_code in (200, 201), (r.request.url, r.text)
+        assert "Saved addresses" in r.text, (r.request.url, r.text)
