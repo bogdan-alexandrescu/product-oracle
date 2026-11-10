@@ -15,8 +15,9 @@ import { expect, test, type Page } from "./test";
  * vqa one-pager 2 is in simple-one-pager-run-prd.spec.ts (an outcome's measure).
  *
  * vqa one-pager 3: protects = every milestone row of the Timeline strip reads its name: a
- * milestone record named only by its code ("M2") reads the name another item gives that code
- * ("one-pager-milestone-names"); fails_when = a row reads "Milestone M2 · 1 roadmap item";
+ * milestone record named only by its code ("M2") reads the name its own items give that code,
+ * in one row ("one-pager-milestone-names"); fails_when = a row reads "Milestone M2 · 1 roadmap
+ * item", or the record's items show as two rows of the same words;
  * no_claim = which code a row shows (an owner's decision).
  *
  * vqa-a: protects = a disagreement the PRD states twice ("Eight features wait for next quarter."
@@ -61,8 +62,7 @@ test("vqa one-pager 3: every milestone row of the Timeline strip reads its name"
   const labels = page.getByLabel("Timeline strip").getByTestId("plan-strip-label");
   await expect(labels).toHaveText([
     "M1 · Measured and mapped · 1 roadmap item",
-    "M2 · Ship to beta · 1 roadmap item",
-    "M2 · Ship to beta · 1 roadmap item",
+    "M2 · Ship to beta · 2 roadmap items",
   ]);
 });
 

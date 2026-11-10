@@ -34,8 +34,9 @@ Test cards (protects / fails_when / no_claim):
 - test_every_milestone_row_has_its_name (vqa one-pager 3): protects=each milestone row of the
   strip reads its code with its name: an item of the PRD with no slice whose milestone (or
   milestone record) says only its code takes the name the PRD's plan gives that code, or the
-  name another row of the strip gives it; fails_when=a row reads a bare code ("Milestone M2")
-  while the PRD names it; no_claim=which code a row shows (an owner's decision).
+  name that record's own items give it; fails_when=a row reads a bare code ("Milestone M2")
+  while the PRD names it, or a record takes (or merges into) another record's row of the same
+  code and date; no_claim=which code a row shows (an owner's decision).
 """
 
 from datetime import date
@@ -318,7 +319,8 @@ def test_every_milestone_row_has_its_name():
         "M3 · Open to all",
         "M4 · Rollout",
     ]
-    # A record row whose code another row names reads that name: one row of both, by date.
+    # A record named only by its code reads the name its own items give it, never the name of
+    # another record (or code row) of the same code and date: those stay their own rows.
     P, start, end, day = (
         plan_strip.PlanItem,
         date(2026, 11, 2),
@@ -327,9 +329,15 @@ def test_every_milestone_row_has_its_name():
     )
     rows = plan_strip.strip(
         [
-            P(start, end, False, "M2 · Ship to beta", day),
+            P(start, end, False, "M2 · Ship to beta", day, "c3a2", "M2"),
             P(start, end, False, "M2", day, "c3a2", "M2"),
+            P(start, end, False, "M2 · Open to all", day),
+            P(start, end, False, "M2", day, "c3a3", "M2"),
         ],
         start,
     ).rows
-    assert [(r.name, r.items) for r in rows] == [("M2 · Ship to beta", 2)]
+    assert [(r.name, r.items) for r in rows] == [
+        ("M2", 1),
+        ("M2 · Open to all", 1),
+        ("M2 · Ship to beta", 2),
+    ]

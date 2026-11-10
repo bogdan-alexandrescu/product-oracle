@@ -778,5 +778,136 @@
    ],
    "past_edge": 0
   }
+ },
+ {
+  "name": "two milestone records sharing a name and date stay two rows",
+  "today": "2026-10-27",
+  "items": [
+   {
+    "start": "2026-11-02",
+    "end": "2026-11-27",
+    "estimated": false,
+    "milestone": "M1 · Pilot",
+    "milestoneDate": "2026-12-04",
+    "record": {
+     "id": "pilot-north",
+     "name": "M1 · Pilot"
+    }
+   },
+   {
+    "start": "2026-11-09",
+    "end": "2026-12-01",
+    "estimated": false,
+    "milestone": "M1 · Pilot",
+    "milestoneDate": "2026-12-04",
+    "record": {
+     "id": "pilot-south",
+     "name": "M1 · Pilot"
+    }
+   }
+  ],
+  "expected": {
+   "start": "2026-11-01",
+   "end": "2026-12-31",
+   "months": [
+    "2026-11-01",
+    "2026-12-01"
+   ],
+   "today": null,
+   "rows": [
+    {
+     "name": "M1 · Pilot",
+     "date": "2026-12-04",
+     "items": 1,
+     "start": "2026-11-02",
+     "end": "2026-11-27",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "M1 · Pilot",
+     "date": "2026-12-04",
+     "items": 1,
+     "start": "2026-11-09",
+     "end": "2026-12-01",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    }
+   ],
+   "past_edge": 0
+  }
+ },
+ {
+  "name": "a record named only by its code reads the name its own items give, never another record's",
+  "today": "2026-10-27",
+  "items": [
+   {
+    "start": "2026-11-02",
+    "end": "2026-11-27",
+    "estimated": false,
+    "milestone": "M2",
+    "milestoneDate": "2026-12-11",
+    "record": {
+     "id": "m2-first",
+     "name": "M2"
+    }
+   },
+   {
+    "start": "2026-11-09",
+    "end": "2026-12-04",
+    "estimated": false,
+    "milestone": "M2",
+    "milestoneDate": "2026-12-11",
+    "record": {
+     "id": "m2-second",
+     "name": "M2"
+    }
+   },
+   {
+    "start": "2026-11-16",
+    "end": "2026-12-11",
+    "estimated": false,
+    "milestone": "M2 · Ship to beta",
+    "milestoneDate": "2026-12-11",
+    "record": {
+     "id": "m2-second",
+     "name": "M2"
+    }
+   }
+  ],
+  "expected": {
+   "start": "2026-11-01",
+   "end": "2026-12-31",
+   "months": [
+    "2026-11-01",
+    "2026-12-01"
+   ],
+   "today": null,
+   "rows": [
+    {
+     "name": "M2",
+     "date": "2026-12-11",
+     "items": 1,
+     "start": "2026-11-02",
+     "end": "2026-11-27",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "M2 · Ship to beta",
+     "date": "2026-12-11",
+     "items": 2,
+     "start": "2026-11-09",
+     "end": "2026-12-11",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    }
+   ],
+   "past_edge": 0
+  }
  }
 ]
