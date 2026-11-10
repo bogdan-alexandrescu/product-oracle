@@ -873,3 +873,44 @@ async def test_a_run_item_depending_on_another_prds_is_never_dated_before_it(cli
     assert [r["key"] for r in queued] == ["read-replicas", "report-button"]
     by = {r["key"]: r for r in queued}
     assert by["report-button"]["start"] >= by["read-replicas"]["end"]
+
+
+async def test_deleting_an_area_prd_keeps_the_company_roadmap(client):
+    """delete-prd-simple review: the company roadmap's versions are built from each PRD run,
+    yet deleting one area PRD never takes it, nor another PRD's items. Its own items on the
+    company roadmap stay, without it; its per-PRD roadmap goes; Restore brings both back."""
+    ctx, ids = await world(client)
+    auth = ctx.as_("owner")
+    body = (await client.get("/v1/documents/user-safety/dependents", headers=auth)).json()
+    assert ids["slug"] not in {d["slug"] for d in body["items"] if d["type"] == "document"}
+    assert "user-safety-roadmap" in {d["slug"] for d in body["items"] if d["type"] == "document"}
+    stays, goes = body["feeds"], body["feeds_going"]
+    assert {i["title"] for i in stays if i["type"] == "feature"} == {"Report button"}
+    assert {i["title"] for i in goes if i["type"] == "feature"} == {"Old report button"}
+
+    async def readable(item_id: str) -> bool:
+        async with tenant_session(ctx.tenant_id) as s:
+            row = select(RoadmapItem.id).where(RoadmapItem.id == uuid.UUID(item_id))
+            return await s.scalar(row) is not None
+
+    resp = await client.request("DELETE", "/v1/documents/user-safety", headers=auth)
+    assert resp.status_code == 200, resp.text
+    r = await client.get(f"/v1/documents/{ids['slug']}", headers=auth)
+    assert r.status_code == 200, r.text
+    r = await client.get("/v1/simple/roadmap", headers=auth)
+    assert r.status_code == 200, r.text
+    assert {i["key"] for i in r.json()["items"]} >= {"read-replicas", "report-button"}
+    for item in stays:
+        assert await readable(item["id"]), item
+    for item in goes:
+        assert not await readable(item["id"]), item
+    assert (await client.get("/v1/documents/user-safety", headers=auth)).status_code == 404
+
+    restored = await client.post(f"/v1/trash/{resp.json()['id']}/restore", headers=auth)
+    assert restored.status_code == 200, restored.text
+    assert (await client.get("/v1/documents/user-safety", headers=auth)).status_code == 200
+    for item in [*stays, *goes]:
+        assert await readable(item["id"]), item
+    r = await client.get("/v1/simple/roadmap", headers=auth)
+    prds = {i["key"]: (i["prd"] or {}).get("title") for i in r.json()["items"]}
+    assert prds["report-button"] == "User Safety" and prds["read-replicas"] == "Scale"
