@@ -13,6 +13,7 @@ import { Button } from "@/components/ds";
 import { GoalNumbers } from "@/components/simple/GoalOrder";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { addDays, calendarDay } from "@/lib/dates";
+import { joinedNames } from "@/lib/milestone-code";
 
 import { decide as decideChange, shortDay, type Item, type Roadmap } from "./_lib";
 import { msEdge, msFill, msInk } from "./_timeline";
@@ -49,6 +50,8 @@ export interface MsCtl {
   list: GoalMilestone[];
   /** roadmap-milestone-codes: every dated goal milestone of the roadmap once, by code. */
   band: GoalMilestone[];
+  /** Join whenever names match (the owner, Nov 9): each code's longer name and the other names. */
+  joined: Map<string, { name: string; also: string[] }>;
   draft: Draft | null;
   hover: string | null;
   moving: { id: string; date: string } | null;
@@ -133,6 +136,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
     },
     list,
     band,
+    joined: joinedNames(list, data.milestones),
     draft,
     hover,
     moving,
@@ -728,7 +732,7 @@ export function MsLayer(props: MsLayerProps) {
     const MIN = 62;
     for (const m of list) {
       const mx = X(m.date!);
-      const w = Math.min(textW(words(m)), phone ? 150 : 230);
+      const w = Math.min(textW(ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m)), phone ? 150 : 230);
       let l = mx + 6;
       if (l + MIN > props.width - 4) l = mx - 6 - Math.min(w, MIN + 40);
       const row = last.findIndex((p) => !p || p.left + MIN + (p.more.length ? 30 : 0) <= l - 4);
@@ -745,11 +749,14 @@ export function MsLayer(props: MsLayerProps) {
     }
     for (const p of placed) p.w = Math.min(p.w, props.width - 4 - p.left - (p.more.length ? 30 : 0));
     out.push(<div key="band" data-testid="ms-band" aria-hidden className="pointer-events-none absolute z-[11] border-b border-line bg-surface2/60" style={{ left, top: props.bandTop, width: props.width - left, height: band }} />);
+    // The joined milestone's longer name (the owner's "Join whenever names match").
+    const bandWords = (m: GoalMilestone) => (ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m));
     const tipFor = (m: GoalMilestone) => {
       const g = ms.goals.find((o) => o.id === m.goal_id)?.title ?? goalOf(m)?.title ?? "No goal";
       const n = goalNums.get(m.goal_id ?? "");
       return {
-        head: `${words(m)} · ${fullDay(m.date!)}`,
+        head: `${bandWords(m)} · ${fullDay(m.date!)}`,
+        also: ms.joined.get(msCode(m))?.also ?? [],
         goal: `Advances ${n ? `goal ${n}, ` : ""}${g}`,
         prd: m.prd ? `From the PRD ${m.prd.title}` : null,
       };
@@ -762,7 +769,7 @@ export function MsLayer(props: MsLayerProps) {
       const asked = m.prd ? ((ms.moving?.id === m.id ? ms.moving.date : null) ?? m.pending?.date ?? null) : null;
       out.push(
         <span key={`rb-${m.id}`} data-testid={m.prd ? "ms-prd-label" : "ms-label"} data-day={m.date} data-prd={m.prd ? "" : undefined} role="button" tabIndex={0} aria-label={`${tipFor(m).head}. ${tipFor(m).goal}`} onPointerEnter={show} onFocus={show} onPointerLeave={() => setBandTip(null)} onBlur={() => setBandTip(null)} onClick={() => ms.edit(m)} className="absolute z-[14] flex cursor-pointer items-center gap-1 overflow-hidden rounded-full px-1.5 text-xs leading-5 font-semibold whitespace-nowrap" style={{ left: p.left, top, maxWidth: Math.max(p.w, 40), background: msFill(msCode(m)), color: msInk(msCode(m)), border: `1px solid ${msEdge(msCode(m))}`, opacity: asked && asked !== m.date ? 0.5 : 1 }}>
-          <span className="min-w-0 overflow-hidden text-ellipsis">{words(m)}</span>
+          <span className="min-w-0 overflow-hidden text-ellipsis">{bandWords(m)}</span>
         </span>,
       );
       // The milestones folded into "+N": its list on hover, focus or a click, each opening its card.
@@ -773,7 +780,7 @@ export function MsLayer(props: MsLayerProps) {
               type="button"
               data-testid="ms-band-more"
               data-days={p.more.map((o) => o.date).join(",")}
-              aria-label={`${p.more.length} more ${p.more.length === 1 ? "milestone" : "milestones"}: ${p.more.map((o) => `${words(o)} · ${fullDay(o.date!)}`).join(", ")}`}
+              aria-label={`${p.more.length} more ${p.more.length === 1 ? "milestone" : "milestones"}: ${p.more.map((o) => `${bandWords(o)} · ${fullDay(o.date!)}`).join(", ")}`}
               aria-expanded={bandMore === m.id}
               onClick={() => setBandMore((o) => (o === m.id ? null : m.id))}
               className="block h-5 cursor-pointer rounded-full border border-line-strong bg-surface px-1.5 text-xs leading-[18px] font-semibold text-text hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
@@ -794,7 +801,7 @@ export function MsLayer(props: MsLayerProps) {
                       }}
                       className="block w-full px-3 py-1 text-left text-xs whitespace-nowrap text-text hover:bg-surface2 focus-visible:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
                     >
-                      {words(o)} · {day(o.date!)}
+                      {bandWords(o)} · {day(o.date!)}
                     </button>
                   </li>
                 ))}
@@ -809,6 +816,7 @@ export function MsLayer(props: MsLayerProps) {
       out.push(
         <span key="band-tip" data-testid="ms-band-tip" role="tooltip" className="pointer-events-none absolute z-40 flex max-w-80 flex-col rounded bg-tip px-2 py-1 text-xs text-tip-text" style={{ left: Math.min(bandTip.left, props.width - 300), top: bandTip.top }}>
           <b>{t.head}</b>
+          {t.also.length > 0 && <span data-testid="ms-band-also">Also: {t.also.join(", ")}</span>}
           {t.prd && <span>{t.prd}</span>}
           <span>{t.goal}</span>
           <span>Waits on {tm.item_ids.length} {tm.item_ids.length === 1 ? "item" : "items"}</span>

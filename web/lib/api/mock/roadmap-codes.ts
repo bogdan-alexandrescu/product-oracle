@@ -2,8 +2,9 @@
  * roadmap-milestone-codes: the API's oracle.simple.roadmap_codes.assign, as the mock reads it.
  * Every milestone of a roadmap read gets one code M1, M2, M3 ... by date across the read
  * (undated last; one date: goal order, no goal last, then name); a goal milestone that is the
- * same milestone as a track milestone (the one of its code holding items on its roadmap; one
- * of no goal, or its roadmap's only one of the code with a name that matches) shares its code.
+ * same milestone as a track milestone (one of its code holding items on its roadmap: the one, for
+ * one of no goal, else one whose name it leads or follows, whatever else of the code is there)
+ * or as a PRD's (or the roadmap's own) milestone of its code with a name that matches shares its code.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -39,13 +40,27 @@ export function withRoadmapCodes<T extends { goal_milestones?: Gm[]; milestones:
   for (const i of out.items) if (i.milestone?.record_id) hold(i.milestone.record_id, i.roadmap.id);
   for (const t of tracks) for (const x of t.item_ids) if (roadmapOf.has(x)) hold(t.id, roadmapOf.get(x)!);
   const groups = new Map<string, (Gm | Tm)[]>(tracks.map((t) => [t.id, [t]]));
-  for (const g of goals) {
+  // Join whenever names match (the owner, Nov 9): a goal's milestone is the track's (or a PRD's, or
+  // the roadmap's own) milestone of its code on its roadmap whose name it leads or follows.
+  const into = new Map<string, string>();
+  const best = (g: Gm, of: (Gm | Tm)[]) => {
+    const name = split(g.name)[1];
+    const same = (m: Gm | Tm) => words(split(m.name)[1]).join(" ") === words(name).join(" ");
+    const hits = of.filter((m) => match(name, split(m.name)[1])).sort((p, q) => Number(!same(p)) - Number(!same(q)) || (p.id < q.id ? -1 : 1));
+    return hits[0]?.id ?? null;
+  };
+  for (const g of [...goals].sort((p, q) => Number(!!p.goal_id) - Number(!!q.goal_id) || (p.id < q.id ? -1 : 1))) {
     const code = gmCode(g);
     const there = tracks.filter((t) => !!code && split(t.name)[0] === code && !!held.get(t.id)?.has(g.roadmap_id));
-    const alike = new Set(goals.filter((o) => o.roadmap_id === g.roadmap_id && gmCode(o) === code).map((o) => `${o.goal_id ?? ""}|${o.prd?.id ?? ""}`));
-    const same = alike.size === 1 && there.length === 1 && match(g.name, split(there[0].name)[1]);
-    if (there.length === 1 && (!g.goal_id || same)) groups.get(there[0].id)!.push(g);
-    else groups.set(g.id, [g]);
+    const plain = goals.filter((o) => !!code && !o.goal_id && o !== g && o.roadmap_id === g.roadmap_id && gmCode(o) === code);
+    let to = !g.goal_id && there.length === 1 ? there[0].id : (best(g, there) ?? (g.goal_id ? best(g, plain) : null));
+    if (!to) {
+      groups.set(g.id, [g]);
+      continue;
+    }
+    to = into.get(to) ?? to;
+    into.set(g.id, to);
+    groups.set(to, [...(groups.get(to) ?? []), g]);
   }
   const far = 1e9;
   const key = (ms: (Gm | Tm)[]) => {

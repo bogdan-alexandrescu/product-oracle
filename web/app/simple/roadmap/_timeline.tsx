@@ -7,7 +7,7 @@ import { FeatureMarks, pillWord, type FeatureState } from "@/components/current-
 import { calendarDay } from "@/lib/dates";
 import { useMsBand } from "./_milestones";
 import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
-import { trackWords } from "@/lib/milestone-code";
+import { joinedNames, joinedWords } from "@/lib/milestone-code";
 
 import {
   addDays,
@@ -484,7 +484,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
       const code = `${codeOf(m.name)}${prd ? ` ${prd.title}` : ""}`;
       list.push({ key: `end-${m.id}`, kind: "end", x: sc.x(m.end_date!) + sc.px, words: compact ? `${code} ends` : `${code} ends ${shortDay(m.end_date!)}`, side: "before" });
     }
-    for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date))) list.push({ key: `track-${m.id}`, kind: "track", x: sc.x(m.date!), words: trackWords(m), side: "after" });
+    const joined = joinedNames(data.goal_milestones ?? [], data.milestones);
+    for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date))) list.push({ key: `track-${m.id}`, kind: "track", x: sc.x(m.date!), words: joinedWords(m, joined), side: "after" });
     for (const k of drawnKeyDates(data)) list.push({ key: `key-${k.id}`, kind: "key", x: sc.x(k.date) + sc.px / 2, words: k.name, side: "after" });
     // finding 18: pack rows in date order left to right, so a later mark never takes a lower
     // row an earlier one needed (the list above is built milestone-ends, then tracks, then key

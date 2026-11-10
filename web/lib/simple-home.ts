@@ -360,13 +360,11 @@ const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowe
  *
  * home-milestones-whole (reviews of PRs 1424 and 1439): one row per milestone: a roadmap's own
  * milestones of one goal, code (and PRD) are one row; a track milestone is one row wherever its
- * items sit, and a roadmap's own milestone joins it only when it is that roadmap's only one of
- * its code, and their names match (one's words lead the other's) or one has none (no name is
- * ever hidden); every one of no goal (each PRD's and the roadmap's own) joins it whatever its
- * name, beside whatever else of the code is there, when it is the one track milestone of the
- * code holding items on that roadmap (review of PR 1489). The row keeps the track's name (its
+ * items sit, and a roadmap's own milestone joins it when the API gives both one roadmap code (oracle.simple.roadmap_codes: their names
+ * match, whatever else of the code is there, the owner's "Join whenever names match" of Nov 9;
+ * one of no goal, the one track of its code on its roadmap). The row shows the longer name (its
  * date, else the earliest joined one's) and its (i) lists each other name once ("Also: M1
- * Measured and mapped"; the owner's of Nov 9); a typed text
+ * Measured"; no name is ever hidden); a typed text
  * or bare code is read on the item's own roadmap (the read's roadmap's when its own has none),
  * never the first roadmap that has it, nor a guess between two goals'.
  *
@@ -452,8 +450,8 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
   const hits = new Map(kept.map((i) => [i.id, find(i)] as const));
   // A track milestone is company-wide: always one row (by its id), wherever its items sit. A
   // roadmap's own milestone joins it when the API gave both one roadmap code (the rule's one place,
-  // oracle.simple.roadmap_codes); the row keeps the track's name and lists another in its (i) (the
-  // owner's of Nov 9, "One M1 row": production showed "M1 · Measured" and "M1 · Measured and mapped").
+  // oracle.simple.roadmap_codes); the row shows the longer name and lists the others in its (i) (the
+  // owner's of Nov 9, "One M1 row" and "Join whenever names match").
   const into = new Map<Gm, Tm>();
   const folded = new Map<Tm, Gm[]>();
   const rowName = new Map<Tm, string>();
@@ -467,17 +465,42 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
     const code = gm.roadmap_code;
     const tm = code ? tracks.find((t) => t.roadmap_code === code) : undefined;
     if (!code || !tm) continue;
-    const name = goalMilestoneName(gm);
-    const at = rowName.get(tm) ?? wholeName(code, restOf(tm.name));
-    const differs = name !== code && at !== code && !sameWords(name, at);
-    // Each other name once, case and spaces never counting.
-    const listed = also.get(tm) ?? [];
-    const other = name.replace(" · ", " ");
-    if (differs) also.set(tm, listed.some((n) => sameWords(n, other)) ? listed : [...listed, other]);
-    else if (at === code) rowName.set(tm, name);
     into.set(gm, tm);
     folded.set(tm, [...(folded.get(tm) ?? []), gm]);
   }
+  // Join whenever names match (the owner's of Nov 9): the row shows the longer name (more words,
+  // then more letters; the track's own on a tie) and its (i) lists each other name once, case and
+  // spaces never counting; a bare code is no name.
+  const pick = (code: string, all: string[]): { shown: string; others: string[] } | null => {
+    const names = all.filter((n) => n !== code);
+    const size = (n: string) => [n.split(/\s+/).length, n.length];
+    const shown = names.reduce<string | null>((best, n) => {
+      if (!best) return n;
+      const [w, l] = size(n);
+      const [bw, bl] = size(best);
+      return w > bw || (w === bw && l > bl) ? n : best;
+    }, null);
+    if (!shown) return null;
+    const others: string[] = [];
+    for (const n of names) {
+      const other = n.replace(" · ", " ");
+      if (!sameWords(n, shown) && !others.some((o) => sameWords(o, other))) others.push(other);
+    }
+    return { shown, others };
+  };
+  for (const [tm, own] of folded) {
+    const got = pick(tm.roadmap_code!, [wholeName(tm.roadmap_code!, restOf(tm.name)), ...own.map(goalMilestoneName)]);
+    if (!got) continue;
+    rowName.set(tm, got.shown);
+    if (got.others.length) also.set(tm, got.others);
+  }
+  // A goal's milestone joined with a PRD's (or the roadmap's own) of one roadmap code, no track's: the same.
+  const byCode = new Map<string, Gm[]>();
+  for (const gm of byName) if (gm.roadmap_code && !into.has(gm)) byCode.set(gm.roadmap_code, [...(byCode.get(gm.roadmap_code) ?? []), gm]);
+  const codeRow = new Map([...byCode].flatMap(([code, own]) => {
+    const got = own.length > 1 ? pick(code, own.map(goalMilestoneName)) : null;
+    return got ? [[code, got] as const] : [];
+  }));
   // Whose a row is (its PRD's, else its goal's, else its track's): two rows that read alike are told apart by it.
   const ofTrack = (tm: Tm) => {
     const own = folded.get(tm) ?? [];
@@ -490,6 +513,9 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
   const ofGoal = (gm: Gm) => {
     const tm = into.get(gm);
     if (tm) return ofTrack(tm);
+    const joined = gm.roadmap_code ? codeRow.get(gm.roadmap_code) : undefined;
+    const dates = (gm.roadmap_code ? (byCode.get(gm.roadmap_code) ?? []) : [gm]).flatMap((g) => (g.date ? [g.date] : []));
+    if (joined) return { key: goalKey(gm), name: joined.shown, date: dates.length ? minOf(dates) : null, of: gm.prd?.title ?? (gm.goal_id ? goalTitles.get(gm.goal_id) : undefined) ?? null, also: joined.others.length ? joined.others : undefined };
     return { key: goalKey(gm), name: goalMilestoneName(gm), date: gm.date ?? null, of: gm.prd?.title ?? (gm.goal_id ? goalTitles.get(gm.goal_id) : undefined) ?? null, also: undefined };
   };
   return kept.map((i) => {

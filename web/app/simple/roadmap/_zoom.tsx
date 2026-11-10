@@ -47,7 +47,7 @@ import {
   whereAttr,
 } from "./_lib";
 import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from "./_timeline";
-import { trackWords } from "@/lib/milestone-code";
+import { joinedNames, joinedWords } from "@/lib/milestone-code";
 
 type Zoom = "3m" | "6m" | "1y" | "all";
 /** Days in sight at each zoom (All fits the whole plan). */
@@ -439,6 +439,8 @@ export function ConflictPanel({
 /** A desktop's chart: one row per item, days to scale, zoomed to three months from just before today. */
 function DayChart(props: TimelineProps) {
   const { data, phone, openKey, onOpen } = props;
+  // Join whenever names match (the owner, Nov 9): a track milestone reads the joined milestone's longer name.
+  const joined = joinedNames(data.goal_milestones ?? [], data.milestones ?? []);
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
   const rows = useMemo(() => rowsOf(data), [data]);
@@ -543,7 +545,7 @@ function DayChart(props: TimelineProps) {
     .sort((a, b) => (a.date as string).localeCompare(b.date as string))
     .map((m) => {
       const at = x(m.date as string);
-      const words = `◆ ${trackWords(m)} · ${shortDay(m.date as string)}`;
+      const words = `◆ ${joinedWords(m, joined)} · ${shortDay(m.date as string)}`;
       const left = fit ? at : Math.max(at, sl);
       return { m, at, words, left, gone: !fit && at + 26 + words.length * 7 < sl };
     });
@@ -607,8 +609,13 @@ function DayChart(props: TimelineProps) {
   useEffect(() => () => cancelAnimationFrame(tipFrame.current), []);
   // roadmap-milestone-codes: the milestone band's row under the date axis.
   const msBandH = useMsBand(phone);
+  // The other names of the joined milestone, each once ("Also: M1 Measured").
+  const alsoOf = (m: { roadmap_code?: string | null }) => {
+    const a = m.roadmap_code ? joined.get(m.roadmap_code)?.also : undefined;
+    return a?.length ? `Also: ${a.join(", ")}` : null;
+  };
   const msWords = (m: (typeof marks)[number]["m"]) =>
-    `${trackWords(m)}, ${fullDay(m.date as string)}${m.done_when.length ? ` · counts when ${m.done_when.join("; ")}` : ""}`;
+    `${joinedWords(m, joined)}, ${fullDay(m.date as string)}${m.done_when.length ? ` · counts when ${m.done_when.join("; ")}` : ""}`;
   // A tip or a card stays inside the chart's view, right of the names column.
   const inView = (l: number, width: number) => Math.max(labelW + sl + 6, Math.min(l, sl + w - width - 6));
   const openMs = (id: string, from: HTMLElement | null) => {
@@ -952,7 +959,7 @@ function DayChart(props: TimelineProps) {
                   <button
                     type="button"
                     data-testid="timeline-milestone-more"
-                    aria-label={`${more.length} more ${more.length === 1 ? "milestone" : "milestones"}: ${more.map((k) => trackWords(k.m)).join(", ")}`}
+                    aria-label={`${more.length} more ${more.length === 1 ? "milestone" : "milestones"}: ${more.map((k) => joinedWords(k.m, joined)).join(", ")}`}
                     aria-expanded={msList === m.id}
                     onClick={() => setMsList((l) => (l === m.id ? null : m.id))}
                     className="block cursor-pointer rounded-full border border-line bg-surface px-1.5 text-xs leading-4 font-semibold text-text2 hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
@@ -995,6 +1002,7 @@ function DayChart(props: TimelineProps) {
               style={{ left: inView(msTip.left, 240), top: msTip.top }}
             >
               {msWords(msById.get(msTip.id)!.m)}
+              {alsoOf(msById.get(msTip.id)!.m) && <span className="block">{alsoOf(msById.get(msTip.id)!.m)}</span>}
             </span>
           )}
           {msCard &&
@@ -1008,12 +1016,12 @@ function DayChart(props: TimelineProps) {
                   tabIndex={-1}
                   data-testid="timeline-milestone-card"
                   role="dialog"
-                  aria-label={`${trackWords(m)}, ${fullDay(m.date as string)}`}
+                  aria-label={`${joinedWords(m, joined)}, ${fullDay(m.date as string)}`}
                   className="absolute top-12 z-40 flex w-72 flex-col gap-2 rounded-xl border border-line bg-surface p-3 text-sm shadow-xl outline-none"
                   style={{ left: inView(labelW + at + 4, 288) }}
                 >
                   <div className="flex items-start gap-2">
-                    <span className="min-w-0 flex-1 font-semibold text-text">◆ {trackWords(m)}</span>
+                    <span className="min-w-0 flex-1 font-semibold text-text">◆ {joinedWords(m, joined)}</span>
                     <button
                       type="button"
                       aria-label="Close"
@@ -1024,6 +1032,7 @@ function DayChart(props: TimelineProps) {
                     </button>
                   </div>
                   <span className="text-text2">{fullDay(m.date as string)}</span>
+                  {alsoOf(m) && <span data-testid="timeline-milestone-also" className="text-text2">{alsoOf(m)}</span>}
                   {m.done_when.length > 0 && <span className="text-text">Counts when {m.done_when.join("; ")}</span>}
                   {gates.length > 0 && (
                     <div className="flex flex-col gap-1">
@@ -1412,7 +1421,7 @@ function QuarterMilestones({ from, to }: { from: string; to: string }) {
         <li key={m.id} className="flex items-center gap-1.5 py-0.5">
           <i aria-hidden className="h-2 w-2 flex-none rotate-45 rounded-[1px]" style={{ background: msEdge(msCode(m)) }} />
           <span className="min-w-0 truncate font-semibold" style={{ color: msInk(msCode(m)) }}>
-            {msCode(m)} {m.name}
+            {msCode(m)} {ms?.joined.get(msCode(m))?.name ?? m.name}
           </span>
           <span className="ml-auto flex-none text-text2">{shortDay(m.date!)}</span>
         </li>
@@ -1425,6 +1434,8 @@ function QuarterMilestones({ from, to }: { from: string; to: string }) {
  * this one, when it started before and runs on). */
 function QuarterList(props: TimelineProps) {
   const { data, openKey, onOpen } = props;
+  // Join whenever names match (the owner, Nov 9): a track milestone reads the joined milestone's longer name.
+  const joined = joinedNames(data.goal_milestones ?? [], data.milestones ?? []);
   const days = data.items
     .flatMap((i) => [i.start.date, i.end.date])
     .concat(data.today)
@@ -1476,7 +1487,7 @@ function QuarterList(props: TimelineProps) {
                   data-testid="timeline-milestone"
                   className="border-b border-line/60 px-3 py-1 text-xs text-text2"
                 >
-                  ◆ {trackWords(m)} · {shortDay(m.date as string)}
+                  ◆ {joinedWords(m, joined)} · {shortDay(m.date as string)}
                   {m.done_when.length > 0 && ` · counts when ${m.done_when.join("; ")}`}
                 </p>
               ))}
