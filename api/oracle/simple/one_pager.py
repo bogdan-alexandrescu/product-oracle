@@ -847,8 +847,10 @@ async def carry_keys(
     """Each new bet line takes the key (``visuals.bet_key``) of the bet it is on the page
     built before (the document's latest other row): line ids are positions, renumbered on
     every build, so a bet keeps its drawn flow when bets are added, dropped or reordered.
-    Matched by words (the earlier bet's, or the words the published draft gave it); then,
-    with as many bets as before, by place (a reworded bet); else a new key."""
+    Matched by words (the earlier bet's, or the words the published draft gave it); then by
+    the earlier bet it reads most like (``visuals.pair_alike``); then, with as many bets as
+    before, by place when that place's bet is unmatched (a bet reworded past likeness); else
+    a new key."""
     from oracle.simple import visuals
 
     q = select(SimpleOnePager).where(SimpleOnePager.document_id == document.id)
@@ -875,6 +877,17 @@ async def carry_keys(
         if key and key not in used:
             x["flow_key"] = key
             used.add(key)
+    # Reworded (Oracle words each build its own way): the earlier bet it reads most like.
+    was = [
+        []
+        if visuals.bet_key(x) in used
+        else [t for t in (edited.get(x.get("id")), x.get("text")) if t]
+        for x in old
+    ]
+    now = [[] if "flow_key" in x else [x["text"]] for x in new]
+    for j, i in visuals.pair_alike(was, now).items():
+        new[j]["flow_key"] = visuals.bet_key(old[i])
+        used.add(new[j]["flow_key"])
     by_place = {str(x.get("id")): visuals.bet_key(x) for x in old} if len(old) == len(new) else {}
     taken = {visuals.bet_key(x) for x in old}
     for x in new:
@@ -958,7 +971,8 @@ async def built(
 async def bet_flows(db: AsyncSession, document: Document) -> list[tuple[str, list[str], Any]]:
     """walkb-roadmap review: each bet of the PRD's published one-pager with the flow drawn for
     it (its words, its source sections, its ``SimpleFlow`` or None), as the page reads them: by
-    the bet's line, else by its words (0092_bet_flow_line_key). Nothing is written or queued."""
+    the bet it was drawn for (visuals.flows_of_bets), else by its words (0092_bet_flow_line_key).
+    Nothing is written or queued."""
     from oracle.simple import visuals
 
     try:
@@ -971,13 +985,13 @@ async def bet_flows(db: AsyncSession, document: Document) -> list[tuple[str, lis
         for x in blk.get("lines") or []
         if str(x.get("id", "")).startswith("bets-")
     ]
-    subjects = [visuals.line_subject(document.id, visuals.bet_key(x)) for x in bets]
-    flows = await visuals.flows_for(db, "one_pager_line", subjects)
-    by_words = [visuals.words_subject(document.id, str(x.get("text") or "")) for x in bets]
-    flows.update(await visuals.flows_for(db, "one_pager_line", by_words))
+    said = [str(x.get("text") or "") for x in bets]
+    found = await visuals.flows_of_bets(
+        db, document.id, [(visuals.bet_key(x), [t]) for x, t in zip(bets, said, strict=True)]
+    )
     return [
-        (str(x.get("text") or ""), list(x.get("source_keys") or []), flows.get(a) or flows.get(w))
-        for x, a, w in zip(bets, subjects, by_words, strict=True)
+        (t, list(x.get("source_keys") or []), flow)
+        for x, t, (_, flow) in zip(bets, said, found, strict=True)
     ]
 
 
@@ -1631,23 +1645,24 @@ async def read(
         )  # type: ignore[arg-type]
     # S10: each bet ("What we will build") carries its visual.
     bets = [x for blk in blocks for x in blk.lines if x.id.startswith("bets-")]
-    keys = {x["id"]: visuals.bet_key(x) for blk in page for x in blk["lines"]}
-    for x in bets:
-        x.flow_subject = visuals.line_subject(document.id, keys.get(x.id, x.id))
-    line_flows = await visuals.flows_for(db, "one_pager_line", [x.flow_subject for x in bets])
-    # A flow still keyed by a bet's words (0092_bet_flow_line_key left it: its words matched
-    # no line then) is read as before, by a bet with those words and no flow of its own.
-    by_words = {
-        visuals.words_subject(document.id, x.text): x
-        for x in bets
-        if x.flow_subject not in line_flows
-    }
-    for sid, flow in (await visuals.flows_for(db, "one_pager_line", list(by_words))).items():
-        by_words[sid].flow_subject, line_flows[sid] = sid, flow
+    # Each bet's flow by its key, on the bet it was drawn for (visuals.flows_of_bets); a flow
+    # still keyed by a bet's words (0092_bet_flow_line_key) by a bet with those words.
+    raw = {x["id"]: x for blk in page for x in blk["lines"]}
+    found = await visuals.flows_of_bets(
+        db,
+        document.id,
+        [
+            (
+                visuals.bet_key(raw.get(x.id) or {"id": x.id}),
+                [x.text, (raw.get(x.id) or {}).get("text") or ""],
+            )
+            for x in bets
+        ],
+    )
     # The request's own rule (visuals.may_revise of a bet: who changes the PRD directly).
     draws = await visuals.may_revise(db, principal, SimpleVisual(document_id=document.id))
-    for x in bets:
-        x.flow = visuals.one_pager_flow(line_flows.get(x.flow_subject))
+    for x, (sid, flow) in zip(bets, found, strict=True):
+        x.flow_subject, x.flow = sid, visuals.one_pager_flow(flow)
         x.can_draw_flow = x.flow is None and draws
     # Reads clearly (2026-10-30): who has it, measures, codes with names, footnotes; the
     # "Needs a look" items for the PRD's owners. After the flows: a flow still keyed by a

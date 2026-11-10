@@ -50,7 +50,8 @@ ANSWER = {"blocks": [
 # The next version: a new first bet; the last one dropped (as many bets as before).
 V2 = PRD.replace(
     "- A setup checklist that shows the next step",
-    "- A welcome note that names the first three steps\n- A setup checklist that shows the next step",
+    "- A welcome note that names the first three steps\n"
+    "- A setup checklist that shows the next step",
 ).replace("- A progress meter on the home page\n", "")
 
 

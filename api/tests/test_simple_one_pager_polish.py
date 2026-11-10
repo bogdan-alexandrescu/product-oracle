@@ -319,11 +319,17 @@ def test_every_milestone_row_has_its_name():
         "M4 · Rollout",
     ]
     # A record row whose code another row names reads that name too.
+    P, start, end, day = (
+        plan_strip.PlanItem,
+        date(2026, 11, 2),
+        date(2026, 11, 20),
+        date(2026, 12, 11),
+    )
     rows = plan_strip.strip(
         [
-            plan_strip.PlanItem(date(2026, 11, 2), date(2026, 11, 20), False, "M2 · Ship to beta", date(2026, 12, 11)),
-            plan_strip.PlanItem(date(2026, 11, 3), date(2026, 11, 21), False, "M2", date(2026, 12, 11), "c3a2", "M2"),
+            P(start, end, False, "M2 · Ship to beta", day),
+            P(start, end, False, "M2", day, "c3a2", "M2"),
         ],
-        date(2026, 11, 2),
+        start,
     ).rows
     assert [r.name for r in rows] == ["M2 · Ship to beta", "M2 · Ship to beta"]

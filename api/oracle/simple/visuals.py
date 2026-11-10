@@ -109,6 +109,96 @@ def words_subject(document_id: uuid.UUID, text: str) -> uuid.UUID:
     return uuid.uuid5(document_id, "one_pager_line:" + " ".join(text.split()).lower())
 
 
+# Words that say nothing about which bet a text is.
+_THIN = frozenset("a an and or of to for on in with from that this its our by at is are be".split())
+# How alike two bets' words read for one to be the other reworded (``likeness``).
+LIKE = 0.4
+
+
+def _gist(text: str) -> set[str]:
+    return {
+        w.rstrip("s") for w in re.findall(r"[a-z0-9]+", (text or "").lower()) if len(w) > 1
+    } - _THIN
+
+
+def likeness(a: str, b: str) -> float:
+    """How alike two bets' words read, 0 to 1 (the words they share over all their words): a
+    bet Oracle rewords, or the PRD rewords in its next version, still reads like itself."""
+    x, y = _gist(a), _gist(b)
+    return len(x & y) / len(x | y) if x and y else 0.0
+
+
+def pair_alike(old: list[list[str]], new: list[list[str]]) -> dict[int, int]:
+    """Each of ``new`` (by index) paired with the ``old`` it reads most like (any of its
+    words), at least ``LIKE`` alike, each at most once: the most alike pairs first, a tie
+    to the same place. Never by place alone: a bet added above the others moves them all."""
+    pairs = sorted(
+        (
+            (
+                max((likeness(a, b) for a in was for b in now), default=0.0),
+                i == j,
+                -abs(i - j),
+                i,
+                j,
+            )
+            for i, was in enumerate(old)
+            for j, now in enumerate(new)
+        ),
+        reverse=True,
+    )
+    out: dict[int, int] = {}
+    used: set[int] = set()
+    for score, _, _, i, j in pairs:
+        if score < LIKE:
+            break
+        if j not in out and i not in used:
+            out[j] = i
+            used.add(i)
+    return out
+
+
+async def flows_of_bets(
+    db: AsyncSession, document_id: uuid.UUID, bets: list[tuple[str, list[str]]]
+) -> list[tuple[uuid.UUID, Any]]:
+    """Each bet's flow subject and its flow (a ``SimpleFlow`` or None), as the page reads
+    them. ``bets``: each bet's key (``bet_key``) and its words, as this reader reads them
+    first (any other words it has after: the published ones).
+
+    A flow keyed to a bet shows on the bet its brief (the words it was drawn from) reads
+    most like, else on its own: a page built before keys were carried by likeness gave a bet
+    the key of the bet at its place before (a bet added above shifted every flow by one), so
+    the stored key alone never puts a flow on another bet. A bet with no flow whose key
+    holds another bet's flow is drawn on its words' subject; a flow still keyed by a bet's
+    words (0092_bet_flow_line_key left it) is read by a bet with those words and none."""
+    keyed = [line_subject(document_id, k) for k, _ in bets]
+    flows = await flows_for(db, "one_pager_line", keyed)
+    briefs: dict[uuid.UUID, str] = {}
+    if flows:
+        briefs = dict(
+            (
+                await db.execute(
+                    select(SimpleVisual.subject_id, SimpleVisual.brief).where(
+                        SimpleVisual.subject_kind == "one_pager_line",
+                        SimpleVisual.subject_id.in_(list(flows)),
+                    )
+                )
+            ).all()
+        )
+    drawn = [[briefs.get(s, "")] if s in flows else [] for s in keyed]
+    on = {j: keyed[i] for j, i in pair_alike(drawn, [w for _, w in bets]).items()}
+    for i, s in enumerate(keyed):
+        if s in flows and i not in on and s not in on.values():
+            on[i] = s  # drawn from words like no bet's now: it stays on its own
+    out = [
+        on.get(j) or (keyed[j] if keyed[j] not in flows else words_subject(document_id, w[0]))
+        for j, (_, w) in enumerate(bets)
+    ]
+    loose = {words_subject(document_id, w[0]): j for j, (_, w) in enumerate(bets) if j not in on}
+    for sid, flow in (await flows_for(db, "one_pager_line", list(loose))).items():
+        out[loose[sid]], flows[sid] = sid, flow
+    return [(s, flows.get(s)) for s in out]
+
+
 # --------------------------------------------------------------------------- subjects
 
 
