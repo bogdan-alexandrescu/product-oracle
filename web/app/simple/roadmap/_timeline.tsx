@@ -396,6 +396,8 @@ export interface ChartProps {
   /** The label column's heading when the rows are grouped by something Simple has no lane for
    * (the Detailed Plan's Horizon grouping: "Horizon"); else the lane's own word. */
   laneWord?: string;
+  /** tb-mk: Simple's track bands (a track's name, goal and health; a quick add dropped on one lands on that track); the Plan keeps its own lanes and counts. */
+  trackBands?: boolean;
   /** The plan's no-work weeks (holidays), drawn grey. */
   noWork?: { start: string; end: string; label?: string | null }[];
   /** roadmap-milestones D3: on a phone, the milestone whose end is off screen to the right ("M3"), as the chart scrolls (null: none). */
@@ -448,7 +450,7 @@ declare global {
   }
 }
 
-export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, lane = data.group, laneWord, noWork = [], onOffscreen, pulled }: ChartProps) {
+export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, lane = data.group, laneWord, trackBands = false, noWork = [], onOffscreen, pulled }: ChartProps) {
   const box = useRef<HTMLDivElement>(null);
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
@@ -756,12 +758,20 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
             <div
               key={`g-${r.key}-${n}`}
               data-testid={r.below ? "below-the-line" : "chart-group"}
-              data-add-where={dropTargets && lane === "goal" && !r.below && goalLane(r.key) ? whereAttr("goal", r.key) : undefined}
+              data-add-where={
+                !dropTargets || r.below
+                  ? undefined
+                  : lane === "goal" && goalLane(r.key)
+                    ? whereAttr("goal", r.key)
+                    : trackBands && lane === "track" && (data.tracks ?? []).some((t) => t.id === r.key)
+                      ? whereAttr("track", r.key)
+                      : undefined
+              }
               data-add-label={r.title}
               style={{ height: l.hs[n] }}
               className={`flex min-w-0 flex-col justify-center bg-surface2 px-3 ${r.below ? "text-text2" : ""}`}
             >
-              {lane === "track" && !r.below ? (
+              {trackBands && lane === "track" && !r.below ? (
                 <TrackHead data={data} laneKey={r.key} title={r.title} stack />
               ) : gantt ? (
                 // D: the goal's name and, under it, its metric. The row's height must fit both

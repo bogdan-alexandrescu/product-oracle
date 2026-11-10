@@ -1123,7 +1123,12 @@ function DayChart(props: TimelineProps) {
                   className="pointer-events-none relative z-[25] flex h-8 items-end border-b border-line bg-surface2/70 focus-within:z-[30] hover:z-[30]"
                 >
                   {data.group === "track" && r.key !== "below" && r.key !== "none" ? (
-                    <div className="sticky left-0 px-3 pb-1 text-sm whitespace-nowrap">
+                    // tb-mk: a quick add dropped on a track band's header lands on that track.
+                    <div
+                      data-add-where={props.canChange && (data.tracks ?? []).some((t) => t.id === r.key) ? whereAttr("track", r.key) : undefined}
+                      data-add-label={r.title}
+                      className="pointer-events-auto sticky left-0 px-3 pb-1 text-sm whitespace-nowrap"
+                    >
                       <TrackHead data={data} laneKey={r.key} title={r.title} />
                     </div>
                   ) : (

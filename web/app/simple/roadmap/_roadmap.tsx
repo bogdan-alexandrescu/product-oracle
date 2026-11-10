@@ -100,7 +100,7 @@ async function brandOf(): Promise<Brand | null> {
 }
 
 type Filters = { group: Lane; roadmap: string; prd: string; goal: string; track: string; from: string; to: string };
-const NO_FILTERS: Filters = { group: "track", roadmap: "", prd: "", goal: "", track: "", from: "", to: "" };
+const NO_FILTERS: Filters = { group: "goal", roadmap: "", prd: "", goal: "", track: "", from: "", to: "" };
 type Picks = Record<"prd" | "goal" | "track", Set<string>>;
 const PICKS = ["prd", "goal", "track"] as const;
 /** roadmap-stale-filters: the PRDs, goals and tracks a roadmap's items are on (what its filters may pick). */
@@ -995,6 +995,8 @@ export function SimpleRoadmap() {
   const params = useSearchParams();
   const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, prd: params.get("prd") ?? "", roadmap: params.get("roadmap") ?? "", goal: params.get("goal") ?? "" }));
   const [format, setFormat] = useState<Format>("timeline");
+  // tb-mk: the Gantt starts grouped by track, the Board and the Waterfall by goal, till a person picks a Group by.
+  const groupPicked = useRef(false);
   const [unit, setUnit] = useState<GanttUnit>("week");
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);
   const [pop, setPop] = useState<{ id: string; left: number; top: number; above: number } | null>(null);
@@ -1493,7 +1495,9 @@ export function SimpleRoadmap() {
   const filterWords = (): string => {
     const named = (list: [string, string][], v: string) => list.find(([k]) => k === v)?.[1] ?? v;
     const qName = (v: string) => (data ? quarters(data.windows.now.start, data.windows.later.end).find((q) => q.start === v || q.end === v)?.label : null) ?? shortDay(v);
-    const parts = [`Grouped by ${f.group === "prd" ? "PRD" : f.group}`];
+    // The Timeline always draws track bands.
+    const group = format === "timeline" ? "track" : f.group;
+    const parts = [`Grouped by ${group === "prd" ? "PRD" : group}`];
     if (f.prd) parts.push(`PRD: ${named(seen.prd, f.prd)}`);
     if (f.goal) parts.push(`Goal: ${named(goalOptions, f.goal)}`);
     if (f.track) parts.push(`Track: ${named(seen.track, f.track)}`);
@@ -1593,10 +1597,21 @@ export function SimpleRoadmap() {
     if (known) return known.applies ? "Add" : "Propose";
     return data.items.some((i) => i.roadmap.id === rm && i.can_decide) ? "Add" : "Propose";
   };
-  const onAdd = async (title: string, w: Where, rmId?: string): Promise<boolean> => {
+  const onAdd = async (title: string, at: Where, rmId?: string): Promise<boolean> => {
+    // tb-mk: a quick add dropped on a track band is added to Next, then put on that track (set_track).
+    const band = at.kind === "track" ? (data.tracks ?? []).find((t) => t.id === at.value) : undefined;
+    if (at.kind === "track" && !band) return false;
+    const w: Where = band ? { kind: "horizon", value: "next", label: band.title } : at;
     try {
       const r = await propose({ op: "add_item", target: { roadmap_id: rmId ?? target?.id ?? null, where: { kind: w.kind, value: w.value } }, before: {}, after: { title } });
       const c = r.change;
+      const id = c.target.item_id;
+      if (band && c.status === "applied" && typeof id === "string") {
+        // Its track as the roadmap now reads it (the roadmap's first track), then the band's.
+        const now = await unwrap(api.GET("/v1/simple/roadmap", { params: { query: wideQs as never } }));
+        const had = now.items.find((i) => i.id === id)?.track?.id ?? null;
+        if (had !== band.id) await propose({ op: "set_track", target: { item_id: id }, before: { track_id: had }, after: { track_id: band.id } });
+      }
       if (c.status === "applied")
         toast({
           message: `Added ${title} as a draft`,
@@ -1781,10 +1796,13 @@ export function SimpleRoadmap() {
           label="Group by"
           size="sm"
           value={f.group}
-          onChange={(group) => setF({ ...f, group })}
+          onChange={(group) => {
+            groupPicked.current = true;
+            setF({ ...f, group });
+          }}
           items={[
-            { value: "goal", label: "Goal", testId: "group-goal" },
             { value: "track", label: "Track", testId: "group-track" },
+            { value: "goal", label: "Goal", testId: "group-goal" },
             { value: "prd", label: "PRD", testId: "group-prd" },
             { value: "milestone", label: "Milestone", testId: "group-milestone" },
           ]}
@@ -1892,6 +1910,7 @@ export function SimpleRoadmap() {
               setCard(null);
               setPop(null);
               setFormat(v);
+              if (!groupPicked.current) setF((p) => ({ ...p, group: v === "gantt" ? "track" : "goal" }));
             }}
             items={[
               { value: "timeline", label: "Timeline", testId: "format-timeline" },
@@ -2103,6 +2122,7 @@ export function SimpleRoadmap() {
           <Chart
             data={(format === "gantt" && f.group === "track" ? goalLaned : laned) ?? data}
             lane={f.group}
+            trackBands={f.group === "track"}
             noWork={noWork}
             format={format}
             unit={unit}

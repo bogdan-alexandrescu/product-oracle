@@ -473,8 +473,8 @@ export function quarterValue(start: string): string {
   return `${d.getUTCFullYear()}-Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
 }
 
-/** S7: where a quick-added item goes: a quarter, a horizon or a goal (data-add-where="kind:value"). */
-export type Where = { kind: "quarter" | "horizon" | "goal"; value: string; label: string };
+/** S7: where a quick-added item goes: a quarter, a horizon, a goal or (tb-mk) a track band (data-add-where="kind:value"). */
+export type Where = { kind: "quarter" | "horizon" | "goal" | "track"; value: string; label: string };
 export const whereAttr = (kind: Where["kind"], value: string): string => `${kind}:${value}`;
 
 /** roadmap-gantt: what the rows sit under (Goal by default; Milestone is read from the items' slices). */
