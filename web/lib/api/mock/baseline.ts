@@ -759,7 +759,12 @@ function entityDiff(e: EntityRow, changes: Changes): Partial<EntityRow> {
   }
   if (changes.status != null && changes.status !== e.status) out.status = changes.status;
   if ("parent_id" in changes && (changes.parent_id ?? null) !== (e.parent_id ?? null)) out.parent_id = changes.parent_id ?? null;
-  if (typeof changes.key === "string" && changes.key && changes.key !== e.key) out.key = changes.key;
+  // codes-on-join: only a feature's key changes here, a code read one way (F-9 is F-09).
+  const key = typeof changes.key === "string" && e.type === "feature" ? (canonicalCode(changes.key) ?? changes.key.trim()) : "";
+  if (key && key !== e.key) {
+    if (key.length > 120 || !(KEY_RE.test(key) || CODE_KEY_RE.test(key))) throw new MockError(422, "key: lowercase letters, digits, . _ -, or a feature code");
+    out.key = key;
+  }
   return out;
 }
 
@@ -1055,7 +1060,7 @@ export function acceptNewFeatures(
   const added: EntityRow[] = [];
   for (const key of keys) {
     const mine = creates.get(key) ?? [];
-    const exists = s.entities.some((e) => e.type === "feature" && e.key === key);
+    const exists = !!findByKey(s, "feature", key);
     // Rejected before the first is accepted (as the API: it would otherwise close it as already done).
     for (const p of mine.slice(exists ? 0 : 1)) reject(p);
     if (exists) continue;
@@ -1341,7 +1346,7 @@ function noOp(s: BaselineState, p: ProposalRow): boolean {
   }
   if (pay.op !== "create") return false;
   if (pay.kind === "edge") return s.edges.some((e) => e.src_id === f.src_id && e.dst_id === f.dst_id && e.type === f.type);
-  return s.entities.some((e) => e.type === f.type && e.key === f.key);
+  return !!findByKey(s, String(f.type ?? ""), String(f.key ?? ""));
 }
 
 /** As service.close_siblings' query: a new item of the same type, or a link between the same two items. */
