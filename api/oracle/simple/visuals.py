@@ -179,8 +179,9 @@ async def flows_of_bets(
     the key of the bet at its place before (a bet added above shifted every flow by one), so
     the stored key alone never puts a flow on another bet. A bet with no flow whose key
     holds another bet's flow is drawn on ``own_subject``, built from its key so it stays
-    the bet's when the bet is reworded (and shown before a flow left at its key); a flow still keyed by a bet's words
-    (0092_bet_flow_line_key left it) is read by a bet with those words and none."""
+    the bet's when the bet is reworded (and shown before a flow left at its key); a flow
+    still keyed by a bet's words (0092_bet_flow_line_key left it) is read by a bet with
+    those words and none."""
     keyed = [line_subject(document_id, k) for k, _ in bets]
     own = [own_subject(document_id, k) for k, _ in bets]
     flows = await flows_for(db, "one_pager_line", keyed + own)
