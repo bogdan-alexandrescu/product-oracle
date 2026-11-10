@@ -79,6 +79,64 @@ export const betSubject = (lineId: string, text?: string): string => {
   return id;
 };
 
+/** A bet's subject by its words, as the API's words_subject (0092_bet_flow_line_key). */
+const wordsSubject = (prefix: string, text: string): string => {
+  const said = text.split(/\s+/).filter(Boolean).join(" ");
+  const id = stableUuid(`simple-visual/bet-words/${prefix}/${said.toLowerCase()}`);
+  BET_WORDS.set(id, said);
+  return id;
+};
+
+// As visuals._THIN, visuals.LIKE: words that say nothing about which bet a text is; how alike to be the same bet.
+const THIN = new Set("a an and or of to for on in with from that this its our by at is are be".split(" "));
+const LIKE = 0.4;
+const gist = (t: string): Set<string> =>
+  new Set((t.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 1).map((w) => w.replace(/s+$/, "")).filter((w) => !THIN.has(w)));
+
+/** As visuals.likeness: the words two bets share over all their words, 0 to 1. */
+export function likeness(a: string, b: string): number {
+  const x = gist(a);
+  const y = gist(b);
+  if (!x.size || !y.size) return 0;
+  const both = [...x].filter((w) => y.has(w)).length;
+  return both / new Set([...x, ...y]).size;
+}
+
+/** As visuals.pair_alike: each new (by index) with the old it reads most like, at least LIKE, each once. */
+function pairAlike(old: string[][], now: string[][]): Map<number, number> {
+  const pairs: [number, number, number, number, number][] = [];
+  old.forEach((was, i) => now.forEach((n, j) => pairs.push([Math.max(0, ...was.flatMap((a) => n.map((b) => likeness(a, b)))), i === j ? 1 : 0, -Math.abs(i - j), i, j])));
+  pairs.sort((p, q) => { for (let k = 0; k < 5; k++) if (p[k] !== q[k]) return q[k] - p[k]; return 0; });
+  const out = new Map<number, number>();
+  const used = new Set<number>();
+  for (const [score, , , i, j] of pairs) {
+    if (score < LIKE) break;
+    if (!out.has(j) && !used.has(i)) { out.set(j, i); used.add(i); }
+  }
+  return out;
+}
+
+/** As visuals.flows_of_bets (vqa one-pager 1): each bet's flow subject and flow. A flow keyed to a
+ * bet's line (`key`, a position) shows on the bet its brief reads most like, else on its own, so a
+ * bet added above never shifts the flows; a bet with no flow whose key holds another bet's is
+ * drawn on its words' subject. */
+export function flowsOfBets(db: VisualsDb | undefined, prefix: string, bets: { key: string; text: string }[]): { subject: string; flow: Flow | null }[] {
+  const keyed = bets.map((b) => betSubject(b.key));
+  const has = (s: string) => !!flowFor(db, "one_pager_line", s);
+  const drawn = keyed.map((s) => (has(s) ? [db!.visuals[`one_pager_line:${s}`].brief] : []));
+  const on = new Map<number, string>();
+  for (const [j, i] of pairAlike(drawn, bets.map((b) => [b.text]))) on.set(j, keyed[i]);
+  const taken = new Set(on.values());
+  keyed.forEach((s, i) => { if (has(s) && !on.has(i) && !taken.has(s)) on.set(i, s); });
+  return bets.map((b, j) => {
+    const words = wordsSubject(prefix, b.text);
+    // A flow still keyed by a bet's words is read by a bet with those words and none.
+    const subject = on.get(j) ?? (has(keyed[j]) || has(words) ? words : keyed[j]);
+    BET_WORDS.set(subject, b.text.split(/\s+/).filter(Boolean).join(" "));
+    return { subject, flow: flowFor(db, "one_pager_line", subject) };
+  });
+}
+
 function drawSvg(title: string, steps: Step[]): string {
   const w = 150;
   const boxes = steps

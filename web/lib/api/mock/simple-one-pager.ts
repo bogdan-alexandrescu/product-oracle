@@ -31,7 +31,7 @@ import { stableUuid } from "./ids";
 import { changePhrase, changeSentence } from "./simple-change-words";
 import { annotate, asWritten, resolved, setNumber } from "./one-pager-checks";
 import { roadmapOut } from "./simple-roadmap";
-import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
+import { betSubject, flowFor, flowsOfBets, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
 import { madeOrder } from "./made-order";
 
 type Role = Schemas["Me"]["role"];
@@ -264,6 +264,36 @@ export function seedNeedsLookOnePager(): OnePagerDb {
   blocks.find((b) => b.key === "risks")!.lines = [{ id: "risks-1", text: "Pricing for teams is TBD", keys: ["risks"] }];
   db.held = { blocks, checks: ["2 bets; a one-pager has 3 to 5", "A line in “Risks and open decisions” says “TBD”"] };
   return db;
+}
+
+/**
+ * The "one-pager-bet-added" scenario (vqa one-pager 1): the PRD's next version gained a new
+ * first bet, so every bet's line moved down one; the flows were drawn before (keyed to the
+ * lines they were on then, ./simple-visuals.ts seedVisuals). Invented data.
+ */
+export function seedBetAddedOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  const bets = db.blocks.find((b) => b.key === "bets")!;
+  const was = bets.lines.map((l) => l.text);
+  bets.lines = ["Workspace templates for common teams", ...was].map((text, i) => ({ id: `bets-${i + 1}`, text, keys: ["build"] }));
+  return { ...db, version: db.version + 1 };
+}
+
+/**
+ * The "one-pager-milestone-names" scenario (vqa one-pager 3): the plan's M2 milestone record is
+ * named only by its code ("M2") while another item names it ("M2 · Ship to beta"). Invented data.
+ */
+export function seedMilestoneNamesOnePager(): OnePagerDb {
+  const item = (title: string, start: string, end: string, milestone: [string, string], record?: { id: string; name: string }): SliceItem =>
+    ({ title, horizon: "now", start, end, estimated: false, milestone, ...(record ? { record } : {}) });
+  return {
+    ...seedOnePager(),
+    slice: [
+      item("Setup checklist", "2026-11-02", "2026-11-27", ["M1 · Measured and mapped", "2026-12-04"]),
+      item("Calendar invites", "2026-11-09", "2026-12-04", ["M2", "2026-12-11"], { id: stableUuid("op-milestone/m2"), name: "M2" }),
+      item("Sample project", "2026-11-16", "2026-12-11", ["M2 · Ship to beta", "2026-12-18"]),
+    ],
+  };
 }
 
 /**
@@ -998,12 +1028,17 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const owner = db.ownerless ? undefined : db.owner ?? ctx.owners[0];
   // S-8: a PRD's own page reads its slice from the roadmap at each read (one_pager.prd_items).
   const read = db.roadmap ? prdSlice(db.roadmap, ctx.role, db) : null;
-  const placed = read ? read.items : (db.slice ?? SLICE);
+  const placed = read ? read.items : namedMilestones(db.slice ?? SLICE, {});
   const span = read?.span ?? milestoneSpan(placed);
   // The Timeline lists each item once; the strip reads one input per slice.
   const slice = placed.filter((x, i) => !x.id || placed.findIndex((y) => y.id === x.id) === i);
   const held = ctx.role === "owner" ? db.held ?? null : null;
   // A build held for owners (oracle.simple.quality) is what owners read; others the last good.
+  // vqa one-pager 1, as visuals.flows_of_bets: each bet's flow on the bet it was drawn for.
+  const betLines = (held?.blocks ?? db.blocks).find((b) => b.key === "bets")?.lines ?? [];
+  const keyOf = (id: string) => (db.flowKey ? `${db.flowKey}/${id}` : id);
+  const betIndex = new Map(betLines.map((l, i) => [l.id, i]));
+  const found = flowsOfBets(db.visuals, db.flowKey ?? db.doc.slug, betLines.map((l) => ({ key: keyOf(l.id), text: uncomment(l.text).split(/\s+/).filter(Boolean).join(" ") })));
   const blocks: Schemas["OnePagerBlock"][] = (held?.blocks ?? db.blocks).map((b) => ({
       key: b.key, title: b.title, rules: b.rules, kind: b.kind, who: null,
       // P-9: a line that only says "Not in the PRD yet" is the block's mark, said once.
@@ -1013,13 +1048,14 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
         // As one_pager._tidy: a stored line's citations resolved, as the PRD's PDF resolves them.
         const text = edited ? db.draft!.lines[l.id] : resolved(uncomment(l.text)).split(/\s+/).filter(Boolean).join(" ");
         const metric = l.metric ? { name: resolved(l.metric.name).trim(), from: resolved(l.metric.from).trim(), to: resolved(l.metric.to).trim() } : null;
-        const flow = b.key === "bets" ? onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(db.flowKey ? `${db.flowKey}/${l.id}` : l.id))) : null;
+        const bet = b.key === "bets" ? found[betIndex.get(l.id) ?? -1] : undefined;
+        const flow = bet ? onePagerFlow(bet.flow) : null;
         return {
           id: l.id, text, full: edited || !l.full ? null : resolved(l.full), source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : metric,
           state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
           // S10: each bet carries its visual, keyed by its line: an edit keeps the flow. Its
           // brief is the published words (the API's bet_line): never a draft's.
-          ...(b.key === "bets" ? { flow_subject: betSubject(db.flowKey ? `${db.flowKey}/${l.id}` : l.id, uncomment(l.text).split(/\s+/).filter(Boolean).join(" ")), flow } : {}),
+          ...(b.key === "bets" ? { flow_subject: bet?.subject ?? betSubject(keyOf(l.id)), flow } : {}),
           decisions: [...(db.decisions?.[l.id] ?? [])],
           measure: null, measure_source: null, footnotes: [],
           // 2026-10-30: a bet with no flow offers "Draw the flow" to those who change the PRD (visuals.may_revise).

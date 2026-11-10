@@ -195,7 +195,7 @@ import { runGroupsOut } from "./simple-runs";
 import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
 import { rebuildsOut } from "./rebuilds";
-import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedHeadingCountOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedTwoCountsOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedBetAddedOnePager, seedHeadingCountOnePager, seedMilestoneNamesOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedTwoCountsOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -7768,6 +7768,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   // "one-pager-run-prd": a run's Goal-traced PRD, its lines cited, while Oracle writes the page.
   // "one-pager-quick-read": the same PRD, its one_pager job failed: the quick read stays.
   // "one-pager-run-prd-walk": a run's approved PRD as Oracle's job wrote its page (CLD's walk B).
+  // "one-pager-bet-added": the PRD's next version gained a new first bet; the flows drawn before stay on their bets.
+  // "one-pager-milestone-names": a milestone record named only by its code beside an item that names it.
   db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd"
     ? seedRunPrdOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd-walk"
@@ -7782,6 +7784,10 @@ async function route(db: Db, req: Request): Promise<Response> {
     ? seedHeadingCountOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-two-counts"
     ? seedTwoCountsOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-bet-added"
+    ? seedBetAddedOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-milestone-names"
+    ? seedMilestoneNamesOnePager()
     : seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
