@@ -540,7 +540,8 @@ export function prioritiesOut(
   yours = dependencyOrder(yours, byId);
   const can = ctx.role !== "viewer";
   // qa-prio-twins (priorities._held): a feature's live draft on the roadmap the reader sees, by its link.
-  const draftOf = (i: Item) => live.find((d) => d.draft && d.key !== i.key && featureOfItem(db, d) === featureOfItem(db, i));
+  // Only the company roadmap's while there is one.
+  const draftOf = (i: Item) => live.find((d) => d.draft && d.key !== i.key && (!db.company_roadmap || d.roadmap.slug === db.company_roadmap) && featureOfItem(db, d) === featureOfItem(db, i));
   const rows: Row[] = yours.map((i, n) => {
     const e = estimates(db, keyOf(i), i.id);
     const above = yours.slice(0, n);
@@ -605,20 +606,6 @@ export function prioritiesOut(
   yours.forEach((i, n) => (rows[n].short_code = short.get(featureKey(i.key))!));
   // prio-company: the feature's own code beside its name (priorities.FEATURE_CODE), never letters made up.
   rows.forEach((r) => (r.own_key = /^[A-Z]{1,3}-\d+$/.test(r.short_code) ? r.short_code : null));
-  const codes = new Map(read.items.map((i) => [i.id, i]));
-  // As priorities.py lists them: by at, a tie in the order made.
-  const proposals: Schemas["SimplePriorityProposal"][] = madeOrder(db.changes ?? [], (c) => [c.at])
-    // Ranking proposals, and a draft's Confirm or Merge (S7: a merge_item), as priorities.py.
-    .filter((c) => c.status === "proposed" && codes.has(String(c.target.item_id)))
-    .filter((c) => c.op === "override_priority" || c.op === "estimate_feature" || ((c.op === "confirm_item" || c.op === "cut" || c.op === "merge_item") && codes.get(String(c.target.item_id))!.draft))
-    .filter((c) => ctx.role === "owner" || c.by === ctx.id || route(c).includes(ctx.id))
-    .map((c) => {
-      const i = codes.get(String(c.target.item_id))!;
-      return {
-        change_id: c.id, op: c.op as Schemas["SimplePriorityProposal"]["op"], item_id: i.id, feature_id: featureOfItem(db, i), code: i.key, title: i.title, by_name: c.by_name, at: c.at, reason: c.reason,
-        after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), can_withdraw: c.by === ctx.id, flow: flowFor(db.visuals, "change", c.id) ?? flowFor(db.visuals, "feature", i.id),
-      };
-    });
   // plan-charts: with a plan, its PRD's items are in it (Goal buckets lists the rest outside it).
   const plan = planOf(db, read, ctx.role);
   if (plan) {
@@ -627,20 +614,55 @@ export function prioritiesOut(
   }
   // qa-prio-twins (priorities._fold_twins): rows of one name are one row, the best-ranked on the roadmap; the
   // others its twins, each with how it merges into it. Nothing is merged.
-  const lead = new Map<string, Row>();
+  // A row's names: its title and its feature's own (the seed item's), as priorities.py folds by either.
+  const namesOf = (r: Row) => new Set([sameName(r.title), sameName(db.items.find((x) => x.key === r.code)?.title)].filter(Boolean));
+  const groups: Row[][] = [];
+  const group = new Map<string, number>();
   for (const r of rows) {
-    const first = rows.filter((x) => sameName(x.title) === sameName(r.title)).sort((a, b) => a.rank - b.rank);
-    const l = first.find((x) => x.on_roadmap) ?? first[0];
-    lead.set(r.feature_id, l);
-    if (l === r) continue;
-    const mine = !!r.item_id && !!l.item_id && readItems.get(r.item_id)!.roadmap.id === readItems.get(l.item_id)!.roadmap.id;
-    const merge = !can ? null : mine ? ("item" as const) : !r.item_id ? ("entity" as const) : null;
-    (l.twins ??= []).push({
-      feature_id: r.feature_id, item_id: r.item_id, code: r.code, title: r.title, goal: r.goal, merge,
-      into_id: merge === "item" ? l.item_id : null, applies: merge === "item" ? decides(r.item_id!) : merge === "entity" && (ctx.role === "owner" || ctx.role === "approver"),
-    });
+    const ns = [...namesOf(r)];
+    const found = [...new Set(ns.filter((n) => group.has(n)).map((n) => group.get(n)!))].sort((a, b) => a - b);
+    const g = found.length ? found[0] : groups.push([]) - 1;
+    for (const o of found.slice(1)) {
+      groups[g].push(...groups[o]);
+      groups[o] = [];
+      for (const [n, x] of group) if (x === o) group.set(n, g);
+    }
+    groups[g].push(r);
+    for (const n of ns) group.set(n, g);
+  }
+  const lead = new Map<string, Row>();
+  for (const members of groups.filter((m) => m.length)) {
+    members.sort((a, b) => a.rank - b.rank);
+    const l = members.find((x) => x.on_roadmap) ?? members[0];
+    for (const r of members) {
+      lead.set(r.feature_id, l);
+      if (l === r) continue;
+      const mine = !!r.item_id && !!l.item_id && readItems.get(r.item_id)!.roadmap.id === readItems.get(l.item_id)!.roadmap.id;
+      // No item, an item on another roadmap, or a lead with only a draft: the Ground Truth's Merge into….
+      const merge = !can ? null : mine ? ("item" as const) : ("entity" as const);
+      (l.twins ??= []).push({
+        feature_id: r.feature_id, item_id: r.item_id, code: r.code, title: r.title, goal: r.goal, rank: r.rank, merge,
+        into_id: merge === "item" ? l.item_id : null, applies: merge === "item" ? decides(r.item_id!) : merge === "entity" && (ctx.role === "owner" || ctx.role === "approver"),
+      });
+    }
   }
   const kept = rows.filter((r) => lead.get(r.feature_id) === r);
+  const twinItems = new Set(kept.flatMap((r) => (r.twins ?? []).map((t) => t.item_id).filter((x): x is string => !!x)));
+  const codes = new Map(read.items.map((i) => [i.id, i]));
+  // As priorities.py lists them: by at, a tie in the order made.
+  const proposals: Schemas["SimplePriorityProposal"][] = madeOrder(db.changes ?? [], (c) => [c.at])
+    // Ranking proposals, and a draft's Confirm or Merge (S7: a merge_item), as priorities.py; qa-prio-twins: a twin's Merge too.
+    .filter((c) => c.status === "proposed" && codes.has(String(c.target.item_id)))
+    .filter((c) => c.op === "override_priority" || c.op === "estimate_feature" || ((c.op === "confirm_item" || c.op === "cut" || c.op === "merge_item") && (codes.get(String(c.target.item_id))!.draft || (c.op === "merge_item" && twinItems.has(String(c.target.item_id))))))
+    .filter((c) => ctx.role === "owner" || c.by === ctx.id || route(c).includes(ctx.id))
+    .map((c) => {
+      const i = codes.get(String(c.target.item_id))!;
+      return {
+        change_id: c.id, op: c.op as Schemas["SimplePriorityProposal"]["op"], item_id: i.id, feature_id: featureOfItem(db, i), code: i.key, title: i.title, by_name: c.by_name, at: c.at, reason: c.reason,
+        after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), can_withdraw: c.by === ctx.id, flow: flowFor(db.visuals, "change", c.id) ?? flowFor(db.visuals, "feature", i.id),
+      };
+    });
+
   const byFeature = new Map(kept.map((r) => [r.feature_id, r]));
   const drafts: Schemas["SimplePriorityDraft"][] = live
     .filter((i) => i.draft)
@@ -648,7 +670,8 @@ export function prioritiesOut(
       // qa-prio-twins: the row it shows on, by its link (a draft added for a feature), else by name.
       const own = featureOf(db, i.key) !== i.key;
       const linked = own ? byFeature.get(featureOfItem(db, i)) : undefined;
-      const row = linked ?? (own ? undefined : kept.find((r) => sameName(r.title) === sameName(i.title)));
+      const g = group.get(sameName(i.title));
+      const row = linked ?? (own || g == null ? undefined : lead.get(groups[g][0].feature_id));
       return {
         item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, roadmap: i.roadmap, applies: decides(i.id),
         merge_into: all

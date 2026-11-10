@@ -80,9 +80,10 @@ function OwnKey({ r }: { r: { own_key?: string | null } }) {
 /** qa-simple-plan-3: what the score is, in words (the API's formula: Σ goal weight × contribution × confidence ÷ effort). */
 const SCORE_WORDS = "Score = goal value × Oracle's confidence in it (0 to 1) ÷ effort in engineer-weeks.";
 /** qa-prio-twins (the owner's rule: explanations behind a tooltip): how the score is worked out, behind an (i) by the list's heading. */
-function ScoreTip() {
+function ScoreTip({ id = "prio-score-text" }: { id?: string }) {
+  // The caption's and the "Makes" heading's can show at once (a goal's list split at a dated line): one id each.
   return (
-    <InfoTip label="the score" align="start" testId="prio-score-help" id="prio-score-text">
+    <InfoTip label="the score" align="start" testId="prio-score-help" id={id}>
       {SCORE_WORDS}
     </InfoTip>
   );
@@ -748,7 +749,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
             )}
             {/* qa-prio-twins: the feature's drafts on the roadmap and its unlinked twins, on its one row. */}
             <RowDrafts drafts={data.drafts.filter((d) => d.row_feature_id === r.feature_id)} proposals={data.proposals} mayChange={mayChange} changed={changed} />
-            {(r.twins ?? []).length > 0 && <Twins r={r} mayChange={mayChange} changed={changed} />}
+            {(r.twins ?? []).length > 0 && <Twins r={r} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
             {mayChange && !r.can_reorder && (
               <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-locked">
                 {/* prio-company: never the owner's (an owner moves every row); someone who truly lacks the right. A feature not
@@ -1131,6 +1132,11 @@ function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Ch
   );
 }
 
+/** qa-prio-twins: a merge's toast; one name merged into the same name says by code which record was kept. */
+const sameName = (t: string): string => t.split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+const mergedWords = (from: { title: string; code: string }, kept: { title: string; code: string }): string =>
+  sameName(from.title) === sameName(kept.title) ? `Merged ${from.title} (${from.code}) into ${kept.title} (${kept.code}), which is kept` : `Merged ${from.title} into ${kept.title}`;
+
 /** qa-prio-twins: the drafts no ranked row holds (one of a ranked feature shows on its row). */
 const ownDrafts = (data: Out): Draft[] => data.drafts.filter((d) => !d.row_feature_id);
 
@@ -1232,7 +1238,7 @@ function DraftItem({ d, proposals, mayChange, changed, onRow = false }: { d: Dra
             setMerging(false);
             await changed(
               await send({ op: "merge_item", target: { item_id: d.item_id, into_id: target.item_id }, before: {}, after: {}, reason: `Merged into ${target.title}` }),
-              `Merged ${d.title} into ${target.title}`,
+              mergedWords(d, target),
             );
           }}
         >
@@ -1271,7 +1277,7 @@ function DraftItem({ d, proposals, mayChange, changed, onRow = false }: { d: Dra
  * second item), on its one row: each named with its goal, and Merge into… this one (merge_item for an item of the
  * same roadmap, the Ground Truth's Merge into… for a feature with no item). Oracle never merges them.
  */
-function Twins({ r, mayChange, changed }: { r: Row; mayChange: boolean; changed: Changed }) {
+function Twins({ r, proposals, mayChange, changed }: { r: Row; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
   const [merging, setMerging] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function merge(t: Twin) {
@@ -1279,7 +1285,7 @@ function Twins({ r, mayChange, changed }: { r: Row; mayChange: boolean; changed:
     if (t.merge === "item" && t.item_id && t.into_id) {
       await changed(
         await send({ op: "merge_item", target: { item_id: t.item_id, into_id: t.into_id }, before: {}, after: {}, reason: `Merged into ${r.title}` }),
-        `Merged ${t.title} into ${r.title}`,
+        mergedWords(t, r),
       );
       return;
     }
@@ -1288,7 +1294,7 @@ function Twins({ r, mayChange, changed }: { r: Row; mayChange: boolean; changed:
     try {
       await unwrap(api.POST("/v1/baseline/entities/{entity_id}/merge", { params: { path: { entity_id: t.feature_id } }, body: { into: r.feature_id, reason: null } }));
       window.dispatchEvent(new Event(ITEM_CHANGED_EVENT));
-      toast({ message: `Merged ${t.title} into ${r.title}` });
+      toast({ message: mergedWords(t, r) });
     } catch (e) {
       toast({ message: errorMessage(e) });
     } finally {
@@ -1301,6 +1307,11 @@ function Twins({ r, mayChange, changed }: { r: Row; mayChange: boolean; changed:
         const id = t.feature_id ?? t.code;
         // A merge the caller may start: merge_item (applied or proposed), or the Ground Truth's for who may approve.
         const may = mayChange && (t.merge === "item" || (t.merge === "entity" && t.applies));
+        // Its own waiting proposals (a move, an estimate, a merge): they show here, its row being folded into this one;
+        // none more until they are decided (as a draft's).
+        const pending = proposals.filter(
+          (p) => (p.feature_id != null && p.feature_id === t.feature_id && (p.op === "override_priority" || p.op === "estimate_feature")) || (p.op === "merge_item" && p.item_id === t.item_id),
+        );
         return (
           <li key={id} data-testid="prio-twin" data-code={t.code} className="rounded-lg border border-dashed border-line-strong px-2 py-1.5 text-[length:var(--simple-small)]">
             <div className="flex flex-wrap items-center gap-2">
@@ -1308,9 +1319,21 @@ function Twins({ r, mayChange, changed }: { r: Row; mayChange: boolean; changed:
                 Same name
               </span>
               <span className="flex-1 font-medium">{t.title}</span>
-              <span className="text-text2">{t.goal?.title ?? "No goal"}</span>
+              {/* The folding by name stays visible: the twin's own rank and goal. */}
+              {t.rank != null && (
+                <span className="tabular-nums text-text2" data-testid="prio-twin-rank" title="Its own rank">
+                  #{t.rank}
+                </span>
+              )}
+              <span className="text-text2" data-testid="prio-twin-goal">{t.goal?.title ?? "No goal"}</span>
               {may && (
-                <Button variant="secondary" disabled={busy} aria-expanded={merging === id} onClick={() => setMerging(merging === id ? null : id)}>
+                <Button
+                  variant="secondary"
+                  disabled={busy || pending.length > 0}
+                  title={pending.length ? "A proposal for it is waiting for a decision" : undefined}
+                  aria-expanded={merging === id}
+                  onClick={() => setMerging(merging === id ? null : id)}
+                >
                   {t.applies ? "Merge into…" : "Propose a merge…"}
                 </Button>
               )}
@@ -1325,11 +1348,16 @@ function Twins({ r, mayChange, changed }: { r: Row; mayChange: boolean; changed:
               >
                 <label htmlFor={`twin-${id}`}>Merge into</label>
                 <select id={`twin-${id}`} value={r.feature_id} disabled className="rounded-lg border border-line bg-bg px-2 py-1">
-                  <option value={r.feature_id}>{r.title}</option>
+                  <option value={r.feature_id}>
+                    {r.title} ({r.code})
+                  </option>
                 </select>
                 <Button type="submit">{t.applies ? "Merge" : "Propose"}</Button>
               </form>
             )}
+            {pending.map((p) => (
+              <ProposalCard key={p.change_id} p={p} row={r} changed={changed} />
+            ))}
           </li>
         );
       })}
@@ -2139,7 +2167,7 @@ function PartHead({ data, makes, n }: { data: Out; makes: boolean; n: number }) 
       <span className="text-[length:var(--simple-small)] text-text2" data-testid="prio-part-count">
         {n} {n === 1 ? "feature" : "features"}, in rank order
       </span>
-      {makes && <ScoreTip />}
+      {makes && <ScoreTip id="prio-score-text-makes" />}
     </li>
   );
 }
