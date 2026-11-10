@@ -109,7 +109,7 @@ for (const [size, device] of [
         await roadmap(page);
         await page.getByTestId("needs-decision").click();
         const tray = page.getByTestId("decision-tray");
-        const row = tray.getByTestId("tray-proposal").filter({ hasText: "Milestone 'Alerts live for 50 teams': change it" });
+        const row = tray.getByTestId("tray-proposal").filter({ hasText: "Milestone 'M1 Alerts live for 50 teams': change it" });
         await expect(row).toBeVisible();
         await row.scrollIntoViewIfNeeded();
         await shot(page, "owner-tray", size, scheme);

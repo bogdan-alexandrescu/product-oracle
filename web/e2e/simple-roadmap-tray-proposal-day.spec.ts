@@ -14,7 +14,8 @@ import { expect, test, type Page } from "./test";
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const APPROVER = "approver@example.com";
-const M1 = "M1 Alerts live for 50 teams";
+// roadmap-milestone-codes: the milestone reads its roadmap code, whatever number it is.
+const M1 = /^M\d+ Alerts live for 50 teams$/;
 const card = (page: Page) => page.getByTestId("ms-card");
 
 async function roadmap(page: Page) {
@@ -27,7 +28,7 @@ async function propose(page: Page, name: string) {
   await expect(card(page)).toHaveAttribute("data-rights", "propose");
   await card(page).getByLabel("Name").fill(name);
   await card(page).getByTestId("ms-propose").click();
-  await expect(page.getByTestId("ms-toast")).toContainText(`Proposed a change to ${M1}`);
+  await expect(page.getByTestId("ms-toast")).toContainText(/Proposed a change to M\d+ Alerts live for 50 teams/);
   await expect(card(page)).toHaveCount(0);
 }
 
@@ -48,7 +49,7 @@ test("two proposals on one milestone each show the day they were made, month fir
   await login(page);
   await roadmap(page);
   await page.getByTestId("needs-decision").click();
-  const rows = page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: "Milestone 'Alerts live for 50 teams': change it" });
+  const rows = page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: /Milestone 'M\d+ Alerts live for 50 teams': change it/ });
   await expect(rows).toHaveCount(2);
   const day = (words: string) => rows.filter({ has: page.getByTestId("tray-proposal-day").filter({ hasText: new RegExp(`^\\s*·\\s*${words}$`) }) });
   await expect(day("Oct 22")).toHaveCount(1);
@@ -85,7 +86,7 @@ test("only a milestone's proposal says its day, with the year once it is not thi
   await roadmap(page);
   await page.getByTestId("needs-decision").click();
   const tray = page.getByTestId("decision-tray");
-  const milestone = tray.getByTestId("tray-proposal").filter({ hasText: "Milestone 'Alerts live for 50 teams': change it" });
+  const milestone = tray.getByTestId("tray-proposal").filter({ hasText: /Milestone 'M\d+ Alerts live for 50 teams': change it/ });
   await expect(milestone.getByTestId("tray-proposal-day")).toHaveText(/^\s*·\s*Oct 22, 2026$/);
   const keyDate = tray.getByTestId("tray-proposal").filter({ hasText: "Key date 'Product launch'" });
   await expect(keyDate).toBeVisible();

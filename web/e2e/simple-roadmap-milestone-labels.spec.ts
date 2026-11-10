@@ -67,7 +67,8 @@ async function namesReached(page: Page, where: string) {
     await expect(page.getByTestId("ms-ghost-words"), `${where}: a label's hover shows the + Milestone hint`).toHaveCount(0);
     await expect(tip).toBeVisible();
     const words = (await tip.innerText()).trim();
-    for (const [name, day] of NAMES) if (words.startsWith(`${name}, ${day}, 2027`)) seen.add(name);
+    // roadmap-milestone-codes: each reads its roadmap code first ("M3 Trail beta, Jan 15, 2027").
+    for (const [name, day] of NAMES) if (new RegExp(`^M\\d+ ${name}, ${day}, 2027`).test(words)) seen.add(name);
   }
   for (const chip of await page.getByTestId("timeline-milestone-more").filter({ visible: true }).all()) {
     await chip.hover();
@@ -78,7 +79,7 @@ async function namesReached(page: Page, where: string) {
     await expect(list.getByTestId("timeline-milestone-entry")).toHaveCount(n);
     for (const e of await list.getByTestId("timeline-milestone-entry").all()) {
       const words = (await e.innerText()).trim();
-      for (const [name, day] of NAMES) if (words === `◆ ${name} · ${day}`) seen.add(name);
+      for (const [name, day] of NAMES) if (new RegExp(`^◆ M\\d+ ${name} · ${day}$`).test(words)) seen.add(name);
     }
     await page.mouse.move(5, 5);
   }
@@ -151,7 +152,7 @@ for (const scheme of ["light", "dark"] as const)
       await cut!.hover();
       await expect(page.getByTestId("ms-ghost-words")).toHaveCount(0);
       await expect(tip).toBeVisible();
-      await expect(tip).toContainText(/^(Trail beta|Route preview for group hikes|Photo pins on the map|Trip reports open), Jan \d+, 2027/);
+      await expect(tip).toContainText(/^M\d+ (Trail beta|Route preview for group hikes|Photo pins on the map|Trip reports open), Jan \d+, 2027/);
       await page.screenshot({ path: test.info().outputPath(`cut-hover-${scheme}.png`) });
       await page.mouse.move(5, 5);
       await expect(tip).toHaveCount(0);
@@ -169,7 +170,7 @@ for (const scheme of ["light", "dark"] as const)
       // The first label in the row is Jan 15's, cut short: its tip gives the whole name.
       expect(await focused.evaluate((el) => el.scrollWidth > el.clientWidth + 1), "the focused label is not the cut one").toBe(true);
       await expect(tip).toBeVisible();
-      await expect(tip).toContainText(/^Trail beta, Jan 15, 2027/);
+      await expect(tip).toContainText(/^M\d+ Trail beta, Jan 15, 2027/);
       expect(await focused.evaluate((el) => getComputedStyle(el).outlineStyle)).not.toBe("none");
       // On along the row: the chip lists what it folds; Enter on an entry opens it.
       let chip = false;
@@ -257,6 +258,6 @@ test.describe("phone", () => {
     await open(page);
     const q = page.getByTestId("timeline-quarter").filter({ hasText: "Q1 2027" }).filter({ visible: true }).first();
     await expect(q).toBeVisible();
-    for (const [name, day] of NAMES) await expect(q.getByTestId("timeline-milestone").filter({ hasText: `◆ ${name} · ${day}` })).toBeVisible();
+    for (const [name, day] of NAMES) await expect(q.getByTestId("timeline-milestone").filter({ hasText: new RegExp(`◆ M\\d+ ${name} · ${day}`) })).toBeVisible();
   });
 });

@@ -437,6 +437,9 @@ class SimpleMilestone(BaseModel):
     effort_weeks: float | None = None
     done_when: list[str] = []
     targets: list["SimpleMilestoneTarget"] = []
+    # roadmap-milestone-codes: its one code across the read (M1, M2 ... by date;
+    # oracle.simple.roadmap_codes); null when dropped or a PRD plan's own.
+    roadmap_code: str | None = None
 
 
 class SimpleAppliedVersion(BaseModel):
@@ -521,6 +524,9 @@ class SimpleGoalMilestone(BaseModel):
     can_propose: bool = False
     # old-milestones: the older per-PRD roadmap it was brought over from, if it was.
     carried_from: "SimpleDocRef | None" = None
+    # roadmap-milestone-codes: its one code across the roadmap read (M1, M2 ... by date;
+    # oracle.simple.roadmap_codes), the code every page shows; null outside a roadmap read.
+    roadmap_code: str | None = None
 
 
 class SimpleGoalMilestoneIn(BaseModel):

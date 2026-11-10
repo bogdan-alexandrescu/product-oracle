@@ -113,7 +113,11 @@ async def test_panel_places_an_item_in_a_roadmap_milestone(client):
     assert (first["status"], first["can_undo"]) == ("applied", True)
     it = _item(await _read(client, ctx, "decider"), a)
     assert it["milestone"]["id"] == m1["id"]
-    assert (it["milestone"]["name"], it["milestone"]["source"]) == ("M1 Prove it", "item")
+    # roadmap-milestone-codes: read by its code across the roadmap read.
+    assert (it["milestone"]["name"], it["milestone"]["source"]) == (
+        f"{m1['roadmap_code']} Prove it",
+        "item",
+    )
     # Placing it in a milestone leaves its dates as they were.
     assert (it["start"]["date"], it["end"]["date"]) == dates
 
@@ -125,7 +129,11 @@ async def test_panel_places_an_item_in_a_roadmap_milestone(client):
     assert r.status_code == 201, r.text
     moved = r.json()["change"]
     it = _item(await _read(client, ctx, "decider"), a)
-    assert (it["milestone"]["id"], it["milestone"]["name"]) == (m2["id"], "M2 Scale volume")
+    assert (it["milestone"]["id"], it["milestone"]["name"]) == (
+        m2["id"],
+        f"{m2['roadmap_code']} Scale volume",
+    )
+    assert m2["roadmap_code"] == "M3"  # after M1 Prove it and the other roadmap's Dec 4 one
 
     # Undo puts M1 back.
     r = await client.post(f"{CHANGES}/{moved['id']}/undo", headers=ctx.as_("decider"))
@@ -186,7 +194,12 @@ async def test_company_roadmap_lists_each_prds_milestones_in_one_goal(client):
     assert r.status_code == 201, r.text
     assert r.json()["change"]["status"] == "applied"
     it = _item(await _read(client, ctx, "owner"), ids["a"])
-    assert (it["milestone"]["id"], it["milestone"]["name"]) == (scale_m1["id"], "M1 Load measured")
+    # roadmap-milestone-codes: two PRDs' M1 are two milestones with two codes across the roadmap.
+    assert (it["milestone"]["id"], it["milestone"]["name"]) == (
+        scale_m1["id"],
+        f"{scale_m1['roadmap_code']} Load measured",
+    )
+    assert scale_m1["roadmap_code"] == "M2"
 
 
 async def test_a_proposed_pick_of_a_milestone_deleted_since_is_refused_on_accept(client):

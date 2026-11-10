@@ -42179,6 +42179,8 @@ export interface components {
              */
             can_propose: boolean;
             carried_from?: components["schemas"]["SimpleDocRef"] | null;
+            /** Roadmap Code */
+            roadmap_code?: string | null;
         };
         /** SimpleGoalMilestoneIn */
         SimpleGoalMilestoneIn: {
@@ -42910,6 +42912,8 @@ export interface components {
              * @default []
              */
             targets: components["schemas"]["SimpleMilestoneTarget"][];
+            /** Roadmap Code */
+            roadmap_code?: string | null;
         };
         /**
          * SimpleMilestonePending

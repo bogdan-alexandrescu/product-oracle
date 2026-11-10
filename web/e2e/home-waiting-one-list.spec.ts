@@ -254,8 +254,9 @@ for (const phone of [false, true]) {
       const labels = page.getByTestId("home-plan").getByTestId("home-strip-label");
       await expect(labels.first()).toBeVisible();
       const texts = await labels.allTextContents();
-      expect(texts.some((t) => t.startsWith("Beta · "))).toBe(true);
-      for (const t of texts) expect(t).not.toMatch(/^(Milestone )?M\d+\b/);
+      // Each milestone by its roadmap code and name ("M1 · Beta", roadmap-milestone-codes), never "Milestone M1".
+      expect(texts.some((t) => /^M\d+ · Beta · /.test(t))).toBe(true);
+      for (const t of texts) expect(t).not.toMatch(/^Milestone M\d+\b/);
       await expect(page.getByTestId("home-plan").getByRole("link").first()).toHaveAttribute("href", "/simple/roadmap");
     });
 

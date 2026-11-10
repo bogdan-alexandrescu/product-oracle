@@ -125788,6 +125788,17 @@
                 "type": "null"
               }
             ]
+          },
+          "roadmap_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Code"
           }
         },
         "type": "object",
@@ -127706,6 +127717,17 @@
             "type": "array",
             "title": "Targets",
             "default": []
+          },
+          "roadmap_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Code"
           }
         },
         "type": "object",

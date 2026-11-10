@@ -522,14 +522,14 @@ export function placeable(all: readonly GoalMilestone[], roadmapId: string, prdO
       (a, b) =>
         Number(!!a.prd) - Number(!!b.prd) ||
         (a.prd && b.prd && a.prd.id !== b.prd.id ? (prdOrder?.(a.prd, b.prd) ?? a.prd.title.localeCompare(b.prd.title)) : 0) ||
-        a.code.localeCompare(b.code, undefined, { numeric: true }),
+        (a.roadmap_code ?? a.code).localeCompare(b.roadmap_code ?? b.code, undefined, { numeric: true }),
     );
 }
 
 /** item-milestone: a goal milestone's words, its code and name, with its PRD when the roadmap's come from several ("M1 Load measured (Scale)"). */
 export function goalMilestoneWords(m: GoalMilestone, all: readonly GoalMilestone[]): string {
   const prds = new Set(all.filter((x) => x.roadmap_id === m.roadmap_id && x.prd).map((x) => x.prd!.id));
-  return `${milestoneWords(`${m.code} ${m.name}`)}${m.prd && prds.size > 1 ? ` (${m.prd.title})` : ""}`;
+  return `${milestoneWords(`${m.roadmap_code ?? m.code} ${m.name}`)}${m.prd && prds.size > 1 ? ` (${m.prd.title})` : ""}`;
 }
 
 /** A milestone's colour, by its code (M1, M2, M3, then round again). */

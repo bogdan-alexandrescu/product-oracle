@@ -1628,6 +1628,37 @@ function seedRoadmapMilestonesHardScenario(): Db {
   return db;
 }
 
+// roadmap-milestone-codes ("roadmap-milestones"): 4 goals, milestones over Nov to Feb (two on Dec 22), a PRD's own one
+// and work of no goal: one code per milestone across the roadmap. Invented data.
+function seedRoadmapMilestonesScenario(): Db {
+  const db = seed();
+  const rm = (db.simple_roadmap = seedSimpleRoadmap());
+  GOALS["win-teams"] = "Win larger teams";
+  const set = (key: string, f: Partial<(typeof rm.items)[number]>) => Object.assign(rm.items.find((i) => i.key === key)!, f);
+  set("alert-export", { goal: "quiet-alerts", start: 15, end: 60, source: "typed" });
+  set("price-tiers", { goal: "win-teams", start: 20, end: 70, source: "typed" });
+  set("setup-health-log", { start: 5, end: 35, source: "typed" });
+  set("alert-sso", { start: 50, end: 95, source: "typed" });
+  for (const it of [
+    { source: "typed", key: "quiet-hours", title: "Quiet hours per team", horizon: "next", roadmap: "alerts-roadmap", goal: "quiet-alerts", track: "alerts", start: 40, end: 95 },
+    { source: "typed", key: "seat-billing", title: "Billing by seat", horizon: "later", roadmap: "pricing-roadmap", goal: "win-teams", start: 60, end: 110 },
+    { source: "typed", key: "pricing-faq", title: "Pricing questions page", horizon: "next", roadmap: "pricing-roadmap", start: 25, end: 50 },
+  ] as const) {
+    rm.items.push({ ...it });
+    rm.ids[it.key] = stableUuid(`simple-item/${it.key}`);
+  }
+  const prd = { slug: "usage-alerts", title: "Usage alerts", owner: "Nora Vance" };
+  rm.goal_milestones = [
+    ...seedOwnMilestones(),
+    { id: stableUuid("simple-gm/p2"), roadmap: "alerts-roadmap", code: "M2", name: "Digest for all teams", date: "2026-12-15", goal: "grow-retention", gates: ["alert-digest"], counts_when: "Sent to every team 2 weeks in a row", progress: "at_risk", prd },
+    { id: stableUuid("simple-gm/m3"), roadmap: "alerts-roadmap", code: "M3", name: "Teams set 3 rules in week 1", date: "2027-01-20", goal: "grow-retention", gates: ["alert-sso"], counts_when: "Holds 7 days in a row", progress: "not_started" },
+    { id: stableUuid("simple-gm/m4"), roadmap: "alerts-roadmap", code: "M4", name: "Digest opened by 70%", date: "2027-02-17", goal: "grow-retention", gates: [], counts_when: "Sent to every team 2 weeks in a row", progress: "not_started" },
+    { id: stableUuid("simple-gm/a2"), roadmap: "onboarding-roadmap", code: "M2", name: "Half of new teams invite a teammate", date: "2026-12-22", goal: "faster-activation", gates: ["setup-ideas"], counts_when: "Holds 14 days in a row on all teams", progress: "not_started" },
+    { id: stableUuid("simple-gm/q1"), roadmap: "alerts-roadmap", code: "M1", name: "Under 10% of teams mute alerts", date: "2027-01-13", goal: "quiet-alerts", gates: ["quiet-hours"], counts_when: "Holds 14 days in a row", progress: "not_started" },
+  ];
+  return db;
+}
+
 /**
  * #723 S1 Home's "simple-home" scenario: the default company whose confirmed goals are those
  * Simple's roadmap items serve (Grow retention, Faster activation) plus a guardrail goal, each
@@ -4143,6 +4174,8 @@ function load(): Db {
                     }
                     return db;
                   }
+              : scenario === "roadmap-milestones"
+                ? seedRoadmapMilestonesScenario
               : scenario === ROADMAP_MILESTONES_HARD_SCENARIO
                 ? seedRoadmapMilestonesHardScenario
               : scenario === GOAL_BUCKETS_HARD_SCENARIO
@@ -4671,7 +4704,7 @@ function load(): Db {
   // items "gm-f1", ...) are on every page from the first load, whichever page opens first.
   // A new company ("empty") has no features on its map yet; the 500-item company ("simple-500",
   // dod-perf) has its own 500 items and none of the default company's map features.
-  db.goal_map ??= scenario === "empty" || scenario === "simple-500" ? { ...seedGoalMap(scenario), features: [] } : seedGoalMap(scenario);
+  db.goal_map ??= scenario === "empty" || scenario === "simple-500" || scenario === "roadmap-milestones" ? { ...seedGoalMap(scenario), features: [] } : seedGoalMap(scenario);
   if (db.simple_roadmap) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   // pre-demo QA P-6 with P-1: the panel reads the goal each map feature serves from the first load too.
   if (db.simple_roadmap) db.simple_roadmap.map_goals = goalMapGoals(db.goal_map, db.baseline.entities.filter((e) => e.type === "goal"));
@@ -7855,6 +7888,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     knowCompanyGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
     knowGoalOrderGoals(db.baseline.entities);
+    // roadmap-milestones: its fourth goal names its work on every load.
+    if (db.simple_roadmap?.items.some((i) => i.key === "pricing-faq")) GOALS["win-teams"] = "Win larger teams";
     knowGoalParents(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served a page built from its own sections (vqa B-13), with its own draft and changes.

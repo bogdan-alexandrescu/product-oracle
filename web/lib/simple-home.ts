@@ -234,8 +234,9 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
   for (const [key, of] of keyed) {
     const counts = new Map<string, number>();
     for (const x of of) counts.set(x.label, (counts.get(x.label) ?? 0) + 1);
-    // A named label ("M4 · Rollout") before the bare code ("M4"), then the commonest.
-    const name = [...counts].sort((a, b) => Number(a[0] === key) - Number(b[0] === key) || b[1] - a[1] || byCodePoint(a[0], b[0]))[0][0];
+    // A named label ("M4 · Rollout") before the bare code ("M4"), a record's too, then the commonest.
+    const bare = (label: string) => Number(/^M\d{1,2}$/i.test(label.trim()));
+    const name = [...counts].sort((a, b) => bare(a[0]) - bare(b[0]) || b[1] - a[1] || byCodePoint(a[0], b[0]))[0][0];
     const dates = of.flatMap((x) => (x.i.milestoneDate ? [x.i.milestoneDate] : []));
     const date = dates.length ? maxOf(dates) : null;
     // A dated plan milestone (the PRD dates it): its row spans its start to its end.
@@ -341,8 +342,9 @@ const wholeName = (code: string | null, name: string) => {
   n = unwrap(n);
   return code ? (n ? `${code} · ${n}` : code) : n || "Milestone";
 };
-/** A roadmap's own (goal) milestone's name, whole: "M2 · Pilot", "M3" with no name (never "M3 · "). */
-export const goalMilestoneName = (m: { code: string; name: string }) => wholeName(m.code.trim().toUpperCase() || null, m.name);
+/** A roadmap's own (goal) milestone's name, whole: "M2 · Pilot", "M3" with no name (never "M3 · ");
+ * its code the roadmap's one (roadmap-milestone-codes), else its own. */
+export const goalMilestoneName = (m: { code: string; roadmap_code?: string | null; name: string }) => wholeName((m.roadmap_code ?? m.code).trim().toUpperCase() || null, m.name);
 const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowerCase() === b.trim().replace(/\s+/g, " ").toLowerCase();
 
 /**
@@ -358,14 +360,11 @@ const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowe
  *
  * home-milestones-whole (reviews of PRs 1424 and 1439): one row per milestone: a roadmap's own
  * milestones of one goal, code (and PRD) are one row; a track milestone is one row wherever its
- * items sit, and a goal's (or a goal's PRD's) milestone joins it whenever their names match
- * (one's words lead the other's), whatever other milestones of the code the roadmap has (the
- * owner's "Join whenever names match"), or, as that roadmap's only one of its code, one has none
- * (no name is ever hidden); every one of no goal (each PRD's and the roadmap's own) joins it whatever its
- * name, beside whatever else of the code is there, when it is the one track milestone of the
- * code holding items on that roadmap (review of PR 1489). The row keeps the track's name (its
+ * items sit, and a roadmap's own milestone joins it when the API gives both one roadmap code (oracle.simple.roadmap_codes: their names
+ * match, whatever else of the code is there, the owner's "Join whenever names match" of Nov 9;
+ * one of no goal, the one track of its code on its roadmap). The row shows the longer name (its
  * date, else the earliest joined one's) and its (i) lists each other name once ("Also: M1
- * Measured and mapped"; the owner's of Nov 9); a typed text
+ * Measured"; no name is ever hidden); a typed text
  * or bare code is read on the item's own roadmap (the read's roadmap's when its own has none),
  * never the first roadmap that has it, nor a guess between two goals'.
  *
@@ -396,6 +395,7 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
   // One row per milestone: a roadmap's own milestones of one goal, code (and PRD) are one;
   // two goals' M1 on one roadmap are two (codes are numbered per goal, the owner's of Nov 8).
   const goalKey = (gm: Gm) => {
+    if (gm.roadmap_code) return `goal:${gm.roadmap_code}`;
     const code = goalCode(gm);
     return code ? `goal:${gm.roadmap_id}|${gm.goal_id ?? ""}|${code}|${gm.prd?.slug ?? ""}` : `goal:${gm.id}`;
   };
@@ -449,86 +449,79 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
   const kept = data.items.filter((i) => i.status !== "cut");
   const hits = new Map(kept.map((i) => [i.id, find(i)] as const));
   // A track milestone is company-wide: always one row (by its id), wherever its items sit. A
-  // roadmap's own milestone joins it only when that track milestone is the only one of the code
-  // holding items on that roadmap; a goal's then joins when the names match, whatever else of the
-  // code is there, and, when either is a bare code ("M1"), only as the roadmap's only one of the
-  // code; otherwise each is its own row (two goals' M2 and the track's M2 of other names: three rows).
-  const holding = new Map<string, Tm[]>();
-  for (const h of hits.values()) {
-    if (!h || !("tm" in h)) continue;
-    const code = codeOf(h.tm.name);
-    const at = `${h.roadmap}|${code}`;
-    if (code && !(holding.get(at) ?? []).includes(h.tm)) holding.set(at, [...(holding.get(at) ?? []), h.tm]);
-  }
-  // A goal's (or a goal's PRD's) joins whenever their names match or one of them has none (no
-  // name is ever hidden); when both have names, whatever other milestones of the code the
-  // roadmap has (the owner's "Join whenever names match"). Names match when, word by word, one's words are the first words of the
-  // other's ("Measured" and "Measured and mapped"; not "Daily scoreboard" and "200 replied
-  // threads"); case and extra spaces never count. A nameless track milestone reads the name of the
-  // first that joins it, and one of another name keeps its own row ("M3 · Billing beta" beside
-  // "M3 · Prices live"). Every one of no goal (each PRD's and the roadmap's own) joins whatever
-  // its name and whatever else of the code is there, when that track milestone is the only one of
-  // the code holding items on the roadmap (review of PR 1489).
-  // When the names differ the row keeps the track's name and lists the other in its (i) (the
-  // owner's of Nov 9, "One M1 row" and "Keep joining when names match": production showed
-  // "M1 · Measured" and "M1 · Measured and mapped").
-  const plain = (g: Gm) => !g.goal_id;
-  const words = (n: string) => n.trim().toLowerCase().split(/\s+/);
-  const leads = (a: string, b: string) => {
-    const [x, y] = [words(a), words(b)].sort((p, q) => p.length - q.length);
-    return x.every((w, k) => w === y[k]);
-  };
+  // roadmap's own milestone joins it when the API gave both one roadmap code (the rule's one place,
+  // oracle.simple.roadmap_codes); the row shows the longer name and lists the others in its (i) (the
+  // owner's of Nov 9, "One M1 row" and "Join whenever names match").
   const into = new Map<Gm, Tm>();
   const folded = new Map<Tm, Gm[]>();
-  // A name a roadmap's milestone lends a bare-code track, by roadmap: each roadmap's joins are its own, whatever the order.
-  const rowName = new Map<string, string>();
-  const lent = (roadmap: string, tm: Tm) => `${roadmap}|${tm.id}`;
+  const rowName = new Map<Tm, string>();
   const also = new Map<Tm, string[]>();
-  for (const gm of goals) {
-    const code = goalCode(gm);
-    if (!code) continue;
-    // A goal's joins whenever the names match, beside whatever else of the code the roadmap has
-    // (a goal's of another name keeps its own row); when either has no name, only as the roadmap's
-    // only one of the code. One of no goal joins beside any other, whatever its name.
-    const alike = new Set(goals.filter((g) => g.roadmap_id === gm.roadmap_id && goalCode(g) === code).map(goalKey));
-    const there = holding.get(`${gm.roadmap_id}|${code}`) ?? [];
-    if (there.length !== 1) continue;
-    const tm = there[0];
-    const name = goalMilestoneName(gm);
-    const own = wholeName(code, restOf(tm.name));
-    const at = rowName.get(lent(gm.roadmap_id, tm)) ?? own;
-    // A bare-code track's own name, never one a joined milestone lent it: the same rows whatever the order.
-    if (!plain(gm) && alike.size !== 1 && (name === code || own === code)) continue;
-    const differs = name !== code && at !== code && !sameWords(name, at);
-    if (differs && !plain(gm) && !leads(name, at)) continue;
-    const listed = also.get(tm) ?? [];
-    const other = name.replace(" · ", " ");
-    if (differs) also.set(tm, listed.some((n) => sameWords(n, other)) ? listed : [...listed, other]);
-    else if (at === code) rowName.set(lent(gm.roadmap_id, tm), name);
+  // roadmap-milestone-codes: a goal's (or a PRD's) milestone that is a track milestone shares its
+  // roadmap code (the API's rule, oracle.simple.roadmap_codes): one row.
+  // Read by whole name (then id), never in the read's order: a bare-code track takes the same
+  // name, and lists the same others, whichever roadmap comes first (home-milestones-two-roadmaps).
+  const byName = [...goals].sort((a, b) => byCodePoint(goalMilestoneName(a), goalMilestoneName(b)) || byCodePoint(a.id, b.id));
+  for (const gm of byName) {
+    const code = gm.roadmap_code;
+    const tm = code ? tracks.find((t) => t.roadmap_code === code) : undefined;
+    if (!code || !tm) continue;
     into.set(gm, tm);
     folded.set(tm, [...(folded.get(tm) ?? []), gm]);
   }
+  // Join whenever names match (the owner's of Nov 9): the row shows the longer name (more words,
+  // then more letters; the track's own on a tie) and its (i) lists each other name once, case and
+  // spaces never counting; a bare code is no name.
+  const pick = (code: string, all: string[]): { shown: string; others: string[] } | null => {
+    const names = all.filter((n) => n !== code);
+    const size = (n: string) => [n.split(/\s+/).length, n.length];
+    const shown = names.reduce<string | null>((best, n) => {
+      if (!best) return n;
+      const [w, l] = size(n);
+      const [bw, bl] = size(best);
+      return w > bw || (w === bw && l > bl) ? n : best;
+    }, null);
+    if (!shown) return null;
+    const others: string[] = [];
+    for (const n of names) {
+      const other = n.replace(" · ", " ");
+      if (!sameWords(n, shown) && !others.some((o) => sameWords(o, other))) others.push(other);
+    }
+    return { shown, others };
+  };
+  for (const [tm, own] of folded) {
+    const got = pick(tm.roadmap_code!, [wholeName(tm.roadmap_code!, restOf(tm.name)), ...own.map((g) => wholeName(tm.roadmap_code!, restOf(g.name)))]);
+    if (!got) continue;
+    rowName.set(tm, got.shown);
+    if (got.others.length) also.set(tm, got.others);
+  }
+  // A goal's milestone joined with a PRD's (or the roadmap's own) of one roadmap code, no track's: the same.
+  const byCode = new Map<string, Gm[]>();
+  for (const gm of byName) if (gm.roadmap_code && !into.has(gm)) byCode.set(gm.roadmap_code, [...(byCode.get(gm.roadmap_code) ?? []), gm]);
+  const codeRow = new Map([...byCode].flatMap(([code, own]) => {
+    const got = own.length > 1 ? pick(code, own.map((g) => wholeName(code, restOf(g.name)))) : null;
+    return got ? [[code, got] as const] : [];
+  }));
   // Whose a row is (its PRD's, else its goal's, else its track's): two rows that read alike are told apart by it.
-  const ofTrack = (tm: Tm, roadmap: string) => {
+  const ofTrack = (tm: Tm) => {
     const own = folded.get(tm) ?? [];
-    // Its own whole name; with none, the name a milestone of the item's roadmap that joins it lent ("M3" never hides a joined "M3 · Rules ready").
-    const name = rowName.get(lent(roadmap, tm)) ?? wholeName(codeOf(tm.name), restOf(tm.name));
+    // Its own whole name; with none, the name of a roadmap milestone that joins it ("M3" never hides a joined "M3 · Rules ready").
+    const name = rowName.get(tm) ?? wholeName(tm.roadmap_code ?? codeOf(tm.name), restOf(tm.name));
     // Its own date, else the earliest of those that join it.
     const dates = own.flatMap((g) => (g.date ? [g.date] : []));
-    // The names other roadmaps' milestones lent it are in its (i): one row, no name hidden.
-    const others = [...new Set(own.flatMap((g) => g.roadmap_id !== roadmap ? [rowName.get(lent(g.roadmap_id, tm))] : []))].flatMap((n) => (n && !sameWords(n, name) ? [n.replace(" · ", " ")] : []));
-    const listed = [...(also.get(tm) ?? []), ...others];
-    return { key: `track:${tm.id}`, name, date: tm.date ?? (dates.length ? minOf(dates) : null), of: trackTitles.get(tm.track_id) ?? null, also: listed.length ? listed : undefined };
+    return { key: `track:${tm.id}`, name, date: tm.date ?? (dates.length ? minOf(dates) : null), of: trackTitles.get(tm.track_id) ?? null, also: also.get(tm) };
   };
   const ofGoal = (gm: Gm) => {
     const tm = into.get(gm);
-    if (tm) return ofTrack(tm, gm.roadmap_id);
+    if (tm) return ofTrack(tm);
+    const joined = gm.roadmap_code ? codeRow.get(gm.roadmap_code) : undefined;
+    const dates = (gm.roadmap_code ? (byCode.get(gm.roadmap_code) ?? []) : [gm]).flatMap((g) => (g.date ? [g.date] : []));
+    if (joined) return { key: goalKey(gm), name: joined.shown, date: dates.length ? minOf(dates) : null, of: gm.prd?.title ?? (gm.goal_id ? goalTitles.get(gm.goal_id) : undefined) ?? null, also: joined.others.length ? joined.others : undefined };
     return { key: goalKey(gm), name: goalMilestoneName(gm), date: gm.date ?? null, of: gm.prd?.title ?? (gm.goal_id ? goalTitles.get(gm.goal_id) : undefined) ?? null, also: undefined };
   };
   return kept.map((i) => {
     const base: PlanInput = { start: i.start.date, end: i.end.date, estimated: i.estimated, milestone: null, milestoneDate: null, id: i.id };
     const h = hits.get(i.id);
-    const m = h ? ("gm" in h ? ofGoal(h.gm) : ofTrack(h.tm, h.roadmap)) : null;
+    const m = h ? ("gm" in h ? ofGoal(h.gm) : ofTrack(h.tm)) : null;
     return m ? { ...base, milestone: m.name, milestoneDate: m.date, record: { id: m.key, name: m.name, label: m.name, of: m.of, ...(m.also ? { also: m.also } : {}) } } : base;
   });
 }

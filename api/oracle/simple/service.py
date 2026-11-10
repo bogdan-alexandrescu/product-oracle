@@ -26,6 +26,7 @@ import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -1315,6 +1316,23 @@ def _milestone_out(m: TrackMilestone, keyed: dict, ids: set, view: Any) -> Simpl
     return out
 
 
+async def _roadmap_codes(
+    db: AsyncSession, goal_ms: list, track_ms: list[SimpleMilestone], items: list
+) -> None:
+    """roadmap-milestone-codes: each milestone's one code across the read, goals in the one
+    goal order (oracle.simple.roadmap_codes)."""
+    from oracle.simple import roadmap_codes
+
+    goal_ids = {m.goal_id for m in goal_ms if m.goal_id is not None}
+    goals = (
+        (await db.execute(select(Entity).where(Entity.id.in_(goal_ids)))).scalars().all()
+        if goal_ids
+        else []
+    )
+    rank = {g.id: n for n, g in enumerate(sorted(goals, key=goal_sort_key))}
+    roadmap_codes.assign(goal_ms, track_ms, items, rank)
+
+
 def _goal_target(goal: Entity) -> str | None:
     """one-feature-panel: the goal's target as the goal bucket edit reads it."""
     from oracle.simple.goal_buckets import _target  # goal_buckets imports the router
@@ -1501,11 +1519,18 @@ async def build(
     track_prd = {e.track.id: e.track.prd_document_id for e in read.entries if e.track}
     # roadmap-keydates: the key dates read with the PRDs' milestones, as priorities reads them.
     kd_prds = await key_dates.key_date_prds(db, principal, kd_docs, read.entries)
+    # roadmap-milestone-codes: the codes are numbered over every readable roadmap, so a
+    # filtered read shows the codes Home and the Goal map show.
+    all_prds = (
+        kd_prds
+        if chosen is None
+        else await key_dates.key_date_prds(db, principal, readable, read.entries)
+    )
     views = await plans.views(
         db,
         {e.prd.id for e in shown if e.prd}
         | set(track_prd.values())
-        | {p.id for of in kd_prds.values() for p in of},
+        | {p.id for of in all_prds.values() for p in of},
     )
     kds, kd_roadmaps = await key_dates.read_key_dates(
         db, principal, kd_docs, read.entries, views, kd_prds
@@ -1531,12 +1556,37 @@ async def build(
             if pm is not None and pm.end_date is not None:
                 it.milestone.start_date = pm.start_date
                 it.milestone.date = it.milestone.date or pm.end_date
-    # item-milestone: a picked roadmap milestone reads its live code and name (a PRD may rename it).
+    track_outs = [
+        _milestone_out(m, keyed, ids, views.get(track_prd.get(m.track_id)))  # type: ignore[arg-type]
+        for m in read.milestones
+    ]
+    all_goal_milestones = (
+        shown_goal_milestones
+        if chosen is None
+        else await goal_milestones.list_for_roadmaps(
+            db, principal, readable, read.entries, views, all_prds
+        )
+    )
+    # Every entry's item, shown or not: which roadmap holds a track milestone decides a fold.
+    await _roadmap_codes(
+        db,
+        all_goal_milestones,
+        track_outs,
+        [
+            SimpleNamespace(id=e.row.id, roadmap=e.roadmap, milestone=e.milestone)
+            for e in read.entries
+        ],
+    )
+    coded = {m.id: m.roadmap_code for m in all_goal_milestones}
+    for m in shown_goal_milestones:
+        m.roadmap_code = coded.get(m.id)
+    # item-milestone: a picked roadmap milestone reads its live code (the roadmap's one,
+    # roadmap-milestone-codes) and name (a PRD may rename it).
     live = {m.id: m for m in shown_goal_milestones}
     for it in items:
         gm = live.get(it.milestone.id) if it.milestone is not None and it.milestone.id else None
         if gm is not None:
-            it.milestone.name = " ".join(f"{gm.code} {gm.name}".split())
+            it.milestone.name = " ".join(f"{gm.roadmap_code or gm.code} {gm.name}".split())
     shown_prds = {e.prd.id for e in shown if e.prd}
     span = plans.current_span([v for p, v in views.items() if p in shown_prds], read.today)
     return SimpleRoadmapOut(
@@ -1547,10 +1597,7 @@ async def build(
         ),
         groups=[SimpleGroup(key=k, title=t, item_ids=i) for k, (_, t, i) in ordered],
         items=items,
-        milestones=[
-            _milestone_out(m, keyed, ids, views.get(track_prd.get(m.track_id)))  # type: ignore[arg-type]
-            for m in read.milestones
-        ],
+        milestones=track_outs,
         goal_milestones=shown_goal_milestones,
         old_milestones=await old_milestones.preview(db, principal),
         span=span,
