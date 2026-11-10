@@ -142801,7 +142801,8 @@
               "agenda_item",
               "request",
               "track",
-              "milestone"
+              "milestone",
+              "task"
             ],
             "title": "Type"
           },

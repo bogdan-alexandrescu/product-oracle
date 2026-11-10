@@ -57,7 +57,7 @@ class TrashEntry(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(
             "root_type IN ('document', 'intake', 'run', 'feature', 'goal', 'decision', "
-            "'question', 'agenda_item', 'request', 'track', 'milestone')",
+            "'question', 'agenda_item', 'request', 'track', 'milestone', 'task')",
             name="root_type",
         ),
         Index("ix_trash_entries_purge_after", "purge_after"),

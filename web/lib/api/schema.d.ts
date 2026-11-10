@@ -48453,7 +48453,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track" | "milestone";
+            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track" | "milestone" | "task";
             /**
              * Id
              * Format: uuid

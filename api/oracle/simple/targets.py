@@ -683,13 +683,27 @@ async def _apply(
             row = await _row(db, kind, t)
             if row is None:
                 raise ChangeError(409, "The task or action item is gone")
+            was = getattr(row, "status", None)
             if c.op.startswith("add_"):
                 await db.delete(row)
             else:
                 _set(row, values)
+            if kind == "task":
+                await _task_trash(db, principal, row, was, c.op.startswith("add_"))
     except launches.LaunchError as e:
         raise _fail(e) from e
     await db.flush()
+
+
+async def _task_trash(db: AsyncSession, principal: Any, row: Any, was: Any, gone: bool) -> None:
+    """feature-panel (owner's pick, Nov 10): a task dropped goes to Settings > Trash; one set
+    away from dropped (the drop's Undo, or a later change) or deleted leaves it."""
+    from oracle.trash import service as trash
+
+    if gone or (was == "dropped" and row.status != "dropped"):
+        await trash.task_back_on_list(db, row.id)
+    elif row.status == "dropped" and was != "dropped":
+        await trash.drop_task(db, principal, row, was or "todo")
 
 
 async def _create(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
