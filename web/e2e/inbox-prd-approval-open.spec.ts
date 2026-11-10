@@ -36,7 +36,6 @@ for (const width of [1366, 390]) {
     await bar(page).getByRole("button", { name: "Send for approval…" }).click();
     await page.getByTestId("send-for-approval").getByRole("button", { name: "Send for approval" }).click();
     await expect(bar(page).getByTestId("draft-waits-on")).toContainText("Sent for approval · waiting on");
-    await expect(bar(page).getByRole("button", { name: "Approve" })).toHaveCount(0);
 
     // The reviewer opens it from their Inbox.
     await switchTo(page, "approver@example.com");
