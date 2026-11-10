@@ -1471,16 +1471,21 @@ function QuarterMilestones({ from, to }: { from: string; to: string }) {
 
 /** A phone's Timeline: a list by quarter; an item sits in the quarter it starts in (or in
  * this one, when it started before and runs on). */
-/** tb-mk: an item's band on the phone's list: its track's place, No track, then Below the line. */
-function bandRank(data: Roadmap, i: Item): number {
-  if (closedItem(i)) return 1e6;
-  const n = data.groups.findIndex((g) => g.item_ids.includes(i.id));
-  return n < 0 ? 1e5 : n;
-}
-function bandOf(data: Roadmap, i: Item): { key: string; title: string } | null {
-  if (closedItem(i)) return { key: "below", title: "Below the line" };
-  const g = data.groups.find((x) => x.item_ids.includes(i.id));
-  return g ? { key: g.key, title: g.title } : null;
+/** tb-mk: each item's band on the phone's list (its track's place, No track, then Below the line),
+ * by id, read once for the list rather than once an item a sort compares. */
+function bandsOf(data: Roadmap): { rank: (i: Item) => number; of: (i: Item) => { key: string; title: string } | null } {
+  const at = new Map<string, number>();
+  data.groups.forEach((g, n) => {
+    for (const id of g.item_ids) if (!at.has(id)) at.set(id, n);
+  });
+  return {
+    rank: (i) => (closedItem(i) ? 1e6 : (at.get(i.id) ?? 1e5)),
+    of: (i) => {
+      if (closedItem(i)) return { key: "below", title: "Below the line" };
+      const g = data.groups[at.get(i.id) ?? -1];
+      return g ? { key: g.key, title: g.title } : null;
+    },
+  };
 }
 
 function QuarterList(props: TimelineProps) {
@@ -1494,6 +1499,7 @@ function QuarterList(props: TimelineProps) {
   const qs = quarters(days[0], days[days.length - 1]);
   const tq = qs.find((q) => q.start <= data.today && data.today <= q.end);
   const byId = new Map(data.items.map((i) => [i.id, i]));
+  const bands = bandsOf(data);
   return (
     <div data-testid="timeline-list" className="space-y-3">
       {qs.map((q) => {
@@ -1505,7 +1511,7 @@ function QuarterList(props: TimelineProps) {
           )
           .sort((a, b) => (a.start.date < b.start.date ? -1 : 1))
           // tb-mk: by band (the tracks' order, No track, then Below the line), by start in each.
-          .sort((a, b) => bandRank(data, a) - bandRank(data, b));
+          .sort((a, b) => bands.rank(a) - bands.rank(b));
         if (!inQ.length) return null;
         // feature-parts: the quarter's parts under their parents, as a tree.
         const tree = partsTree([inQ.map((i) => i.id)], byId)[0];
@@ -1549,7 +1555,7 @@ function QuarterList(props: TimelineProps) {
               {items.map((i, n) => {
                 const lk = lookOf(i);
                 const sel = openKey === i.key;
-                const band = n === 0 || bandRank(data, items[n - 1]) !== bandRank(data, i) ? bandOf(data, i) : null;
+                const band = n === 0 || bands.rank(items[n - 1]) !== bands.rank(i) ? bands.of(i) : null;
                 return (
                   <Fragment key={i.id}>
                   {band && (
