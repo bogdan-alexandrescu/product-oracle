@@ -26,12 +26,14 @@ export function trackLaned(data: Roadmap): Roadmap {
 
 function Mark({ t }: { t: Track }) {
   return t.health === "on_track" ? (
-    <span aria-hidden className="font-bold text-pass">
-      ✓
+    <span className="font-bold text-pass">
+      <span aria-hidden>✓</span>
+      <span className="sr-only">On track</span>
     </span>
   ) : (
-    <span aria-hidden className="font-bold text-warn">
-      ⚠
+    <span className="font-bold text-warn">
+      <span aria-hidden>⚠</span>
+      <span className="sr-only">Needs a look</span>
     </span>
   );
 }
