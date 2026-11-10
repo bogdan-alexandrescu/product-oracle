@@ -41,7 +41,8 @@ async function open(page: Page, opts: { scenario?: string; theme?: "light" | "da
   await page.emulateMedia({ colorScheme: theme });
   await login(page);
   await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  // The 500-item seed takes seconds to draw on a busy runner (as simple-roadmap-drag-layer and -500-timing wait).
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
   await page.getByTestId(`format-${format}`).click();
   await expect(page.getByTestId(`format-${format}`)).toHaveAttribute("aria-pressed", "true");
 }
