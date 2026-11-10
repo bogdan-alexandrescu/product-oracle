@@ -85,12 +85,14 @@ test("an owner adds a task and edits each part of its row in place; Drop this ta
   await expect(task(page, "Write the export help page")).toBeVisible();
 });
 
-test("a commenter's new task is a proposal; a viewer reads tasks with no add row", async ({ page }) => {
+test("a commenter's new task is a proposal", async ({ page }) => {
   await open(page, "commenter@example.com", "alert-export");
   await addTask(page, "Check the export on a phone");
   await expect(toasts(page)).toContainText("proposed");
   await expect(task(page, "Check the export on a phone")).toHaveCount(0);
+});
 
+test("a viewer reads tasks with no add row", async ({ page }) => {
   await open(page, "viewer@example.com", "alert-export");
   await expect(panel(page).getByRole("button", { name: "+ Add a task" })).toHaveCount(0);
 });
@@ -129,7 +131,7 @@ test("Cut and Restore live in the ⋯ menu; Move to Trash… lists what points a
   await expect(panel(page).getByTestId("item-cut")).toHaveCount(0);
 });
 
-test("the Decider and Horizon are changed in place; a commenter's horizon is a proposal", async ({ page }) => {
+test("the Decider and Horizon are changed in place", async ({ page }) => {
   await open(page, undefined, "alert-export");
   await tap(panel(page).getByRole("button", { name: "Change the decider" }));
   await panel(page).getByTestId("card-decider-edit").getByLabel("Decider").selectOption({ label: "Priya Raman" });
@@ -142,7 +144,9 @@ test("the Decider and Horizon are changed in place; a commenter's horizon is a p
   await tap(panel(page).getByTestId("card-horizon-edit").getByRole("button", { name: "Save" }));
   await expect(toasts(page)).toContainText("Horizon changed");
   await expect(panel(page).getByTestId("card-horizon")).toHaveText("Later");
+});
 
+test("a commenter's horizon is a proposal", async ({ page }) => {
   await open(page, "commenter@example.com", "alert-mobile");
   const was = await panel(page).getByTestId("card-horizon").innerText();
   await tap(panel(page).getByRole("button", { name: "Change the horizon" }));
