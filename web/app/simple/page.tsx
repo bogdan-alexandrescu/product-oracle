@@ -425,14 +425,21 @@ export default function SimpleHome() {
   const drawnHere = decisionCount + toDecide.length + brokenMine + stopCount + myTasks.length + alsoWaiting.length;
   const moreInInbox = drawnHere === 0 ? railCount : drawnElsewhere;
   const inboxCount = alsoWaiting.filter((i) => i.kind === "inbox").length + moreInInbox;
-  const waits = waitSentence([
+  const parts: [number, string, string][] = [
     [decisionCount, "decision", "decisions"],
     [proposalRows === toDecide ? toDecide.length : 0, "proposal", "proposals"],
     [brokenMine, "broken link", "broken links"],
     [stopCount, "run", "runs"],
     [myTasks.length, "task", "tasks"],
-    [inboxCount, "thing in your Inbox", "things in your Inbox"],
-  ]);
+  ];
+  // Review: the Inbox's rows (the rail's count) read in a short sentence of their own after the
+  // others, with no number as the others ("More waits in your Inbox."); alone, as the others do.
+  const waits =
+    inboxCount === 0
+      ? waitSentence(parts)
+      : parts.every(([n]) => n === 0)
+        ? waitSentence([[inboxCount, "thing in your Inbox", "things in your Inbox"]])
+        : `${waitSentence(parts)} More waits in your Inbox.`;
   const brokenWords = brokenOthers === 1 ? "a broken link" : "broken links";
   // home-honest-loading: what waits is said only once every source it counts has answered
   // (the role, the decisions and tasks, the proposals, the roadmap's links, the run stops).
