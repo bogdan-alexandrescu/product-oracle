@@ -90,16 +90,26 @@ def strip(items: list[PlanItem], today: date) -> SimplePlanStrip | None:
             loose.append(i)
     groups: dict[tuple[str, date | None], list[PlanItem]] = {}
     begins: dict[tuple[str, date | None], date] = {}
-    for key, of in keyed.items():
+    # A code's name as any row says it (vqa one-pager 3): a row of a milestone record named
+    # only by its code ("M2") reads the name another row gives that code.
+    said: dict[str, str] = {}
+    for of in keyed.values():
+        for label, _ in of:
+            code = milestone_of(label)[0]
+            if label != code:
+                said.setdefault(code, label)
+    for of in keyed.values():
         labels = Counter(label for label, _ in of)
         # A named label ("M4 · Rollout") before the bare code ("M4"), then the commonest.
-        name = min(labels, key=lambda x: (x == key, -labels[x], x))
+        name = min(labels, key=lambda x: (milestone_of(x)[0] == x, -labels[x], x))
+        name = said.get(name, name)
         when = max((i.milestone_date for _, i in of if i.milestone_date), default=None)
-        groups[(name, when)] = [i for _, i in of]
+        # Rows of one code and date (a record's row named by another's) are one row.
+        groups.setdefault((name, when), []).extend(i for _, i in of)
         # A dated plan milestone (the PRD dates it): its row spans its start to its end.
         starts = [i.milestone_start for _, i in of if i.milestone_start]
         if starts:
-            begins[(name, when)] = min(starts)
+            begins[(name, when)] = min(starts + [begins.get((name, when), min(starts))])
     dated = [d for _, d in groups if d is not None]
     committed = [i.end for i in items if not i.estimated]
     first = min(

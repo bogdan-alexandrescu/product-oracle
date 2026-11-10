@@ -400,9 +400,17 @@ def _id(item: Any) -> str | None:
     return str(item.id) if getattr(item, "id", None) else None
 
 
-def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
+def plan_items(items: list[Any], names: dict[str, str] | None = None) -> list[plan_strip.PlanItem]:
     """The plan strip's reading of a PRD's roadmap items (neither cut nor merged), each with
-    the milestone record that links it, when any."""
+    the milestone record that links it, when any. ``names``: the PRD plan's milestone names
+    by code; a milestone said only by its code ("M2", an item of the PRD with no slice, or
+    its milestone record) reads with its name ("M2 · Ship to beta", vqa one-pager 3)."""
+    names = names or {}
+
+    def named(text: str | None) -> str | None:
+        code, label = plan_strip.milestone_of(text)
+        return f"{code} · {names[code]}" if text and label == code and names.get(code) else text
+
     out = []
     for i in items:
         # panel-menu: a merged feature (any, not only a draft) is off the plan as a cut one.
@@ -415,7 +423,7 @@ def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
                     sl.start_date or i.start.date,
                     sl.end_date or i.end.date,
                     not (sl.milestone_start and sl.milestone_end),
-                    f"{sl.milestone} · {sl.milestone_name}",
+                    named(f"{sl.milestone} · {sl.milestone_name}"),
                     sl.milestone_end,
                     milestone_start=sl.milestone_start,
                     id=_id(i),
@@ -428,10 +436,10 @@ def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
                 i.start.date,
                 i.end.date,
                 i.estimated,
-                (i.milestone.name or "Milestone") if i.milestone else None,
+                named(i.milestone.name or "Milestone") if i.milestone else None,
                 i.milestone.date if i.milestone else None,
                 str(i.milestone.record_id) if i.milestone and i.milestone.record_id else None,
-                i.milestone.record_name if i.milestone else None,
+                named(i.milestone.record_name) if i.milestone else None,
                 i.milestone.start_date if i.milestone else None,
                 _id(i),
             )
@@ -1749,13 +1757,14 @@ async def read(
         for i in mine
         if i.status not in ("cut", "merged")
     ]
-    plan = plan_strip.strip(plan_items(mine), slice_.today)
+    called = {m.code: m.name for m in view.milestones if m.name} if view is not None else {}
+    plan = plan_strip.strip(plan_items(mine, called), slice_.today)
     # A dated plan's span is the one its timeline draws (its milestones, or the dates the
     # lead accepted); else the items' dated milestones.
     if view is not None and view.dated and view.span:
         span: tuple[date, date] | None = (view.span.start, view.span.end)
     else:
-        span = milestone_span(plan_items(mine))
+        span = milestone_span(plan_items(mine, called))
     timeline = OnePagerBlock(
         key=TIMELINE.key, title=TIMELINE.title, rules=TIMELINE.rules, kind="timeline", lines=[]
     )
