@@ -33,6 +33,13 @@ Test cards (protects / fails_when / no_claim):
 - test_panel_status_planned_keeps_other_shipped: protects=planned clears only the panel's
   own done mark: a shipped mark made elsewhere stays; fails_when=planned wipes it;
   no_claim=the tracker's records.
+- test_cut_restore_cut_again_reads_the_tracker_each_time: protects=an in-progress item cut,
+  restored (plain ``cut``/``restore`` or the panel's ``set_status``), cut again and restored
+  again reads In progress after each restore; fails_when=a restore reads planned (the
+  tracker's status lost); no_claim=the web (web/e2e/mock-matches-api-roadmap.spec.ts).
+- test_a_stale_cut_names_another_person_s_latest_change: protects=a cut over a restore
+  another person made since is 409 naming them, the latest; fails_when=it lands or names
+  the first cut's person; no_claim=proposals.
 - test_panel_fields_bad_values: protects=an unknown confidence, track, PRD, goal, status, or
   the item depending on itself, is 422; fails_when=a bad value is stored; no_claim=the web.
 """
@@ -44,7 +51,7 @@ import pytest
 
 from oracle import company_time
 from oracle.auth.models import User
-from oracle.roadmap.models import RoadmapItem
+from oracle.roadmap.models import RoadmapItem, TrackerRecord
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import CHANGES, make_people
 from tests.test_simple_roadmap_api import NOW, Seed, by_key, get
@@ -344,3 +351,52 @@ async def test_panel_status_planned_keeps_other_shipped(client):
     r = await p.post(client, "set_status", {"status": "done"}, {"status": "planned"}, item=p.b)
     assert r.status_code == 201, r.text
     assert (await p.read(client))["b"]["status"] == "planned"
+
+
+async def _in_progress(p: "Panel") -> None:
+    """The tracker reads item ``a`` as in progress."""
+    async with tenant_session(p.ctx.tenant_id) as s:
+        s.add(TrackerRecord(tracker="linear", external_ref="ENG-7", track_id=p.track.id,
+                            item_key="a", state="in_progress", observed_at=NOW))  # fmt: skip
+        await s.commit()
+
+
+@pytest.mark.parametrize("plain", [True, False])
+async def test_cut_restore_cut_again_reads_the_tracker_each_time(client, plain):
+    p = await Panel().build(await make_people())
+    await _in_progress(p)
+    assert (await p.read(client))["a"]["status"] == "in_progress"
+    for _ in range(2):
+        if plain:
+            r = await p.post(client, "cut", {"cut": False}, {})
+        else:
+            r = await p.post(client, "set_status", {"status": "in_progress"}, {"status": "cut"})
+        assert r.status_code == 201, r.text
+        assert (await p.read(client))["a"]["status"] == "cut"
+        if plain:
+            r = await p.post(client, "restore", {"cut": True}, {})
+        else:
+            r = await p.post(client, "set_status", {"status": "cut"}, {"status": "planned"})
+        assert r.status_code == 201, r.text
+        assert (await p.read(client))["a"]["status"] == "in_progress"
+
+
+async def test_a_stale_cut_names_another_person_s_latest_change(client):
+    ctx = await make_people()
+    async with tenant_session(ctx.tenant_id) as s:
+        ctx.users["second"] = User(email="second.owner@example.com", name="Sam Second",
+                                   password_hash="x", role="owner")  # fmt: skip
+        s.add(ctx.users["second"])
+        await s.commit()
+    p = await Panel().build(ctx)
+    await _in_progress(p)
+    assert (await p.post(client, "set_status", {"status": "in_progress"},
+                         {"status": "cut"})).status_code == 201  # fmt: skip
+    r = await p.post(client, "set_status", {"status": "cut"}, {"status": "planned"}, who="second")
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    # The owner still sees it cut: their Restore then Cut meets the second owner's restore.
+    stale = await p.post(client, "set_status", {"status": "cut"}, {"status": "planned"})
+    assert stale.status_code == 409, stale.text
+    assert stale.json()["detail"]["changed_by"]["id"] == str(ctx.users["second"].id)
+    assert "changed by Sam Second" in stale.json()["detail"]["message"]
+    assert (await p.read(client))["a"]["status"] == "in_progress"

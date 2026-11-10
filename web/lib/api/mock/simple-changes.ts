@@ -531,6 +531,11 @@ function statusAfter(s: ReturnType<typeof seed>, status: string, by: string): Va
   return { cut: status === "cut", shipped: status === "done" ? (s.shipped ?? { note: PANEL_DONE, by, on: iso(mockNowMs()).slice(0, 10) }) : kept };
 }
 
+/** The status the tracker gives the item, read before a cut or a shipped mark is written (kept as its tracked). */
+function trackerStatus(s: ReturnType<typeof seed>): NonNullable<ReturnType<typeof seed>["tracked"]> {
+  return !s.status || s.status === "cut" || s.status === "draft" || (s.status === "done" && s.shipped) ? "planned" : s.status;
+}
+
 function write(db: SimpleDb, key: string, values: Values, target: Values): void {
   const s = seed(db, key);
   if ("start_date" in values) {
@@ -540,7 +545,11 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("horizon" in values) s.horizon = values.horizon as typeof s.horizon;
   if ("position" in values) s.position = values.position as number;
   // set_status's {cut, shipped} is written below, from the tracker's status read before either is written.
-  if ("cut" in values && !("shipped" in values)) s.status = values.cut ? "cut" : "planned";
+  // cut / restore write {cut} alone: restored, it reads as service._status, its shipped mark, then the tracker's status.
+  if ("cut" in values && !("shipped" in values)) {
+    s.tracked ??= trackerStatus(s);
+    s.status = values.cut ? "cut" : s.shipped ? "done" : s.tracked;
+  }
   if ("title" in values) s.title = String(values.title);
   if ("draft" in values) s.draft = !!values.draft;
   if ("goal_ids" in values) {
@@ -570,7 +579,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("parent_key" in values) s.parent = (values.parent_key as string | null) ?? undefined;
   if ("shipped" in values) {
     // changes.py set_status ({cut, shipped}): it reads as service._status: cut, then its shipped mark, then the tracker's status.
-    s.tracked ??= !s.status || s.status === "cut" || s.status === "draft" || (s.status === "done" && s.shipped) ? "planned" : s.status;
+    s.tracked ??= trackerStatus(s);
     s.shipped = (values.shipped as typeof s.shipped) ?? null;
     s.status = values.cut ? "cut" : s.shipped ? "done" : s.tracked;
   }

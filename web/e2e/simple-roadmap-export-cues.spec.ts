@@ -102,7 +102,7 @@ test("the Timeline's PDF: Today's pill on its line, an arrow on each cut bar, it
   expect(pdf).toContain("3 Tr");
   expect(pdf).toMatch(/\(Roadmap \S Timeline\) Tj/);
   expect(pdf).toContain("(Today) Tj");
-  const lanes = (await page.getByTestId("timeline-lane").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim().split(" · ")[0].replace(/^\d+\s*/, ""));
+  const lanes = (await page.getByTestId("timeline-lane").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim().replace(/^\d+ · /, "").split(" · ")[0].replace(/^\d+\s*/, ""));
   expect(lanes.length).toBeGreaterThan(0);
   const ascii = lanes.filter((l) => /^[ -~]+$/.test(l) && !/[()\\]/.test(l));
   for (const lane of ascii) expect(pdf).toContain(lane.slice(0, 12));

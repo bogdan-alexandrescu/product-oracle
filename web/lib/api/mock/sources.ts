@@ -423,7 +423,9 @@ export function relinkMockSources(conn: { id: string; provider: string; account_
 
 /** The person's connections of `provider` a source can use (/v1/sources/kinds): their rows in
  * the one connections store (./connections.ts) that Settings › Connections reads too (F-60). */
-function choicesFor(provider: string, email?: string): Schemas["ConnectionChoice"][] {
+function choicesFor(provider: string, email: string): Schemas["ConnectionChoice"][] {
+  // sources.connection_choices reads one person's rows: nobody signed in has none (never everyone's).
+  if (!email) return [];
   return mockConnectionRows(email)
     .filter((r) => r.provider === provider)
     .map((r) => ({

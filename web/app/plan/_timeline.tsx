@@ -133,8 +133,8 @@ export function PlanTimeline({
         <Chart
           data={drawn.data}
           lane={by === "prd" ? "prd" : by === "goal" ? "goal" : "track"}
-          // B-26: the label column's heading for the Horizon grouping ("Horizon", not the lane's
-          // "Track") needs Chart's laneWord, which is Simple's to add (left for the Simple port).
+          // B-26: the label column's heading names the Group by ("Horizon", not the lane's "Track").
+          laneWord={by === "horizon" ? "Horizon" : undefined}
           format="timeline"
           unit="week"
           compact={phone}
