@@ -12,6 +12,7 @@ import { OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFe
 import { OnePagerSlides } from "@/components/simple/OnePagerSlides";
 import { FeaturePanel } from "@/app/simple/roadmap/_panel";
 import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
+import { PrdHeaderMenu } from "@/components/simple/PrdMenu";
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { RunReviewStep } from "@/components/simple/RunReviewStep";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
@@ -534,6 +535,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
         {/* qa4-simple-prd-34: it says it leaves Simple for Detailed. */}
         Open in Detailed{sessionId ? " (new tab)" : ""}
       </Link>
+      {/* delete-prd-simple (EP2 a, ep2-a-hard): the PRD's ⋯ ends the header's row; deleted, it goes back to One-pagers. */}
+      {!sessionId && <PrdHeaderMenu doc={v.document} btnClass={`${btn(phone)} justify-center ${phone ? "min-w-[34px] px-0" : "min-w-10 px-0"}`} />}
       {phone && startWhyLine}
     </>
   );

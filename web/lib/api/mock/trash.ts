@@ -22,6 +22,7 @@ export interface TrashDocument {
   slug: string;
   title: string;
   kind: string;
+  company_roadmap?: boolean;
 }
 
 export interface TrashVersion {
@@ -87,6 +88,9 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   onRestore?: (released: unknown) => void;
   /** trash-features-goals: Restore of a roadmap feature or a goal (kept in place, marked `trashed`). */
   simple?: () => TrashedSimple | undefined;
+  /** delete-prd-simple: the roadmap items and tracks these PRDs feed, as what stays and what goes with the
+   * documents of the delete (`gone`, their slugs): the dependents' `feeds` and `feeds_going`. */
+  feeds?: (prdSlugs: string[], gone: string[]) => { stays: TrashItem[]; goes: TrashItem[] };
   /** prd-reads-working-draft: which company roadmap a PRD's run reads (./roadmap-read.ts). */
   roadmapRead?: (me: { id: string; role: Role }) => string | null;
   uuid: () => string;
@@ -145,7 +149,8 @@ const runItem = (r: RunOut): TrashItem => ({ type: "run", id: r.id, slug: null, 
 const intakeItem = (i: Intake): TrashItem => ({ type: "intake", id: i.id, slug: null, title: i.title, kind: "intake" });
 
 /** What goes to Trash with a document: the documents built from its versions and its spec
- * requests' tech briefs, transitively, and the runs that write any of them. */
+ * requests' tech briefs, transitively (never the company roadmap or a roadmap another PRD
+ * feeds), and the runs that write any of them. */
 function resolve<D extends TrashDocument, V extends TrashVersion>(ctx: TrashContext<D, V>, tops: D[]) {
   const docs = [...tops];
   const seen = new Set(tops.map((d) => d.id));
@@ -158,6 +163,14 @@ function resolve<D extends TrashDocument, V extends TrashVersion>(ctx: TrashCont
     for (const r of ctx.specRequests()) {
       const brief = frontier.has(r.source_document_id) ? ctx.documents.find((d) => d.slug === r.document_slug) : undefined;
       if (brief && !seen.has(brief.id)) next.add(brief.id);
+    }
+    // delete-prd-simple (trash.service._not_shared): never the company roadmap, nor a roadmap
+    // another PRD outside the delete feeds; the delete's own items on it stay, without it.
+    const inside = new Set([...seen, ...next]);
+    for (const id of next) {
+      const d = ctx.documents.find((x) => x.id === id);
+      const fedByOther = ctx.versions.some((v) => v.document_id === id && v.source && !inside.has(v.source.document_id));
+      if (d?.company_roadmap || fedByOther) next.delete(id);
     }
     for (const id of next) {
       seen.add(id);
@@ -404,7 +417,9 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     return r ? { ...i, created_at: r.created_at, wrote: docs.find((d) => d.slug === r.document_slug)?.title ?? null } : i;
   });
   if (isDependents) {
-    const out: Schemas["DependentsOut"] = { root, items: said, published, working_runs: working.map((r) => r.id) };
+    const prds = docs.filter((d) => d.kind === "prd").map((d) => d.slug);
+    const fed = prds.length && ctx.feeds ? ctx.feeds(prds, docs.map((d) => d.slug)) : { stays: [], goes: [] };
+    const out: Schemas["DependentsOut"] = { root, items: said, published, working_runs: working.map((r) => r.id), feeds: fed.stays, feeds_going: fed.goes };
     return json(200, out);
   }
   if (working.length) return json(409, { detail: `A run is still working on this (${working[0].flow}, ${working[0].status}): cancel it first` });

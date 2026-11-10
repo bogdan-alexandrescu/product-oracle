@@ -208,8 +208,8 @@ import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones, seedStuckPrdAs
 import { knowPrdOrder } from "./prd-rank";
 import { codedTitle, openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
-import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrdSlug, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
-import { closed, GOALS, MAP_GOALS, prdOwnerIdsOf, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
+import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, ownPrdSlug, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
+import { closed, GOALS, MAP_GOALS, prdFeeds, prdOwnerIdsOf, prdTrackOwnerIds, roadmapKeyOf, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
@@ -1841,7 +1841,10 @@ function seedOneRoadmapScenario(): Db {
   const oldRoadmap = doc(uuid(), OLD_ROADMAP[0], OLD_ROADMAP[1], "roadmap");
   // replaced-prd-history: its v2, never sent: read-only history, never approved.
   db.versions.push(buildVersion(oldRoadmap, { number: 2, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: `${OLD_ROADMAP[1]}, a draft never sent.` }], citations: [] }));
-  doc(uuid(), COMPANY_SLUG, COMPANY_TITLE, "roadmap", { company_roadmap: true });
+  const company = doc(uuid(), COMPANY_SLUG, COMPANY_TITLE, "roadmap", { company_roadmap: true });
+  // As the API: a PRD run's company roadmap version is built from that PRD's version.
+  const cv = db.versions.find((v) => v.document_id === company.id);
+  if (cv) (cv as { source?: { document_id: string; version?: number } | null }).source = { document_id: areas[0].id, version: 1 };
   db.simple_roadmap = seedCompanyRoadmap(seedSimpleRoadmap());
   return db;
 }
@@ -5161,8 +5164,12 @@ function historyRoadmapRefs(db: Db): Map<string, string[]> {
 /** replaced-prd-history: the roadmaps Simple leaves out, by slug: a replaced PRD's own roadmap,
  * and one in Trash (a trashed row is out of every read). */
 function historyRoadmaps(db: Db): string[] {
-  const trashed = (db.trash?.entries ?? []).flatMap((e) => (e.documents as { kind?: string; slug: string }[]).filter((d) => d.kind === "roadmap").map((d) => d.slug));
-  return [...historyRoadmapRefs(db).keys(), ...trashed];
+  return [...historyRoadmapRefs(db).keys(), ...trashedRoadmaps(db)];
+}
+
+/** The roadmap documents in Trash, by slug. */
+function trashedRoadmaps(db: Db): string[] {
+  return (db.trash?.entries ?? []).flatMap((e) => (e.documents as { kind?: string; slug: string }[]).filter((d) => d.kind === "roadmap").map((d) => d.slug));
 }
 
 /** one-roadmap-many-prds: the PRDs that replace `doc`, by name (oracle.roadmap.company.refs). */
@@ -5250,6 +5257,8 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
 function markReplaced(db: Db, simple: SimpleDb): void {
   simple.replaced_prds = replacedPrds(db);
   simple.history_roadmaps = historyRoadmaps(db);
+  // delete-prd-simple: a roadmap in Trash takes its items out of Simple (oracle.trash.filter).
+  simple.trashed_roadmaps = trashedRoadmaps(db).map(roadmapKeyOf);
   simple.replaced_prd_titles = db.documents.filter((d) => d.kind === "prd" && liveReplacers(db, d).length).map((d) => d.title);
   const to: NonNullable<SimpleDb["replaced_with"]> = {};
   for (const d of db.documents.filter((x) => x.kind === "prd" && liveReplacers(db, x).length)) {
@@ -7055,6 +7064,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       // edit-decisions: Restore puts a decision or a PRD's question back on Simple's Decisions too.
       // goal-map-editing: and a goal map milestone back on the map.
       simple: () => db.simple_roadmap && { ...db.simple_roadmap, sheet: [...(db.simple_meetings?.decisions ?? []), ...(db.simple_meetings?.questions?.questions ?? [])], goal_map: db.goal_map },
+      // delete-prd-simple: the roadmap items and tracks a PRD feeds, named by Delete PRD.
+      // Read from the seed when Simple has not been opened yet, never storing it (the dependents only read).
+      feeds: (slugs, gone) => prdFeeds(db.simple_roadmap ?? seedSimpleRoadmap(), slugs, gone),
       // As the API: the draft only when the person starting the run may see it.
       roadmapRead: (starter) => roadmapRead(db.documents, db.versions, db.simple_roadmap, String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"), (d) => seesDraft(d, starter, db.simple_roadmap)),
       onRestore: (released) => (db.simple_roadmap && restoreTrack(db.simple_roadmap, released)) || relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),

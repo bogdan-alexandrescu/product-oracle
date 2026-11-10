@@ -71,7 +71,9 @@ def _entry_out(
 
 async def _dependents(db: TenantDB, root_type: str, ref: str) -> DependentsOut:
     root = await _call(service.find_root(db, root_type, ref))
-    return DependentsOut(**service.preview(await service.resolve(db, root_type, root)))
+    resolved = await service.resolve(db, root_type, root)
+    stays, goes = await service.feeds(db, resolved)
+    return DependentsOut(**service.preview(resolved), feeds=stays, feeds_going=goes)
 
 
 async def _delete(

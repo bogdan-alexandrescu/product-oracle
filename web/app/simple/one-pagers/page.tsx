@@ -5,17 +5,17 @@ import { useCallback, useState } from "react";
 
 import { InfoTip } from "@/components/ds/InfoTip";
 import { toast } from "@/components/ds/Toast";
-import { PrdMoveMenu } from "@/components/simple/PrdMoveMenu";
 import { NewPrdButton, NewPrdSheet, StartedRows, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
+import { deletedText, PrdMenu, restorePrd } from "@/components/simple/PrdMenu";
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { dmy } from "@/components/simple/PrdTimeline";
 import { SimpleEmpty, SimplePage, SimpleSection } from "@/components/simple/SimplePage";
 import { Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone, dayIn } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { sortPrds } from "@/lib/prd-order";
-import { useQuery } from "@/lib/use-query";
+import { errorMessage, useQuery } from "@/lib/use-query";
 
 import "@/components/simple/SimplePrd.css";
 
@@ -65,6 +65,21 @@ export default function OnePagers() {
     },
     [q],
   );
+  // EP2 a (ep2-a-result): what a delete did, with Undo, at the top of the list.
+  const [note, setNote] = useState<{ text: string; entry?: Schemas["TrashEntryOut"] } | null>(null);
+  const reload = q.reload;
+  const undo = useCallback(
+    async (entry: Schemas["TrashEntryOut"]) => {
+      try {
+        await restorePrd(entry);
+        setNote({ text: `Restored ${entry.root.title}.` });
+      } catch (e) {
+        setNote({ text: errorMessage(e) });
+      }
+      await reload();
+    },
+    [reload],
+  );
   return (
     <SimplePage title="One-pagers">
       <SimpleSection
@@ -85,6 +100,16 @@ export default function OnePagers() {
           </span>
         }
       >
+        {note && (
+          <div role="status" data-testid="one-pagers-note" className="mb-2 flex items-center gap-3 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-[15px] text-text">
+            <span className="min-w-0 flex-1">{note.text}</span>
+            {note.entry && (
+              <button type="button" className="flex-none font-[650] text-accent-ink underline" onClick={() => note.entry && void undo(note.entry)}>
+                Undo
+              </button>
+            )}
+          </div>
+        )}
         {q.error ? (
           <p className="simple-small">{q.error}</p>
         ) : !rows ? (
@@ -113,9 +138,17 @@ export default function OnePagers() {
                 </Link>
                 <PrdStatus d={d} />
                 <span className="simple-small ml-auto">Updated {dmy(dayIn(d.updated_at, zone))}</span>
-                {canMove && rows.length > 1 && (
-                  <PrdMoveMenu title={d.title} busy={moving} onUp={n > 0 ? () => void move(d, "up") : undefined} onDown={n < rows.length - 1 ? () => void move(d, "down") : undefined} />
-                )}
+                {/* delete-prd-simple: one ⋯ per row, Move up and Move down (owners of the order) and Delete PRD. */}
+                <PrdMenu
+                  doc={d}
+                  busy={moving}
+                  onUp={canMove && n > 0 ? () => void move(d, "up") : undefined}
+                  onDown={canMove && n < rows.length - 1 ? () => void move(d, "down") : undefined}
+                  onDeleted={(entry) => {
+                    setNote({ text: deletedText(d.title), entry });
+                    void reload();
+                  }}
+                />
               </li>
             ))}
           </ul>

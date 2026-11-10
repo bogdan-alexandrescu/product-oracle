@@ -22385,7 +22385,9 @@ export interface components {
          * DependentsOut
          * @description What the delete dialog lists: the root and everything that goes to Trash with it.
          *     ``published``: ask once more, the external copy stays where it is. ``working_runs``:
-         *     runs to cancel before the delete is allowed.
+         *     runs to cancel before the delete is allowed. ``feeds`` (delete-prd-simple): the roadmap
+         *     items and tracks a PRD feeds that stay, without it; ``feeds_going``: those that go to
+         *     Trash with it (on its own roadmap, or a track holding no other PRD).
          */
         DependentsOut: {
             root: components["schemas"]["TrashItem"];
@@ -22398,6 +22400,16 @@ export interface components {
              * @default []
              */
             working_runs: string[];
+            /**
+             * Feeds
+             * @default []
+             */
+            feeds: components["schemas"]["TrashItem"][];
+            /**
+             * Feeds Going
+             * @default []
+             */
+            feeds_going: components["schemas"]["TrashItem"][];
         };
         /** DeriveIn */
         DeriveIn: {
