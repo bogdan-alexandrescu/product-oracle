@@ -244,6 +244,22 @@ async def _asked(db: AsyncSession, prd_ids: set[str]) -> bool:
     return any(prd_ids & _prds_of(c.op, c.after or {}) for c in open_)
 
 
+async def _close_asked(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
+    """tracks-goal: a PRD put on a track directly (each in ``prior``, where it was) closes
+    the open proposal that asked to put it on one: declined by who placed it, so it no
+    longer waits for a decision it cannot get."""
+    tracked = c.op in ("add_track", "edit_track")
+    placed = set((c.target or {}).get("prior") or {}) if tracked else set()
+    if not placed:
+        return
+    for p, asked in (await waiting_for(db)).items():
+        if str(p) in placed and asked.status == "proposed":
+            asked.status = "declined"
+            asked.decided_by, asked.decided_at = _me(principal), company_time.now()
+            await audit.record(db, principal, "simple_change.declined", "simple_change",
+                               asked.id, data={"op": asked.op, "target": asked.target})  # fmt: skip
+
+
 async def waiting_for(db: AsyncSession) -> dict[uuid.UUID, SimpleChange]:
     """tracks-goal (owner Nov 9): each PRD a proposed track change puts on a track, by PRD
     (its Inbox suggestion waits for that decision)."""
@@ -385,6 +401,7 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
                      at=now, reason=body.reason, routed_to=route)  # fmt: skip
     if applies:
         await _apply(db, principal, c)
+        await _close_asked(db, principal, c)
     db.add(c)
     await db.flush()
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
