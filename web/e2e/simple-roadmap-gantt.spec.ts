@@ -184,14 +184,14 @@ for (const phone of [false, true]) {
           const [u, r] = [(await usage.boundingBox())!, (await referral.boundingBox())!];
           expect(Math.abs(u.y - r.y), "two rows").toBeGreaterThan(10);
           expect(u.x < r.x + r.width && r.x < u.x + u.width, "they overlap in time").toBe(true);
-          // Every band header says what it is: a track's its name and health, the others their count.
+          // Every band header says what it is: a track's its name and health, No track just its name, Below the line its count.
           const heads = page.getByTestId("timeline-lane");
           const n = await heads.count();
           expect(n).toBeGreaterThan(1);
           for (let k = 0; k < n; k++) {
             const h = heads.nth(k);
             if (await h.getByTestId("track-head").count()) await expect(h).toContainText(/(On track|Needs a look)$/);
-            else await expect(h).toHaveText(/ · \d+ items?$/);
+            else await expect(h).toHaveText(/^(No track\s*|Below the line · \d+ items?)$/);
           }
 
           // Group by is the Gantt's (the Timeline always draws track bands); its Goal lanes hold

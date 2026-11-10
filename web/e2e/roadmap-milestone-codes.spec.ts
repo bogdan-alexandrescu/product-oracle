@@ -86,11 +86,11 @@ test("on the Timeline every milestone's line runs through every group and the ba
   const dec22 = codes.filter(([, name]) => name === "60% of teams active at day 90" || name === "Half of new teams invite a teammate").map(([c]) => Number(c.slice(1)));
   expect(dec22).toHaveLength(2);
   expect(Math.abs(dec22[0] - dec22[1])).toBe(1);
-  // The PRD's milestone is drawn like the others, its tip naming its PRD and the goal it advances.
+  // The PRD's milestone is drawn like the others, its tip naming its PRD and the goal it builds toward.
   const prd = page.getByTestId("ms-prd-label").first();
   await prd.hover();
   await expect(page.getByTestId("ms-band-tip")).toContainText("From the PRD Usage alerts");
-  await expect(page.getByTestId("ms-band-tip")).toContainText("Advances");
+  await expect(page.getByTestId("ms-band-tip")).toContainText("Builds toward Grow retention");
 });
 
 test("on the Gantt every milestone's line runs through every group, each named once in the band", async ({ page }) => {

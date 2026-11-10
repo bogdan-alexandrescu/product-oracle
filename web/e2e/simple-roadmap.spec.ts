@@ -129,9 +129,10 @@ for (const [where, use] of [
         } else {
           // B3: a thin lane per goal (and below the line), the open lane's pieces listed under the chart.
           // mk-qa4-roadmap QR1 A: a phone's Timeline is a list by quarter (the picked frame has
-          // no goal lanes there): each row names its goal, a broken link says so.
+          // no goal lanes there): each row reads its dates only (its band header names the goal), a broken link says so.
           const row = page.locator('[data-testid="timeline-list"] [data-testid="timeline-row"][data-item="alert-digest"]');
-          await expect(row).toContainText("Grow retention");
+          await expect(row).toContainText("Oct 31 – Dec 10");
+          await expect(row).not.toContainText("Grow retention");
           await expect(row).toContainText("Broken link");
           await expect(page.getByTestId("timeline-quarter").first()).toBeVisible();
           // The phone's list marks today on its quarter (the picked frame draws no line or milestone marks there).

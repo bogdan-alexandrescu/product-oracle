@@ -306,7 +306,7 @@ for (const scheme of ["light", "dark"] as const) {
       // P-1: Q1 2027 also lists the Goal map's 12 features (roadmap items from the first load, next quarter).
       await expect(quarters.nth(1).locator("h3")).toHaveText(/^Q1 2027\s*Jan – Mar 2027 · 20 items$/);
       await expect(list.getByTestId("timeline-row")).toHaveCount(32);
-      await expect(row(page, "setup-checklist")).toHaveText(/^Setup checklist\s*Nov 2 – Nov 20 · Activation$/);
+      await expect(row(page, "setup-checklist")).toHaveText(/^Setup checklist\s*Nov 2 – Nov 20$/);
       await expect(row(page, "plan-f-03")).toHaveText(/^Setup failure alerts\s*Nov 2 – Nov 13/);
       // P-1: the Goal map's One-tap sign-up link (Jan 1) starts before Public signup (Jan 4), in start order.
       await expect(quarters.nth(1).getByTestId("timeline-row").first()).toHaveText(/^One-tap sign-up link\s*Jan 1 – Jun 30, 2027/);
