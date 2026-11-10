@@ -129303,6 +129303,17 @@
             "type": "array",
             "title": "Item Ids",
             "default": []
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
           }
         },
         "type": "object",

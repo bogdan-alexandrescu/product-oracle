@@ -1690,6 +1690,10 @@ class SimplePlanRow(BaseModel):
     past_edge: bool = False
     # The one-pager: its roadmap items' ids (OnePagerOut.timeline), each once, in plan order.
     item_ids: list[uuid.UUID] = []
+    # The one-pager: the milestone's roadmap-wide code, the one the Roadmap read gives it
+    # (``roadmap_code``, roadmap-milestone-codes), which ``name`` leads with ("M2 · Beta");
+    # null when it is no roadmap milestone (``name`` is then its name alone) or not a milestone.
+    code: str | None = None
 
 
 class SimplePlanStrip(BaseModel):

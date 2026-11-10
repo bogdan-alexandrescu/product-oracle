@@ -5,7 +5,8 @@ Test cards (protects / fails_when / no_claim):
 
 - test_noted_milestones_one_row_each: protects=items whose milestone texts carry notes
   ("M1 · Measure it, make it safe (a note); Digest in M2 · ...") draw one strip row per
-  milestone, "M1 · Measure it, make it safe · 3 items", on the one-pager and its PDF;
+  milestone, "Measure it, make it safe · 3 items" (no roadmap code: item texts are no
+  roadmap milestone), on the one-pager and its PDF;
   fails_when=one row per distinct text (three identical truncated M1 labels) or a note in
   the label; no_claim=the web's mirror (e2e/simple-plan-strip-rules.spec.ts).
 - test_skeleton_prd_one_pager: protects=a PRD started from an empty skeleton shows no
@@ -72,9 +73,10 @@ async def test_noted_milestones_one_row_each(client):
         await s.commit()
     view = await get(client, ctx, "viewer")
     rows = [(r["name"], r["items"]) for r in view["plan"]["rows"]]
-    assert rows == [(M1, 3), ("M2 · Ship to beta", 1)]
+    # roadmap-milestone-codes: item texts are no roadmap milestone, so no written code shows.
+    assert rows == [("Measure it, make it safe", 3), ("Ship to beta", 1)]
     html = await pdf(ctx)
-    assert html.count(f"{M1} · 3 items · Nov 20") == 1
+    assert html.count("Measure it, make it safe · 3 items · Nov 20") == 1
     assert "dry run" not in html and "baseline needs" not in html
 
 

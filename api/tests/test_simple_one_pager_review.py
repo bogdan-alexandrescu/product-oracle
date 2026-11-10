@@ -82,9 +82,12 @@ def test_plan_strip_cases(case):
         for i in case["items"]
     ]
     got = plan_strip.strip(items, date.fromisoformat(case["today"]))
-    # The rules shared with the web's mirror; which items a row holds is the one-pager's.
+    # The rules shared with the web's mirror; which items a row holds and its roadmap code are
+    # the one-pager's.
     dumped = (
-        got.model_dump(mode="json", exclude={"rows": {"__all__": {"item_ids"}}}) if got else None
+        got.model_dump(mode="json", exclude={"rows": {"__all__": {"item_ids", "code"}}})
+        if got
+        else None
     )
     assert dumped == case["expected"]
 

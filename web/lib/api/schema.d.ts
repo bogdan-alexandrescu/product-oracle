@@ -43530,6 +43530,8 @@ export interface components {
              * @default []
              */
             item_ids: string[];
+            /** Code */
+            code?: string | null;
         };
         /**
          * SimplePlanSpan
