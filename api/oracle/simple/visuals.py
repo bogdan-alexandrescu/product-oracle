@@ -128,14 +128,18 @@ def likeness(a: str, b: str) -> float:
     return len(x & y) / len(x | y) if x and y else 0.0
 
 
-def pair_alike(old: list[list[str]], new: list[list[str]]) -> dict[int, int]:
+def pair_alike(
+    old: list[list[str]], new: list[list[str]], kept: set[int] | frozenset[int] = frozenset()
+) -> dict[int, int]:
     """Each of ``new`` (by index) paired with the ``old`` it reads most like (any of its
-    words), at least ``LIKE`` alike, each at most once: the most alike pairs first, a tie
-    to the same place. Never by place alone: a bet added above the others moves them all."""
+    words), at least ``LIKE`` alike, each at most once: the most alike pairs first; on a tie
+    an ``old`` in ``kept`` (a flow a person edited or commented on) first, then the same
+    place. Never by place alone: a bet added above the others moves them all."""
     pairs = sorted(
         (
             (
                 max((likeness(a, b) for a in was for b in now), default=0.0),
+                i in kept,
                 i == j,
                 -abs(i - j),
                 i,
@@ -148,13 +152,19 @@ def pair_alike(old: list[list[str]], new: list[list[str]]) -> dict[int, int]:
     )
     out: dict[int, int] = {}
     used: set[int] = set()
-    for score, _, _, i, j in pairs:
+    for score, _, _, _, i, j in pairs:
         if score < LIKE:
             break
         if j not in out and i not in used:
             out[j] = i
             used.add(i)
     return out
+
+
+def own_subject(document_id: uuid.UUID, key: str) -> uuid.UUID:
+    """The flow subject of a bet whose key holds another bet's flow (a page built before
+    keys were carried by likeness): built from its key, so the bet keeps it when reworded."""
+    return line_subject(document_id, key + "/own")
 
 
 async def flows_of_bets(
@@ -168,32 +178,49 @@ async def flows_of_bets(
     most like, else on its own: a page built before keys were carried by likeness gave a bet
     the key of the bet at its place before (a bet added above shifted every flow by one), so
     the stored key alone never puts a flow on another bet. A bet with no flow whose key
-    holds another bet's flow is drawn on its words' subject; a flow still keyed by a bet's
-    words (0092_bet_flow_line_key left it) is read by a bet with those words and none."""
+    holds another bet's flow is drawn on ``own_subject``, built from its key so it stays
+    the bet's when the bet is reworded; a flow still keyed by a bet's words
+    (0092_bet_flow_line_key left it) is read by a bet with those words and none."""
     keyed = [line_subject(document_id, k) for k, _ in bets]
-    flows = await flows_for(db, "one_pager_line", keyed)
+    own = [own_subject(document_id, k) for k, _ in bets]
+    flows = await flows_for(db, "one_pager_line", keyed + own)
     briefs: dict[uuid.UUID, str] = {}
+    kept: set[uuid.UUID] = set()
     if flows:
-        briefs = dict(
-            (
-                await db.execute(
-                    select(SimpleVisual.subject_id, SimpleVisual.brief).where(
-                        SimpleVisual.subject_kind == "one_pager_line",
-                        SimpleVisual.subject_id.in_(list(flows)),
-                    )
+        visuals = (
+            await db.execute(
+                select(SimpleVisual.id, SimpleVisual.subject_id, SimpleVisual.brief).where(
+                    SimpleVisual.subject_kind == "one_pager_line",
+                    SimpleVisual.subject_id.in_(list(flows)),
                 )
-            ).all()
+            )
+        ).all()
+        briefs = {sid: brief for _, sid, brief in visuals}
+        ids = {vid: sid for vid, sid, _ in visuals}
+        touched = select(SimpleVisualVersion.visual_id).where(
+            SimpleVisualVersion.visual_id.in_(list(ids)), SimpleVisualVersion.made_by.is_not(None)
         )
+        commented = select(SimpleVisualComment.visual_id).where(
+            SimpleVisualComment.visual_id.in_(list(ids))
+        )
+        kept = {ids[v] for v in await db.scalars(touched.union(commented))}
     drawn = [[briefs.get(s, "")] if s in flows else [] for s in keyed]
-    on = {j: keyed[i] for j, i in pair_alike(drawn, [w for _, w in bets]).items()}
+    by_person = {i for i, s in enumerate(keyed) if s in kept}
+    paired = pair_alike(drawn, [w for _, w in bets], by_person)
+    on = {j: keyed[i] for j, i in paired.items()}
     for i, s in enumerate(keyed):
         if s in flows and i not in on and s not in on.values():
             on[i] = s  # drawn from words like no bet's now: it stays on its own
     out = [
-        on.get(j) or (keyed[j] if keyed[j] not in flows else words_subject(document_id, w[0]))
-        for j, (_, w) in enumerate(bets)
+        on.get(j) or (own[j] if own[j] in flows or keyed[j] in flows else keyed[j])
+        for j in range(len(bets))
     ]
-    loose = {words_subject(document_id, w[0]): j for j, (_, w) in enumerate(bets) if j not in on}
+    # A flow still keyed by a bet's words (0092_bet_flow_line_key left it).
+    loose = {
+        words_subject(document_id, w[0]): j
+        for j, (_, w) in enumerate(bets)
+        if j not in on and own[j] not in flows
+    }
     for sid, flow in (await flows_for(db, "one_pager_line", list(loose))).items():
         out[loose[sid]], flows[sid] = sid, flow
     return [(s, flows.get(s)) for s in out]
@@ -288,7 +315,7 @@ async def bet_line(
             words = on_page.text if on_page and on_page.state != "edited" else x.get("text")
             bets.append((bet_key(x), str(words or "")))
     for key, text in bets:
-        if line_subject(doc_id, key) == subject_id:
+        if subject_id in (line_subject(doc_id, key), own_subject(doc_id, key)):
             return doc_id, text
     # A flow still keyed by a bet's words (one the migration did not move).
     said = [(x.id, x.text) for x in shown.values()]
