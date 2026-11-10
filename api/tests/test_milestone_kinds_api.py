@@ -53,9 +53,12 @@ async def seed(ctx: Ctx, due: str | None = None) -> dict:
         if due:
             attrs["due"] = due
         goal = await sd.entity("goal", "activation", **attrs)
+        # Tracks read oldest first; one transaction would give both the same created_at.
         checkout = await sd.track(pv, rm, title="Checkout", goal_id=goal.id,
-                                  monitored_at=datetime(2026, 10, 15, 18, tzinfo=UTC))  # fmt: skip
-        search = await sd.track(pv2, rm, title="Search", monitored_at=NOW)
+                                  monitored_at=datetime(2026, 10, 15, 18, tzinfo=UTC),
+                                  created_at=datetime(2026, 10, 1, tzinfo=UTC))  # fmt: skip
+        search = await sd.track(pv2, rm, title="Search", monitored_at=NOW,
+                                created_at=datetime(2026, 10, 2, tzinfo=UTC))  # fmt: skip
         early = await sd.item(rv, pv, "f-01", title="Saved carts", track_id=checkout.id,
                               start_date=date(2026, 11, 2), end_date=date(2026, 11, 20),
                               date_source="typed")  # fmt: skip
