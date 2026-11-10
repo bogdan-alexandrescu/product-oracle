@@ -474,11 +474,31 @@ async def _check_refs(
             raise _error(422, "sub_goal_of_id: no such milestone")
         if (to.kind or "delivery") != "goal":
             raise _error(422, "sub_goal_of_id: a sub-goal builds toward a goal milestone")
+        roadmap_id = _uid(given.get("roadmap_id")) or getattr(row, "roadmap_id", None)
+        if roadmap_id is not None and to.roadmap_id != roadmap_id:
+            raise _error(422, "sub_goal_of_id: a sub-goal builds toward a goal milestone "
+                              "on the same roadmap")  # fmt: skip
+    # A goal milestone sub-goals build toward stays a goal until none does.
+    if row is not None and "kind" in given and (row.kind or "delivery") == "goal":
+        if now["kind"] is not None and now["kind"] != "goal":
+            subs = list(await db.scalars(
+                select(TrackMilestone.name).where(
+                    TrackMilestone.sub_goal_of_id == row.id, TrackMilestone.deleted_at.is_(None)
+                ).order_by(TrackMilestone.name)
+            ))  # fmt: skip
+            if subs:
+                raise _error(422, "kind: sub-goals build toward this goal ("
+                                  f"{', '.join(subs)}); point them elsewhere first")  # fmt: skip
+    history: set[uuid.UUID] | None = None
     for k in ("home_track_id", "from_track_id", "to_track_id"):
         if k in looked and ids[k] is not None:
             t = await db.get(ProductTrack, ids[k])
             if t is None or getattr(t, "deleted_at", None) is not None:
                 raise _error(422, f"{k}: no such track")
+            if history is None:
+                history = await company.history_track_ids(db)
+            if t.id in history:
+                raise _error(422, f"{k}: that track is a replaced PRD's history")
     hand = ids["from_track_id"], ids["to_track_id"]
     if hand[0] is not None and hand[0] == hand[1] and looked & {"from_track_id", "to_track_id"}:
         raise _error(422, "to_track_id: a hand-off goes to another track")
