@@ -19,6 +19,7 @@ Test cards (protects / fails_when / no_claim):
 """
 
 import uuid
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import select
@@ -112,6 +113,7 @@ async def shift_keys(ctx) -> None:
         for x, key in zip(bets, old, strict=True):
             x["flow_key"] = key
         v2.blocks = blocks
+        v2.built_at = NOW + timedelta(minutes=1)  # built after version 1, as in production
         await s.commit()
 
 
