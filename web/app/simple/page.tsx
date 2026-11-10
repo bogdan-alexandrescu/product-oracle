@@ -8,6 +8,8 @@ import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRo
 import { Walk } from "@/app/simple/_home/walk";
 import { runStopsOf, StopCard } from "@/app/simple/_home/run-stops";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
+// MOCK-HOOK: ?gtf=a|b|c|d mock-up variants of Home counting the Ground Truth flags.
+import { GtCard, GtGoalChip, GtNoGoalLine, GtTitleBadge, GtWaitingLine, useGt } from "@/app/simple/_home/gt-flags";
 import { MarkForItem, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Icon } from "@/components/ds/Icon";
 import { Button } from "@/components/ds/Button";
@@ -292,6 +294,8 @@ export default function SimpleHome() {
   };
   // A4: a phone's Home shows the soonest two decisions, a desktop's three.
   const phone = usePhone();
+  // MOCK-HOOK: the Ground Truth flags variant (?gtf), off without it.
+  const gt = useGt({ canWrite: can("confirm_entity"), canPropose: can("create_proposal"), canChangeRoadmap: can("create_simple_change") });
   // The one list of scheduled reviews (Meetings > Upcoming): its first row is the next.
   const meeting = useQuery(k("meeting"), async () => {
     const list = await unwrap(api.GET("/v1/simple/meetings"));
@@ -690,7 +694,11 @@ export default function SimpleHome() {
         <div className="flex items-center justify-between gap-2">
           <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
           {/* F-28, the owner's pick (Nov 5): a hidden Set up comes back from Home's menu. */}
-          {setupHidden && <HomeMenu onShowSetup={() => void hideSetup(false)} />}
+          {/* MOCK-HOOK: (d) the flags' badge on the Home title. */}
+          <span className="flex items-center gap-2">
+            <GtTitleBadge gt={gt} />
+            {setupHidden && <HomeMenu onShowSetup={() => void hideSetup(false)} />}
+          </span>
         </div>
         <p className="simple-lead max-[600px]:min-h-[2lh]">
           {greeting(hour)}
@@ -819,6 +827,8 @@ export default function SimpleHome() {
                           {g.needYou} {g.needYou === 1 ? "item needs" : "items need"} you
                         </span>
                       )}
+                      {/* MOCK-HOOK: (c) this goal's Ground Truth flags. */}
+                      <GtGoalChip gt={gt} goalId={g.id} goalName={g.name} />
                       {/* goal-map-scoreboard: the goal on the Goal map, the scoreboard of its gates. */}
                       <Link
                         href={`/simple/goals?goal=${encodeURIComponent(g.id)}&name=${encodeURIComponent(g.name)}`}
@@ -836,6 +846,8 @@ export default function SimpleHome() {
             )
           }
         </Block>
+        {/* MOCK-HOOK: (c) the flags of no goal on Home. */}
+        <GtNoGoalLine gt={gt} goalIds={(tiles ?? []).map((t) => t.id)} />
         {/* qa4-simple-home-6: a goal still proposed is not on Home: said, so Detailed's extra goal is no surprise. */}
         {proposedGoals.length > 0 && (
           <div data-testid="home-goals-proposed-list" className="simple-small mt-2">
@@ -945,6 +957,8 @@ export default function SimpleHome() {
               </Link>
             </p>
           ))}
+          {/* MOCK-HOOK: (a) one line in the waiting card. */}
+          <GtWaitingLine gt={gt} />
         </section>
       )}
 
@@ -972,6 +986,8 @@ export default function SimpleHome() {
               </Link>
             </p>
           )}
+          {/* MOCK-HOOK: (a) one line in the waiting card, when there is no summary card. */}
+          {!(tilesReady && (tilesShown.length > 0 || myDrafts.length > 0)) && <GtWaitingLine gt={gt} />}
         </section>
       )}
 
@@ -1279,6 +1295,8 @@ export default function SimpleHome() {
           )}
         </Block>
       </HomeCard>
+      {/* MOCK-HOOK: (b) a small Ground Truth card beside the broken links. */}
+      <GtCard gt={gt} />
 
       {reads ? (
         <>
