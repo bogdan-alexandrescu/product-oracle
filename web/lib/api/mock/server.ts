@@ -4158,7 +4158,10 @@ function load(): Db {
                 ? () => {
                     // Owner, Nov 10 ('Add rows to the plan card'): one of the PRD's roadmap items has no plan milestone.
                     const db = seedSimplePlanScenario();
-                    db.simple_one_pager!.slice!.push({ title: "Calendar invite sync", horizon: "later", start: "2027-01-04", end: "2027-01-29", estimated: true, milestone: null });
+                    const rm = db.simple_roadmap!;
+                    rm.items.push({ key: "plan-loose", title: "Calendar invite sync", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "low", start: 0, end: 25, source: "typed" });
+                    rm.ids["plan-loose"] = stableUuid("simple-item/plan-loose");
+                    db.simple_one_pager!.slice!.push({ id: rm.ids["plan-loose"], title: "Calendar invite sync", horizon: "later", start: "2027-01-04", end: "2027-01-29", estimated: true, milestone: null });
                     return db;
                   }
               : scenario === PRIORITIES_PLAN_GOAL_NAMES_SCENARIO

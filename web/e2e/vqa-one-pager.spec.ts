@@ -82,10 +82,13 @@ test("vqa-b: the plan's When card lists the PRD's item with no plan milestone un
   // The group is the card's last part, after the milestones.
   await expect(card.locator(":scope > *").last()).toHaveAttribute("data-testid", "timeline-no-milestone");
   const rows = group.getByTestId("timeline-no-milestone-item");
-  await expect(rows).toHaveText(["Calendar invite sync"]);
+  await expect(rows).toHaveCount(1);
+  await expect(rows.getByRole("button", { name: "Calendar invite sync" })).toBeVisible();
   // Its name opens the feature's panel, as every feature does.
   await rows.getByRole("button", { name: "Calendar invite sync" }).click();
-  await expect(page.getByTestId("floating-card").getByTestId("card-name")).toContainText("Calendar invite sync");
+  const panel = page.getByRole("complementary", { name: "Calendar invite sync" });
+  await expect(panel).toBeVisible();
+  await expect(panel).not.toContainText("not on a roadmap you can see");
 });
 
 test.describe("production QA", () => {
