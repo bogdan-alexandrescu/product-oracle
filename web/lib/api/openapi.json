@@ -130435,6 +130435,17 @@
             ],
             "title": "Own Owner Id"
           },
+          "own_decider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Own Decider Id"
+          },
           "depends_keys": {
             "items": {
               "type": "string"

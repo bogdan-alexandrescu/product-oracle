@@ -44067,6 +44067,8 @@ export interface components {
             owner?: components["schemas"]["SimpleOwnerRef"] | null;
             /** Own Owner Id */
             own_owner_id?: string | null;
+            /** Own Decider Id */
+            own_decider_id?: string | null;
             /**
              * Depends Keys
              * @default []
