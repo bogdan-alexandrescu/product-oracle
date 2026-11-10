@@ -12014,7 +12014,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.simple.track_suggestions import inbox_rows as track_suggestion_rows
 
     simple_track_suggestions = await track_suggestion_rows(db, principal, seen)
-    counted += len(simple_track_suggestions)
+    # One waiting for its track's decider asks nothing of me: not counted.
+    counted += sum(1 for s in simple_track_suggestions if s.proposed is None)
     # Simple S8: meeting minutes sent to me as an attendee (nothing to decide: not counted).
     from oracle.simple.meetings import inbox_rows as simple_minutes_rows
 

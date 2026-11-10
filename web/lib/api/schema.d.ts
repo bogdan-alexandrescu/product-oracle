@@ -28828,6 +28828,7 @@ export interface components {
              * @enum {string}
              */
             state: "new" | "open";
+            proposed?: components["schemas"]["SimpleTrackProposed"] | null;
         };
         /** InboxSource */
         InboxSource: {
@@ -44555,6 +44556,23 @@ export interface components {
             track_id?: string | null;
             /** Track Title */
             track_title?: string | null;
+        };
+        /**
+         * SimpleTrackProposed
+         * @description The open proposal a track suggestion waits for: which track (``title`` of a new
+         *     one), and whom it waits for.
+         */
+        SimpleTrackProposed: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            track?: components["schemas"]["SimpleTrackChoice"] | null;
+            /** Title */
+            title: string;
+            /** To Name */
+            to_name?: string | null;
         };
         /** SimpleTrackRef */
         SimpleTrackRef: {
