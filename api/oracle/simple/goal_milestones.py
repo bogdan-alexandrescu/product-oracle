@@ -19,6 +19,7 @@ wired in ``oracle.simple.changes.decide``): accepting it writes the date and/or
 import re
 import uuid
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -32,7 +33,7 @@ from oracle.authz import has_role
 from oracle.docs.models import Document
 from oracle.members.names import display_name
 from oracle.roadmap import company
-from oracle.roadmap.models import TrackMilestone
+from oracle.roadmap.models import ProductTrack, TrackMilestone
 from oracle.simple import drafts
 from oracle.simple.models import SimpleChange
 from oracle.simple.schemas import (
@@ -73,6 +74,75 @@ async def _company_owners(db: AsyncSession) -> list[uuid.UUID]:
     return await owners(db)
 
 
+# --------------------------------------------------------------------------- status
+
+MEASURED = frozenset({"goal", "sub_goal"})
+# The fields a person writes on a roadmap's own milestone beyond name/date/goal/items/counts.
+KIND_FIELDS = ("kind", "done_when_line", "status_set", "status_reason", "measure", "baseline",
+               "target", "current", "sub_goal_of_id", "home_track_id", "from_track_id",
+               "to_track_id")  # fmt: skip
+_UUID_FIELDS = ("sub_goal_of_id", "home_track_id", "from_track_id", "to_track_id")
+_NUMBERS = ("baseline", "target", "current")
+
+
+def _num(v: float | None) -> str:
+    if v is None:
+        return ""
+    return str(int(v)) if float(v).is_integer() else f"{v:g}"
+
+
+def _f(v: Decimal | float | None) -> float | None:
+    return float(v) if v is not None else None
+
+
+def status_of(
+    kind: str,
+    day: date | None,
+    status_set: str | None,
+    status_reason: str | None,
+    set_by_name: str | None,
+    baseline: float | None,
+    target: float | None,
+    current: float | None,
+    items: list[tuple[str, date | None]],
+    today: date,
+    down: bool | None = None,
+) -> tuple[str, str]:
+    """milestone-kinds: a milestone's status and why. A person's wins; else a measured
+    (sub-)goal whose reading reached its target is hit (downward when ``down``, a goal's
+    ``at_most``/``below``; else upward when the target is at or above the baseline, else
+    downward), one whose date passed short of it missed, and one with no reading by its
+    date missed; else at risk when a piece of work it serves ends after its date, else on
+    track."""
+    if status_set:
+        return status_set, status_reason or f"Set by {set_by_name or 'a person'}"
+    passed = day is not None and today > day
+    if kind in MEASURED and current is None and passed:
+        return "missed", "No reading came in by its date."
+    if kind in MEASURED and current is not None and target is not None:
+        if down is None:
+            down = baseline is not None and target < baseline
+        if (current <= target) if down else (current >= target):
+            return "hit", f"Reached {_num(current)} on its target {_num(target)}"
+        if day is not None and passed:
+            return "missed", (
+                f"{_num(current)} on its target {_num(target)} when its date "
+                f"{company_time.calendar_day(day, today)} passed"
+            )
+    if day is not None:
+        late = sorted(
+            ((end, title) for title, end in items if end is not None and end > day),
+            key=lambda x: (-x[0].toordinal(), x[1]),
+        )
+        if late:
+            end, title = late[0]
+            return "at_risk", (
+                f"{title} ends {company_time.calendar_day(end, today)}, after its date "
+                f"{company_time.calendar_day(day, today)}"
+            )
+    return "on_track", "Every piece of work ends by its date"
+
+
 # --------------------------------------------------------------------------- reading
 
 
@@ -97,7 +167,12 @@ async def _out(
     prd: Document | None,
     w: drafts.Who,
     names: dict[uuid.UUID, str] | None = None,
+    ends: dict[uuid.UUID, tuple[str, date | None]] | None = None,
+    today: date | None = None,
+    look: dict[uuid.UUID, str] | None = None,
 ) -> SimpleGoalMilestone:
+    if look is None:
+        look = await _lookups(db, [row])
     pending = None
     if row.pending_change:
         pc = row.pending_change
@@ -125,13 +200,43 @@ async def _out(
     else:
         can_change = drafts.can_edit(principal, row.roadmap_id, w)
     can_propose = prd is None and not can_change and _may_propose(principal)
+    set_by = look.get(row.status_set_by) if row.status_set and row.status_set_by else None
+    numbers = {k: _f(getattr(row, k)) for k in _NUMBERS}
+    st, why = status_of(
+        row.kind, row.target_date, row.status_set, row.status_reason, set_by,
+        numbers["baseline"], numbers["target"], numbers["current"],
+        [(ends or {})[i] for i in row.item_ids or [] if i in (ends or {})],
+        today or company_time.today(),
+    )  # fmt: skip
     return SimpleGoalMilestone(
         id=row.id, roadmap_id=row.roadmap_id, code=row.code or "", name=row.name,
         date=row.target_date, goal_id=row.goal_id, item_ids=list(row.item_ids or []),
         counts_when=row.counts_when, progress=row.progress,  # type: ignore[arg-type]
         prd=SimpleDocRef(id=prd.id, slug=prd.slug, title=prd.title) if prd is not None else None,
         prd_owner=prd_owner, pending=pending, can_change=can_change, can_propose=can_propose,
+        kind=row.kind, done_when_line=row.done_when_line or "", status=st, status_reason=why,
+        status_set=row.status_set, status_set_by_name=set_by, measure=row.measure, **numbers,
+        sub_goal_of_id=row.sub_goal_of_id, home_track_id=row.home_track_id,
+        home_track_name=look.get(row.home_track_id) if row.home_track_id else None,
+        from_track_id=row.from_track_id,
+        to_track_id=row.to_track_id,
+        from_track_name=look.get(row.from_track_id) if row.from_track_id else None,
+        to_track_name=look.get(row.to_track_id) if row.to_track_id else None,
     )  # fmt: skip
+
+
+async def _lookups(db: AsyncSession, rows: list[TrackMilestone]) -> dict[uuid.UUID, str]:
+    """The names a milestone shows by id: who set its status, and a hand-off's tracks."""
+    users = {r.status_set_by for r in rows if r.status_set_by}
+    tracks = {t for r in rows for t in (r.home_track_id, r.from_track_id, r.to_track_id) if t}
+    out: dict[uuid.UUID, str] = {}
+    if users:
+        for u in await db.scalars(select(User).where(User.id.in_(users))):
+            out[u.id] = display_name(u.email, u.name)
+    if tracks:
+        for t in await db.scalars(select(ProductTrack).where(ProductTrack.id.in_(tracks))):
+            out[t.id] = t.title
+    return out
 
 
 async def list_for_roadmaps(
@@ -141,10 +246,13 @@ async def list_for_roadmaps(
     entries: list[Any],
     views: dict[uuid.UUID, Any],
     kd_prds: dict[uuid.UUID, list[Document]],
+    ends: dict[uuid.UUID, tuple[str, date | None]] | None = None,
+    today: date | None = None,
 ) -> list[SimpleGoalMilestone]:
     """Each shown roadmap's goal milestones: its own, and each dated-or-not milestone of
     the PRDs its items come from (materialised as rows on first read). One read for all the
-    roadmaps' rows, so the roadmap read stays bulk."""
+    roadmaps' rows, so the roadmap read stays bulk. ``ends``: each item's title and end
+    date, for each milestone's status (milestone-kinds)."""
     if not docs:
         return []
     rows = await _rows(db, list(docs))
@@ -215,6 +323,7 @@ async def list_for_roadmaps(
         u.id: display_name(u.email, u.name)
         for u in (await db.scalars(select(User).where(User.id.in_(first_owners))))
     } if first_owners else {}  # fmt: skip
+    look = await _lookups(db, shown)
     out = [
         await _out(
             db,
@@ -224,9 +333,18 @@ async def list_for_roadmaps(
             prds_by_id.get(r.origin_prd_id),  # type: ignore[arg-type]
             w,
             names,
+            ends,
+            today,
+            look,
         )
         for r in shown
     ]
+    subs: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for m in out:
+        if m.sub_goal_of_id is not None:
+            subs.setdefault(m.sub_goal_of_id, []).append(m.id)
+    for m in out:
+        m.sub_goal_ids = subs.get(m.id, [])
     # old-milestones: each one brought over from an older roadmap names it (one read).
     came = (
         await db.execute(
@@ -296,18 +414,94 @@ async def create(
         raise _error(status.HTTP_403_FORBIDDEN,
                      "Only an owner or the roadmap's decider (with none, its owner) "
                      "changes its milestones")  # fmt: skip
+    await _check_refs(db, body.model_dump(include=body.model_fields_set))
     code = await _next_code(db, body.roadmap_id, body.goal_id)
     row = TrackMilestone(
         track_id=None, roadmap_id=body.roadmap_id, goal_id=body.goal_id, code=code,
         name=body.name, target_date=body.date, item_ids=body.item_ids,
         counts_when=body.counts_when, created_by=_me(principal),
     )  # fmt: skip
+    _write_kind(row, body, set(body.model_fields_set) | {"kind", "done_when_line"}, principal)
     db.add(row)
     await db.flush()
     await audit.record(db, principal, "goal_milestone.create", "track_milestone", row.id,
                        data={"roadmap_id": str(body.roadmap_id), "code": code})  # fmt: skip
     await db.commit()
     return await _out(db, principal, row, roadmap, None, w)
+
+
+def _write_kind(row: TrackMilestone, body: Any, fields: set[str], principal: Any) -> None:
+    """milestone-kinds: the kind fields sent (``kind`` and ``done_when_line`` are never
+    null); setting the status names who set it, clearing it clears who and why."""
+    for k in KIND_FIELDS:
+        if k not in fields:
+            continue
+        v = getattr(body, k)
+        if k in ("kind", "done_when_line") and v is None:
+            continue
+        setattr(row, k, Decimal(str(v)) if k in _NUMBERS and v is not None else v)
+    if "status_set" in fields:
+        row.status_set_by = _me(principal) if body.status_set else None
+        if body.status_set is None and "status_reason" not in fields:
+            row.status_reason = None
+
+
+def _uid(v: Any) -> uuid.UUID | None:
+    return v if isinstance(v, uuid.UUID) or v is None else uuid.UUID(str(v))
+
+
+async def _check_refs(
+    db: AsyncSession,
+    given: dict[str, Any],
+    row: TrackMilestone | None = None,
+    changed: set[str] | None = None,
+) -> None:
+    """A sub-goal's goal milestone, and the home, from and to tracks, must exist (422, not a
+    500): a sub-goal builds toward another milestone of kind goal (never itself), a hand-off
+    goes between two tracks. ``given``: the fields sent (the rest are ``row``'s); ``changed``
+    (default: those sent): the refs looked up, so one gone meanwhile does not block an edit
+    of something else."""
+    keys = ("kind", *_UUID_FIELDS)
+    now = {k: (given[k] if k in given else getattr(row, k, None)) for k in keys}
+    ids = {k: _uid(now[k]) for k in _UUID_FIELDS}
+    looked = set(given) if changed is None else changed
+    parent = ids["sub_goal_of_id"]
+    if "sub_goal_of_id" in looked and parent is not None:
+        if row is not None and parent == row.id:
+            raise _error(422, "sub_goal_of_id: a sub-goal builds toward another milestone")
+        to = await db.get(TrackMilestone, parent)
+        if to is None or to.roadmap_id is None or to.deleted_at is not None:
+            raise _error(422, "sub_goal_of_id: no such milestone")
+        if (to.kind or "delivery") != "goal":
+            raise _error(422, "sub_goal_of_id: a sub-goal builds toward a goal milestone")
+        roadmap_id = _uid(given.get("roadmap_id")) or getattr(row, "roadmap_id", None)
+        if roadmap_id is not None and to.roadmap_id != roadmap_id:
+            raise _error(422, "sub_goal_of_id: a sub-goal builds toward a goal milestone "
+                              "on the same roadmap")  # fmt: skip
+    # A goal milestone sub-goals build toward stays a goal until none does.
+    if row is not None and "kind" in given and (row.kind or "delivery") == "goal":
+        if now["kind"] is not None and now["kind"] != "goal":
+            subs = list(await db.scalars(
+                select(TrackMilestone.name).where(
+                    TrackMilestone.sub_goal_of_id == row.id, TrackMilestone.deleted_at.is_(None)
+                ).order_by(TrackMilestone.name)
+            ))  # fmt: skip
+            if subs:
+                raise _error(422, "kind: sub-goals build toward this goal ("
+                                  f"{', '.join(subs)}); point them elsewhere first")  # fmt: skip
+    history: set[uuid.UUID] | None = None
+    for k in ("home_track_id", "from_track_id", "to_track_id"):
+        if k in looked and ids[k] is not None:
+            t = await db.get(ProductTrack, ids[k])
+            if t is None or getattr(t, "deleted_at", None) is not None:
+                raise _error(422, f"{k}: no such track")
+            if history is None:
+                history = await company.history_track_ids(db)
+            if t.id in history:
+                raise _error(422, f"{k}: that track is a replaced PRD's history")
+    hand = ids["from_track_id"], ids["to_track_id"]
+    if hand[0] is not None and hand[0] == hand[1] and looked & {"from_track_id", "to_track_id"}:
+        raise _error(422, "to_track_id: a hand-off goes to another track")
 
 
 async def _get_or_404(db: AsyncSession, milestone_id: uuid.UUID) -> TrackMilestone:
@@ -333,6 +527,7 @@ async def patch(
         raise _error(status.HTTP_403_FORBIDDEN,
                      "Only an owner or the roadmap's decider (with none, its owner) "
                      "changes its milestones")  # fmt: skip
+    await _check_refs(db, body.model_dump(include=fields), row)
     if "name" in fields and body.name is not None:
         row.name = body.name
     if "date" in fields:
@@ -343,6 +538,7 @@ async def patch(
         row.item_ids = body.item_ids
     if "counts_when" in fields and body.counts_when is not None:
         row.counts_when = body.counts_when
+    _write_kind(row, body, fields, principal)
     await db.flush()
     await audit.record(db, principal, "goal_milestone.edit", "track_milestone", row.id, data={})
     await db.commit()
@@ -357,7 +553,9 @@ async def _propose_prd_change(
     body: SimpleGoalMilestonePatch,
     fields: set[str],
 ) -> SimpleGoalMilestone:
-    if fields & {"name", "goal_id", "item_ids"} or not (fields & {"date", "counts_when"}):
+    if fields & {"name", "goal_id", "item_ids", *KIND_FIELDS} or not (
+        fields & {"date", "counts_when"}
+    ):
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY,
                      "A PRD's milestone: only date and counts_when may be proposed "
                      "(name, goal and items are the roadmap's own)")  # fmt: skip
@@ -458,7 +656,9 @@ async def put_back(db: AsyncSession, row: TrackMilestone) -> None:
 
 # --------------------------------------------------------------------------- the change engine
 
-FIELDS = ("name", "date", "goal_id", "item_ids", "counts_when")
+FIELDS = ("name", "date", "goal_id", "item_ids", "counts_when", *KIND_FIELDS)
+# Fields a proposal may set to null (the rest keep their value when sent null).
+_NULLABLE = {"goal_id", "status_set", "status_reason", "measure", *_NUMBERS, *_UUID_FIELDS}
 
 
 def _value(row: TrackMilestone) -> dict[str, Any]:
@@ -469,7 +669,26 @@ def _value(row: TrackMilestone) -> dict[str, Any]:
         "goal_id": str(row.goal_id) if row.goal_id else None,
         "item_ids": [str(i) for i in row.item_ids or []],
         "counts_when": row.counts_when or "",
+        "kind": row.kind or "delivery",
+        "done_when_line": row.done_when_line or "",
+        "status_set": row.status_set,
+        "status_reason": row.status_reason,
+        "measure": row.measure,
+        **{k: _f(getattr(row, k)) for k in _NUMBERS},
+        **{k: str(getattr(row, k)) if getattr(row, k) else None for k in _UUID_FIELDS},
     }
+
+
+def _moved(current: dict[str, Any], after: dict[str, Any]) -> set[str]:
+    """The refs a proposal's ``after.milestone`` changes from the milestone as it is."""
+    return {k for k in ("kind", *_UUID_FIELDS) if k in after and after[k] != current.get(k)}
+
+
+def _same(row: TrackMilestone, seen: dict[str, Any]) -> bool:
+    """The milestone is as ``seen`` names it (only the fields named: a proposal made before
+    milestone-kinds names none of the kind fields)."""
+    now = _value(row)
+    return seen == {k: now[k] for k in seen}
 
 
 def _checked(given: Any) -> dict[str, Any]:
@@ -518,12 +737,14 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
     after = None
     if wanted is not None:
         given = _checked(wanted)
-        after = {**current, **{k: v for k, v in given.items() if v is not None or k == "goal_id"}}
+        after = {**current, **{k: v for k, v in given.items() if v is not None or k in _NULLABLE}}
         after = {**after, "date": str(after["date"]) if after["date"] else None,
                  "goal_id": str(after["goal_id"]) if after["goal_id"] else None,
-                 "item_ids": [str(i) for i in after["item_ids"]]}  # fmt: skip
+                 "item_ids": [str(i) for i in after["item_ids"]],
+                 **{k: str(after[k]) if after[k] else None for k in _UUID_FIELDS}}  # fmt: skip
         if after == current:
             raise _error(422, "after.milestone: nothing changes")
+        await _check_refs(db, after, row, _moved(current, after))
     c = SimpleChange(
         document_id=row.roadmap_id, op="edit_goal_milestone",
         target={"milestone_id": str(row.id), "roadmap_id": str(row.roadmap_id),
@@ -567,7 +788,8 @@ async def _decide_own(db: AsyncSession, principal: Any, c: SimpleChange, action:
                            with_for_update=True)  # fmt: skip
         if row is None or row.deleted_at is not None:
             raise ChangeError(404, "The milestone is gone")
-        if _value(row) != c.before.get("milestone"):
+        seen = c.before.get("milestone")
+        if not isinstance(seen, dict) or not _same(row, seen):
             raise ChangeError(409, {"message": "outdated: the milestone changed since the proposal",
                                     "current": {"milestone": _value(row)}, "changed_by": None,
                                     "changed_at": None})  # fmt: skip
@@ -575,11 +797,30 @@ async def _decide_own(db: AsyncSession, principal: Any, c: SimpleChange, action:
         if after is None:
             row.deleted_at = now
         else:
+            # What it names may have gone since it was proposed: refused (422), not a 500.
+            try:
+                await _check_refs(db, after, row, _moved(_value(row), after))
+            except HTTPException as e:
+                raise ChangeError(e.status_code, e.detail) from None
             row.name = after["name"]
             row.target_date = date.fromisoformat(after["date"]) if after["date"] else None
             await _regoal(db, row, uuid.UUID(after["goal_id"]) if after["goal_id"] else None)
             row.item_ids = [uuid.UUID(i) for i in after["item_ids"]]
             row.counts_when = after["counts_when"]
+            was = row.status_set
+            for k in KIND_FIELDS:
+                if k not in after:
+                    continue
+                v = after[k]
+                if k in _UUID_FIELDS:
+                    v = uuid.UUID(v) if v else None
+                elif k in _NUMBERS:
+                    v = Decimal(str(v)) if v is not None else None
+                if k in ("kind", "done_when_line") and v is None:
+                    continue
+                setattr(row, k, v)
+            if row.status_set != was:
+                row.status_set_by = c.by if row.status_set else None
     c.status = "accepted" if action == "accept" else "declined"
     c.decided_by, c.decided_at, c.decision_reason = me, now, reason
     await db.flush()

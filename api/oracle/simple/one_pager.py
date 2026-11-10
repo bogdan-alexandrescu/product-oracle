@@ -46,6 +46,7 @@ import hashlib
 import json
 import re
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from html import escape
@@ -401,9 +402,56 @@ def _id(item: Any) -> str | None:
     return str(item.id) if getattr(item, "id", None) else None
 
 
-def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
+def roadmap_codes_of(read: Any, prd_id: uuid.UUID) -> Callable[..., str | None]:
+    """roadmap-milestone-codes: an item's milestone's roadmap-wide code, as the Roadmap read
+    (``read``, service.build) gives it: a picked roadmap milestone's or a track milestone's by
+    its id, else this PRD's milestone of that written code (or name) on the roadmap; None when
+    it is no roadmap milestone. A PRD milestone on two roadmaps reads its first code."""
+    by_id = {m.id: m.roadmap_code for m in [*read.goal_milestones, *read.milestones]}
+    own: dict[str, str] = {}
+    for m in read.goal_milestones:
+        if m.prd is None or m.prd.id != prd_id or not m.roadmap_code:
+            continue
+        for k in (m.code.strip().upper(), " ".join(m.name.split()).casefold()):
+            if k and (k not in own or int(m.roadmap_code[1:]) < int(own[k][1:])):
+                own[k] = m.roadmap_code
+
+    by_name: dict[str, str] = {}
+    # A roadmap milestone (a track's, or a roadmap's own; a goal's target date holds no item).
+    named = [
+        *read.milestones,
+        *(m for m in read.goal_milestones if not getattr(m, "goal_target", False)),
+    ]
+    for m in named:
+        k = " ".join((m.name or "").split()).casefold()
+        code = m.roadmap_code
+        if k and code and (k not in by_name or int(code[1:]) < int(by_name[k][1:])):
+            by_name[k] = code
+
+    def of(text: str | None, *ids: uuid.UUID | None) -> str | None:
+        for i in ids:
+            if i is not None and by_id.get(i):
+                return by_id[i]
+        if not text:
+            return None
+        key, label = plan_strip.milestone_of(text)
+        name = label.split(" · ", 1)[1] if " · " in label else ""
+        return (
+            own.get(key)
+            or own.get(" ".join(name.split()).casefold())
+            # A track milestone the text names ("Beta launch"), as Home and the Roadmap read it.
+            or by_name.get(" ".join((name or label).split()).casefold())
+        )
+
+    return of
+
+
+def plan_items(
+    items: list[Any], code_of: Callable[..., str | None] | None = None
+) -> list[plan_strip.PlanItem]:
     """The plan strip's reading of a PRD's roadmap items (neither cut nor merged), each with
-    the milestone record that links it, when any."""
+    the milestone record that links it, when any; ``code_of`` (roadmap_codes_of): each with
+    its milestone's roadmap code."""
     out = []
     for i in items:
         # panel-menu: a merged feature (any, not only a draft) is off the plan as a cut one.
@@ -420,6 +468,7 @@ def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
                     sl.milestone_end,
                     milestone_start=sl.milestone_start,
                     id=_id(i),
+                    roadmap_code=code_of(sl.milestone) if code_of else None,
                 )
             )
         if getattr(i, "slices", None):
@@ -435,6 +484,13 @@ def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
                 i.milestone.record_name if i.milestone else None,
                 i.milestone.start_date if i.milestone else None,
                 _id(i),
+                code_of(
+                    i.milestone.record_name or i.milestone.name,
+                    i.milestone.id,
+                    i.milestone.record_id,
+                )
+                if code_of and i.milestone
+                else None,
             )
         )
     return out
@@ -1739,7 +1795,10 @@ async def read(
         for i in mine
         if i.status not in ("cut", "merged")
     ]
-    plan = plan_strip.strip(plan_items(mine), slice_.today)
+    # roadmap-milestone-codes: each row reads its milestone's roadmap code, as the Roadmap does.
+    plan = plan_strip.strip(
+        plan_items(mine, roadmap_codes_of(slice_, document.id)), slice_.today, coded=True
+    )
     # A dated plan's span is the one its timeline draws (its milestones, or the dates the
     # lead accepted); else the items' dated milestones.
     if view is not None and view.dated and view.span:

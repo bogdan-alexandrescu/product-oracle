@@ -4,7 +4,10 @@
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
 import { MsLayer, msCode, useMsBand, useMsCtl, type MsLane, type MsRow } from "./_milestones";
+import { kindName, MK_STATUS, MkIcon, MkLegend, MkStatusMark } from "./_mk";
+import { TrackHead } from "./_trackbands";
 import {
+  Fragment,
   memo,
   useContext,
   useEffect,
@@ -36,7 +39,6 @@ import {
   mergedName,
   ms,
   partsTree,
-  planGoal,
   quarterValue,
   quarters,
   shortDay,
@@ -438,6 +440,7 @@ export function ConflictPanel({
 
 /** A desktop's chart: one row per item, days to scale, zoomed to three months from just before today. */
 function DayChart(props: TimelineProps) {
+  const msCtl = useMsCtl();
   const { data, phone, openKey, onOpen } = props;
   // Join whenever names match (the owner, Nov 9): a track milestone reads the joined milestone's longer name.
   const joined = joinedNames(data.goal_milestones ?? [], data.milestones ?? []);
@@ -540,14 +543,25 @@ function DayChart(props: TimelineProps) {
   // left edge, till all of it would be gone; then the label goes too. Re-review (Nov 5): no name
   // is ever lost. A label that would meet the one before folds into that one's "+N" chip, right
   // after its label; a label ends short of the next (its words cut with "…", whole in its tip).
+  // tb-mk: the Milestones band's diamonds (and a same-day count on a corner) sit on this row too:
+  // a label never lies under one; it steps past any it would cover, and ends short of the next.
+  const gems = (msCtl?.list ?? [])
+    .flatMap((m) => (m.date && m.date >= t0 && m.date <= t1 ? [x(m.date)] : []))
+    .sort((a, b) => a - b);
+  const clear = (left: number) => {
+    let l = left;
+    for (const g of gems) if (g + 15 > l + 4 && g - 12 < l + 4 + 56) l = g + 12;
+    return l;
+  };
   const marks = (data.milestones ?? [])
     .filter((m) => m.date && m.status !== "dropped" && m.date >= t0 && m.date <= t1)
     .sort((a, b) => (a.date as string).localeCompare(b.date as string))
     .map((m) => {
       const at = x(m.date as string);
       const words = `◆ ${joinedWords(m, joined)} · ${shortDay(m.date as string)}`;
-      const left = fit ? at : Math.max(at, sl);
-      return { m, at, words, left, gone: !fit && at + 26 + words.length * 7 < sl };
+      const left = clear(fit ? at : Math.max(at, sl));
+      const next = gems.find((g) => g - 12 >= left + 4);
+      return { m, at, words, left, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
     });
   const msGroups: { head: (typeof marks)[number]; more: (typeof marks)[number][]; room: number }[] = [];
   for (const k of marks) {
@@ -556,8 +570,8 @@ function DayChart(props: TimelineProps) {
     const room = g ? k.left - 6 - g.head.left - (g.more.length ? MS_CHIP_W + 2 : 0) : Infinity;
     if (g && room < 56) g.more.push(k);
     else {
-      if (g) g.room = room;
-      msGroups.push({ head: k, more: [], room: Infinity });
+      if (g) g.room = Math.min(room, g.head.gems);
+      msGroups.push({ head: k, more: [], room: k.gems });
     }
   }
   const msById = new Map(marks.map((k) => [k.m.id, k]));
@@ -886,6 +900,11 @@ function DayChart(props: TimelineProps) {
             <div className="flex" style={{ height: msBandH }}>
               <div className="sticky left-0 z-20 flex flex-none items-center border-r border-b border-line bg-surface px-3 text-xs font-semibold text-text2" style={{ width: labelW }}>
                 Milestones
+                <span className="ml-1.5 font-normal">
+                  <InfoTip label="the milestone marks" align="start" side="bottom" testId="ms-legend-tip">
+                    <MkLegend />
+                  </InfoTip>
+                </span>
               </div>
             </div>
           )}
@@ -1101,15 +1120,29 @@ function DayChart(props: TimelineProps) {
                 <div
                   key={`l-${r.key}`}
                   data-testid="timeline-lane"
-                  className="pointer-events-none relative z-[11] flex h-8 items-end border-b border-line bg-surface2/70"
+                  className="pointer-events-none relative z-[25] flex h-8 items-end border-b border-line bg-surface2/70 focus-within:z-[30] hover:z-[30]"
                 >
+                  {data.group === "track" && r.key !== "below" && r.key !== "none" ? (
+                    // tb-mk: a quick add dropped on a track band's header lands on that track.
+                    <div
+                      data-add-where={props.canChange && (data.tracks ?? []).some((t) => t.id === r.key) ? whereAttr("track", r.key) : undefined}
+                      data-add-label={r.title}
+                      className="pointer-events-auto sticky left-0 px-3 pb-1 text-sm whitespace-nowrap"
+                    >
+                      <TrackHead data={data} laneKey={r.key} title={r.title} />
+                    </div>
+                  ) : (
                   <div className="sticky left-0 px-3 pb-1 text-sm font-semibold whitespace-nowrap">
                     {data.group === "goal" && r.key !== "none" && r.key !== "below" && <GoalNum n={numbers.get(r.key) ?? numbers.get(r.title)} />}
                     {r.title}{" "}
-                    <span className="font-normal text-text2">
-                      · {r.count} {r.count === 1 ? "item" : "items"}
-                    </span>
+                    {/* tb-mk: "No track" reads with no count, as the track bands' headers. */}
+                    {!(data.group === "track" && r.key === "none") && (
+                      <span className="font-normal text-text2">
+                        · {r.count} {r.count === 1 ? "item" : "items"}
+                      </span>
+                    )}
                   </div>
+                  )}
                 </div>
               );
             const i = r.item;
@@ -1418,10 +1451,14 @@ function QuarterMilestones({ from, to }: { from: string; to: string }) {
   return (
     <ul data-testid="ms-quarter" className="border-b border-line/60 bg-surface2/60 px-3 py-1.5 text-xs">
       {list.map((m) => (
-        <li key={m.id} className="flex items-center gap-1.5 py-0.5">
-          <i aria-hidden className="h-2 w-2 flex-none rotate-45 rounded-[1px]" style={{ background: msEdge(msCode(m)) }} />
+        // tb-mk: its kind's icon first and its status mark after its name, as the band's label; the reason in its tap text.
+        <li key={m.id} data-testid="ms-quarter-row" title={`${kindName(m.kind)} · ${MK_STATUS[m.status ?? "on_track"]}${m.status_reason ? `: ${m.status_reason}` : ""}`} className="flex items-center gap-1.5 py-0.5">
+          <MkIcon kind={m.kind} size={11} color={msEdge(msCode(m))} />
           <span className="min-w-0 truncate font-semibold" style={{ color: msInk(msCode(m)) }}>
             {msCode(m)} {ms?.joined.get(msCode(m))?.name ?? m.name}
+          </span>
+          <span data-testid="ms-status" data-status={m.status ?? "on_track"} className="flex-none">
+            <MkStatusMark status={m.status ?? "on_track"} size={11} />
           </span>
           <span className="ml-auto flex-none text-text2">{shortDay(m.date!)}</span>
         </li>
@@ -1432,6 +1469,18 @@ function QuarterMilestones({ from, to }: { from: string; to: string }) {
 
 /** A phone's Timeline: a list by quarter; an item sits in the quarter it starts in (or in
  * this one, when it started before and runs on). */
+/** tb-mk: an item's band on the phone's list: its track's place, No track, then Below the line. */
+function bandRank(data: Roadmap, i: Item): number {
+  if (closedItem(i)) return 1e6;
+  const n = data.groups.findIndex((g) => g.item_ids.includes(i.id));
+  return n < 0 ? 1e5 : n;
+}
+function bandOf(data: Roadmap, i: Item): { key: string; title: string } | null {
+  if (closedItem(i)) return { key: "below", title: "Below the line" };
+  const g = data.groups.find((x) => x.item_ids.includes(i.id));
+  return g ? { key: g.key, title: g.title } : null;
+}
+
 function QuarterList(props: TimelineProps) {
   const { data, openKey, onOpen } = props;
   // Join whenever names match (the owner, Nov 9): a track milestone reads the joined milestone's longer name.
@@ -1452,7 +1501,9 @@ function QuarterList(props: TimelineProps) {
               (q.start <= i.start.date && i.start.date <= q.end) ||
               (q === tq && i.start.date < q.start && i.end.date >= q.start),
           )
-          .sort((a, b) => (a.start.date < b.start.date ? -1 : 1));
+          .sort((a, b) => (a.start.date < b.start.date ? -1 : 1))
+          // tb-mk: by band (the tracks' order, No track, then Below the line), by start in each.
+          .sort((a, b) => bandRank(data, a) - bandRank(data, b));
         if (!inQ.length) return null;
         // feature-parts: the quarter's parts under their parents, as a tree.
         const tree = partsTree([inQ.map((i) => i.id)], byId)[0];
@@ -1493,12 +1544,17 @@ function QuarterList(props: TimelineProps) {
               ))}
             <QuarterMilestones from={q.start} to={q.end} />
             <ul className="divide-y divide-line/60">
-              {items.map((i) => {
+              {items.map((i, n) => {
                 const lk = lookOf(i);
                 const sel = openKey === i.key;
-                // ah2-roadmap-specs review: the goal its Gantt lane names (its PRD's, else its own).
-                const goal = planGoal(i) ?? i.goal?.title;
+                const band = n === 0 || bandRank(data, items[n - 1]) !== bandRank(data, i) ? bandOf(data, i) : null;
                 return (
+                  <Fragment key={i.id}>
+                  {band && (
+                    <li data-testid="timeline-band" className="bg-surface2/70 px-3 py-1 text-sm">
+                      {band.key === "below" || band.key === "none" ? <b className={band.key === "below" ? "text-text2" : ""}>{band.title}</b> : <TrackHead data={data} laneKey={band.key} title={band.title} />}
+                    </li>
+                  )}
                   <li
                     key={i.id}
                     data-testid="timeline-row"
@@ -1539,9 +1595,9 @@ function QuarterList(props: TimelineProps) {
                             </span>
                           ) : null}
                         </span>
-                        <span className="block text-xs text-text2">
+                        <span data-testid="timeline-row-dates" className="block text-xs text-text2">
+                          {/* tb-mk: the dates only; the band's header names the track's goal. */}
                           {spanWords(i.start.date, i.end.date, data.today)}
-                          {goal ? ` · ${goal}` : ""}
                         </span>
                         {brokenFlag(i) && (
                           <span className="block text-xs text-crit">
@@ -1551,6 +1607,7 @@ function QuarterList(props: TimelineProps) {
                       </span>
                     </button>
                   </li>
+                  </Fragment>
                 );
               })}
             </ul>

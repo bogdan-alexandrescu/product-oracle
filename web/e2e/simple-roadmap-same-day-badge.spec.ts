@@ -20,6 +20,8 @@ import { expect, test, type Locator, type Page } from "./test";
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const card = (page: Page) => page.getByTestId("ms-card");
+// The counts of the days this spec fills (the goals' own target dates may share a day too).
+const ours = (page: Page) => page.getByTestId("ms-same-day").filter({ hasText: /on Nov 2[01]$/ });
 
 async function twoOnNov20(page: Page) {
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-prd-milestones"] as const);
@@ -49,9 +51,11 @@ async function addOn(page: Page, name: string, date: string) {
   const at = { x: seen.left + 150, y: box.y + box.height / 2 };
   await page.mouse.move(at.x, at.y);
   await page.mouse.click(at.x, at.y);
+  // tb-mk: + Milestone asks for the kind first (Delivery, what a new one was before kinds).
+  await page.getByTestId("ms-kind-picker").getByRole("option", { name: "Delivery" }).click();
   await card(page).getByLabel("Name").fill(name);
   await card(page).getByLabel("Date").fill(date);
-  await card(page).getByLabel("Goal").selectOption({ index: 1 });
+  await card(page).getByLabel("Builds toward", { exact: true }).selectOption({ index: 1 });
   await card(page).getByTestId("ms-save").click();
   await expect(card(page)).toBeHidden();
 }
@@ -70,7 +74,7 @@ for (const [zoom, name] of [
   test(`${name}: the same-day count never covers the next diamond, which opens on a click`, async ({ page }) => {
     await twoOnNov20(page);
     await page.getByTestId(`zoom-${zoom}`).click();
-    const badge = page.getByTestId("ms-same-day");
+    const badge = ours(page);
     const next = page.locator('[data-testid="ms-prd-diamond"][title*=" Rules in beta"]');
     const b = await boxOf(badge);
     const d = await boxOf(next);
@@ -86,8 +90,12 @@ for (const [zoom, name] of [
     expect(b.width).toBeLessThanOrEqual(20);
     await expect(badge).toHaveAttribute("title", /^2 milestones on Nov 20: .*M\d+ First alert within a day.*Setup checks for new teams|^2 milestones on Nov 20: .*Setup checks for new teams.*M\d+ First alert within a day/);
     // A click on the count lists the day's milestones; each opens its card.
+    // Its words: the count and its day to a screen reader, the day's list named by its day.
+    await expect(badge).toHaveAccessibleName("2 on Nov 20");
     await badge.click();
+    await expect(page.getByTestId("ms-same-day-list")).toHaveAccessibleName("Milestones on Nov 20");
     const entries = page.getByTestId("ms-same-day-list").getByTestId("ms-same-day-entry");
+    await expect(entries.filter({ hasText: "Setup checks for new teams" })).toHaveText(/^M\d+ Setup checks for new teams$/);
     await expect(entries).toHaveCount(2);
     await entries.filter({ hasText: "Setup checks for new teams" }).click();
     await expect(card(page).getByLabel("Name")).toHaveValue("Setup checks for new teams");
@@ -104,12 +112,12 @@ async function twoPairs(page: Page) {
   await twoOnNov20(page);
   await addOn(page, "Trial teams onboarded", "2026-11-21");
   await addOn(page, "Help pages written", "2026-11-21");
-  await expect(page.getByTestId("ms-same-day")).toHaveCount(2);
+  await expect(ours(page)).toHaveCount(2);
 }
 
 /** Every same-day badge is clear of the others, of the diamonds, of each month's and week's name and of the Today pill. */
 async function badgesClear(page: Page, names: Locator) {
-  const badges = page.getByTestId("ms-same-day");
+  const badges = ours(page);
   await expect(badges).toHaveCount(2);
   const b = [await boxOf(badges.nth(0)), await boxOf(badges.nth(1))];
   expect(overlaps(b[0], b[1])).toBe(false);
@@ -176,4 +184,46 @@ test("phone: on the Gantt, same-day badges on neighbouring days keep apart, clea
   await page.getByTestId("format-gantt").click();
   await expect(page.getByTestId("today-pill")).toBeVisible();
   await badgesClear(page, page.locator('[data-testid="axis-tick"], [data-testid="axis-month"], [data-testid="axis-year"]'));
+});
+
+/*
+ * Card same-day-list-closes: protects = the same-day list closes on Escape (focus back on its
+ * count) and on a click outside it, and a keyboard opens it from the count; fails_when = the
+ * list stays open after Escape or an outside click.
+ */
+test("the same-day list opens from the keyboard and closes on Escape and on a click outside it", async ({ page }) => {
+  await twoOnNov20(page);
+  const count = ours(page).first();
+  const list = page.getByTestId("ms-same-day-list");
+  await count.focus();
+  await page.keyboard.press("Enter");
+  await expect(list).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(list.getByTestId("ms-same-day-entry").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(list).toBeHidden();
+  await expect(count).toBeFocused();
+  await count.click();
+  await expect(list).toBeVisible();
+  await page.getByTestId("simple-roadmap").getByRole("heading").first().click({ force: true });
+  await expect(list).toBeHidden();
+});
+
+/*
+ * Card same-day-tap-target: protects = on a phone the 12 px same-day count takes a tap 24 px
+ * across (an invisible pad round it); fails_when = a tap 9 px above its middle misses it.
+ */
+test("phone: a tap just beside the same-day count still opens its list", async ({ page }) => {
+  await twoOnNov20(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByTestId("format-gantt").click();
+  const count = ours(page).first();
+  await count.evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top - 300));
+  const b = await boxOf(count);
+  expect(b.height).toBeLessThan(16);
+  const at = { x: b.x + b.width / 2, y: b.y + b.height / 2 - 9 };
+  const hit = await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('[data-testid="ms-same-day"]'), at);
+  expect(hit).toBe(true);
+  await page.mouse.click(at.x, at.y);
+  await expect(page.getByTestId("ms-same-day-list")).toBeVisible();
 });

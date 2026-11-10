@@ -46,6 +46,9 @@ async function menu(page: Page, goal: string) {
 async function roadmapFirst(page: Page, goal: string) {
   await page.goto("/simple/roadmap");
   await page.getByRole("button", { name: "Gantt", exact: true }).click();
+  // tb-mk: the Gantt starts grouped by track; its Group by Goal draws the goal groups.
+  await page.getByTestId("group-goal").click();
+  await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("chart-group").first()).toContainText(goal);
 }
 

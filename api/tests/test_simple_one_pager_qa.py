@@ -174,7 +174,8 @@ async def test_timeline_reads_the_approved_versions_plan(client):
         await s.commit()
     view = await get(client, ctx, "viewer")
     assert [i["title"] for i in view["timeline"]] == ["Checklist polish"]
-    assert [r["name"] for r in view["plan"]["rows"]] == ["M1 · Setup basics"]
+    # No roadmap item names the PRD, so its M1 is no roadmap milestone: its name, no code.
+    assert [r["name"] for r in view["plan"]["rows"]] == ["Setup basics"]
 
 
 NOT_YET = "Not in the PRD yet"

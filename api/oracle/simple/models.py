@@ -32,6 +32,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
+from oracle.roadmap.models import MilestoneKindFields, kind_checks
 
 SUGGESTION_STATUSES = ("open", "accepted", "edited", "dismissed")
 SESSION_KINDS = ("editing", "meeting")
@@ -356,13 +357,14 @@ class SimpleOnePager(TenantScoped, Base):
     held: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
 
 
-class RoadmapKeyDate(TenantScoped, Base):
+class RoadmapKeyDate(MilestoneKindFields, TenantScoped, Base):
     """Simple roadmap-plus: one of a roadmap's published key dates (a conference, a product
     launch, a board meeting): a name, a day and an optional note. Owners' and the decider's
     changes wait in the roadmap's working draft (``overlay["key_dates"]``) and are written
     here when the draft is approved (oracle.simple.key_dates.publish)."""
 
     __tablename__ = "roadmap_key_dates"
+    __table_args__ = kind_checks()
 
     roadmap_document_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True

@@ -63,12 +63,12 @@ for (const [where, size] of [
 
     test(`qa4-1 / 10: Now / Next / Later groups by the same goal lanes as the Timeline; a card per goal (${where})`, async ({ page }) => {
       await open(page, { scenario: "simple-plan-lanes", url: "/simple/roadmap?roadmap=onboarding-roadmap" });
-      // A desktop's Timeline draws a lane per goal; a phone's Timeline is a list by quarter, so
-      // a phone reads the goal lanes on the Gantt.
-      if (isPhone(page)) await page.getByTestId("format-gantt").click();
-      const laneTitles = isPhone(page)
-        ? await page.getByTestId("chart-group").evaluateAll((gs) => gs.map((g) => g.querySelector("span[title]")?.getAttribute("title") ?? ""))
-        : await page.getByTestId("timeline-lane").evaluateAll((ls) => ls.map((l) => (l.textContent ?? "").replace(/\s*· \d+ items?$/, "").trim()));
+      // tb-mk: the Timeline's bands are tracks, so the goal lanes are read on the Gantt's Group by Goal.
+      await page.getByTestId("format-gantt").click();
+      await page.getByTestId("group-goal").click();
+      await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByTestId("chart-group").first()).toBeVisible();
+      const laneTitles = await page.getByTestId("chart-group").evaluateAll((gs) => gs.map((g) => g.querySelector("span[title]")?.getAttribute("title") ?? ""));
       // PM-owned work has its own lane but is no goal.
       const goals = laneTitles.filter((t) => !["No goal", "Below the line", "PM-owned"].includes(t));
       expect(goals.length).toBeGreaterThan(1);

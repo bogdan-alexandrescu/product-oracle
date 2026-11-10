@@ -89,6 +89,7 @@ for (const [where, use] of [
         for (const k of ["alert-rules", "alert-digest", "setup-checklist"]) await expect(column(page, "now").locator(`[data-item="${k}"]`)).toBeVisible();
         for (const k of ["alert-export", "alert-sso", "setup-ideas"]) await expect(column(page, "next").locator(`[data-item="${k}"]`)).toBeVisible();
         await expect(column(page, "later").locator('[data-item="setup-video"]')).toBeVisible();
+        // The board groups by goal (tb-mk: only the Timeline and the Gantt start by track).
         await expect(column(page, "now").getByTestId("board-group").first()).toContainText(/Grow retention|Faster activation/);
         await expect(card(page, "alert-sso")).toHaveAttribute("data-kind", "estimated");
         await expect(card(page, "alert-sso").getByTestId("board-dates")).toContainText("estimated");
@@ -195,10 +196,12 @@ for (const [where, use] of [
           "png:Roadmap · Waterfall",
           "pdf:Roadmap · Waterfall",
         ]);
-        for (const d of drawn) {
-          expect(d.brand).toBe(COMPANY);
-          expect(d.filters).toBe("Grouped by goal · Goal: Faster activation");
-        }
+        // tb-mk: the Timeline's and the Gantt's track bands, the board's and the Waterfall's goal lanes.
+        expect(drawn.map((d) => d.filters)).toEqual([
+          ...Array(4).fill("Grouped by track · Goal: Faster activation"),
+          ...Array(4).fill("Grouped by goal · Goal: Faster activation"),
+        ]);
+        for (const d of drawn) expect(d.brand).toBe(COMPANY);
       });
     });
   }

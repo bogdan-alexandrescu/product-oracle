@@ -85,15 +85,19 @@ test("Home's plan groups by the roadmap's current milestones, a removed one's it
     "M3 · First alert within a day · 3 items",
     "M4 · Pilot · 2 items",
     "M5 · Pilot · 2 items",
-    "M6 · 2 items",
-    "M7 · Launch (beta) · 3 items",
-    "M8 · Prices live · 2 items",
+    "M10 · Launch (beta) · 3 items",
+    "M11 · Prices live · 2 items",
+    "M9 · 2 items",
     "Not in a milestone · 11 items",
   ]);
   const codes = labels.flatMap((l) => (l.match(/^M(\d+)(?: ·|$)/)?.[1] ? [Number(l.match(/^M(\d+)(?: ·|$)/)![1])] : []));
-  // Codes are unique (no repeats, even for the two look-alike "Pilot" rows) and ascend in order.
+  // Codes are unique (no repeats, even for the two look-alike "Pilot" rows); the dated rows
+  // ascend by code, the undated ones follow in the strip's name order (the API's plan_strip), so
+  // "M10" reads before "M9" there. The goals' own target dates (milestone-kinds) take M6-M8 and
+  // hold no row of their own: their features stay in the milestones they are in.
   expect(new Set(codes).size).toBe(codes.length);
-  expect(codes).toEqual([...codes].sort((a, b) => a - b));
+  expect(codes.slice(0, 4)).toEqual([...codes.slice(0, 4)].sort((a, b) => a - b));
+  expect(codes).toEqual([1, 3, 4, 5, 10, 11, 9]);
   for (const l of labels) {
     expect(l).not.toMatch(/Milestone M\d/);
     expect(l).not.toContain("Alerts for 20 teams");
@@ -105,8 +109,8 @@ test("Home's plan groups by the roadmap's current milestones, a removed one's it
   // Typed texts naming Onboarding's current milestone by its code and by its name.
   expect(await itemsOf(page, "M3 · First alert within a day · 3 items")).toEqual([["Sample data import", "Setup checklist", "Welcome video"]]);
   // An undated track milestone holds its items, its name whole (with the roadmap's own milestone, one row).
-  expect(await itemsOf(page, "M7 · Launch (beta) · 3 items")).toEqual([["Alert history export", "Alert routing by team", "Weekly alert digest"]]);
-  expect(await itemsOf(page, "M6 · 2 items")).toEqual([["Health log", "Setup reminders"]]);
+  expect(await itemsOf(page, "M10 · Launch (beta) · 3 items")).toEqual([["Alert history export", "Alert routing by team", "Weekly alert digest"]]);
+  expect(await itemsOf(page, "M9 · 2 items")).toEqual([["Health log", "Setup reminders"]]);
   // Two PRDs' "Pilot" on one day: two rows, each with its own new code (never sharing one code).
   expect(await itemsOf(page, "M4 · Pilot · 2 items")).toEqual([["Lead list ranking", "Refund in one step"]]);
   expect(await itemsOf(page, "M5 · Pilot · 2 items")).toEqual([["Complaint early warning", "Rep call script hints"]]);
@@ -172,13 +176,13 @@ test("a roadmap's own milestone reads whole, one row per milestone, a bare code 
     expect(l).not.toMatch(/·\s*·/);
     expect(l).not.toMatch(/[[\]]/);
   }
-  // Onboarding's own M3 (no name) and the track's M3: one row, its code alone (now M6).
-  expect(labels.filter((l) => l.startsWith("M6"))).toEqual(["M6 · 2 items"]);
-  // Alerts' own "[Launch (beta)]" M2 and the track's "M2 · Launch (beta)": one row (now M7).
-  expect(labels.filter((l) => l.startsWith("M7 · Launch"))).toEqual(["M7 · Launch (beta) · 3 items"]);
-  // Annual billing types a bare "M3": Pricing's milestone (now M8), never Onboarding's (now M6).
-  expect(await itemsOf(page, "M8 · Prices live · 2 items")).toEqual([["Annual billing", "Usage meter"]]);
-  expect((await itemsOf(page, "M6 · 2 items"))[0]).not.toContain("Annual billing");
+  // Onboarding's own M3 (no name) and the track's M3: one row, its code alone (now M9).
+  expect(labels.filter((l) => l.startsWith("M9"))).toEqual(["M9 · 2 items"]);
+  // Alerts' own "[Launch (beta)]" M2 and the track's "M2 · Launch (beta)": one row (now M10).
+  expect(labels.filter((l) => l.startsWith("M10 · Launch"))).toEqual(["M10 · Launch (beta) · 3 items"]);
+  // Annual billing types a bare "M3": Pricing's milestone (now M11), never Onboarding's (now M9).
+  expect(await itemsOf(page, "M11 · Prices live · 2 items")).toEqual([["Annual billing", "Usage meter"]]);
+  expect((await itemsOf(page, "M9 · 2 items"))[0]).not.toContain("Annual billing");
 });
 
 /*
@@ -569,7 +573,7 @@ test.describe("on a touch screen", () => {
    */
   test("a quarter plan row's items read on tap and on keyboard focus", async ({ page }) => {
     await home(page, 390);
-    const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M8 · Prices live · 2 items$/ }) });
+    const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M11 · Prices live · 2 items$/ }) });
     const tip = line.getByRole("tooltip");
     await expect(tip).toBeHidden();
     // Tap.

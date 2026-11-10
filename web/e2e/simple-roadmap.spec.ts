@@ -97,19 +97,42 @@ for (const [where, use] of [
           // fix4 qa-simple-roadmap-3: the return queue's place is on hover ("1st to come back"), not a "#1" on the bar.
           // The Gantt (mk-qa4-roadmap) says the cut item's place in the return queue in words.
           await expect(page.getByTestId("return-place").first()).toHaveText("1st to return");
-          // The Timeline's lanes (mk-qa4-roadmap QR1 A) name their goal and count their items; the digest sits in its goal's lane.
+          // tb-mk: the Timeline's bands are tracks (pick C): the digest sits in its track's band,
+          // Usage alerts track, which names the goal Grow retention it serves.
           await page.getByTestId("format-timeline").click();
-          await expect(page.getByTestId("timeline-lane").filter({ hasText: "Grow retention" })).toContainText("4 items");
           const lanes = await page.locator('[data-testid="timeline-lane"], [data-testid="timeline-row"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-item") ?? `lane:${e.textContent}`));
           const at = lanes.indexOf("alert-digest");
-          expect(lanes.slice(0, at).filter((l) => l.startsWith("lane:")).pop()).toContain("Grow retention");
+          expect(at).toBeGreaterThan(0);
+          expect(lanes.slice(0, at).filter((l) => l.startsWith("lane:")).pop()).toContain("Usage alerts track");
+          // Its goal's lane is the Gantt's Group by Goal: Grow retention, its four items drawn in it.
           await page.getByTestId("format-gantt").click();
+          await page.getByTestId("group-goal").click();
+          const inLane = () => page.evaluate((name) => {
+            const heads = [...document.querySelectorAll<HTMLElement>('[data-testid="chart-group"], [data-testid="below-the-line"]')].map((e) => ({ text: e.textContent ?? "", top: e.getBoundingClientRect().top, bottom: e.getBoundingClientRect().bottom }));
+            const n = heads.findIndex((h) => h.text.includes(name));
+            if (n < 0) return null;
+            const y0 = heads[n].top;
+            const y1 = heads.slice(n + 1).find((h) => h.top > y0)?.top ?? Infinity;
+            return [...document.querySelectorAll('g[data-testid="bar"]')]
+              .filter((b) => {
+                const r = b.getBoundingClientRect();
+                const c = r.top + r.height / 2;
+                return c >= y0 && c < y1;
+              })
+              .map((b) => b.getAttribute("data-item") ?? "")
+              .filter((k) => k.startsWith("alert-"))
+              .sort();
+          }, "Grow retention");
+          await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
+          await expect.poll(inLane).toEqual(["alert-digest", "alert-mobile", "alert-rules", "alert-sso"]);
+          await page.getByTestId("group-track").click();
         } else {
           // B3: a thin lane per goal (and below the line), the open lane's pieces listed under the chart.
           // mk-qa4-roadmap QR1 A: a phone's Timeline is a list by quarter (the picked frame has
-          // no goal lanes there): each row names its goal, a broken link says so.
+          // no goal lanes there): each row reads its dates only (its band header names the goal), a broken link says so.
           const row = page.locator('[data-testid="timeline-list"] [data-testid="timeline-row"][data-item="alert-digest"]');
-          await expect(row).toContainText("Grow retention");
+          await expect(row).toContainText("Oct 31 – Dec 10");
+          await expect(row).not.toContainText("Grow retention");
           await expect(row).toContainText("Broken link");
           await expect(page.getByTestId("timeline-quarter").first()).toBeVisible();
           // The phone's list marks today on its quarter (the picked frame draws no line or milestone marks there).

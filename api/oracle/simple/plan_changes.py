@@ -244,6 +244,81 @@ async def _asked(db: AsyncSession, prd_ids: set[str]) -> bool:
     return any(prd_ids & _prds_of(c.op, c.after or {}) for c in open_)
 
 
+async def _close_asked(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
+    """tracks-goal: a PRD put on a track directly (each in ``prior``, where it was) is taken
+    out of the open proposal that asked to put it on one, so that proposal no longer waits
+    for a decision it cannot get: a proposal of more PRDs keeps the rest open (its
+    ``target.placed_directly`` says which went and why); one left with none is declined by
+    who placed it, with that reason."""
+    tracked = c.op in ("add_track", "edit_track")
+    placed = set((c.target or {}).get("prior") or {}) if tracked else set()
+    if not placed:
+        return
+    where = await _track_title(db, c)
+    asked_of: dict[uuid.UUID, SimpleChange] = {}
+    for p, asked in (await waiting_for(db)).items():
+        if str(p) in placed and asked.status == "proposed":
+            asked_of.setdefault(asked.id, asked)
+    for asked in asked_of.values():
+        await _take_out(db, principal, asked, placed, where)
+
+
+async def _track_title(db: AsyncSession, c: SimpleChange) -> str:
+    title = (c.after or {}).get("title") or (c.target or {}).get("title")
+    if not title and (c.after or {}).get("track_id"):
+        t = await db.get(ProductTrack, uuid.UUID(c.after["track_id"]))
+        title = t.title if t is not None else None
+    return title or "a track"
+
+
+async def _take_out(
+    db: AsyncSession, principal: Any, asked: SimpleChange, placed: set[str], where: str
+) -> None:
+    """Take the PRDs ``placed`` (on track ``where``, directly) out of the open ``asked``."""
+    after = dict(asked.after or {})
+    gone = sorted(_prds_of(asked.op, after) & placed)
+    titles = dict((asked.target or {}).get("prd_titles") or {})
+    if not titles:
+        docs = await db.scalars(select(Document).where(Document.id.in_(map(uuid.UUID, gone))))
+        titles = {str(d.id): d.title for d in docs}
+    reasons = [
+        {"prd_id": p, "reason": f"{titles.get(p) or 'That PRD'} was put on {where} directly"}
+        for p in gone
+    ]
+    before = dict(asked.before or {})
+    held = list(before.get("prd_ids") or [])
+    # Only the PRDs it puts on go (one it holds already stays, or the change would take it off).
+    rest = [p for p in after.get("prd_ids") or [] if p in held or p not in placed]
+    if asked.op == "edit_track" and "prd_ids" in after and rest == held:
+        after.pop("prd_ids")
+        before.pop("prd_ids", None)
+    elif "prd_ids" in after:
+        after["prd_ids"] = rest
+    # A one-PRD change (add_prd_id), or one left with nothing to do, is declined.
+    left = set(after) - {"add_prd_id", "remove_prd_id"}
+    keeps = bool(rest) if asked.op == "add_track" else bool(left)
+    me, now = _me(principal), company_time.now()
+    if not keeps:
+        asked.status = "declined"
+        asked.decided_by, asked.decided_at = me, now
+        asked.decision_reason = "; ".join(r["reason"] for r in reasons)
+        await audit.record(db, principal, "simple_change.declined", "simple_change", asked.id,
+                           data={"op": asked.op, "target": asked.target,
+                                 "reason": asked.decision_reason})  # fmt: skip
+        return
+    target = dict(asked.target or {})
+    if "prd_ids" in target:
+        target["prd_ids"] = [p for p in target["prd_ids"] if p not in placed]
+    for key in ("prior", *(("prd_titles",) if asked.op == "add_track" else ())):
+        if isinstance(target.get(key), dict):
+            target[key] = {p: v for p, v in target[key].items() if p not in placed}
+    target["placed_directly"] = [*(target.get("placed_directly") or []), *reasons]
+    asked.target, asked.after, asked.before = target, after, before
+    await audit.record(db, principal, "simple_change.narrowed", "simple_change", asked.id,
+                       data={"op": asked.op, "target": asked.target,
+                             "reason": "; ".join(r["reason"] for r in reasons)})  # fmt: skip
+
+
 async def waiting_for(db: AsyncSession) -> dict[uuid.UUID, SimpleChange]:
     """tracks-goal (owner Nov 9): each PRD a proposed track change puts on a track, by PRD
     (its Inbox suggestion waits for that decision)."""
@@ -385,6 +460,7 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
                      at=now, reason=body.reason, routed_to=route)  # fmt: skip
     if applies:
         await _apply(db, principal, c)
+        await _close_asked(db, principal, c)
     db.add(c)
     await db.flush()
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,

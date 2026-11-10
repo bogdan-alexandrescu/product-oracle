@@ -55,9 +55,17 @@ test("the goal counters follow the lanes' goal order, the Goal map's goals too",
   await roadmap(page);
   const cards = page.getByTestId("goal-counters").getByTestId("goal-counter");
   await expect(cards.first()).toBeVisible();
-  await expect(page.getByTestId("timeline-lane").first()).toBeVisible();
+  // tb-mk: the Timeline's bands are tracks; the Waterfall keeps the goal lanes.
+  await page.getByTestId("format-waterfall").click();
+  // Track everywhere (owner Nov 10): the Waterfall starts in track bands.
+  await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("chart-group").first()).toContainText(/track/i);
+  // Its goal lanes are a Group by Goal away.
+  await page.getByTestId("group-goal").click();
+  await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("chart-group").first()).toBeVisible();
   const onCards = (await cards.locator("p:first-child").allInnerTexts()).map((t) => t.replace(/^\s*\d+\s*/, "").trim());
-  const onLanes = (await page.getByTestId("timeline-lane").allInnerTexts()).map((t) => t.split("\n")[0].replace(/ · \d+ items?$/, "").replace(/^\s*\d+\s*/, "").trim());
+  const onLanes = await page.getByTestId("chart-group").evaluateAll((els) => els.map((e) => e.getAttribute("data-add-label") ?? ""));
   expect(onCards).toContain("Sign-ups per rep per day");
   expect(onCards).toEqual(onLanes.filter((n) => onCards.includes(n)));
 });

@@ -8,7 +8,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { mockNowMs } from "./clock";
-import { seedGoalBuckets } from "./goal-buckets";
+import { lazyGoalBuckets, seedGoalBuckets } from "./goal-buckets";
 import { stableUuid } from "./ids";
 import { canDecideItem, canEditRoadmap, closed, deciderIds, GOALS, ROADMAPS, TRACKS, trackGoal, type SimpleDb } from "./simple-roadmap";
 import type { MockMilestone } from "./simple-milestones";
@@ -52,11 +52,18 @@ type Db = SimpleDb & {
 function askedFor(db: Db, prd: string): Schemas["SimpleChangeOut"] | undefined {
   return (db.changes ?? []).find((c) => c.status === "proposed" && (c.op === "add_track" || c.op === "edit_track") && ((c.after as { add_prd_id?: string }).add_prd_id === prd || ((c.after as { prd_ids?: string[] }).prd_ids ?? []).includes(prd)));
 }
+/** tracks-goal: PRDs (ids) put on a track directly close the open proposals that asked to put them on one: declined by who placed them (as plan_changes._close_asked). */
+const closeAsked = (db: Db, by: string, prds: string[]) => {
+  for (const p of prds) {
+    const c = askedFor(db, p);
+    if (c) Object.assign(c, { status: "declined", decided_by: by, decided_at: now(), can_decide: false });
+  }
+};
 /** A proposed track change for any of these PRDs (ids), not decided yet (plan_changes._asked; a removal counts too). */
 const asked = (db: Db, prds: string[]) => prds.some((p) => askedFor(db, p) || (db.changes ?? []).some((c) => c.status === "proposed" && c.op === "edit_track" && (c.after as { remove_prd_id?: string }).remove_prd_id === p));
 
 /** The company's goals a track may be tied to: neither archived nor in Trash, in their order. */
-const liveGoals = (db: Db) => (db.goal_buckets ??= seedGoalBuckets()).goals.filter((g) => !g.archived && !g.trashed).sort((a, b) => a.order - b.order);
+const liveGoals = (db: Db) => (db.goal_buckets ??= lazyGoalBuckets()).goals.filter((g) => !g.archived && !g.trashed).sort((a, b) => a.order - b.order);
 /** tracks-goal: a track's PRDs, its first one first. */
 export const prdsOf = (st: TrackState | undefined): string[] => (st ? [st.prd, ...(st.more ?? [])].filter(Boolean) : []);
 const setPrds = (st: TrackState, titles: string[]) => {
@@ -115,7 +122,7 @@ function seed(db: Db, ctx: RemovedCtx): Log {
   const owner = ctx.owners[0] ?? ctx.id;
   const other = Object.keys(ctx.names).find((x) => x !== owner) ?? owner;
   db.items.filter((s) => s.status === "cut").forEach((s, n) => (log[`feature:${s.key}`] = { at: daysAgo(15 + 7 * n), by: n % 2 ? other : owner }));
-  const gb = (db.goal_buckets ??= seedGoalBuckets());
+  const gb = (db.goal_buckets ??= lazyGoalBuckets());
   const gid = stableUuid(`goal-bucket/${ARCHIVED_GOAL}`);
   if (!gb.goals.some((g) => g.id === gid)) gb.goals.push({ id: gid, key: "fewer-billing-tickets", title: ARCHIVED_GOAL, order: gb.goals.length + 1, measure: "Billing tickets a month", target: "Under 40", due: "2027-06-30", archived: true });
   log[`goal:${gid}`] = { at: daysAgo(17), by: other };
@@ -317,7 +324,10 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
       if (a.owner_id) (db.track_owners ??= {})[k] = a.owner_id;
     };
     if (proposal) return (make(), null);
-    if (owner) make();
+    if (owner) {
+      make();
+      closeAsked(db, ctx.id, want);
+    }
     // Undo removes the track while it holds nothing; one that anything references since goes to Trash.
     return done(change(ctx, body, owner, ctx.owners, `added the track ${title}`), () => {
       if (!(added in TRACKS)) return;
@@ -352,6 +362,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     if (!decides && asked(db, [prdId(prd)])) return json(409, { detail: "A change to that PRD's track waits for a decision already" });
     const putBack = snapshot();
     if (decides) putPrds(k, adding ? [...prdsOf(states[k]), prd] : prdsOf(states[k]).filter((x) => x !== prd));
+    if (decides && adding) closeAsked(db, ctx.id, [prdId(prd)]);
     const res = change(ctx, { ...body, target: { ...t, title, prd_titles: { [prdId(prd)]: prd } } }, decides, route, `${adding ? "put" : "took"} ${prd} ${adding ? "on" : "off"} ${title}`);
     return done(res, putBack, true);
   }
@@ -390,6 +401,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     if (decides) {
       if ("goal_id" in a) states[k].goal = goal?.id ?? null;
       if (titles) putPrds(k, titles as string[]);
+      closeAsked(db, ctx.id, put.map(prdId));
       if (a.title != null && a.title.trim()) setTitle(db, k, a.title.trim());
       if (a.status != null) states[k].status = a.status as Status;
       if ("owner_id" in a) {

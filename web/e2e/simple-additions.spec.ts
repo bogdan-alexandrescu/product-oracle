@@ -37,9 +37,30 @@ async function openRoadmap(page: Page, email?: string) {
 /** A lane's key on the Timeline (timeline-overlap B2), by its title. */
 const laneOf = (page: Page, title: string) => page.getByTestId("chart-group").filter({ hasText: title }).getAttribute("data-lane");
 
+/** The Gantt's group (its title, as its header names it) an item's row sits under, by the item's title. */
+const groupOf = (page: Page, title: string) =>
+  page
+    .getByTestId("chart-label")
+    .filter({ has: page.getByTestId("label-title").getByText(title, { exact: true }) })
+    .evaluate((el) => {
+      let e = el.parentElement!.previousElementSibling;
+      while (e && e.getAttribute("data-testid") !== "chart-group") e = e.previousElementSibling;
+      return e?.getAttribute("data-add-label") ?? "";
+    });
+
+/** The Timeline's band (a track's name) an item's row sits under: the nearest band header above it. */
+const bandOf = (page: Page, key: string) =>
+  page.locator(`[data-testid="timeline-row"][data-item="${key}"]`).evaluate((el) => {
+    let e = el.previousElementSibling;
+    while (e && e.getAttribute("data-testid") !== "timeline-lane") e = e.previousElementSibling;
+    return (e?.querySelector('[data-testid="track-head"] button')?.textContent ?? e?.textContent ?? "").trim();
+  });
+
 async function board(page: Page) {
   await page.getByTestId("format-board").click();
   await expect(page.getByTestId("board")).toBeVisible();
+  // Track everywhere (owner Nov 10): the board starts in track bands.
+  await expect(page.getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
 }
 
 /** Types a title in Quick add and drags its chip onto `target` with the mouse, as a person does. */
@@ -199,11 +220,83 @@ for (const scheme of ["light", "dark"] as const) {
      */
     test("an owner drops a quick add on a goal header", async ({ page }) => {
       await openRoadmap(page);
+      // tb-mk: the Gantt starts grouped by track; its Group by Goal draws the goal headers.
+      await page.getByTestId("group-goal").click();
+      await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
       await dragAdd(page, "Team usage report", page.getByTestId("chart-group").filter({ hasText: "Faster activation" }));
       await expect(toastWith(page, "Added Team usage report as a draft")).toBeVisible();
       // B2: its pill sits in the Faster activation lane.
       await expect(bar(page, "team-usage-report")).toBeVisible();
       expect(await bar(page, "team-usage-report").getAttribute("data-lane")).toBe(await laneOf(page, "Faster activation"));
+      await expect.poll(() => groupOf(page, "Team usage report")).toBe("Faster activation");
+    });
+
+    /**
+     * Card tb-mk-track-drop: protects = a chip dropped on a track band (the Gantt's Group by
+     * Track, the Timeline's band header) adds the draft on that track, even another roadmap's
+     * than the roadmap's first track (Alerts roadmap's own is Usage alerts track), and it stays
+     * in that band after a reload; fails_when = no drop on a band, it lands in another band or
+     * leaves it on reload; no_claim = the horizon (Next).
+     */
+    test("an owner drops a quick add on a track band, on the Gantt and on the Timeline", async ({ page }) => {
+      await openRoadmap(page);
+      await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
+      const guided = page.getByTestId("chart-group").filter({ hasText: "Guided setup track" });
+      await dragAdd(page, "Team usage report", guided);
+      await expect(toastWith(page, "Added Team usage report as a draft")).toBeVisible();
+      await expect(bar(page, "team-usage-report")).toBeVisible();
+      await expect.poll(() => groupOf(page, "Team usage report")).toBe("Guided setup track");
+      const close = page.getByTestId("floating-card").getByRole("button", { name: "Close" });
+      if (await close.isVisible()) await close.click();
+
+      // The Timeline: its band header takes a drop too.
+      await page.getByTestId("format-timeline").click();
+      await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "timeline");
+      const head = page.getByTestId("timeline-lane").filter({ hasText: "Guided setup track" }).locator("[data-add-where]");
+      await dragAdd(page, "Setup tips by mail", head);
+      await expect(toastWith(page, "Added Setup tips by mail as a draft")).toBeVisible();
+      await expect.poll(() => bandOf(page, "setup-tips-by-mail")).toBe("Guided setup track");
+      expect(await bandOf(page, "team-usage-report")).toBe("Guided setup track");
+
+      // Both stay on the track after a reload.
+      await page.reload();
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await expect(page.locator('[data-testid="timeline-row"][data-item="setup-tips-by-mail"]')).toBeVisible();
+      expect(await bandOf(page, "setup-tips-by-mail")).toBe("Guided setup track");
+      expect(await bandOf(page, "team-usage-report")).toBe("Guided setup track");
+      await page.getByTestId("format-gantt").click();
+      await expect(bar(page, "team-usage-report")).toBeVisible();
+      expect(await groupOf(page, "Team usage report")).toBe("Guided setup track");
+    });
+
+    /**
+     * Card tb-mk-track-drop-proposer: protects = an approver's quick add dropped on a track band is
+     * a proposal that keeps the band's track (after.track_id), so the owner's Accept lands it in
+     * that band, not the roadmap's first track; fails_when = the accepted item sits in Usage alerts
+     * track (the Alerts roadmap's first); no_claim = an owner's own drop (above).
+     */
+    test("an approver's quick add on a track band keeps its track once the owner accepts it", async ({ page }) => {
+      test.skip(page.viewportSize()!.width <= 640, "a phone's Timeline is a list by quarter, with no band to drop on");
+      await openRoadmap(page, "approver@example.com");
+      await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
+      await dragAdd(page, "Rule import from a file", page.getByTestId("chart-group").filter({ hasText: "Guided setup track" }));
+      await expect(toastWith(page, "Proposed Rule import from a file (Guided setup track): it waits for the roadmap's owner in Needs a decision")).toBeVisible();
+      await expect(bar(page, "rule-import-from-a-file")).toHaveCount(0);
+
+      await switchTo(page, "admin@example.com");
+      await page.getByTestId("format-gantt").click();
+      await expect(bar(page, "alert-rules")).toBeVisible();
+      await page.getByTestId("needs-decision").click();
+      const tray = page.getByTestId("decision-tray");
+      const p = tray.getByTestId("tray-proposal").filter({ hasText: "Rule import from a file" });
+      await p.getByRole("button", { name: "Accept" }).click();
+      await expect(toastWith(page, "Accepted: it is in your working draft")).toBeVisible();
+      await tray.getByRole("button", { name: "Close" }).click();
+      await expect(bar(page, "rule-import-from-a-file")).toBeVisible();
+      await expect.poll(() => groupOf(page, "Rule import from a file")).toBe("Guided setup track");
+      // The Timeline's band too.
+      await page.getByTestId("format-timeline").click();
+      await expect.poll(() => bandOf(page, "rule-import-from-a-file")).toBe("Guided setup track");
     });
 
     /**
@@ -281,6 +374,9 @@ for (const scheme of ["light", "dark"] as const) {
       await dragAdd(page, "Rule import from a file", column(page, "next"));
       await expect(toastWith(page, "Proposed Rule import from a file (Next): it waits for the roadmap's owner in Needs a decision")).toBeVisible();
       await expect(boardCard(page, "rule-import-from-a-file")).toHaveCount(0);
+      // A goal's suggestions sit on its goal band: Group by Goal.
+      await page.getByTestId("group-goal").click();
+      await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
       await page.getByRole("button", { name: "Suggested features for Grow retention", exact: true }).first().click();
       // Only the decider accepts or rejects a goal's suggestions (pick D): an approver reads them.
       const panel = page.getByTestId("goal-panel");

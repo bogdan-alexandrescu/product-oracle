@@ -122,7 +122,7 @@ function Field({ label, children, error, now }: { label: string; children: React
   );
 }
 
-type Fields = { title: string; measure: string; target: string; due: string; owner?: string | null };
+type Fields = { title: string; measure: string; target: string; due: string; owner?: string | null; on_roadmap?: boolean };
 
 /** The members a goal's owner is picked from (edit-goals-prds EG1). */
 function usePeople() {
@@ -130,11 +130,12 @@ function usePeople() {
 }
 
 /** A goal's fields as its form shows them. */
-const fieldsOf = (g: Goal, year: string): Fields => ({ title: g.title, measure: g.measure ?? "", target: g.target ?? "", due: dayOf(g.due, year), owner: g.owner_id ?? null });
+const fieldsOf = (g: Goal, year: string): Fields => ({ title: g.title, measure: g.measure ?? "", target: g.target ?? "", due: dayOf(g.due, year), owner: g.owner_id ?? null, on_roadmap: g.on_roadmap ?? true });
 
 /** GB1 a: the goal's header turned into a small form, right where it sits. */
 export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: { start: Fields; goal?: Goal; order: number; title: string; year: string; onSave: (f: Fields & { day: string }, seen?: Goal, refused?: (line: string) => void) => Promise<void>; onCancel: () => void }) {
-  const [f, setF] = useState<Fields>(start);
+  // milestone-kinds: whether its target date shows on the roadmap, set where who may edit the goal edits it.
+  const [f, setF] = useState<Fields>(goal?.can_edit ? { on_roadmap: goal.on_roadmap ?? true, ...start } : start);
   // The goal as it read when the form opened: its save is refused if it changed since.
   const [seen, setSeen] = useState(goal);
   const [busy, setBusy] = useState(false);
@@ -151,7 +152,7 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
     const beside: Partial<Record<keyof Fields, string>> = {};
     for (const k of Object.keys(is) as (keyof Fields)[]) {
       if (f[k] === was[k]) (next as Record<keyof Fields, unknown>)[k] = is[k];
-      else if (is[k] !== was[k] && is[k] !== f[k] && k !== "owner") beside[k] = is[k] ?? "";
+      else if (is[k] !== was[k] && is[k] !== f[k] && k !== "owner" && k !== "on_roadmap") beside[k] = String(is[k] ?? "");
     }
     setF(next);
     setNow(beside);
@@ -205,6 +206,13 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
         </Field>
       </div>
       <OwnerField value={f.owner ?? null} onChange={(owner) => setF((x) => ({ ...x, owner }))} />
+      {/* tb-mk: a goal with no target date has no milestone to put on the roadmap. */}
+      {goal?.can_edit && f.on_roadmap !== undefined && !!day && (
+        <label className="flex items-center gap-2 text-[13px] font-[650] text-text2">
+          <input type="checkbox" role="switch" data-testid="goal-on-roadmap" checked={f.on_roadmap} onChange={(e) => setF((x) => ({ ...x, on_roadmap: e.target.checked }))} className="size-4 accent-[var(--accent)]" />
+          On the roadmap
+        </label>
+      )}
       <div className="mt-1 flex items-center gap-2">
         <button type="submit" className={PRIMARY} disabled={!done || busy}>
           Save goal
@@ -726,7 +734,7 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
           unwrap(
             api.PATCH("/v1/simple/goal-buckets/goals/{goal_id}", {
               params: { path: { goal_id: g.id } },
-              body: { title: f.title, measure: f.measure, target: f.target, due: f.day, ...(f.owner !== undefined ? { owner_id: f.owner } : {}), seen: { title: seen.title, measure: seen.measure ?? null, target: seen.target ?? null, due: seen.due ?? null } },
+              body: { title: f.title, measure: f.measure, target: f.target, due: f.day, ...(f.owner !== undefined ? { owner_id: f.owner } : {}), ...(f.on_roadmap !== undefined ? { on_roadmap: f.on_roadmap } : {}), seen: { title: seen.title, measure: seen.measure ?? null, target: seen.target ?? null, due: seen.due ?? null } },
             }),
           ),
         <>

@@ -26618,6 +26618,11 @@ export interface components {
             owner_id?: string | null;
             /** Owner Name */
             owner_name?: string | null;
+            /**
+             * On Roadmap
+             * @default true
+             */
+            on_roadmap: boolean;
         };
         /** GoalBucketWrite */
         GoalBucketWrite: {
@@ -26708,6 +26713,8 @@ export interface components {
             /** Owner Id */
             owner_id?: string | null;
             seen?: components["schemas"]["GoalSeen"] | null;
+            /** On Roadmap */
+            on_roadmap?: boolean | null;
         };
         /** GoalInterviewOut */
         GoalInterviewOut: {
@@ -26866,6 +26873,11 @@ export interface components {
             attrs: {
                 [key: string]: unknown;
             };
+            /**
+             * On Roadmap
+             * @default true
+             */
+            on_roadmap: boolean;
         };
         /** GoalTargetIn */
         GoalTargetIn: {
@@ -42223,6 +42235,61 @@ export interface components {
             carried_from?: components["schemas"]["SimpleDocRef"] | null;
             /** Roadmap Code */
             roadmap_code?: string | null;
+            /**
+             * Kind
+             * @default delivery
+             * @enum {string}
+             */
+            kind: "sub_goal" | "goal" | "delivery" | "decision" | "outside" | "handoff";
+            /**
+             * Done When Line
+             * @default
+             */
+            done_when_line: string;
+            /**
+             * Status
+             * @default on_track
+             * @enum {string}
+             */
+            status: "on_track" | "at_risk" | "hit" | "missed";
+            /** Status Reason */
+            status_reason?: string | null;
+            /** Status Set */
+            status_set?: ("on_track" | "at_risk" | "hit" | "missed") | null;
+            /** Status Set By Name */
+            status_set_by_name?: string | null;
+            /** Measure */
+            measure?: string | null;
+            /** Baseline */
+            baseline?: number | null;
+            /** Target */
+            target?: number | null;
+            /** Current */
+            current?: number | null;
+            /** Sub Goal Of Id */
+            sub_goal_of_id?: string | null;
+            /**
+             * Sub Goal Ids
+             * @default []
+             */
+            sub_goal_ids: string[];
+            /** Home Track Id */
+            home_track_id?: string | null;
+            /** Home Track Name */
+            home_track_name?: string | null;
+            /** From Track Id */
+            from_track_id?: string | null;
+            /** To Track Id */
+            to_track_id?: string | null;
+            /** From Track Name */
+            from_track_name?: string | null;
+            /** To Track Name */
+            to_track_name?: string | null;
+            /**
+             * Goal Target
+             * @default false
+             */
+            goal_target: boolean;
         };
         /** SimpleGoalMilestoneIn */
         SimpleGoalMilestoneIn: {
@@ -42250,6 +42317,37 @@ export interface components {
              * @default
              */
             counts_when: string;
+            /**
+             * Kind
+             * @default delivery
+             * @enum {string}
+             */
+            kind: "sub_goal" | "goal" | "delivery" | "decision" | "outside" | "handoff";
+            /**
+             * Done When Line
+             * @default
+             */
+            done_when_line: string;
+            /** Status Set */
+            status_set?: ("on_track" | "at_risk" | "hit" | "missed") | null;
+            /** Status Reason */
+            status_reason?: string | null;
+            /** Measure */
+            measure?: string | null;
+            /** Baseline */
+            baseline?: number | null;
+            /** Target */
+            target?: number | null;
+            /** Current */
+            current?: number | null;
+            /** Sub Goal Of Id */
+            sub_goal_of_id?: string | null;
+            /** Home Track Id */
+            home_track_id?: string | null;
+            /** From Track Id */
+            from_track_id?: string | null;
+            /** To Track Id */
+            to_track_id?: string | null;
         };
         /** SimpleGoalMilestonePatch */
         SimpleGoalMilestonePatch: {
@@ -42263,6 +42361,30 @@ export interface components {
             item_ids?: string[] | null;
             /** Counts When */
             counts_when?: string | null;
+            /** Kind */
+            kind?: ("sub_goal" | "goal" | "delivery" | "decision" | "outside" | "handoff") | null;
+            /** Done When Line */
+            done_when_line?: string | null;
+            /** Status Set */
+            status_set?: ("on_track" | "at_risk" | "hit" | "missed") | null;
+            /** Status Reason */
+            status_reason?: string | null;
+            /** Measure */
+            measure?: string | null;
+            /** Baseline */
+            baseline?: number | null;
+            /** Target */
+            target?: number | null;
+            /** Current */
+            current?: number | null;
+            /** Sub Goal Of Id */
+            sub_goal_of_id?: string | null;
+            /** Home Track Id */
+            home_track_id?: string | null;
+            /** From Track Id */
+            from_track_id?: string | null;
+            /** To Track Id */
+            to_track_id?: string | null;
         };
         /** SimpleGoalRef */
         SimpleGoalRef: {
@@ -42489,6 +42611,20 @@ export interface components {
              */
             in_draft: boolean;
             prd?: components["schemas"]["SimpleDocRef"] | null;
+            /**
+             * Kind
+             * @default delivery
+             * @enum {string}
+             */
+            kind: "sub_goal" | "goal" | "delivery" | "decision" | "outside" | "handoff";
+            /**
+             * Status
+             * @default on_track
+             * @enum {string}
+             */
+            status: "on_track" | "at_risk" | "hit" | "missed";
+            /** Status Reason */
+            status_reason?: string | null;
         };
         /**
          * SimpleKeyDateRoadmap
@@ -43394,6 +43530,8 @@ export interface components {
              * @default []
              */
             item_ids: string[];
+            /** Code */
+            code?: string | null;
         };
         /**
          * SimplePlanSpan
@@ -44230,6 +44368,48 @@ export interface components {
              * @default []
              */
             applied_versions: components["schemas"]["SimpleAppliedVersion"][];
+            /**
+             * Tracks
+             * @default []
+             */
+            tracks: components["schemas"]["SimpleRoadmapTrack"][];
+        };
+        /**
+         * SimpleRoadmapTrack
+         * @description milestone-kinds: a track band on the roadmap read, in the Tracks order, with its
+         *     health: ``at_risk`` (a feature ends after a milestone it serves), ``stale`` (not checked
+         *     in 14 days) or ``on_track``, and a short reason.
+         */
+        SimpleRoadmapTrack: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Goal Name */
+            goal_name?: string | null;
+            /** Owner Name */
+            owner_name?: string | null;
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["SimplePrdRef"][];
+            /**
+             * Health
+             * @default on_track
+             * @enum {string}
+             */
+            health: "on_track" | "at_risk" | "stale";
+            /**
+             * Health Reason
+             * @default
+             */
+            health_reason: string;
         };
         /**
          * SimpleRoadmapWaiting

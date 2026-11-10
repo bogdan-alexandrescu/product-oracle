@@ -29,6 +29,87 @@ export interface MockMilestone {
   dropped?: boolean;
   /** Its copy on the company roadmap: the older roadmap it came from (slug). */
   carried_from?: string;
+  /** tb-mk (goal_milestones, migration 0125): its kind and that kind's fields; none: a delivery point. */
+  k?: Partial<MockKindFields>;
+  /** goal_milestones._write_kind: the name of who set its status (status_set_by), shown as status_set_by_name. */
+  set_by?: string | null;
+}
+
+/** tb-mk: the kind fields a milestone stores (SimpleGoalMilestonePatch's). */
+export interface MockKindFields {
+  kind: Schemas["SimpleGoalMilestone"]["kind"];
+  done_when_line: string;
+  status_set: Schemas["SimpleGoalMilestone"]["status"] | null;
+  status_reason: string | null;
+  measure: string | null;
+  baseline: number | null;
+  target: number | null;
+  current: number | null;
+  sub_goal_of_id: string | null;
+  /** tb-mk (migration 0126): the track it sits on, the panel's Track. */
+  home_track_id: string | null;
+  from_track_id: string | null;
+  to_track_id: string | null;
+}
+const KIND_KEYS = ["kind", "done_when_line", "status_set", "status_reason", "measure", "baseline", "target", "current", "sub_goal_of_id", "home_track_id", "from_track_id", "to_track_id"] as const;
+const kindDefaults = (m: MockMilestone): MockKindFields => ({ kind: m.prd ? "delivery" : m.goal ? "sub_goal" : "delivery", status_set: null, status_reason: null, done_when_line: "", measure: null, baseline: null, target: null, current: null, sub_goal_of_id: null, home_track_id: null, from_track_id: null, to_track_id: null, ...m.k });
+/** Writes the kind fields a body names (a status_set of null clears the override and its reason).
+ * `byName`: who writes it (goal_milestones._write_kind's status_set_by); left out, who set it stays. */
+export function writeKind(m: MockMilestone, b: Record<string, unknown>, byName?: string | null): void {
+  for (const key of KIND_KEYS) if (key in b) (m.k ??= {})[key] = b[key] as never;
+  if ("status_set" in b && b.status_set == null && !("status_reason" in b && b.status_reason)) (m.k ??= {}).status_reason = null;
+  if ("status_set" in b && (byName !== undefined || !b.status_set)) m.set_by = b.status_set ? (byName ?? null) : null;
+}
+
+const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** company_time.calendar_day(d, today): "Nov 30", with ", 2027" when it falls in another year than today. */
+export const calendarDay = (d: string, today?: string): string => `${MONTH[Number(d.slice(5, 7)) - 1]} ${Number(d.slice(8, 10))}${today && today.slice(0, 4) !== d.slice(0, 4) ? `, ${d.slice(0, 4)}` : ""}`;
+/** goal_milestones._num: a whole number without its ".0". */
+const num = (v: number) => (Number.isInteger(v) ? String(v) : String(Number(v.toPrecision(6))));
+/** goal_milestones.status_of's reason when a measured milestone's date passed with no reading. */
+export const NO_READING = "No reading came in by its date.";
+
+/** tb-mk (goal_milestones.status_of): a person's status wins; a measure at its target is hit, past its
+ * date short of it (or with no reading) missed; else at risk when work that serves it ends after its
+ * date (the one that ends latest named), else on track. `down`: lower is better (a goal's comparison
+ * at_most or below); left out, downward when the target is below the start. */
+export function withKindStatus(
+  out: Schemas["SimpleGoalMilestone"],
+  all: Schemas["SimpleGoalMilestone"][],
+  item: (id: string) => { title: string; end: string } | undefined,
+  today: string,
+  trackTitle: (id: string) => string | null,
+  down?: boolean,
+): Schemas["SimpleGoalMilestone"] {
+  const k = out;
+  let status: Schemas["SimpleGoalMilestone"]["status"] = "on_track";
+  let reason = "Every piece of work ends by its date";
+  const measured = k.kind === "goal" || k.kind === "sub_goal";
+  const past = !!k.date && today > k.date;
+  const up = down === undefined ? k.baseline == null || k.target == null || k.target >= k.baseline : !down;
+  const late = k.date
+    ? out.item_ids
+        .map(item)
+        .filter((i): i is { title: string; end: string } => !!i && i.end > k.date!)
+        .sort((a, b) => (a.end !== b.end ? (a.end < b.end ? 1 : -1) : a.title < b.title ? -1 : a.title > b.title ? 1 : 0))[0]
+    : undefined;
+  if (k.status_set) {
+    status = k.status_set;
+    reason = k.status_reason || `Set by ${k.status_set_by_name || "a person"}`;
+  } else if (measured && k.current != null && k.target != null && (up ? k.current >= k.target : k.current <= k.target)) {
+    status = "hit";
+    reason = `Reached ${num(k.current)} on its target ${num(k.target)}`;
+  } else if (measured && past && k.current != null && k.target != null) {
+    status = "missed";
+    reason = `${num(k.current)} on its target ${num(k.target)} when its date ${calendarDay(k.date!, today)} passed`;
+  } else if (measured && past && k.current == null) {
+    status = "missed";
+    reason = NO_READING;
+  } else if (late) {
+    status = "at_risk";
+    reason = `${late.title} ends ${calendarDay(late.end, today)}, after its date ${calendarDay(k.date!, today)}`;
+  }
+  return { ...out, status, status_reason: reason, home_track_name: k.home_track_id ? trackTitle(k.home_track_id) : null, from_track_name: k.from_track_id ? trackTitle(k.from_track_id) : null, to_track_name: k.to_track_id ? trackTitle(k.to_track_id) : null, sub_goal_ids: all.filter((x) => x.sub_goal_of_id === out.id).map((x) => x.id) };
 }
 
 /** What the old-milestones read and routes need of the roadmap db (./simple-roadmap.ts). */
@@ -213,6 +294,14 @@ export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canC
     can_change: canChange,
     can_propose: !m.prd && !canChange && canPropose,
     carried_from: m.carried_from ? { id: stableUuid(`simple-doc/${m.carried_from}`), slug: m.carried_from, title: titleOf(m.carried_from) } : null,
+    ...kindDefaults(m),
+    status: kindDefaults(m).status_set ?? "on_track",
+    // goal_milestones._out: who set its status (status_set_by), not who reads it.
+    status_set_by_name: kindDefaults(m).status_set ? (m.set_by ?? null) : null,
+    sub_goal_ids: [],
+    from_track_name: null,
+    to_track_name: null,
+    goal_target: false,
   };
 }
 
@@ -223,7 +312,7 @@ const GOAL_KEYS = ["grow-retention", "faster-activation", "quiet-alerts"];
 
 /** milestone-rights: a roadmap's own milestone as an edit_goal_milestone proposal holds it (goal_milestones._value). */
 export function milestoneValue(m: MockMilestone, ids: Record<string, string>): Record<string, unknown> {
-  return { name: m.name, date: m.date, goal_id: m.goal ? stableUuid(`simple-goal/${m.goal}`) : null, item_ids: m.gates.map((k) => ids[k]).filter(Boolean), counts_when: m.counts_when };
+  return { name: m.name, date: m.date, goal_id: m.goal ? stableUuid(`simple-goal/${m.goal}`) : null, item_ids: m.gates.map((k) => ids[k]).filter(Boolean), counts_when: m.counts_when, ...kindDefaults(m) };
 }
 
 /** milestone-rights: an accepted edit_goal_milestone writes the milestone (null: removes it). */
@@ -238,6 +327,7 @@ export function writeMilestone(m: MockMilestone, ids: Record<string, string>, v:
   m.goal = v.goal_id ? (GOAL_KEYS.find((g) => stableUuid(`simple-goal/${g}`) === v.goal_id) ?? null) : null;
   m.gates = ((v.item_ids as string[]) ?? []).map(keyOf).filter((k): k is string => !!k);
   m.counts_when = String(v.counts_when ?? "");
+  writeKind(m, v);
 }
 
 const json = (status: number, body: unknown): Response => new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -262,6 +352,8 @@ export async function routeMilestones(
   // A viewer changes nothing (Commenter); a commenter only asks a PRD's owner (goal_milestones._may_propose).
   if (me.role === "viewer") return json(403, { detail: "Requires the commenter role" });
   const history = json(409, { detail: "That roadmap is history" });
+  // goal_milestones._write_kind: setting a status names who set it (the writer).
+  const myName = (me.id && me.names?.[me.id]) || me.name || null;
   if (!p[4] && req.method === "POST") {
     const b = (await req.json()) as Schemas["SimpleGoalMilestoneIn"];
     const roadmap = slugOf(b.roadmap_id);
@@ -271,6 +363,8 @@ export async function routeMilestones(
     const goal = goalKey(b.goal_id, GOAL_KEYS);
     const n = list.filter((m) => m.roadmap === roadmap && m.goal === goal && !m.prd).reduce((a, m) => Math.max(a, Number(m.code.slice(1)) || 0), 0);
     const m: MockMilestone = { id: stableUuid(`simple-gm/${roadmap}/${goal}/${list.length}/${b.name}`), roadmap, code: `M${n + 1}`, name: b.name, date: b.date, goal, gates: (b.item_ids ?? []).map(keyOf).filter((k): k is string => !!k), counts_when: b.counts_when ?? "", progress: "not_started" };
+    // SimpleGoalMilestoneIn's kind defaults to delivery, with a goal or not (goal_milestones.create).
+    writeKind(m, { ...(b as Record<string, unknown>), kind: b.kind ?? "delivery" }, myName);
     list.push(m);
     return json(201, milestoneOut(m, db.ids, true));
   }
@@ -310,6 +404,7 @@ export async function routeMilestones(
     if (b.goal_id !== undefined) m.goal = goalKey(b.goal_id, GOAL_KEYS);
     if (b.item_ids != null) m.gates = b.item_ids.map(keyOf).filter((k): k is string => !!k);
     if (b.counts_when != null) m.counts_when = b.counts_when;
+    writeKind(m, b as Record<string, unknown>, myName);
     return json(200, milestoneOut(m, db.ids, true));
   }
   if (!p[5] && req.method === "DELETE" && m.prd) return json(409, { detail: "This milestone is the PRD's: it changes in the PRD" });

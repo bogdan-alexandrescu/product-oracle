@@ -59,10 +59,14 @@ async function itemsIn(page: Page, title: string): Promise<string[]> {
   );
 }
 
-/** The items (their keys) in a goal lane of a desktop's Timeline: the rows after its header, up to the next one. */
+/**
+ * The items (their keys) in a band of a desktop's Timeline (tb-mk: its bands are the tracks,
+ * a header naming the track first): the rows after its header, up to the next one.
+ */
 async function timelineLane(page: Page, title: string): Promise<string[]> {
   return page.locator('[data-testid="timeline-lane"], [data-testid="timeline-row"]').evaluateAll((els, t) => {
-    const at = els.findIndex((e) => e.getAttribute("data-testid") === "timeline-lane" && (e.textContent ?? "").startsWith(`${t} ·`));
+    const named = (e: Element) => (e.textContent ?? "").startsWith(t) && !/^[\p{L}\p{N}]/u.test((e.textContent ?? "").slice(t.length));
+    const at = els.findIndex((e) => e.getAttribute("data-testid") === "timeline-lane" && named(e));
     if (at < 0) return [];
     const out: string[] = [];
     for (const e of els.slice(at + 1)) {
@@ -137,7 +141,8 @@ for (const phone of [false, true]) {
       if (!phone) {
         /**
          * Card gantt-slices (Timeline): protects = on the Timeline Team invites (F-05) is ONE
-         * item on ONE row with one bar, in the Growth lane; fails_when = its slices become rows
+         * item on ONE row with one bar, in its band (tb-mk: the Timeline's bands are tracks, so
+         * the Guided setup track's band, no longer a Growth goal lane); fails_when = its slices become rows
          * of their own; no_claim = the slices' dates and colours (the Gantt test above, the card).
          */
         test(`timeline: a two-slice feature is one item on one row (${where})`, async ({ page }) => {
@@ -147,41 +152,63 @@ for (const phone of [false, true]) {
           const row = page.locator('[data-testid="timeline-row"][data-item="plan-f-05"]');
           await expect(row).toHaveCount(1);
           await expect(row.getByTestId("timeline-bar")).toHaveCount(1);
-          expect(await timelineLane(page, "Growth")).toContain("plan-f-05");
+          expect(await timelineLane(page, "Guided setup track")).toContain("plan-f-05");
         });
 
         /**
-         * Card gantt-goal-lanes: protects = by default the Timeline's lanes are the goals, each
-         * header naming the goal and its item count ("Growth", "4 items": its PM-owned Launch
-         * email sits in the PM-owned lane, timeline-overlap B2), the plan's features in the lane
-         * of the goal they move most; inside the Growth lane Usage dashboard (F-08) and Referral
-         * link (F-12) run at the same time and stack on two rows; Group by Milestone puts Team
-         * invites in "M1 Prove it" (its first slice) with a count, still drawn as its two
-         * slices; fails_when = the plan's features fall under "No goal", a lane has no count,
-         * overlapping items share a row, or Group by Milestone is missing; no_claim = the lanes'
-         * order beyond the API's (simple-roadmap-lanes.spec: Track, PRD and the phone's lanes).
+         * Card gantt-goal-lanes: protects = the plan's features sit in the lane of the goal they
+         * move most, each header naming the goal and its item count ("Growth", "4 items": its
+         * PM-owned Launch email sits in the PM-owned lane, timeline-overlap B2); inside a band
+         * Usage dashboard (F-08) and Referral link (F-12) run at the same time and stack on two
+         * rows; every Timeline band header says what it is (a count, or a track's health); Group by Milestone puts Team invites in "M1
+         * Prove it" (its first slice) with a count, still drawn as its two slices; fails_when =
+         * the plan's features fall under "No goal", a lane has no count, overlapping items share
+         * a row, or Group by Milestone is missing; no_claim = the lanes' order beyond the API's
+         * (simple-roadmap-lanes.spec: Track, PRD and the phone's lanes). tb-mk: the Timeline's
+         * bands are now the tracks (a track's header names it, its goal and its health, no
+         * count; No track and Below the line keep their counts), so the stacking is read in the
+         * Guided setup track's band and the goal lanes on the Gantt's Group by Goal.
          */
         test(`goal lanes stack parallel work, and Group by Milestone (${where})`, async ({ page }) => {
           await open(page, scheme);
-          // build-roadmap (8ba0ac46): the Timeline's goal lanes are headers ("Growth · 4 items")
-          // over a row per item, so work that runs at the same time sits on rows of its own.
-          const growth = page.getByTestId("timeline-lane").filter({ hasText: /^Growth · \d+ items?$/ });
-          await expect(growth).toHaveCount(1);
-          await expect(growth).toHaveText("Growth · 4 items");
-          const inGrowth = await timelineLane(page, "Growth");
-          expect(inGrowth).toContain("plan-f-08");
-          expect(inGrowth).toContain("plan-f-12");
+          // The Timeline's bands are headers over a row per item, so work that runs at the same
+          // time sits on rows of its own.
+          const guided = page.getByTestId("timeline-lane").filter({ hasText: /^Guided setup track/ });
+          await expect(guided).toHaveCount(1);
+          const inGuided = await timelineLane(page, "Guided setup track");
+          expect(inGuided).toContain("plan-f-08");
+          expect(inGuided).toContain("plan-f-12");
           const usage = page.locator('[data-testid="timeline-row"][data-item="plan-f-08"] [data-testid="timeline-bar"]');
           const referral = page.locator('[data-testid="timeline-row"][data-item="plan-f-12"] [data-testid="timeline-bar"]');
           await usage.scrollIntoViewIfNeeded();
           const [u, r] = [(await usage.boundingBox())!, (await referral.boundingBox())!];
           expect(Math.abs(u.y - r.y), "two rows").toBeGreaterThan(10);
           expect(u.x < r.x + r.width && r.x < u.x + u.width, "they overlap in time").toBe(true);
-          // Every lane header has its count.
-          for (const t of await page.getByTestId("timeline-lane").allTextContents()) expect(t).toMatch(/ · \d+ items?$/);
+          // Every band header says what it is: a track's its name and health, No track just its name, Below the line its count.
+          const heads = page.getByTestId("timeline-lane");
+          const n = await heads.count();
+          expect(n).toBeGreaterThan(1);
+          for (let k = 0; k < n; k++) {
+            const h = heads.nth(k);
+            if (await h.getByTestId("track-head").count()) await expect(h).toContainText(/(On track|Needs a look)$/);
+            else await expect(h).toHaveText(/^(No track\s*|Below the line · \d+ items?)$/);
+          }
 
-          // Group by is the Gantt's (the Timeline always groups by goal).
+          // Group by is the Gantt's (the Timeline always draws track bands); its Goal lanes hold
+          // the plan's features under Growth (its 4 items), not under "No goal". A desktop
+          // Gantt's goal header names the goal and its measure (D), so the 4 are its bars.
           await page.getByTestId("format-gantt").click();
+          await page.getByTestId("group-goal").click();
+          await expect(lane(page, "Growth")).toHaveCount(1);
+          const inGrowth = await itemsIn(page, "Growth");
+          expect(inGrowth).toHaveLength(4);
+          expect(inGrowth).toContain("plan-f-08");
+          expect(inGrowth).toContain("plan-f-12");
+          if (await page.getByTestId("chart-group").filter({ hasText: /^No goal/ }).count()) {
+            const none = await itemsIn(page, "No goal");
+            for (const id of ["plan-f-05", "plan-f-08", "plan-f-12"]) expect(none).not.toContain(id);
+          }
+
           await page.getByTestId("group-milestone").click();
           const m1 = lane(page, "M1 Prove it");
           await expect(m1).toHaveCount(1);

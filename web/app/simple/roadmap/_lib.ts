@@ -473,8 +473,8 @@ export function quarterValue(start: string): string {
   return `${d.getUTCFullYear()}-Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
 }
 
-/** S7: where a quick-added item goes: a quarter, a horizon or a goal (data-add-where="kind:value"). */
-export type Where = { kind: "quarter" | "horizon" | "goal"; value: string; label: string };
+/** S7: where a quick-added item goes: a quarter, a horizon, a goal or (tb-mk) a track band (data-add-where="kind:value"). */
+export type Where = { kind: "quarter" | "horizon" | "goal" | "track"; value: string; label: string };
 export const whereAttr = (kind: Where["kind"], value: string): string => `${kind}:${value}`;
 
 /** roadmap-gantt: what the rows sit under (Goal by default; Milestone is read from the items' slices). */
@@ -514,10 +514,11 @@ export type GoalMilestone = Roadmap["goal_milestones"][number];
 /**
  * item-milestone: the milestones a roadmap's feature can be placed in, in order: the roadmap's
  * own first, then each PRD's in the one PRD order (`prdOrder`), each by its code (M1, M2, M10).
+ * A goal's own target date (milestone-kinds, goal_target) is never one: its features are the goal's.
  */
 export function placeable(all: readonly GoalMilestone[], roadmapId: string, prdOrder?: (a: { slug?: string | null; id?: string | null; title: string }, b: { slug?: string | null; id?: string | null; title: string }) => number): GoalMilestone[] {
   return all
-    .filter((m) => m.roadmap_id === roadmapId)
+    .filter((m) => m.roadmap_id === roadmapId && !m.goal_target)
     .sort(
       (a, b) =>
         Number(!!a.prd) - Number(!!b.prd) ||

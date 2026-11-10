@@ -21,6 +21,7 @@ from sqlalchemy import (
     Uuid,
     false,
     func,
+    true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -125,6 +126,10 @@ class Entity(Trashable, TenantScoped, Base):
     # removed-tracks: a goal archived in Simple (status rejected): when and by whom.
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     archived_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # milestone-kinds: a goal with a target date shows on the roadmap as a goal milestone.
+    on_roadmap: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
 
 
 class Edge(TenantScoped, Base):

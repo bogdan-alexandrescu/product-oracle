@@ -34,12 +34,13 @@ async function goalInPanel(page: Page): Promise<string> {
   return goal;
 }
 
-/** The lane (its goal's name) a Timeline row sits under: the nearest lane header above it. */
-const laneOf = (row: Locator) =>
+/** The band (a track's name, else "No track") a Timeline row sits under: the nearest band header above it. */
+const bandOf = (row: Locator) =>
   row.evaluate((el) => {
     let e = el.previousElementSibling;
     while (e && e.getAttribute("data-testid") !== "timeline-lane") e = e.previousElementSibling;
-    return (e?.textContent ?? "").split(" · ")[0].replace(/^\d+/, "").trim();
+    const track = e?.querySelector('[data-testid="track-head"] button');
+    return (track?.textContent ?? (e?.textContent ?? "").split(" · ")[0]).trim();
   });
 
 test.describe("1440", () => {
@@ -50,12 +51,14 @@ test.describe("1440", () => {
     const goal = await goalInPanel(page);
     expect(goal).toBe("Sign-ups per rep per day");
 
-    // Roadmap, grouped by goal: the Timeline's lane for the goal holds the feature.
+    // Roadmap (tb-mk: the Timeline's bands are tracks, so the Gantt grouped by goal checks the goal).
     await page.getByTestId("simple-nav-roadmap").first().click();
     await expect(page.getByTestId("simple-roadmap")).toBeVisible();
     const row = page.locator('[data-testid="timeline-row"][data-item="gm-f1"]');
     await expect(row).toBeVisible();
-    expect(await laneOf(row)).toBe(goal);
+    // tb-mk: its Timeline band is its track's, the one its panel reads (below).
+    const band = await bandOf(row);
+    expect(band).not.toBe("");
     // The Gantt's Group by Goal puts it under the same goal.
     await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
@@ -86,6 +89,7 @@ test.describe("1440", () => {
     await page.locator('[data-testid="board-card"][data-item="gm-f1"]').click();
     const card = page.getByTestId("floating-card");
     await expect(card.getByTestId("card-goal")).toHaveText(goal);
+    await expect(card.getByTestId("card-track")).toContainText(band);
     await tap(card.getByTestId("card-horizon").getByRole("button", { name: "Now" }));
     await expect(page.locator('[data-testid="board-column"][data-horizon-column="now"] [data-testid="board-card"][data-item="gm-f1"]')).toBeVisible();
 

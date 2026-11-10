@@ -294,6 +294,8 @@ async def test_key_date_prds_read_the_order_once_for_all_roadmaps():
             entries = [SimpleNamespace(roadmap=r, prd=docs[prds[k].id]) for r in roadmaps
                        for k in ("apple", "cherry", "banana")]  # fmt: skip
             statements.clear()
+            # Each run reads the goals itself (they are read once per session until it writes).
+            s.sync_session.info.pop("simple_goals", None)
             engine = get_engine().sync_engine
             event.listen(engine, "before_cursor_execute", count)
             try:

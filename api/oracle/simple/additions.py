@@ -329,10 +329,25 @@ async def _plan(db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: s
         day = changes._day(m.get("date"), "after.milestone.date")
         after["milestone"] = {"name": name, "date": changes._iso(day),
                               "date_source": "typed" if day else None}  # fmt: skip
+    # tb-mk: a quick add on a track band names the band's track; the item lands on it.
+    if body.after.get("track_id") is not None:
+        after["track_id"] = str(await _live_track(db, body.after["track_id"]))
     # every-field: a title leading with a code ("F-30 Night digest") gives the item that code;
     # one code, one item, in set_code's words.
     await changes._title_code(db, None, title, read_)
     return doc, target, after
+
+
+async def _live_track(db: AsyncSession, raw: Any) -> uuid.UUID:
+    """tb-mk: ``after.track_id`` of an add_item: a live track (not in Trash, not history)."""
+    try:
+        ref = uuid.UUID(str(raw))
+    except ValueError:
+        raise ChangeError(422, "after.track_id: a product track") from None
+    track = await db.get(ProductTrack, ref)
+    if track is None or track.deleted_at is not None or ref in await company.history_track_ids(db):
+        raise ChangeError(422, "after.track_id: a product track")
+    return ref
 
 
 async def _home(
@@ -408,6 +423,8 @@ async def _place(
     )
     goal_ids = [uuid.UUID(g) for g in c.after.get("goal_ids") or []]
     track, prd, prd_version = await _home(db, doc)
+    # tb-mk: the band's track, written as set_track writes it (the item's track_id).
+    track_id = uuid.UUID(c.after["track_id"]) if c.after.get("track_id") else None
     row = RoadmapItem(
         id=item_id,
         roadmap_document_id=doc,
@@ -420,7 +437,7 @@ async def _place(
         horizon=c.after["horizon"],
         draft=True,
         goal_ids=goal_ids,
-        track_id=track.id if track is not None else None,
+        track_id=track_id or (track.id if track is not None else None),
         prd_document_id=prd,
         prd_version_id=prd_version,
         note="added in Simple",
