@@ -23,11 +23,9 @@ const STOP = new Set(
 export const resolved = (t: string) => (t ?? "").replace(/(?<![ \t])[ \t]*\[c:[^\]\s[]+\]/g, "").replace(/[ \t]*\[c(?:(?=…$)|:[^\]\s…]*(?=…?$))/, "");
 const plainKeep = (t: string) => (t ?? "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`]+|\{#[^}]*\}|<!--.*?-->/g, "").split(/\s+/).filter(Boolean).join(" ");
 const plain = (t: string) => plainKeep(resolved(t));
-const plainOf = (t: string) => plain(t);
 const sentences = (t: string) => t.split(/(?<=[.!?])\s+/).filter(Boolean);
 
-function rows(body: string, cites = false): { bullets: string[]; cells: string[][]; prose: string[] } {
-  const plain = cites ? plainKeep : plainOf;
+function rows(body: string): { bullets: string[]; cells: string[][]; prose: string[] } {
   const bullets: string[] = [], cells: string[][] = [], prose: string[] = [];
   const lines = (body ?? "").split("\n");
   lines.forEach((raw, i) => {
@@ -159,9 +157,6 @@ const trimP = (t: string) => t.replace(/^[\s:,;·\-—–.]+|[\s:,;·\-—–.]+
 
 /** A source named only by its citation ("source: [c:c1]") leaves its word behind. */
 const SOURCE_LEFT = /[\s;,·|]*\b(?:sources?|from|via)\s*:?\s*$/i;
-/** Each citation's title and excerpt, by its id (the API's Citation rows). */
-export type Cites = Record<string, { title: string | null; excerpt: string | null }>;
-
 function measureIn(text: string): Measure | null {
   const m = MEASURE.exec(text);
   if (!m) return null;
@@ -169,29 +164,6 @@ function measureIn(text: string): Measure | null {
   const s = SOURCE.exec(rest);
   const measure = trimP((s ? rest.slice(0, s.index) : rest).replace(SOURCE_LEFT, ""));
   return measure ? { name: trimP(text.slice(0, m.index)), measure, source: s ? trimP(s[1]) || null : null } : null;
-}
-
-const keysOf = (raw: string, cites: Cites) =>
-  [...(raw ?? "").matchAll(/\[c:\s*([^[\]]*?)\s*\]/g)].flatMap((g) => g[1].split(",")).map((k) => k.trim()).filter((k) => k && k in cites);
-
-/** one_pager_checks._excerpt: a citation's excerpt as a measure, at most 20 words, cut with "…". */
-function excerpt(t: string): string {
-  const words = plain(t).split(/\s+/).filter(Boolean);
-  return words.slice(0, 20).join(" ") + (words.length > 20 ? "…" : "");
-}
-
-/** one_pager_checks._cited: a measure with its citations resolved; ids alone are the cited source's words, else no measure. */
-function cited(raw: string, cites: Cites): Measure | null {
-  const keys = keysOf(raw, cites);
-  const m = measureIn(plain(raw));
-  if (!m) {
-    const at = MEASURE.exec(raw);
-    const src = keys.map((k) => cites[k]).find((c) => c.excerpt);
-    if (!at || !src) return null;
-    return { name: trimP(plain(raw.slice(0, at.index))), measure: excerpt(src.excerpt ?? ""), source: src.title };
-  }
-  if (m.source === null) m.source = keys.map((k) => cites[k].title).find(Boolean) ?? null;
-  return m;
 }
 
 // A success measures section (CLD's walk B, 2026-11-01): its lines say how each outcome is
@@ -223,13 +195,17 @@ function stated(raw: string): Measure | null {
   return { name: trimS(name), measure: kept.join(", "), source: source || null };
 }
 
-function measures(secs: Sec[], cites: Cites): Measure[] {
+/**
+ * one_pager_checks.measures: every measure the PRD states in its words. A citation is never its
+ * words (vqa one-pager 2): ids alone are no measure, a source named only by its citation none.
+ */
+function measures(secs: Sec[]): Measure[] {
   const out: Measure[] = [];
   for (const s of secs) {
-    const { bullets, cells, prose } = rows(s.body, true);
+    const { bullets, cells, prose } = rows(s.body);
     const success = SUCCESS_HEAD.test(s.heading);
     for (const t of [...bullets, ...sentences(prose.join(" "))]) {
-      const m = cited(t, cites) ?? (success && !MEASURE.test(t) ? stated(t) : null);
+      const m = measureIn(t) ?? (success && !MEASURE.test(t) ? stated(t) : null);
       if (m) out.push(m);
     }
     const head = header(s.body);
@@ -238,12 +214,9 @@ function measures(secs: Sec[], cites: Cites): Measure[] {
     for (const r of cells) {
       if (mcol > 0 && r[mcol]) {
         const said = scol > 0 ? r[scol] ?? "" : "";
-        const keys = [...keysOf(r[mcol], cites), ...keysOf(said, cites)];
-        const measure = plain(r[mcol]) || excerpt(keys.map((k) => cites[k].excerpt).find(Boolean) ?? "");
-        const src = plain(said) || (keys.map((k) => cites[k].title).find(Boolean) ?? null);
-        if (measure) out.push({ name: plain(r[0]), measure: plain(measure), source: src || null });
+        if (plain(r[mcol])) out.push({ name: plain(r[0]), measure: plain(r[mcol]), source: plain(said) || null });
       } else {
-        const m = cited(r.join(" · "), cites) ?? (success && r[0] ? stated(`${r[0]}: ${r.slice(1).join("; ")}`) : null);
+        const m = measureIn(r.join(" · ")) ?? (success && r[0] ? stated(`${r[0]}: ${r.slice(1).join("; ")}`) : null);
         if (m) out.push(m);
       }
     }
@@ -497,8 +470,8 @@ export function wholeWord(cut: string, said: string): string {
 }
 
 /** one_pager_checks.annotate: fills the blocks' clear-reading fields in place; the "Needs a look" items. */
-export function annotate(blocks: Block[], secs: Sec[], cites: Cites = {}, checked: Sec[] = secs): Look[] {
-  const names = glossary(secs), notes = footnoteNotes(secs), found = measures(secs, cites), who = whoHasIt(secs);
+export function annotate(blocks: Block[], secs: Sec[], checked: Sec[] = secs): Look[] {
+  const names = glossary(secs), notes = footnoteNotes(secs), found = measures(secs), who = whoHasIt(secs);
   const unnamed = new Map<string, string[]>();
   for (const b of blocks) {
     if (b.key === "problem") b.who = who ? monthFirst(who) : who;

@@ -29,7 +29,7 @@ import { companyDayIso } from "./connections";
 import { draftDecisionNotes, leftOut } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changePhrase, changeSentence } from "./simple-change-words";
-import { annotate, asWritten, resolved, setNumber, type Cites } from "./one-pager-checks";
+import { annotate, asWritten, resolved, setNumber } from "./one-pager-checks";
 import { roadmapOut } from "./simple-roadmap";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
 import { madeOrder } from "./made-order";
@@ -128,8 +128,6 @@ export interface OnePagerDb {
   writing?: boolean;
   /** The page is Oracle's quick read with no one_pager job writing it (it failed or was never queued). */
   quickRead?: boolean;
-  /** The PRD version's citations (title, excerpt) by id: a measure's source (one_pager_checks.measures). */
-  cites?: Cites;
 }
 
 const DOC_ID = stableUuid("simple-one-pager-doc");
@@ -325,11 +323,6 @@ export function seedNotInPrdOnePager(): OnePagerDb {
 export function seedRunPrdOnePager(): OnePagerDb {
   const db = seedOnePager();
   db.writing = true;
-  db.cites = {
-    c1: { title: "Library owner interviews", excerpt: null },
-    c4: { title: "Upload log export", excerpt: "photos given an album within 24 hours of upload, per library per week" },
-    c11: { title: "Sorting habits study", excerpt: null },
-  };
   db.sections = [
     { key: "problem", heading: "Problem", body: "Owners of small photo libraries lose an hour a week finding new photos (about 9 minutes per day) [c:c1]. Every feature below serves sorting time [c:c4]:" },
     { key: "brief-items", heading: "Features by milestone", body: "| Milestone | Feature | Goal | Outcome |\n|---|---|---|---|\n| [M1](#milestone-m1) | [F-10 Auto albums](#feature-auto-albums) | Faster sorting | Albums by event [c:c4] |\n| | [F-12 Face groups](#feature-face-groups) | Faster sorting | People found in one tap [c:c1] |\n| | [F-13 Album names](#feature-album-names) | Faster sorting | Albums named by place and date [c:c1] |" },
@@ -379,11 +372,6 @@ export function seedRunPrdOnePager(): OnePagerDb {
 export function seedRunPrdWalkOnePager(): OnePagerDb {
   const db = seedOnePager();
   db.doc = { ...db.doc, title: "Onboarding pace" };
-  db.cites = {
-    c1: { title: "Manager interviews", excerpt: null },
-    c2: { title: "Onboarding tracker export", excerpt: null },
-    c3: { title: "Time study", excerpt: null },
-  };
   db.sections = [
     { key: "problem", heading: "Problem", body: "New accounts take weeks to go live, and a late step is found only when the customer asks why [c:c1]." },
     { key: "brief-items", heading: "Features by milestone", body: "| Milestone | Feature |\n|---|---|\n| M1 | [Pacing plan](#f-01) |\n| | [Late alerts](#f-02) |" },
@@ -603,9 +591,9 @@ function buildLines(spec: FallbackSpec, secs: Sec[]): SeedLine[] {
  * As one_pager.extract, read from a PRD's own published sections (never Guided setup's
  * copied ones). `slice`: the PRD's own roadmap items, when the mock links any to it; `[]`
  * with none, so the header's span and the strip read the PRD's own (or "No roadmap items
- * yet"), never SLICE's. `cites`: that version's citations, as the page's sources read them.
+ * yet"), never SLICE's.
  */
-export function seedOnePagerFromSections(doc: OnePagerDb["doc"], sections: Sec[], slice: SliceItem[] = [], cites: Cites = {}): OnePagerDb {
+export function seedOnePagerFromSections(doc: OnePagerDb["doc"], sections: Sec[], slice: SliceItem[] = []): OnePagerDb {
   const mapped = mapToBlocks(sections);
   const blocks: OnePagerDb["blocks"] = FALLBACK_SPECS.map((spec) => {
     const secs = mapped[spec.key];
@@ -613,20 +601,19 @@ export function seedOnePagerFromSections(doc: OnePagerDb["doc"], sections: Sec[]
     return { key: spec.key, title: spec.title, rules: spec.rules, kind: spec.kind, lines, missing: secs.length === 0 };
   });
   blocks.push({ key: "timeline", title: "Timeline", rules: "The PRD's roadmap slice", kind: "timeline", lines: [] });
-  return { doc, version: 1, sections, blocks, draft: null, changes: [], slice, cites };
+  return { doc, version: 1, sections, blocks, draft: null, changes: [], slice };
 }
 
 /**
  * vqa B-13: a mock PRD's own one-pager from a version's sections as the API reads them (its
- * `#` title and empty sections left out), with that version's citations; never another PRD's
- * words under this PRD's title.
+ * `#` title and empty sections left out); never another PRD's words under this PRD's title.
  */
 export type PrdSection = { section_key: string; level: number; heading: string; body_md: string };
-export function prdOnePager(doc: OnePagerDb["doc"], prdSections: PrdSection[], cites: Cites = {}): OnePagerDb {
+export function prdOnePager(doc: OnePagerDb["doc"], prdSections: PrdSection[]): OnePagerDb {
   const sections: Sec[] = prdSections
     .filter((s) => s.level > 1 && (s.body_md ?? "").trim())
     .map((s) => ({ key: s.section_key, heading: s.heading, body: s.body_md }));
-  return seedOnePagerFromSections(doc, sections, [], cites);
+  return seedOnePagerFromSections(doc, sections, []);
 }
 
 type RoadmapDb = Parameters<typeof roadmapOut>[0];
@@ -1010,7 +997,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     }));
   // Reads clearly (2026-10-30): as one_pager_checks.annotate on the PRD's sections.
   // The numbers as the reader's working draft has them, so a fixed number clears.
-  const looks = annotate(blocks, db.sections, db.cites, db.sections.map((x) => ({ ...x, heading: headingNow(db, x.key, sees), body: sectionNow(db, x.key, sees) }))).map((x): Schemas["OnePagerLook"] => {
+  const looks = annotate(blocks, db.sections, db.sections.map((x) => ({ ...x, heading: headingNow(db, x.key, sees), body: sectionNow(db, x.key, sees) }))).map((x): Schemas["OnePagerLook"] => {
     if (!x.fix) return { ...x, fix: null };
     const f = x.fix;
     const c = fixes.find((y) => y.target.section === f.target.section && y.target.said === f.target.said && (y.target.part ?? "body") === (f.target.part ?? "body"));
