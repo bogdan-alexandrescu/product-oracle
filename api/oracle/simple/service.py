@@ -26,6 +26,7 @@ import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -1518,11 +1519,18 @@ async def build(
     track_prd = {e.track.id: e.track.prd_document_id for e in read.entries if e.track}
     # roadmap-keydates: the key dates read with the PRDs' milestones, as priorities reads them.
     kd_prds = await key_dates.key_date_prds(db, principal, kd_docs, read.entries)
+    # roadmap-milestone-codes: the codes are numbered over every readable roadmap, so a
+    # filtered read shows the codes Home and the Goal map show.
+    all_prds = (
+        kd_prds
+        if chosen is None
+        else await key_dates.key_date_prds(db, principal, readable, read.entries)
+    )
     views = await plans.views(
         db,
         {e.prd.id for e in shown if e.prd}
         | set(track_prd.values())
-        | {p.id for of in kd_prds.values() for p in of},
+        | {p.id for of in all_prds.values() for p in of},
     )
     kds, kd_roadmaps = await key_dates.read_key_dates(
         db, principal, kd_docs, read.entries, views, kd_prds
@@ -1552,7 +1560,26 @@ async def build(
         _milestone_out(m, keyed, ids, views.get(track_prd.get(m.track_id)))  # type: ignore[arg-type]
         for m in read.milestones
     ]
-    await _roadmap_codes(db, shown_goal_milestones, track_outs, items)
+    all_goal_milestones = (
+        shown_goal_milestones
+        if chosen is None
+        else await goal_milestones.list_for_roadmaps(
+            db, principal, readable, read.entries, views, all_prds
+        )
+    )
+    # Every entry's item, shown or not: which roadmap holds a track milestone decides a fold.
+    await _roadmap_codes(
+        db,
+        all_goal_milestones,
+        track_outs,
+        [
+            SimpleNamespace(id=e.row.id, roadmap=e.roadmap, milestone=e.milestone)
+            for e in read.entries
+        ],
+    )
+    coded = {m.id: m.roadmap_code for m in all_goal_milestones}
+    for m in shown_goal_milestones:
+        m.roadmap_code = coded.get(m.id)
     # item-milestone: a picked roadmap milestone reads its live code (the roadmap's one,
     # roadmap-milestone-codes) and name (a PRD may rename it).
     live = {m.id: m for m in shown_goal_milestones}
