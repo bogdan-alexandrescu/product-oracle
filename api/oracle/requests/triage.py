@@ -169,7 +169,8 @@ def _confidence(value: Any) -> float | None:
 
 
 class _Lookups:
-    """The company's confirmed goals and features by key, and its live themes."""
+    """The company's confirmed goals and features by key (a feature also by a key it had
+    before it joined with its code), and its live themes."""
 
     def __init__(self, goals: dict[str, uuid.UUID], features: dict[str, uuid.UUID],
                  themes: dict[uuid.UUID, RequestTheme]) -> None:  # fmt: skip
@@ -186,8 +187,11 @@ class _Lookups:
                 Entity.type == "feature", Entity.status != "rejected"
             )
         )
+        from oracle.baseline import fixes
+
+        by_key = {**await fixes.former_keys(db, live=True), **dict(features.all())}
         themes = await db.scalars(select(RequestTheme).where(RequestTheme.archived_at.is_(None)))
-        return cls(dict(goals.all()), dict(features.all()), {t.id: t for t in themes})
+        return cls(dict(goals.all()), by_key, {t.id: t for t in themes})
 
     def goal_ids(self, raw: Any, drops: Counter[tuple[str, str]] | None) -> list[uuid.UUID]:
         keys = raw if isinstance(raw, list) else ([] if raw is None else [raw])
