@@ -1290,7 +1290,12 @@ async def _unknown_keys(db: AsyncSession, keys: list[str], read_: service.Read) 
     low = [k.lower() for k in left]
     q = select(Entity.key).where(Entity.type == "feature", func.lower(Entity.key).in_(low))
     features = {k.lower() for k in await db.scalars(q) if k}
-    return [k for k in left if k.lower() not in features]
+    left = [k for k in left if k.lower() not in features]
+    # A feature's key before it was given a code still names it (oracle.baseline.fixes).
+    from oracle.baseline import fixes
+
+    former = await fixes.features_by_keys(db, left) if left else {}
+    return [k for k in left if k not in former]
 
 
 async def _exists(db: AsyncSession, op: str, ref: uuid.UUID) -> bool:

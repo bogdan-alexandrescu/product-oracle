@@ -115,8 +115,8 @@ async def test_a_lost_race_on_join_is_refused(client, monkeypatch):
 
 async def test_a_create_with_another_features_old_key_names_it(client):
     ctx, _ = await _planner(client)
-    r = await client.post(f"{B}/entities", headers=ctx.as_("approver"),
-                          json={"type": "feature", "key": "trip-planner", "title": "Trips"})  # fmt: skip
+    body = {"type": "feature", "key": "trip-planner", "title": "Trips"}
+    r = await client.post(f"{B}/entities", headers=ctx.as_("approver"), json=body)
     assert r.status_code == 409, r.text
     assert "The key trip-planner is F-01 Trip planner's old key." in r.text
 
@@ -135,8 +135,8 @@ async def test_a_yaml_import_reads_the_codes_taken_once(client):
     reads = []
     for n, prefix in ((1, "one"), (5, "five")):
         with count_statements() as seen:
-            r = await client.post(f"{B}/yaml", content=_yaml(n, prefix).encode(),
-                                  headers={**ctx.as_("owner"), "Content-Type": "application/yaml"})  # fmt: skip
+            headers = {**ctx.as_("owner"), "Content-Type": "application/yaml"}
+            r = await client.post(f"{B}/yaml", content=_yaml(n, prefix).encode(), headers=headers)
         assert r.status_code == 200, r.text
         reads.append(sum("simple_prd_plans" in q for q in seen))
     assert reads[0] == reads[1], reads
