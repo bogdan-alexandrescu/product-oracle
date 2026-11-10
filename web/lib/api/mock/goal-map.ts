@@ -27,6 +27,7 @@ import type { TrashDb, TrashEntryRow } from "./trash";
 import { FIT_COMPANY_SCENARIO } from "./fit-date";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderMap } from "./goal-ladder";
 import { stableUuid } from "./ids";
+import { codedTitle, shownTitle } from "./item-code";
 import { COMPANY_SLUG } from "./one-roadmap";
 
 export type GoalMap = Schemas["GoalMapOut"];
@@ -569,13 +570,13 @@ export function mayChangeMilestone(me: { id?: string; role: string }, decider: s
 
 /** /v1/simple/goal-map and its edits; null for any other path. Edits need approver and up. */
 export async function routeGoalMap(
-  db: { goal_map?: GoalMap; goal_map_decider?: string | null; goal_map_places?: Record<string, Record<string, [number, number]>> },
+  db: { goal_map?: GoalMap; goal_map_decider?: string | null; goal_map_places?: Record<string, Record<string, [number, number]>>; simple_roadmap?: { feature_codes?: Record<string, string> } },
   scenario: string | null,
   me: { role: string; name: string; id?: string },
   req: Request,
   p: string[],
   /** A Simple roadmap item by id (any item can be attached, not only those on the map). */
-  item: (id: string) => { title: string; trashed?: boolean; merged_into?: string } | null = () => null,
+  item: (id: string) => { title: string; section?: string | null; feature_id?: string | null; trashed?: boolean; merged_into?: string } | null = () => null,
   /** The Simple roadmap's items as the reader sees them (the unplaced features). */
   items: () => Promise<{ id: string; title: string; status: string }[]> = async () => [],
   /** The Baseline goals (the goals left off the map; the map's own goal names). */
@@ -601,7 +602,10 @@ export async function routeGoalMap(
     // panel-menu (goal_map.build): a feature merged into another is no longer one of the map's.
     const features = map.features.filter((f) => !item(f.id)?.trashed && !item(f.id)?.merged_into).flatMap((f) => {
       const links = f.links.filter((l) => on.has(l.milestone));
-      return links.length ? [{ ...f, milestones: f.milestones.filter((m) => on.has(m)), links }] : [];
+      // QA goal map codes: its item's name as the roadmap reads it, without a leading code of its own.
+      const it = item(f.id);
+      const name = it ? shownTitle(it, (k) => db.simple_roadmap?.feature_codes?.[k]) : codedTitle(f.name, null)[1];
+      return links.length ? [{ ...f, name, milestones: f.milestones.filter((m) => on.has(m)), links }] : [];
     });
     return { goals, milestones, features };
   };

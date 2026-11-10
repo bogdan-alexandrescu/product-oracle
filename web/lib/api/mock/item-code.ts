@@ -26,6 +26,11 @@ export function shownName(item: CodedItem, featureCode: (id: string) => string |
   return code ? `${code} ${name}` : name;
 }
 
+/** QA goal map codes (goal_map.build): an item's name as the roadmap reads it, without a leading code of its own. */
+export function shownTitle(item: CodedItem, featureCode: (id: string) => string | null | undefined): string {
+  return codedTitle(item.title, ownCode(item, featureCode))[1];
+}
+
 type CodedItem = { title: string; feature_id?: string | null; section?: string | null };
 
 const ownCode = (item: CodedItem, featureCode: (id: string) => string | null | undefined) =>

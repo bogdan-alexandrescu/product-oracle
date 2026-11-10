@@ -308,7 +308,7 @@ export function GoalMapPage() {
       const m = map.milestones.find((x) => x.id === draft.milestone);
       const ok = await send(
         api.POST("/v1/simple/goal-map/links", { body: { feature: draft.feature, milestone: draft.milestone, area: draft.area, expected: draft.expected, confidence: "medium" } }),
-        (next) => `Attached: ${next.features.find((x) => x.id === draft.feature)?.name} now also serves ${m?.name}.`,
+        (next) => `Attached: ${`${codes.get(draft.feature) ?? ""} ${next.features.find((x) => x.id === draft.feature)?.name}`.trim()} now also serves ${m?.name}.`,
       );
       if (!ok) return;
       reveal(`[data-feature="${draft.feature}"]`);
@@ -446,8 +446,9 @@ function AttachDrawer({ map, draft, set, onClose, onSave }: { map: GoalMap; draf
   const label = "flex flex-col gap-1.5 font-semibold";
   const on = new Map(map.features.map((f) => [f.id, f]));
   const term = draft.search.toLowerCase();
-  const named = (roadmap.data?.items ?? []).map((i) => ({ id: i.id, name: on.get(i.id)?.name ?? i.title }));
-  const list = named.filter((i) => !on.get(i.id)?.milestones.includes(draft.milestone) && (!term || i.name.toLowerCase().includes(term)));
+  // QA goal map codes: each with its code, then its name.
+  const named = (roadmap.data?.items ?? []).map((i) => ({ id: i.id, code: i.code ?? "", name: on.get(i.id)?.name ?? i.title }));
+  const list = named.filter((i) => !on.get(i.id)?.milestones.includes(draft.milestone) && (!term || `${i.code} ${i.name}`.toLowerCase().includes(term)));
   // A feature sits in one area: attached from another area's cell, it moves there.
   const picked = on.get(draft.feature);
   const areaName = (id: string | null) => map.areas.find((a) => a.id === id)?.name;
@@ -491,7 +492,10 @@ function AttachDrawer({ map, draft, set, onClose, onSave }: { map: GoalMap; draf
           return (
             <li key={i.id}>
               <button type="button" onClick={() => set({ feature: i.id })} className={`w-full rounded-xl border px-3 py-2 text-left ${draft.feature === i.id ? "border-accent bg-accent-soft" : "border-line"}`}>
-                <span className="font-semibold">{i.name}</span>
+                <span className="font-semibold">
+                  {i.code && <span className="simple-code mr-1">{i.code}</span>}
+                  {i.name}
+                </span>
                 <span className="simple-small block text-[14px]! leading-5">
                   {f ? `${map.areas.find((a) => a.id === f.area)?.name ?? "No area"} · serves ${f.milestones.map((x) => msName(map, x)).join(", ")}` : "Not on the map yet"}
                 </span>
