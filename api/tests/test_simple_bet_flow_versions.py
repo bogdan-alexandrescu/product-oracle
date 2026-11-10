@@ -11,6 +11,11 @@ Test cards (protects / fails_when / no_claim):
   bets' keys shifted by one (before this fix) still shows each flow on the bet it was drawn
   for, by the words it was drawn from, and the bet left without one can be drawn;
   fails_when=the stored keys decide which bet shows a flow drawn for another.
+- test_the_moved_bets_own_flow_stays_when_it_is_reworded: protects=on such a page, the flow
+  drawn for the bet left without one stays on it when a later version rewords only that bet;
+  fails_when=its flow is kept under its words, so new words lose it ("Draw the flow" again).
+- test_a_tie_keeps_the_flow_a_person_touched: protects=when two drawn flows read as alike to a
+  bet, the one a person redrew or commented on stays on it; fails_when=place decides.
 """
 
 import uuid
@@ -21,7 +26,7 @@ from sqlalchemy import select
 from oracle import company_time
 from oracle.docs.models import Document, DocumentVersion
 from oracle.jobs.models import LlmJob
-from oracle.simple import one_pager
+from oracle.simple import one_pager, visuals
 from oracle.simple.models import SimpleOnePager, SimpleVisual
 from oracle.tenancy import tenant_session
 from tests.test_simple_line_visuals_api import ask
@@ -86,6 +91,30 @@ async def next_version(client, ctx) -> None:
         await s.commit()
 
 
+async def shift_keys(ctx) -> None:
+    """Version 2's page as built before the fix: each bet keyed by the bet at its place
+    before."""
+    async with tenant_session(ctx.tenant_id) as s:
+        v1 = await s.scalar(
+            select(SimpleOnePager)
+            .join(DocumentVersion, DocumentVersion.id == SimpleOnePager.version_id)
+            .where(DocumentVersion.number == 1)
+        )
+        old = [x["flow_key"] for b in v1.blocks if b["key"] == "bets" for x in b["lines"]]
+        doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
+        v2 = await s.scalar(
+            select(SimpleOnePager).where(
+                SimpleOnePager.document_id == doc.id, SimpleOnePager.id != v1.id
+            )
+        )
+        blocks = [dict(b, lines=[dict(x) for x in b["lines"]]) for b in v2.blocks]
+        bets = next(b for b in blocks if b["key"] == "bets")["lines"]
+        for x, key in zip(bets, old, strict=True):
+            x["flow_key"] = key
+        v2.blocks = blocks
+        await s.commit()
+
+
 def shown(view: dict) -> list[tuple[str, str | None]]:
     """Each bet's words and the subject of the flow it shows (None: "Draw the flow")."""
     return [
@@ -115,26 +144,7 @@ async def test_a_shifted_page_reads_each_flow_on_its_own_bet(client):
     await next_version(client, ctx)
     view = await get(client, ctx, "decider")
     doc_id = view["document"]["id"]
-    # The page as built before the fix: each bet keyed by the bet at its place before.
-    async with tenant_session(ctx.tenant_id) as s:
-        v1 = await s.scalar(
-            select(SimpleOnePager)
-            .join(DocumentVersion, DocumentVersion.id == SimpleOnePager.version_id)
-            .where(DocumentVersion.number == 1)
-        )
-        old = [x["flow_key"] for b in v1.blocks if b["key"] == "bets" for x in b["lines"]]
-        doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
-        v2 = await s.scalar(
-            select(SimpleOnePager).where(
-                SimpleOnePager.document_id == doc.id, SimpleOnePager.id != v1.id
-            )
-        )
-        blocks = [dict(b, lines=[dict(x) for x in b["lines"]]) for b in v2.blocks]
-        bets = next(b for b in blocks if b["key"] == "bets")["lines"]
-        for x, key in zip(bets, old, strict=True):
-            x["flow_key"] = key
-        v2.blocks = blocks
-        await s.commit()
+    await shift_keys(ctx)
     view = await get(client, ctx, "decider")
     assert shown(view) == [
         ("A welcome note that names the first three steps", None),
@@ -150,3 +160,43 @@ async def test_a_shifted_page_reads_each_flow_on_its_own_bet(client):
     after = block(await get(client, ctx, "decider"), "bets")["lines"]
     assert after[0]["flow"] is not None and after[0]["flow_subject"] == new["flow_subject"]
     assert uuid.UUID(after[1]["flow_subject"]) == uuid.UUID(by_brief[WORDED[0]])
+
+
+async def test_the_moved_bets_own_flow_stays_when_it_is_reworded(client):
+    ctx = await world(client)
+    by_brief = await drawn(client, ctx)
+    await next_version(client, ctx)
+    view = await get(client, ctx, "decider")
+    doc_id = view["document"]["id"]
+    await shift_keys(ctx)
+    new = block(await get(client, ctx, "decider"), "bets")["lines"][0]
+    assert (await ask(client, ctx, "decider", new["flow_subject"], doc_id)).status_code == 202
+    await run_visual_jobs(ctx)
+    # Version 3 rewords only the bet added in version 2.
+    v3 = V2.replace(
+        "- A welcome note that names the first three steps",
+        "- A welcome note that lists the first three setup steps",
+    )
+    r = await client.post("/v1/documents/guided-setup/versions", content=v3.encode(),
+                          headers=MD | ctx.as_("owner"))  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        v = await s.scalar(select(DocumentVersion).where(DocumentVersion.number == 3))
+        v.approved_at = NOW
+        await s.commit()
+    for who in ("decider", "viewer"):
+        view = await get(client, ctx, who)
+        assert view["version"] == 3
+        assert shown(view) == [
+            ("A welcome note that lists the first three setup steps", new["flow_subject"]),
+            ("A setup checklist that shows the next step", by_brief[WORDED[0]]),
+            ("Invite suggestions from the admin's calendar", by_brief[WORDED[1]]),
+            ("A sample project created on day one", by_brief[WORDED[2]]),
+        ], who
+
+
+def test_a_tie_keeps_the_flow_a_person_touched():
+    # Two flows drawn from the same words; the bet at the first one's place.
+    old = [["Setup checklist"], ["Setup checklist"]]
+    assert visuals.pair_alike(old, [["A setup checklist"]]) == {0: 0}
+    assert visuals.pair_alike(old, [["A setup checklist"]], {1}) == {0: 1}
