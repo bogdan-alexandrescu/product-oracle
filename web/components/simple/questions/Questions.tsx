@@ -335,6 +335,7 @@ export function QuestionRow({
   plain = false,
   forOthers = false,
   linked = false,
+  listCode = false,
 }: {
   q: Question;
   mode: Mode;
@@ -347,6 +348,9 @@ export function QuestionRow({
   forOthers?: boolean;
   /** The question a link opened (Decisions' ?question=, from the Inbox): marked as an anchor is. */
   linked?: boolean;
+  /** QA: a list of many PRDs' questions (Decisions), where a PRD's own code (Q8) repeats: the
+   * decision's number (D-12), unique in the list; the PRD and its code stay in the chip's tooltip. */
+  listCode?: boolean;
 }) {
   const zone = useCompanyZone();
   const { me } = useMe();
@@ -457,6 +461,13 @@ export function QuestionRow({
       </>
     );
   }
+  const codeChip = listCode ? (
+    <span className="simple-code" title={`${q.prd.title} ${q.code.toUpperCase()}`} data-testid="question-code">
+      D-{q.number}
+    </span>
+  ) : (
+    <span className="simple-code">{q.code}</span>
+  );
   return (
     <Tag data-testid={testId} data-code={q.code} data-question-id={q.id} data-linked={linked ? "true" : undefined} aria-label={`${q.code} ${q.title}`} className={`simple-row${linked ? " bg-[var(--simple-edited)]" : ""}`}>
       <span aria-hidden className={`simple-ico ${done ? "simple-ico-done" : ""}`}>
@@ -466,7 +477,7 @@ export function QuestionRow({
         {gone ? (
           <>
             <span className="break-words">
-              {!plain && <span className="simple-code">{q.code}</span>}{" "}
+              {!plain && codeChip}{" "}
               <s className="font-[650] text-text2" data-testid="question-withdrawn">
                 {q.title}
               </s>
@@ -478,7 +489,7 @@ export function QuestionRow({
         <span className="break-words">
           {sheet && !done ? (
             <>
-              {!plain && <span className="simple-code">{q.code}</span>}{" "}
+              {!plain && codeChip}{" "}
               <button type="button" data-testid="question-open" title={plain ? `${q.code} · ${q.title}` : undefined} className="text-left font-[650] underline decoration-1 underline-offset-4 hover:text-accent-ink" onClick={() => sheet.open({ kind: "question", q })}>
                 {q.title}
               </button>
@@ -489,7 +500,7 @@ export function QuestionRow({
             </b>
           ) : (
             <>
-              <span className="simple-code">{q.code}</span> <b className="font-[650]">{q.title}</b>
+              {codeChip} <b className="font-[650]">{q.title}</b>
             </>
           )}
         </span>

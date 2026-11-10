@@ -31,7 +31,8 @@ function day(d: string): string {
  * proposed to them (the Inbox's decisions they decide, as the waiting count's `others`), broken links and dates on
  * items they decide, drafts waiting for their approval, proposals on their items, the goal
  * suggestions they decide and the proposed goals they may confirm (an approver or the owner, as
- * POST /v1/baseline/entities/{id}/confirm takes).
+ * POST /v1/baseline/entities/{id}/confirm takes), then the Inbox's other counted rows (Add
+ * predictions, launches, rituals, metrics, requests).
  */
 export async function waitingItems(get: (path: string) => Promise<unknown>, meId: string, questions: Schemas["SimpleQuestion"][], role = ""): Promise<Item[]> {
   const read = async <T,>(path: string): Promise<T | undefined> => (await get(path).catch(() => undefined)) as T | undefined;
@@ -111,5 +112,22 @@ export async function waitingItems(get: (path: string) => Promise<unknown>, meId
   for (const g of proposed) {
     out.push({ kind: "goal", key: `goal:${g.id}`, ref_id: g.id, title: g.title, detail: "", action: "Confirm", href: "/simple", at: g.created_at, op: null });
   }
+  // The Inbox's other counted rows (waiting_list._inbox), in the Inbox's words, so Home and the Inbox agree.
+  const row = (key: string, title: string, detail: string, href: string, at: string | null = null): Item => ({ kind: "inbox", key, ref_id: key.split(":").at(-1)!, title, detail, action: "Open", href, at, op: null });
+  for (const o of inbox?.outcomes ?? []) if (o.counts) out.push(row(`outcome:${o.reason}:${o.id}`, o.title, "Plan › Outcomes", `/plan/outcomes?outcome=${o.id}`));
+  for (const r of inbox?.launches ?? []) if (r.counted) out.push(row(`launch:${r.reason}:${r.launch_id}`, `${LAUNCH[r.reason] ?? "Launch"} · ${r.title}`, r.item, `/roadmap/launches?launch=${r.launch_id}`, r.at ?? null));
+  for (const r of inbox?.rituals ?? []) if (r.counts && (r.state === "new" || r.state === "open")) out.push(row(`ritual:${r.reason}:${r.occurrence_id}`, `${RITUAL[r.reason]} · ${r.title}`, "Rituals", `/company/rituals/${r.occurrence_id}`, r.due_at));
+  for (const m of inbox?.metrics ?? []) {
+    if (!m.counts) continue;
+    const href = m.reason !== "pull_failed" && m.occurrence_id ? `/company/rituals/${m.occurrence_id}` : `/company/metrics?metric=${m.metric_id}`;
+    out.push(row(`metric:${m.reason}:${m.variance_id ?? m.metric_id}`, `${METRIC[m.reason]} · ${m.metric_title}`, "Metrics", href));
+  }
+  for (const r of inbox?.requests ?? []) if (r.counts) out.push(row(`request:${r.reason}:${r.request_id}`, `${REQUEST[r.reason]} · ${r.title}`, "Requests", `/requests?request=${r.request_id}`, r.at ?? null));
   return out;
 }
+
+/** The Inbox's words for each row (oracle.simple.waiting_list _LAUNCH, _RITUAL, _METRIC, _REQUEST). */
+const LAUNCH: Record<string, string> = { ready: "Ready to launch", set_tier: "Set tier", notes_to_send: "Notes to send" };
+const RITUAL: Record<string, string> = { pre_read: "Pre-read ready", record_notes: "Record notes", failed: "Ritual failed to prepare" };
+const METRIC: Record<string, string> = { explain: "Explain an unusual week", find_out: "Find out", pull_failed: "Metric not read for a day" };
+const REQUEST: Record<string, string> = { replies_to_send: "Replies to send", asked_again: "Asked again since you said no", answer: "Answer to your request" };

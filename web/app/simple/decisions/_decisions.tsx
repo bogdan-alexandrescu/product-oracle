@@ -124,7 +124,7 @@ export function SimpleDecisions() {
   useItemChanged(() => Promise.all([q.reload(), roadmap.reload()]));
   const found = useCallback((f: Parameters<OpenFeature>[0]) => !!itemFor(roadmap.data?.items ?? [], f), [roadmap.data]);
   return (
-    <SimplePage title="Decisions" lead={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
+    <SimplePage title="Decisions" info={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
       <OpenFeatureContext.Provider value={setFeature}>
       <FeatureFoundContext.Provider value={found}>
       <DecisionSheetHost onChanged={() => q.reload()}>
@@ -327,7 +327,7 @@ function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["S
           )
         ) : (
           <ul>
-            {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} linked={x.id === linked} />)}
+            {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} linked={x.id === linked} listCode />)}
             {extra.map((i) => <WaitingRow key={i.key} item={i} />)}
           </ul>
         )}
@@ -339,7 +339,7 @@ function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["S
       </QuestionCard>
       {others.length > 0 && (
         <QuestionCard label="Waiting for others" testId="questions-others" questions={others} count={others.length}>
-          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} forOthers linked={x.id === linked} />)}</ul>
+          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} forOthers linked={x.id === linked} listCode />)}</ul>
         </QuestionCard>
       )}
     </>
@@ -396,7 +396,7 @@ function Board({ questions, actions, linked }: { questions: Question[]; actions:
               ) : (
                 <ul>
                   {/* qa4-simple-decide-6: someone else's question says for whom here too, as on the List. */}
-                  {of(c.key).map((x) => <QuestionRow key={x.id} q={x} mode={c.key} actions={actions} forOthers linked={x.id === linked} />)}
+                  {of(c.key).map((x) => <QuestionRow key={x.id} q={x} mode={c.key} actions={actions} forOthers linked={x.id === linked} listCode />)}
                 </ul>
               )}
             </section>
@@ -612,7 +612,8 @@ function Rows({ rows }: { rows: Row[] }) {
         const done = r.status === "decided";
         // qa-simple-decide-19: a question decided in a meeting shows as one decided outside it:
         // its code, its title, then the answer, as the API sends them (never read out of the title).
-        const code = r.code ?? `D-${r.number}`;
+        // QA: a PRD's code (Q8) repeats across PRDs' runs: the decision's own number, unique in the list (the PRD's code in its tooltip).
+        const code = `D-${r.number}`;
         const { title } = r;
         // ec1 b: an open decision's title opens its sheet; one withdrawn here just now stays, struck through, with Undo.
         const opens = !!sheet && r.status === "proposed" && !!r.can;
@@ -631,7 +632,9 @@ function Rows({ rows }: { rows: Row[] }) {
             </span>
             <span className="simple-rb flex-1">
               <span className="break-words">
-                <span className="simple-code">{code}</span>{" "}
+                <span className="simple-code" title={r.code ? r.code.toUpperCase() : undefined}>
+                  {code}
+                </span>{" "}
                 {gone ? (
                   <s className="font-[650] text-text2" data-testid="decision-withdrawn" data-user-content>
                     {title}

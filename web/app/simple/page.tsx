@@ -121,6 +121,7 @@ const BESIDES: [Schemas["SimpleWaitingItem"]["kind"], string, string][] = [
   ["proposal", "proposal", "proposals"],
   ["goal_suggestion", "goal suggestion", "goal suggestions"],
   ["goal", "proposed goal", "proposed goals"],
+  ["inbox", "Inbox item", "Inbox items"],
 ];
 function allBesides(items: Schemas["SimpleWaitingItem"][]): string {
   return joinAnd(
@@ -404,9 +405,11 @@ export default function SimpleHome() {
   // confirm and goal suggestions I decide, each with its action in place.
   // home-draft-in-review: a draft the drafts card shows lives only there (Home only; other pages keep their rows).
   const draftIds = new Set(myDrafts.map((d) => d.id));
+  // QA: and the Inbox's other counted rows (Add predictions, launches, rituals, metrics, requests), so Home and the Inbox agree.
   const alsoWaiting = (waiting.data?.items ?? []).filter(
-    (i) => (i.kind === "draft" && !draftIds.has(i.ref_id)) || i.kind === "goal_suggestion" || (i.kind === "date" && !i.op),
+    (i) => (i.kind === "draft" && !draftIds.has(i.ref_id)) || i.kind === "goal_suggestion" || (i.kind === "date" && !i.op) || i.kind === "inbox",
   );
+  const inboxCount = alsoWaiting.filter((i) => i.kind === "inbox").length;
   const stopCount = runStops?.length ?? 0;
   // walkc-roadmap-tasks: the open tasks on roadmap items that wait on me.
   const myTasks = waiting.data?.tasks ?? [];
@@ -419,6 +422,7 @@ export default function SimpleHome() {
     [brokenMine, "broken link", "broken links"],
     [stopCount, "run", "runs"],
     [myTasks.length, "task", "tasks"],
+    [inboxCount, "thing in your Inbox", "things in your Inbox"],
   ]);
   const brokenWords = brokenOthers === 1 ? "a broken link" : "broken links";
   // home-honest-loading: what waits is said only once every source it counts has answered
@@ -431,12 +435,12 @@ export default function SimpleHome() {
     ? "Here is where the plan stands."
     : brokenOthers === 0
       ? waits
-      : brokenMine + decisionCount + stopCount + myTasks.length + (proposalRows === toDecide ? toDecide.length : 0) === 0
+      : brokenMine + decisionCount + stopCount + myTasks.length + inboxCount + (proposalRows === toDecide ? toDecide.length : 0) === 0
         ? `You can propose fixes for ${brokenWords}.`
         : `${waits} You can also propose fixes for ${brokenWords}.`;
   // Nothing waits and no review is due (a new company): no walk to offer. Unknown until its reads answer.
   const counted = [waiting, changes, roadmap, meeting, inbox].every((q) => q.data !== undefined || !!q.error);
-  const nothingToWalk = counted && stopCount + decisionCount + toDecide.length + mine.length + broken.length + myTasks.length === 0 && !meeting.data?.next;
+  const nothingToWalk = counted && stopCount + decisionCount + toDecide.length + mine.length + broken.length + myTasks.length + inboxCount === 0 && !meeting.data?.next;
   // qa-simple-home-16: nothing waits on me (no decision, no proposal): one line, not two empty cards and two 0 tiles.
   // An empty section alone is not shown either (its tile neither): the cards that wait on me lead.
   // build-rundecide RD3 a: the PRDs' questions I own wait in a card per PRD; this card keeps the other judgement calls.
