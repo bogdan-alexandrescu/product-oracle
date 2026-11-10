@@ -55,7 +55,8 @@ export function OccurrenceDetail({ id }: { id: string }) {
   // Read with the time it was read: the meeting has ended when the owner records it.
   const q = useQuery(`ritual-occurrence|${id}`, async () => {
     const occ = await unwrap(api.GET("/v1/ritual-occurrences/{occurrence_id}", { params: { path: { occurrence_id: id } } })).catch((e: unknown) => {
-      throw e instanceof ApiError && e.status === 404 ? new ApiError(404, MEETING_MISSING) : e;
+      // An address whose id is not an id (a typo, a cut-off link) is the API's 422: not found too.
+      throw e instanceof ApiError && (e.status === 404 || e.status === 422) ? new ApiError(404, MEETING_MISSING) : e;
     });
     return { occ, at: Date.now() };
   });
