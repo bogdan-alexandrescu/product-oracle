@@ -23,6 +23,10 @@ Test cards (protects / fails_when / no_claim):
 - test_a_draft_on_another_roadmap_is_not_on_the_company_roadmap: protects=while there is a
   company roadmap, only its drafts put a feature on it; fails_when=a draft elsewhere reads as on
   the company roadmap.
+- test_a_twin_of_a_row_with_only_a_draft_still_merges: protects=a twin whose row has only a draft
+  is offered the baseline's Merge into…, and keeps its own rank; fails_when=it offers nothing.
+- test_a_twins_merge_proposal_shows: protects=a waiting merge_item of a twin's item is listed;
+  fails_when=it shows nowhere (review of #1503).
 """
 
 import uuid
@@ -160,3 +164,50 @@ def test_a_draft_on_another_roadmap_is_not_on_the_company_roadmap():
     assert priorities._held(read_, company)[fid] is here
     assert priorities._held(SimpleNamespace(entries=[elsewhere]), company) == {}
     assert priorities._held(read_, None)[fid] is elsewhere, "no company roadmap: every draft"
+
+
+async def _features(w, *specs: tuple[str, str, int]) -> None:
+    """Features (key, title, effort) serving retention."""
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        retention = await s.scalar(select(Entity).where(Entity.key == "retention"))
+        for key, title, effort in specs:
+            f = await seed.entity("feature", key, effort=effort)
+            f.title = title
+            await seed.supports(f, retention)
+            await s.commit()
+            w.ids[key] = str(f.id)
+
+
+async def test_a_twin_of_a_row_with_only_a_draft_still_merges(client):
+    w = await company_world()
+    await _features(w, ("gadget", "Gadget", 1), ("gadget-copy", "gadget", 9))
+    await _add_item(w, "pay-8", title="Gadget", draft=True, feature_id=uuid.UUID(w.ids["gadget"]))
+    await _add_item(w, "pay-9", title="Gadget", feature_id=uuid.UUID(w.ids["gadget-copy"]))
+    out = await w.read(client)
+    [row] = [r for r in out["rows"] if r["title"].lower() == "gadget"]
+    assert row["feature_id"] == w.ids["gadget"] and row["draft_item_id"] == w.ids["pay-8"]
+    [twin] = row["twins"]
+    assert (twin["code"], twin["merge"], twin["applies"]) == ("pay-9", "entity", True), twin
+    # The folding by name shows: the twin keeps its own rank, below the row's.
+    assert isinstance(twin["rank"], int) and twin["rank"] > row["rank"]
+
+
+async def test_a_twins_merge_proposal_shows(client):
+    w = await company_world()
+    await _features(w, ("ledger-copy", "Ledger", 9))
+    await _add_item(w, "pay-8", title="Ledger", feature_id=uuid.UUID(w.ids["ledger-copy"]))
+    out = await w.read(client)
+    [twin] = by_feature(out, w)["ledger"]["twins"]
+    assert (twin["code"], twin["merge"], twin["into_id"]) == ("pay-8", "item", w.ids["pay-1"])
+    body = {"op": "merge_item", "target": {"item_id": w.ids["pay-8"], "into_id": w.ids["pay-1"]},
+            "before": {}, "after": {}, "reason": "Merged into Ledger"}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=w.ctx.as_("commenter"))
+    assert r.status_code in (200, 201), r.text
+    assert r.json()["change"]["status"] == "proposed", r.text
+    out = await w.read(client)
+    merges = [p for p in out["proposals"] if p["op"] == "merge_item"]
+    assert [p["item_id"] for p in merges] == [w.ids["pay-8"]], (
+        "a twin's waiting merge shows nowhere"
+    )
+    assert merges[0]["feature_id"] == w.ids["ledger-copy"]
