@@ -32,6 +32,10 @@ Test cards (protects / fails_when / no_claim):
   PRD on a track directly (``add_prd_id`` or ``prd_ids``) closes an open proposal for that PRD
   (declined, by them): it leaves their Inbox and the PRD owner's item, and is no longer
   decided; fails_when=it stays open, still counts, or its Accept answers 409 "outdated".
+- test_placing_one_prd_of_a_two_prd_proposal_keeps_the_rest_open: protects=the track's
+  decider putting one PRD of an open two-PRD proposal on a track directly takes only that
+  PRD out of the proposal (saying why); the rest stays open and, accepted, puts on only the
+  other PRD; fails_when=the whole proposal is declined, or accepting moves the placed PRD.
 """
 
 import uuid
@@ -331,3 +335,45 @@ async def test_placing_a_prd_directly_closes_its_open_proposal(client, form):
     assert "outdated" not in r.text
     t = row(await read_tracks(client, ctx), "Checkout")
     assert sorted(p["id"] for p in t["prds"]) == sorted([ids["prd_id"], ids["second_id"]])
+
+
+async def test_placing_one_prd_of_a_two_prd_proposal_keeps_the_rest_open(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    tid = ids["track_id"]
+    async with tenant_session(ctx.tenant_id) as s:
+        from tests.test_simple_roadmap_api import Seed
+
+        third = await Seed(s).doc("loyalty-points-prd")
+        await Seed(s).version(third)
+        await s.commit()
+        third_id = str(third.id)
+    prop = (await change(client, ctx, "approver", "add_track", {},
+                         {"title": "Wallets", "prd_ids": [ids["second_id"], third_id]}))[
+        "change"
+    ]  # fmt: skip
+    assert prop["status"] == "proposed"
+    # The decider of Checkout puts the second PRD there directly.
+    done = (await change(client, ctx, "owner", "edit_track", {"track_id": tid},
+                         {"add_prd_id": ids["second_id"]}))["change"]  # fmt: skip
+    assert done["status"] == "applied"
+    async with tenant_session(ctx.tenant_id) as s:
+        c = await s.get(SimpleChange, uuid.UUID(prop["id"]))
+        assert c.status == "proposed"
+        assert c.after["prd_ids"] == [third_id]
+        assert c.target["prd_ids"] == [third_id]
+        assert ids["second_id"] not in (c.target.get("prior") or {})
+        (dropped,) = c.target["placed_directly"]
+        assert dropped["prd_id"] == ids["second_id"]
+        assert dropped["reason"] == "Checkout Wallets Prd was put on Checkout directly"
+    (waiting,) = (await client.get("/v1/inbox", headers=ctx.as_("owner"))).json()[
+        "simple_proposals"
+    ]
+    assert waiting["id"] == prop["id"]
+    r = await client.post(f"{CHANGES}/{prop['id']}/accept", json={}, headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    tracks = await read_tracks(client, ctx)
+    assert [p["id"] for p in row(tracks, "Wallets")["prds"]] == [third_id]
+    assert sorted(p["id"] for p in row(tracks, "Checkout")["prds"]) == sorted(
+        [ids["prd_id"], ids["second_id"]]
+    )

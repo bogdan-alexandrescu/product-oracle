@@ -21,10 +21,23 @@ Test cards (protects / fails_when):
 - test_a_milestone_has_its_own_track: the panel's Track (tb-mk fidelity, the pick's Track field)
   is written on create and patch, read back with its name, cleared by null, and an unknown
   track is a 422; fails_when=the track is lost, misnamed or not cleared.
+- test_a_falling_goal_reads_its_start_and_direction: a company goal's target milestone reads
+  the goal's ``start`` as its baseline and its ``comparison`` as its direction (at most:
+  lower is better); fails_when=a falling goal above its target reads hit, or the start is lost.
+- test_a_measured_milestone_with_no_reading_past_its_date_is_missed: no reading by its date
+  is missed, "No reading came in by its date."; fails_when=it reads on track.
+- test_numbers_fit_the_column: a baseline, target or current of 1e20, NaN or infinity is a
+  422 (on create, patch and in a proposal); fails_when=it is stored or a 500.
+- test_refs_checked_on_create_patch_and_proposal: a sub-goal of itself, of a non-goal or of
+  a missing milestone, a hand-off from a track to itself, and a missing home, from or to
+  track are 422 on create, patch and a proposal; a proposal whose refs went bad meanwhile
+  is refused on accept (422, not a 500); fails_when=any is stored or a 500.
 - test_tracks_served_in_order_with_health: the read's track bands, in the Tracks order,
   each with its health and reason; fails_when=order, health or reason is wrong.
 """
 
+import json
+import math
 import uuid
 from datetime import UTC, date, datetime
 
@@ -283,3 +296,119 @@ async def test_a_milestone_has_its_own_track(client):
     r = await client.patch(f"{MILESTONES}/{m['id']}", headers=ctx.as_("owner"),
                            json={"home_track_id": str(uuid.uuid4())})  # fmt: skip
     assert r.status_code == 422, r.text
+
+
+async def test_a_falling_goal_reads_its_start_and_direction(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx, due="2026-12-15")
+    async with tenant_session(ctx.tenant_id) as s:
+        from oracle.baseline.models import Entity
+
+        g = await s.get(Entity, uuid.UUID(ids["goal_id"]))
+        g.attrs = {**g.attrs, "metric": "Refunds", "unit": "%", "comparison": "at_most",
+                   "start": 9, "current": 8, "target": 5}  # fmt: skip
+        await s.commit()
+    [m] = targets(await read(client, ctx))
+    assert (m["baseline"], m["target"], m["current"]) == (9.0, 5.0, 8.0)
+    assert m["status"] == "on_track", m["status_reason"]
+    async with tenant_session(ctx.tenant_id) as s:
+        g = await s.get(Entity, uuid.UUID(ids["goal_id"]))
+        g.attrs = {**g.attrs, "current": 4}
+        await s.commit()
+    [m] = targets(await read(client, ctx))
+    assert m["status"] == "hit", m["status_reason"]
+    # Pure: the direction given wins over the numbers' order.
+    s_, _ = status_of("goal", date(2026, 12, 1), None, None, None, 9, 5, 8, [],
+                      date(2026, 11, 2), down=True)  # fmt: skip
+    assert s_ == "on_track"
+    s_, _ = status_of("goal", date(2026, 12, 1), None, None, None, 9, 5, 4, [],
+                      date(2026, 11, 2), down=True)  # fmt: skip
+    assert s_ == "hit"
+
+
+async def test_a_measured_milestone_with_no_reading_past_its_date_is_missed(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    m = await make(client, ctx, ids, name="Five teams", kind="sub_goal", baseline=2, target=5,
+                   date="2026-10-30")  # fmt: skip
+    got = by_id(await read(client, ctx))[m["id"]]
+    assert (got["status"], got["status_reason"]) == ("missed", "No reading came in by its date.")
+    later = await make(client, ctx, ids, name="Six teams", kind="sub_goal", target=6,
+                       date="2026-12-30")  # fmt: skip
+    assert by_id(await read(client, ctx))[later["id"]]["status"] == "on_track"
+
+
+async def send(client, ctx: Ctx, method: str, url: str, role: str, body: dict):
+    """JSON as sent, NaN and Infinity as their literals (json.dumps writes them)."""
+    headers = {**ctx.as_(role), "content-type": "application/json"}
+    return await client.request(method, url, content=json.dumps(body), headers=headers)
+
+
+@pytest.mark.parametrize("bad", [1e20, -1e20, 1e14, math.nan, math.inf, -math.inf])
+async def test_numbers_fit_the_column(client, bad):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    for k in ("baseline", "target", "current"):
+        body = {"roadmap_id": ids["roadmap_id"], "name": "Big", "date": "2026-11-27",
+                "kind": "goal", k: bad}  # fmt: skip
+        r = await send(client, ctx, "POST", MILESTONES, "owner", body)
+        assert r.status_code == 422, r.text
+    m = await make(client, ctx, ids, name="Fits", kind="goal", target=99999999999999.5)
+    assert m["target"] == 99999999999999.5
+    r = await send(client, ctx, "PATCH", f"{MILESTONES}/{m['id']}", "owner", {"current": bad})
+    assert r.status_code == 422, r.text
+    seen = {k: m[k] for k in ("name", "date", "goal_id", "item_ids", "counts_when")}
+    ask = {"op": "edit_goal_milestone", "target": {"milestone_id": m["id"]},
+           "before": {"milestone": seen}, "after": {"milestone": {**seen, "current": bad}}}  # fmt: skip
+    r = await send(client, ctx, "POST", CHANGES, "approver", ask)
+    assert r.status_code == 422, r.text
+
+
+async def test_refs_checked_on_create_patch_and_proposal(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    goal = await make(client, ctx, ids, name="Activation doubles", kind="goal")
+    plain = await make(client, ctx, ids, name="Carts ready")
+    nobody = str(uuid.uuid4())
+    bad = [
+        {"kind": "sub_goal", "sub_goal_of_id": nobody},
+        {"kind": "sub_goal", "sub_goal_of_id": plain["id"]},
+        {"kind": "handoff", "from_track_id": ids["checkout"], "to_track_id": ids["checkout"]},
+        {"kind": "handoff", "from_track_id": nobody},
+        {"kind": "handoff", "to_track_id": nobody},
+        {"home_track_id": nobody},
+    ]
+    for kw in bad:
+        body = {"roadmap_id": ids["roadmap_id"], "name": "Bad", "date": "2026-11-27", **kw}
+        r = await client.post(MILESTONES, json=body, headers=ctx.as_("owner"))
+        assert r.status_code == 422, (kw, r.text)
+    sub = await make(client, ctx, ids, name="Eight teams", kind="sub_goal",
+                     sub_goal_of_id=goal["id"])  # fmt: skip
+    hand = await make(client, ctx, ids, name="Search takes over", kind="handoff",
+                      from_track_id=ids["checkout"])  # fmt: skip
+    for mid, kw in ((sub["id"], {"sub_goal_of_id": sub["id"]}),
+                    (sub["id"], {"sub_goal_of_id": plain["id"]}),
+                    (hand["id"], {"to_track_id": ids["checkout"]}),
+                    (hand["id"], {"home_track_id": nobody})):  # fmt: skip
+        r = await client.patch(f"{MILESTONES}/{mid}", json=kw, headers=ctx.as_("owner"))
+        assert r.status_code == 422, (kw, r.text)
+    # A proposal (by who may not change it directly) is checked as it is made.
+    seen = {k: plain[k] for k in ("name", "date", "goal_id", "item_ids", "counts_when")}
+    for kw in bad:
+        ask = {"op": "edit_goal_milestone", "target": {"milestone_id": plain["id"]},
+               "before": {"milestone": seen}, "after": {"milestone": {**seen, **kw}}}  # fmt: skip
+        r = await client.post(CHANGES, json=ask, headers=ctx.as_("approver"))
+        assert r.status_code == 422, (kw, r.text)
+    # A proposal whose goal milestone is removed meanwhile is refused on accept, not a 500.
+    ask = {"op": "edit_goal_milestone", "target": {"milestone_id": plain["id"]},
+           "before": {"milestone": seen},
+           "after": {"milestone": {**seen, "kind": "sub_goal",
+                                   "sub_goal_of_id": goal["id"]}}}  # fmt: skip
+    r = await client.post(CHANGES, json=ask, headers=ctx.as_("approver"))
+    assert r.status_code == 201, r.text
+    c = r.json()["change"]
+    r = await client.delete(f"{MILESTONES}/{goal['id']}", headers=ctx.as_("owner"))
+    assert r.status_code in (200, 204), r.text
+    r = await client.post(f"{CHANGES}/{c['id']}/accept", headers=ctx.as_("owner"))
+    assert r.status_code == 422, r.text
+    assert by_id(await read(client, ctx))[plain["id"]]["kind"] == "delivery"
