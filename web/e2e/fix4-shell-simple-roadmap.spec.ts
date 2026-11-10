@@ -56,6 +56,10 @@ test.describe("desktop", () => {
     await open(page);
     await page.getByTestId("format-waterfall").click();
     await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
+    // Track everywhere (owner Nov 10): the Waterfall starts in track bands; its goal lanes are a Group by Goal away.
+    await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("chart-group").first()).toContainText(/track/i);
+    await page.getByTestId("group-goal").click();
     await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
     const lanes = page.getByTestId("chart-group");
     await expect(lanes.first()).toBeVisible();

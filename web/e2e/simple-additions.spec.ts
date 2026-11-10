@@ -59,6 +59,8 @@ const bandOf = (page: Page, key: string) =>
 async function board(page: Page) {
   await page.getByTestId("format-board").click();
   await expect(page.getByTestId("board")).toBeVisible();
+  // Track everywhere (owner Nov 10): the board starts in track bands.
+  await expect(page.getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
 }
 
 /** Types a title in Quick add and drags its chip onto `target` with the mouse, as a person does. */
@@ -342,6 +344,9 @@ for (const scheme of ["light", "dark"] as const) {
       await dragAdd(page, "Rule import from a file", column(page, "next"));
       await expect(toastWith(page, "Proposed Rule import from a file (Next): it waits for the roadmap's owner in Needs a decision")).toBeVisible();
       await expect(boardCard(page, "rule-import-from-a-file")).toHaveCount(0);
+      // A goal's suggestions sit on its goal band: Group by Goal.
+      await page.getByTestId("group-goal").click();
+      await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
       await page.getByRole("button", { name: "Suggested features for Grow retention", exact: true }).first().click();
       // Only the decider accepts or rejects a goal's suggestions (pick D): an approver reads them.
       const panel = page.getByTestId("goal-panel");

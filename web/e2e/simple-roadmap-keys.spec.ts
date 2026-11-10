@@ -35,6 +35,8 @@ async function board(page: Page, email?: string) {
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await page.getByTestId("format-board").click();
   await expect(page.getByTestId("board")).toBeVisible();
+  // Track everywhere (owner Nov 10): the board starts in track bands.
+  await expect(page.getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
 }
 
 /** The change engine's answers come late (MOCK_SLOW_MS): a change is on its way while the person goes on. */

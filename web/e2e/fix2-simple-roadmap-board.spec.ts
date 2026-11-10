@@ -31,6 +31,8 @@ async function openBoard(page: Page, email?: string) {
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await page.getByTestId("format-board").click();
   await expect(page.getByTestId("format-board")).toHaveAttribute("aria-pressed", "true");
+  // Track everywhere (owner Nov 10): the board starts in track bands.
+  await expect(page.getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
 }
 
 /** Opens Oracle's date suggestion for an item (the Gantt, which shows bars on a phone too)
@@ -81,6 +83,7 @@ for (const [where, use] of [
       await openBoard(page);
       await acceptSuggestion(page, "alert-sso");
       await page.getByTestId("format-board").click();
+      await expect(page.getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
       await expect(column(page, "next").locator('[data-item="alert-sso"]')).toBeVisible();
       await expect(column(page, "now").locator("header")).toContainText("Oct 1 – Dec 31");
       await card(page, "alert-sso").scrollIntoViewIfNeeded();
@@ -147,6 +150,7 @@ test.describe("desktop, format", () => {
     await pop.getByRole("button", { name: "Save dates" }).click();
     await expect(page.getByText("Dates accepted in your working draft")).toBeVisible();
     await page.getByTestId("format-board").click();
+    await expect(page.getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
     const dates = card(page, key!).getByTestId("board-dates");
     await expect(dates).toContainText("Dec 1 – Jan 15, 2027");
     await expect(dates).not.toContainText("2026");

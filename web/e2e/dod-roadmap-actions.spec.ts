@@ -388,6 +388,7 @@ test.describe("phone, proposals", () => {
   test("a commenter's long press on a board card is a proposal", async ({ page }) => {
     await open(page, "commenter@example.com");
     await page.getByTestId("format-board").click();
+    await expect(page.getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
     const c = boardCard(page, "alert-export");
     await c.scrollIntoViewIfNeeded();
     const from = (await c.boundingBox())!;
