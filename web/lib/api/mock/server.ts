@@ -7874,7 +7874,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   // Running today: every Simple feature's mark and proof; the approver role (confirm_entity) moves and answers.
   if (p[1] === "feature-states") {
-    const rows = prioritiesOut(db.simple_roadmap, { id: me.id, role: me.role, owners: simpleOwners, names: {} }, () => [], () => false).rows;
+    // qa-prio-twins: a feature Oracle only proposed ranks, but has no mark (feature-states lists confirmed ones).
+    const proposed = new Set(db.simple_roadmap.proposed_features ?? []);
+    const rows = prioritiesOut(db.simple_roadmap, { id: me.id, role: me.role, owners: simpleOwners, names: {} }, () => [], () => false).rows.filter((r) => !proposed.has(r.code));
     db.current_state ??= seedCurrentState(rows, Date.now());
     const mayMove = me.role === "approver" || me.role === "owner";
     // Every confirmed feature, as the API lists them: the Detailed Plan's traced features too

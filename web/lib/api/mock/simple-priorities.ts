@@ -79,6 +79,8 @@ export function seedPrioritiesTwins(db: SimpleDb): void {
   add({ key: "trusted-badge-draft", title: TWINS.draft, horizon: "later", roadmap: COMPANY_SLUG, feature: "trusted-badge", draft: true, confidence: "high", source: "engineering" });
   add({ key: "block-list-copy", title: TWINS.unlinked, horizon: "later", roadmap: COMPANY_SLUG, draft: true, confidence: "medium", source: "engineering" });
   add({ key: "queue-backpressure-2", title: TWINS.item, horizon: "later", roadmap: COMPANY_SLUG, confidence: "low", source: "engineering" });
+  // Oracle only proposed these two: they rank, but have no mark (Show's All still counts them).
+  db.proposed_features = ["block-list", "queue-backpressure"];
 }
 
 /** qa-prio-twins (priorities.same_name): two names are the same, case and spacing aside. */

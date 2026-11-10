@@ -237,6 +237,8 @@ interface SimpleDb {
   /** item-milestone: tracks Simple knows besides TRACKS and the added roadmaps' own (key -> title),
    * known as knowExtraRoadmaps knows theirs. */
   extra_tracks?: Record<string, string>;
+  /** qa-prio-twins: item keys whose feature Oracle only proposed: ranked, but not in /v1/feature-states (confirmed only). */
+  proposed_features?: string[];
   /** one-roadmap-many-prds (api/oracle/roadmap/company.feeding_ids): the company roadmap's slug;
    * while set, its items alone feed Simple and older per-PRD roadmaps' items are history. */
   company_roadmap?: string;
