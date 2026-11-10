@@ -1671,7 +1671,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   // roadmap-milestone-codes: each milestone's one code across every readable roadmap and item, numbered
   // before the filters so a filtered read shows the codes Home and the Goal map show (oracle.simple.service).
   const coded = withRoadmapCodes({ goal_milestones: liveGoalMilestones.map(goalMilestoneOut), milestones: trackMilestones(readable), items }, (id) => goalRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
-  const codeOf = new Map([...coded.goal_milestones, ...coded.milestones].map((m) => [m.id, m.roadmap_code ?? null]));
+  const codeOf = new Map<string, string | null>([...coded.goal_milestones, ...(coded.milestones as { id: string; roadmap_code?: string | null }[])].map((m) => [m.id, m.roadmap_code ?? null]));
   const withCode = <M extends { id: string }>(m: M) => ({ ...m, roadmap_code: codeOf.get(m.id) ?? null });
   return {
     today, group,

@@ -8,8 +8,8 @@ import { expect, test, type Locator, type Page } from "./test";
  * it covered the next milestone's diamond a week later, so a person could neither see nor click
  * it. Now it is a small badge with the count alone on the diamond's top-right corner, its names
  * in its tooltip, clear of every other diamond. Mock scenario "simple-prd-milestones" (invented
- * goals and people): its own "M1 First alert within a day" is moved to Nov 20 and a second one
- * added that day, a week before the PRD's hollow "M1 Rules in beta" on Nov 27.
+ * goals and people): its own "First alert within a day" is moved to Nov 20 and a second one
+ * added that day, a week before the PRD's hollow "Rules in beta" on Nov 27.
  *
  * At 1 year and All 3 years a day is a few pixels wide: the badges of two such pairs a day
  * apart (Nov 20 and Nov 21) drew over each other. Now each keeps clear of the others, of the
@@ -26,7 +26,8 @@ async function twoOnNov20(page: Page) {
   await login(page);
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await page.getByTestId("ms-label").filter({ hasText: "M1 First alert within a day" }).click();
+  await // roadmap-milestone-codes: by its name; its roadmap code follows its date.
+  await page.getByTestId("ms-label").filter({ hasText: "First alert within a day" }).click();
   await card(page).getByLabel("Date").fill("2026-11-20");
   await card(page).getByTestId("ms-save").click();
   await expect(card(page)).toBeHidden();
@@ -70,7 +71,7 @@ for (const [zoom, name] of [
     await twoOnNov20(page);
     await page.getByTestId(`zoom-${zoom}`).click();
     const badge = page.getByTestId("ms-same-day");
-    const next = page.locator('[data-testid="ms-prd-diamond"][title^="M1 Rules in beta"]');
+    const next = page.locator('[data-testid="ms-prd-diamond"][title*=" Rules in beta"]');
     const b = await boxOf(badge);
     const d = await boxOf(next);
     // A week after it, to the right.
@@ -83,7 +84,7 @@ for (const [zoom, name] of [
     // Its count alone in sight (a screen reader also hears the day), the names of both in its tooltip.
     expect(await badge.evaluate((e) => e.firstChild?.textContent)).toBe("2");
     expect(b.width).toBeLessThanOrEqual(20);
-    await expect(badge).toHaveAttribute("title", /^2 milestones on Nov 20: .*M1 First alert within a day.*Setup checks for new teams|^2 milestones on Nov 20: .*Setup checks for new teams.*M1 First alert within a day/);
+    await expect(badge).toHaveAttribute("title", /^2 milestones on Nov 20: .*M\d+ First alert within a day.*Setup checks for new teams|^2 milestones on Nov 20: .*Setup checks for new teams.*M\d+ First alert within a day/);
     await next.click();
     await expect(page.getByTestId("ms-prd-card")).toBeVisible();
     await expect(page.getByTestId("ms-prd-card")).toContainText("From the PRD Usage alerts");

@@ -102,8 +102,9 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
   const items = new Map(data.items.map((i) => [i.id, i]));
   const goals = [...new Map(data.items.flatMap((i) => (i.goal ? [[i.goal.id, { id: i.goal.id, title: i.goal.title }] as const] : []))).values()];
   const goalTitle = (id: string | null) => goals.find((g) => g.id === id)?.title ?? "No goal";
-  // roadmap-milestone-codes: a new one takes the code after those dated on or before its day.
-  const nextCode = (date: string, extra = 0) => `M${new Set(list.filter((m) => m.date && m.date <= date).map(msCode)).size + 1 + extra}`;
+  // roadmap-milestone-codes: a new one takes the code after those dated on or before its day (the tracks' too).
+  const coded = [...list.map((m) => ({ date: m.date, code: msCode(m) })), ...data.milestones.flatMap((m) => (m.roadmap_code ? [{ date: m.date, code: m.roadmap_code }] : []))];
+  const nextCode = (date: string, extra = 0) => `M${new Set(coded.filter((m) => m.date && m.date <= date).map((m) => m.code)).size + 1 + extra}`;
   const roadmapOf = (goal: string | null) => data.roadmap?.id ?? data.items.find((i) => i.goal?.id === goal)?.roadmap.id ?? data.items[0]?.roadmap.id;
   // A milestone is added only where the reader's change applies (POST answers 403 elsewhere).
   const applies = new Set((data.key_date_roadmaps ?? []).filter((r) => r.applies).map((r) => r.roadmap.id));
@@ -187,7 +188,8 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
       const late = lateOf(d.item_ids, d.date);
       setDraft(again ? fresh(addDays(d.date, 28), d.goal_id, true) : null);
       await done({
-        words: late ? `${words({ ...made, roadmap_code: d.code })} added · ${late} ${late === 1 ? "item it waits on ends" : "items it waits on end"} after it` : `${words({ ...made, roadmap_code: d.code })} added to ${goalTitle(made.goal_id ?? null)}`,
+        // roadmap-milestone-codes: the code its saved day gives it (the card's day may have changed since it opened).
+        words: late ? `${words({ ...made, roadmap_code: nextCode(d.date) })} added · ${late} ${late === 1 ? "item it waits on ends" : "items it waits on end"} after it` : `${words({ ...made, roadmap_code: nextCode(d.date) })} added to ${goalTitle(made.goal_id ?? null)}`,
         undo: () => unwrap(api.DELETE("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: made.id } } })),
       });
     },
@@ -728,8 +730,10 @@ export function MsLayer(props: MsLayerProps) {
       const m = p.m;
       const top = props.bandTop + (phone ? 5 : 4 + p.row * BAND_ROW);
       const show = () => setBandTip({ id: m.id, left: p.left, top: top + 24 });
+      // A PRD's milestone asked to move (or being dragged) fades where it is, as its diamond does.
+      const asked = m.prd ? ((ms.moving?.id === m.id ? ms.moving.date : null) ?? m.pending?.date ?? null) : null;
       out.push(
-        <span key={`rb-${m.id}`} data-testid={m.prd ? "ms-prd-label" : "ms-label"} data-day={m.date} data-prd={m.prd ? "" : undefined} role="button" tabIndex={0} aria-label={`${tipFor(m).head}. ${tipFor(m).goal}`} onPointerEnter={show} onFocus={show} onPointerLeave={() => setBandTip(null)} onBlur={() => setBandTip(null)} onClick={() => ms.edit(m)} className="absolute z-[14] flex cursor-pointer items-center gap-1 overflow-hidden rounded-full px-1.5 text-xs leading-5 font-semibold whitespace-nowrap" style={{ left: p.left, top, maxWidth: Math.max(p.w, 40), background: msFill(msCode(m)), color: msInk(msCode(m)), border: `1px solid ${msEdge(msCode(m))}` }}>
+        <span key={`rb-${m.id}`} data-testid={m.prd ? "ms-prd-label" : "ms-label"} data-day={m.date} data-prd={m.prd ? "" : undefined} role="button" tabIndex={0} aria-label={`${tipFor(m).head}. ${tipFor(m).goal}`} onPointerEnter={show} onFocus={show} onPointerLeave={() => setBandTip(null)} onBlur={() => setBandTip(null)} onClick={() => ms.edit(m)} className="absolute z-[14] flex cursor-pointer items-center gap-1 overflow-hidden rounded-full px-1.5 text-xs leading-5 font-semibold whitespace-nowrap" style={{ left: p.left, top, maxWidth: Math.max(p.w, 40), background: msFill(msCode(m)), color: msInk(msCode(m)), border: `1px solid ${msEdge(msCode(m))}`, opacity: asked && asked !== m.date ? 0.5 : 1 }}>
           <span className="min-w-0 overflow-hidden text-ellipsis">{words(m)}</span>
         </span>,
       );
