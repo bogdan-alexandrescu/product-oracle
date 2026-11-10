@@ -117,9 +117,10 @@ for (const look of LOOKS) {
     test("Delete PRD stays off until the published tick, and while a run works on the PRD", async ({ page }) => {
       test.setTimeout(120_000);
       await open(page, look);
-      await rows(page).getByRole("button", { name: `More for ${CHECKOUT}` }).click();
+      await rows(page).getByRole("button", { name: `More for ${USAGE}` }).click();
       await page.getByRole("menuitem", { name: "Delete PRD" }).click();
-      let dialog = page.getByRole("dialog", { name: `Delete ${CHECKOUT}` });
+      let dialog = page.getByRole("dialog", { name: `Delete ${USAGE}` });
+      await expect(dialog.getByText("Finding what goes with it…")).toHaveCount(0);
       const tick = dialog.getByLabel("It is published: its copy outside Oracle stays where it is.");
       await expect(tick).toBeVisible();
       const remove = dialog.getByRole("button", { name: "Delete PRD" });
