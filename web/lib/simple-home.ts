@@ -375,7 +375,9 @@ const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowe
  * of two tracks' "M1", never a guess).
  */
 export function homePlanInputs(data: Roadmap): PlanInput[] {
-  const goals = data.goal_milestones ?? [];
+  // milestone-kinds: a goal's own target date (goal_target) lists the goal's features but holds
+  // none of them: they stay in the milestones they are placed in.
+  const goals = (data.goal_milestones ?? []).filter((m) => !m.goal_target);
   const live = new Map(goals.map((m) => [m.id, m]));
   // A milestone with a start and an end is a PRD's plan milestone, never read here.
   const tracks = data.milestones.filter((m) => m.status !== "dropped" && !(m.start_date && m.end_date));
