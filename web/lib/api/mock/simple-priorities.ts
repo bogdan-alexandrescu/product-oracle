@@ -15,7 +15,7 @@ import { closed, codedTitle, companyToday, goalRank, prdCode, roadmapOut, trackP
 import { flowFor } from "./simple-visuals";
 import { madeOrder } from "./made-order";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
-import { COMPANY_TITLE } from "./one-roadmap";
+import { COMPANY_SLUG, COMPANY_TITLE, OLD_ITEM } from "./one-roadmap";
 import { seedGoalBuckets } from "./goal-buckets";
 
 type Row = Schemas["SimplePriorityRow"];
@@ -63,6 +63,26 @@ export function seedGoalNoValue(db: SimpleDb): void {
   db.items.push({ ...GOAL_NO_VALUE });
   db.ids[GOAL_NO_VALUE.key] = stableUuid(`simple-item/${GOAL_NO_VALUE.key}`);
 }
+
+/**
+ * qa-prio-twins ("priorities-twins", on "one-roadmap"): one feature known to more than one record. Trusted seller
+ * badge (only an older roadmap holds it) has a draft on the company roadmap linked to it; a second Block list draft
+ * links to nothing; a second Queue backpressure item is its own feature. Invented data.
+ */
+export const PRIORITIES_TWINS_SCENARIO = "priorities-twins";
+export const TWINS = { draft: OLD_ITEM, unlinked: "Block list", item: "Queue backpressure" } as const;
+export function seedPrioritiesTwins(db: SimpleDb): void {
+  const add = (s: SeedItem) => {
+    db.items.push(s);
+    db.ids[s.key] = stableUuid(`simple-item/${s.key}`);
+  };
+  add({ key: "trusted-badge-draft", title: TWINS.draft, horizon: "later", roadmap: COMPANY_SLUG, feature: "trusted-badge", draft: true, confidence: "high", source: "engineering" });
+  add({ key: "block-list-copy", title: TWINS.unlinked, horizon: "later", roadmap: COMPANY_SLUG, draft: true, confidence: "medium", source: "engineering" });
+  add({ key: "queue-backpressure-2", title: TWINS.item, horizon: "later", roadmap: COMPANY_SLUG, confidence: "low", source: "engineering" });
+}
+
+/** qa-prio-twins (priorities.same_name): two names are the same, case and spacing aside. */
+const sameName = (t: string | null | undefined): string => (t ?? "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
 
 /**
  * The "priorities-plan-goal-names" scenario (the owner, Nov 8: a plan goal and a goal record with one name are two
@@ -517,6 +537,8 @@ export function prioritiesOut(
   }
   yours = dependencyOrder(yours, byId);
   const can = ctx.role !== "viewer";
+  // qa-prio-twins (priorities._held): a feature's live draft on the roadmap the reader sees, by its link.
+  const draftOf = (i: Item) => live.find((d) => d.draft && d.key !== i.key && featureOfItem(db, d) === featureOfItem(db, i));
   const rows: Row[] = yours.map((i, n) => {
     const e = estimates(db, keyOf(i), i.id);
     const above = yours.slice(0, n);
@@ -556,7 +578,9 @@ export function prioritiesOut(
       in_plan: false,
       // prio-company: an owner moves every row (a move adds a feature to the company roadmap).
       can_reorder: can && (mine || ctx.role === "owner"),
-      on_roadmap: mine,
+      on_roadmap: mine || !!draftOf(i),
+      draft_item_id: mine ? null : (draftOf(i)?.id ?? null),
+      twins: [],
       applies: mine ? decides(i.id) : ctx.role === "owner",
       // feature-parts: the feature it is part of, as the roadmap reads it.
       part_of: mine ? (i.part_of ?? null) : null,
@@ -593,23 +617,54 @@ export function prioritiesOut(
         after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), can_withdraw: c.by === ctx.id, flow: flowFor(db.visuals, "change", c.id) ?? flowFor(db.visuals, "feature", i.id),
       };
     });
+  // plan-charts: with a plan, its PRD's items are in it (Goal buckets lists the rest outside it).
+  const plan = planOf(db, read, ctx.role);
+  if (plan) {
+    const prdOf = new Map(read.items.map((i) => [i.id, i.prd?.slug]));
+    yours.forEach((i, n) => (rows[n].in_plan = prdOf.get(i.id) === PLAN_PRD_SLUG));
+  }
+  // qa-prio-twins (priorities._fold_twins): rows of one name are one row, the best-ranked on the roadmap; the
+  // others its twins, each with how it merges into it. Nothing is merged.
+  const lead = new Map<string, Row>();
+  for (const r of rows) {
+    const first = rows.filter((x) => sameName(x.title) === sameName(r.title)).sort((a, b) => a.rank - b.rank);
+    const l = first.find((x) => x.on_roadmap) ?? first[0];
+    lead.set(r.feature_id, l);
+    if (l === r) continue;
+    const mine = !!r.item_id && !!l.item_id && readItems.get(r.item_id)!.roadmap.id === readItems.get(l.item_id)!.roadmap.id;
+    const merge = !can ? null : mine ? ("item" as const) : !r.item_id ? ("entity" as const) : null;
+    (l.twins ??= []).push({
+      feature_id: r.feature_id, item_id: r.item_id, code: r.code, title: r.title, goal: r.goal, merge,
+      into_id: merge === "item" ? l.item_id : null, applies: merge === "item" ? decides(r.item_id!) : merge === "entity" && (ctx.role === "owner" || ctx.role === "approver"),
+    });
+  }
+  const kept = rows.filter((r) => lead.get(r.feature_id) === r);
+  const byFeature = new Map(kept.map((r) => [r.feature_id, r]));
   const drafts: Schemas["SimplePriorityDraft"][] = live
     .filter((i) => i.draft)
-    .map((i) => ({
-      item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, roadmap: i.roadmap, applies: decides(i.id),
-      merge_into: all
-        .filter((x) => !x.draft && seen.has(x.id))
-        .filter((x) => x.roadmap.id === i.roadmap.id)
-        .sort((a, b) => Number(a.goal?.key !== i.goal?.key) - Number(b.goal?.key !== i.goal?.key) || a.key.localeCompare(b.key))
-        .slice(0, 8)
-        .map((x) => ({ item_id: x.id, code: x.key, title: x.title })),
-    }));
+    .map((i) => {
+      // qa-prio-twins: the row it shows on, by its link (a draft added for a feature), else by name.
+      const own = featureOf(db, i.key) !== i.key;
+      const linked = own ? byFeature.get(featureOfItem(db, i)) : undefined;
+      const row = linked ?? (own ? undefined : kept.find((r) => sameName(r.title) === sameName(i.title)));
+      return {
+        item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, roadmap: i.roadmap, applies: decides(i.id),
+        merge_into: all
+          .filter((x) => !x.draft && seen.has(x.id))
+          .filter((x) => x.roadmap.id === i.roadmap.id)
+          .sort((a, b) => Number(a.id !== row?.item_id) - Number(b.id !== row?.item_id) || Number(a.goal?.key !== i.goal?.key) - Number(b.goal?.key !== i.goal?.key) || a.key.localeCompare(b.key))
+          .slice(0, 8)
+          .map((x) => ({ item_id: x.id, code: x.key, title: x.title })),
+        row_feature_id: row?.feature_id ?? null,
+        linked: !!linked,
+      };
+    });
   // prio-unranked (priorities.py `_unranked`): the reader's live, non-draft items no row holds.
   const unranked: Schemas["SimplePriorityUnranked"][] = live
     .filter((i) => !i.draft && noFeature(i))
     .map((i) => ({ item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, roadmap: i.roadmap }));
   const buckets: Schemas["SimpleGoalBucket"][] = [];
-  for (const r of rows) {
+  for (const r of kept) {
     const key = r.goal?.key ?? "none";
     let b = buckets.find((x) => x.key === key);
     if (!b) buckets.push((b = { key, title: r.goal?.title ?? "No goal", weeks: 0, share: 0, codes: [], no_goal: !r.goal, position: r.goal?.position ?? null }));
@@ -622,18 +677,12 @@ export function prioritiesOut(
   buckets.sort((a, b) => Number(a.no_goal) - Number(b.no_goal) || goalRank(a.key) - goalRank(b.key));
   const total = round(buckets.reduce((s, b) => s + b.weeks, 0));
   for (const b of buckets) b.share = total ? round(b.weeks / total) : 0;
-  // plan-charts: with a plan, its PRD's items are in it (Goal buckets lists the rest outside it).
-  const plan = planOf(db, read, ctx.role);
-  if (plan) {
-    const prdOf = new Map(read.items.map((i) => [i.id, i.prd?.slug]));
-    yours.forEach((i, n) => (rows[n].in_plan = prdOf.get(i.id) === PLAN_PRD_SLUG));
-  }
   const bucketOnly = typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === PRIORITIES_BUCKET_ONLY_SCENARIO ? buckets.find((b) => !b.no_goal)?.codes[0] : undefined;
   return {
     // The plan-model lane: with a plan, its span ("Nov 2 - Feb 12"), else the calendar quarter.
     today, quarter: read.span ?? quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
-    rows: bucketOnly ? rows.filter((r) => r.code !== bucketOnly) : rows, proposals, drafts, unranked, buckets, weeks_total: total, can_change: can, line, lines,
+    rows: bucketOnly ? kept.filter((r) => r.code !== bucketOnly) : kept, proposals, drafts, unranked, buckets, weeks_total: total, can_change: can, line, lines,
     company_roadmap: db.company_roadmap ? { id: stableUuid(`simple-doc/${db.company_roadmap}`), slug: db.company_roadmap, title: COMPANY_TITLE } : null,
     // plan-charts: the plan this quarter is, when the reader sees its PRD's items.
     plan,

@@ -175,6 +175,7 @@ import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./curr
 import {
   featureKeyOf,
   PRIORITIES_GOAL_NO_VALUE_SCENARIO,
+  PRIORITIES_TWINS_SCENARIO,
   PRIORITIES_PLAN_GOAL_CODES_SCENARIO,
   PRIORITIES_PLAN_GOAL_NAMES_SCENARIO,
   PRIORITIES_PLAN_GOAL_TWINS_SCENARIO,
@@ -182,6 +183,7 @@ import {
   PRIORITIES_PLAN_ONE_WEEK_SCENARIO,
   prioritiesOut,
   seedGoalNoValue,
+  seedPrioritiesTwins,
   seedPlanGoalCodes,
   seedPlanGoalNames,
   seedPlanGoalTwins,
@@ -4400,6 +4402,12 @@ function load(): Db {
                 ? () => seedApprovedRoadmapScenario(false, true)
               : scenario === ONE_ROADMAP_SCENARIO
                 ? seedOneRoadmapScenario
+              : scenario === PRIORITIES_TWINS_SCENARIO
+                ? () => {
+                    const db = seedOneRoadmapScenario();
+                    seedPrioritiesTwins(db.simple_roadmap!);
+                    return db;
+                  }
               : scenario === REPLACED_PRD_TRASH_SCENARIO
                 ? seedReplacedPrdTrashScenario
               : scenario === HOME_MILESTONES_SCENARIO

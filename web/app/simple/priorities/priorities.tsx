@@ -18,6 +18,7 @@ import { topGoalSuggestions } from "@/lib/key-results";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
+import { ITEM_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
@@ -30,6 +31,7 @@ type Out = Schemas["SimplePrioritiesOut"];
 type Row = Schemas["SimplePriorityRow"];
 type Proposal = Schemas["SimplePriorityProposal"];
 type Draft = Schemas["SimplePriorityDraft"];
+type Twin = Schemas["SimplePriorityTwin"];
 type Bucket = Schemas["SimpleGoalBucket"];
 type Line = Schemas["SimpleLine"];
 type ChangeIn = Schemas["SimpleChangeIn"];
@@ -77,6 +79,14 @@ function OwnKey({ r }: { r: { own_key?: string | null } }) {
 
 /** qa-simple-plan-3: what the score is, in words (the API's formula: Σ goal weight × contribution × confidence ÷ effort). */
 const SCORE_WORDS = "Score = goal value × Oracle's confidence in it (0 to 1) ÷ effort in engineer-weeks.";
+/** qa-prio-twins (the owner's rule: explanations behind a tooltip): how the score is worked out, behind an (i) by the list's heading. */
+function ScoreTip() {
+  return (
+    <InfoTip label="the score" align="start" testId="prio-score-help" id="prio-score-text">
+      {SCORE_WORDS}
+    </InfoTip>
+  );
+}
 
 /** Each tab's own line under the heading; only the Ranked list is a ranking. */
 const SUBTITLE: Record<Tab, string> = {
@@ -344,7 +354,7 @@ export function Priorities() {
       )}
       {data && !blank && tab === "ranked" && marks && (
         <div className="mb-3" data-testid="cs-prio-bar">
-          <ShowFilter counts={showCounts} pick={show} onPick={setShow} />
+          <ShowFilter counts={showCounts} total={data.rows.length} pick={show} onPick={setShow} />
           {show && (
             <p className="mt-2 text-[length:var(--simple-small)] text-text2">
               {SHOW_NOTE[show](showCounts[show])} <InfoTip label="ranks shown">Ranks stay as in the full list.</InfoTip>
@@ -504,7 +514,8 @@ function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: {
         list
       )}
       {data.unranked.length > 0 && !goalOn && <Unranked items={data.unranked} />}
-      {data.drafts.length > 0 && !goalOn && <Drafts drafts={data.drafts} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
+      {/* qa-prio-twins: a draft of a ranked feature shows on that feature's row, not here too. */}
+      {ownDrafts(data).length > 0 && !goalOn && <Drafts drafts={ownDrafts(data)} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
       {move && (
         <MoveDialog
           move={move}
@@ -617,9 +628,6 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
     )}
     {/* Split at a dated line, the two parts' headings say what the caption said; a goal's list keeps it (qp4=b), counting only its features. */}
     {goal ? rows.length > 0 && <LineCaption data={{ ...data, rows }} /> : !apart && <LineCaption data={data} />}
-    <p className="mb-2 text-[length:var(--simple-small)] text-text2" data-testid="prio-score-help">
-      {SCORE_WORDS}
-    </p>
     <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
       {rows.flatMap((r, i) => {
         // Split at a dated line: "Makes ..." over the first part, "Misses ..." over the rest, each in rank order.
@@ -738,11 +746,14 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                 Not on {data.company_roadmap.title} yet: moving it adds it there, under Later.
               </p>
             )}
+            {/* qa-prio-twins: the feature's drafts on the roadmap and its unlinked twins, on its one row. */}
+            <RowDrafts drafts={data.drafts.filter((d) => d.row_feature_id === r.feature_id)} proposals={data.proposals} mayChange={mayChange} changed={changed} />
+            {(r.twins ?? []).length > 0 && <Twins r={r} mayChange={mayChange} changed={changed} />}
             {mayChange && !r.can_reorder && (
               <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-locked">
                 {/* prio-company: never the owner's (an owner moves every row); someone who truly lacks the right. A feature not
                     on the company roadmap waits for the owner to add it, which no access changes. */}
-                {!r.on_roadmap && data.company_roadmap ? "Only the owner can add this to the roadmap." : "Only people with access to this feature's roadmap can move it. Ask the owner for access."}
+                {(!r.on_roadmap || r.draft_item_id) && data.company_roadmap ? "Only the owner can add this to the roadmap." : "Only people with access to this feature's roadmap can move it. Ask the owner for access."}
               </p>
             )}
             {r.after && (
@@ -1120,110 +1131,209 @@ function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Ch
   );
 }
 
+/** qa-prio-twins: the drafts no ranked row holds (one of a ranked feature shows on its row). */
+const ownDrafts = (data: Out): Draft[] => data.drafts.filter((d) => !d.row_feature_id);
+
 function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
-  const [merging, setMerging] = useState<string | null>(null);
-  const [into, setInto] = useState("");
-  const show = useSearchParams().get("show");
-  // A draft's name opens the one feature panel (the roadmap's), as a ranked row's does.
-  const [opened, setOpened] = useState<Draft | null>(null);
-  const phone = usePhone();
-  const { can } = useMe();
   return (
     <section aria-label="Not ranked yet" className="mt-6">
       <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Not ranked yet</h2>
       <ul className="flex flex-col gap-[var(--simple-gap)]">
-        {drafts.map((d) => {
-          // qa-simple-plan-29: a Confirm or Merge waiting for the decider; none more until it is decided.
-          const pending = proposals.filter((p) => p.item_id === d.item_id && (p.op === "confirm_item" || p.op === "cut" || p.op === "merge_item"));
-          return (
-          <li key={d.item_id} data-testid="prio-draft" data-code={d.code} data-shown={show === d.item_id ? "true" : undefined} className={`rounded-[var(--simple-card-radius)] border border-dashed bg-surface p-3 ${show === d.item_id ? "border-accent ring-2 ring-accent" : "border-line-strong"}`}>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na">Draft</span>
-              {/* build-feature-panel review 7: a draft's name opens the one feature panel too. */}
-              <span className="flex-1 font-medium">
-                <button type="button" data-feature={d.item_id} title={`Open ${d.title}`} className="text-left hover:underline" onClick={() => setOpened(d)}>
-                  {d.title}
-                </button>
+        {drafts.map((d) => (
+          <DraftItem key={d.item_id} d={d} proposals={proposals} mayChange={mayChange} changed={changed} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** qa-prio-twins: a ranked feature's drafts on its row: its own (Confirm, Merge into…) and one only named as it (Merge into…). */
+function RowDrafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
+  if (!drafts.length) return null;
+  return (
+    <ul className="mt-2 flex flex-col gap-2 sm:pl-12" aria-label="Drafts of this feature">
+      {drafts.map((d) => (
+        <DraftItem key={d.item_id} d={d} proposals={proposals} mayChange={mayChange} changed={changed} onRow />
+      ))}
+    </ul>
+  );
+}
+
+/** A draft with its Confirm and Merge into…; on a ranked row (`onRow`) a draft only named as the row's feature merges only. */
+function DraftItem({ d, proposals, mayChange, changed, onRow = false }: { d: Draft; proposals: Proposal[]; mayChange: boolean; changed: Changed; onRow?: boolean }) {
+  const [merging, setMerging] = useState(false);
+  // On its row, the row's item is first: the one it repeats.
+  const [into, setInto] = useState(onRow && !d.linked ? (d.merge_into[0]?.item_id ?? "") : "");
+  const show = useSearchParams().get("show");
+  // A draft's name opens the one feature panel (the roadmap's), as a ranked row's does.
+  const [opened, setOpened] = useState(false);
+  const phone = usePhone();
+  const { can } = useMe();
+  // qa-simple-plan-29: a Confirm or Merge waiting for the decider; none more until it is decided.
+  const pending = proposals.filter((p) => p.item_id === d.item_id && (p.op === "confirm_item" || p.op === "cut" || p.op === "merge_item"));
+  const confirms = !onRow || d.linked;
+  return (
+    <li
+      data-testid={onRow ? "prio-row-draft" : "prio-draft"}
+      data-code={d.code}
+      data-shown={show === d.item_id ? "true" : undefined}
+      className={onRow ? "rounded-lg border border-dashed border-line-strong px-2 py-1.5" : `rounded-[var(--simple-card-radius)] border border-dashed bg-surface p-3 ${show === d.item_id ? "border-accent ring-2 ring-accent" : "border-line-strong"}`}
+    >
+      <div className={`flex flex-wrap items-center ${onRow ? "gap-2 text-[length:var(--simple-small)]" : "gap-3"}`}>
+        <span
+          className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na"
+          title={onRow ? (d.linked ? `On ${d.roadmap.title}, not confirmed yet: moving the feature confirms it there` : "A draft with this feature's name, not linked to it") : undefined}
+        >
+          Draft
+        </span>
+        {/* build-feature-panel review 7: a draft's name opens the one feature panel too. */}
+        <span className="flex-1 font-medium">
+          <button type="button" data-feature={d.item_id} title={`Open ${d.title}`} className="text-left hover:underline" onClick={() => setOpened(true)}>
+            {d.title}
+          </button>
+        </span>
+        {!onRow && <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>}
+        {mayChange && (
+          <span className="flex gap-2">
+            {/* qa-plan-14: who only proposes (the draft's own `applies`) is offered Propose, not Confirm. */}
+            {confirms && (
+              <Button
+                disabled={pending.length > 0}
+                title={pending.length ? "A proposal for it is waiting for a decision" : d.applies ? undefined : "Propose confirming it: the decider decides"}
+                onClick={async () =>
+                  changed(
+                    await send({ op: "confirm_item", target: { item_id: d.item_id }, before: { draft: true }, after: { draft: false } }),
+                    d.applies ? (onRow ? `Confirmed ${d.title} on ${d.roadmap.title}` : `Added ${d.title} to the ranking`) : `Proposed adding ${d.title}`,
+                  )
+                }
+              >
+                {onRow ? (d.applies ? "Confirm" : "Propose confirming") : d.applies ? "Add to the ranking" : "Propose adding"}
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              disabled={pending.length > 0}
+              title={pending.length ? "A proposal for it is waiting for a decision" : undefined}
+              aria-expanded={merging}
+              onClick={() => setMerging(!merging)}
+            >
+              {d.applies ? "Merge into…" : "Propose a merge…"}
+            </Button>
+          </span>
+        )}
+      </div>
+      {merging && (
+        <form
+          className="mt-2 flex flex-wrap items-center gap-2"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const target = d.merge_into.find((m) => m.item_id === into);
+            if (!target) return;
+            setMerging(false);
+            await changed(
+              await send({ op: "merge_item", target: { item_id: d.item_id, into_id: target.item_id }, before: {}, after: {}, reason: `Merged into ${target.title}` }),
+              `Merged ${d.title} into ${target.title}`,
+            );
+          }}
+        >
+          <label htmlFor={`merge-${d.item_id}`} className="text-[length:var(--simple-small)]">
+            Merge into
+          </label>
+          <select id={`merge-${d.item_id}`} value={into} onChange={(e) => setInto(e.target.value)} className="rounded-lg border border-line bg-bg px-2 py-1 text-[length:var(--simple-small)]">
+            <option value="">Choose a feature…</option>
+            {d.merge_into.map((m) => (
+              <option key={m.item_id} value={m.item_id}>
+                {m.title}
+              </option>
+            ))}
+          </select>
+          <Button type="submit" disabled={!into}>
+            {d.applies ? "Merge" : "Propose"}
+          </Button>
+          <p className="w-full text-[length:var(--simple-small)] text-text2" data-testid="merge-hint">
+            {into ? "" : "Choose the feature it repeats. "}Only features on {d.roadmap?.title ? `the ${d.roadmap.title} roadmap` : "its own roadmap"}, the same as the draft&apos;s, are listed.
+          </p>
+        </form>
+      )}
+      {/* A Confirm or Merge waiting for the decider. */}
+      {pending.map((p) => (
+        <ProposalCard key={p.change_id} p={p} changed={changed} />
+      ))}
+      {opened && (
+        <FeaturePanel key={d.item_id} feature={{ id: d.item_id, code: d.code, name: d.title }} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(false)} />
+      )}
+    </li>
+  );
+}
+
+/**
+ * qa-prio-twins: the feature's other ranked records with its name, not linked to it (a second baseline entry, a
+ * second item), on its one row: each named with its goal, and Merge into… this one (merge_item for an item of the
+ * same roadmap, the Ground Truth's Merge into… for a feature with no item). Oracle never merges them.
+ */
+function Twins({ r, mayChange, changed }: { r: Row; mayChange: boolean; changed: Changed }) {
+  const [merging, setMerging] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function merge(t: Twin) {
+    setMerging(null);
+    if (t.merge === "item" && t.item_id && t.into_id) {
+      await changed(
+        await send({ op: "merge_item", target: { item_id: t.item_id, into_id: t.into_id }, before: {}, after: {}, reason: `Merged into ${r.title}` }),
+        `Merged ${t.title} into ${r.title}`,
+      );
+      return;
+    }
+    if (t.merge !== "entity" || !t.feature_id) return;
+    setBusy(true);
+    try {
+      await unwrap(api.POST("/v1/baseline/entities/{entity_id}/merge", { params: { path: { entity_id: t.feature_id } }, body: { into: r.feature_id, reason: null } }));
+      window.dispatchEvent(new Event(ITEM_CHANGED_EVENT));
+      toast({ message: `Merged ${t.title} into ${r.title}` });
+    } catch (e) {
+      toast({ message: errorMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <ul className="mt-2 flex flex-col gap-2 sm:pl-12" aria-label="Also listed as">
+      {(r.twins ?? []).map((t) => {
+        const id = t.feature_id ?? t.code;
+        // A merge the caller may start: merge_item (applied or proposed), or the Ground Truth's for who may approve.
+        const may = mayChange && (t.merge === "item" || (t.merge === "entity" && t.applies));
+        return (
+          <li key={id} data-testid="prio-twin" data-code={t.code} className="rounded-lg border border-dashed border-line-strong px-2 py-1.5 text-[length:var(--simple-small)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-na-bg px-2 text-na" title="Another record with this feature's name, not linked to it">
+                Same name
               </span>
-              <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>
-              {mayChange && (
-                <span className="flex gap-2">
-                  {/* qa-plan-14: who only proposes (the draft's own `applies`) is offered Propose, not Confirm. */}
-                  <Button
-                    disabled={pending.length > 0}
-                    title={pending.length ? "A proposal for it is waiting for a decision" : d.applies ? undefined : "Propose confirming it: the decider decides"}
-                    onClick={async () =>
-                      changed(
-                        await send({ op: "confirm_item", target: { item_id: d.item_id }, before: { draft: true }, after: { draft: false } }),
-                        d.applies ? `Added ${d.title} to the ranking` : `Proposed adding ${d.title}`,
-                      )
-                    }
-                  >
-                    {d.applies ? "Add to the ranking" : "Propose adding"}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    disabled={pending.length > 0}
-                    title={pending.length ? "A proposal for it is waiting for a decision" : undefined}
-                    aria-expanded={merging === d.item_id}
-                    onClick={() => setMerging(merging === d.item_id ? null : d.item_id)}
-                  >
-                    {d.applies ? "Merge into…" : "Propose a merge…"}
-                  </Button>
-                </span>
+              <span className="flex-1 font-medium">{t.title}</span>
+              <span className="text-text2">{t.goal?.title ?? "No goal"}</span>
+              {may && (
+                <Button variant="secondary" disabled={busy} aria-expanded={merging === id} onClick={() => setMerging(merging === id ? null : id)}>
+                  {t.applies ? "Merge into…" : "Propose a merge…"}
+                </Button>
               )}
             </div>
-            {merging === d.item_id && (
+            {merging === id && (
               <form
                 className="mt-2 flex flex-wrap items-center gap-2"
-                onSubmit={async (e) => {
+                onSubmit={(e) => {
                   e.preventDefault();
-                  const target = d.merge_into.find((m) => m.item_id === into);
-                  if (!target) return;
-                  setMerging(null);
-                  await changed(
-                    await send({ op: "merge_item", target: { item_id: d.item_id, into_id: target.item_id }, before: {}, after: {}, reason: `Merged into ${target.title}` }),
-                    `Merged ${d.title} into ${target.title}`,
-                  );
+                  void merge(t);
                 }}
               >
-                <label htmlFor={`merge-${d.item_id}`} className="text-[length:var(--simple-small)]">
-                  Merge into
-                </label>
-                <select id={`merge-${d.item_id}`} value={into} onChange={(e) => setInto(e.target.value)} className="rounded-lg border border-line bg-bg px-2 py-1 text-[length:var(--simple-small)]">
-                  <option value="">Choose a feature…</option>
-                  {d.merge_into.map((m) => (
-                    <option key={m.item_id} value={m.item_id}>
-                      {m.title}
-                    </option>
-                  ))}
+                <label htmlFor={`twin-${id}`}>Merge into</label>
+                <select id={`twin-${id}`} value={r.feature_id} disabled className="rounded-lg border border-line bg-bg px-2 py-1">
+                  <option value={r.feature_id}>{r.title}</option>
                 </select>
-                <Button type="submit" disabled={!into}>
-                  {d.applies ? "Merge" : "Propose"}
-                </Button>
-                <p className="w-full text-[length:var(--simple-small)] text-text2" data-testid="merge-hint">
-                  {into ? "" : "Choose the feature it repeats. "}Only features on {d.roadmap?.title ? `the ${d.roadmap.title} roadmap` : "its own roadmap"}, the same as the draft&apos;s, are listed.
-                </p>
+                <Button type="submit">{t.applies ? "Merge" : "Propose"}</Button>
               </form>
             )}
-            {/* A Confirm or Merge waiting for the decider. */}
-            {pending.map((p) => (
-              <ProposalCard key={p.change_id} p={p} changed={changed} />
-            ))}
           </li>
-          );
-        })}
-      </ul>
-      {opened && (
-        <FeaturePanel
-          key={opened.item_id}
-          feature={{ id: opened.item_id, code: opened.code, name: opened.title }}
-          phone={phone}
-          canChange={can("create_simple_change")}
-          onClose={() => setOpened(null)}
-        />
-      )}
-    </section>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -1974,6 +2084,7 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
         <span className="font-medium text-accent-ink">
           {misses.length} of {data.rows.length} miss {lineLabel(data)}
         </span>
+        <ScoreTip />
         {misses.length > 0 && (
           <button type="button" data-testid="line-caption-more" aria-expanded={open} aria-controls="line-misses" onClick={() => setOpen(!open)} className="font-semibold text-accent-ink underline">
             {open ? "Hide them" : "Show them"}
@@ -2028,6 +2139,7 @@ function PartHead({ data, makes, n }: { data: Out; makes: boolean; n: number }) 
       <span className="text-[length:var(--simple-small)] text-text2" data-testid="prio-part-count">
         {n} {n === 1 ? "feature" : "features"}, in rank order
       </span>
+      {makes && <ScoreTip />}
     </li>
   );
 }

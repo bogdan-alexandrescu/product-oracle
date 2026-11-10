@@ -118,8 +118,8 @@ function MarkCard({ f }: { f: FeatureState }) {
 }
 
 /** Priorities' Show filter: All and each kind, with how many there are. */
-export function ShowFilter({ counts, pick, onPick }: { counts: Record<"new" | "in_progress" | "exists", number>; pick: "new" | "in_progress" | "exists" | null; onPick: (k: "new" | "in_progress" | "exists" | null) => void }) {
-  const total = counts.new + counts.in_progress + counts.exists;
+export function ShowFilter({ counts, total, pick, onPick }: { counts: Record<"new" | "in_progress" | "exists", number>; total: number; pick: "new" | "in_progress" | "exists" | null; onPick: (k: "new" | "in_progress" | "exists" | null) => void }) {
+  // qa-prio-twins: All counts every feature listed, a feature with no mark yet too.
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-[length:var(--simple-small)]" data-testid="cs-legend" role="group" aria-label="Show features that are">
       <span className="mr-1 text-text2">Show</span>
