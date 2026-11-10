@@ -53,6 +53,9 @@ const TITLE = "Reliability";
 test("a goal's On the roadmap switch takes its target-date milestone off the Milestones band and puts it back", async ({ page }) => {
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
   await login(page);
+  // The goals as Priorities lists them (the mock reads its goal buckets there first).
+  await page.goto("/simple/priorities?tab=buckets");
+  await expect(page.getByTestId("goal-bucket").filter({ has: page.getByRole("heading", { name: TITLE, exact: true }) })).toBeVisible();
   await roadmap(page);
   // The goal's target date, drawn as a goal milestone named for the goal.
   expect(await goalOnBand(page, TITLE)).toBe(1);

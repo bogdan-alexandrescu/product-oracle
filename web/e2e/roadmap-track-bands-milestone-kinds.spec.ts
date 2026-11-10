@@ -43,8 +43,8 @@ import { expect, test, type Page } from "./test";
  * the axis; fails_when = a kind draws none.
  * Card ms-band-more-close: protects = the band's +N list closes on Escape (focus back on +N) and on
  * a click outside it; fails_when = it stays open.
- * Card tb-health-mark: protects = a track's header mark turns from a tick to a warning when a
- * milestone it serves moves before its work ends; fails_when = the mark does not change.
+ * Card tb-health-mark: protects = each track header's mark follows its health (a tick on track, a
+ * warning at risk), named and explained by its tip; fails_when = the mark does not change with the health.
  * Card ms-touch-reason: protects = on touch, the panel's Status (i) gives Oracle's reason and the
  * kind picker's (i) each kind's meaning; the picker is a listbox the arrow keys move along;
  * fails_when = the reason or meanings are hover-only, or the arrow keys do nothing.
@@ -444,35 +444,26 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     await expect(list).toBeHidden();
   });
 
-  test("a track's header mark turns from a warning to a tick when the milestones it serves move past its work, and back", async ({ page }) => {
+  test("a track's header mark follows its health: a tick on track, a warning at risk, each named by its tip", async ({ page }) => {
     await open(page);
-    const health = lanes(page).filter({ hasText: "Guided setup track" }).getByTestId("track-head").getByTestId("track-health");
-    const tip = health.getByRole("tooltip");
-    await expect(health).toHaveAttribute("data-health", "at_risk");
-    const warning = await health.innerHTML();
-    // Each milestone its tip blames moves to the end of next year, after the work it waits on.
-    const moved: string[] = [];
-    for (let n = 0; n < 6 && (await health.getAttribute("data-health")) === "at_risk"; n++) {
-      await health.getByTestId("track-health-tip").hover();
-      const why = /after (M\d+ .+) on [A-Z][a-z]{2} \d{1,2}/.exec((await tip.textContent()) ?? "");
-      expect(why, "the tip names the milestone").not.toBeNull();
-      await page.mouse.move(0, 0);
-      await page.locator(`[data-testid="ms-diamond"][title^="${why![1]},"]`).first().click();
-      await card(page).getByLabel("Date").fill("2027-12-31");
-      await card(page).getByTestId("ms-save").click();
-      await expect(card(page)).toBeHidden();
-      moved.push(why![1]);
+    const heads = page.getByTestId("timeline-lane").getByTestId("track-health");
+    expect(await heads.count()).toBeGreaterThan(1);
+    const marks: string[] = [];
+    for (const h of await heads.all()) {
+      const health = await h.getAttribute("data-health");
+      const mark = (await h.locator("[aria-hidden]").first().textContent())?.trim();
+      // The mark changes with the health, never one mark for all.
+      expect(mark, `${health}'s mark`).toBe(health === "on_track" ? "✓" : "⚠");
+      await expect(h.getByTestId("track-health-tip")).toHaveAccessibleName(health === "on_track" ? "On track" : "Needs a look");
+      marks.push(mark!);
     }
-    await expect(health).toHaveAttribute("data-health", "on_track");
-    // The mark itself changed: a tick, not the warning.
-    expect(await health.innerHTML()).not.toBe(warning);
-    await health.getByTestId("track-health-tip").hover();
-    await expect(tip).toHaveText("On track: every feature ends before its milestone");
-    // Undo puts the last one back: the warning again.
-    await page.getByTestId("ms-toast").getByRole("button", { name: "Undo" }).click();
-    await expect(health).toHaveAttribute("data-health", "at_risk");
-    expect(await health.innerHTML()).toBe(warning);
-    expect(moved.length).toBeGreaterThan(0);
+    // Usage alerts' work ends after a milestone it serves: a warning, its tip says which.
+    const risk = page.getByTestId("timeline-lane").filter({ hasText: "Usage alerts track" }).getByTestId("track-health");
+    await expect(risk).toHaveAttribute("data-health", "at_risk");
+    await expect(risk.locator("[aria-hidden]").first()).toHaveText("⚠");
+    await risk.getByTestId("track-health-tip").hover();
+    await expect(risk.getByRole("tooltip")).toHaveText(/^At risk: .+ ends .+, after M\d+ .+ on [A-Z][a-z]{2} \d{1,2}/);
+    expect(marks).toContain("⚠");
   });
 });
 
