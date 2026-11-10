@@ -1115,9 +1115,12 @@ class SimplePriorityTwin(BaseModel):
     code: str
     title: str
     goal: SimplePriorityGoal | None = None
-    # How it merges into the row's record: ``item`` (merge_item into ``into_id``), ``feature``
-    # (merge_item of its item into the row's item), ``entity`` (the baseline's Merge into… of
-    # one feature into the row's); None: no merge the caller may start.
+    # Its own rank, were it a row (the name folding is shown, not hidden).
+    rank: int | None = None
+    # How it merges into the row's record: ``item`` (merge_item of its item into the row's,
+    # ``into_id``: both on one roadmap), ``entity`` (the baseline's Merge into… of its feature
+    # into the row's: no item, an item on another roadmap, or a row with only a draft); None:
+    # the caller may change nothing.
     merge: Literal["item", "entity"] | None = None
     into_id: uuid.UUID | None = None
     # The caller's merge applies (else it is proposed).

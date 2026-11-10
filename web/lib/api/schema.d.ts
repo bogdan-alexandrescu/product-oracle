@@ -43729,6 +43729,8 @@ export interface components {
             /** Title */
             title: string;
             goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            /** Rank */
+            rank?: number | null;
             /** Merge */
             merge?: ("item" | "entity") | null;
             /** Into Id */

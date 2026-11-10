@@ -129567,6 +129567,17 @@
               }
             ]
           },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
           "merge": {
             "anyOf": [
               {

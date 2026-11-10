@@ -180,11 +180,15 @@ def _live_drafts(read_: service.Read) -> list[service.Entry]:
     return [e for e in read_.entries if e.row.draft and e.status not in ("cut", "merged")]
 
 
-def _held(read_: service.Read) -> dict[str, service.Entry]:
+def _held(read_: service.Read, roadmap_id: uuid.UUID | None) -> dict[str, service.Entry]:
     """qa-prio-twins: feature id -> its draft item (by its link; the lowest key) for a feature
-    with no other item: on the roadmap, not yet confirmed (a move confirms it)."""
+    with no other item: on the roadmap, not yet confirmed (a move confirms it: targets.
+    add_to_company finds it the same way). Only the company roadmap's (``roadmap_id``) while
+    there is one."""
     out: dict[str, service.Entry] = {}
     for e in sorted(_live_drafts(read_), key=lambda e: e.row.item_key):
+        if roadmap_id is not None and e.roadmap.id != roadmap_id:
+            continue
         fid = link(e.row)
         if fid is not None:
             out.setdefault(fid, e)
@@ -233,8 +237,13 @@ def _after(rows: list[SimplePriorityRow], deps: dict[str, list[str]]) -> None:
 
 
 async def _proposals(
-    db: AsyncSession, principal: Any, by_id: dict[uuid.UUID, service.Entry]
+    db: AsyncSession,
+    principal: Any,
+    by_id: dict[uuid.UUID, service.Entry],
+    twin_items: set[uuid.UUID] | None = None,
 ) -> list[SimplePriorityProposal]:
+    """qa-prio-twins: also a ``merge_item`` of a row's twin's item (``twin_items``): it shows
+    on that row."""
     rows = list(
         await db.scalars(
             select(SimpleChange)
@@ -254,7 +263,8 @@ async def _proposals(
             e = by_id.get(uuid.UUID(str(c.target.get("item_id"))))
         except ValueError:
             e = None
-        if e is not None and (c.op in PROPOSED_OPS or e.row.draft) and v.sees(c):
+        twin = c.op == "merge_item" and e is not None and e.row.id in (twin_items or ())
+        if e is not None and (c.op in PROPOSED_OPS or e.row.draft or twin) and v.sees(c):
             shown.append((c, e))
     from oracle.simple import visuals
 
@@ -768,12 +778,14 @@ def _fold_twins(
                 pass
             elif e is not None and lead_e is not None and e.roadmap.id == lead_e.roadmap.id:
                 merge, applies = "item", service.can_decide(principal, e, deciders)
-            elif e is None:
+            else:
+                # No item, an item on another roadmap, or a lead with only a draft: the
+                # baseline's Merge into… of its feature into the row's.
                 merge, applies = "entity", has_role(principal.role, "approver")
             lead.twins.append(
                 SimplePriorityTwin(
                     feature_id=r.feature_id, item_id=r.item_id, code=r.code, title=r.title,
-                    goal=r.goal, merge=merge,  # type: ignore[arg-type]
+                    goal=r.goal, rank=r.rank, merge=merge,  # type: ignore[arg-type]
                     into_id=lead.item_id if merge == "item" else None, applies=applies,
                 )
             )  # fmt: skip
@@ -788,7 +800,6 @@ async def build(
     ranking = await priorities.compute(db, METHOD, principal, overrides=True)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     items = _items(read_)
-    held = _held(read_)
     offered, same = await lines(db, principal, read_)
     line = pick_line(line_key, offered, same)
     active = {str(o.id): o for o in await priorities.active_overrides(db)}
@@ -803,6 +814,7 @@ async def build(
     # their move adds there (targets.add_to_company). Anyone else moves what is on it.
     owner = has_role(principal.role, "owner")
     the_company = await company.active(db)
+    held = _held(read_, the_company.id if the_company is not None else None)
     code_of = {
         f.key: (items[f.entity_id].row.item_key if f.entity_id in items else f.key)
         for f in features
@@ -882,6 +894,7 @@ async def build(
             r.in_plan = pid == str(plan_out.prd.id)
     rows, named = _fold_twins(rows, {f.entity_id: f.title for f in features}, by_id, principal,
                               read_.deciders, can_change)  # fmt: skip
+    twin_items = {t.item_id for r in rows for t in r.twins if t.item_id is not None}
     goal_rows = await db.scalars(select(Entity).where(Entity.type == "goal"))
     order = {g.key: i for i, g in enumerate(sort_goals(goal_rows))}
     buckets, total = _buckets(rows, inside, order)
@@ -892,7 +905,7 @@ async def build(
         method=METHOD,
         formula=ranking.formula,
         rows=rows,
-        proposals=await _proposals(db, principal, read_.by_id()),
+        proposals=await _proposals(db, principal, read_.by_id(), twin_items),
         drafts=_drafts(read_, principal, rows, named),
         unranked=_unranked(read_, {f.entity_id for f in features}),
         buckets=buckets,
