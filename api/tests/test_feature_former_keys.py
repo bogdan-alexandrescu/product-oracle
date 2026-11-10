@@ -21,22 +21,53 @@ Test cards (protects / fails_when / no_claim):
   exists".
 - test_a_yaml_import_reads_the_codes_taken_once: protects=an import adding 1 or 5 features
   reads the codes taken (the PRD plans) as often; fails_when=they are read per feature.
+
+Guards added after the fix (they fail on the readers as they were before it, 064e9c4a2,
+and pass now; not red-first):
+
+- test_a_roadmap_dependency_on_a_features_old_key_shows_its_name: protects=an item that
+  depends on the feature's old key reads its name; fails_when=with_dependency_names reads
+  features by their key now only; no_claim=the web's own fallback.
+- test_a_strategy_naming_a_features_old_key_finds_it: protects=a stop choice naming the old
+  key is no unknown_feature and approving it sets its affects edge on the feature;
+  fails_when=frontmatter._missing or sync._keyed read by the key now only.
+- test_an_engineering_brief_for_a_features_old_key_reads_its_requirements: protects=a brief
+  keyed by the old key is registered against the feature and its requirements;
+  fails_when=engineering.store._feature reads by the key now only; no_claim=the run flow.
+- test_an_approved_check_sets_the_size_on_a_feature_by_its_old_key: protects=the size a
+  lead set at the check is written to the feature; fails_when=check.on_approved reads by
+  the key now only; no_claim=the run flow.
 """
 
 import uuid
+from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select
 
 from oracle import company_time
+from oracle.auth.deps import Principal
 from oracle.baseline import fixes
 from oracle.baseline.models import Edge, Entity
+from oracle.engineering import check as eng_check
+from oracle.engineering import store as eng_store
 from oracle.launches import tiers
+from oracle.models import AuditEvent
 from oracle.roadmap import items as roadmap_items
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import changes
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import entity, make_ctx
 from tests.coverage_helpers import count_statements
+from tests.strategy_helpers import (
+    STRATEGY,
+    approved,
+    choice,
+    edges,
+    imported,
+    roadmap_with_items,
+    strategy_md,
+)
 from tests.test_simple_roadmap_api import NOW
 
 B = "/v1/baseline"
@@ -143,3 +174,64 @@ async def test_a_yaml_import_reads_the_codes_taken_once(client):
     async with tenant_session(ctx.tenant_id) as s:
         found = await fixes.features_by_keys(s, ["one-0", *(f"five-{i}" for i in range(5))])
         assert sorted(e.key for e in found.values()) == [f"F-0{i}" for i in range(1, 7)]
+
+
+async def test_a_roadmap_dependency_on_a_features_old_key_shows_its_name(client):
+    ctx, _ = await _planner(client)
+    await roadmap_with_items(client, ctx, [("trip-sharing", "now", None)], track=False)
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "trip-sharing"))
+        row.depends_on = ["trip-planner"]
+        await s.commit()
+    r = await client.get(
+        "/v1/roadmaps/example-roadmap/items", params={"version": 1}, headers=ctx.as_("owner")
+    )
+    assert r.status_code == 200, r.text
+    (item,) = r.json()["items"]
+    assert item["depends_titles"] == {"trip-planner": "Trip planner"}, item
+
+
+async def test_a_strategy_naming_a_features_old_key_finds_it(client):
+    ctx, planner = await _planner(client)
+    md = strategy_md([choice("one", goals=[]), choice("trips", "stop", features=["trip-planner"])])
+    v = await imported(client, ctx.as_("owner"), STRATEGY, md)
+    assert "unknown_feature" not in {w["code"] for w in v["warnings"]}, v["warnings"]
+    await approved(client, ctx.as_("owner"), STRATEGY, 1)
+    affects = await edges(ctx.tenant_id, "affects")
+    assert [e.dst_id for e in affects] == [uuid.UUID(planner["id"])], affects
+
+
+async def test_an_engineering_brief_for_a_features_old_key_reads_its_requirements(client):
+    ctx, planner = await _planner(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        req = Entity(type="requirement", key="trip-dates", title="Pick trip dates", attrs={},
+                     status="confirmed", origin="user", locked=False)  # fmt: skip
+        s.add(req)
+        await s.flush()
+        s.add(Edge(src_id=req.id, dst_id=uuid.UUID(planner["id"]), type="part_of",
+                   attrs={}, status="confirmed", origin="user", locked=False))  # fmt: skip
+        await s.commit()
+        feature = await eng_store._feature(s, "trip-planner")
+        assert feature is not None and feature.id == uuid.UUID(planner["id"])
+        assert await eng_store._requirements(s, feature.id) == [req.id]
+
+
+async def test_an_approved_check_sets_the_size_on_a_feature_by_its_old_key(client):
+    ctx, planner = await _planner(client)
+    lead = ctx.users["approver"]
+    principal = Principal(tenant_id=ctx.tenant_id, kind="user", role="approver",
+                          user_id=lead.id)  # fmt: skip
+    cp = SimpleNamespace(
+        id=uuid.uuid4(),
+        payload={eng_check.PAYLOAD_KEY: {"features": [{"key": "trip-planner", "size": "s"}]}},
+    )
+    size = SimpleNamespace(item_key="trip-planner", field="size", state="staged", kind="edit",
+                           value="l")  # fmt: skip
+    async with tenant_session(ctx.tenant_id) as s:
+        await eng_check.on_approved(s, principal, SimpleNamespace(id=uuid.uuid4()), cp, [size])
+        await s.commit()
+    async with tenant_session(ctx.tenant_id) as s:
+        feature = await s.get(Entity, uuid.UUID(planner["id"]))
+        assert (feature.key, feature.attrs.get("effort")) == ("F-01", "l"), feature.attrs
+        set_ = await s.scalar(select(AuditEvent).where(AuditEvent.action == "entity.effort_set"))
+        assert set_ is not None and set_.entity_id == feature.id
