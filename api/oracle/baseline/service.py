@@ -235,7 +235,14 @@ async def get_edge(db: AsyncSession, edge_id: uuid.UUID) -> Edge:
 
 
 async def find_entity(db: AsyncSession, type_: str, key: str) -> Entity | None:
-    return await db.scalar(select(Entity).where(Entity.type == type_, Entity.key == key))
+    """The entity of that type and key; for a feature, also the one that had ``key`` before
+    (its code given when it joined the Ground Truth: the old key stays its alias)."""
+    found = await db.scalar(select(Entity).where(Entity.type == type_, Entity.key == key))
+    if found is None and type_ == "feature" and key:
+        from oracle.baseline import fixes
+
+        found = await fixes.by_former_key(db, key)
+    return found
 
 
 async def find_edge(
@@ -1381,9 +1388,13 @@ async def create_entity(
     lock(entity, writer)
     db.add(entity)
     await db.flush()
-    if type_ == "feature":
-        await fixes.code_on_join(db, entity)
     _revision(db, writer, None, entity_snapshot(entity), entity=entity)
+    if type_ == "feature":
+        # Its code as a revision of its own, so the key it was added with stays its alias.
+        before = entity_snapshot(entity)
+        await fixes.code_on_join(db, entity)
+        if entity.key != before["key"]:
+            _revision(db, writer, before, entity_snapshot(entity), entity=entity)
     await db.flush()
     return WriteResult(entity=entity, kept_as_text=kept)
 

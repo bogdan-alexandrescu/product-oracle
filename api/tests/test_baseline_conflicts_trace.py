@@ -296,6 +296,8 @@ async def test_traceability_report(client, ctx):
     carts = await entity(client, ctx, type="feature", key="saved-carts")
     await entity(client, ctx, type="feature", key="dark-mode")
     weak = await entity(client, ctx, type="feature", key="usage-export")
+    # Each joined the Ground Truth with its code, in the order added: F-01 to F-04.
+    assert [f["key"] for f in (setup, carts, weak)] == ["F-01", "F-02", "F-04"]
     await edge(client, ctx, setup, activation, "supports", attrs={"contribution": 3})
     # Supports only a goal that is not confirmed: serves no goal.
     await edge(client, ctx, carts, conversion, "supports", attrs={"contribution": 2})
@@ -317,15 +319,15 @@ async def test_traceability_report(client, ctx):
     report = resp.json()
     flags = {f["key"]: f["flags"] for f in report["features"]}
     assert flags == {
-        "dark-mode": ["serves_no_goal", "no_evidence"],
-        "guided-setup": [],
-        "saved-carts": ["serves_no_goal"],
-        "usage-export": ["low_confidence"],
+        "F-03": ["serves_no_goal", "no_evidence"],  # dark-mode
+        "F-01": [],  # guided-setup
+        "F-02": ["serves_no_goal"],  # saved-carts
+        "F-04": ["low_confidence"],  # usage-export
     }
-    assert {f["key"] for f in report["flagged"]} == {"dark-mode", "saved-carts", "usage-export"}
+    assert {f["key"] for f in report["flagged"]} == {"F-03", "F-02", "F-04"}
     goals = {g["key"]: g for g in report["goals"]}
     assert goals["activation"]["coverage"] == 4
-    assert [f["key"] for f in goals["activation"]["features"]] == ["guided-setup", "usage-export"]
+    assert [f["key"] for f in goals["activation"]["features"]] == ["F-01", "F-04"]
     assert goals["activation"]["weight"] == 3
     assert goals["churn"]["features"] == []
     assert report["summary"] == {
