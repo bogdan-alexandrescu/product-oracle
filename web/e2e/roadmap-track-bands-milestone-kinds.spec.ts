@@ -64,6 +64,30 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     await expect(head.getByTestId("track-name-tip").locator("xpath=..").getByRole("tooltip")).toContainText("Owner:");
   });
 
+  // Card gantt-track-head-text: protects = a Gantt Group by Track header's text is its name and
+  // goal only, the hover card's owner, PRD and health reason out of it until pointed at;
+  // fails_when = the header's textContent carries "Owner:", "PRD:" or the reason.
+  test("a Gantt track header reads its name and goal; its hover card shows only on hover or focus", async ({ page }) => {
+    await open(page);
+    await page.getByTestId("format-gantt").click();
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
+    const group = page.getByTestId("chart-group").filter({ has: page.getByTestId("track-head") }).first();
+    await expect(group).toBeVisible();
+    const text = (await group.textContent()) ?? "";
+    expect(text).not.toContain("Owner:");
+    expect(text).not.toContain("PRD:");
+    expect(text).not.toMatch(/every feature ends|ends [A-Z][a-z]{2} \d{1,2}, after|Not checked since/);
+    const nameTip = group.getByTestId("track-name-tip");
+    expect(text.startsWith((await nameTip.innerText()).trim())).toBe(true);
+    await nameTip.hover();
+    await expect(nameTip.locator("xpath=..").getByRole("tooltip")).toContainText("Owner:");
+    await page.mouse.move(0, 0);
+    await expect(nameTip.locator("xpath=..").getByRole("tooltip")).toBeHidden();
+    // A keyboard person reads it on focus.
+    await nameTip.focus();
+    await expect(nameTip.locator("xpath=..").getByRole("tooltip")).toContainText("PRD:");
+  });
+
   test("a label leads with its kind's icon and ends with its status mark; its tooltip gives kind, status and why", async ({ page }) => {
     await open(page);
     const l = label(page, "M1 Alerts live for 50 teams");
