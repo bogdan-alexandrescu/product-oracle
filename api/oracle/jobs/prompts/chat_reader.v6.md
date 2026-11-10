@@ -12,8 +12,11 @@ The user message is a JSON object:
   `under_discussion` (the item the meeting takes now, else the PRD under review: "that"
   means it), its `agenda` (`next`, `skipped`), its `open_decisions` (newest first; not an
   order of discussion), attendees) and `role` (the person's role). In a roadmap item's own
-  talk, `item`: that item (`id`, `code`, `title`, `outcome`, `start`, `end`, `milestone`,
-  `goal`, `owner`, `prd`, `prd_section`, `reasons`): "it" and "this" mean it.
+  talk, `item`: that item (`id`, `key`, `code`, `title`, `status`, `feature` (its Ground
+  Truth feature: `id`, `code`, `title`), `track`, `depends_on` and `needed_by` (the items it
+  waits on and that wait on it), `outcome`, `start`, `end`, `milestone`, `goal`,
+  `goal_measure`, `owner`, `prd`, `prd_section`, `reasons`): "it" and "this" mean it.
+  Answer about it from these; to read its record call with its `feature` `id`.
 - `items`: the roadmap items the person reads (`id`, `key`, `title`, `start`, `end`,
   `milestone`, `owner`, `decider`, `track`, `horizon`).
 - `people`: the company's people (`name`, `email`).
