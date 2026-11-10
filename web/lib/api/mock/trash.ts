@@ -85,8 +85,9 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   onRestore?: (released: unknown) => void;
   /** trash-features-goals: Restore of a roadmap feature or a goal (kept in place, marked `trashed`). */
   simple?: () => TrashedSimple | undefined;
-  /** delete-prd-simple: the roadmap items and tracks these PRDs feed (the dependents' `feeds`). */
-  feeds?: (prdSlugs: string[]) => TrashItem[];
+  /** delete-prd-simple: the roadmap items and tracks these PRDs feed, as what stays and what goes with the
+   * documents of the delete (`gone`, their slugs): the dependents' `feeds` and `feeds_going`. */
+  feeds?: (prdSlugs: string[], gone: string[]) => { stays: TrashItem[]; goes: TrashItem[] };
   /** prd-reads-working-draft: which company roadmap a PRD's run reads (./roadmap-read.ts). */
   roadmapRead?: (me: { id: string; role: Role }) => string | null;
   uuid: () => string;
@@ -392,8 +393,9 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     return r ? { ...i, created_at: r.created_at, wrote: docs.find((d) => d.slug === r.document_slug)?.title ?? null } : i;
   });
   if (isDependents) {
-    const feeds = ctx.feeds?.(docs.filter((d) => d.kind === "prd").map((d) => d.slug)) ?? [];
-    const out: Schemas["DependentsOut"] = { root, items: said, published, working_runs: working.map((r) => r.id), feeds };
+    const prds = docs.filter((d) => d.kind === "prd").map((d) => d.slug);
+    const fed = prds.length && ctx.feeds ? ctx.feeds(prds, docs.map((d) => d.slug)) : { stays: [], goes: [] };
+    const out: Schemas["DependentsOut"] = { root, items: said, published, working_runs: working.map((r) => r.id), feeds: fed.stays, feeds_going: fed.goes };
     return json(200, out);
   }
   if (working.length) return json(409, { detail: `A run is still working on this (${working[0].flow}, ${working[0].status}): cancel it first` });

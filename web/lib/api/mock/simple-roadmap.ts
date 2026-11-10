@@ -246,6 +246,9 @@ interface SimpleDb {
   /** replaced-prd-history (company.history_roadmaps): the slugs of the roadmaps Simple leaves out,
    * a replaced PRD's own roadmap (and one in Trash), set by server.ts: no draft, track or Inbox row. */
   history_roadmaps?: string[];
+  /** delete-prd-simple (oracle.trash.filter): the roadmaps (by key) whose document is in Trash, set by
+   * server.ts: their items leave every read with it, and a Restore brings them back. */
+  trashed_roadmaps?: string[];
   /** replaced-prd-history (company.history_track_ids): the titles of the PRDs a live PRD replaces,
    * set by server.ts: their own tracks are history, never in Tracks. */
   replaced_prd_titles?: string[];
@@ -1169,20 +1172,31 @@ export function trackPrdTitles(db: SimpleDb, track: string): string[] {
   return first ? [first] : [];
 }
 
-/** delete-prd-simple (the API's trash feeds): the roadmap items a PRD feeds (each once, by key) and the
- * tracks that hold it, by title; Delete PRD names them (they stay, without it). */
-export function prdFeeds(db: SimpleDb, prdSlug: string): Schemas["TrashItem"][] {
+/** delete-prd-simple (the API's trash feeds): the roadmap items these PRDs feed (each once, by key) and
+ * the tracks that hold them, by title, as what stays and what goes with them: an item on a roadmap
+ * document of the delete (`gone`, its slugs) or on a draft of these PRDs goes, as does a track holding
+ * no other PRD. Delete PRD names both. */
+export function prdFeeds(db: SimpleDb, prdSlugs: string[], gone: string[]): { stays: Schemas["TrashItem"][]; goes: Schemas["TrashItem"][] } {
   const slug = (title: string | undefined) => title?.toLowerCase().replace(/ /g, "-");
-  const items = new Map<string, Schemas["TrashItem"]>();
+  const prds = new Set(prdSlugs);
+  const stays = new Map<string, Schemas["TrashItem"]>();
+  const goes = new Map<string, Schemas["TrashItem"]>();
   for (const s of db.items) {
-    if (s.trashed || (s.prd_doc?.slug ?? slug(ROADMAPS[s.roadmap]?.prd)) !== prdSlug || items.has(s.key)) continue;
-    items.set(s.key, { type: "feature", id: db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`), slug: s.key, title: s.title, kind: "feature" });
+    const prd = s.prd_doc?.slug ?? slug(ROADMAPS[s.roadmap]?.prd);
+    if (s.trashed || !prd || !prds.has(prd)) continue;
+    const going = gone.includes(ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap) || !!s.draft_roadmap;
+    (going ? goes : stays).set(s.key, { type: "feature", id: db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`), slug: s.key, title: s.title, kind: "feature" });
   }
-  const tracks = Object.keys(TRACKS)
-    .filter((t) => trackPrdTitles(db, t).some((title) => slug(title) === prdSlug))
-    .map((t): Schemas["TrashItem"] => ({ type: "track", id: stableUuid(`simple-track/${t}`), slug: null, title: TRACKS[t], kind: "Track" }));
+  // An item on several roadmaps stays while one of them does.
+  for (const k of stays.keys()) goes.delete(k);
   const byTitle = (a: Schemas["TrashItem"], b: Schemas["TrashItem"]) => a.title.localeCompare(b.title);
-  return [...[...items.values()].sort(byTitle), ...tracks.sort(byTitle)];
+  const tracks = Object.keys(TRACKS).map((t) => [t, trackPrdTitles(db, t).map(slug)] as const).filter(([, held]) => held.some((x) => x && prds.has(x)));
+  const track = (t: string): Schemas["TrashItem"] => ({ type: "track", id: stableUuid(`simple-track/${t}`), slug: null, title: TRACKS[t], kind: "Track" });
+  const out = (items: Map<string, Schemas["TrashItem"]>, going: boolean) => [
+    ...[...items.values()].sort(byTitle),
+    ...tracks.filter(([, held]) => held.every((x) => x && prds.has(x)) === going).map(([t]) => track(t)).sort(byTitle),
+  ];
+  return { stays: out(stays, false), goes: out(goes, true) };
 }
 
 /** A PRD's owners (drafts.who on its document), by person id in id order: the owners of its tracks
@@ -1269,7 +1283,8 @@ export function fileUnderCurrentPrd(db: SimpleDb, s: SeedItem): void {
 
 function visibleItems(db: SimpleDb, role: Role): SeedItem[] {
   const restricted = role === "commenter" || role === "viewer";
-  return db.items.filter((s) => !s.trashed && !offLatest(db, s) && (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company") && !ofReplacedPrd(db, s));
+  const trashed = new Set(db.trashed_roadmaps ?? []);
+  return db.items.filter((s) => !s.trashed && !trashed.has(s.roadmap) && !offLatest(db, s) && (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company") && !ofReplacedPrd(db, s));
 }
 
 /** plan-model (suggestions._planned): the item's dated slices in its PRD's plan; none when the plan does not place it. */

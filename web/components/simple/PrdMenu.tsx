@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 
 import { itemKind, itemTitle } from "@/components/ArtifactMenu";
 import { toast } from "@/components/ds/Toast";
+import { useFocusTrap } from "@/components/ds/ConfirmDialog";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { artifactsChanged } from "@/lib/artifacts";
 import { useMe } from "@/lib/me";
@@ -100,7 +101,10 @@ export function PrdMenu({
   );
 }
 
-/** The one-pager header's ⋯: deleted, the PRD goes back to One-pagers with Undo in the note. */
+/**
+ * The one-pager header's ⋯: deleted, the PRD goes back to One-pagers with Undo in the note. Undo opens
+ * the one-pager again while the person is still on One-pagers; elsewhere it only restores, with a link.
+ */
 export function PrdHeaderMenu({ doc, btnClass }: { doc: { slug: string; title: string }; btnClass: string }) {
   const router = useRouter();
   return (
@@ -114,7 +118,11 @@ export function PrdHeaderMenu({ doc, btnClass }: { doc: { slug: string; title: s
             label: "Undo",
             onClick: () =>
               void restorePrd(entry)
-                .then(() => router.push(`/simple/one-pagers/${doc.slug}`))
+                .then(() => {
+                  const page = `/simple/one-pagers/${doc.slug}`;
+                  if (window.location.pathname === "/simple/one-pagers") router.push(page);
+                  else toast({ message: `Restored ${doc.title}.`, action: { label: "Open it", onClick: () => router.push(page) } });
+                })
                 // A failed restore says why, in the API's words.
                 .catch((e) => toast({ message: errorMessage(e) })),
           },
@@ -139,8 +147,8 @@ function Row({ i, root }: { i: Item; root: string }) {
 
 /**
  * EP2 a (ep2-a-delete, ep2-a-phone): Delete asks first, says where it goes, what goes with it (the
- * documents built from it and their runs) and what it feeds (roadmap items and tracks, which stay);
- * on a phone it rises from the bottom.
+ * documents built from it, the roadmap items and tracks that leave with its roadmap, and their runs)
+ * and what it feeds that stays; on a phone it rises from the bottom. Focus stays in it until it closes.
  */
 function DeletePrdDialog({ doc, onClose, onDeleted }: { doc: { slug: string; title: string }; onClose: () => void; onDeleted: (entry: Entry) => void }) {
   const [deps, setDeps] = useState<Schemas["DependentsOut"] | null>(null);
@@ -157,14 +165,10 @@ function DeletePrdDialog({ doc, onClose, onDeleted }: { doc: { slug: string; tit
       alive = false;
     };
   }, [doc.slug]);
-  useEffect(() => {
-    ref.current?.querySelector<HTMLElement>("button:not([disabled])")?.focus();
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", esc);
-    return () => window.removeEventListener("keydown", esc);
-  }, [onClose]);
+  useFocusTrap(ref, true, onClose);
   const working = (deps?.working_runs.length ?? 0) > 0;
-  const withIt = [...(deps?.items.filter((i) => i.type !== "run") ?? []), ...(deps?.items.filter((i) => i.type === "run") ?? [])];
+  // Its documents, then the items and tracks that leave with its roadmap, then the runs.
+  const withIt = [...(deps?.items.filter((i) => i.type !== "run") ?? []), ...(deps?.feeds_going ?? []), ...(deps?.items.filter((i) => i.type === "run") ?? [])];
   const feeds = deps?.feeds ?? [];
   const root = deps?.root.title ?? doc.title;
   const ready = !!deps && !working && (!deps.published || published);
@@ -187,6 +191,7 @@ function DeletePrdDialog({ doc, onClose, onDeleted }: { doc: { slug: string; tit
     <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
       <div
         ref={ref}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={`Delete ${doc.title}`}
@@ -202,7 +207,7 @@ function DeletePrdDialog({ doc, onClose, onDeleted }: { doc: { slug: string; tit
             <p className="font-semibold">These go with it:</p>
             <ul className="mt-1 flex flex-col gap-0.5">
               {withIt.map((i) => (
-                <Row key={i.id} i={i} root={root} />
+                <Row key={`${i.type}-${i.id}`} i={i} root={root} />
               ))}
             </ul>
           </div>
@@ -233,7 +238,7 @@ function DeletePrdDialog({ doc, onClose, onDeleted }: { doc: { slug: string; tit
           <button type="button" className={DANGER} disabled={!ready || busy} onClick={() => void remove()}>
             Delete PRD
           </button>
-          <button type="button" className={BTN} onClick={onClose}>
+          <button type="button" data-autofocus="" className={BTN} onClick={onClose}>
             Cancel
           </button>
         </div>
