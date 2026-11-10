@@ -196,7 +196,7 @@ for (const phone of [false, true]) {
           const filters = page.getByTestId("filters");
           await expect(filters).toContainText("Group by");
           await expect(filters).toContainText("Scale");
-          await expect(filters.getByRole("group", { name: "Group by" }).getByRole("button")).toHaveText(["Goal", "Track", "PRD", "Milestone"]);
+          await expect(filters.getByRole("group", { name: "Group by" }).getByRole("button")).toHaveText(["Track", "Goal", "PRD", "Milestone"]);
           const prd = (await filters.locator("label", { hasText: /^PRD/ }).locator("select").boundingBox())!;
           expect(prd.width).toBeLessThan(90);
           await page.getByTestId("format-timeline").click();
