@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 
 import { Button, GoalTag, Notice } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type EntityOut, type GraphOut } from "@/lib/api/client";
+import { named } from "@/lib/codes";
 import { errorMessage, useAuthRedirect } from "@/lib/use-query";
 
 import { goalCodes, sortedGoals } from "./common";
@@ -71,7 +72,7 @@ export function AddItemSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Once the item is made, a retry makes only the links still missing: never a second item.
-  const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
+  const [created, setCreated] = useState<{ id: string; name: string; code?: string } | null>(null);
   const linked = useRef(new Set<string>());
 
   // Closing after the item is made still refreshes the page, so the item shows.
@@ -116,7 +117,9 @@ export function AddItemSheet({
           onAdded(`“${title.trim()}” was saved as a proposal for an approver.`);
           return;
         }
-        item = { id: out.entity.id, name: `“${title.trim()}”` };
+        // codes-on-join: a feature gets its code as it joins the Ground Truth; the notice says it.
+        const code = kind === "feature" ? named(out.entity.title, out.entity.key).code : null;
+        item = { id: out.entity.id, name: `“${title.trim()}”`, ...(code ? { code } : {}) };
         setCreated(item);
       }
       const name = item.name;
@@ -138,7 +141,7 @@ export function AddItemSheet({
       onAdded(
         kind === "goal"
           ? `Added ${name}. New goals start proposed: confirm it from its panel once it is agreed.`
-          : `Added ${name}. It is confirmed and locked against agent changes.`,
+          : `Added ${name}${item.code ? ` as ${item.code}` : ""}. It is confirmed and locked against agent changes.`,
       );
     } catch (err) {
       if (!onAuth(err)) {
