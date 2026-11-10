@@ -22,6 +22,7 @@ export interface TrashDocument {
   slug: string;
   title: string;
   kind: string;
+  company_roadmap?: boolean;
 }
 
 export interface TrashVersion {
@@ -146,7 +147,8 @@ const runItem = (r: RunOut): TrashItem => ({ type: "run", id: r.id, slug: null, 
 const intakeItem = (i: Intake): TrashItem => ({ type: "intake", id: i.id, slug: null, title: i.title, kind: "intake" });
 
 /** What goes to Trash with a document: the documents built from its versions and its spec
- * requests' tech briefs, transitively, and the runs that write any of them. */
+ * requests' tech briefs, transitively (never the company roadmap or a roadmap another PRD
+ * feeds), and the runs that write any of them. */
 function resolve<D extends TrashDocument, V extends TrashVersion>(ctx: TrashContext<D, V>, tops: D[]) {
   const docs = [...tops];
   const seen = new Set(tops.map((d) => d.id));
@@ -159,6 +161,14 @@ function resolve<D extends TrashDocument, V extends TrashVersion>(ctx: TrashCont
     for (const r of ctx.specRequests()) {
       const brief = frontier.has(r.source_document_id) ? ctx.documents.find((d) => d.slug === r.document_slug) : undefined;
       if (brief && !seen.has(brief.id)) next.add(brief.id);
+    }
+    // delete-prd-simple (trash.service._not_shared): never the company roadmap, nor a roadmap
+    // another PRD outside the delete feeds; the delete's own items on it stay, without it.
+    const inside = new Set([...seen, ...next]);
+    for (const id of next) {
+      const d = ctx.documents.find((x) => x.id === id);
+      const fedByOther = ctx.versions.some((v) => v.document_id === id && v.source && !inside.has(v.source.document_id));
+      if (d?.company_roadmap || fedByOther) next.delete(id);
     }
     for (const id of next) {
       seen.add(id);
