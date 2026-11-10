@@ -69,15 +69,14 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
         await expect(page.getByTestId("timeline-list")).toBeVisible();
         const rows = page.getByTestId("timeline-list").getByTestId("timeline-row");
         await expect(rows.first()).toBeVisible();
-        // tb-mk: a phone's rows read dates only (the owner's pick); each item's sheet names its goal.
-        for (const item of ["setup-checklist", "setup-import"]) {
-          const row = rows.and(page.locator(`[data-item="${item}"]`));
-          await row.first().click();
-          const card = page.getByTestId("floating-card");
-          await expect(card.getByTestId("card-goal"), `${item} names its PRD's goal`).toHaveText("Activation");
-          await card.getByRole("button", { name: "Close" }).click();
-          await expect(card).toHaveCount(0);
-        }
+        // tb-mk: a phone's rows read dates only (the owner's pick): both items are listed, and the
+        // same phone's Gantt, by goal, draws them in the PRD's Activation lane, five in all.
+        for (const item of ["setup-checklist", "setup-import"]) await expect(rows.and(page.locator(`[data-item="${item}"]`)).first()).toBeVisible();
+        const lanes = await ganttLanes(page);
+        const activation = lanes.find((l) => l.title === "Activation");
+        for (const item of ["setup-checklist", "setup-import"]) expect(activation?.items, `${item} sits in its PRD's goal`).toContain(item);
+        expect(new Set(activation!.items).size).toBe(5);
+        expect(lanes.filter((l) => l.title === "Faster activation")).toEqual([]);
       });
   });
 }
