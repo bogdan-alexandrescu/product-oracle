@@ -119,10 +119,10 @@ for (const phone of [false, true]) {
       await expect(row).toBeVisible();
       await tap(row.getByTestId("prio-title"));
       await expect(panel(page)).toBeVisible();
-      await tap(panel(page).getByRole("button", { name: "Change the status" }));
-      await panel(page).getByLabel("Status").selectOption("cut");
-      await tap(panel(page).getByRole("button", { name: "Save" }));
-      await expect(page.getByRole("status").filter({ hasText: "Status changed" })).toBeVisible();
+      await tap(panel(page).getByRole("button", { name: "More actions" }));
+      await tap(panel(page).getByRole("menuitem", { name: "Cut from the roadmap" }));
+      await tap(page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }));
+      await expect(page.getByRole("status").filter({ hasText: /^Cut / })).toBeVisible();
       await expect(panel(page)).toBeVisible();
       await expect(row).toHaveCount(0);
     });

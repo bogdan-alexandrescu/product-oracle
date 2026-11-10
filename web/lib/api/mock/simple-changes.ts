@@ -904,6 +904,8 @@ function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false, ctx?
   // walkc-roadmap-tasks: a task is stored under its item, open, as RoadmapItemTask is.
   else if (c.op === "add_item_task") targets[id] = { status: "todo", owner_id: null, due_date: null, ...values, kind: "item_task", item_id: c.target.item_id, at: c.at };
   else targets[id] = { ...(targets[id] ?? {}), ...values };
+  // feature-panel: a task's owner changed in its panel (or undone) reads by the person's name, as service._tasks does.
+  if (c.op === "edit_item_task" && "owner_id" in values) targets[id].owner_name = values.owner_id ? (ctx?.names[String(values.owner_id)] ?? null) : null;
   // An item's own milestone (set_milestone, and its undo) is what the roadmap reads of it.
   if (c.op === "set_milestone") {
     const key = keyOf(db, c.target.item_id);

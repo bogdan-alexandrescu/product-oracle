@@ -62,14 +62,14 @@ test("the goal counters follow the lanes' goal order, the Goal map's goals too",
   expect(onCards).toEqual(onLanes.filter((n) => onCards.includes(n)));
 });
 
-test("Status set to Cut in the panel lists the feature as cut today, by who cut it", async ({ page }) => {
+test("Cut from the panel's menu lists the feature as cut today, by who cut it", async ({ page }) => {
   await login(page);
   await roadmap(page);
   await openRoadmapItem(page, "alert-export");
   await expect(panel(page)).toBeVisible();
-  await tap(panel(page).getByRole("button", { name: "Change the status" }));
-  await panel(page).getByTestId("card-status-edit").getByLabel("Status").selectOption("cut");
-  await tap(panel(page).getByTestId("card-status-edit").getByRole("button", { name: "Save" }));
+  await tap(panel(page).getByRole("button", { name: "More actions" }));
+  await tap(panel(page).getByRole("menuitem", { name: "Cut from the roadmap" }));
+  await tap(page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }));
   await expect(panel(page).getByTestId("item-cut")).toHaveText(/^Cut on [A-Z][a-z]{2} \d+ by Avery Stone/);
   await page.keyboard.press("Escape");
   await tap(page.getByTestId("removed-open"));

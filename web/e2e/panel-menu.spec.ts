@@ -11,7 +11,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * Simple roadmap's Timeline at 1440 and 390, light and dark, against the mock's default scenario
  * (invented alert features).
  *
- * Card pm-delete: protects = Delete feature in the panel's menu moves it to Trash, the panel
+ * Card pm-delete: protects = Move to Trash… in the panel's menu moves it to Trash, the panel
  * closes, the row leaves the roadmap and Undo brings it back; fails_when = no Delete in the menu,
  * the panel stays open or the row stays.
  * Card pm-merge: protects = Merge into… marks it merged ("Merged into <name>" on its row and
@@ -74,7 +74,8 @@ for (const size of SIZES)
       test("an owner deletes a feature from its panel to Trash; the panel closes and Undo brings it back", async ({ page }) => {
         await open(page, undefined, "alert-export");
         if (scheme === "dark") await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-        await menu(page, "Delete feature");
+        await menu(page, "Move to Trash…");
+        await tap(page.getByRole("alertdialog").getByRole("button", { name: "Move to Trash" }));
         await expect(toasts(page)).toContainText("Moved Alert history export to Trash.");
         await expect(panel(page)).toHaveCount(0);
         await expect(row(page, "alert-export")).toHaveCount(0);
@@ -143,7 +144,8 @@ for (const size of SIZES)
         await expect(panel(page).getByTestId("item-merged")).toHaveCount(0);
 
         // As a row's Delete: who may not decide proposes it.
-        await menu(page, "Propose: delete");
+        await menu(page, "Propose: move to Trash…");
+        await tap(page.getByRole("alertdialog").getByRole("button", { name: "Move to Trash" }));
         await expect(toasts(page)).toContainText("Sent: delete Alert history export. Its decider decides.");
         await expect(panel(page)).toBeVisible();
         await expect(row(page, "alert-export")).toHaveCount(1);
