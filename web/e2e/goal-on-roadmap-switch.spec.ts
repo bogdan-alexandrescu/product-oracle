@@ -36,7 +36,7 @@ async function goalOnBand(page: Page, title: string): Promise<number> {
 
 async function setOnRoadmap(page: Page, title: string, on: boolean) {
   await page.goto("/simple/priorities?tab=buckets");
-  const bucket = page.getByTestId("goal-bucket").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+  const bucket = page.locator(`[data-testid="plan-goal"][data-goal="${title}"]`);
   await bucket.getByRole("button", { name: `Edit ${title}` }).click();
   const form = bucket.getByTestId("goal-form");
   const sw = form.getByRole("switch", { name: "On the roadmap" });
@@ -55,7 +55,7 @@ test("a goal's On the roadmap switch takes its target-date milestone off the Mil
   await login(page);
   // The goals as Priorities lists them (the mock reads its goal buckets there first).
   await page.goto("/simple/priorities?tab=buckets");
-  await expect(page.getByTestId("goal-bucket").filter({ has: page.getByRole("heading", { name: TITLE, exact: true }) })).toBeVisible();
+  await expect(page.locator(`[data-testid="plan-goal"][data-goal="${TITLE}"]`)).toBeVisible();
   await roadmap(page);
   // The goal's target date, drawn as a goal milestone named for the goal.
   expect(await goalOnBand(page, TITLE)).toBe(1);
