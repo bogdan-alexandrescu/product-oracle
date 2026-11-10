@@ -52,10 +52,16 @@ test("confirming a proposed feature gives it its code", async ({ page }) => {
   await login(page);
   await page.goto("/ground-truth");
   await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
-  await page.getByRole("tab", { name: /Items/ }).click();
-  await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: /Features/ }).click();
-  await page.getByRole("grid", { name: "Items" }).getByRole("button", { name: "Usage export" }).click();
-  const d = page.getByRole("dialog", { name: "Usage export" });
+  // A run proposed Dark mode (invented): it is not in the Ground Truth yet.
+  await page.evaluate(() => {
+    const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
+    db.baseline.entities.find((e: { key: string }) => e.key === "f.dark-mode").status = "proposed";
+    localStorage.setItem("po-mock-db-v2", JSON.stringify(db));
+  });
+  await page.reload();
+  const row = page.getByTestId("product-p.admin-console").getByRole("row").filter({ hasText: "Dark mode" });
+  await row.getByRole("button", { name: /Dark mode/ }).first().click();
+  const d = page.getByRole("dialog", { name: /Dark mode/ });
   await d.getByRole("button", { name: "Confirm" }).click();
-  await expect(d.getByRole("status").filter({ hasText: "Confirmed" })).toContainText(/Confirmed “Usage export” as F-\d{2,}\./);
+  await expect(d.getByRole("status").filter({ hasText: "Confirmed" })).toContainText(/Confirmed “Dark mode” as F-\d{2,}\./);
 });

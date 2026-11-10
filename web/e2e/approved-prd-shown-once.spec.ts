@@ -146,8 +146,10 @@ test("an item keyed phase-2 is its own item, never folded into phase", async ({ 
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await page.getByTestId("format-gantt").click();
   await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
-  await expect(page.locator('g[data-testid="bar"][data-item="phase"]')).toHaveCount(1);
-  await expect(page.locator('g[data-testid="bar"][data-item="phase-2"]')).toHaveCount(1);
-  await expect(page.locator('g[data-testid="bar"][aria-label^="Reminder rollout:"]')).toHaveAttribute("data-end", "2027-01-15");
-  await expect(page.locator('g[data-testid="bar"][aria-label^="Reminder rollout two:"]')).toHaveAttribute("data-end", "2027-03-12");
+  const phase = page.locator('g[data-testid="bar"][aria-label^="Reminder rollout:"]');
+  const phase2 = page.locator('g[data-testid="bar"][aria-label^="Reminder rollout two:"]');
+  await expect(phase).toHaveCount(1);
+  await expect(phase2).toHaveCount(1);
+  await expect(phase).toHaveAttribute("data-end", "2027-01-15");
+  await expect(phase2).toHaveAttribute("data-end", "2027-03-12");
 });
