@@ -14597,6 +14597,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/priorities/twins/{feature_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Simple Priority Twin
+         * @description A Same name record's Merge into… the row's feature (qa-prio-twins): its roadmap items
+         *     are linked to the kept feature first, then its feature is merged into it. 403 unless the
+         *     caller is an approver who decides each of those items' roadmaps; nothing is written.
+         */
+        post: operations["merge_simple_priority_twin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/priorities": {
         parameters: {
             query?: never;
@@ -44700,6 +44722,30 @@ export interface components {
              * @default []
              */
             goals: components["schemas"]["SimpleTrackGoal"][];
+        };
+        /**
+         * SimpleTwinMergeIn
+         * @description qa-prio-twins: a Same name record's Merge into… ``into`` (the row's feature).
+         */
+        SimpleTwinMergeIn: {
+            /**
+             * Into
+             * Format: uuid
+             */
+            into: string;
+        };
+        /**
+         * SimpleTwinMergeOut
+         * @description The kept feature, and the item keys of the twin's items now linked to it.
+         */
+        SimpleTwinMergeOut: {
+            /** Feature Id */
+            feature_id: string;
+            /**
+             * Relinked
+             * @default []
+             */
+            relinked: string[];
         };
         /**
          * SimpleUpcomingMeeting
@@ -78081,6 +78127,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimpleDecisionsWaitingOut"];
+                };
+            };
+        };
+    };
+    merge_simple_priority_twin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleTwinMergeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleTwinMergeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

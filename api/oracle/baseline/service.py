@@ -1706,19 +1706,25 @@ async def delete_edge(db: AsyncSession, writer: Writer, edge: Edge) -> WriteResu
 
 
 async def merge_entity(
-    db: AsyncSession, principal: Principal, source: Entity, into: Entity, reason: str | None
+    db: AsyncSession,
+    principal: Principal,
+    source: Entity,
+    into: Entity,
+    reason: str | None,
+    any_run: bool = False,
 ) -> Entity:
     """Merge a duplicate a run created into ``into`` (B2 Merge into…): its evidence and
     edges move to the target (an edge the target already has, or one that would link the
     target to itself, is dropped), its open proposals are rejected "Merged into <title>",
     and it is deleted. A person's write: revisions on both and an audit row. Refused (409,
     nothing changed) unless both have the same type, a run created the source, nobody
-    locked it and no PRD section links it."""
+    locked it and no PRD section links it. ``any_run``: a source a person made too (Simple
+    Priorities' Same name merge, oracle.simple.priorities.merge_twin)."""
     from oracle.baseline.from_run import LINKED, LOCKED, NOT_SAME_TYPE, NOT_THIS_RUN
 
     if source.id == into.id or source.type != into.type:
         raise ConflictError(NOT_SAME_TYPE)
-    if source.run_id is None:
+    if source.run_id is None and not any_run:
         raise ConflictError(NOT_THIS_RUN)
     if source.locked:
         raise ConflictError(LOCKED)

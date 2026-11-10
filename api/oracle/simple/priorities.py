@@ -40,7 +40,7 @@ import uuid
 from datetime import date
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -73,6 +73,8 @@ from oracle.simple.schemas import (
     SimplePriorityTwin,
     SimplePriorityUnranked,
     SimpleQuarter,
+    SimpleTwinMergeIn,
+    SimpleTwinMergeOut,
 )
 from oracle.trash.filter import INCLUDE_TRASHED
 
@@ -174,6 +176,15 @@ def link(row: Any) -> str | None:
         if isinstance(t, dict) and t.get("target") == "feature" and t.get("id"):
             return str(t["id"])
     return None
+
+
+def _items_of(read_: service.Read) -> dict[str, list[service.Entry]]:
+    """qa-prio-twins: feature id -> its open items (by their link), on every roadmap."""
+    out: dict[str, list[service.Entry]] = {}
+    for e in read_.entries:
+        if e.status not in ("cut", "merged") and (fid := link(e.row)) is not None:
+            out.setdefault(fid, []).append(e)
+    return out
 
 
 def _live_drafts(read_: service.Read) -> list[service.Entry]:
@@ -739,6 +750,7 @@ def _fold_twins(
     principal: Any,
     deciders: Any,
     can_change: bool,
+    items_of: dict[str, list[service.Entry]] | None = None,
 ) -> tuple[list[SimplePriorityRow], dict[str, SimplePriorityRow]]:
     """qa-prio-twins: rows of separate features with one name (a row's title or its feature's
     own, ``titles``: feature id -> title) are one feature not linked as one: one row, the
@@ -780,8 +792,15 @@ def _fold_twins(
                 merge, applies = "item", service.can_decide(principal, e, deciders)
             else:
                 # No item, an item on another roadmap, or a lead with only a draft: the
-                # baseline's Merge into… of its feature into the row's.
-                merge, applies = "entity", has_role(principal.role, "approver")
+                # baseline's Merge into… of its feature into the row's (merge_twin), which
+                # first re-links each of its items: it applies for an approver who decides
+                # every one of them.
+                theirs = (items_of or {}).get(r.feature_id, [])
+                merge, applies = (
+                    "entity",
+                    has_role(principal.role, "approver")
+                    and all(service.can_decide(principal, x, deciders) for x in theirs),
+                )
             lead.twins.append(
                 SimplePriorityTwin(
                     feature_id=r.feature_id, item_id=r.item_id, code=r.code, title=r.title,
@@ -893,7 +912,7 @@ async def build(
         for r, pid in zip(rows, prd_of, strict=True):
             r.in_plan = pid == str(plan_out.prd.id)
     rows, named = _fold_twins(rows, {f.entity_id: f.title for f in features}, by_id, principal,
-                              read_.deciders, can_change)  # fmt: skip
+                              read_.deciders, can_change, _items_of(read_))  # fmt: skip
     twin_items = {t.item_id for r in rows for t in r.twins if t.item_id is not None}
     goal_rows = await db.scalars(select(Entity).where(Entity.type == "goal"))
     order = {g.key: i for i, g in enumerate(sort_goals(goal_rows))}
@@ -919,6 +938,87 @@ async def build(
         if the_company is not None
         else None,
     )
+
+
+async def merge_twin(
+    db: AsyncSession, principal: Any, feature_id: uuid.UUID, into_id: uuid.UUID
+) -> SimpleTwinMergeOut:
+    """qa-prio-twins (review of #1503): a twin's Merge into… the row's feature. Each open item
+    of the twin's feature is first re-linked to the kept feature (``set_feature``; when the
+    kept feature holds only a draft on that item's roadmap, that draft is merged into the
+    item first, ``merge_item``, so the confirmed item stays), then the feature is merged
+    (baseline.merge_entity) and deleted: no item is left with no feature. Refused, nothing
+    written, unless the caller is an approver who decides every one of those items.
+    Not committed."""
+    from oracle.baseline import service as baseline
+    from oracle.simple.schemas import SimpleChangeIn
+
+    if not has_role(principal.role, "approver"):
+        raise changes.ChangeError(403, "Only an approver merges Ground Truth features")
+    try:
+        source = await baseline.get_entity(db, feature_id)
+        into = await baseline.get_entity(db, into_id)
+    except baseline.BaselineError as exc:
+        raise changes.ChangeError(exc.status_code, str(exc)) from exc
+    if source.type != "feature" or into.type != "feature" or source.id == into.id:
+        raise changes.ChangeError(422, "into: another Ground Truth feature")
+    read_ = await service.load(db, await drafts.overlays_for(db, principal))
+    items = _items_of(read_)
+    theirs = items.get(str(source.id), [])
+    ours = items.get(str(into.id), [])
+    for e in theirs:
+        if not service.can_decide(principal, e, read_.deciders):
+            raise changes.ChangeError(
+                403,
+                f"Only the decider of {e.roadmap.title} links {e.row.title} to another "
+                "feature: ask them to merge it",
+            )
+    relinked: list[str] = []
+    for e in theirs:
+        if not e.row.draft:
+            same = [d for d in ours if d.roadmap.id == e.roadmap.id]
+            if same and all(d.row.draft for d in same):
+                # The kept feature holds only a draft here: it goes into the confirmed item.
+                draft = min(same, key=lambda d: d.row.item_key)
+                body = SimpleChangeIn(
+                    op="merge_item",
+                    target={"item_id": str(draft.row.id), "into_id": str(e.row.id)},
+                    before={}, after={}, reason=f"Merged into {e.row.title}",
+                )  # fmt: skip
+                await changes.create(db, principal, body, commit=False)
+        now = e.row.feature_id
+        body = SimpleChangeIn(
+            op="set_feature", target={"item_id": str(e.row.id)},
+            before={"feature_id": str(now) if now else None},
+            after={"feature_id": str(into.id)}, reason=f"Merged into {into.title}",
+        )  # fmt: skip
+        await changes.create(db, principal, body, commit=False)
+        relinked.append(e.row.item_key)
+    try:
+        await baseline.merge_entity(db, principal, source, into, None, any_run=True)
+    except baseline.BaselineError as exc:
+        raise changes.ChangeError(exc.status_code, str(exc)) from exc
+    return SimpleTwinMergeOut(feature_id=str(into.id), relinked=relinked)
+
+
+@router.post(
+    "/priorities/twins/{feature_id}/merge",
+    response_model=SimpleTwinMergeOut,
+    name="merge_simple_priority_twin",
+)
+async def post_merge_twin(
+    feature_id: uuid.UUID, body: SimpleTwinMergeIn, principal: Reader, db: TenantDB
+) -> SimpleTwinMergeOut:
+    """A Same name record's Merge into… the row's feature (qa-prio-twins): its roadmap items
+    are linked to the kept feature first, then its feature is merged into it. 403 unless the
+    caller is an approver who decides each of those items' roadmaps; nothing is written."""
+    try:
+        out = await merge_twin(db, principal, feature_id, body.into)
+    except (changes.ChangeError, drafts.DraftError) as e:
+        await db.rollback()
+        raise HTTPException(e.status, e.detail) from e
+    await db.commit()
+    return out
 
 
 @router.get("/priorities", response_model=SimplePrioritiesOut, name="get_simple_priorities")

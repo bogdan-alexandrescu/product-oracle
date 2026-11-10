@@ -49287,6 +49287,69 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/simple/priorities/twins/{feature_id}/merge": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Merge Simple Priority Twin",
+        "description": "A Same name record's Merge into\u2026 the row's feature (qa-prio-twins): its roadmap items\nare linked to the kept feature first, then its feature is merged into it. 403 unless the\ncaller is an approver who decides each of those items' roadmaps; nothing is written.",
+        "operationId": "merge_simple_priority_twin",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feature_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Feature Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleTwinMergeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleTwinMergeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/priorities": {
       "get": {
         "tags": [
@@ -131987,6 +132050,43 @@
           "prds"
         ],
         "title": "SimpleTracks"
+      },
+      "SimpleTwinMergeIn": {
+        "properties": {
+          "into": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Into"
+          }
+        },
+        "type": "object",
+        "required": [
+          "into"
+        ],
+        "title": "SimpleTwinMergeIn",
+        "description": "qa-prio-twins: a Same name record's Merge into\u2026 ``into`` (the row's feature)."
+      },
+      "SimpleTwinMergeOut": {
+        "properties": {
+          "feature_id": {
+            "type": "string",
+            "title": "Feature Id"
+          },
+          "relinked": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Relinked",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature_id"
+        ],
+        "title": "SimpleTwinMergeOut",
+        "description": "The kept feature, and the item keys of the twin's items now linked to it."
       },
       "SimpleUpcomingMeeting": {
         "properties": {

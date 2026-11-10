@@ -1127,6 +1127,19 @@ class SimplePriorityTwin(BaseModel):
     applies: bool = False
 
 
+class SimpleTwinMergeIn(BaseModel):
+    """qa-prio-twins: a Same name record's Merge into… ``into`` (the row's feature)."""
+
+    into: uuid.UUID
+
+
+class SimpleTwinMergeOut(BaseModel):
+    """The kept feature, and the item keys of the twin's items now linked to it."""
+
+    feature_id: str
+    relinked: list[str] = []
+
+
 class SimplePriorityRow(BaseModel):
     rank: int
     # Oracle's rank (the formula and dependencies, before people's overrides).

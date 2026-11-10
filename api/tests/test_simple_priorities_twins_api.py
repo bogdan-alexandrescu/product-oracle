@@ -31,9 +31,9 @@ Test cards (protects / fails_when / no_claim):
   holds only a draft merges that draft into the twin's confirmed item, links the item to the
   kept feature, then merges the feature: the row keeps its rank and now has the item;
   fails_when=the item loses its feature and drops to Not ranked yet (review of #1503).
-- test_merging_a_twin_relinks_its_item_on_another_roadmap: protects=a twin's item on another
-  roadmap is linked to the kept feature before the twin's feature goes; fails_when=it is left
-  with no feature (Not ranked yet).
+- test_merging_a_twin_relinks_its_item_on_another_roadmap: protects=with no company roadmap, a
+  twin's item on another roadmap is linked to the kept feature before the twin's feature
+  goes; fails_when=it is left with no feature (Not ranked yet).
 - test_merging_a_twin_needs_its_roadmaps_decider: protects=a twin merge whose item the caller
   may not re-link is refused (403) and changes nothing; it is offered as not applying;
   fails_when=the feature is deleted and the item left unlinked.
@@ -46,9 +46,11 @@ from sqlalchemy import select
 
 from oracle.baseline.models import Entity
 from oracle.roadmap.models import RoadmapItem
-from oracle.simple import drafts, priorities, service
+from oracle.simple import priorities
+from oracle.simple.models import SimpleDraft
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import CHANGES, clock, make_people  # noqa: F401
+from tests.test_simple_priorities_api import World
 from tests.test_simple_priorities_company_roadmap_api import REASON, by_feature, company_world
 from tests.test_simple_roadmap_api import Seed
 from tests.test_simple_targets_api import no_llm  # noqa: F401
@@ -227,13 +229,18 @@ def _merge_url(w, key: str) -> str:
     return f"/v1/simple/priorities/twins/{w.ids[key]}/merge"
 
 
-async def _feature_of(w, who: str, item: str) -> str | None:
-    """The item's feature as ``who`` reads it (their roadmap's working draft included)."""
+async def _feature_of(w, item: str) -> str | None:
+    """The item's feature: its roadmap's working draft's, else its row's."""
     async with tenant_session(w.ctx.tenant_id) as s:
-        me = SimpleNamespace(id=w.ctx.users[who].id, role=who)
-        read_ = await service.load(s, await drafts.overlays_for(s, me))
-        e = read_.by_id()[uuid.UUID(w.ids[item])]
-        return str(e.row.feature_id) if e.row.feature_id else None
+        row = await s.get(RoadmapItem, uuid.UUID(w.ids[item]))
+        for d in await s.scalars(
+            select(SimpleDraft).where(
+                SimpleDraft.document_id == row.roadmap_document_id, SimpleDraft.status == "working"
+            )
+        ):
+            if "feature_id" in (d.overlay or {}).get(w.ids[item], {}):
+                return d.overlay[w.ids[item]]["feature_id"]
+        return str(row.feature_id) if row.feature_id else None
 
 
 async def test_merging_a_twin_keeps_its_item_on_the_kept_row(client):
@@ -253,7 +260,7 @@ async def test_merging_a_twin_keeps_its_item_on_the_kept_row(client):
     assert (row["rank"], row["twins"], row["draft_item_id"]) == (before["rank"], [], None)
     assert w.ids["pay-9"] not in [u["item_id"] for u in out["unranked"]], "Not ranked yet"
     assert w.ids["pay-8"] not in [d["item_id"] for d in out["drafts"]]
-    assert await _feature_of(w, "owner", "pay-9") == w.ids["gadget"]
+    assert await _feature_of(w, "pay-9") == w.ids["gadget"]
     async with tenant_session(w.ctx.tenant_id) as s:
         assert await s.get(Entity, uuid.UUID(w.ids["gadget-copy"])) is None
 
@@ -262,26 +269,30 @@ async def _devices(w, key: str, feature: str) -> None:
     """A second roadmap, ``devices``, with one confirmed item ``key`` of ``feature``."""
     async with tenant_session(w.ctx.tenant_id) as s:
         seed = Seed(s)
-        _, pv, _, rv = await seed.roadmap("devices")
-        row = await seed.item(rv, pv, key, title="Ledger", feature_id=uuid.UUID(w.ids[feature]))
+        _, pv, rm, rv = await seed.roadmap("devices")
+        track = await seed.track(pv, rm)
+        row = await seed.item(rv, pv, key, title="Ledger", track_id=track.id,
+                              feature_id=uuid.UUID(w.ids[feature]))  # fmt: skip
         await s.commit()
         w.ids[key] = str(row.id)
 
 
 async def test_merging_a_twin_relinks_its_item_on_another_roadmap(client):
-    w = await company_world()
+    # No company roadmap: every roadmap feeds Simple.
+    w = await World(await make_people()).build()
     await _features(w, ("ledger-copy", "Ledger", 9))
     await _devices(w, "dev-1", "ledger-copy")
     [twin] = by_feature(await w.read(client), w)["ledger"]["twins"]
-    assert (twin["code"], twin["merge"], twin["applies"]) == ("ledger-copy", "entity", True)
+    assert (twin["item_id"], twin["merge"], twin["applies"]) == (w.ids["dev-1"], "entity", True)
     r = await client.post(
         _merge_url(w, "ledger-copy"), json={"into": w.ids["ledger"]}, headers=w.ctx.as_("owner")
     )
     assert r.status_code == 200, r.text
+    assert r.json()["relinked"] == ["dev-1"], r.text
     out = await w.read(client)
     assert by_feature(out, w)["ledger"]["twins"] == []
     assert w.ids["dev-1"] not in [u["item_id"] for u in out["unranked"]], "Not ranked yet"
-    assert await _feature_of(w, "owner", "dev-1") == w.ids["ledger"]
+    assert await _feature_of(w, "dev-1") == w.ids["ledger"]
 
 
 async def test_merging_a_twin_needs_its_roadmaps_decider(client):
