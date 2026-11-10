@@ -1090,6 +1090,13 @@ export function ownPrd(s: SeedItem): Schemas["SimpleDocRef"] {
   return itemPrd(s);
 }
 
+/** ownPrd(s).slug, without deriving the PRD's id (prdOrder reads it for every item). */
+export function ownPrdSlug(s: SeedItem): string {
+  if (s.prd_doc) return s.prd_doc.slug;
+  if (s.from_prd) return s.from_prd.slug;
+  return ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-");
+}
+
 /** A milestone no plan dates (the new SimpleMilestone fields, empty). */
 const UNDATED = { start_date: null, end_date: null, effort_weeks: null, done_when: [] as string[], targets: [] as { goal: string; target: string }[] };
 

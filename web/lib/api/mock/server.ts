@@ -208,7 +208,7 @@ import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones, seedStuckPrdAs
 import { knowPrdOrder } from "./prd-rank";
 import { codedTitle, openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
-import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
+import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrdSlug, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdOwnerIdsOf, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
@@ -5382,11 +5382,19 @@ export function prdOrder(db: Db): Map<string, number> {
   const items = (db.simple_roadmap?.items ?? []).filter((s) => !s.trashed && s.goal);
   // Each goal's place: the one goal order, a goal it does not hold after those by key (as the roadmap's goal rows).
   const keys = [...new Set(items.map((s) => s.goal!))].sort((a, b) => goalRank(a) - goalRank(b) || a.localeCompare(b));
+  // simple-roadmap-500-paint: each PRD's items per goal place, counted in one pass (each route ranks
+  // PRDs per roadmap, so a pass per PRD over the 500 items was most of a roadmap read).
+  const place = new Map(keys.map((k, n) => [k, n]));
+  const bySlug = new Map<string, Map<number, number>>();
+  for (const s of items) {
+    const slug = ownPrdSlug(s);
+    const counts = bySlug.get(slug) ?? new Map<number, number>();
+    bySlug.set(slug, counts);
+    const r = place.get(s.goal!)!;
+    counts.set(r, (counts.get(r) ?? 0) + 1);
+  }
   const main = (d: DocumentRow): number | null => {
-    const counts = new Map<number, number>();
-    for (const s of items) {
-      if (ownPrd(s).slug === d.slug) counts.set(keys.indexOf(s.goal!), (counts.get(keys.indexOf(s.goal!)) ?? 0) + 1);
-    }
+    const counts = bySlug.get(d.slug) ?? new Map<number, number>();
     const most = Math.max(0, ...counts.values());
     return most ? Math.min(...[...counts].filter(([, n]) => n === most).map(([r]) => r)) : null;
   };
