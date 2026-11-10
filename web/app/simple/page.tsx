@@ -8,6 +8,7 @@ import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRo
 import { Walk } from "@/app/simple/_home/walk";
 import { runStopsOf, StopCard } from "@/app/simple/_home/run-stops";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
+import { GtWaitingLine } from "@/app/simple/_home/gt-flags";
 import { MarkForItem, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Icon } from "@/components/ds/Icon";
 import { Button } from "@/components/ds/Button";
@@ -980,6 +981,8 @@ export default function SimpleHome() {
               </Link>
             </p>
           ))}
+          {/* The owner's pick (Nov 10): the Ground Truth flags, one line at the foot of the card. */}
+          <GtWaitingLine />
         </section>
       )}
 
@@ -1007,6 +1010,7 @@ export default function SimpleHome() {
               </Link>
             </p>
           )}
+          {!(tilesReady && (tilesShown.length > 0 || myDrafts.length > 0)) && <GtWaitingLine />}
         </section>
       )}
 
@@ -1325,6 +1329,7 @@ export default function SimpleHome() {
 
       {reads ? (
         <>
+          <GtWaitingLine card />
           <HomeCard id="next-milestone" icon="flag" title="What the next milestone delivers" all="/simple/roadmap" allLabel="All of the roadmap">
             <Block q={roadmap} testId="home-milestone">
               {(r) => {
