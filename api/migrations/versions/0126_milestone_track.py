@@ -1,8 +1,8 @@
 """A roadmap milestone sits on a track (tb-mk: the milestone panel's Track field)
 
 On ``track_milestones`` and ``roadmap_key_dates``: ``home_track_id``, the track the milestone
-sits on (null: none; ``track_id`` is a track's own milestone's), set null when the track goes. No
-backfill. The downgrade drops it.
+sits on (null: none; ``track_id`` is a track's own milestone's), set null when the track goes,
+indexed. No backfill. The downgrade drops it.
 
 Revision ID: 0126_milestone_track
 Revises: 0125_milestone_kinds
@@ -34,10 +34,12 @@ def upgrade() -> None:
             ["id"],
             ondelete="SET NULL",
         )
+        op.create_index(op.f(f"ix_{t}_home_track_id"), t, ["home_track_id"])
 
 
 def downgrade() -> None:
     op.execute(LOCK_TIMEOUT)
     for t in TABLES:
+        op.drop_index(op.f(f"ix_{t}_home_track_id"), table_name=t)
         op.drop_constraint(op.f(f"fk_{t}_home_track_id_product_tracks"), t, type_="foreignkey")
         op.drop_column(t, "home_track_id")

@@ -9,7 +9,8 @@ On ``track_milestones`` and ``roadmap_key_dates``:
   ``status_reason``: a person's override of the computed status, and why;
 - ``measure``, ``baseline``, ``target``, ``current``: a measured (sub-)goal's numbers;
 - ``sub_goal_of_id``: the measured-goal milestone a sub-goal builds toward;
-- ``from_track_id``, ``to_track_id``: a hand-off's tracks.
+- ``from_track_id``, ``to_track_id``: a hand-off's tracks, each indexed (a track's removal
+  sets them null).
 
 On ``entities`` (the company goals): ``on_roadmap`` (default true), whether a goal with a target
 date shows on the roadmap as a goal milestone.
@@ -62,6 +63,8 @@ def upgrade() -> None:
             op.create_foreign_key(
                 op.f(f"fk_{t}_{col}_{to}"), t, to, [col], ["id"], ondelete="SET NULL"
             )
+            if to == "product_tracks":
+                op.create_index(op.f(f"ix_{t}_{col}"), t, [col])
         op.create_check_constraint(op.f(f"ck_{t}_kind"), t, _in("kind", KINDS))
         op.create_check_constraint(
             op.f(f"ck_{t}_status_set"), t, "status_set IS NULL OR " + _in("status_set", STATUSES)
@@ -84,4 +87,4 @@ def downgrade() -> None:
             "kind", "done_when_line", "status_set", "status_set_by", "status_reason", "measure",
             "baseline", "target", "current", "sub_goal_of_id", "from_track_id", "to_track_id",
         ):  # fmt: skip
-            op.drop_column(t, col)  # drops its check constraint and foreign key
+            op.drop_column(t, col)  # drops its check constraint, foreign key and index

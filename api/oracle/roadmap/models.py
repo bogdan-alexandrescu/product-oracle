@@ -86,15 +86,15 @@ class MilestoneKindFields:
     def home_track_id(cls) -> Mapped[uuid.UUID | None]:  # noqa: N805
         """tb-mk: the track a roadmap milestone sits on (the panel's Track); ``track_id``
         is a track's own milestone's."""
-        return mapped_column(Uuid, ForeignKey("product_tracks.id", ondelete="SET NULL"))
+        return mapped_column(Uuid, ForeignKey("product_tracks.id", ondelete="SET NULL"), index=True)
 
     @declared_attr
     def from_track_id(cls) -> Mapped[uuid.UUID | None]:  # noqa: N805
-        return mapped_column(Uuid, ForeignKey("product_tracks.id", ondelete="SET NULL"))
+        return mapped_column(Uuid, ForeignKey("product_tracks.id", ondelete="SET NULL"), index=True)
 
     @declared_attr
     def to_track_id(cls) -> Mapped[uuid.UUID | None]:  # noqa: N805
-        return mapped_column(Uuid, ForeignKey("product_tracks.id", ondelete="SET NULL"))
+        return mapped_column(Uuid, ForeignKey("product_tracks.id", ondelete="SET NULL"), index=True)
 
 
 def kind_checks() -> tuple[CheckConstraint, CheckConstraint]:
