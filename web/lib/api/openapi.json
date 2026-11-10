@@ -88459,6 +88459,15 @@
           "document": {
             "$ref": "#/components/schemas/SimpleDocRef"
           },
+          "document_kind": {
+            "type": "string",
+            "enum": [
+              "roadmap",
+              "prd"
+            ],
+            "title": "Document Kind",
+            "default": "roadmap"
+          },
           "version": {
             "anyOf": [
               {
@@ -100289,6 +100298,11 @@
           "can_submit": {
             "type": "boolean",
             "title": "Can Submit"
+          },
+          "can_approve": {
+            "type": "boolean",
+            "title": "Can Approve",
+            "default": false
           },
           "reminded_at": {
             "anyOf": [

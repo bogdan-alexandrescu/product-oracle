@@ -505,6 +505,15 @@ async def _added_reviewers(
     return [{"id": str(i), "approved_at": None} for i in ids]
 
 
+def can_approve(principal: Any, d: SimpleDraft, w: Who) -> bool:
+    """Submitted, and waiting on the caller: a required reviewer it waits on, or its
+    approver whose approval is not in yet (a decider who approved waits on the reviewers)."""
+    return d.status == "submitted" and (
+        (_approver_of(principal, d, w) and d.decider_approval is None)
+        or _me(principal) in (d.waiting_on or [])
+    )
+
+
 def _approver_of(principal: Any, d: SimpleDraft, w: Who) -> bool:
     """The draft's final approval: the decider's, with none an owner's or the roadmap's
     owner's."""
@@ -1040,11 +1049,7 @@ async def outs(
                 and me is not None
                 and me in (d.created_by, w.deciders.get(d.document_id)),
                 # Review: a decider who approved already waits on the reviewers, not on themself.
-                can_approve=d.status == "submitted"
-                and (
-                    (_approver_of(principal, d, w) and d.decider_approval is None)
-                    or me in (d.waiting_on or [])
-                ),
+                can_approve=can_approve(principal, d, w),
                 can_publish=can_publish(principal, d, w),
                 required_reviewers=[r for r in w.reviewers.get(d.document_id, []) if r != me]
                 if d.status == "working"
@@ -1945,6 +1950,7 @@ async def inbox_rows(
                 slug=docs[d.document_id].slug,
                 title=docs[d.document_id].title,
             ),
+            document_kind="prd" if docs[d.document_id].kind == "prd" else "roadmap",
             version=numbers.get(d.version_id),
             submitted_by=d.submitted_by,
             submitted_by_name=names.get(d.submitted_by) if d.submitted_by else None,

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_RITUALS_KEY } from "../lib/api/mock/rituals";
 
 import { mockName } from "../lib/api/mock/people";
 
@@ -109,9 +110,11 @@ test("12b: an attendee follows Pre-read ready to the occurrence; Tracks and Date
 });
 
 test("12c: after the end time the owner records notes and marks it held; the Record notes row is gone", async ({ page }) => {
-  // protects=AC12c, the owner's Record notes row after the end and Mark held; fails_when=no
-  // Record notes row after the end, the notes are not saved, the chip does not read Held, or
-  // the row stays; no_claim=Record decision (H1's form).
+  // protects=AC12c, the owner's Record notes row after the end and Mark held; inbox-ritual-seen:
+  // the row stays New through visits to the Inbox and is Seen once the owner opened it;
+  // fails_when=no Record notes row after the end, it is Seen before the owner opened it, the
+  // notes are not saved, the chip does not read Held, or the row stays; no_claim=Record
+  // decision (H1's form).
   await withRituals(page);
   await login(page);
   await page.goto("/inbox");
@@ -119,9 +122,21 @@ test("12c: after the end time the owner records notes and marks it held; the Rec
   await expect(ritualNeed(page, "Record notes")).toHaveCount(0);
   // The meeting ends Tue Nov 3 11:00 UTC; a day later:
   await page.clock.setSystemTime(new Date("2026-11-04T12:00:00Z"));
-  await page.goto("/inbox");
-  await tab(page, "Seen").click();
   const notes = ritualNeed(page, "Record notes · Monthly roadmap refresh");
+  // Opening the Inbox, twice, leaves it New: only opening it makes it Seen.
+  for (let visit = 0; visit < 2; visit++) {
+    await page.goto("/inbox");
+    await tab(page, "New").click();
+    await expect(page.getByTestId("inbox-tab-new")).toBeVisible();
+    await expect(notes).toHaveCount(1);
+  }
+  await notes.getByRole("link", { name: "Open" }).click();
+  await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
+  await expect(page.getByTestId("occurrence-state")).toBeVisible();
+  // Back to the Inbox from the app's nav, as a person goes (a reload could cut the open short).
+  await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
+  await expect(page).toHaveURL(/\/inbox$/);
+  await tab(page, "Seen").click();
   await expect(notes).toHaveCount(1);
   await notes.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
@@ -302,4 +317,34 @@ test("One zone: a ritual has no Time zone field; the inspector names the Company
   await form.getByRole("button", { name: "Add" }).click();
   await ritualRow(page, "Pricing sync").click();
   await expect(inspector(page).getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles) for now");
+});
+
+test("12i: a ritual that failed to prepare stays New through Inbox visits and is Seen once an owner opened it", async ({ page }) => {
+  // protects=review minor (inbox-ritual-seen), the owners' failed-to-prepare row: New until an
+  // owner opens the occurrence after it failed; fails_when=it is Seen as soon as it shows or
+  // after a visit to the Inbox; no_claim=a failed Retry (api test_rituals_ticker).
+  await page.addInitScript((key) => localStorage.setItem(key, "prepare-failed"), MOCK_RITUALS_KEY);
+  await withRituals(page);
+  await login(page);
+  const failed = ritualNeed(page, "Ritual failed to prepare · Quarterly goals review");
+  for (let visit = 0; visit < 2; visit++) {
+    await page.goto("/inbox");
+    await tab(page, "New").click();
+    await expect(failed).toHaveCount(1);
+  }
+  await openRituals(page);
+  await ritualRow(page, "Quarterly goals review").click();
+  await inspector(page).getByTestId("ritual-occurrences").getByRole("link").first().click();
+  await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
+  await expect(page.getByTestId("occurrence-state")).toBeVisible();
+  await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
+  await expect(page).toHaveURL(/\/inbox$/);
+  // The open is recorded as the meeting page loads; the Inbox shows it once it reads it again.
+  await expect(async () => {
+    await page.reload();
+    await tab(page, "Seen").click();
+    await expect(failed).toHaveCount(1, { timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
+  await tab(page, "New").click();
+  await expect(failed).toHaveCount(0);
 });

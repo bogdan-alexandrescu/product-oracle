@@ -1900,7 +1900,7 @@ export function simpleInboxRows(
       .filter((d) => d.out.status === "submitted" && (d.out.waiting_on.includes(me) || (!d.out.decider_approved && !!who.role && approverOf(db!, { id: me, role: who.role }, d))))
       .sort((a, b) => ((a.out.submitted_at ?? "") < (b.out.submitted_at ?? "") ? -1 : 1))
       .map((d) => ({
-        draft_id: d.out.id, document: { id: d.out.document.id, slug: d.out.document.slug, title: d.out.document.title }, version: d.out.version ?? null, submitted_by: d.out.submitted_by ?? null,
+        draft_id: d.out.id, document: { id: d.out.document.id, slug: d.out.document.slug, title: d.out.document.title }, document_kind: "roadmap" as const, version: d.out.version ?? null, submitted_by: d.out.submitted_by ?? null,
         submitted_by_name: d.out.submitted_by ? (who.names?.[d.out.submitted_by] ?? null) : null, submitted_at: d.out.submitted_at ?? null,
         decider_approved: !!d.out.decider_approved, state: !seen || (d.out.submitted_at ?? "") > seen ? ("new" as const) : ("open" as const),
       })),

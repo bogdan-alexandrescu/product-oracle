@@ -1164,6 +1164,8 @@ class InboxSimpleApproval(BaseModel):
 
     draft_id: uuid.UUID
     document: SimpleDocRef
+    # inbox-prd-approval-open: a PRD's draft opens on its one-pager, a roadmap's on the roadmap.
+    document_kind: Literal["roadmap", "prd"] = "roadmap"
     version: int | None
     submitted_by: uuid.UUID | None
     # inbox-meeting-proposals fix: who submitted it, by name (or e-mail).
@@ -1657,6 +1659,8 @@ class OnePagerDraft(BaseModel):
     # may add more when sending (build-review: Send for approval…).
     reviewers: list[SimplePersonRef] = []
     can_submit: bool
+    # inbox-prd-approval-open: submitted, and the caller's approval is one it waits for.
+    can_approve: bool = False
     # Remind (owner, 2026-10-26): the last nudge to a waiting reviewer, and whether the
     # caller (the PRD's owners, its decider) may nudge one now (each at most once a day).
     reminded_at: dt.datetime | None = None
