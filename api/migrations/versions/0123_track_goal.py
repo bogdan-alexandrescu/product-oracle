@@ -38,6 +38,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Deletes every track with no PRD (its features go to no track): the column takes NOT
+    NULL again."""
     op.execute(LOCK_TIMEOUT)
     op.drop_index("ix_product_tracks_goal_id", table_name=T)
     op.drop_constraint("fk_product_tracks_goal_id_entities", T, type_="foreignkey")

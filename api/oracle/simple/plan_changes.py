@@ -382,6 +382,7 @@ async def _write_track(db: AsyncSession, t: ProductTrack, values: dict[str, Any]
             version = await tracks.latest_approved(db, t.prd_document_id) if v else None
             t.current_version_id = version.id if version else None
             t.started_version_id = t.current_version_id
+            await tracks.took_prd(db, t)
         else:
             setattr(t, k, uuid.UUID(v) if k in ("owner_id", "goal_id") and v else v)
     t.lock_version += 1

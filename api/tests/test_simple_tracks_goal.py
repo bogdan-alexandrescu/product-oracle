@@ -224,13 +224,20 @@ async def test_a_feature_on_a_track_with_no_prd_reads_everywhere(client):
         await s.commit()
         tid = track.id
     owner = ctx.as_("owner")
-    reads = [
-        await client.get(f"/v1/tracks/{tid}", headers=owner),
-        await client.post(f"/v1/tracks/{tid}/monitor", headers=owner),
-        await client.get("/v1/plan", headers=owner),
-        await client.get("/v1/simple/priorities", headers=owner),
-        await client.post("/v1/alignment-reports", json={}, headers=owner),
-    ]
-    for r in reads:
-        assert r.status_code in (200, 201), (r.request.url, r.text)
-        assert "Saved addresses" in r.text, (r.request.url, r.text)
+    health = await client.get(f"/v1/tracks/{tid}", headers=owner)
+    monitor = await client.post(f"/v1/tracks/{tid}/monitor", headers=owner)
+    plan = await client.get("/v1/plan", headers=owner)
+    priorities = await client.get("/v1/simple/priorities", headers=owner)
+    report = await client.post("/v1/alignment-reports", json={}, headers=owner)
+    for r in (health, monitor, plan, priorities):
+        assert r.status_code == 200, (r.request.url, r.text)
+    assert report.status_code == 201, report.text
+    # Track health and its monitor count the feature; the Plan and priorities name it.
+    assert health.json()["prd"] is None and health.json()["counts"]["items"] == 1
+    assert monitor.json()["overview"]["counts"]["items"] == 1
+    assert [i["title"] for i in plan.json()["items"]] == ["Saved addresses"]
+    assert "Saved addresses" in priorities.text
+    # The weekly report reads the track by its name, its Now feature with no issue.
+    (t,) = report.json()["tracks"]
+    assert t["prd"]["title"] == "Account Management"
+    assert t["alignment"]["untracked"] == 1

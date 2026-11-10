@@ -96,6 +96,17 @@ async def _latest_roadmap_of(db: AsyncSession, prd_document_id: uuid.UUID) -> uu
     )
 
 
+async def took_prd(db: AsyncSession, track: ProductTrack) -> None:
+    """tracks-goal: a track set to a PRD takes it as ``ensure_track`` starts one: the PRD's
+    latest roadmap when it has none, and the PRD's linked issues with no track."""
+    if track.prd_document_id is None:
+        return
+    if track.roadmap_document_id is None:
+        track.roadmap_document_id = await _latest_roadmap_of(db, track.prd_document_id)
+    await db.flush()
+    await links.adopt(db, track)
+
+
 async def ensure_track(
     db: AsyncSession,
     prd: Document,

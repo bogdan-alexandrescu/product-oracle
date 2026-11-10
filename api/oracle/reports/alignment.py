@@ -277,7 +277,7 @@ async def _track_content(
 ) -> tuple[dict[str, Any], int]:
     """One track's part of the report, and its Now items without a tracker issue."""
     o = await views.overview(db, track)
-    prd = await db.get(Document, track.prd_document_id)
+    prd = await db.get(Document, track.prd_document_id) if track.prd_document_id else None
     # tracks-goal: a track with no PRD reads by its name.
     slug = prd.slug if prd else track.title
     counts = {"aligned": 0, "drift": 0, "untracked": 0, "done": 0}

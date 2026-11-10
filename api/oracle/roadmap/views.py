@@ -554,7 +554,7 @@ def track_out_of(
 
 
 async def track_out(db: AsyncSession, track: ProductTrack) -> TrackOut:
-    prd = await db.get(Document, track.prd_document_id)
+    prd = await db.get(Document, track.prd_document_id) if track.prd_document_id else None
     roadmap = (
         await db.get(Document, track.roadmap_document_id) if track.roadmap_document_id else None
     )
@@ -1016,7 +1016,7 @@ async def monitor(
     ]
     event_id = None
     if changed:
-        prd = await db.get(Document, track.prd_document_id)
+        prd = await db.get(Document, track.prd_document_id) if track.prd_document_id else None
         event = await changes.record_change(
             db,
             "product_track",
