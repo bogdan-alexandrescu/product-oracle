@@ -9,26 +9,15 @@ import { expect, test, type Page } from "./test";
 
 const URL = "/simple/roadmap?roadmap=onboarding-roadmap";
 /**
- * build-roadmap (47361c89): the picked Timeline draws a header per goal lane ("Activation · 5
- * items") with its items' rows under it, and a phone's Timeline is a list by quarter, so a
- * phone reads the goal lanes on the Gantt. Each lane's title and the items drawn under it, in
- * the order the page draws them.
+ * The Gantt's goal lanes (tb-mk: the Timeline's bands are tracks): each lane's title and the
+ * items drawn under it, in the order the page draws them.
  */
-async function timelineLanes(page: Page): Promise<{ title: string; items: string[] }[]> {
-  await expect(page.getByTestId("timeline-lane").first()).toBeVisible();
-  return page.getByTestId("simple-chart").evaluate((root) => {
-    const out: { title: string; items: string[] }[] = [];
-    for (const r of root.querySelectorAll<HTMLElement>('[data-testid="timeline-lane"], [data-testid="timeline-row"]')) {
-      if (r.dataset.testid === "timeline-lane") out.push({ title: (r.textContent ?? "").replace(/\s+/g, " ").trim(), items: [] });
-      else out[out.length - 1]?.items.push(r.dataset.item!);
-    }
-    return out;
-  });
-}
-
 async function ganttLanes(page: Page): Promise<{ title: string; items: string[] }[]> {
   await page.getByTestId("format-gantt").click();
   await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
+  // tb-mk: the Gantt starts grouped by track; its Group by Goal draws the goal lanes.
+  await page.getByTestId("group-goal").click();
+  await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("chart-group").first()).toBeVisible();
   const heads: { title: string; y: number }[] = [];
   for (const g of await page.locator('[data-testid="chart-group"], [data-testid="below-the-line"]').all())
@@ -56,12 +45,16 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await login(page);
       await page.goto(URL);
       await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "timeline");
-      const lanes = viewport.width > 600 ? await timelineLanes(page) : await ganttLanes(page);
+      // tb-mk: the Timeline's bands are tracks: the goal lanes are the Gantt's Group by Goal.
+      const lanes = await ganttLanes(page);
       const activation = lanes.find((l) => /^Activation( · \d+ items?)?$/.test(l.title));
       expect(activation, `an Activation lane among ${lanes.map((l) => l.title).join(", ")}`).toBeTruthy();
-      // The desktop's header counts its items; both count five drawn under it.
-      if (viewport.width > 600) expect(activation!.title).toBe("Activation · 5 items");
       expect(activation!.items).toHaveLength(5);
+      // The desktop's Waterfall (still by goal) heads the lane with its count, the five drawn.
+      if (viewport.width > 600) {
+        await page.getByTestId("format-waterfall").click();
+        await expect(page.getByTestId("chart-group").filter({ has: page.locator('[title="Activation"]') }).getByTestId("lane-count")).toHaveText("5 items");
+      }
       expect(lanes.filter((l) => l.title.startsWith("Faster activation"))).toEqual([]);
       for (const item of ["setup-checklist", "setup-import"]) expect(activation!.items).toContain(item);
     });
@@ -76,15 +69,15 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
         await expect(page.getByTestId("timeline-list")).toBeVisible();
         const rows = page.getByTestId("timeline-list").getByTestId("timeline-row");
         await expect(rows.first()).toBeVisible();
+        // tb-mk: a phone's rows read dates only (the owner's pick); each item's sheet names its goal.
         for (const item of ["setup-checklist", "setup-import"]) {
           const row = rows.and(page.locator(`[data-item="${item}"]`));
-          await expect(row.first(), `${item} names its PRD's goal`).toContainText(/ · Activation\b/);
+          await row.first().click();
+          const card = page.getByTestId("floating-card");
+          await expect(card.getByTestId("card-goal"), `${item} names its PRD's goal`).toHaveText("Activation");
+          await card.getByRole("button", { name: "Close" }).click();
+          await expect(card).toHaveCount(0);
         }
-        await expect(rows.filter({ hasText: "Faster activation" })).toHaveCount(0);
-        // An item that started before this quarter is listed in both; count each item once.
-        const activation = new Set<string>();
-        for (const r of await rows.all()) if (/ · Activation\b/.test((await r.textContent()) ?? "")) activation.add((await r.getAttribute("data-item"))!);
-        expect(activation.size).toBe(5);
       });
   });
 }
