@@ -35,7 +35,8 @@ export function useWaitingList(): { data: Waiting | undefined; error: unknown; r
       apply();
     };
     loadWaiting()
-      .then((d) => land(() => (setData(d), setError(null))))
+      // Review: a read begun before an action never lands after it (the action's own read does).
+      .then((d) => alive && land(() => (setData(d), setError(null))))
       // counts-failed-part: a failed read drops what the last one read, so no out-of-date number
       // shows beside Could not load; a failure after a later change is left to the later read.
       .catch((e) => alive && land(() => (setData(undefined), setError(e))));
@@ -95,6 +96,10 @@ function actionsOf(i: WaitingItem): Act[] {
       { label: "Confirm", primary: true, done: `${i.title} confirmed`, run: () => unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", entity)) },
       { label: "Not this", done: `${i.title} set aside`, run: () => unwrap(api.POST("/v1/baseline/entities/{entity_id}/reject", entity)) },
     ];
+  }
+  // A ritual that failed to prepare is prepared again in place, as the Inbox's row does.
+  if (i.kind === "inbox" && i.key.startsWith("ritual:failed:")) {
+    return [{ label: "Retry", primary: true, done: "Preparing it again", run: () => unwrap(api.POST("/v1/rituals/{ritual_id}/prepare", { params: { path: { ritual_id: i.ref_id } } })) }];
   }
   if (i.kind === "draft") {
     return [{ label: "Approve", primary: true, done: "Approved", run: () => unwrap(api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: i.ref_id } } })) }];
@@ -180,11 +185,19 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
             {item.action}
           </button>
         ) : acts.length ? (
-          acts.map((a) => (
-            <button key={a.label} type="button" disabled={busy} className={`simple-button${a.primary ? " simple-button-primary" : ""}`} onClick={() => void act(a.run, a.done)}>
-              {a.label}
-            </button>
-          ))
+          <>
+            {acts.map((a) => (
+              <button key={a.label} type="button" disabled={busy} className={`simple-button${a.primary ? " simple-button-primary" : ""}`} onClick={() => void act(a.run, a.done)}>
+                {a.label}
+              </button>
+            ))}
+            {/* An Inbox row acted on in place still opens where it lives (a failed ritual: Company › Rituals). */}
+            {item.kind === "inbox" && (
+              <Link href={item.href} className="simple-button">
+                Open
+              </Link>
+            )}
+          </>
         ) : (
           <Link href={item.href} className="simple-button simple-button-primary">
             {item.action}

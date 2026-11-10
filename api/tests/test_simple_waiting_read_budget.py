@@ -1,3 +1,4 @@
+# ruff: noqa: F811 - the ritual fixtures are imported
 """QA (Simple Home and Decisions): GET /v1/simple/decisions/waiting, the one list Home's
 waiting cards, the Decisions page's "Waiting for you" and the rail read, answers in a fixed
 number of statements however many run stops wait, and holds the Inbox's other "Needs you"
@@ -32,11 +33,11 @@ The budget is in statements, never in seconds: a slow machine neither fails nor 
 from sqlalchemy import event
 
 from oracle.db import get_engine
+from oracle.rituals import blocks
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.outcome_helpers import outcome_world
-from oracle.rituals import blocks
 from tests.ritual_helpers import (  # noqa: F401 - fixtures
     at,
     ctx,

@@ -113,10 +113,15 @@ export async function waitingItems(get: (path: string) => Promise<unknown>, meId
     out.push({ kind: "goal", key: `goal:${g.id}`, ref_id: g.id, title: g.title, detail: "", action: "Confirm", href: "/simple", at: g.created_at, op: null });
   }
   // The Inbox's other counted rows (waiting_list._inbox), in the Inbox's words, so Home and the Inbox agree.
-  const row = (key: string, title: string, detail: string, href: string, at: string | null = null): Item => ({ kind: "inbox", key, ref_id: key.split(":").at(-1)!, title, detail, action: "Open", href, at, op: null });
+  const row = (key: string, title: string, detail: string, href: string, at: string | null = null, action = "Open", ref_id = key.split(":").at(-1)!): Item => ({ kind: "inbox", key, ref_id, title, detail, action, href, at, op: null });
   for (const o of inbox?.outcomes ?? []) if (o.counts) out.push(row(`outcome:${o.reason}:${o.id}`, o.title, "Plan › Outcomes", `/plan/outcomes?outcome=${o.id}`));
   for (const r of inbox?.launches ?? []) if (r.counted) out.push(row(`launch:${r.reason}:${r.launch_id}`, `${LAUNCH[r.reason] ?? "Launch"} · ${r.title}`, r.item, `/roadmap/launches?launch=${r.launch_id}`, r.at ?? null));
-  for (const r of inbox?.rituals ?? []) if (r.counts && (r.state === "new" || r.state === "open")) out.push(row(`ritual:${r.reason}:${r.occurrence_id}`, `${RITUAL[r.reason]} · ${r.title}`, "Rituals", `/company/rituals/${r.occurrence_id}`, r.due_at));
+  // A ritual that failed to prepare: Retry (its ritual's prepare) and Company › Rituals, as the Inbox.
+  for (const r of inbox?.rituals ?? []) {
+    if (!r.counts || (r.state !== "new" && r.state !== "open")) continue;
+    const failed = r.reason === "failed";
+    out.push(row(`ritual:${r.reason}:${r.occurrence_id}`, `${RITUAL[r.reason]} · ${r.title}`, "Rituals", failed ? "/company/rituals" : `/company/rituals/${r.occurrence_id}`, r.due_at, failed ? "Retry" : "Open", failed ? r.ritual_id : undefined));
+  }
   for (const m of inbox?.metrics ?? []) {
     if (!m.counts) continue;
     const href = m.reason !== "pull_failed" && m.occurrence_id ? `/company/rituals/${m.occurrence_id}` : `/company/metrics?metric=${m.metric_id}`;

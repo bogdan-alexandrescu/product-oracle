@@ -41544,6 +41544,8 @@ export interface components {
             flow?: components["schemas"]["SimpleDecidedFlow"] | null;
             /** Code */
             code?: string | null;
+            /** Prd Title */
+            prd_title?: string | null;
             /** Chosen */
             chosen?: string | null;
             /** Question */

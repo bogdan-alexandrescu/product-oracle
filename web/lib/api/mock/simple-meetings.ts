@@ -1147,6 +1147,8 @@ function row(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecisionRow"] {
     id: d.id, number: d.number, title: d.question?.title ?? d.title, origin: d.question ? "prd" : d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
     decided_at: d.status === "decided" ? d.at : null, created_at: d.at, subjects: d.subjects, flow: decidedFlow(ctx, d),
     code: d.question?.code ?? null, chosen: d.question?.chosen ?? null,
+    // QA (unique codes): a PRD's question names its PRD (the meeting's, its document subject).
+    prd_title: d.question ? (prds(ctx).find((x) => d.subjects.some((s) => s.kind === "document" && s.id === x.id))?.title ?? null) : null,
     // edit-decisions (ec1 b): every field the sheet shows, what the reader may do there, its last edit.
     question: d.ask ?? null, context: d.context ?? null, options: d.options ?? [], review_at: d.review_at ?? null, can: sheetCan(ctx, d),
     edited_at: d.edited?.at ?? null, edited_by: d.edited ? ref(ctx, d.edited.by) : null,
@@ -1785,8 +1787,8 @@ function repeatedCodeRows(): Schemas["SimpleDecisionRow"][] {
   if (typeof localStorage === "undefined" || localStorage.getItem("po-mock-scenario") !== REPEATED_CODES_SCENARIO) return [];
   const at = iso(mockNowMs() - 3 * 86_400_000);
   return [
-    { id: stableUuid("qa-repeated-codes/q5"), number: 140, title: "Trial length for new teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "q5", chosen: "14 days", options: [] },
-    { id: stableUuid("qa-repeated-codes/q9-a"), number: 142, title: "Seat price for teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "Q9", chosen: "Per seat", options: [] },
-    { id: stableUuid("qa-repeated-codes/q9-b"), number: 141, title: "Seat price for teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "Q9", chosen: "Flat", options: [] },
+    { id: stableUuid("qa-repeated-codes/q5"), number: 140, title: "Trial length for new teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "q5", chosen: "14 days", options: [], prd_title: "Team trials" },
+    { id: stableUuid("qa-repeated-codes/q9-a"), number: 142, title: "Seat price for teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "Q9", chosen: "Per seat", options: [], prd_title: "Team trials" },
+    { id: stableUuid("qa-repeated-codes/q9-b"), number: 141, title: "Seat price for teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "Q9", chosen: "Flat", options: [], prd_title: "Team billing" },
   ];
 }

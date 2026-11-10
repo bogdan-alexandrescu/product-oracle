@@ -2424,6 +2424,8 @@ class SimpleDecisionRow(BaseModel):
     flow: SimpleDecidedFlow | None = None
     # prd-questions: a PRD's question keeps its code ("Q10"); a decided one, its answer.
     code: str | None = None
+    # QA (unique codes): a PRD's question names its PRD (one the reader reads).
+    prd_title: str | None = None
     chosen: str | None = None
     # edit-decisions (ec1 b): every field the sheet shows and changes, what the reader may
     # do there, and the last change made from it.

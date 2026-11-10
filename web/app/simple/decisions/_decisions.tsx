@@ -48,16 +48,17 @@ const VIEWS: { value: View; label: string }[] = [
  */
 const RepeatedCodes = createContext<Set<string>>(new Set());
 function repeatedCodes(d: Schemas["SimpleDecisionsOut"]): Set<string> {
-  // A question and its own decided row (in a meeting or outside) are one decision: told apart by title.
-  const titles = new Map<string, Set<string>>();
-  const add = (code: string | null | undefined, title: string) => {
+  // A question and its own decided row (in a meeting or outside) are one decision, one id; two
+  // decisions of one code and one title are still two.
+  const ids = new Map<string, Set<string>>();
+  const add = (code: string | null | undefined, id: string) => {
     if (!code) return;
     const k = code.toUpperCase();
-    titles.set(k, (titles.get(k) ?? new Set()).add(title));
+    ids.set(k, (ids.get(k) ?? new Set()).add(id));
   };
-  for (const q of d.questions) add(q.code, q.title);
-  for (const r of [...d.meetings.flatMap((g) => g.decisions), ...d.other]) add(r.code, r.title);
-  return new Set([...titles].filter(([, of]) => of.size > 1).map(([k]) => k));
+  for (const q of d.questions) add(q.code, q.id);
+  for (const r of [...d.meetings.flatMap((g) => g.decisions), ...d.other]) add(r.code, r.id);
+  return new Set([...ids].filter(([, of]) => of.size > 1).map(([k]) => k));
 }
 
 /** The List shows this many questions waiting for you before "Show N more". */
@@ -658,7 +659,7 @@ function Rows({ rows }: { rows: Row[] }) {
             </span>
             <span className="simple-rb flex-1">
               <span className="break-words">
-                <span className="simple-code" title={r.code && code !== r.code.toUpperCase() ? r.code.toUpperCase() : undefined} data-testid="decision-code">
+                <span className="simple-code" title={r.code && code !== r.code.toUpperCase() ? [r.prd_title, r.code.toUpperCase()].filter(Boolean).join(" ") : undefined} data-testid="decision-code">
                   {code}
                 </span>{" "}
                 {gone ? (

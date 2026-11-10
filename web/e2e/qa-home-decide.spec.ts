@@ -14,7 +14,7 @@ import { expect, test } from "./test";
  * no_claim = the API's list (pytest test_simple_waiting_read_budget.py).
  *
  * Card inbox-more: protects = an Inbox row Home does not draw itself (open feedback, for an
- * approver) counts on Home as on the rail and the Inbox: Home reads "1 thing in your Inbox" and
+ * approver) counts on Home as on the rail and the Inbox: Home reads "A thing in your Inbox waits on you." and
  * one row "1 more in your Inbox" that opens Simple's Inbox, the rail's Inbox count reads 1 and the
  * Inbox says 1 waiting; fails_when = Home says "Nothing waits on you today." while the rail and
  * the Inbox count it.
@@ -65,7 +65,7 @@ for (const phone of [false, true]) {
       await expect(page.getByText("1 waiting", { exact: true })).toBeVisible();
       await page.goto("/simple");
       const sentence = page.getByTestId("simple-page").getByTestId("home-sentence");
-      await expect(sentence).toContainText("1 thing in your Inbox");
+      await expect(sentence).toHaveText("A thing in your Inbox waits on you.");
       await expect(page.getByText("Nothing waits on you today.")).toHaveCount(0);
       const more = page.getByTestId("home-also-waiting").getByTestId("home-inbox-more");
       await expect(more).toHaveText(/^1 more in your Inbox\s*Open$/);

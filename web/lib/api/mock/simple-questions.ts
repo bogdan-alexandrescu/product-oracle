@@ -224,7 +224,7 @@ export function decidedOutsideRows(ctx: QuestionsCtx, db: QuestionsDb, shown: Qu
       return {
         id: o.id, number: o.number, title: o.title, origin: "prd", status: "decided", approver: q.decider ? ref(ctx, q.decider) : null,
         decided_at: o.decided_at ?? null, created_at: o.decided_at ?? iso(todayStart()), subjects: [{ kind: "document", id: QUESTIONS_PRD.id }],
-        code: o.code, chosen: o.chosen, options: [],
+        code: o.code, prd_title: o.prd.title, chosen: o.chosen, options: [],
       };
     })
     .sort((a, b) => b.number - a.number);

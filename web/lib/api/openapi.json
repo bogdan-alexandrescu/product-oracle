@@ -124318,6 +124318,17 @@
             ],
             "title": "Code"
           },
+          "prd_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Title"
+          },
           "chosen": {
             "anyOf": [
               {

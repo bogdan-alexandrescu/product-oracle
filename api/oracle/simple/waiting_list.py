@@ -195,10 +195,11 @@ async def _inbox(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
     from oracle.requests.inbox import inbox_rows as request_rows
     from oracle.rituals.service import inbox_rows as ritual_rows
 
-    def row(key: str, title: str, detail: str, href: str, at: Any = None) -> SimpleWaitingItem:
+    def row(key: str, title: str, detail: str, href: str, at: Any = None, action: str = "Open",
+            ref_id: str | None = None) -> SimpleWaitingItem:  # fmt: skip
         return SimpleWaitingItem(
-            kind="inbox", key=key, ref_id=key.rsplit(":", 1)[-1],
-            title=title, detail=detail, action="Open", href=href, at=at,
+            kind="inbox", key=key, ref_id=ref_id or key.rsplit(":", 1)[-1],
+            title=title, detail=detail, action=action, href=href, at=at,
         )  # fmt: skip
 
     out = [
@@ -222,13 +223,17 @@ async def _inbox(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
         for r in await launches.inbox_rows(db, principal)
         if r.counted
     ]
+    # A ritual that failed to prepare is retried in place (its ritual's POST
+    # /v1/rituals/{id}/prepare) and opens Company > Rituals, as the Inbox's row does.
     out += [
         row(
             f"ritual:{r.reason}:{r.occurrence_id}",
             f"{_RITUAL[r.reason]} · {r.title}",
             "Rituals",
-            f"/company/rituals/{r.occurrence_id}",
+            "/company/rituals" if r.reason == "failed" else f"/company/rituals/{r.occurrence_id}",
             r.due_at,
+            "Retry" if r.reason == "failed" else "Open",
+            str(r.ritual_id) if r.reason == "failed" else None,
         )  # fmt: skip
         for r in await ritual_rows(db, principal)
         if r.counts and r.state in ("new", "open")

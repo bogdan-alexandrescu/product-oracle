@@ -38,6 +38,30 @@ export function waitingCount(inbox: Inbox, questions: readonly unknown[]): numbe
 }
 
 /**
+ * Of what the rail counts (`waitingCount`), the Inbox rows Home draws itself from the one waiting
+ * list: run stops, the questions asked of me, decision-log calls to decide, drafts for my approval,
+ * proposals, dates, goal suggestions and the Plan › Outcomes, launch, ritual, metric and request
+ * rows. Home shows the rest (feedback, cost approvals, discussions, reports, ...) as one row,
+ * "N more in your Inbox", so its count is the rail's.
+ */
+export function drawnOnHome(inbox: Inbox, questions: readonly unknown[]): number {
+  return (
+    inbox.checkpoints.length +
+    questions.length +
+    (inbox.decisions ?? []).filter((d) => d.counts && d.reason === "needs_decision").length +
+    inbox.simple_approvals.length +
+    inbox.simple_proposals.length +
+    inbox.simple_date_suggestions.length +
+    inbox.simple_goal_suggestions.length +
+    (inbox.outcomes ?? []).filter((o) => o.counts).length +
+    (inbox.launches ?? []).filter((r) => r.counted).length +
+    (inbox.rituals ?? []).filter((r) => r.counts && (r.state === "new" || r.state === "open")).length +
+    (inbox.metrics ?? []).filter((m) => m.counts).length +
+    (inbox.requests ?? []).filter((r) => r.counts).length
+  );
+}
+
+/**
  * Records this Inbox visit as my last one (C1e: what "new" is measured from next time). A
  * shared read from before the mark is dropped, so coming back within FRESH_MS (Home and back,
  * qa-company-17) measures "new" from this visit, not the one before.
