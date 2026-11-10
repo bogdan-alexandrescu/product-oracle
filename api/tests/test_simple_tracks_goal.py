@@ -165,22 +165,23 @@ async def test_edit_track_sets_and_clears_the_goal_and_the_prd(client):
 
 
 async def test_a_prd_keeps_one_track(client):
+    """tracks-goal (owner Nov 9): a PRD on a track put on another moves from it; its Undo
+    puts it back."""
     ctx = await make_ctx()
     ids = await seed(ctx)
-    await change(client, ctx, "owner", "add_track", {},
-                 {"title": "Second", "prd_id": ids["own_prd_id"]}, 409)  # fmt: skip
     added = (await change(client, ctx, "owner", "add_track", {}, {"title": "Second"}))["change"]
     other = {"track_id": added["after"]["track_id"]}
-    await change(client, ctx, "owner", "edit_track", other, {"prd_id": ids["own_prd_id"]}, 409)
-    # Taken off Guided setup, its PRD is free for another track.
-    await change(client, ctx, "owner", "edit_track", {"track_id": ids["track_id"]},
-                 {"prd_id": None})  # fmt: skip
-    assert ids["own_prd_id"] in [p["id"] for p in (await read_tracks(client, ctx))["prds"]]
-    await change(client, ctx, "owner", "edit_track", other, {"prd_id": ids["own_prd_id"]})
+    moved = (await change(client, ctx, "owner", "edit_track", other,
+                          {"prd_id": ids["own_prd_id"]}))["change"]  # fmt: skip
     out = await read_tracks(client, ctx)
     assert row(out, "Second")["prd_id"] == ids["own_prd_id"]
     assert row(out, "Guided setup")["prd_id"] is None
-    assert ids["own_prd_id"] not in [p["id"] for p in out["prds"]]
+    assert next(p for p in out["prds"] if p["id"] == ids["own_prd_id"])["track_title"] == "Second"
+    r = await client.post(f"{CHANGES}/{moved['id']}/undo", headers=ctx.as_("owner"))
+    assert r.status_code == 201, r.text
+    out = await read_tracks(client, ctx)
+    assert row(out, "Guided setup")["prd_id"] == ids["own_prd_id"]
+    assert row(out, "Second")["prd_id"] is None
 
 
 async def test_a_prd_set_on_a_track_adopts_its_issues_and_roadmap(client):
@@ -205,7 +206,7 @@ async def test_a_prd_set_on_a_track_adopts_its_issues_and_roadmap(client):
     await change(client, ctx, "owner", "edit_track", {"track_id": tid}, {"prd_id": prd_id})
     async with tenant_session(ctx.tenant_id) as s:
         track = await s.scalar(select(ProductTrack).where(ProductTrack.id == tid))
-        assert str(track.prd_document_id) == prd_id
+        assert [str(p) for p in track.prd_ids] == [prd_id]
         assert track.roadmap_document_id == rm_id
         record = await s.scalar(select(TrackerRecord).where(TrackerRecord.id == record_id))
         assert str(record.track_id) == tid

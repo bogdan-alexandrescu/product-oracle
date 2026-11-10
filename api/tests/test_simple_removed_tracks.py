@@ -252,7 +252,9 @@ async def test_tracks_add_edit_delete_and_restore_from_trash(client):
     assert t0["owner_name"] == name(ctx, "approver") and t0["prd_id"] == ids["own_prd_id"]
     assert t0["can_decide"] is True
     assert ids["prd_id"] in [p["id"] for p in out["prds"]]
-    assert ids["own_prd_id"] not in [p["id"] for p in out["prds"]]
+    # tracks-goal: a PRD on a track is offered as moving from it.
+    on = next(p for p in out["prds"] if p["id"] == ids["own_prd_id"])
+    assert on["track_title"] == "Guided setup"
     assert name(ctx, "viewer") in [p["name"] for p in out["people"]]
     seen = await read_tracks(client, ctx, "viewer")
     assert seen["can_add"] is False and seen["add_decider_name"] == name(ctx, "owner")
@@ -273,7 +275,8 @@ async def test_tracks_add_edit_delete_and_restore_from_trash(client):
     new_id = added["after"]["track_id"]
     out = await read_tracks(client, ctx)
     assert {t["title"] for t in out["tracks"]} == {"Guided setup", "Gift boxes"}
-    assert ids["prd_id"] not in [p["id"] for p in out["prds"]]
+    on = next(p for p in out["prds"] if p["id"] == ids["prd_id"])
+    assert on["track_title"] == "Gift boxes"
 
     renamed = (await change(client, ctx, "owner", "edit_track", {"track_id": new_id},
                             {"title": "Gift wrap"}))["change"]  # fmt: skip
