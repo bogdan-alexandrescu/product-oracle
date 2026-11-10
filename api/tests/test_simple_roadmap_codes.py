@@ -177,3 +177,41 @@ async def test_an_items_picked_milestone_reads_its_roadmap_code(client):
     assert r.status_code == 201, r.text
     it = _item(await _read(client, ctx, "decider"), a)
     assert it["milestone"]["name"] == "M2 Prove it"
+
+
+async def test_a_filtered_read_keeps_the_unfiltered_codes(client, clock):
+    """protects=a read with ?roadmap=, ?prd= or a date range gives each shown milestone the
+    code the whole roadmap gives it (Home and the Goal map read it unfiltered); fails_when=the
+    codes are numbered from the filtered read, so a roadmap's milestones shift down or a folded
+    track milestone splits into two codes."""
+    from oracle.roadmap.models import TrackMilestone
+    from tests.test_simple_roadmap_api import get
+
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, launch, rv = await seed.roadmap("launch")
+        _, gpv, growth, grv = await seed.roadmap("growth")
+        track = await seed.track(pv, launch, title="Alerts")
+        await seed.item(rv, pv, "f-01", track_id=track.id)
+        await seed.item(grv, gpv, "g-01", track_id=None)
+        s.add(TrackMilestone(track_id=track.id, name="M1 Beta", horizon="now", item_keys=["f-01"]))
+        await s.commit()
+        ids = {"launch": str(launch.id), "growth": str(growth.id)}
+    for rm, name, when in [("launch", "Beta", "2026-11-25"), ("growth", "Kickoff", "2026-11-10"),
+                           ("launch", "Scale", "2026-12-18")]:  # fmt: skip
+        body = {"roadmap_id": ids[rm], "name": name, "date": when}
+        r = await client.post(MILESTONES, json=body, headers=ctx.as_("owner"))
+        assert r.status_code == 201, r.text
+
+    def codes(body: dict) -> dict[str, str]:
+        out = {m["id"]: m["roadmap_code"] for m in body["goal_milestones"]}
+        return out | {m["id"]: m["roadmap_code"] for m in body["milestones"] if m["roadmap_code"]}
+
+    whole = codes(await get(client, ctx))
+    assert sorted(whole.values()) == ["M1", "M2", "M2", "M3"], whole
+    for params in ({"roadmap": "launch"}, {"prd": "growth-prd"}, {"from": "2027-06-01"},
+                   {"prd": "launch-prd", "from": "2026-01-01", "to": "2027-12-31"}):  # fmt: skip
+        part = codes(await get(client, ctx, **params))
+        assert part, params
+        assert part == {k: whole[k] for k in part}, (params, part, whole)
