@@ -125,9 +125,16 @@ test("Cut and Restore live in the ⋯ menu; Move to Trash… lists what points a
   const cut = page.getByRole("alertdialog", { name: "Cut Alert history export?" });
   await expect(cut).toContainText("Alert routing by team loses it");
   await tap(cut.getByRole("button", { name: "Cut", exact: true }));
+  await expect(toasts(page)).toContainText("Cut Alert history export from the roadmap");
+  await expect(panel(page).getByTestId("item-cut")).toBeVisible();
+  // The cut panel's strip restores in one click; the menu offers Restore in Cut's place.
+  await tap(panel(page).getByRole("button", { name: "Restore", exact: true }));
+  await expect(toasts(page)).toContainText("Restored Alert history export to the roadmap");
+  await expect(panel(page).getByTestId("item-cut")).toHaveCount(0);
+  await menu(page, "Cut from the roadmap");
+  await tap(cut.getByRole("button", { name: "Cut", exact: true }));
   await expect(panel(page).getByTestId("item-cut")).toBeVisible();
   await menu(page, "Restore to the roadmap");
-  await expect(toasts(page)).toContainText("Restored Alert history export");
   await expect(panel(page).getByTestId("item-cut")).toHaveCount(0);
 });
 

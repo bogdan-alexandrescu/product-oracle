@@ -952,10 +952,10 @@ export function FloatingCard({
     const parts = partsWords(item.parts.length, "stay");
     const rows = [{ label: "Needed by", value: neededBy.length ? `${andWords(neededBy.map(codeName))} ${neededBy.length === 1 ? "loses" : "lose"} it` : "Nothing" }];
     if (!(await confirmInPage({ action: "Cut", title: `Cut ${item.title}?`, message: parts, rows, cancel: "Cancel" }))) return;
-    await act({ applied: `Cut ${item.title}`, proposed: `cut ${item.title}` }, { op: "set_status", target: { item_id: item.id }, before: { status: item.status }, after: { status: "cut" } }, parts || undefined);
+    await act({ applied: `Cut ${item.title} from the roadmap`, proposed: `cut ${item.title} from the roadmap` }, { op: "set_status", target: { item_id: item.id }, before: { status: item.status }, after: { status: "cut" } }, parts || undefined);
   };
   const restore = () =>
-    act({ applied: `Restored ${item.title}`, proposed: `restore ${item.title}` }, { op: "set_status", target: { item_id: item.id }, before: { status: item.status }, after: { status: "planned" } });
+    act({ applied: `Restored ${item.title} to the roadmap`, proposed: `restore ${item.title} to the roadmap` }, { op: "set_status", target: { item_id: item.id }, before: { status: item.status }, after: { status: "planned" } });
   const menuItem = (label: string, run: () => void, warn = false) => (
     <button
       type="button"
@@ -1117,7 +1117,7 @@ export function FloatingCard({
         </p>
       )}
       {/* removed-tracks: a cut feature's head says who cut it and when (the Removed list's row). */}
-      {cut && <CutBy id={item.id} />}
+      {cut && <CutBy id={item.id} onRestore={canChange ? () => void restore() : undefined} restoreLabel={item.can_decide ? "Restore" : "Propose: restore"} />}
       {pick && <PickFeature key={pick} kind={pick} item={item} items={items} act={act} done={() => setPick(null)} />}
       {item.merged_into && (
         <p className="mt-1 text-sm text-text2" data-testid="item-merged">
