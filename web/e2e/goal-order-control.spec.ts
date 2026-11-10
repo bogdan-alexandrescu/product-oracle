@@ -54,9 +54,14 @@ async function everyPageShows(page: Page, want: string[], phone: boolean) {
     if (want.includes(name)) await expect(card.getByTestId("order-num")).toHaveText(String(want.indexOf(name) + 1));
   }
   // The goal lane headers lead with the same number (tb-mk: the Timeline's bands are tracks):
-  // the Waterfall's (grouped by goal; a phone's checks the Gantt's alone), then the Gantt's Group by Goal.
+  // the Waterfall's Group by Goal (it starts on track bands, owner Nov 10; a phone's checks the
+  // Gantt's alone), then the Gantt's Group by Goal.
   if (!phone) {
     await page.getByRole("button", { name: "Waterfall", exact: true }).click();
+    await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("chart-group").first()).toContainText(/track/i);
+    await page.getByTestId("group-goal").click();
+    await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
     const lane = page.getByTestId("chart-group").filter({ hasText: want[0] }).first();
     await expect(lane).toBeVisible();
     await expect(lane.getByTestId("order-num")).toHaveText("1");
