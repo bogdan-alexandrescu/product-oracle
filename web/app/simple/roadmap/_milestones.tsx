@@ -443,6 +443,14 @@ export function MsLayer(props: MsLayerProps) {
         el.style.visibility = gone ? "hidden" : "";
         return !gone;
       });
+      // Each label's own width, read once for all (one layout for the 500-row chart, not one a label).
+      for (const el of shown) {
+        el.style.whiteSpace = "nowrap";
+        el.style.width = "";
+        el.style.maxWidth = "";
+        el.style.top = `${Number(el.dataset.t0) || 0}px`;
+      }
+      const widths = shown.map((el) => el.scrollWidth + 2);
       let end = -Infinity;
       shown.forEach((el, n) => {
         const t0 = Number(el.dataset.t0) || 0;
@@ -450,11 +458,7 @@ export function MsLayer(props: MsLayerProps) {
         if (!prev || (Number(prev.dataset.t0) || 0) !== t0) end = -Infinity;
         const next = shown[n + 1];
         const nextT = next && (Number(next.dataset.t0) || 0) === t0 ? lx + Number(next.dataset.mx) + 6 : Infinity;
-        el.style.whiteSpace = "nowrap";
-        el.style.width = "";
-        el.style.maxWidth = "";
-        el.style.top = `${t0}px`;
-        const w = el.scrollWidth + 2;
+        const w = widths[n];
         const mx = lx + Number(el.dataset.mx);
         // A change asked of a PRD keeps all its words; the labels after it make room.
         const lead = el.dataset.testid === "ms-asked";
@@ -513,10 +517,15 @@ export function MsLayer(props: MsLayerProps) {
       const names = chart.querySelector("[data-testid=timeline-names-head]");
       const floor = names ? boxOf(names).r : -Infinity;
       const taken: Box[] = [];
-      for (const el of badges.sort((a, b) => Number(a.dataset.mx) - Number(b.dataset.mx))) {
+      // Every count back on its corner, then all their boxes read at once (one layout, not one a count).
+      const sorted = badges.sort((a, b) => Number(a.dataset.mx) - Number(b.dataset.mx));
+      for (const el of sorted) {
         el.style.left = `${Number(el.dataset.mx) + 3}px`;
         el.style.visibility = "";
-        const at = boxOf(el);
+      }
+      const boxes = sorted.map(boxOf);
+      for (const [n, el] of sorted.entries()) {
+        const at = boxes[n];
         const w = at.r - at.l;
         const mx = lx + Number(el.dataset.mx);
         if (mx + 3 < floor) {
