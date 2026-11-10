@@ -446,7 +446,7 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
 
   test("a track's header mark turns from a warning to a tick when the milestones it serves move past its work, and back", async ({ page }) => {
     await open(page);
-    const health = lanes(page).filter({ hasText: "Usage alerts track" }).getByTestId("track-head").getByTestId("track-health");
+    const health = lanes(page).filter({ hasText: "Guided setup track" }).getByTestId("track-head").getByTestId("track-health");
     const tip = health.getByRole("tooltip");
     await expect(health).toHaveAttribute("data-health", "at_risk");
     const warning = await health.innerHTML();

@@ -6,11 +6,13 @@ import { expect, test, type Page } from "./test";
  * milestone-kinds (PR 1499 review): a goal's target date shows on the roadmap as a goal milestone
  * while the goal is "On the roadmap". Who may edit the goal turns that off and on in the goal's own
  * form on Priorities (Goal buckets), as a person would; on invented data (the mock's
- * "roadmap-milestones" scenario; the mock's today is Nov 3, 2026).
+ * "simple-plan" scenario, whose goal Reliability has a target date; the mock's today is Nov 3, 2026).
  *
  * Card goal-on-roadmap-switch: protects = the goal's form has an "On the roadmap" switch; off, the
  * goal's target-date milestone leaves the roadmap's Milestones band; on, it comes back; fails_when =
  * the form has no switch, or the milestone stays (or does not come back).
+ * Card goal-target-diamond: protects = the goal's target-date diamond, not the reader's to move,
+ * opens its card to read on a click; fails_when = the click does nothing.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -46,21 +48,24 @@ async function setOnRoadmap(page: Page, title: string, on: boolean) {
   await expect(page.getByTestId("bucket-note")).toContainText(`Saved ${title}`);
 }
 
+const TITLE = "Reliability";
+
 test("a goal's On the roadmap switch takes its target-date milestone off the Milestones band and puts it back", async ({ page }) => {
-  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-milestones"] as const);
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
   await login(page);
   await roadmap(page);
-  // A goal's target date, drawn as a goal milestone named for the goal.
-  const first = page.getByTestId("ms-label").filter({ has: page.locator('[data-testid="mk-icon"][data-kind="goal"]') }).first();
-  await expect(first).toBeVisible();
-  const title = (await first.innerText()).trim().replace(/^M\d+ /, "");
-  expect(await goalOnBand(page, title)).toBe(1);
+  // The goal's target date, drawn as a goal milestone named for the goal.
+  expect(await goalOnBand(page, TITLE)).toBe(1);
+  // Its diamond opens its card to read (it changes on the goal, not here).
+  await page.locator(`[data-testid="ms-diamond"][data-kind="goal"][data-day="2027-02-12"]`).click();
+  await expect(page.getByTestId("ms-card")).toHaveAttribute("data-rights", "read");
+  await page.getByTestId("ms-card").getByRole("button", { name: "Close" }).click();
 
-  await setOnRoadmap(page, title, false);
+  await setOnRoadmap(page, TITLE, false);
   await roadmap(page);
-  await expect.poll(() => goalOnBand(page, title)).toBe(0);
+  await expect.poll(() => goalOnBand(page, TITLE)).toBe(0);
 
-  await setOnRoadmap(page, title, true);
+  await setOnRoadmap(page, TITLE, true);
   await roadmap(page);
-  await expect.poll(() => goalOnBand(page, title)).toBe(1);
+  await expect.poll(() => goalOnBand(page, TITLE)).toBe(1);
 });

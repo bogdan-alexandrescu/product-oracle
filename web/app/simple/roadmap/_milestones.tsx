@@ -61,7 +61,8 @@ type KindFields = {
 const kindFields = (m: GoalMilestone): KindFields => ({
   kind: m.kind ?? "delivery",
   status_set: m.status_set ?? null,
-  status_reason: m.status_reason && m.status_set ? m.status_reason : null,
+  // A person's reason for At risk or Missed; never the words Oracle reads out ("Set by ...") for another status.
+  status_reason: m.status_reason && (m.status_set === "at_risk" || m.status_set === "missed") && m.status_reason !== `Set by ${m.status_set_by_name || "a person"}` ? m.status_reason : null,
   done_when_line: m.done_when_line ?? "",
   measure: m.measure ?? null,
   baseline: m.baseline ?? null,
@@ -599,7 +600,16 @@ export function MsLayer(props: MsLayerProps) {
   }
   // A drag on a diamond moves it; a click (no move) opens it.
   const grab = (m: GoalMilestone) => (e: ReactPointerEvent) => {
-    if (!m.can_change) return;
+    // One that is not the reader's to move (a goal's own target date) still opens on a click, to read.
+    if (!m.can_change) {
+      e.stopPropagation();
+      const up = () => {
+        window.removeEventListener("pointerup", up);
+        ms.edit(m);
+      };
+      window.addEventListener("pointerup", up);
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     const layer = e.currentTarget.closest<HTMLElement>("[data-testid=ms-layer]")!;
