@@ -772,8 +772,8 @@ async def delete(db: AsyncSession, principal: Any, milestone_id: uuid.UUID) -> N
     # goal-map-editing: it goes to Settings > Trash (its features stay linked to it).
     from oracle.trash import service as trash
 
+    # It sets deleted_at and deleted_by (the user id, as _me reads it).
     await trash.delete_milestone(db, principal, row)
-    row.deleted_by = _me(principal)
     await db.flush()
     await audit.record(db, principal, "goal_milestone.delete", "track_milestone", row.id, data={})
     await db.commit()
@@ -801,7 +801,13 @@ async def restore(db: AsyncSession, principal: Any, milestone_id: uuid.UUID) -> 
 
 async def put_back(db: AsyncSession, row: TrackMilestone) -> None:
     """Restore a removed milestone, any time after it was removed (removed-tracks): its
-    code again unless another milestone of its goal took it meanwhile (then the next)."""
+    code again unless another milestone of its goal took it meanwhile (then the next).
+    Refused (409) while its goal is in Trash: it never goes live under a goal in Trash."""
+    from oracle.trash import service as trash
+
+    goal = await trash.goal_in_trash(db, row.goal_id)
+    if goal is not None:
+        raise _error(status.HTTP_409_CONFLICT, trash.goal_first(goal))
     if row.roadmap_id is not None and row.code:
         taken = await db.scalar(
             select(TrackMilestone.id).where(
@@ -1009,7 +1015,10 @@ async def _decide_own(db: AsyncSession, principal: Any, c: SimpleChange, action:
                                     "changed_at": None})  # fmt: skip
         after = c.after.get("milestone")
         if after is None:
-            row.deleted_at = now
+            # goal-map-editing: an accepted removal goes to Settings > Trash, as a direct delete.
+            from oracle.trash import service as trash
+
+            await trash.delete_milestone(db, principal, row)
         else:
             # What it names may have gone since it was proposed: refused (422), not a 500.
             try:

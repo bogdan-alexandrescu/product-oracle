@@ -210,7 +210,7 @@ import { codedTitle, openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrdSlug, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdFeeds, prdOwnerIdsOf, prdTrackOwnerIds, roadmapKeyOf, seesDraft, shownDates, storedDates } from "./simple-roadmap";
-import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
+import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, milestoneGoalInTrash, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
@@ -7070,8 +7070,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       // As the API: the draft only when the person starting the run may see it.
       roadmapRead: (starter) => roadmapRead(db.documents, db.versions, db.simple_roadmap, String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"), (d) => seesDraft(d, starter, db.simple_roadmap)),
       onRestore: (released) => (db.simple_roadmap && restoreTrack(db.simple_roadmap, released)) || relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
-      // every-field: as trash_items._codes_free, never one code on two items.
-      refuseRestore: (entry) => (db.simple_roadmap ? restoreCodeTaken(db.simple_roadmap, me, entry) : null),
+      // every-field: as trash_items._codes_free, never one code on two items; goal-map-editing: a
+      // milestone never comes back under a goal in Trash (trash._milestone_goal_live).
+      refuseRestore: (entry) =>
+        (entry.out.root.type === "milestone" ? milestoneGoalInTrash(db, entry.out.root.id) : null) ??
+        (db.simple_roadmap ? restoreCodeTaken(db.simple_roadmap, me, entry) : null),
       // port-an-decisions: Restore puts a meeting's removed agenda item or a deleted request back.
       restoreRoot: (entry) => {
         if (entry.request !== undefined) {
@@ -8111,7 +8114,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       const why = d && readOnlyWhy(db, d);
       if (why) return json(409, { detail: why });
     }
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced, ladder: ladderMilestones(db, me) }, r, p, q);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced, ladder: ladderMilestones(db, { id: me.id, role: me.role, name: simpleNames[me.id] ?? me.email }, bin.trash, bin.now) }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.

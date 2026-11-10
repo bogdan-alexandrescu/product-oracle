@@ -694,8 +694,8 @@ function Flags({ map, open }: { map: GoalMap; open: Ctx["open"] }) {
         </button>
       )}
       {unplaced > 0 && (
-        // goal-map-editing: leads to the features on no milestone on the ladder, highlighted.
-        <button type="button" data-testid="gm-flag-unplaced" className={chip} onClick={() => window.dispatchEvent(new Event("ld-show-loose"))}>
+        // goal-map-editing: opens the list of features on no milestone, each with its fix.
+        <button type="button" data-testid="gm-flag-unplaced" className={chip} onClick={() => open("unplaced")}>
           {unplaced} {unplaced === 1 ? "feature serves" : "features serve"} no gate
         </button>
       )}
@@ -750,6 +750,7 @@ function FlagDrawer({ map, kind, onClose, open, onOpen }: { map: GoalMap; kind: 
         {map.unplaced.map((f) => (
           <li key={f.id} data-testid="gm-unplaced" className={row}>
             <button type="button" className="text-left font-semibold hover:underline" onClick={() => onOpen({ id: f.id, name: f.name } as GmFeature)}>
+              {f.code && <span className="simple-code mr-1">{f.code}</span>}
               {f.name}
             </button>
             {map.can_edit && (

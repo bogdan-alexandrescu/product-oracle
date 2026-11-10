@@ -21,6 +21,10 @@ Test cards (protects / fails_when / no_claim):
   trashed feature is read; no_claim=Trash's own pages.
 - test_place_card_needs_a_feature_on_the_map: protects=a place for no feature is refused
   (404); fails_when=places pile up for any id.
+- test_a_card_on_no_milestone_is_placed_too (Free canvas, owner's pick): protects=a live
+  feature on no milestone (one of ``unplaced``) is placed like any card and read back in
+  ``places``; once in Trash it is refused (404) and its place is not read;
+  fails_when=an unplaced feature's place is refused or dropped from the read.
 - test_move_a_feature_to_another_milestone: protects=``POST /links/move`` moves a feature's
   link from one milestone to another, keeping its expected lift and area; approvers and up
   only; fails_when=the feature serves both or a commenter moves it.
@@ -29,6 +33,7 @@ Test cards (protects / fails_when / no_claim):
   loop is stored; no_claim=dates through dependencies.
 """
 
+import uuid
 from datetime import UTC, date, datetime
 
 import pytest
@@ -146,11 +151,28 @@ async def test_places_of_a_feature_in_trash_are_not_shown(client):
 
 async def test_place_card_needs_a_feature_on_the_map(client):
     ctx, ids = await world()
-    for feature in (ids["m1"], ids["f3"]):
+    for feature in (ids["m1"], str(uuid.uuid4())):
         r = await client.post(
             PLACE, json={"feature": feature, "x": 1, "y": 1}, headers=ctx.as_("owner")
         )
         assert r.status_code == 404, r.text
+
+
+async def test_a_card_on_no_milestone_is_placed_too(client):
+    ctx, ids = await world()
+    assert ids["f3"] in {f["id"] for f in (await read(client, ctx))["unplaced"]}
+    body = await place(client, ctx, "viewer", ids["f3"], 40, 50)
+    assert places(body) == {ids["f3"]: (40, 50)}
+    assert places(await read(client, ctx, "viewer")) == {ids["f3"]: (40, 50)}
+    async with tenant_session(ctx.tenant_id) as s:
+        item = await s.get(RoadmapItem, ids["f3"])
+        item.deleted_at = NOW
+        await s.commit()
+    assert places(await read(client, ctx, "viewer")) == {}
+    r = await client.post(
+        PLACE, json={"feature": ids["f3"], "x": 1, "y": 1}, headers=ctx.as_("viewer")
+    )
+    assert r.status_code == 404, r.text
 
 
 async def test_move_a_feature_to_another_milestone(client):

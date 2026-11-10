@@ -816,6 +816,10 @@ ChangeOp = Literal[
     # owners by who may not (oracle.simple.goal_asks).
     "archive_goal",
     "unarchive_goal",
+    # goal-map-link-asks: a feature put on a goal milestone (or its link moved from another),
+    # suggested by who may propose but not edit the Goal map, routed to the feature's
+    # roadmap's decider (oracle.simple.goal_map_asks).
+    "link_goal_map",
     # roadmap-decide: a dependent no longer depends on a cut item (its fix).
     "remove_dependency",
     # removed-tracks: a removed goal milestone put back; a track added, edited (title, owner,

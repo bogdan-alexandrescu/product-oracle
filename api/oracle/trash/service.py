@@ -590,6 +590,35 @@ async def milestone_restored(db: AsyncSession, milestone_id: uuid.UUID) -> None:
     )
 
 
+async def goal_in_trash(db: AsyncSession, goal_id: uuid.UUID | None) -> str | None:
+    """The name of the goal ``goal_id`` while it is in Trash (None: live, or no goal)."""
+    if goal_id is None:
+        return None
+    from oracle.baseline.goals import goal_name
+    from oracle.baseline.models import Entity
+
+    goal = await db.get(Entity, goal_id, execution_options=ALL)
+    if goal is None or goal.deleted_at is None:
+        return None
+    return goal_name(goal.title, goal.key)
+
+
+def goal_first(name: str) -> str:
+    return f"Its goal {name} is in Trash: restore the goal first"
+
+
+async def _milestone_goal_live(db: AsyncSession, entry: TrashEntry) -> None:
+    """A milestone never comes back under a goal in Trash (409, before anything changes)."""
+    if entry.root_type != "milestone":
+        return
+    from oracle.roadmap.models import TrackMilestone
+
+    row = await db.get(TrackMilestone, entry.root_id)
+    name = await goal_in_trash(db, row.goal_id) if row is not None else None
+    if name is not None:
+        raise Conflict(goal_first(name))
+
+
 async def _milestone_back(db: AsyncSession, entry: TrashEntry) -> None:
     """A restored milestone entry puts the milestone back on its roadmap."""
     if entry.root_type != "milestone":
@@ -798,6 +827,7 @@ async def restore_entry(
     entry = await get_entry(db, entry_id)
     if not may_restore(principal, entry):
         raise Forbidden("Only an owner, or whoever deleted it, restores this")
+    await _milestone_goal_live(db, entry)
     from oracle.simple import trash_items
 
     await trash_items.before_restore(db, entry, principal)

@@ -199,11 +199,11 @@ export function ladderMap(keyResults = false, codes = false): GoalMap {
     if (!g || !m) return [];
     const milestones = (codes && i + 1 === 21 ? ["m6", m] : [m, ...(ALSO[i + 1] ? [ALSO[i + 1]] : [])]).map((x) => `l${x}`);
     const link = (milestone: string) => ({ milestone, expected: "", confidence: "Medium" as const, measured: null, lift: "not_measured" as const, shipped_on: null, before: null, after: null });
-    return [{ id: `f${i + 1}`, name, area: area(a), milestones, lever: a, expected: "", confidence: "Medium" as const, released: false, measured: null, lift: "not_measured" as const, links: milestones.map(link) }];
+    return [{ id: `f${i + 1}`, name, code: "", area: area(a), milestones, lever: a, expected: "", confidence: "Medium" as const, released: false, measured: null, lift: "not_measured" as const, links: milestones.map(link) }];
   });
   // One feature with no roadmap item (no code, no key): a link onto it is refused, for a reason that is not a loop.
   const link = { milestone: "lm12", expected: "", confidence: "Medium" as const, measured: null, lift: "not_measured" as const, shipped_on: null, before: null, after: null };
-  features.push({ id: "bare-feature", name: BARE, area: area("Mobile"), milestones: ["lm12"], lever: "Mobile", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [link] });
+  features.push({ id: "bare-feature", name: BARE, code: "", area: area("Mobile"), milestones: ["lm12"], lever: "Mobile", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [link] });
   return {
     goals: [...GOALS, ...(keyResults ? KRS.map(([k]) => k) : []), ...(codes ? CODE_KRS.filter(([, , , s]) => s === "confirmed").map(([k]) => k) : [])].map(({ position, ...g }) => (void position, { ...g })),
     areas: AREAS.map((a) => ({ id: area(a), name: a, lever: a })),

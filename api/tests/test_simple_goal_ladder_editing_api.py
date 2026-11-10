@@ -24,6 +24,13 @@ Test cards (protects / fails_when / no_claim):
   lists a milestone that is back on the map.
 - test_purging_a_milestone_deletes_it: protects=Delete for good removes the milestone and
   its links; fails_when=the row or a link is left behind.
+- test_a_milestone_delete_names_who_deleted_it: protects=the milestone's ``deleted_by`` is
+  the signed-in person's user id, as its Trash entry's maker; fails_when=it is another id.
+- test_a_milestone_of_a_goal_in_trash_stays_in_trash: protects=while its goal is in Trash,
+  the milestone's own restore and Trash's Restore are refused (409, "Its goal <name> is in
+  Trash: restore the goal first") and it stays deleted, in Trash; once the goal is back it
+  is restored; fails_when=a milestone goes live under a goal in Trash or the refusal is a
+  500.
 """
 
 from datetime import UTC, datetime
@@ -141,3 +148,64 @@ async def test_purging_a_milestone_deletes_it(client):
             )
         ).all()
         assert links == []
+
+
+async def test_a_milestone_delete_names_who_deleted_it(client):
+    ctx, ids = await world()
+    r = await client.delete(MILESTONE.format(ids["m1"]), headers=ctx.as_("owner"))
+    assert r.status_code == 204, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(TrackMilestone, ids["m1"])
+        assert row.deleted_at is not None
+        assert row.deleted_by == ctx.users["owner"].id
+
+
+async def test_a_milestone_of_a_goal_in_trash_stays_in_trash(client):
+    ctx, ids = await world()
+    r = await client.delete(MILESTONE.format(ids["m3"]), headers=ctx.as_("owner"))
+    assert r.status_code == 204, r.text
+    [entry] = await trash_entries(client, ctx)
+    goals = "/v1/simple/goal-buckets/goals/{}"
+    r = await client.delete(goals.format(ids["revenue"]), headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    detail = "Its goal Revenue is in Trash: restore the goal first"
+    for url in (MILESTONE.format(ids["m3"]) + "/restore", f"/v1/trash/{entry['id']}/restore"):
+        r = await client.post(url, headers=ctx.as_("owner"))
+        assert r.status_code == 409, r.text
+        assert r.json()["detail"] == detail
+    assert [e["id"] for e in await trash_entries(client, ctx)] == [entry["id"]]
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.get(TrackMilestone, ids["m3"])).deleted_at is not None
+    r = await client.post(goals.format(ids["revenue"]) + "/restore", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await client.post(f"/v1/trash/{entry['id']}/restore", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert ids["m3"] in {m["id"] for m in (await read(client, ctx))["milestones"]}
+
+
+async def test_a_commenters_milestone_trash_accepted_goes_to_trash(client):
+    # protects=a commenter's Move to Trash on the ladder is a suggestion (edit_goal_milestone,
+    # after.milestone null); the decider's accept sends it to Settings > Trash like their own
+    # delete, so Restore brings it back; fails_when=the accept only hides it, out of Trash.
+    ctx, ids = await world()
+    m3 = next(m for m in (await read(client, ctx))["milestones"] if m["id"] == str(ids["m3"]))
+    body = {
+        "op": "edit_goal_milestone",
+        "target": {"milestone_id": str(ids["m3"])},
+        "before": {"milestone": {"name": m3["name"]}},
+        "after": {"milestone": None},
+    }
+    r = await client.post("/v1/simple/changes", json=body, headers=ctx.as_("commenter"))
+    assert r.status_code in (200, 201), r.text
+    change = r.json()["change"]
+    assert change["status"] == "proposed"
+    assert await trash_entries(client, ctx) == []
+    r = await client.post(f"/v1/simple/changes/{change['id']}/accept", json={},
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert str(ids["m3"]) not in {m["id"] for m in (await read(client, ctx))["milestones"]}
+    [entry] = await trash_entries(client, ctx)
+    assert entry["root"]["id"] == str(ids["m3"])
+    r = await client.post(f"/v1/trash/{entry['id']}/restore", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert str(ids["m3"]) in {m["id"] for m in (await read(client, ctx))["milestones"]}

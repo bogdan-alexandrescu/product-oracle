@@ -551,6 +551,7 @@ def current_route(
     if (
         c.status != "proposed"
         or c.op in ("edit_line", "set_section_number", "edit_goal_milestone", *QUESTION_OPS)
+        or c.op == "link_goal_map"
         or c.op in KEY_DATE_OPS
         or c.op in PLAN_OPS
     ):
@@ -1531,6 +1532,7 @@ async def create(
         agenda,
         decision_sheet,
         goal_asks,
+        goal_map_asks,
         goal_milestones,
         key_dates,
         one_pager,
@@ -1555,6 +1557,8 @@ async def create(
         return await trash_items.create_change(db, principal, body)
     if body.op in goal_asks.OPS:
         return await goal_asks.create_change(db, principal, body)
+    if body.op in goal_map_asks.OPS:
+        return await goal_map_asks.create_change(db, principal, body)
     if body.op in goal_milestones.OPS:
         return await goal_milestones.create_change(db, principal, body)
     if body.op in plan_changes.OPS:
@@ -1671,6 +1675,7 @@ async def decide(
     from oracle.simple import (
         additions,
         goal_asks,
+        goal_map_asks,
         goal_milestones,
         key_dates,
         one_pager,
@@ -1701,6 +1706,8 @@ async def decide(
         return await trash_items.decide(db, principal, c, action, reason)
     if c.op in goal_asks.OPS:
         return await goal_asks.decide(db, principal, c, action, reason)
+    if c.op in goal_map_asks.OPS:
+        return await goal_map_asks.decide(db, principal, c, action, reason)
     from oracle.simple import decision_sheet
 
     if c.op in decision_sheet.OPS:
@@ -1962,6 +1969,7 @@ class _View:
             additions,
             decision_sheet,
             goal_asks,
+            goal_map_asks,
             goal_milestones,
             key_dates,
             one_pager,
@@ -1990,6 +1998,8 @@ class _View:
             return trash_items.may_decide_goal(self.principal)
         if c.op in goal_asks.OPS:
             return goal_asks.may_decide(self.principal)
+        if c.op in goal_map_asks.OPS:
+            return goal_map_asks.may_decide(self.principal, c, self)
         if c.op in PLAN_OPS:
             return plan_changes.may_decide(self.principal, c)
         if c.op == CUT_ALL:

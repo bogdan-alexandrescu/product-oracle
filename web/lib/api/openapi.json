@@ -63676,6 +63676,7 @@
                   "delete_goal",
                   "archive_goal",
                   "unarchive_goal",
+                  "link_goal_map",
                   "remove_dependency",
                   "restore_goal_milestone",
                   "add_track",
@@ -64108,6 +64109,7 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
+              "link_goal_map",
               "remove_dependency",
               "restore_goal_milestone",
               "add_track",
@@ -82653,6 +82655,11 @@
             "type": "string",
             "title": "Name"
           },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "default": ""
+          },
           "area": {
             "anyOf": [
               {
@@ -83344,6 +83351,11 @@
               }
             ],
             "title": "Goal"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "default": ""
           }
         },
         "type": "object",
@@ -88604,6 +88616,7 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
+              "link_goal_map",
               "remove_dependency",
               "restore_goal_milestone",
               "add_track",
@@ -123723,6 +123736,7 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
+              "link_goal_map",
               "remove_dependency",
               "restore_goal_milestone",
               "add_track",
@@ -123889,6 +123903,7 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
+              "link_goal_map",
               "remove_dependency",
               "restore_goal_milestone",
               "add_track",

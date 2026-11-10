@@ -56,6 +56,9 @@ Test cards (protects / fails_when / no_claim):
   once; a title that leads with another code than the item's own, and one with no code,
   read whole; fails_when=the map's name repeats the code the card shows ("F-07 F-07 ...");
   no_claim=the web's cards (Playwright's goal-map-code-once spec).
+- test_every_feature_and_unplaced_entry_carries_its_code: protects=each feature and each
+  unplaced entry reads its code as the Simple roadmap reads it (``code``, "" for none);
+  fails_when=a code is missing or differs from the roadmap's; no_claim=the web's cards.
 """
 
 import uuid
@@ -653,3 +656,22 @@ async def test_a_goal_name_stored_with_a_placeholder_reads_without_it(client):
     body = await read(client, ctx)
     goal = next(g for g in body["goals"] if g["id"] == ids["signups"])
     assert goal["name"] == "KR 1.1 sign-ups per rep"
+
+
+async def test_every_feature_and_unplaced_entry_carries_its_code(client):
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        f1 = await s.get(RoadmapItem, uuid.UUID(ids["f1"]))
+        f1.title = "F-07 One-tap sign-up link"
+        f2 = await s.get(RoadmapItem, uuid.UUID(ids["f2"]))
+        f2.prd_section_key = "f-09"
+        f3 = await s.get(RoadmapItem, uuid.UUID(ids["f3"]))
+        f3.title = "F-37a Rep leaderboard"
+        await s.commit()
+    body = await read(client, ctx)
+    codes = {f["id"]: f["code"] for f in body["features"] + body["unplaced"]}
+    assert codes == {ids["f1"]: "F-07", ids["f2"]: "F-09", ids["f3"]: "F-37a"}
+    r = await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    road = {i["id"]: i["code"] or "" for i in r.json()["items"]}
+    assert all(road[k] == v for k, v in codes.items())
