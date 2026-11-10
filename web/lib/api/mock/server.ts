@@ -209,7 +209,7 @@ import { knowPrdOrder } from "./prd-rank";
 import { openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
-import { closed, GOALS, MAP_GOALS, prdOwnerIdsOf, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
+import { closed, GOALS, MAP_GOALS, prdFeeds, prdOwnerIdsOf, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
@@ -7007,6 +7007,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       // edit-decisions: Restore puts a decision or a PRD's question back on Simple's Decisions too.
       // goal-map-editing: and a goal map milestone back on the map.
       simple: () => db.simple_roadmap && { ...db.simple_roadmap, sheet: [...(db.simple_meetings?.decisions ?? []), ...(db.simple_meetings?.questions?.questions ?? [])], goal_map: db.goal_map },
+      // delete-prd-simple: the roadmap items and tracks a PRD feeds, named by Delete PRD.
+      feeds: (slugs) => slugs.flatMap((s) => prdFeeds((db.simple_roadmap ??= seedSimpleRoadmap()), s)),
       // As the API: the draft only when the person starting the run may see it.
       roadmapRead: (starter) => roadmapRead(db.documents, db.versions, db.simple_roadmap, String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"), (d) => seesDraft(d, starter, db.simple_roadmap)),
       onRestore: (released) => (db.simple_roadmap && restoreTrack(db.simple_roadmap, released)) || relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),

@@ -1169,6 +1169,22 @@ export function trackPrdTitles(db: SimpleDb, track: string): string[] {
   return first ? [first] : [];
 }
 
+/** delete-prd-simple (the API's trash feeds): the roadmap items a PRD feeds (each once, by key) and the
+ * tracks that hold it, by title; Delete PRD names them (they stay, without it). */
+export function prdFeeds(db: SimpleDb, prdSlug: string): Schemas["TrashItem"][] {
+  const slug = (title: string | undefined) => title?.toLowerCase().replace(/ /g, "-");
+  const items = new Map<string, Schemas["TrashItem"]>();
+  for (const s of db.items) {
+    if (s.trashed || (s.prd_doc?.slug ?? slug(ROADMAPS[s.roadmap]?.prd)) !== prdSlug || items.has(s.key)) continue;
+    items.set(s.key, { type: "feature", id: db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`), slug: s.key, title: s.title, kind: "feature" });
+  }
+  const tracks = Object.keys(TRACKS)
+    .filter((t) => trackPrdTitles(db, t).some((title) => slug(title) === prdSlug))
+    .map((t): Schemas["TrashItem"] => ({ type: "track", id: stableUuid(`simple-track/${t}`), slug: null, title: TRACKS[t], kind: "Track" }));
+  const byTitle = (a: Schemas["TrashItem"], b: Schemas["TrashItem"]) => a.title.localeCompare(b.title);
+  return [...[...items.values()].sort(byTitle), ...tracks.sort(byTitle)];
+}
+
 /** A PRD's owners (drafts.who on its document), by person id in id order: the owners of its tracks
  * only. An ask of its milestones is sent to them (with none, the company's owners) and theirs to decide. */
 export function prdOwnerIdsOf(db: SimpleDb, prdSlug: string): string[] {
