@@ -46,23 +46,51 @@ async function format(page: Page, f: "gantt" | "waterfall" | "timeline") {
   await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", f);
 }
 
-/** The Timeline's lane (its title) an item's row sits under: the nearest lane header above it. */
+/**
+ * The Timeline's band (its title) an item's row sits under: the nearest band header above it
+ * (tb-mk: a track band's header reads its name, then its goal and health; the name is its title).
+ */
 async function laneOf(page: Page, key: string) {
   return row(page, key).evaluate((el) => {
     let e = el.previousElementSibling;
     while (e && e.getAttribute("data-testid") !== "timeline-lane") e = e.previousElementSibling;
-    return (e?.textContent ?? "").split(" · ")[0].trim();
+    const track = e?.querySelector('[data-testid="track-head"] button');
+    return (track?.textContent ?? (e?.textContent ?? "").split(" · ")[0]).trim();
   });
 }
 
-/** The Gantt's group (its title) an item's row sits under. */
+/** The Gantt's group (its title) an item's row sits under (a track band's: the track's name). */
 async function groupOf(page: Page, title: string) {
   return label(page, title).evaluate((el) => {
     let e = el.parentElement!.previousElementSibling;
     while (e && e.getAttribute("data-testid") !== "chart-group") e = e.previousElementSibling;
-    return (e?.querySelector("span")?.textContent ?? "").trim();
+    const track = e?.querySelector('[data-testid="track-head"] button');
+    return ((track ?? e?.querySelector("span"))?.textContent ?? "").trim();
   });
 }
+
+/** The Gantt's or the Waterfall's groups, in order: each one's title (and count, where drawn). */
+async function groupsDrawn(page: Page) {
+  return page.getByTestId("chart-group").evaluateAll((els) =>
+    els.map((e) => {
+      const title = e.getAttribute("data-add-label") ?? "";
+      const count = e.querySelector('[data-testid="lane-count"]')?.textContent?.trim();
+      return count ? `${title} · ${count}` : title;
+    }),
+  );
+}
+
+/** The goal lanes, in the one goal order, then PM-owned, with their counts. */
+const GOAL_LANES = [
+  "Sign-ups per rep per day · 4 items",
+  "Revenue per day · 3 items",
+  "Paid conversions per rep per day · 5 items",
+  "Activation · 5 items",
+  "Reliability · 5 items",
+  "Revenue · 3 items",
+  "Growth · 4 items",
+  "PM-owned · 3 items",
+];
 
 for (const scheme of ["light", "dark"] as const) {
   test.describe(`desktop, ${scheme}`, () => {
@@ -78,42 +106,38 @@ for (const scheme of ["light", "dark"] as const) {
      * its milestone (F-05a in M1, F-05b in M2); the Timeline's months and Today, the Gantt's
      * weeks and Today pill, each milestone's end "M1 ends Nov 27" with a dashed line, the
      * year-end break, the legend (One bar per part of a feature, Milestone ends, Holidays, No
-     * engineering work, Today); the Timeline always groups by goal, so it offers no Group by and
-     * no lanes hint; fails_when = a lane, a count, the PM-owned lane, a milestone, the one-bar
+     * engineering work, Today); the Timeline always draws its bands one way, so it offers no
+     * Group by and no lanes hint; fails_when = a lane, a count, the PM-owned lane, a milestone, the one-bar
      * slices, the stacking, a milestone end or a legend entry is missing or wrong; no_claim =
-     * pixels, the slices' colours (the Gantt draws every bar in the accent by design).
+     * pixels, the slices' colours (the Gantt draws every bar in the accent by design). tb-mk: the
+     * Timeline's bands are now the tracks (this scenario's one track, Guided setup track, with
+     * its health) and the Gantt's Group by starts at Track, so the goal lanes, their counts and
+     * the PM-owned lane are read on Group by Goal, picked on the Gantt as a person would (and
+     * on the Waterfall, which keeps it and draws each lane's count); the stacking and start order are
+     * read in the Timeline's track band and again in the goal lanes.
      */
     test(`B2: goal lanes with stacked pieces (desktop, ${scheme})`, async ({ page }) => {
       await open(page, scheme);
       await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "zoom");
-      const lanes = await page.getByTestId("timeline-lane").allInnerTexts();
-      // P-1: the Goal map's 12 features are roadmap items from the first load; each names the map goal it
-      // serves (P-6, feature-panel-qa 6bf7dbec7 and its first-load merge 1e1ad87ac), so the map's three goals
-      // lead the lanes in the one goal order and no item is left with No goal.
-      expect(lanes).toEqual([
-        "Sign-ups per rep per day · 4 items",
-        "Revenue per day · 3 items",
-        "Paid conversions per rep per day · 5 items",
-        "Activation · 5 items",
-        "Reliability · 5 items",
-        "Revenue · 3 items",
-        "Growth · 4 items",
-        "PM-owned · 3 items",
-      ]);
-      // The Timeline always draws its rows under their goal: no Group by, no stale lanes hint.
+      // tb-mk: the Timeline's bands are the tracks: this scenario's every item is on Guided setup
+      // track (no goal of its own, on track), so one band, and no No track band.
+      const lanes = (await page.getByTestId("timeline-lane").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
+      expect(lanes).toEqual(["Guided setup track ✓ On track"]);
+      await expect(page.getByTestId("timeline-row")).toHaveCount(32);
+      // The Timeline always draws its rows under their track: no Group by, no stale lanes hint.
       await expect(page.getByTestId("group-milestone")).toHaveCount(0);
       await expect(page.getByTestId("lanes-hint")).toHaveCount(0);
-      // PM-owned work (F-04, F-10, F-18) sits in its own lane.
-      for (const key of ["plan-f-04", "plan-f-10", "plan-f-18"]) expect(await laneOf(page, key)).toBe("PM-owned");
-      // Overlapping pieces never share a row; pieces one after the other sit in start order in their lane.
-      expect(await laneOf(page, "setup-checklist")).toBe("Activation");
-      expect(await laneOf(page, "setup-import")).toBe("Activation");
+      // PM-owned work (F-04, F-10, F-18) stays in its track's band (its own lane is Group by Goal's, below).
+      for (const key of ["plan-f-04", "plan-f-10", "plan-f-18"]) expect(await laneOf(page, key)).toBe("Guided setup track");
+      // Overlapping pieces never share a row; pieces one after the other sit in start order in their band.
+      expect(await laneOf(page, "setup-checklist")).toBe("Guided setup track");
+      expect(await laneOf(page, "setup-import")).toBe("Guided setup track");
       const [checklist, sample] = [(await row(page, "setup-checklist").boundingBox())!, (await row(page, "setup-import").boundingBox())!];
       expect(Math.abs(checklist.y - sample.y)).toBeGreaterThanOrEqual(checklist.height - 1);
       await expect(row(page, "setup-checklist").getByTestId("timeline-bar")).toHaveAttribute("data-end", "2026-11-20");
       await expect(row(page, "setup-import").getByTestId("timeline-bar")).toHaveAttribute("data-start", "2026-11-09");
-      expect(await laneOf(page, "plan-f-03")).toBe("Reliability");
-      expect(await laneOf(page, "plan-f-06")).toBe("Reliability");
+      expect(await laneOf(page, "plan-f-03")).toBe("Guided setup track");
+      expect(await laneOf(page, "plan-f-06")).toBe("Guided setup track");
       expect((await row(page, "plan-f-03").boundingBox())!.y).toBeLessThan((await row(page, "plan-f-06").boundingBox())!.y);
       // The Timeline's axis: months, Today (its line and its day in the key).
       await expect(page.getByTestId("timeline-month").filter({ hasText: /^Dec$/ })).toHaveCount(1);
@@ -123,6 +147,23 @@ for (const scheme of ["light", "dark"] as const) {
       expect(w).toBeLessThanOrEqual(1367);
 
       await format(page, "gantt");
+      // The Gantt starts at Group by Track; Group by Goal draws the goal lanes in the one goal
+      // order, then PM-owned: P-1, the Goal map's 12 features are roadmap items from the first
+      // load, each naming the map goal it serves (P-6, feature-panel-qa 6bf7dbec7 and its
+      // first-load merge 1e1ad87ac), so the map's three goals lead and no item is left with No goal.
+      await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
+      await page.getByTestId("group-goal").click();
+      await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
+      // (A desktop Gantt's goal header names the goal and its measure; the Waterfall's, below, its count.)
+      await expect.poll(() => groupsDrawn(page)).toEqual(GOAL_LANES.map((l) => l.split(" · ")[0]));
+      // The overlapping pieces are both Activation's, the ones in a row both Reliability's, and
+      // in their goal lanes too they keep two rows and start order.
+      expect(await groupOf(page, "Setup checklist")).toBe("Activation");
+      expect(await groupOf(page, "Sample data import")).toBe("Activation");
+      expect(Math.abs((await bar(page, "setup-checklist").boundingBox())!.y - (await bar(page, "setup-import").boundingBox())!.y)).toBeGreaterThanOrEqual(1);
+      expect(await groupOf(page, "Setup failure alerts")).toBe("Reliability");
+      expect(await groupOf(page, "Setup error report")).toBe("Reliability");
+      expect((await bar(page, "plan-f-03").boundingBox())!.y).toBeLessThan((await bar(page, "plan-f-06").boundingBox())!.y);
       // The Gantt draws PM-owned work grey and dashed, in the PM-owned group.
       await expect(group(page, "PM-owned")).toHaveCount(1);
       for (const [code, title] of [["F-04", "Pricing page words"], ["F-10", "Launch email"], ["F-18", "Pricing questions page"]]) {
@@ -160,8 +201,11 @@ for (const scheme of ["light", "dark"] as const) {
       w = await page.evaluate(() => document.documentElement.scrollWidth);
       expect(w).toBeLessThanOrEqual(1367);
 
-      // The Waterfall shows the whole plan: all three milestones' ends, each with its dashed line.
+      // The Waterfall shows the whole plan: all three milestones' ends, each with its dashed line;
+      // still grouped by goal, each lane heads its count of items.
       await format(page, "waterfall");
+      await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
+      await expect.poll(() => groupsDrawn(page)).toEqual(GOAL_LANES);
       const ends = page.getByTestId("milestone-end");
       await expect(ends).toHaveCount(3);
       await expect(ends.getByTestId("milestone-end-label")).toHaveText(["M1 ends Nov 27", "M2 ends Dec 25", /^M3 ends Feb 12/]);
@@ -195,14 +239,15 @@ for (const scheme of ["light", "dark"] as const) {
 
     /**
      * Card lanes-group-by: protects = Group by Track, PRD and Milestone draw groups of that
-     * grouping (on the Gantt: the Timeline always groups by goal and offers no Group by): by
+     * grouping (on the Gantt: the Timeline always draws track bands and offers no Group by): by
      * Milestone, M1 Prove it, M2 Scale volume and M3 Open to all (Team invites under M1, its
      * first slice, still drawn as both slices), by Track the track "Guided setup track", by PRD
      * Guided setup; in each, Setup checklist and Sample data import (they overlap) sit in one
      * group on two rows, and PM-owned work stays in its group; fails_when = a grouping draws the
      * goal groups, a group is missing, or overlapping pieces share a row; on the Waterfall each
      * milestone's group heads its count of items (M1 6, M2 6, M3 8); no_claim = the groups'
-     * order beyond the API's.
+     * order beyond the API's. tb-mk: a track group's header reads the track's name, then its
+     * health ("Guided setup track ✓ On track"), so a row's group is read by the track's name.
      */
     test(`Group by Milestone, Track and PRD draw their own lanes (desktop, ${scheme})`, async ({ page }) => {
       await open(page, scheme);

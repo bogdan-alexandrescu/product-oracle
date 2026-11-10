@@ -59,7 +59,8 @@ for (const phone of [false, true]) {
       test.use({ ...(phone ? PHONE : DESKTOP), colorScheme: scheme });
 
       /**
-       * Card milestones-d-gantt: protects = on the Gantt grouped by goal, Team invites' row
+       * Card milestones-d-gantt: protects = on the Gantt grouped by goal (picked
+       * in Group by: tb-mk opens it by track), Team invites' row
        * reads "Team invites" with its code (F-05, unique) only in its tooltip (fix2-simple-
        * roadmap-gantt finding 15/16: a visible code is dropped since the mock repeats one on
        * two items), its two bars are labelled F-05a and F-05b while Usage dashboard's one bar
@@ -76,6 +77,10 @@ for (const phone of [false, true]) {
         await open(page, scheme);
         await page.getByTestId("format-gantt").click();
         await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
+        // tb-mk: the Gantt opens grouped by track; this card reads the goal rows (their metric),
+        // so a person picks Group by Goal.
+        await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
+        await page.getByTestId("group-goal").click();
         await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
 
         // fix4 qa-simple-roadmap-3: a row and a slice read by name, never by code ("F-05", "F-05a").

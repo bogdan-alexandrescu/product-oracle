@@ -42,6 +42,13 @@ const shot = async (page: Page, name: string) => {
 const label = (page: Page, words: string) => page.locator(`[data-testid="ms-label"][aria-label^="${words}"]`);
 const card = (page: Page) => page.getByTestId("ms-card");
 const toast = (page: Page) => page.getByTestId("ms-toast");
+// tb-mk: + Milestone asks for the kind first (a picker headed like the card), then opens the card.
+async function pickKind(page: Page, kind = "Sub-goal", head = "New milestone") {
+  const picker = page.getByTestId("ms-kind-picker");
+  await expect(picker.getByRole("heading", { name: head })).toBeVisible();
+  await picker.getByRole("option", { name: kind }).click();
+  await expect(card(page).getByRole("heading", { name: head })).toBeVisible();
+}
 
 async function pointAtAxis(page: Page, at = 0.7) {
   // The axis runs the whole chart; point at the part in sight (its scroller's box, past the names).
@@ -72,10 +79,11 @@ test.describe("milestones on the Timeline", () => {
     await expect(page.getByTestId("ms-ghost-words")).toContainText(/^\+ Milestone on [A-Z][a-z]{2} \d{1,2}, 20\d\d$/);
     await shot(page, "ms1-a-open");
     await page.mouse.click(at.x, at.y);
-    await expect(card(page).getByRole("heading", { name: "New milestone" })).toBeVisible();
+    // A measured step ("It counts when" is a measured kind's rule).
+    await pickKind(page, "Sub-goal");
     await card(page).getByLabel("Name").fill("Teams set 3 rules in week 1");
     await card(page).getByLabel("Date").fill("2027-01-20");
-    await card(page).getByLabel("Goal").selectOption({ label: "Grow retention" });
+    await card(page).getByLabel("Goal", { exact: true }).selectOption({ label: "Grow retention" });
     await page.locator('[data-testid="timeline-bar"][aria-label^="Mobile alert push,"]').click();
     await page.locator('[data-testid="timeline-bar"][aria-label^="Alert routing by team,"]').click();
     await expect(card(page).getByTestId("ms-waits-chip")).toHaveCount(2);
@@ -98,8 +106,9 @@ test.describe("milestones on the Timeline", () => {
     await page.getByTestId("zoom-6m").click();
     const at = await pointAtAxis(page, 0.6);
     await page.mouse.click(at.x, at.y);
+    await pickKind(page, "Sub-goal");
     await card(page).getByLabel("Name").fill("Teams set 3 rules in week 1");
-    await card(page).getByLabel("Goal").selectOption({ label: "Grow retention" });
+    await card(page).getByLabel("Goal", { exact: true }).selectOption({ label: "Grow retention" });
     await card(page).getByTestId("ms-add-another").click();
     await expect(card(page).getByRole("heading", { name: "Next milestone" })).toBeVisible();
     await expect(toast(page)).toContainText("M5 Teams set 3 rules in week 1 added to Grow retention");
@@ -190,8 +199,9 @@ test.describe("milestones on the Gantt and Now / Next / Later", () => {
     await page.getByTestId("format-gantt").click();
     const at = await pointAtAxis(page, 0.5);
     await page.mouse.click(at.x, at.y);
+    await pickKind(page, "Sub-goal");
     await card(page).getByLabel("Name").fill("Teams set 3 rules in week 1");
-    await card(page).getByLabel("Goal").selectOption({ label: "Grow retention" });
+    await card(page).getByLabel("Goal", { exact: true }).selectOption({ label: "Grow retention" });
     await page.locator('[data-testid="bar"][data-item="alert-mobile"]').first().click();
     await expect(card(page).getByTestId("ms-waits-chip")).toHaveCount(1);
     await card(page).getByTestId("ms-save").click();
@@ -205,8 +215,9 @@ test.describe("milestones on the Gantt and Now / Next / Later", () => {
     const now = page.getByTestId("ms-board-row").first();
     await expect(now.getByTestId("ms-board-chip").filter({ hasText: "M1 Alerts live for 50 teams · Nov 20" })).toBeVisible();
     await now.getByTestId("ms-board-add").click();
+    await pickKind(page, "Sub-goal");
     await card(page).getByLabel("Name").fill("Teams set 3 rules in week 1");
-    await card(page).getByLabel("Goal").selectOption({ label: "Grow retention" });
+    await card(page).getByLabel("Goal", { exact: true }).selectOption({ label: "Grow retention" });
     await card(page).getByTestId("ms-save").click();
     await expect(now.getByTestId("ms-board-chip").filter({ hasText: /^M\d+ Teams set 3 rules in week 1/ })).toBeVisible();
     await shot(page, "ms1-a-board");
@@ -306,7 +317,11 @@ test.describe("on a phone", () => {
     await axis.evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top - 300));
     const box = (await axis.boundingBox())!;
     await page.touchscreen.tap(Math.max(box.x, 0) + 200, box.y + box.height / 2);
-    await expect(card(page).getByRole("heading", { name: "New milestone" })).toBeVisible();
+    // The kind picker opens as the sheet first; the card after it is the sheet measured below.
+    const picker = (await page.getByTestId("ms-kind-picker").boundingBox())!;
+    expect(picker.x).toBe(0);
+    expect(Math.round(picker.y + picker.height)).toBe(844);
+    await pickKind(page, "Sub-goal");
     const sheet = (await card(page).boundingBox())!;
     expect(sheet.x).toBe(0);
     expect(Math.round(sheet.y + sheet.height)).toBe(844);

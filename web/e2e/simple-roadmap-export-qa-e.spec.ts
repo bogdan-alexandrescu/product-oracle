@@ -105,15 +105,16 @@ test.describe("R1: a phone's exported chart keeps every quarter label whole", ()
   }
 });
 
-test.describe("A phone's Timeline export names every quarter and every goal", () => {
+test.describe("A phone's Timeline export names every quarter and every track band", () => {
   for (const width of [390, 320]) {
     test.describe(`${width} wide`, () => {
       test.use({ viewport: { width, height: 844 }, hasTouch: true });
 
-      test("the PNG and the PDF carry each quarter the page lists, its months, and each goal's lane by name", async ({ page }) => {
+      test("the PNG and the PDF carry each quarter the page lists, its months, and each band's lane by name", async ({ page }) => {
         await open(page, { format: "timeline" });
         await expect(page.getByTestId("timeline-quarter").first()).toBeVisible();
-        // What the phone shows: each quarter ("Q4 2026", "Oct – Dec 2026") and the goal each row serves.
+        // What the phone shows: each quarter ("Q4 2026", "Oct – Dec 2026") and the band each row sits in
+        // (tb-mk: the Timeline's bands are tracks now, then No track, then Below the line, not goals).
         const heads = await page.locator('[data-testid="timeline-quarter"] h3').allInnerTexts();
         const shown = heads.map((h) => {
           const m = /^(Q[1-4] \d{4})\s+((?:Jan|Apr|Jul|Oct) – (?:Mar|Jun|Sep|Dec) \d{4})/.exec(h.replace(/\s+/g, " ").trim());
@@ -121,9 +122,14 @@ test.describe("A phone's Timeline export names every quarter and every goal", ()
           return { label: m![1], months: m![2] };
         });
         expect(shown.length).toBeGreaterThan(1);
-        const rows = await page.locator('[data-testid="timeline-bar"] > span > span:nth-child(2)').allInnerTexts();
-        const goals = [...new Set(rows.map((r) => r.split(" · ").slice(1).join(" · ").trim()).filter(Boolean))];
-        expect(goals.length).toBeGreaterThan(1);
+        // A band reads its track's name (its goal and health mark after it), or "No track".
+        const bands = await page.getByTestId("timeline-band").evaluateAll((els) =>
+          els.map((el) => (el.querySelector('[data-testid="track-name-tip"]') ?? el).textContent!.replace(/\s+/g, " ").trim()),
+        );
+        // Below the line is the export's own divider ("Below the line · 1 item"), not a lane: read apart.
+        const below = bands.includes("Below the line");
+        const tracks = [...new Set(bands.filter((b) => b && b !== "Below the line"))];
+        expect(tracks.length).toBeGreaterThan(1);
         for (const kind of ["PNG", "PDF"] as const) {
           await page.evaluate(() => (window.__poExports = []));
           const { svg, bytes } = await exported(page, kind);
@@ -139,9 +145,10 @@ test.describe("A phone's Timeline export names every quarter and every goal", ()
           const months = await textsIn(page, svg, '[data-testid="chart-axis"] [data-testid="axis-tick"]');
           expect(months.length, `${kind}: month ticks`).toBeGreaterThan(2);
           for (const m of months) expect(m).toMatch(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)( \d{4})?$/);
-          // A lane reads "2 Faster activation · 3 items": its number, its goal whole, its count.
+          // A lane reads "Guided setup track · 16 items": its track whole (then its goal, if any), its count.
           const lanes = (await textsIn(page, svg, '[data-testid="export-lane"]')).map((l) => l.replace(/^\d+\s*/, ""));
-          for (const g of goals) expect(lanes.some((l) => l === g || l.startsWith(`${g} · `)), `${kind}: the lane ${g} is named whole`).toBe(true);
+          for (const t of tracks) expect(lanes.some((l) => l === t || l.startsWith(`${t} · `)), `${kind}: the lane ${t} is named whole`).toBe(true);
+          if (below) expect((await textsIn(page, svg, "text")).some((l) => /^Below the line · \d+ items?$/.test(l)), `${kind}: Below the line is named`).toBe(true);
           if (kind === "PDF") {
             const pdf = bytes.toString("latin1");
             expect(pdf).toContain("/MediaBox [0 0 792 612]");
@@ -158,6 +165,9 @@ test.describe("A phone's Gantt export names each goal lane whole", () => {
 
   test("each lane's goal and metric read whole in the PNG and the PDF", async ({ page }) => {
     await open(page, { format: "gantt" });
+    // tb-mk: the Gantt groups by Track first; a person picks Group by Goal to get the goal lanes.
+    await page.getByTestId("group-goal").click();
+    await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
     const groups = page.locator('[data-testid="chart-labels"] > [data-testid="chart-group"]');
     await expect(groups.first()).toBeVisible();
     // Each lane's goal and, after it, its metric ("Grow retention · Teams active after 90 days").
@@ -176,10 +186,17 @@ test.describe("A phone's Gantt export names each goal lane whole", () => {
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("E-1: the Timeline's export is the zoom shown: its months, window, goals and dated milestones", async ({ page }) => {
+  test("E-1: the Timeline's export is the zoom shown: its months, window, track bands and dated milestones", async ({ page }) => {
     await open(page, { format: "timeline" });
     await expect(page.getByTestId("timeline-row").first()).toBeVisible();
-    const lanes = (await page.getByTestId("timeline-lane").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim().split(" · ")[0].replace(/^\d+\s*/, ""));
+    // tb-mk: the bands are tracks (then No track, Below the line): a band's name is its track's
+    // name, not the goal and health mark after it.
+    const lanes = await page.getByTestId("timeline-lane").evaluateAll((els) =>
+      els.map((el) => {
+        const name = el.querySelector('[data-testid="track-name-tip"]');
+        return name ? name.textContent!.trim() : el.textContent!.replace(/\s+/g, " ").trim().split(" · ")[0].replace(/^\d+\s*/, "");
+      }),
+    );
     expect(lanes.length).toBeGreaterThan(0);
     const files: Record<string, string> = {};
     for (const zoom of ["3m", "1y"] as const) {
@@ -191,7 +208,7 @@ test.describe("desktop", () => {
       expect(months.length, `${zoom}: month ticks`).toBeGreaterThanOrEqual(zoom === "3m" ? 2 : 10);
       for (const m of months) expect(m).toMatch(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)( \d{4})?$/);
       expect(months[0], "the first month names its year").toMatch(/ \d{4}$/);
-      // Every goal's lane is named.
+      // Every track band is named.
       const named = await textsIn(page, svg, '[data-testid="export-lane"]');
       for (const lane of lanes) expect(named.join("\n")).toContain(lane);
       // A milestone in the file says its day.

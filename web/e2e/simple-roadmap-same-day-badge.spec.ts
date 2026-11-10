@@ -49,9 +49,11 @@ async function addOn(page: Page, name: string, date: string) {
   const at = { x: seen.left + 150, y: box.y + box.height / 2 };
   await page.mouse.move(at.x, at.y);
   await page.mouse.click(at.x, at.y);
+  // tb-mk: + Milestone asks for the kind first (Delivery, what a new one was before kinds).
+  await page.getByTestId("ms-kind-picker").getByRole("option", { name: "Delivery" }).click();
   await card(page).getByLabel("Name").fill(name);
   await card(page).getByLabel("Date").fill(date);
-  await card(page).getByLabel("Goal").selectOption({ index: 1 });
+  await card(page).getByLabel("Goal", { exact: true }).selectOption({ index: 1 });
   await card(page).getByTestId("ms-save").click();
   await expect(card(page)).toBeHidden();
 }
@@ -176,4 +178,46 @@ test("phone: on the Gantt, same-day badges on neighbouring days keep apart, clea
   await page.getByTestId("format-gantt").click();
   await expect(page.getByTestId("today-pill")).toBeVisible();
   await badgesClear(page, page.locator('[data-testid="axis-tick"], [data-testid="axis-month"], [data-testid="axis-year"]'));
+});
+
+/*
+ * Card same-day-list-closes: protects = the same-day list closes on Escape (focus back on its
+ * count) and on a click outside it, and a keyboard opens it from the count; fails_when = the
+ * list stays open after Escape or an outside click.
+ */
+test("the same-day list opens from the keyboard and closes on Escape and on a click outside it", async ({ page }) => {
+  await twoOnNov20(page);
+  const count = page.getByTestId("ms-same-day").first();
+  const list = page.getByTestId("ms-same-day-list");
+  await count.focus();
+  await page.keyboard.press("Enter");
+  await expect(list).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(list.getByTestId("ms-same-day-entry").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(list).toBeHidden();
+  await expect(count).toBeFocused();
+  await count.click();
+  await expect(list).toBeVisible();
+  await page.getByTestId("simple-roadmap").getByRole("heading").first().click({ force: true });
+  await expect(list).toBeHidden();
+});
+
+/*
+ * Card same-day-tap-target: protects = on a phone the 12 px same-day count takes a tap 24 px
+ * across (an invisible pad round it); fails_when = a tap 9 px above its middle misses it.
+ */
+test("phone: a tap just beside the same-day count still opens its list", async ({ page }) => {
+  await twoOnNov20(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByTestId("format-gantt").click();
+  const count = page.getByTestId("ms-same-day").first();
+  await count.evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top - 300));
+  const b = await boxOf(count);
+  expect(b.height).toBeLessThan(16);
+  const at = { x: b.x + b.width / 2, y: b.y + b.height / 2 - 9 };
+  const hit = await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('[data-testid="ms-same-day"]'), at);
+  expect(hit).toBe(true);
+  await page.mouse.click(at.x, at.y);
+  await expect(page.getByTestId("ms-same-day-list")).toBeVisible();
 });
