@@ -31,12 +31,21 @@ Test cards (protects / fails_when / no_claim):
   holds only a draft merges that draft into the twin's confirmed item, links the item to the
   kept feature, then merges the feature: the row keeps its rank and now has the item;
   fails_when=the item loses its feature and drops to Not ranked yet (review of #1503).
-- test_merging_a_twin_relinks_its_item_on_another_roadmap: protects=with no company roadmap, a
-  twin's item on another roadmap is linked to the kept feature before the twin's feature
-  goes; fails_when=it is left with no feature (Not ranked yet).
+- test_merging_a_twin_relinks_its_item_on_another_roadmap: protects=while there is a company
+  roadmap, a twin's item on an older roadmap (one Simple does not read) is linked to the kept
+  feature before the twin's feature goes; fails_when=it is left with no feature (re-review of
+  #1503).
+- test_a_twin_on_a_roadmap_the_caller_does_not_decide_is_refused: protects=a twin merge whose
+  item on an older roadmap the caller does not decide is refused (409, naming that roadmap)
+  and changes nothing; it is offered as not applying, with that reason; fails_when=it applies.
+- test_a_twin_merges_only_into_its_same_name_row: protects=Merge into… a feature of another
+  name is refused (422); fails_when=any feature can be merged through it.
+- test_a_twins_item_is_not_linked_beside_the_kept_features_own: protects=a twin's confirmed
+  item is never linked to a kept feature that has its own confirmed item on that roadmap
+  (409, naming it: merge the items first); fails_when=the kept feature gets two.
 - test_merging_a_twin_needs_its_roadmaps_decider: protects=a twin merge whose item the caller
-  may not re-link is refused (403) and changes nothing; it is offered as not applying;
-  fails_when=the feature is deleted and the item left unlinked.
+  may not re-link is refused (409, naming its roadmap) and changes nothing; it is offered as
+  not applying, with that reason; fails_when=the feature is deleted and the item left unlinked.
 """
 
 import uuid
@@ -45,12 +54,12 @@ from types import SimpleNamespace
 from sqlalchemy import select
 
 from oracle.baseline.models import Entity
+from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import priorities
 from oracle.simple.models import SimpleDraft
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import CHANGES, clock, make_people  # noqa: F401
-from tests.test_simple_priorities_api import World
 from tests.test_simple_priorities_company_roadmap_api import REASON, by_feature, company_world
 from tests.test_simple_roadmap_api import Seed
 from tests.test_simple_targets_api import no_llm  # noqa: F401
@@ -265,25 +274,30 @@ async def test_merging_a_twin_keeps_its_item_on_the_kept_row(client):
         assert await s.get(Entity, uuid.UUID(w.ids["gadget-copy"])) is None
 
 
-async def _devices(w, key: str, feature: str) -> None:
-    """A second roadmap, ``devices``, with one confirmed item ``key`` of ``feature``."""
+async def _devices(w, *items: tuple[str, str], decider: str | None = None) -> None:
+    """A second roadmap, ``devices``, with confirmed items (key, feature) titled Ledger; its
+    policy's decider ``decider`` (a role of w.ctx.users), else none."""
     async with tenant_session(w.ctx.tenant_id) as s:
         seed = Seed(s)
         _, pv, rm, rv = await seed.roadmap("devices")
         track = await seed.track(pv, rm)
-        row = await seed.item(rv, pv, key, title="Ledger", track_id=track.id,
-                              feature_id=uuid.UUID(w.ids[feature]))  # fmt: skip
+        if decider is not None:
+            s.add(DocumentReviewPolicy(document_id=rm.id, decider_id=w.ctx.users[decider].id))
+        for n, (key, feature) in enumerate(items):
+            row = await seed.item(rv, pv, key, title="Ledger", track_id=track.id, position=n,
+                                  feature_id=uuid.UUID(w.ids[feature]))  # fmt: skip
+            await s.flush()
+            w.ids[key] = str(row.id)
         await s.commit()
-        w.ids[key] = str(row.id)
 
 
 async def test_merging_a_twin_relinks_its_item_on_another_roadmap(client):
-    # No company roadmap: every roadmap feeds Simple.
-    w = await World(await make_people()).build()
+    # payments is the company roadmap: Simple reads it alone, devices is an older one.
+    w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
-    await _devices(w, "dev-1", "ledger-copy")
+    await _devices(w, ("dev-1", "ledger-copy"))
     [twin] = by_feature(await w.read(client), w)["ledger"]["twins"]
-    assert (twin["item_id"], twin["merge"], twin["applies"]) == (w.ids["dev-1"], "entity", True)
+    assert (twin["merge"], twin["applies"], twin["blocked"]) == ("entity", True, None), twin
     r = await client.post(
         _merge_url(w, "ledger-copy"), json={"into": w.ids["ledger"]}, headers=w.ctx.as_("owner")
     )
@@ -291,8 +305,56 @@ async def test_merging_a_twin_relinks_its_item_on_another_roadmap(client):
     assert r.json()["relinked"] == ["dev-1"], r.text
     out = await w.read(client)
     assert by_feature(out, w)["ledger"]["twins"] == []
-    assert w.ids["dev-1"] not in [u["item_id"] for u in out["unranked"]], "Not ranked yet"
-    assert await _feature_of(w, "dev-1") == w.ids["ledger"]
+    assert await _feature_of(w, "dev-1") == w.ids["ledger"], "the item was left with no feature"
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert await s.get(Entity, uuid.UUID(w.ids["ledger-copy"])) is None
+
+
+async def test_a_twin_on_a_roadmap_the_caller_does_not_decide_is_refused(client):
+    w = await company_world()
+    await _features(w, ("ledger-copy", "Ledger", 9))
+    await _devices(w, ("dev-1", "ledger-copy"), decider="decider")
+    [twin] = by_feature(await w.read(client, "approver"), w)["ledger"]["twins"]
+    assert (twin["merge"], twin["applies"]) == ("entity", False), twin
+    assert "Devices" in (twin["blocked"] or ""), twin
+    r = await client.post(
+        _merge_url(w, "ledger-copy"), json={"into": w.ids["ledger"]}, headers=w.ctx.as_("approver")
+    )
+    assert r.status_code == 409, r.text
+    assert "Devices" in r.json()["detail"], r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert await s.get(Entity, uuid.UUID(w.ids["ledger-copy"])) is not None
+        item = await s.get(RoadmapItem, uuid.UUID(w.ids["dev-1"]))
+        assert str(item.feature_id) == w.ids["ledger-copy"]
+
+
+async def test_a_twin_merges_only_into_its_same_name_row(client):
+    w = await company_world()
+    await _features(w, ("ledger-copy", "Ledger", 9))
+    r = await client.post(
+        _merge_url(w, "ledger-copy"), json={"into": w.ids["insights"]}, headers=w.ctx.as_("owner")
+    )
+    assert r.status_code == 422, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert await s.get(Entity, uuid.UUID(w.ids["ledger-copy"])) is not None
+
+
+async def test_a_twins_item_is_not_linked_beside_the_kept_features_own(client):
+    w = await company_world()
+    await _features(w, ("ledger-copy", "Ledger", 9))
+    await _devices(w, ("dev-0", "ledger"), ("dev-1", "ledger-copy"))
+    [twin] = by_feature(await w.read(client), w)["ledger"]["twins"]
+    assert (twin["merge"], twin["applies"]) == ("entity", False), twin
+    assert "dev-0" in (twin["blocked"] or ""), twin
+    r = await client.post(
+        _merge_url(w, "ledger-copy"), json={"into": w.ids["ledger"]}, headers=w.ctx.as_("owner")
+    )
+    assert r.status_code == 409, r.text
+    assert "dev-0" in r.json()["detail"], r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert await s.get(Entity, uuid.UUID(w.ids["ledger-copy"])) is not None
+        item = await s.get(RoadmapItem, uuid.UUID(w.ids["dev-1"]))
+        assert str(item.feature_id) == w.ids["ledger-copy"]
 
 
 async def test_merging_a_twin_needs_its_roadmaps_decider(client):
@@ -303,10 +365,12 @@ async def test_merging_a_twin_needs_its_roadmaps_decider(client):
     # The approver may merge Ground Truth features, but payments has its own decider.
     [twin] = by_feature(await w.read(client, "approver"), w)["gadget"]["twins"]
     assert (twin["merge"], twin["applies"]) == ("entity", False), twin
+    assert "Payments" in (twin["blocked"] or ""), twin
     r = await client.post(
         _merge_url(w, "gadget-copy"), json={"into": w.ids["gadget"]}, headers=w.ctx.as_("approver")
     )
-    assert r.status_code == 403, r.text
+    assert r.status_code == 409, r.text
+    assert "Payments" in r.json()["detail"], r.text
     async with tenant_session(w.ctx.tenant_id) as s:
         assert await s.get(Entity, uuid.UUID(w.ids["gadget-copy"])) is not None
         item = await s.get(RoadmapItem, uuid.UUID(w.ids["pay-9"]))
