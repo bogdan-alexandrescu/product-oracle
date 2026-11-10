@@ -99,6 +99,46 @@ function Choice({
   );
 }
 
+/** The due day's input: it saves on Enter, on leaving it or on a picker choice, never on a
+ * typed part of a day ('1' on the way to '12'); Escape leaves it as it was. */
+function DueInput({ task, save, done }: { task: Task; save: Save; done: () => void }) {
+  // A key pressed since the picker was last opened: its changes wait for Enter or leaving.
+  const typed = useRef(false);
+  const over = useRef(false);
+  const finish = (el: HTMLInputElement | null) => {
+    if (over.current) return;
+    over.current = true;
+    done();
+    // A half-typed day reads as none: it is left as it was, never cleared.
+    if (!el || el.validity.badInput) return;
+    const v = el.value || null;
+    if (v !== (task.due_date ?? null))
+      void save.edit(task, { due_date: v }, `Due date of “${task.title}” changed`);
+  };
+  return (
+    <input
+      type="date"
+      aria-label={`Due date of ${task.title}`}
+      className={INPUT}
+      defaultValue={task.due_date ?? ""}
+      autoFocus
+      onMouseDown={() => (typed.current = false)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          finish(e.currentTarget);
+        } else if (e.key === "Escape") {
+          // Only the input closes, not the panel.
+          e.stopPropagation();
+          finish(null);
+        } else typed.current = true;
+      }}
+      onBlur={(e) => finish(e.currentTarget)}
+      onChange={(e) => !typed.current && finish(e.currentTarget)}
+    />
+  );
+}
+
 function TaskRow({
   task,
   canChange,
@@ -192,24 +232,7 @@ function TaskRow({
           </button>
           {" · "}
           {open === "due" ? (
-            <input
-              type="date"
-              aria-label={`Due date of ${task.title}`}
-              className={INPUT}
-              defaultValue={task.due_date ?? ""}
-              autoFocus
-              onBlur={done}
-              onChange={(e) => {
-                const v = e.target.value || null;
-                done();
-                if (v !== (task.due_date ?? null))
-                  void save.edit(
-                    task,
-                    { due_date: v },
-                    `Due date of “${task.title}” changed`,
-                  );
-              }}
-            />
+            <DueInput task={task} save={save} done={done} />
           ) : (
             <button
               type="button"

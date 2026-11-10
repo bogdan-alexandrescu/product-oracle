@@ -951,7 +951,9 @@ export function FloatingCard({
   const cutIt = async () => {
     const parts = partsWords(item.parts.length, "stay");
     const rows = [{ label: "Needed by", value: neededBy.length ? `${andWords(neededBy.map(codeName))} ${neededBy.length === 1 ? "loses" : "lose"} it` : "Nothing" }];
-    if (!(await confirmInPage({ action: "Cut", title: `Cut ${item.title}?`, message: parts, rows, cancel: "Cancel" }))) return;
+    // Who may not decide on it is asked to propose the cut, not to cut.
+    const ask = item.can_decide ? { action: "Cut", title: `Cut ${item.title}?` } : { action: "Propose", title: `Propose cutting ${item.title}?` };
+    if (!(await confirmInPage({ ...ask, message: parts, rows, cancel: "Cancel" }))) return;
     await act({ applied: `Cut ${item.title} from the roadmap`, proposed: `cut ${item.title} from the roadmap` }, { op: "set_status", target: { item_id: item.id }, before: { status: item.status }, after: { status: "cut" } }, parts || undefined);
   };
   const restore = () =>
@@ -1025,7 +1027,7 @@ export function FloatingCard({
               {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
               {menuItem(
                 item.can_decide ? "Move to Trash…" : "Propose: move to Trash…",
-                () => void remove({ id: item.id, title: item.title, parts: item.parts, rows: pointsAt(item, items) }),
+                () => void remove({ id: item.id, title: item.title, parts: item.parts, rows: pointsAt(item, items), propose: !item.can_decide, deciders: item.deciders }),
                 true,
               )}
             </div>

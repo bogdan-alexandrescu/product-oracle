@@ -565,11 +565,44 @@ async def _task_back(db: AsyncSession, entry: TrashEntry) -> None:
         return
     from oracle.simple.models import TASK_STATUSES, RoadmapItemTask
 
-    row = await db.get(RoadmapItemTask, entry.root_id)
+    # Read as Trash does: a task whose feature is in Trash is hidden from other reads.
+    stmt = select(RoadmapItemTask).where(RoadmapItemTask.id == entry.root_id)
+    row = await db.scalar(stmt.execution_options(**ALL))
     if row is not None and row.status == "dropped":
         before = entry.root.get("status_before")
         row.status = before if before in TASK_STATUSES and before != "dropped" else "todo"
         await db.flush()
+
+
+async def _task_feature_in_trash(db: AsyncSession, entry: TrashEntry) -> list[dict[str, Any]]:
+    """A restored task whose feature is still in Trash is back on it, shown when the feature
+    is restored: the answer says so, naming the feature ("it shows when F-3 Ledger is
+    restored")."""
+    if entry.root_type != "task":
+        return []
+    from oracle.roadmap.models import RoadmapItem
+    from oracle.simple.models import RoadmapItemTask
+
+    task = await db.scalar(
+        select(RoadmapItemTask).where(RoadmapItemTask.id == entry.root_id).execution_options(**ALL)
+    )
+    if task is None:
+        return []
+    # Its feature by roadmap and key, as the item's tasks are read: in Trash on every row.
+    stmt = select(RoadmapItem).where(
+        RoadmapItem.roadmap_document_id == task.roadmap_document_id,
+        RoadmapItem.item_key == task.item_key,
+    )
+    rows = list(await db.scalars(stmt.execution_options(**ALL)))
+    if not rows or any(r.deleted_at is None for r in rows):
+        return []
+    item = next((r for r in rows if r.id == task.item_id), rows[0])
+    held = await db.get(TrashEntry, item.trash_entry_id) if item.trash_entry_id else None
+    code = (held.root.get("code") if held else None) or None
+    name = f"{code} {item.title}" if code else item.title
+    feature = {"type": "feature", "id": str(item.id), "slug": item.item_key,
+               "title": item.title, "kind": "feature", "code": code}  # fmt: skip
+    return [{"item": feature, "reason": f"it shows when {name} is restored"}]
 
 
 async def _track_items_back(db: AsyncSession, entry: TrashEntry) -> None:
@@ -709,7 +742,11 @@ async def restore_entry(
     await requests_service.relink_documents(
         db, principal, entry.root.get("released_requests") or []
     )
-    not_restored = [*dropped, *await _not_restored(db, entry)]
+    not_restored = [
+        *dropped,
+        *await _not_restored(db, entry),
+        *await _task_feature_in_trash(db, entry),
+    ]
     await audit.record(
         db,
         principal,

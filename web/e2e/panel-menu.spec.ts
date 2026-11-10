@@ -145,8 +145,8 @@ for (const size of SIZES)
 
         // As a row's Delete: who may not decide proposes it.
         await menu(page, "Propose: move to Trash…");
-        await tap(page.getByRole("alertdialog").getByRole("button", { name: "Move to Trash" }));
-        await expect(toasts(page)).toContainText("Sent: delete Alert history export. Its decider decides.");
+        await tap(page.getByRole("alertdialog", { name: "Propose moving Alert history export to Trash?" }).getByRole("button", { name: "Propose", exact: true }));
+        await expect(toasts(page)).toContainText(/Proposed: move Alert history export to Trash; it waits for \S.+ in Needs a decision/);
         await expect(panel(page)).toBeVisible();
         await expect(row(page, "alert-export")).toHaveCount(1);
       });

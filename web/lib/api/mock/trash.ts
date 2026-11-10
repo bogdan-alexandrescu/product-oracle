@@ -253,8 +253,15 @@ export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string,
   // trash._task_back: a dropped task goes back to the status it had.
   const task = root.type === "task" ? simple?.targets?.[root.id] : undefined;
   if (task && task.status === "dropped") task.status = entry.task_status ?? "todo";
+  // trash._task_feature_in_trash: its feature still in Trash, the answer says it shows when that is restored.
+  const ids = simple && "ids" in simple ? (simple as SimpleDb).ids : {};
+  const key = task ? Object.keys(ids).find((k) => ids[k] === task.item_id) : undefined;
+  const held = key ? db.entries.find((e) => e.out.root.type === "feature" && e.out.root.slug === key) : undefined;
   db.entries = db.entries.filter((e) => e !== entry);
-  return entryOut(entry, now);
+  const out = entryOut(entry, now);
+  if (!held) return out;
+  const f = held.out.root;
+  return { ...out, not_restored: [{ item: f, reason: `it shows when ${f.code ? `${f.code} ${f.title}` : f.title} is restored` }] };
 }
 
 function take<T>(rows: T[], keep: (row: T) => boolean): T[] {

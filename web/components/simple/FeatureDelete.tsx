@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { confirmInPage, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
-import { partsWords } from "@/app/simple/roadmap/_lib";
+import { deciderWords, partsWords } from "@/app/simple/roadmap/_lib";
 
 /**
  * trash-features-goals: a roadmap feature's Delete from its row (the Gantt or Timeline row's
@@ -16,11 +16,14 @@ import { partsWords } from "@/app/simple/roadmap/_lib";
  * how many stay on the roadmap (Delete or Cancel), and says it again once done.
  */
 export function useFeatureDelete(reload: () => Promise<unknown>, toast: (ask: ToastAsk) => void = dsToast, onGone?: (id: string) => void) {
-  return async (f: { id: string; title: string; parts?: readonly unknown[]; rows?: { label: string; value: string }[] }): Promise<void> => {
+  return async (f: { id: string; title: string; parts?: readonly unknown[]; rows?: { label: string; value: string }[]; propose?: boolean; deciders?: string[] }): Promise<void> => {
     const parts = partsWords(f.parts?.length ?? 0, "stay");
     // pm2 'List what points at it' (owner's pick, Nov 5): the panel's Delete always asks, listing what points at it.
+    // Who may not decide on it (`propose`) is asked to propose it, not to move it.
     if (f.rows) {
-      const ask = { action: "Move to Trash", title: `Move ${f.title} to Trash?`, message: parts, rows: f.rows, destructive: true, cancel: "Cancel" };
+      const ask = f.propose
+        ? { action: "Propose", title: `Propose moving ${f.title} to Trash?`, message: parts, rows: f.rows, cancel: "Cancel" }
+        : { action: "Move to Trash", title: `Move ${f.title} to Trash?`, message: parts, rows: f.rows, destructive: true, cancel: "Cancel" };
       if (!(await confirmInPage(ask))) return;
     } else if (parts && !(await confirmInPage({ action: "Delete", title: `Delete ${f.title}?`, message: parts, destructive: true, cancel: "Cancel" }))) return;
     try {
@@ -29,7 +32,7 @@ export function useFeatureDelete(reload: () => Promise<unknown>, toast: (ask: To
       if (out.entry) onGone?.(f.id);
       await reload();
       if (!out.entry) {
-        toast({ message: `Sent: delete ${f.title}. Its decider decides.` });
+        toast({ message: f.deciders ? `Proposed: move ${f.title} to Trash; it waits for ${deciderWords(f.deciders)} in Needs a decision` : `Sent: delete ${f.title}. Its decider decides.` });
         return;
       }
       toast({
