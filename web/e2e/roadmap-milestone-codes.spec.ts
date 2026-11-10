@@ -171,3 +171,22 @@ test("the band's +N lists the milestones it folds by name and day, and each open
   await entry.click();
   await expect(page.getByTestId("ms-card").getByLabel("Name")).toHaveValue(name);
 });
+
+/*
+ * Card roadmap-band-joined (the owner's "Join whenever names match", Nov 9), on
+ * "home-milestones-goals-fold": protects = the Setup guide PRD's "M1 Measured" under a goal, beside
+ * another goal's M1, joins the track's "M1 · Measured and mapped": its band label reads the longer
+ * name and its tip lists the other ("Also: M1 Measured"); fails_when = the band shows "Measured"
+ * alone, or the other name shows nowhere.
+ */
+test("a joined milestone's band label reads the longer name, its tip the other", async ({ page }) => {
+  await open(page, "home-milestones-goals-fold");
+  const label = labels(page).filter({ hasText: /^M\d+ Measured and mapped$/ });
+  await expect(label).toHaveCount(1);
+  const code = (await label.innerText()).split(" ")[0];
+  await label.hover();
+  const tip = page.getByTestId("ms-band-tip");
+  await expect(tip).toBeVisible();
+  await expect(tip.getByTestId("ms-band-also")).toHaveText(`Also: ${code} Measured`);
+  await expect(labels(page).filter({ hasText: /^M\d+ Measured$/ })).toHaveCount(0);
+});

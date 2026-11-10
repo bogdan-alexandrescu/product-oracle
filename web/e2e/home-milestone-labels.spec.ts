@@ -312,22 +312,23 @@ test("a roadmap milestone of another name keeps its own row; a typed code never 
 /*
  * Card home-milestone-fold (the owner's of Nov 9), on "home-milestones-fold": protects = a
  * roadmap's own milestone of no goal folds into the track milestone of its code whatever its name:
- * one row with the track's name ("M1 · Measured"), its (i) listing every item and naming the
- * folded one ("Also: M1 Measured and mapped"); a goal's milestone of that code ("M1 · Return
- * pilot") keeps its own row; fails_when = "M1 · Measured and mapped" is a row of its own, the
- * folded name shows nowhere, or the goal's M1 joins the track's row.
+ * one row with the longer name ("M1 · Measured and mapped", the owner's "Join whenever names
+ * match"), its (i) listing every item and naming the track's ("Also: M1 Measured"); a goal's
+ * milestone of that code ("M1 · Return pilot") keeps its own row; fails_when = "M1 · Measured" is
+ * a row of its own, the other name shows nowhere, or the goal's M1 joins the track's row.
  */
 test("a roadmap's own milestone of another name folds into the track's row of its code; a goal's stays apart", async ({ page }) => {
   await home(page, 1440, ADMIN.email, HOME_MILESTONE_FOLD_SCENARIO);
   const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
-  const measured = oneLabel(labels, /^M\d+ · Measured · 3 items$/);
+  const measured = oneLabel(labels, /^M\d+ · Measured and mapped · 3 items$/);
+  expect(labels.filter((l) => /^M\d+ · Measured · /.test(l))).toEqual([]);
   const returnPilot = oneLabel(labels, /^M\d+ · Return pilot · 1 item$/);
   expect(measured.match(/^M\d+/)![0]).not.toBe(returnPilot.match(/^M\d+/)![0]);
   expect(await itemsOf(page, measured)).toEqual([["Health log", "Sample data import", "Setup checklist"]]);
-  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M\d+ · Measured · 3 items$/ }) });
+  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M\d+ · Measured and mapped · 3 items$/ }) });
   await line.getByTestId("home-strip-items-tip").click();
-  // The folded one's name still shows in its (i), whatever the row's own code now is.
-  await expect(line.getByRole("tooltip")).toContainText("Measured and mapped");
+  // The other name still shows in its (i), whatever the row's own code now is.
+  await expect(line.getByRole("tooltip").getByText(/^Also: /)).toHaveText(`Also: ${measured.split(" · ")[0]} Measured`);
   await page.keyboard.press("Escape");
   expect(await itemsOf(page, returnPilot)).toEqual([["Welcome video"]]);
 });
@@ -406,80 +407,83 @@ test("a PRD's own goal milestone whose name leads the track's folds into the tra
 });
 
 /*
- * Card home-milestone-goals-fold, on "home-milestones-goals-fold": protects = a PRD's own M1
- * "Measured" under a goal, another goal's "M1 · First wins" and the track's "M1 · Measured and
- * mapped" on one roadmap are three rows, each with its own roadmap code (roadmap-milestone-codes:
- * the API folds a goal's milestone into a track's only as the roadmap's only one of its old code),
- * each with its own items; fails_when = a name shows nowhere, two rows share a code, or an item
- * sits in the wrong row.
+ * Card home-milestone-goals-fold, on "home-milestones-goals-fold" (the owner's "Join whenever
+ * names match", Nov 9): protects = a PRD's own M1 "Measured" under a goal joins the track's "M1 ·
+ * Measured and mapped" beside another goal's "M1 · First wins" on one roadmap: one row with the
+ * longer name, the other in its (i) ("Also: M1 Measured"), and First wins its own row and code;
+ * fails_when = "Measured" is a row of its own (the old rule: the roadmap's only one of its old
+ * code), a name shows nowhere, two rows share a code, or an item sits in the wrong row.
  */
-test("a goal milestone beside another goal's of its old code keeps its own row and code, no name hidden", async ({ page }) => {
+test("a goal milestone joins the track's of a matching name beside another goal's of its old code, no name hidden", async ({ page }) => {
   await home(page, 1440, ADMIN.email, HOME_MILESTONE_GOALS_FOLD_SCENARIO);
   const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
-  const measured = oneLabel(labels, /^M\d+ · Measured · 2 items$/);
+  expect(labels.filter((l) => /^M\d+ · Measured · /.test(l))).toEqual([]);
   const wins = oneLabel(labels, /^M\d+ · First wins · 1 item$/);
-  const mapped = oneLabel(labels, /^M\d+ · Measured and mapped · 1 item$/);
-  expect(new Set([measured, wins, mapped].map((l) => l.split(" · ")[0])).size).toBe(3);
-  expect(await itemsOf(page, measured)).toEqual([["Sample data import", "Setup checklist"]]);
+  const mapped = oneLabel(labels, /^M\d+ · Measured and mapped · 3 items$/);
+  expect(wins.split(" · ")[0]).not.toBe(mapped.split(" · ")[0]);
+  expect(await itemsOf(page, mapped)).toEqual([["Health log", "Sample data import", "Setup checklist"]]);
   expect(await itemsOf(page, wins)).toEqual([["Welcome video"]]);
-  expect(await itemsOf(page, mapped)).toEqual([["Health log"]]);
+  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: mapped }) });
+  await line.getByTestId("home-strip-items-tip").click();
+  await expect(line.getByRole("tooltip").getByText(/^Also: /)).toHaveText(`Also: ${mapped.split(" · ")[0]} Measured`);
 });
 
 /*
- * Card home-milestone-bare-track (review of PR 1489), on "home-milestones-bare-track": protects =
- * a bare-code track milestone ("M1") takes a goal's milestone only as the roadmap's only one of
- * its code, even after a milestone of no goal joined first and named its row: "M1 · Measured"
- * (Health log, Setup checklist) and Faster activation's "M1 · Measured and mapped" (Sample data
- * import) are two rows; fails_when = the goal's joins the row named by the one of no goal.
+ * Card home-milestone-bare-track (review of PR 1489; the owner's "Join whenever names match",
+ * Nov 9), on "home-milestones-bare-track": protects = a bare-code track milestone ("M1") takes
+ * Onboarding's own "M1 · Measured" and Faster activation's "M1 · Measured and mapped" (a bare
+ * code is no name, so both match): one row with the longer name, the other in its (i);
+ * fails_when = two rows, or a name shows nowhere.
  */
-test("a bare-code track takes a goal's milestone only as its roadmap's only one, whatever joined first", async ({ page }) => {
+test("a bare-code track takes a goal's milestone beside one of no goal: one row, the longer name, the other in its (i)", async ({ page }) => {
   await home(page, 1440, ADMIN.email, HOME_MILESTONE_BARE_TRACK_SCENARIO);
   const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
-  // roadmap-milestone-codes: two rows, each its own roadmap code.
-  const measured = oneLabel(labels, /^M\d+ · Measured · 2 items$/);
-  const mapped = oneLabel(labels, /^M\d+ · Measured and mapped · 1 item$/);
-  expect(measured.split(" · ")[0]).not.toBe(mapped.split(" · ")[0]);
-  expect(await itemsOf(page, measured)).toEqual([["Health log", "Setup checklist"]]);
-  expect(await itemsOf(page, mapped)).toEqual([["Sample data import"]]);
+  expect(labels.filter((l) => /^M\d+ · Measured · /.test(l))).toEqual([]);
+  const mapped = oneLabel(labels, /^M\d+ · Measured and mapped · 3 items$/);
+  expect(await itemsOf(page, mapped)).toEqual([["Health log", "Sample data import", "Setup checklist"]]);
+  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: mapped }) });
+  await line.getByTestId("home-strip-items-tip").click();
+  await expect(line.getByRole("tooltip").getByText(/^Also: /)).toHaveText(`Also: ${mapped.split(" · ")[0]} Measured`);
 });
 
 /*
- * Card home-milestone-lead-goals (review of PR 1489), on "home-milestones-lead-goals": protects =
- * two goals' milestones of one old code ("M1 · Measured", "M1 · Measured and") beside the track's
- * "M1 · Measured and mapped" each show once, each with its own roadmap code and its own items
- * (roadmap-milestone-codes: two goals' of one old code never fold into the track's);
- * fails_when = a name shows nowhere or twice, or two rows share a code.
+ * Card home-milestone-lead-goals (review of PR 1489; the owner's "Join whenever names match",
+ * Nov 9), on "home-milestones-lead-goals": protects = two goals' milestones of one old code
+ * ("M1 · Measured", "M1 · Measured and") whose names lead the track's "M1 · Measured and mapped"
+ * both join it: one row, its (i) listing each other name once; fails_when = a name shows
+ * nowhere or as a row of its own.
  */
-test("two goals' milestones of one old code beside the track's each show once, with their own codes", async ({ page }) => {
+test("two goals' milestones of one old code whose names lead the track's join its row, each other name once in its (i)", async ({ page }) => {
   await home(page, 1440, ADMIN.email, HOME_MILESTONE_LEAD_GOALS_SCENARIO);
   const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
-  const measured = oneLabel(labels, /^M\d+ · Measured · 1 item$/);
-  const and = oneLabel(labels, /^M\d+ · Measured and · 1 item$/);
-  const mapped = oneLabel(labels, /^M\d+ · Measured and mapped · 1 item$/);
-  expect(new Set([measured, and, mapped].map((l) => l.split(" · ")[0])).size).toBe(3);
-  expect(await itemsOf(page, measured)).toEqual([["Setup checklist"]]);
-  expect(await itemsOf(page, and)).toEqual([["Welcome video"]]);
-  expect(await itemsOf(page, mapped)).toEqual([["Health log"]]);
+  expect(labels.filter((l) => /^M\d+ · Measured( and)? · /.test(l))).toEqual([]);
+  const mapped = oneLabel(labels, /^M\d+ · Measured and mapped · 3 items$/);
+  expect(await itemsOf(page, mapped)).toEqual([["Health log", "Setup checklist", "Welcome video"]]);
+  const code = mapped.split(" · ")[0];
+  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: mapped }) });
+  await line.getByTestId("home-strip-items-tip").click();
+  await expect(line.getByRole("tooltip").getByText(/^Also: /)).toHaveText(`Also: ${code} Measured, ${code} Measured and`);
 });
 
 /*
  * Card home-milestone-two-roadmaps, on "home-milestones-two-roadmaps" (and "-swapped", Alerts'
  * milestones first): protects = each roadmap's milestones join the Guided setup track's bare "M1"
  * on their own, so Onboarding's "M1 · Measured" and Alerts' "M1 · Rules ready" both join its one
- * row, the other name in its (i), whichever roadmap comes first; fails_when = a name one roadmap
- * lent the track decides the other roadmap's (Rules ready its own row, or the rows differ by order).
+ * row, the longer name shown ("Rules ready", the owner's "Join whenever names match"), the other
+ * in its (i), whichever roadmap comes first; fails_when = a name one roadmap lent the track
+ * decides the other roadmap's (a name its own row, or the rows differ by order).
  */
 for (const scenario of [HOME_MILESTONE_TWO_ROADMAPS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO]) {
   test(`each roadmap's milestone joins a bare-code track on its own, whichever roadmap comes first (${scenario})`, async ({ page }) => {
     await home(page, 1440, ADMIN.email, scenario);
     const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
-    // roadmap-milestone-codes: the row reads the track's roadmap code; "Rules ready" has no row of its own.
-    const measured = oneLabel(labels, /^M\d+ · Measured · 4 items$/);
-    expect(labels.filter((l) => /Rules ready/.test(l))).toEqual([]);
-    expect(await itemsOf(page, measured)).toEqual([["Alert rules engine", "Alert snooze", "Health log", "Setup checklist"]]);
-    const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: measured }) });
+    // roadmap-milestone-codes: the row reads the track's roadmap code and the longer name; "Measured" has no row of its own.
+    const rules = oneLabel(labels, /^M\d+ · Rules ready · 4 items$/);
+    expect(labels.filter((l) => /Measured/.test(l))).toEqual([]);
+    expect(await itemsOf(page, rules)).toEqual([["Alert rules engine", "Alert snooze", "Health log", "Setup checklist"]]);
+    const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: rules }) });
     await line.getByTestId("home-strip-items-tip").click();
-    await expect(line.getByRole("tooltip").getByText(/^Also: /)).toHaveText(/^Also: M\d+ Rules ready$/);
+    await expect(line.getByRole("tooltip").getByText(/^Also: /)).toHaveText(`Also: ${rules.split(" · ")[0]} Measured`);
   });
 }
 
