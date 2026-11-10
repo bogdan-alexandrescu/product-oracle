@@ -424,6 +424,8 @@ class Ctx:
         self.plan_span: tuple[date, date] | None = None
         # roadmap-talk: the item whose talk this is ("it"), the company's goals.
         self.item: service.Entry | None = None
+        # item-talk-reads: the item's Ground Truth feature (None: it has none).
+        self.item_feature: Any = None
         self.talk_goals: list[Any] = []
         # meet-chat-right-prd: a meeting's chat reads only the meeting's PRD.
         self.prd: MeetingPrd | None = None

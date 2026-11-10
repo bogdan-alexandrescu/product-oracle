@@ -1335,6 +1335,27 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
     // As the API: its own read of when / who is the roadmap's; the reader's answers cite the PRD when the item has one.
     const source = i.code && !/\b(when|who)\b/i.test(t) ? `From the PRD · ${about(i)}` : `From the roadmap · ${about(i)}`;
     if (/\bwho\b.*\bown/i.test(t)) return { kind: "answer", body: i.owner ? `${i.owner.name} owns ${i.title}.` : `${i.title} has no owner yet.`, cards: [], source };
+    // item-talk-reads: as the API's item context, what it waits on, what waits on it and its goal's measure.
+    const named = (ids: string[]) => ids.map((id) => items.find((x) => x.id === id)).filter((x): x is Item => !!x).map((x) => (x.code ? `${x.code} ${x.title}` : x.title));
+    const listed = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+    const roadmap = `From the roadmap · ${about(i)}`;
+    // "Which items depend on it?" asks what needs it, as "What needs it?" does.
+    if (new RegExp(`\\b(?:what|who|which)\\b.*\\b(?:needs?|depends? on|wait(?:s|ing)? on) ${it}\\b`, "i").test(t)) {
+      const by = named(i.needed_by);
+      return { kind: "answer", body: by.length ? `${listed(by)} ${by.length === 1 ? "depends" : "depend"} on ${i.title}.` : `Nothing depends on ${i.title}.`, cards: [], source: roadmap };
+    }
+    if (/\b(?:depend|wait(?:s|ing)? on|blocked)/i.test(t)) {
+      const on = named(i.depends_on);
+      return { kind: "answer", body: on.length ? `${i.title} depends on ${listed(on)}.` : `${i.title} depends on nothing.`, cards: [], source: roadmap };
+    }
+    if (/\b(?:goal|measured?)\b/i.test(t) && i.goal) {
+      const g = i.goal;
+      // As the API's goal_measure: the target with its unit (goal_buckets._target), its due day month first.
+      const target = g.target ? (/^[\d.]+$/.test(g.target) && g.unit ? (g.unit === "%" ? `${g.target}%` : `${g.target} ${g.unit}`) : g.target) : null;
+      const now = [g.current != null ? `now ${g.current}${g.unit === "%" ? "%" : g.unit ? ` ${g.unit}` : ""}` : "", target ? `target ${target}${g.due ? ` by ${dayWords(g.due, true)}` : ""}` : ""].filter(Boolean).join(", ");
+      const measure = g.metric ? `, measured by ${g.metric}${now ? ` (${now})` : ""}` : "";
+      return { kind: "answer", body: `${i.title} serves the goal ${g.title}${measure}.`, cards: [], source: roadmap };
+    }
     const why = i.reasons[0] ? ` ${i.reasons[0]}` : "";
     const outcome = i.outcome ? ` Its outcome: ${i.outcome}.` : "";
     return { kind: "answer", body: `${i.title} runs ${usSpan(i.start.date, i.end.date)}; it is ${i.status.replace("_", " ")}.${outcome}${why}`, cards: [], source };
