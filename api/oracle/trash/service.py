@@ -283,18 +283,36 @@ def preview(resolved: Resolved) -> dict[str, Any]:
     }
 
 
-async def feeds(db: AsyncSession, resolved: Resolved) -> list[dict[str, Any]]:
+async def feeds(
+    db: AsyncSession, resolved: Resolved
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """delete-prd-simple: the roadmap items and tracks the PRDs of a delete feed, each once
-    (an item on several roadmaps by its key). They stay; the delete dialog names them."""
-    from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackPrd
+    (an item on several roadmaps by its key), as (what stays, what goes with it). An item on
+    a roadmap (or draft roadmap) that goes to Trash with the PRD leaves every read with it
+    (oracle.trash.filter), as does a track holding no PRD outside the delete; the rest stay,
+    without it. The delete dialog names both."""
+    from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem, TrackPrd
 
     ids = {d.id for d in resolved.documents if d.kind == "prd"}
     if not ids:
-        return []
+        return [], []
+    gone = {d.id for d in resolved.documents}
+    drafts = select(DraftRoadmap.id).where(DraftRoadmap.prd_document_id.in_(gone))
     items = await db.scalars(
         select(RoadmapItem)
         .where(RoadmapItem.prd_document_id.in_(ids))
         .order_by(RoadmapItem.title, RoadmapItem.id)
+    )
+    going_items = set(
+        await db.scalars(
+            select(RoadmapItem.id).where(
+                RoadmapItem.prd_document_id.in_(ids),
+                or_(
+                    RoadmapItem.roadmap_document_id.in_(gone),
+                    RoadmapItem.draft_roadmap_id.in_(drafts),
+                ),
+            )
+        )
     )
     tracks = await db.scalars(
         select(ProductTrack)
@@ -302,11 +320,24 @@ async def feeds(db: AsyncSession, resolved: Resolved) -> list[dict[str, Any]]:
         .where(TrackPrd.prd_document_id.in_(ids), TrackPrd.state == "linked")
         .order_by(ProductTrack.title, ProductTrack.id)
     )
-    out: dict[tuple[str, str], dict[str, Any]] = {}
+    # As filter._some_prd_live: a track stays while it holds a PRD not in Trash (the
+    # session's filter leaves out links to one) and not in this delete.
+    kept_tracks = set(
+        await db.scalars(
+            select(TrackPrd.track_id).where(
+                TrackPrd.track_id.is_not(None), TrackPrd.prd_document_id.not_in(gone)
+            )
+        )
+    )
+    stays: dict[tuple[str, str], dict[str, Any]] = {}
+    goes: dict[tuple[str, str], dict[str, Any]] = {}
     for row in [*items, *tracks]:
         said = describe(row)
-        out.setdefault((said["type"], said["slug"] or said["id"]), said)
-    return list(out.values())
+        key = (said["type"], said["slug"] or said["id"])
+        going = row.id in going_items if isinstance(row, RoadmapItem) else row.id not in kept_tracks
+        (goes if going else stays).setdefault(key, said)
+    # An item on several roadmaps stays while one of them does.
+    return list(stays.values()), [v for k, v in goes.items() if k not in stays]
 
 
 async def _actor_name(db: AsyncSession, principal: Principal) -> str | None:

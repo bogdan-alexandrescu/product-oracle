@@ -71857,6 +71857,14 @@
             "type": "array",
             "title": "Feeds",
             "default": []
+          },
+          "feeds_going": {
+            "items": {
+              "$ref": "#/components/schemas/TrashItem"
+            },
+            "type": "array",
+            "title": "Feeds Going",
+            "default": []
           }
         },
         "type": "object",
@@ -71866,7 +71874,7 @@
           "published"
         ],
         "title": "DependentsOut",
-        "description": "What the delete dialog lists: the root and everything that goes to Trash with it.\n``published``: ask once more, the external copy stays where it is. ``working_runs``:\nruns to cancel before the delete is allowed. ``feeds`` (delete-prd-simple): the roadmap\nitems and tracks a PRD feeds; they stay, without it."
+        "description": "What the delete dialog lists: the root and everything that goes to Trash with it.\n``published``: ask once more, the external copy stays where it is. ``working_runs``:\nruns to cancel before the delete is allowed. ``feeds`` (delete-prd-simple): the roadmap\nitems and tracks a PRD feeds that stay, without it; ``feeds_going``: those that go to\nTrash with it (on its own roadmap, or a track holding no other PRD)."
       },
       "DeriveIn": {
         "properties": {
