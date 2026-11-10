@@ -40,6 +40,13 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
       if (!rest.length) return `cut ${x} and its dependents`;
       return `cut ${x} and its dependents ${rest.length === 1 ? rest[0] : `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}`}`;
     }
+    case "edit_track": {
+      // tracks-goal: one PRD put on or taken off a track (plan_changes.phrase).
+      const names = (target.prd_titles ?? {}) as Record<string, string>;
+      const one = (after.add_prd_id ?? after.remove_prd_id) as string | undefined;
+      if (one) return `${after.add_prd_id ? "put" : "took"} ${names[one] ?? "a PRD"} ${after.add_prd_id ? "on" : "off"} ${target.title ?? "a track"}`;
+      return `changed the track ${target.title ?? ""}`.trim();
+    }
     case "edit_title": return title ? `renamed ${x} to ${title}` : `renamed ${x}`;
     case "edit_outcome": return `changed the outcome of ${x}`;
     case "edit_note": return `changed the notes of ${x}`;

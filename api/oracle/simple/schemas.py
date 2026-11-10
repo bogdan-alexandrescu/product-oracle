@@ -2878,11 +2878,24 @@ class InboxSimpleTrackSuggestion(BaseModel):
     tracks: list["SimpleTrackChoice"] = []
     at: dt.datetime
     state: Literal["new", "open"]
+    # A track someone else decides was asked for: it waits for them (no actions, not
+    # counted) until they accept (the item leaves) or decline (the suggestion is back).
+    proposed: "SimpleTrackProposed | None" = None
 
 
 class SimpleTrackChoice(BaseModel):
     id: uuid.UUID
     title: str
+
+
+class SimpleTrackProposed(BaseModel):
+    """The open proposal a track suggestion waits for: which track (``title`` of a new
+    one), and whom it waits for."""
+
+    change_id: uuid.UUID
+    track: SimpleTrackChoice | None = None
+    title: str
+    to_name: str | None = None
 
 
 class InboxSimpleGoalSuggestion(BaseModel):

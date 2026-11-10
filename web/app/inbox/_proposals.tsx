@@ -231,6 +231,9 @@ export function trackSuggestionRows(rows: TrackSuggestion[], busy: string | null
   return rows.map((s) => {
     const onto = (trackId: string) => act(`track-suggestion-${s.id}`, () => trackChange({ op: "edit_track", target: { track_id: trackId }, after: { add_prd_id: s.prd.id } }));
     const others = s.tracks.filter((t) => t.id !== s.track?.id);
+    // Asked of a track someone else decides: it waits for them (no actions, not counted) until
+    // they accept (it leaves) or decline (the suggestion is back).
+    const asked = s.proposed;
     return {
       key: `track-suggestion-${s.id}`,
       icon: "roadmap",
@@ -240,17 +243,23 @@ export function trackSuggestionRows(rows: TrackSuggestion[], busy: string | null
           <span className="min-w-0 truncate" title={s.prd.title} data-testid="track-suggestion-title">
             {s.prd.title}
           </span>
-          <span className="block basis-full text-sm break-words whitespace-normal text-text2" data-testid="track-suggestion-context">
-            {s.track ? `Oracle suggests the track ${s.track.title}` : "On no track"}
-          </span>
+          {asked ? (
+            <span className="block basis-full" data-testid="track-suggestion-proposed" title={`Asked to put ${s.prd.title} on ${asked.track?.title ?? asked.title}`}>
+              <Chip>{asked.to_name ? `Proposed to ${asked.to_name}` : "Proposed"}</Chip>
+            </span>
+          ) : (
+            <span className="block basis-full text-sm break-words whitespace-normal text-text2" data-testid="track-suggestion-context">
+              {s.track ? `Oracle suggests the track ${s.track.title}` : "On no track"}
+            </span>
+          )}
         </>
       ),
       context: <span className="block truncate text-text2">Its features show under No track</span>,
       at: s.at,
       state: isNew(s.at, seenBefore) ? "new" : "open",
-      counted: true,
+      counted: !asked,
       group: "proposals",
-      action: (
+      action: asked ? null : (
         <>
           {s.track && (
             <Button disabled={busy !== null} onClick={() => onto(s.track!.id)} aria-label={`Put ${s.prd.title} on ${s.track.title}`}>

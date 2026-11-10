@@ -1,5 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /*
@@ -7,7 +7,9 @@ import { expect, test, type Page } from "./test";
  * suggested track in the Inbox ("Oracle suggests, person confirms"). As a person would: in
  * Simple > Roadmap > Tracks add a second PRD to a track and read both after a reload, then take
  * one off; confirm a suggested track from the Inbox and see the PRD's features leave the No
- * track band. Invented tracks and PRDs (the mock's seed).
+ * track band; the PRD's owner who does not decide the track asks its decider: the item waits
+ * ("Proposed to ..."), cannot be asked again, and leaves both Inboxes once the decider accepts.
+ * Invented tracks and PRDs (the mock's seed).
  */
 
 const sheet = (page: Page) => page.getByTestId("tracks-sheet");
@@ -73,5 +75,42 @@ test.describe("Tracks: a track holds many PRDs", () => {
     await expect(await noTrackBand(page)).toHaveCount(0);
     const prds = await openTrack(page, "Guided setup track");
     await expect(prds.getByTestId("track-prd-title")).toHaveText(["Guided setup", "Plan changes"]);
+  });
+
+  test("the PRD's owner confirms a track an owner decides: it waits for them, and their Accept clears both Inboxes", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.addInitScript((key) => localStorage.setItem(key, "track-suggestion-approver"), MOCK_SCENARIO_KEY);
+    await login(page, "approver@example.com");
+    await page.goto("/inbox");
+    await expect(page.getByTestId("track-suggestion-title")).toHaveText(["Plan changes"]);
+    await page.getByRole("button", { name: "Put Plan changes on Guided setup track" }).click();
+    // It waits for the track's decider: a mark naming them, its tooltip the track; no actions.
+    const mark = page.getByTestId("track-suggestion-proposed");
+    await expect(mark).toContainText("Proposed to");
+    await expect(mark).toHaveAttribute("title", "Asked to put Plan changes on Guided setup track");
+    await expect(page.getByRole("button", { name: "Put Plan changes on Guided setup track" })).toHaveCount(0);
+    await expect(page.getByLabel("Pick a track for Plan changes")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "New track", exact: true })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByTestId("track-suggestion-proposed")).toContainText("Proposed to");
+    await expect(page.getByRole("button", { name: "Put Plan changes on Guided setup track" })).toHaveCount(0);
+
+    await signOut(page);
+    await login(page);
+    await page.goto("/inbox");
+    const asked = page.getByRole("row").filter({ hasText: "Put Plan changes on Guided setup track" });
+    await expect(asked).toHaveCount(1);
+    await asked.getByRole("button", { name: "Accept", exact: true }).click();
+    await expect(page.getByRole("row").filter({ hasText: "Put Plan changes on Guided setup track" })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByTestId("inbox-state-tabs")).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "Put Plan changes on Guided setup track" })).toHaveCount(0);
+    await expect(await noTrackBand(page)).toHaveCount(0);
+
+    await signOut(page);
+    await login(page, "approver@example.com");
+    await page.goto("/inbox");
+    await expect(page.getByTestId("inbox-state-tabs")).toBeVisible();
+    await expect(page.getByTestId("track-suggestion-title")).toHaveCount(0);
   });
 });

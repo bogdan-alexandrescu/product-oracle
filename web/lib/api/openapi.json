@@ -89037,6 +89037,16 @@
               "open"
             ],
             "title": "State"
+          },
+          "proposed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleTrackProposed"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -132171,6 +132181,47 @@
         ],
         "title": "SimpleTrackPrdChoice",
         "description": "tracks-goal: an accepted PRD a track can take, with the track it is on now."
+      },
+      "SimpleTrackProposed": {
+        "properties": {
+          "change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Id"
+          },
+          "track": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleTrackChoice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "to_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "title"
+        ],
+        "title": "SimpleTrackProposed",
+        "description": "The open proposal a track suggestion waits for: which track (``title`` of a new\none), and whom it waits for."
       },
       "SimpleTrackRef": {
         "properties": {

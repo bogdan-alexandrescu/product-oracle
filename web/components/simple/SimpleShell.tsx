@@ -180,7 +180,7 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
     ? inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line", "set_section_number"].includes(x.op)).length +
       inbox.simple_approvals.length +
       inbox.simple_goal_suggestions.length +
-      (inbox.simple_track_suggestions?.length ?? 0)
+      (inbox.simple_track_suggestions?.filter((x) => !x.proposed).length ?? 0)
     : 0;
   const all = inbox ? waitingCount(inbox, questions ?? []) : 0;
   // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now.
