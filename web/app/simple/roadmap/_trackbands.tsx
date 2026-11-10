@@ -44,6 +44,7 @@ export function TrackHead({ data, laneKey, title, stack = false }: { data: Roadm
   if (!t) return <span className={`truncate font-semibold ${stack ? "text-[15px] leading-[18px]" : ""}`}>{title}</span>;
   const name = <span className="truncate font-semibold">{t.title}</span>;
   const prds = t.prds.map((p) => p.title).join(", ");
+  const words = `${t.title}${t.goal_name ? ` · ${t.goal_name}` : ""} ${t.health === "on_track" ? "✓ On track" : "⚠ Needs a look"}`;
   const nameTip = (
     <InfoTip label={t.title} align="start" side="bottom" testId="track-name-tip" trigger={name} lazy>
       <span className="block font-semibold">{t.title}</span>
@@ -61,7 +62,7 @@ export function TrackHead({ data, laneKey, title, stack = false }: { data: Roadm
   if (stack)
     return (
       <>
-        <span data-testid="track-head" className="pointer-events-auto flex min-w-0 items-center gap-1.5 text-[15px] leading-[18px]">
+        <span data-testid="track-head" data-words={words} className="pointer-events-auto flex min-w-0 items-center gap-1.5 text-[15px] leading-[18px]">
           {nameTip}
           {health}
         </span>
@@ -69,7 +70,7 @@ export function TrackHead({ data, laneKey, title, stack = false }: { data: Roadm
       </>
     );
   return (
-    <span data-testid="track-head" className="pointer-events-auto inline-flex items-center gap-1.5">
+    <span data-testid="track-head" data-words={words} className="pointer-events-auto inline-flex items-center gap-1.5">
       {nameTip}
       {t.goal_name && <span className="font-normal text-text2">· {t.goal_name}</span>}
       {health}

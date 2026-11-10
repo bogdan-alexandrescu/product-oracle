@@ -322,7 +322,8 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
     breaks.push(y);
     if (el.dataset.testid === "timeline-lane") {
       const h = el.offsetHeight || 32;
-      const words = (el.firstElementChild?.textContent ?? el.textContent ?? "").replace(/\s+/g, " ").trim();
+      // A track band's header gives its words (name, goal, health) apart; its text runs them together.
+      const words = (el.querySelector<HTMLElement>('[data-testid="track-head"]')?.dataset.words ?? el.firstElementChild?.textContent ?? el.textContent ?? "").replace(/\s+/g, " ").trim();
       rows.push(`<rect x="0" y="${y}" width="${width}" height="${h}" fill="var(--surface2)"/><line x1="0" x2="${width}" y1="${y + h}" y2="${y + h}" stroke="var(--line)"/>`);
       rows.push(`<text data-testid="export-lane" x="12" y="${y + h - 10}" font-size="13" font-weight="600" fill="var(--text)">${esc(fit(words, width - 24, 13, 600))}</text>`);
       y += h;

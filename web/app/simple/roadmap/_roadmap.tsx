@@ -1304,7 +1304,17 @@ export function SimpleRoadmap() {
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
-  const ms = useMilestones({ data, phone, canChange, reload, openItem: (id) => setCard({ id, ...anchorOf(id) }) });
+  // A milestone's joined name and its "Also:" read every milestone, so a PRD, goal or track filter never changes them.
+  const picked = !!(f.prd || f.goal || f.track);
+  const unfiltered = useQuery(`simple-roadmap-names:${picked ? JSON.stringify(wideQs) : ""}`, () =>
+    picked ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: wideQs as never } })) : Promise.resolve(null),
+  );
+  // Read again with the roadmap, so a renamed or added milestone's joined name follows.
+  const reloadNames = unfiltered.reload;
+  useEffect(() => {
+    if (picked) void reloadNames();
+  }, [roadmap.data, picked, reloadNames]);
+  const ms = useMilestones({ data, names: picked ? unfiltered.data : data, phone, canChange, reload, openItem: (id) => setCard({ id, ...anchorOf(id) }) });
   // The items as last loaded, for a burst sent after the render that started it.
   const latest = useRef(byId);
   useEffect(() => {
@@ -2092,7 +2102,7 @@ export function SimpleRoadmap() {
           />
           <Chart
             data={(format === "gantt" && f.group === "track" ? goalLaned : laned) ?? data}
-            lane={format === "gantt" ? "track" : f.group}
+            lane={f.group}
             noWork={noWork}
             format={format}
             unit={unit}
@@ -2130,8 +2140,8 @@ export function SimpleRoadmap() {
           <div aria-hidden inert className="pointer-events-none fixed top-0 left-[-20000px] w-[1400px]">
             <Lanes
               quarterAxis
-              data={laned ?? data}
-              lane={f.group}
+              data={goalLaned ?? data}
+              lane="track"
               noWork={noWork}
               compact={false}
               canDrag={false}

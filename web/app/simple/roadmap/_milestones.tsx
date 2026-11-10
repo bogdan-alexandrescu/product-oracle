@@ -7,7 +7,7 @@
  * goal's rows; a drag on the diamond moves it, a click opens it to edit or remove; every change has
  * Undo. A PRD's own milestones are hollow and dashed: a change to one asks the PRD's owner. */
 
-import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { Button, InfoTip } from "@/components/ds";
 import { GoalNumbers } from "@/components/simple/GoalOrder";
@@ -123,7 +123,22 @@ export const MsProvider = ({ value, children }: { value: MsCtl; children: ReactN
 export const useMsCtl = () => useContext(Ctx);
 
 /** The milestones' state and their changes for one read of the roadmap (`reload` reads it again). */
-export function useMilestones({ data, phone, canChange, reload, openItem }: { data: Roadmap | undefined; phone: boolean; canChange: boolean; reload: () => Promise<unknown>; openItem: (itemId: string) => void }): MsCtl | null {
+export function useMilestones({
+  data,
+  names,
+  phone,
+  canChange,
+  reload,
+  openItem,
+}: {
+  data: Roadmap | undefined;
+  /** The roadmap read without its PRD, goal and track filters: a filter never changes a milestone's joined name or its "Also:". */
+  names?: Pick<Roadmap, "goal_milestones" | "milestones"> | null;
+  phone: boolean;
+  canChange: boolean;
+  reload: () => Promise<unknown>;
+  openItem: (itemId: string) => void;
+}): MsCtl | null {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [moving, setMoving] = useState<{ id: string; date: string } | null>(null);
@@ -168,7 +183,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
     },
     list,
     band,
-    joined: joinedNames(list, data.milestones),
+    joined: joinedNames(names?.goal_milestones ?? list, names?.milestones ?? data.milestones),
     draft,
     hover,
     moving,
@@ -352,6 +367,33 @@ export function MsLayer(props: MsLayerProps) {
   const [bandTip, setBandTip] = useState<{ id: string; left: number; top: number } | null>(null);
   const [bandMore, setBandMore] = useState<string | null>(null);
   const [dayList, setDayList] = useState<string | null>(null);
+  // Escape shuts a "+N" list its hover or focus would still show, until the pointer or focus leaves it.
+  const [shut, setShut] = useState(false);
+  // The same-day and "+N" lists close on Escape (focus back on their button) and on a click outside them.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const at = document.activeElement as HTMLElement | null;
+      const pop = at?.closest<HTMLElement>("[data-ms-pop]");
+      const hovered = !!ref.current?.querySelector("[data-ms-more]:hover");
+      if (!dayList && !bandMore && !pop && !hovered) return;
+      setDayList(null);
+      setBandMore(null);
+      setShut(true);
+      (pop?.querySelector<HTMLElement>("[data-ms-pop-button]") ?? (pop ? ref.current?.querySelector<HTMLElement>('[data-ms-pop-button][aria-expanded="true"]') : null))?.focus();
+    };
+    const onDown = (e: PointerEvent) => {
+      if ((e.target as Element | null)?.closest?.("[data-ms-pop]")) return;
+      setDayList(null);
+      setBandMore(null);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [dayList, bandMore]);
   // A label keeps all its words inside the chart's visible part: it sits right of its diamond when it
   // fits there, else left of it, else after the label it meets, on one line (cut short when the row runs
   // out). The names column (the Timeline's sticky one) counts as an edge, and a label whose
@@ -562,6 +604,8 @@ export function MsLayer(props: MsLayerProps) {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   };
+  // The joined milestone's longer name, as the band and its "+N" list give it.
+  const joinedWordsOf = (m: GoalMilestone) => (ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m));
   for (const m of shown) {
     const date = m.date!;
     const mx = X(date);
@@ -580,9 +624,12 @@ export function MsLayer(props: MsLayerProps) {
             data-ms-badge
             data-mx={mx}
             aria-expanded={dayList === date}
-            title={`${many} milestones on ${day(date)}: ${shown.filter((o) => o.date === date).map(words).join(", ")}`}
+            data-ms-pop
+            data-ms-pop-button
+            title={`${many} milestones on ${day(date)}: ${shown.filter((o) => o.date === date).map(joinedWordsOf).join(", ")}`}
             onClick={() => setDayList((d) => (d === date ? null : date))}
-            className="absolute z-[25] h-3 min-w-3 cursor-pointer rounded-full bg-text px-1 text-center text-[10px] leading-3 font-bold text-surface focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+            // A 12 px count, its tap area 24 px on a phone (an invisible pad round it).
+            className="absolute z-[25] h-3 min-w-3 cursor-pointer before:absolute before:inset-0 before:content-[''] max-[600px]:before:-inset-1.5 rounded-full bg-text px-1 text-center text-[10px] leading-3 font-bold text-surface focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
             style={{ left: mx + 3, top: axisY - 22 }}
           >
             {many}
@@ -592,7 +639,7 @@ export function MsLayer(props: MsLayerProps) {
       // A click on the count lists the day's milestones, each opening its card.
       if (many > 1 && dayList === date)
         out.push(
-          <ul key={`cl-${m.id}`} data-testid="ms-same-day-list" aria-label={`Milestones on ${day(date)}`} className="absolute z-40 min-w-48 rounded-lg border border-line bg-surface py-1 shadow-lg" style={{ left: mx + 3, top: axisY - 8 }}>
+          <ul key={`cl-${m.id}`} data-testid="ms-same-day-list" data-ms-pop aria-label={`Milestones on ${day(date)}`} className="absolute z-40 min-w-48 rounded-lg border border-line bg-surface py-1 shadow-lg" style={{ left: mx + 3, top: axisY - 8 }}>
             {shown
               .filter((o) => o.date === date)
               .map((o) => (
@@ -606,7 +653,7 @@ export function MsLayer(props: MsLayerProps) {
                     }}
                     className="block w-full px-3 py-1 text-left text-xs whitespace-nowrap text-text hover:bg-surface2 focus-visible:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
                   >
-                    {words(o)}
+                    {joinedWordsOf(o)}
                   </button>
                 </li>
               ))}
@@ -785,7 +832,7 @@ export function MsLayer(props: MsLayerProps) {
     for (const p of placed) p.w = Math.min(p.w, props.width - 4 - p.left - (p.more.length ? 30 : 0));
     out.push(<div key="band" data-testid="ms-band" aria-hidden className="pointer-events-none absolute z-[11] border-b border-line bg-surface2/60" style={{ left, top: props.bandTop, width: props.width - left, height: band }} />);
     // The joined milestone's longer name (the owner's "Join whenever names match").
-    const bandWords = (m: GoalMilestone) => (ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m));
+    const bandWords = joinedWordsOf;
     const tipFor = (m: GoalMilestone) => {
       const g = ms.goals.find((o) => o.id === m.goal_id)?.title ?? goalOf(m)?.title ?? "No goal";
       const n = goalNums.get(m.goal_id ?? "");
@@ -814,19 +861,23 @@ export function MsLayer(props: MsLayerProps) {
       // The milestones folded into "+N": its list on hover, focus or a click, each opening its card.
       if (p.more.length)
         out.push(
-          <div key={`rbm-${m.id}`} className="group absolute z-[15]" style={{ left: p.left + Math.max(p.w, 40) + 3, top }}>
+          <div key={`rbm-${m.id}`} data-ms-pop data-ms-more onPointerLeave={() => setShut(false)} onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setShut(false)} className="group absolute z-[15]" style={{ left: p.left + Math.max(p.w, 40) + 3, top }}>
             <button
               type="button"
               data-testid="ms-band-more"
+              data-ms-pop-button
               data-days={p.more.map((o) => o.date).join(",")}
               aria-label={`${p.more.length} more ${p.more.length === 1 ? "milestone" : "milestones"}: ${p.more.map((o) => `${bandWords(o)} · ${fullDay(o.date!)}`).join(", ")}`}
               aria-expanded={bandMore === m.id}
-              onClick={() => setBandMore((o) => (o === m.id ? null : m.id))}
+              onClick={() => {
+                setShut(false);
+                setBandMore((o) => (o === m.id ? null : m.id));
+              }}
               className="block h-5 cursor-pointer rounded-full border border-line-strong bg-surface px-1.5 text-xs leading-[18px] font-semibold text-text hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
             >
               +{p.more.length}
             </button>
-            <div className={`absolute top-full left-0 z-40 pt-1 ${bandMore === m.id ? "block" : "hidden group-focus-within:block group-hover:block"}`}>
+            <div className={`absolute top-full left-0 z-40 pt-1 ${bandMore === m.id ? "block" : shut ? "hidden" : "hidden group-focus-within:block group-hover:block"}`}>
               <ul data-testid="ms-band-list" aria-label="More milestones here" className="min-w-48 rounded-lg border border-line bg-surface py-1 shadow-lg">
                 {p.more.map((o) => (
                   <li key={o.id}>
