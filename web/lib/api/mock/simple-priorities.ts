@@ -103,6 +103,14 @@ export function seedPrioritiesTwinsOld(db: SimpleDb): void {
   db.deciders = { ...db.deciders, [OLD_ROADMAP[0]]: OLD_TWIN.decider };
 }
 
+/** "priorities-twins-locked": "priorities-twins" with the second Trusted seller badge's feature locked (a person edited
+ * it), so its Merge into… is refused (baseline.merge_entity's 409) and nothing changes. */
+export const PRIORITIES_TWINS_LOCKED_SCENARIO = "priorities-twins-locked";
+export function seedPrioritiesTwinsLocked(db: SimpleDb): void {
+  seedPrioritiesTwins(db);
+  db.items.find((s) => s.key === "trusted-badge-2")!.gt_lock = "locked";
+}
+
 export function seedPrioritiesTwinsTrace(db: SimpleDb): void {
   seedPrioritiesTwins(db);
   const d = db.items.find((s) => s.key === "trusted-badge-draft")!;

@@ -1,7 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { COMPANY_TITLE, OLD_ROADMAP } from "../lib/api/mock/one-roadmap";
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { OLD_TWIN, PRIORITIES_TWINS_OLD_SCENARIO, PRIORITIES_TWINS_SCENARIO, PRIORITIES_TWINS_TRACE_SCENARIO, TWINS } from "../lib/api/mock/simple-priorities";
+import { OLD_TWIN, PRIORITIES_TWINS_LOCKED_SCENARIO, PRIORITIES_TWINS_OLD_SCENARIO, PRIORITIES_TWINS_SCENARIO, PRIORITIES_TWINS_TRACE_SCENARIO, TWINS } from "../lib/api/mock/simple-priorities";
 import { THEME_KEY } from "../lib/theme";
 import { login } from "./helpers";
 import { expect, test } from "./test";
@@ -21,6 +21,7 @@ import { expect, test } from "./test";
  *   by its trace ("priorities-twins-trace");
  * - a twin whose only item is on an older roadmap ("priorities-twins-old") is merged with that item, which now serves
  *   the kept feature; an approver who does not decide that roadmap is told why it cannot be merged, with no Merge;
+ * - a twin whose feature is locked is not merged: the person is told why, and the twin and the row's draft stay;
  * - the score's formula sits behind an (i) by the list's heading, never as a line of text;
  * - the Show filter's All counts every feature listed, Block list and Queue backpressure too (only proposed by
  *   Oracle, so with no mark yet).
@@ -152,6 +153,17 @@ for (const phone of [false, true]) {
       await expect(page.getByText(/, and its roadmap item now serves it$/)).toBeVisible();
       await expect(rowsNamed(page, TWINS.unlinked)).toHaveCount(1);
       await expect(rowsNamed(page, TWINS.unlinked).getByTestId("prio-twin")).toHaveCount(0);
+    });
+
+    test("a locked twin is not merged, and the person is told why", async ({ page }) => {
+      await setUp(page, phone, "", PRIORITIES_TWINS_LOCKED_SCENARIO);
+      const row = rowsNamed(page, TWINS.draft);
+      const twin = row.getByTestId("prio-twin");
+      await twin.getByRole("button", { name: "Merge into…" }).click();
+      await twin.getByRole("button", { name: "Merge", exact: true }).click();
+      await expect(page.getByText("Locked: a person edited it")).toBeVisible();
+      await expect(rowsNamed(page, TWINS.draft).getByTestId("prio-twin")).toHaveAttribute("data-code", "trusted-badge-2");
+      await expect(rowsNamed(page, TWINS.draft).getByTestId("prio-row-draft")).toHaveCount(1);
     });
 
     test("an approver who does not decide a twin's older roadmap is told why it cannot be merged", async ({ page }) => {
