@@ -1560,6 +1560,10 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     if (!s || s.closed_at || idle(s)) return json(409, { detail: "Its session is closed: undo works only in the change's session" });
     if (c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.after)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "Changed since");
     let undone: { before: Values; after: Values } | undefined;
+    // As changes.undo: the milestone put back is checked as a pick is (it may be in Trash since).
+    const backMs = c.op === "set_milestone" ? (c.before.milestone as Values | null | undefined) : undefined;
+    const gone = backMs && typeof backMs === "object" && backMs.id ? pickRefused(db, c.target.item_id, backMs.id) : null;
+    if (gone) return json(422, { detail: gone });
     if (TARGETS[c.op]) writeTarget(db, c, c.before, true, ctx);
     else if (KEY_DATE_OPS.includes(c.op)) {
       const rm = roadmapOfDoc(db, c.target.document_id)!;
@@ -1592,10 +1596,6 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       // As changes.undo: the code the old title carries may be another item's or a feature's since.
       const taken = (c.op === "set_code" || c.op === "edit_title") && c.before.title ? titleCodeTaken(db, readerDb(db, ctx), keyOf(db, c.target.item_id)!, String(c.before.title)) : null;
       if (taken) return json(409, { detail: taken });
-      // As changes.undo: the milestone put back is checked as a pick is (it may be in Trash since).
-      const back = c.op === "set_milestone" ? (c.before.milestone as Values | null | undefined) : undefined;
-      const gone = back && typeof back === "object" && back.id ? pickRefused(db, c.target.item_id, back.id) : null;
-      if (gone) return json(422, { detail: gone });
       const drafts = intoDrafts(db, c, s, true);
       if (drafts instanceof Response) return drafts;
       apply(db, c, c.before, true);
