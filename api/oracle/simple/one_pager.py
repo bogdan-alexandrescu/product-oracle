@@ -59,7 +59,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs import visibility
-from oracle.docs.models import Citation, Document, DocumentVersion, Section
+from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.simple import drafts, one_pager_checks, plan_strip, quality
@@ -1667,10 +1667,6 @@ async def read(
     # Reads clearly (2026-10-30): who has it, measures, codes with names, footnotes; the
     # "Needs a look" items for the PRD's owners. After the flows: a flow still keyed by a
     # bet's words is found by the words before codes got their names.
-    cites = {
-        c.cite_key: (c.title or c.ref, c.excerpt)
-        for c in await db.scalars(select(Citation).where(Citation.version_id == b.version.id))
-    }
     patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
     # A heading's count fixed in the draft (owner, Nov 5): the drafted heading.
     heads = ((d.overlay or {}).get("headings") or {}) if sees and d else {}
@@ -1684,7 +1680,7 @@ async def read(
         else x
         for x in b.sections
     ]
-    looks = one_pager_checks.annotate(blocks, b.sections, cites, checked)
+    looks = one_pager_checks.annotate(blocks, b.sections, checked)
     # A draft in review takes no change that applies (_ensure refuses it): who would apply a
     # fix is offered none until it is approved. Who proposes still proposes, and an open
     # proposal stays on its item.

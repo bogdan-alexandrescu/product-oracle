@@ -78,13 +78,13 @@ def resolved(text: str) -> str:
     return strip_citations(_CUT_CITE.sub("", text or ""))
 
 
-def _plain(text: str, cites: bool = False) -> str:
-    """Markdown's words; ``cites`` keeps the ``[c:id]`` markers (a measure's source)."""
-    text = text if cites else resolved(text or "")
+def _plain(text: str) -> str:
+    """Markdown's words, no ``[c:id]`` marker left."""
+    text = resolved(text or "")
     return " ".join(_MD.sub(lambda m: m.group(1) or "", text or "").split())
 
 
-def _rows(body: str, cites: bool = False) -> tuple[list[str], list[list[str]], list[str]]:
+def _rows(body: str) -> tuple[list[str], list[list[str]], list[str]]:
     """A section's bullets, its tables' body rows (cells) and its other lines."""
     bullets: list[str] = []
     rows: list[list[str]] = []
@@ -96,12 +96,12 @@ def _rows(body: str, cites: bool = False) -> tuple[list[str], list[list[str]], l
         if raw.strip().startswith("|"):
             nxt = lines[i + 1] if i + 1 < len(lines) else ""
             if not (_TABLE_SEP.match(nxt) and "-" in nxt):
-                rows.append([_plain(c, cites) for c in raw.strip().strip("|").split("|")])
+                rows.append([_plain(c) for c in raw.strip().strip("|").split("|")])
             continue
         if m := _BULLET.match(raw):
-            bullets.append(_plain(m.group(1), cites))
+            bullets.append(_plain(m.group(1)))
         elif raw.strip():
-            prose.append(_plain(raw, cites))
+            prose.append(_plain(raw))
     return bullets, rows, prose
 
 
@@ -282,9 +282,6 @@ class Measure:
 
 # A source named only by its citation ("source: [c:c1]") leaves its word behind.
 _SOURCE_LEFT = re.compile(r"[\s;,·|]*\b(?:sources?|from|via)\s*:?\s*$", re.I)
-_CITED = re.compile(r"\[c:\s*([^\[\]]*?)\s*\]")
-# Each citation's title and excerpt, by its id.
-Cites = dict[str, tuple[str | None, str | None]]
 
 
 def _measure_in(text: str) -> Measure | None:
@@ -299,35 +296,6 @@ def _measure_in(text: str) -> Measure | None:
     if not measure:
         return None
     return Measure(name, measure, source or None)
-
-
-def _keys(raw: str) -> list[str]:
-    return [k.strip() for g in _CITED.findall(raw or "") for k in g.split(",") if k.strip()]
-
-
-def _excerpt(text: str) -> str:
-    """A citation's excerpt as a measure: at most 20 words, cut with "…"."""
-    words = _plain(text).split()
-    return " ".join(words[:20]) + ("…" if len(words) > 20 else "")
-
-
-def _cited(raw: str, cites: Cites) -> Measure | None:
-    """A measure line as the PRD's PDF reads it: its citations resolved. A definition that is
-    only citation ids ("counted as: [c:c4] [c:c11]") is its first cited source's words (the
-    citation's excerpt), else no measure; a source named only by its citation is that
-    source's title."""
-    keys = [k for k in _keys(raw) if k in cites]
-    m = _measure_in(_plain(raw))
-    if m is None:
-        at = _MEASURE.search(raw)
-        src = next((cites[k] for k in keys if cites[k][1]), None)
-        if at is None or src is None:
-            return None
-        name = _plain(raw[: at.start()]).strip(" :,;·-—–")
-        return Measure(name, _excerpt(src[1] or ""), src[0])
-    if m.source is None:
-        m.source = next((cites[k][0] for k in keys if cites[k][0]), None)
-    return m
 
 
 # A success measures section (CLD's walk B, 2026-11-01): its lines say how each outcome is
@@ -369,17 +337,19 @@ def _stated(text: str) -> Measure | None:
     return Measure(name.strip(" :,;·-—–"), ", ".join(kept), source or None)
 
 
-def measures(sections: list[Section], cites: Cites | None = None) -> list[Measure]:
-    """Every measure the PRD states: "<metric> ... counted as <what> · from <source>"
-    lines, and a table's definition and source columns (its first cell names the metric),
-    each with its citations resolved (:func:`_cited`)."""
-    cites = cites or {}
+def measures(sections: list[Section]) -> list[Measure]:
+    """Every measure the PRD states in its words: "<metric> ... counted as <what> · from
+    <source>" lines, and a table's definition and source columns (its first cell names the
+    metric). A citation is never its words (vqa one-pager 2): a definition that is only
+    citation ids ("counted as: [c:c4] [c:c11]") is no measure and a source named only by
+    its citation none; a cited quote (a meeting's words, cut) or title (with its labels)
+    is never how an outcome is measured."""
     out: list[Measure] = []
     for sec in sections:
-        bullets, rows, prose = _rows(sec.body_md or "", cites=True)
+        bullets, rows, prose = _rows(sec.body_md or "")
         success = bool(_SUCCESS_HEAD.search(sec.heading or ""))
         for text in bullets + re.split(r"(?<=[.!?])\s+", " ".join(prose)):
-            if m := _cited(text, cites):
+            if m := _measure_in(text):
                 out.append(m)
             elif success and not _MEASURE.search(text) and (m := _stated(text)):
                 out.append(m)
@@ -389,14 +359,9 @@ def measures(sections: list[Section], cites: Cites | None = None) -> list[Measur
         for r in rows:
             if mcol is not None and mcol < len(r) and r[mcol]:
                 said = r[scol] if scol is not None and scol < len(r) else ""
-                keys = [k for k in _keys(r[mcol]) + _keys(said) if k in cites]
-                measure = _plain(r[mcol]) or _excerpt(
-                    next((cites[k][1] for k in keys if cites[k][1]), "")
-                )
-                src = _plain(said) or next((cites[k][0] for k in keys if cites[k][0]), None)
-                if measure:
-                    out.append(Measure(_plain(r[0]), _plain(measure), src or None))
-            elif m := _cited(" · ".join(r), cites):
+                if measure := _plain(r[mcol]):
+                    out.append(Measure(_plain(r[0]), measure, _plain(said) or None))
+            elif m := _measure_in(" · ".join(r)):
                 out.append(m)
             elif success and r and r[0] and (m := _stated(f"{r[0]}: {'; '.join(r[1:])}")):
                 out.append(m)
@@ -782,17 +747,16 @@ def whole_word(cut: str, said: str) -> str:
 def annotate(
     blocks: list[Any],
     sections: list[Section],
-    cites: Cites | None = None,
     checked: list[Any] | None = None,
 ) -> list[Look]:
     """One call from the one-pager's read: fills each block's and line's clear-reading
     fields in place (``who``; each line's codes with names, its footnotes; each outcome's
-    ``measure`` and ``measure_source``, its citations resolved by ``cites``) and returns the
+    ``measure`` and ``measure_source``, in the PRD's own words) and returns the
     "Needs a look" items; the numbers are those of ``checked`` when given (the sections as
     the reader's working draft has them, so a fixed number clears)."""
     names = glossary(sections)
     notes = footnote_notes(sections)
-    found = measures(sections, cites)
+    found = measures(sections)
     who = who_has_it(sections)
     looks: list[Look] = []
     unnamed: dict[str, list[str]] = {}

@@ -89,7 +89,7 @@ def test_measure_from_success_lines():
         ),
     ]
     blk = OnePagerBlock(key="outcomes", title="Outcomes", rules="", kind="metrics", lines=lines)
-    checks.annotate([blk], [SUCCESS], {})
+    checks.annotate([blk], [SUCCESS])
     assert [x.measure for x in blk.lines] == [
         "share of new accounts live within 30 days, recomputed daily",
         "reported weekly per person",
@@ -161,7 +161,7 @@ def test_generated_words_read_month_first_and_whole():
         "80% of acc",
     )
     blk = OnePagerBlock(key="outcomes", title="Outcomes", rules="", kind="metrics", lines=[line])
-    checks.annotate([blk], [], {})
+    checks.annotate([blk], [])
     assert blk.lines[0].metric.to == "80% of accounts"
     assert blk.lines[0].text == "Accounts live on time from 55% to 80% of accounts by Mar 31, 2027"
     assert one_pager._upto("80% of accounts live within thirty days", 20) == "80% of accounts…"
@@ -195,16 +195,7 @@ def test_pdf_span_reads_month_first():
 
 
 def test_measure_is_the_lines_own_words_never_a_citation():
-    cites = {
-        "m1": (
-            "Weekly planning meeting",
-            "We agreed to move two people onto the crawl queue before the holidays and to look again in a month",
-        ),
-        "f2": (
-            "Crawl priority (current name)",
-            "Pages crawled again within a day of a change, per site and per week, counted from the crawl log and from the change feed each site sends us every Monday",
-        ),
-    }
+    # Cited by a meeting's notes and by a feature: never the measure (vqa one-pager 2).
     success = sec(
         "success",
         "Success measures",
@@ -226,7 +217,7 @@ def test_measure_is_the_lines_own_words_never_a_citation():
         outcome("Sites added a week from 5 to 12", "Sites added a week", "5", "12"),
     ]
     blk = OnePagerBlock(key="outcomes", title="Outcomes", rules="", kind="metrics", lines=lines)
-    checks.annotate([blk], [success], cites)
+    checks.annotate([blk], [success])
     assert [(x.measure, x.measure_source) for x in blk.lines] == [
         (None, None),
         (None, None),
