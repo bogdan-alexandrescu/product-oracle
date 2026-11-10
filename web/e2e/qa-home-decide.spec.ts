@@ -64,7 +64,7 @@ for (const phone of [false, true]) {
       await page.goto("/simple/decisions");
       await expect(page.getByTestId("questions-mine").getByTestId("question-row").first()).toBeVisible();
       await expect(page.getByTestId("decision-row").first()).toBeVisible();
-      const codes = await page.getByTestId("simple-page").locator(".simple-code").filter({ visible: true }).allTextContents();
+      const codes = await page.getByTestId("simple-page").locator("[data-testid=question-code], [data-testid=decision-code]").filter({ visible: true }).allTextContents();
       expect(codes.length).toBeGreaterThan(3);
       for (const c of codes) expect(c.trim()).toMatch(/^D-\d+$/);
       expect(new Set(codes.map((c) => c.trim())).size).toBe(codes.length);

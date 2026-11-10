@@ -632,7 +632,7 @@ function Rows({ rows }: { rows: Row[] }) {
             </span>
             <span className="simple-rb flex-1">
               <span className="break-words">
-                <span className="simple-code" title={r.code ? r.code.toUpperCase() : undefined}>
+                <span className="simple-code" title={r.code ? r.code.toUpperCase() : undefined} data-testid="decision-code">
                   {code}
                 </span>{" "}
                 {gone ? (
