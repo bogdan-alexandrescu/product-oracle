@@ -86,6 +86,8 @@ export type ConfirmAsk = {
   title?: string;
   /** The button that answers no, when not "Back" ("Cancel"). */
   cancel?: string;
+  /** pm2 'List what points at it': one row each under the question ("Needed by", "Weekly alert digest lose this link"). */
+  rows?: { label: string; value: string }[];
 };
 
 type Pending = ConfirmAsk & { resolve: (yes: boolean) => void };
@@ -158,9 +160,25 @@ function ConfirmDialog({ ask, onAnswer }: { ask: ConfirmAsk; onAnswer: (yes: boo
             {ask.title ?? ask.action}
           </h2>
         </div>
-        <p id={body} className="px-5 py-3.5 text-[15px] leading-6 max-[600px]:px-4">
-          {ask.message}
-        </p>
+        {ask.message && (
+          <p id={body} className="px-5 py-3.5 text-[15px] leading-6 max-[600px]:px-4">
+            {ask.message}
+          </p>
+        )}
+        {ask.rows?.length ? (
+          <dl
+            id={ask.message ? undefined : body}
+            data-testid="confirm-rows"
+            className="mx-5 my-3.5 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 rounded-lg bg-surface2 px-3 py-2 text-[15px] leading-6 max-[600px]:mx-4"
+          >
+            {ask.rows.map((r) => (
+              <div key={r.label} className="contents" data-testid="confirm-row">
+                <dt className="text-text2">{r.label}</dt>
+                <dd className="min-w-0 [overflow-wrap:anywhere]">{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
         <div className="flex justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
           <Button variant="ghost" data-autofocus={ask.destructive ? true : undefined} onClick={() => onAnswer(false)}>
             {ask.cancel ?? "Back"}
