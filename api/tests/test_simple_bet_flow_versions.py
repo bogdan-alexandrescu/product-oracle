@@ -14,6 +14,14 @@ Test cards (protects / fails_when / no_claim):
 - test_the_moved_bets_own_flow_stays_when_it_is_reworded: protects=on such a page, the flow
   drawn for the bet left without one stays on it when a later version rewords only that bet;
   fails_when=its flow is kept under its words, so new words lose it ("Draw the flow" again).
+- test_each_flow_stays_when_a_later_version_drops_a_bet: protects=on such a page, a later
+  version that drops a bet shows each flow on the bet it was drawn for, the moved bet's own
+  flow with it; fails_when=the welcome note shows the setup checklist's flow, "Invite
+  suggestions from the admin's calendar" asks to draw again, or the welcome note's own flow
+  is lost.
+- test_flows_of_bets_keeps_the_flow_a_person_touched: protects=when two drawn flows read as
+  alike to a bet, the page shows the one a person redrew or commented on; fails_when=the
+  flows' place decides.
 - test_a_tie_keeps_the_flow_a_person_touched: protects=when two drawn flows read as alike to a
   bet, the one a person redrew or commented on stays on it; fails_when=place decides.
 """
@@ -28,7 +36,7 @@ from oracle import company_time
 from oracle.docs.models import Document, DocumentVersion
 from oracle.jobs.models import LlmJob
 from oracle.simple import one_pager, visuals
-from oracle.simple.models import SimpleOnePager, SimpleVisual
+from oracle.simple.models import SimpleOnePager, SimpleVisual, SimpleVisualComment
 from oracle.tenancy import tenant_session
 from tests.test_simple_line_visuals_api import ask
 from tests.test_simple_one_pager_api import MD, PRD, block, get, world
@@ -195,6 +203,59 @@ async def test_the_moved_bets_own_flow_stays_when_it_is_reworded(client):
             ("Invite suggestions from the admin's calendar", by_brief[WORDED[1]]),
             ("A sample project created on day one", by_brief[WORDED[2]]),
         ], who
+
+
+async def approve(client, ctx, markdown: str, number: int) -> None:
+    r = await client.post("/v1/documents/guided-setup/versions", content=markdown.encode(),
+                          headers=MD | ctx.as_("owner"))  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        v = await s.scalar(select(DocumentVersion).where(DocumentVersion.number == number))
+        v.approved_at = NOW
+        await s.commit()
+
+
+async def test_each_flow_stays_when_a_later_version_drops_a_bet(client):
+    ctx = await world(client)
+    by_brief = await drawn(client, ctx)
+    await next_version(client, ctx)
+    view = await get(client, ctx, "decider")
+    doc_id = view["document"]["id"]
+    await shift_keys(ctx)
+    new = block(await get(client, ctx, "decider"), "bets")["lines"][0]
+    assert (await ask(client, ctx, "decider", new["flow_subject"], doc_id)).status_code == 202
+    await run_visual_jobs(ctx)
+    # Version 3 drops the setup checklist.
+    await approve(client, ctx, V2.replace("- A setup checklist that shows the next step\n", ""), 3)
+    for who in ("decider", "viewer"):
+        view = await get(client, ctx, who)
+        assert view["version"] == 3
+        assert shown(view) == [
+            ("A welcome note that names the first three steps", new["flow_subject"]),
+            ("Invite suggestions from the admin's calendar", by_brief[WORDED[1]]),
+            ("A sample project created on day one", by_brief[WORDED[2]]),
+        ], who
+
+
+async def test_flows_of_bets_keeps_the_flow_a_person_touched(client):
+    ctx = await world(client)
+    await drawn(client, ctx)
+    doc_id = uuid.UUID((await get(client, ctx, "decider"))["document"]["id"])
+    async with tenant_session(ctx.tenant_id) as s:
+        flows = {v.subject_id: v for v in await s.scalars(select(SimpleVisual))}
+        a, b = (visuals.line_subject(doc_id, k) for k in ("bets-1", "bets-2"))
+        # Both flows drawn from the same words; the bet at the first one's place.
+        flows[b].brief = flows[a].brief
+        await s.flush()
+        bets = [("bets-1", [WORDED[0]]), ("bets-2", ["Welcome tour"])]
+        assert (await visuals.flows_of_bets(s, doc_id, bets))[0][0] == a
+        # A person comments on the second one: it stays on the bet.
+        s.add(SimpleVisualComment(visual_id=flows[b].id, version_number=1, body="Looks right",
+                                  author_id=uuid.uuid4()))  # fmt: skip
+        await s.flush()
+        found = await visuals.flows_of_bets(s, doc_id, bets)
+        assert found[0][0] == b and found[0][1] is not None
+        await s.rollback()
 
 
 def test_a_tie_keeps_the_flow_a_person_touched():
