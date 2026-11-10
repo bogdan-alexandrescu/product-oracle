@@ -27,6 +27,16 @@ Test cards (protects / fails_when / no_claim):
   is offered the baseline's Merge into…, and keeps its own rank; fails_when=it offers nothing.
 - test_a_twins_merge_proposal_shows: protects=a waiting merge_item of a twin's item is listed;
   fails_when=it shows nowhere (review of #1503).
+- test_merging_a_twin_keeps_its_item_on_the_kept_row: protects=Merge into… of a twin whose row
+  holds only a draft merges that draft into the twin's confirmed item, links the item to the
+  kept feature, then merges the feature: the row keeps its rank and now has the item;
+  fails_when=the item loses its feature and drops to Not ranked yet (review of #1503).
+- test_merging_a_twin_relinks_its_item_on_another_roadmap: protects=a twin's item on another
+  roadmap is linked to the kept feature before the twin's feature goes; fails_when=it is left
+  with no feature (Not ranked yet).
+- test_merging_a_twin_needs_its_roadmaps_decider: protects=a twin merge whose item the caller
+  may not re-link is refused (403) and changes nothing; it is offered as not applying;
+  fails_when=the feature is deleted and the item left unlinked.
 """
 
 import uuid
@@ -36,7 +46,7 @@ from sqlalchemy import select
 
 from oracle.baseline.models import Entity
 from oracle.roadmap.models import RoadmapItem
-from oracle.simple import priorities
+from oracle.simple import drafts, priorities, service
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import CHANGES, clock, make_people  # noqa: F401
 from tests.test_simple_priorities_company_roadmap_api import REASON, by_feature, company_world
@@ -211,3 +221,82 @@ async def test_a_twins_merge_proposal_shows(client):
         "a twin's waiting merge shows nowhere"
     )
     assert merges[0]["feature_id"] == w.ids["ledger-copy"]
+
+
+def _merge_url(w, key: str) -> str:
+    return f"/v1/simple/priorities/twins/{w.ids[key]}/merge"
+
+
+async def _feature_of(w, who: str, item: str) -> str | None:
+    """The item's feature as ``who`` reads it (their roadmap's working draft included)."""
+    async with tenant_session(w.ctx.tenant_id) as s:
+        me = SimpleNamespace(id=w.ctx.users[who].id, role=who)
+        read_ = await service.load(s, await drafts.overlays_for(s, me))
+        e = read_.by_id()[uuid.UUID(w.ids[item])]
+        return str(e.row.feature_id) if e.row.feature_id else None
+
+
+async def test_merging_a_twin_keeps_its_item_on_the_kept_row(client):
+    w = await company_world()
+    await _features(w, ("gadget", "Gadget", 1), ("gadget-copy", "gadget", 9))
+    await _add_item(w, "pay-8", title="Gadget", draft=True, feature_id=uuid.UUID(w.ids["gadget"]))
+    await _add_item(w, "pay-9", title="Gadget", feature_id=uuid.UUID(w.ids["gadget-copy"]))
+    before = by_feature(await w.read(client), w)["gadget"]
+    r = await client.post(
+        _merge_url(w, "gadget-copy"), json={"into": w.ids["gadget"]}, headers=w.ctx.as_("owner")
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["relinked"] == ["pay-9"], r.text
+    out = await w.read(client)
+    row = by_feature(out, w)["gadget"]
+    assert row["item_id"] == w.ids["pay-9"], "the twin's item left the kept row"
+    assert (row["rank"], row["twins"], row["draft_item_id"]) == (before["rank"], [], None)
+    assert w.ids["pay-9"] not in [u["item_id"] for u in out["unranked"]], "Not ranked yet"
+    assert w.ids["pay-8"] not in [d["item_id"] for d in out["drafts"]]
+    assert await _feature_of(w, "owner", "pay-9") == w.ids["gadget"]
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert await s.get(Entity, uuid.UUID(w.ids["gadget-copy"])) is None
+
+
+async def _devices(w, key: str, feature: str) -> None:
+    """A second roadmap, ``devices``, with one confirmed item ``key`` of ``feature``."""
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, _, rv = await seed.roadmap("devices")
+        row = await seed.item(rv, pv, key, title="Ledger", feature_id=uuid.UUID(w.ids[feature]))
+        await s.commit()
+        w.ids[key] = str(row.id)
+
+
+async def test_merging_a_twin_relinks_its_item_on_another_roadmap(client):
+    w = await company_world()
+    await _features(w, ("ledger-copy", "Ledger", 9))
+    await _devices(w, "dev-1", "ledger-copy")
+    [twin] = by_feature(await w.read(client), w)["ledger"]["twins"]
+    assert (twin["code"], twin["merge"], twin["applies"]) == ("ledger-copy", "entity", True)
+    r = await client.post(
+        _merge_url(w, "ledger-copy"), json={"into": w.ids["ledger"]}, headers=w.ctx.as_("owner")
+    )
+    assert r.status_code == 200, r.text
+    out = await w.read(client)
+    assert by_feature(out, w)["ledger"]["twins"] == []
+    assert w.ids["dev-1"] not in [u["item_id"] for u in out["unranked"]], "Not ranked yet"
+    assert await _feature_of(w, "owner", "dev-1") == w.ids["ledger"]
+
+
+async def test_merging_a_twin_needs_its_roadmaps_decider(client):
+    w = await company_world()
+    await _features(w, ("gadget", "Gadget", 1), ("gadget-copy", "gadget", 9))
+    await _add_item(w, "pay-8", title="Gadget", draft=True, feature_id=uuid.UUID(w.ids["gadget"]))
+    await _add_item(w, "pay-9", title="Gadget", feature_id=uuid.UUID(w.ids["gadget-copy"]))
+    # The approver may merge Ground Truth features, but payments has its own decider.
+    [twin] = by_feature(await w.read(client, "approver"), w)["gadget"]["twins"]
+    assert (twin["merge"], twin["applies"]) == ("entity", False), twin
+    r = await client.post(
+        _merge_url(w, "gadget-copy"), json={"into": w.ids["gadget"]}, headers=w.ctx.as_("approver")
+    )
+    assert r.status_code == 403, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert await s.get(Entity, uuid.UUID(w.ids["gadget-copy"])) is not None
+        item = await s.get(RoadmapItem, uuid.UUID(w.ids["pay-9"]))
+        assert str(item.feature_id) == w.ids["gadget-copy"]
