@@ -1657,6 +1657,8 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     if (m && p[4] === "accept") Object.assign(m, { date: (c.after.date as string | null) ?? m.date, counts_when: (c.after.counts_when as string | null) ?? m.counts_when });
     if (m && waits) m.pending = null;
   } else if (p[4] === "decline" && c.op === "add_item") reopenSuggestion(db, c);
+  // tracks-goal (owner Nov 9): a proposed track change (./simple-removed.ts) puts on or takes off only its PRD.
+  else if (p[4] === "accept" && (c.op === "add_track" || c.op === "edit_track")) (db as { track_accept?: Record<string, () => void> }).track_accept?.[c.id]?.();
   else if (p[4] === "accept" && GOAL_ASK_OPS.includes(c.op)) {
     const err = applyGoalAsk(db, ctx, c);
     if (err) return err;

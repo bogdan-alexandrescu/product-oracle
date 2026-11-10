@@ -21,7 +21,7 @@ function asking(after: Record<string, string | string[] | null>): string {
   if ("title" in after) return "Rename";
   if ("owner_id" in after) return "Owner change";
   if ("goal_id" in after) return "Goal change";
-  if ("prd_id" in after || "prd_ids" in after) return "PRD change";
+  if ("prd_id" in after || "prd_ids" in after || "add_prd_id" in after || "remove_prd_id" in after) return "PRD change";
   return after.status === "paused" ? "Pause" : after.status === "closed" ? "Close" : "Resume";
 }
 
@@ -261,14 +261,14 @@ function TrackFields({ t, may, people, prds, goals, onEdit }: { t: Track; may: b
             <span key={p.id} className="flex items-center gap-2" data-testid="track-prd">
               <span className="min-w-0 flex-1 break-words" data-testid="track-prd-title">{p.title}</span>
               {may && (
-                <button type="button" aria-label={`Remove ${p.title} from ${t.title}`} onClick={() => void onEdit({ prd_ids: ids.filter((x) => x !== p.id) }, `Removed ${p.title} from ${t.title}`)} className="h-7 rounded px-1.5 text-sm text-accent-ink hover:bg-surface">
+                <button type="button" aria-label={`Remove ${p.title} from ${t.title}`} onClick={() => void onEdit({ remove_prd_id: p.id }, `Removed ${p.title} from ${t.title}`)} className="h-7 rounded px-1.5 text-sm text-accent-ink hover:bg-surface">
                   Remove
                 </button>
               )}
             </span>
           ))}
           {may && offered.length > 0 && (
-            <select aria-label="Add a PRD" value="" onChange={(e) => e.target.value && void onEdit({ prd_ids: [...ids, e.target.value] }, `Added ${prds.find((p) => p.id === e.target.value)?.title ?? "a PRD"} to ${t.title}`)} className={FIELD}>
+            <select aria-label="Add a PRD" value="" onChange={(e) => e.target.value && void onEdit({ add_prd_id: e.target.value }, `Added ${prds.find((p) => p.id === e.target.value)?.title ?? "a PRD"} to ${t.title}`)} className={FIELD}>
               <option value="">Add a PRD</option>
               {offered.map((p) => (
                 <option key={p.id} value={p.id}>

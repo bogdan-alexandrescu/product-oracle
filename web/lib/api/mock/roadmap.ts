@@ -24,7 +24,9 @@ import itemsFixture from "./roadmap-items.json";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Item = Schemas["RoadmapItemOut"];
-type Track = { id: string; prd_id: string; roadmap_id: string | null; title: string; status: Schemas["TrackOverview"]["status"]; owner_id: string | null; started_version: number; current_version: number; lock_version: number; created_at: string; monitored_at: string | null; monitor: Record<string, unknown>; plan?: boolean };
+// tracks-goal: a track holds many PRDs, or none (api/oracle/roadmap/models.py ``track_prds``):
+// ``prd_id`` is its first (null: none); ``extra_prd_ids`` any further ones, in the order they joined.
+type Track = { id: string; prd_id: string | null; extra_prd_ids?: string[]; roadmap_id: string | null; title: string; status: Schemas["TrackOverview"]["status"]; owner_id: string | null; started_version: number; current_version: number; lock_version: number; created_at: string; monitored_at: string | null; monitor: Record<string, unknown>; plan?: boolean };
 type Milestone = Schemas["MilestoneOut"];
 type Basis = Schemas["ScheduleBasisOut"];
 type TrackerRecord = Schemas["TrackerRecordOut"];
@@ -172,6 +174,8 @@ export const PLAN_TWO_ROADMAPS_SCENARIO = "plan-two-roadmaps";
 export const REPORT_OFF_TRACK_SCENARIO = "report-off-track";
 /** qa5-plan-at-risk review: "alignment-report" with no First release track milestone; the Plan's Now items name it. */
 export const REPORT_ITEM_MILESTONE_SCENARIO = "report-item-milestone";
+/** tracks-goal: GET /v1/tracks with the Plan's track holding a second PRD (Checkout redesign) and a third track with none. */
+export const TRACK_PRDS_SCENARIO = "track-prds";
 
 const now = () => new Date().toISOString();
 // The company's day (its time zone), as oracle.company_time.company_today (qa-shell-6).
@@ -385,6 +389,18 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
       db.tracks.push({
         id: mockUuid(), prd_id: checkout.id, roadmap_id: null, title: checkout.title, status: "active",
         owner_id: null, started_version: started, current_version: started, lock_version: 1,
+        created_at: AT, monitored_at: null, monitor: {},
+      });
+    }
+    // tracks-goal: GET /v1/tracks shows a track with several PRDs (this one, with Checkout
+    // redesign too) and one with none, so "prd" (its first, or none) and "prds" (all of them)
+    // both show on the route.
+    if (scenario === TRACK_PRDS_SCENARIO) {
+      const second = ctx.documents.find((d) => d.slug === "checkout-redesign");
+      if (second) track.extra_prd_ids = [second.id];
+      db.tracks.push({
+        id: mockUuid(), prd_id: null, roadmap_id: null, title: "Spend policy", status: "active",
+        owner_id: null, started_version: 1, current_version: 1, lock_version: 1,
         created_at: AT, monitored_at: null, monitor: {},
       });
     }
@@ -615,6 +631,18 @@ function docRef(doc: Doc, v?: Version): Schemas["DocumentRef"] {
   return { id: doc.id, slug: doc.slug, title: doc.title, version: v?.number ?? null, approved: v ? !!v.approved_at : null };
 }
 
+/** tracks-goal: a track's PRD ids, first joined first (its ``prd_id``, then ``extra_prd_ids``). */
+export function trackPrdIds(t: Track): string[] {
+  return [t.prd_id, ...(t.extra_prd_ids ?? [])].filter((id): id is string => !!id);
+}
+
+/** tracks-goal: a track's PRD documents, in the order {@link trackPrdIds} gives (missing ones dropped). */
+function trackPrds(ctx: RoadmapContext, t: Track): Doc[] {
+  return trackPrdIds(t)
+    .map((id) => ctx.documents.find((d) => d.id === id))
+    .filter((d): d is Doc => !!d);
+}
+
 function itemDate(db: RoadmapDb, item: Item): string | null {
   const days = db.milestones
     .filter((m) => m.track_id === item.track_id && m.status === "planned" && m.target_date && m.item_keys.includes(item.item_key))
@@ -771,11 +799,13 @@ function planItemMilestone(db: RoadmapDb, s: PlanSeedItem): NamedRow["milestone"
 const NEXT_KEYS = new WeakMap<Schemas["TrackOverview"], Set<string>>();
 
 function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackOverview"] {
-  const prd = ctx.documents.find((d) => d.id === t.prd_id)!;
+  // tracks-goal: its PRDs, first joined first ("prd": the first, or none; "prds": all of them).
+  const prdDocs = trackPrds(ctx, t);
+  const prd = prdDocs[0];
   const roadmap = t.roadmap_id ? ctx.documents.find((d) => d.id === t.roadmap_id) : undefined;
   const rv = roadmap ? itemsVersion(ctx, db, roadmap, null, true) : undefined;
   const items = rv ? db.items[rv.id] ?? [] : [];
-  const latestApproved = latest(ctx, prd.id, true)?.number ?? null;
+  const latestApproved = prd ? latest(ctx, prd.id, true)?.number ?? null : null;
   // qa-plan-1: the Plan's tracked PRD reads the Plan's own items (the rows its table shows), so
   // the track's health, item count and next milestone are the ones the Plan card and table give.
   const own = t.plan ? planTrackItems(db) : null;
@@ -823,7 +853,7 @@ function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackO
   const when = nextName ? ` Next milestone: ${nextName}${nextDate ? `, ${calendarDay(nextDate)}` : ""}.` : "";
   const headline = trackHeadline(health, counts, when, prdMoved ? latestApproved : null);
   const out: Schemas["TrackOverview"] = {
-    id: t.id, title: t.title, status: t.status, owner_id: t.owner_id, prd: docRef(prd), prds: [docRef(prd)], started_version: t.started_version,
+    id: t.id, title: t.title, status: t.status, owner_id: t.owner_id, prd: prd ? docRef(prd) : null, prds: prdDocs.map((d) => docRef(d)), started_version: t.started_version,
     current_version: t.current_version, latest_approved_version: latestApproved,
     roadmap: roadmap ? docRef(roadmap, rv) : null, lock_version: t.lock_version, created_at: t.created_at, monitored_at: t.monitored_at,
     health, headline, counts,
@@ -843,7 +873,8 @@ function checkDate(db: RoadmapDb, t: Track, horizon: string, date: string | null
     const b = db.bases.find((x) => x.id === id);
     if (!b) return `schedule basis ${id} is unknown`;
     if (b.status !== "verified") return `schedule basis ${b.reference} was withdrawn`;
-    if (b.prd_document_id !== t.prd_id) return `schedule basis ${b.reference} belongs to another PRD`;
+    // tracks-goal: a basis on any of the track's PRDs supports its milestone, not only the first.
+    if (!trackPrdIds(t).includes(b.prd_document_id)) return `schedule basis ${b.reference} belongs to another PRD`;
     if (b.supports_date !== date) return `schedule basis ${b.reference} supports ${b.supports_date}, not ${date}`;
     // O4: a basis limited to one item supports only a milestone of that item. (The mock
     // does not resolve tracker_key scopes; the real API does.)
@@ -1121,7 +1152,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
     if (m === "GET") {
       const status = q.get("status");
       const SUMMARY: (keyof Schemas["TrackSummary"])[] = [
-        "id", "title", "status", "owner_id", "prd", "started_version", "current_version", "latest_approved_version",
+        "id", "title", "status", "owner_id", "prd", "prds", "started_version", "current_version", "latest_approved_version",
         "roadmap", "lock_version", "created_at", "monitored_at", "health", "headline",
       ];
       return json(200, db.tracks.filter((t) => !status || t.status === status).map((t) => {
@@ -1134,7 +1165,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
       const b = await body<Schemas["TrackCreate"]>();
       const prd = findDoc(b.prd);
       if (!prd) return notFound(`document '${b.prd}'`);
-      if (db.tracks.some((t) => t.prd_id === prd.id)) return json(409, { detail: `'${prd.slug}' already has a track` });
+      if (db.tracks.some((t) => trackPrdIds(t).includes(prd.id))) return json(409, { detail: `'${prd.slug}' already has a track` });
       const accepted = latest(ctx, prd.id, true);
       if (!accepted) return json(422, { detail: `'${prd.slug}' has no approved version: a track starts from an accepted PRD` });
       const roadmap = ctx.versions.find((v) => v.source?.document_id === prd.id);
@@ -1214,7 +1245,8 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
 /** The body of the prd_to_roadmap run a track's roadmap-run route drafts. */
 export function trackRunBody(ctx: RoadmapContext, db: RoadmapDb, trackId: string): Schemas["RunCreate"] | null {
   const t = db.tracks.find((x) => x.id === trackId);
-  if (!t) return null;
+  // tracks-goal: a track with no PRD has nothing to run a roadmap from.
+  if (!t || !t.prd_id) return null;
   const prd = ctx.documents.find((d) => d.id === t.prd_id)!;
   const roadmap = t.roadmap_id ? ctx.documents.find((d) => d.id === t.roadmap_id) : undefined;
   return { flow: "prd_to_roadmap", source: prd.slug, document: roadmap?.slug ?? null, knobs: { depth: "standard", roles: {}, checkpoints: {} } };
@@ -2347,7 +2379,8 @@ function trackAlerts(
       const from = String(a.data.milestone_date);
       const ref = String(a.data.tracker_ref);
       const basis: Basis = {
-        id: mockUuid(), kind: "estimate", reference: ref, supports_date: day, detail: null, prd_document_id: t.prd_id,
+        // tracks-goal: an alert is only ever opened on a track that has its (first) PRD.
+        id: mockUuid(), kind: "estimate", reference: ref, supports_date: day, detail: null, prd_document_id: t.prd_id!,
         item_key: a.item_key, tracker_key: null, tracker_record_id: String(a.data.record_id ?? "") || null, status: "verified",
         verified_by: ctx.userId, verified_at: now(), withdrawn_by: null, withdrawn_at: null, created_at: now(),
       };

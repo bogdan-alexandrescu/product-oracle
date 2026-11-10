@@ -8308,8 +8308,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.simple_approvals = simpleRows.simple_approvals;
     // tracks-goal (owner Nov 9): a new PRD of mine on no track, with Oracle's suggested track.
     if (db.simple_roadmap) syncTracks(db.simple_roadmap);
-    inbox.simple_track_suggestions = db.simple_roadmap ? trackSuggestionRows(db.simple_roadmap, simpleCtx, seenBefore, localStorage.getItem(MOCK_SCENARIO_KEY) === "track-suggestion") : [];
-    const simpleCounted = simpleRows.simple_proposals.length + simpleRows.simple_approvals.length + inbox.simple_date_suggestions.length + inbox.simple_goal_suggestions.length + inbox.simple_track_suggestions.length;
+    // "track-suggestion-approver": the PRD is approver@example.com's, so a track an owner decides is proposed to them.
+    const suggestionScenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+    const prdOwners = suggestionScenario === "track-suggestion-approver" ? db.members.filter((x) => x.email === "approver@example.com").map((x) => x.id) : simpleCtx.owners;
+    inbox.simple_track_suggestions = db.simple_roadmap ? trackSuggestionRows(db.simple_roadmap, simpleCtx, seenBefore, suggestionScenario === "track-suggestion" || suggestionScenario === "track-suggestion-approver", prdOwners) : [];
+    // One waiting for its track's decider asks nothing of me: not counted.
+    const simpleCounted = simpleRows.simple_proposals.length + simpleRows.simple_approvals.length + inbox.simple_date_suggestions.length + inbox.simple_goal_suggestions.length + inbox.simple_track_suggestions.filter((x) => !x.proposed).length;
     inbox.total += simpleCounted;
     inbox.needs_me = (inbox.needs_me ?? 0) + simpleCounted;
     // Simple S8: minutes sent to me as an attendee (shown, not counted).
