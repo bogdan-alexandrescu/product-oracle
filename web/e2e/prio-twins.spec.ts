@@ -13,6 +13,9 @@ import { expect, test } from "./test";
  *   draft shows on its row (Confirm, Merge into…), not again under "Not ranked yet";
  * - a second Block list draft, linked to nothing, shows on Block list's one row, merged there with Merge into…;
  * - a second Queue backpressure item is one row with it, merged with Merge into…;
+ * - a folded twin keeps its own rank and goal in the row, and its waiting merge shows there (no second Merge
+ *   until it is decided); a merge of one name into the same name says by code which record was kept;
+ * - moving Trusted seller badge confirms its draft there (never a second item);
  * - the score's formula sits behind an (i) by the list's heading, never as a line of text;
  * - the Show filter's All counts every feature listed, Block list and Queue backpressure too (only proposed by
  *   Oracle, so with no mark yet).
@@ -72,7 +75,9 @@ for (const phone of [false, true]) {
       await expect(draft.getByLabel("Merge into")).toHaveValue(/.+/);
       await expect(draft.getByLabel("Merge into").locator("option:checked")).toHaveText(TWINS.unlinked);
       await draft.getByRole("button", { name: "Merge", exact: true }).click();
-      await expect(page.getByText(`Merged ${TWINS.unlinked} into ${TWINS.unlinked}`)).toBeVisible();
+      const code = await draft.getAttribute("data-code");
+      const kept = await row.getAttribute("data-code");
+      await expect(page.getByText(`Merged ${TWINS.unlinked} (${code}) into ${TWINS.unlinked} (${kept}), which is kept`)).toBeVisible();
       await expect(row.getByTestId("prio-row-draft")).toHaveCount(0);
       await expect(rowsNamed(page, TWINS.unlinked)).toHaveCount(1);
     });
@@ -83,11 +88,47 @@ for (const phone of [false, true]) {
       await expect(row).toHaveCount(1);
       const twin = row.getByTestId("prio-twin");
       await expect(twin).toHaveCount(1);
+      // The folding by name shows: the twin's own rank and goal.
+      await expect(twin.getByTestId("prio-twin-rank")).toHaveText(/^#\d+$/);
+      await expect(twin.getByTestId("prio-twin-goal")).toBeVisible();
+      const code = await twin.getAttribute("data-code");
+      const kept = await row.getAttribute("data-code");
       await twin.getByRole("button", { name: "Merge into…" }).click();
       await twin.getByRole("button", { name: "Merge", exact: true }).click();
-      await expect(page.getByText(`Merged ${TWINS.item} into ${TWINS.item}`)).toBeVisible();
+      await expect(page.getByText(`Merged ${TWINS.item} (${code}) into ${TWINS.item} (${kept}), which is kept`)).toBeVisible();
       await expect(rowsNamed(page, TWINS.item).getByTestId("prio-twin")).toHaveCount(0);
       await expect(rowsNamed(page, TWINS.item)).toHaveCount(1);
+    });
+
+    test("a twin's waiting merge shows on the row, and no second merge is offered", async ({ page }) => {
+      await setUp(page, phone, "commenter");
+      const twin = rowsNamed(page, TWINS.item).getByTestId("prio-twin");
+      await twin.getByRole("button", { name: "Propose a merge…" }).click();
+      await twin.getByRole("button", { name: "Propose", exact: true }).click();
+      await expect(twin.getByTestId("prio-proposal")).toHaveCount(1);
+      await expect(twin.getByTestId("prio-proposal")).toContainText(/waiting for/);
+      await expect(twin.getByRole("button", { name: "Propose a merge…" })).toBeDisabled();
+      // Taken back, the merge is offered again.
+      await twin.getByTestId("prio-proposal").getByRole("button", { name: "Withdraw" }).click();
+      await expect(twin.getByTestId("prio-proposal")).toHaveCount(0);
+      await expect(twin.getByRole("button", { name: "Propose a merge…" })).toBeEnabled();
+    });
+
+    test("moving a feature whose only item is a draft confirms that draft", async ({ page }) => {
+      await setUp(page, phone);
+      const row = rowsNamed(page, TWINS.draft);
+      await expect(row.getByTestId("prio-row-draft")).toHaveCount(1);
+      await row.getByRole("button", { name: /^Drag .* to reorder$/ }).focus();
+      await page.keyboard.press("ArrowUp");
+      const dialog = page.getByRole("dialog", { name: /^Why move / });
+      await dialog.getByLabel("Reason").fill("Sellers asked for it at the example.com meetup");
+      await dialog.getByRole("button", { name: "Move", exact: true }).click();
+      await expect(dialog).toBeHidden();
+      // Confirmed: no draft on the row, none under Not ranked yet, one row.
+      await expect(rowsNamed(page, TWINS.draft)).toHaveCount(1);
+      await expect(rowsNamed(page, TWINS.draft).getByTestId("prio-row-draft")).toHaveCount(0);
+      await expect(rowsNamed(page, TWINS.draft).getByTestId("prio-override")).toBeVisible();
+      await expect(notRanked(page).getByText(TWINS.draft)).toHaveCount(0);
     });
 
     test("the score's formula is behind an (i) by the list's heading", async ({ page }) => {
