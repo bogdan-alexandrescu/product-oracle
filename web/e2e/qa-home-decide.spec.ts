@@ -1,4 +1,5 @@
 import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
+import { REPEATED_CODES_SCENARIO } from "../lib/api/mock/simple-meetings";
 import { login } from "./helpers";
 import { expect, test } from "./test";
 
@@ -17,8 +18,8 @@ import { expect, test } from "./test";
  * you…" while a second read of the list is made.
  *
  * Card unique-codes: protects = every decision on the Decisions list reads with a code unique
- * in the list (the decision's D- number, upper case) beside its name; fails_when = a PRD's own
- * per-run code (Q8) shows, which repeats across PRDs' runs.
+ * in the list, upper case, beside its name: a PRD's per-run code another decision shares (Q5 and
+ * another run's q5) reads as the decision's D- number; fails_when = two rows read Q5, or q5.
  *
  * Card info-tips: protects = the explanation lines of Meetings and Decisions sit behind an (i)
  * beside the heading; fails_when = they show under the heading.
@@ -61,18 +62,25 @@ for (const phone of [false, true]) {
     });
 
     test("unique-codes: every decision on the list has a code unique in the list, upper case, beside its name", async ({ page }) => {
+      // Guided setup's open Q5 and another PRD's run's decided q5 on one list.
+      await page.addInitScript((k) => localStorage.setItem("po-mock-scenario", k), REPEATED_CODES_SCENARIO);
       await login(page);
       await page.goto("/simple/decisions");
       await expect(page.getByTestId("questions-mine").getByTestId("question-row").first()).toBeVisible();
-      await expect(page.getByTestId("decision-row").first()).toBeVisible();
-      const codes = await page.getByTestId("simple-page").locator("[data-testid=question-code], [data-testid=decision-code]").filter({ visible: true }).allTextContents();
+      await expect(page.getByTestId("decision-row").filter({ hasText: "Trial length for new teams" })).toBeVisible();
+      const codes = (await page.getByTestId("simple-page").locator("[data-testid=question-code], [data-testid=decision-code]").filter({ visible: true }).allTextContents()).map((c) => c.trim());
       expect(codes.length).toBeGreaterThan(3);
-      for (const c of codes) expect(c.trim()).toMatch(/^D-\d+$/);
-      expect(new Set(codes.map((c) => c.trim())).size).toBe(codes.length);
-      // The name stays beside the code; the PRD's own code is in the chip's tooltip.
-      const first = page.getByTestId("questions-mine").getByTestId("question-row").first();
-      await expect(first.getByTestId("question-code")).toHaveAttribute("title", / Q\d+$/);
-      await expect(first.getByTestId("question-open").or(first.locator("b")).first()).not.toBeEmpty();
+      for (const c of codes) expect(c).toBe(c.toUpperCase());
+      expect(new Set(codes).size).toBe(codes.length);
+      // The two Q5s read by their decision numbers, each beside its name, the PRD's code in the tooltip.
+      const q5 = page.getByTestId("questions-mine").getByTestId("question-row").filter({ hasText: "Reminder default time" });
+      await expect(q5.getByTestId("question-code")).toHaveText("D-105");
+      await expect(q5.getByTestId("question-code")).toHaveAttribute("title", "Guided setup Q5");
+      const other = page.getByTestId("decision-row").filter({ hasText: "Trial length for new teams" });
+      await expect(other.getByTestId("decision-code")).toHaveText("D-140");
+      await expect(other.getByTestId("decision-code")).toHaveAttribute("title", "Q5");
+      // A code no other decision shares keeps it.
+      expect(codes.filter((c) => /^Q\d+$/.test(c)).length).toBeGreaterThan(0);
     });
 
     test("info-tips: Meetings' and Decisions' explanations sit behind the (i) beside the heading", async ({ page }) => {

@@ -1219,7 +1219,7 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
       };
     }),
     // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
-    other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
+    other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d)), ...(meetingQ ? [] : repeatedCodeRows())],
     // qa4-simple-decide-37 (as decisions_page: both from the PRDs the reader reads): every PRD whose questions are shown.
     // prd-order (as decisions_page): the PRD filter lists them in the company PRD order.
     prds: [...new Map([...ps.filter((x) => !x.replaced).map((x) => [x.slug, x.title] as const), ...(questionsPrdReplaced(ctx) ? [] : questionsOut(ctx, qd, null)).map((x) => [x.prd.slug, x.prd.title] as const)])]
@@ -1775,4 +1775,15 @@ export function sheetDecisionMade(db: MeetingsDb, made: Schemas["DecisionOut"], 
     at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))), subjects: [], meeting_id: null, change_ids: [],
     ask: made.question ?? null, context: made.context ?? null, options: (made.options ?? []).map((o) => ({ key: o.key, label: o.label })), review_at: made.review_at ?? null, created_by: by,
   });
+}
+
+/** QA (unique codes): the "repeated-codes" scenario adds a question another PRD's run numbered q5
+ * (lower case, as that run wrote it), decided outside meetings, beside Guided setup's own Q5. */
+export const REPEATED_CODES_SCENARIO = "repeated-codes";
+function repeatedCodeRows(): Schemas["SimpleDecisionRow"][] {
+  if (typeof localStorage === "undefined" || localStorage.getItem("po-mock-scenario") !== REPEATED_CODES_SCENARIO) return [];
+  const at = iso(mockNowMs() - 3 * 86_400_000);
+  return [
+    { id: stableUuid("qa-repeated-codes/q5"), number: 140, title: "Trial length for new teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "q5", chosen: "14 days", options: [] },
+  ];
 }

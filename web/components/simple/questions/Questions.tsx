@@ -348,8 +348,9 @@ export function QuestionRow({
   forOthers?: boolean;
   /** The question a link opened (Decisions' ?question=, from the Inbox): marked as an anchor is. */
   linked?: boolean;
-  /** QA: a list of many PRDs' questions (Decisions), where a PRD's own code (Q8) repeats: the
-   * decision's number (D-12), unique in the list; the PRD and its code stay in the chip's tooltip. */
+  /** QA: on a list of many PRDs' questions (Decisions), its PRD's own code (Q8) is shared by
+   * another decision there: the decision's number (D-12), unique in the list, with the PRD and its
+   * code in the chip's tooltip. */
   listCode?: boolean;
 }) {
   const zone = useCompanyZone();
@@ -466,7 +467,9 @@ export function QuestionRow({
       D-{q.number}
     </span>
   ) : (
-    <span className="simple-code">{q.code}</span>
+    <span className="simple-code" data-testid="question-code">
+      {q.code.toUpperCase()}
+    </span>
   );
   return (
     <Tag data-testid={testId} data-code={q.code} data-question-id={q.id} data-linked={linked ? "true" : undefined} aria-label={`${q.code} ${q.title}`} className={`simple-row${linked ? " bg-[var(--simple-edited)]" : ""}`}>
