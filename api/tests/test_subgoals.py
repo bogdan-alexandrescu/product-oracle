@@ -246,7 +246,7 @@ async def test_scoring_credits_the_parent_through_the_subgoal(client, ctx):
     await edge(client, ctx, feat, s1, "supports", attrs={"contribution": 2})
     resp = await client.get("/v1/priorities", headers=ctx.as_("viewer"))
     assert resp.status_code == 200, resp.text
-    row = next(r for r in resp.json()["features"] if r["key"] == "guided-setup")
+    row = next(r for r in resp.json()["features"] if r["key"] == feat["key"])
     assert "no_confirmed_goal" not in row["flags"]
     [term] = row["explanation"]["goals"]
     assert term["goal"] == "activation-setup"
