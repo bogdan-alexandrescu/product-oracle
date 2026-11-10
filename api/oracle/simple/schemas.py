@@ -2636,6 +2636,9 @@ class SimpleWaitingItem(BaseModel):
         "proposal",
         "goal_suggestion",
         "goal",
+        # The Inbox's other counted "Needs you" rows (Add predictions, launches, rituals,
+        # metrics, requests), opened where the Inbox opens them.
+        "inbox",
     ]
     # Unique in the list (kind and id); ``ref_id`` is the id its own endpoint acts on (the
     # checkpoint, question, decision's number, item, date suggestion, draft, change, goal

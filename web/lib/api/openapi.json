@@ -132290,7 +132290,8 @@
               "draft",
               "proposal",
               "goal_suggestion",
-              "goal"
+              "goal",
+              "inbox"
             ],
             "title": "Kind"
           },

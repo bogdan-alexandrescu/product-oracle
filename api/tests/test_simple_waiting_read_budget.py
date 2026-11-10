@@ -40,14 +40,15 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
 
 WAITING = "/v1/simple/decisions/waiting"
 # The list's statements, the sign-in's included, whatever the number of run stops
-# (measured 53 after the fix, with or without stops).
+# (measured 58 after the fix, with 1 stop or 21; before it, 97 and 277: about nine more
+# statements for every stop, from the Inbox's review summary of each).
 MAX_READS = 70
 MAX_SECONDS = 2.0
 
 
 async def stops(ctx, n: int) -> None:
     async with tenant_session(ctx.tenant_id) as s:
-        for i in range(n):
+        for _ in range(n):
             run = Run(flow="baseline_to_prd", status="awaiting_checkpoint",
                       created_by=ctx.users["owner"].id)  # fmt: skip
             s.add(run)
@@ -121,5 +122,4 @@ async def test_add_predictions_waits_as_on_the_inbox(client, owner, runtime):  #
     )  # fmt: skip
     assert resp.status_code == 200, resp.text
     items = (await client.get(WAITING, headers=auth)).json()["items"]
-    assert [i for i in items if i["kind"] == "inbox"] == []
-
+    assert [i for i in items if i["key"].startswith("outcome:needs_prediction:")] == []
