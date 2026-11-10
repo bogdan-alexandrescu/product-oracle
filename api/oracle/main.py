@@ -1,9 +1,13 @@
 import asyncio
 import contextlib
 import logging
+import math
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request, Response, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -168,6 +172,17 @@ class Health(BaseModel):
     database: str
 
 
+def _finite(v: Any) -> Any:
+    """``v`` with every NaN or infinite float written as its name ("nan", "inf")."""
+    if isinstance(v, float) and not math.isfinite(v):
+        return str(v)
+    if isinstance(v, dict):
+        return {k: _finite(x) for k, x in v.items()}
+    if isinstance(v, list | tuple):
+        return [_finite(x) for x in v]
+    return v
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
@@ -210,6 +225,12 @@ def create_app() -> FastAPI:
         return JSONResponse(
             {"detail": exc.detail, "refs": exc.refs}, exc.status_code, headers=exc.headers
         )
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(_request: Request, exc: RequestValidationError) -> JSONResponse:
+        # FastAPI's own 422, except that an input of NaN or infinity (JSON lets a client
+        # send them) is echoed as its name: JSON cannot carry it, so it was a 500.
+        return JSONResponse({"detail": _finite(jsonable_encoder(exc.errors()))}, 422)
 
     @app.exception_handler(GoalFieldsInvalid)
     async def goal_fields_rejected(_request: Request, exc: GoalFieldsInvalid) -> JSONResponse:
