@@ -518,6 +518,60 @@ async def _milestone_back(db: AsyncSession, entry: TrashEntry) -> None:
         await goal_milestones.put_back(db, row)
 
 
+async def drop_task(db: AsyncSession, principal: Any, row: Any, status_before: str) -> TrashEntry:
+    """feature-panel (owner's pick, Nov 10): an item task dropped in Simple leaves the item's
+    list and goes to Trash on its own, the status it had kept for its restore. The task row
+    stays (status "dropped"); every read of an item's tasks leaves dropped ones out."""
+    await task_back_on_list(db, row.id)
+    at = now()
+    entry = TrashEntry(
+        root_type="task",
+        root_id=row.id,
+        root={
+            "type": "task",
+            "id": str(row.id),
+            "slug": None,
+            "title": row.title,
+            "kind": "Task",
+            "status_before": status_before,
+        },
+        items=[],
+        deleted_by=getattr(principal, "id", None),
+        deleted_by_name=await _actor_name(db, principal),
+        reason=None,
+        published=False,
+        purge_after=at + timedelta(days=RETENTION_DAYS),
+    )
+    entry.created_at = at
+    db.add(entry)
+    await db.flush()
+    await audit.record(db, principal, "trash.delete", "task", row.id,
+                       {"entry_id": str(entry.id), "root": entry.root, "items": []})  # fmt: skip
+    await db.flush()
+    return entry
+
+
+async def task_back_on_list(db: AsyncSession, task_id: uuid.UUID) -> None:
+    """A dropped task set to another status (the drop's Undo, or a later change) leaves
+    Trash too."""
+    await db.execute(
+        delete(TrashEntry).where(TrashEntry.root_type == "task", TrashEntry.root_id == task_id)
+    )
+
+
+async def _task_back(db: AsyncSession, entry: TrashEntry) -> None:
+    """A restored task entry puts the task back on its item with the status it had."""
+    if entry.root_type != "task":
+        return
+    from oracle.simple.models import TASK_STATUSES, RoadmapItemTask
+
+    row = await db.get(RoadmapItemTask, entry.root_id)
+    if row is not None and row.status == "dropped":
+        before = entry.root.get("status_before")
+        row.status = before if before in TASK_STATUSES and before != "dropped" else "todo"
+        await db.flush()
+
+
 async def _track_items_back(db: AsyncSession, entry: TrashEntry) -> None:
     """A restored track takes back its features that are still on no track."""
     from oracle.roadmap.models import RoadmapItem
@@ -605,7 +659,10 @@ async def _not_restored(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
 # it too (edit-decisions: and a decision or a PRD question); everything else in Trash is the
 # owners' alone. port-an-decisions: and a meeting's agenda item (a request is an owner's
 # delete).
-OWN_RESTORE = frozenset({"feature", "goal", "decision", "question", "agenda_item", "milestone"})
+# feature-panel: and a dropped item task.
+OWN_RESTORE = frozenset(
+    {"feature", "goal", "decision", "question", "agenda_item", "milestone", "task"}
+)
 
 
 def may_restore(principal: Any, entry: TrashEntry) -> bool:
@@ -643,6 +700,7 @@ async def restore_entry(
 
     await _track_items_back(db, entry)
     await _milestone_back(db, entry)
+    await _task_back(db, entry)
 
     dropped = await trash_items.after_restore(db, entry, principal)
     await alerts.reopen_after_trash(db, entry.root.get("closed_alerts") or [])

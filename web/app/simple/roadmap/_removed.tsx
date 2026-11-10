@@ -138,14 +138,22 @@ export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: 
  * removed-tracks: who cut a cut feature and when (the removed list's own row), in its panel's
  * head. Nothing when the API does not know (a feature cut before who and when were kept).
  */
-export function CutBy({ id }: { id: string }) {
+export function CutBy({ id, onRestore, restoreLabel = "Restore" }: { id: string; onRestore?: () => void; restoreLabel?: string }) {
   const removed = useQuery(removedKey(`cut:${id}`), readRemoved);
   const r = removed.data?.items.find((x) => x.kind === "feature" && x.id === id);
   if (!r?.at) return null;
+  // pm1 '⋯ menu by the close': a grey strip under the title, Restore one click away, never hidden.
   return (
-    <p className="mt-1 text-sm text-text2" data-testid="item-cut">
-      Cut on {formatDay(r.at)}
-      {r.by_name ? ` by ${r.by_name}` : ""}
-    </p>
+    <div className="mt-1.5 flex items-center gap-2 rounded-lg bg-surface2 px-3 py-1.5 text-sm text-text2">
+      <p className="min-w-0 flex-1" data-testid="item-cut">
+        Cut on {formatDay(r.at)}
+        {r.by_name ? ` by ${r.by_name}` : ""}
+      </p>
+      {onRestore && (
+        <button type="button" className="flex-none rounded-md border border-line bg-surface px-2.5 py-1 font-semibold text-text hover:bg-surface2" onClick={onRestore}>
+          {restoreLabel}
+        </button>
+      )}
+    </div>
   );
 }

@@ -44205,6 +44205,8 @@ export interface components {
             owner?: components["schemas"]["SimpleOwnerRef"] | null;
             /** Own Owner Id */
             own_owner_id?: string | null;
+            /** Own Decider Id */
+            own_decider_id?: string | null;
             /**
              * Depends Keys
              * @default []
@@ -48631,7 +48633,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track" | "milestone";
+            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track" | "milestone" | "task";
             /**
              * Id
              * Format: uuid

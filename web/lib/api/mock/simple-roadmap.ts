@@ -1578,6 +1578,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       owner: ownerOf(db, s, me?.names),
       // one-feature-panel: the item's own owner (set_owner's before) and its stored dependency keys.
       own_owner_id: namedOn(db, s.key, "owner_id") ?? null,
+      // one-feature-panel: the item's own decider (set_decider's before).
+      own_decider_id: namedOn(db, s.key, "decider_id") ?? null,
       depends_keys: s.depends ?? [],
       depends_key_of: Object.fromEntries((s.depends ?? []).flatMap((k) => { const d = depOf(k); return d && d !== s.key ? [[db.ids[d], k]] : []; }).reverse()),
       depends_keys_of: (s.depends ?? []).reduce<Record<string, string[]>>((o, k) => { const d = depOf(k); if (d && d !== s.key) (o[db.ids[d]] ??= []).push(k); return o; }, {}),

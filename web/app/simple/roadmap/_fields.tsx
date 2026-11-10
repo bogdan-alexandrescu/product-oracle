@@ -168,6 +168,8 @@ function Pick({
 /** item-milestone: the Milestone picker's option for the milestone shown now when it was not picked there. */
 const SHOWN = "shown";
 
+const HORIZON_WORDS: Record<Item["horizon"], string> = { now: "Now", next: "Next", later: "Later" };
+
 /** The distinct refs (track, PRD, goal) the roadmap's items have: what an item may be moved to. */
 function refs<T extends { id: string }>(
   items: Map<string, Item>,
@@ -214,6 +216,7 @@ export function PanelFields({
   canChange,
   onOpen,
   milestones = [],
+  noHorizon,
 }: {
   item: Item;
   items: Map<string, Item>;
@@ -223,6 +226,8 @@ export function PanelFields({
   onOpen?: (id: string) => void;
   /** item-milestone: the roadmap read's goal milestones (the item's roadmap's are offered). */
   milestones?: readonly GoalMilestone[];
+  /** The board shows its own horizon control under the fields. */
+  noHorizon?: boolean;
 }) {
   const [why, setWhy] = useState(false);
   const prdOrderOf = usePrdOrder();
@@ -431,22 +436,19 @@ export function PanelFields({
             value={item.status}
             done={done}
             options={[
-              ...(["planned", "done", "cut"].includes(item.status)
+              // pm1 '⋯ menu by the close': Cut and Restore are the panel menu's, not a status picked here.
+              ...(["planned", "done"].includes(item.status)
                 ? []
                 : [{ value: item.status, label: statusWord(item.status) }]),
               { value: "planned", label: "Planned" },
               { value: "done", label: "Done" },
-              { value: "cut", label: "Cut" },
             ]}
-            note={(v) => (v === "cut" && item.status !== "cut" ? parts("stay") : undefined)}
             save={(v) =>
               change(
                 "Status changed",
                 "set_status",
                 { status: item.status },
                 { status: v },
-                undefined,
-                v === "cut" && item.status !== "cut" ? parts("stay") : undefined,
               )
             }
           />
@@ -509,6 +511,60 @@ export function PanelFields({
           />
         )}
       />
+      {/* Who decides changes to this item: its own decider, else its roadmap's. */}
+      <Field
+        label="Decider"
+        testId="card-decider"
+        canChange={canChange}
+        value={
+          item.deciders.length ? item.deciders.join(", ") : <span className="text-text2">No decider yet</span>
+        }
+        editor={(done) => (
+          <Pick
+            label="Decider"
+            value={item.own_decider_id ?? ""}
+            done={done}
+            options={[
+              { value: "", label: "The roadmap's decider" },
+              ...(people.data ?? [])
+                .filter((p) => p.can_write)
+                .map((p) => ({ value: p.user_id, label: p.name })),
+            ]}
+            save={(v) =>
+              change(
+                "Decider changed",
+                "set_decider",
+                { decider_id: item.own_decider_id ?? null },
+                { decider_id: v || null },
+              )
+            }
+          />
+        )}
+      />
+      {!noHorizon && (
+        <Field
+          label="Horizon"
+          testId="card-horizon"
+          canChange={canChange}
+          value={HORIZON_WORDS[item.horizon]}
+          editor={(done) => (
+            <Pick
+              label="Horizon"
+              value={item.horizon}
+              done={done}
+              options={(["now", "next", "later"] as const).map((h) => ({ value: h, label: HORIZON_WORDS[h] }))}
+              save={(v) =>
+                change(
+                  "Horizon changed",
+                  "change_horizon",
+                  { horizon: item.horizon },
+                  { horizon: v },
+                )
+              }
+            />
+          )}
+        />
+      )}
       <Field
         label="Track"
         testId="card-track"

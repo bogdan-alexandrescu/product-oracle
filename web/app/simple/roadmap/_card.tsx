@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { Button, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
+import { Button, confirmInPage, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
 import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
@@ -12,16 +12,17 @@ import { flagKey } from "@/components/simple/chat/ChatCard";
 import { ItemTalk } from "@/components/simple/chat/ItemTalk";
 import { askThread, itemTalkPage, sendCardChanged, type ChatCard } from "@/lib/api/simple-chat";
 import { DecidedWho } from "@/components/simple/DecidedWho";
-import { formatDay } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
 import { NameEdit, PanelFields } from "./_fields";
 import { CutBy } from "./_removed";
+import { TasksPart } from "./_tasks";
 import {
   closedItem,
   milestoneInk,
+  partsWords,
   shortDay,
   storedDates,
   type Change,
@@ -754,7 +755,30 @@ function FlowThumb({
 }
 
 /** One of the card's parts ("WHY", "FLOW"): the mock-up's small-capitals heading over its body. */
-const TASK_WORDS: Record<Item["tasks"][number]["status"], string> = { todo: "To do", doing: "Doing", done: "Done", dropped: "Dropped" };
+
+/** "F-12 Weekly alert digest": a feature's code, then its name. */
+const codeName = (i: Pick<Item, "code" | "title">) => (i.code ? `${i.code} ${i.title}` : i.title);
+
+/** "A, B and C". */
+const andWords = (xs: string[]) => (xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+
+/** pm2 'List what points at it': what the Delete confirm lists, one row each. */
+export function pointsAt(item: Item, items: Map<string, Item>): { label: string; value: string }[] {
+  const named = (ids: string[]) => ids.map((id) => items.get(id)).filter((i): i is Item => !!i).map(codeName);
+  const needed = named(item.needed_by);
+  const deps = named(item.depends_on);
+  const decisions = item.open_decisions.length + item.decided_in.length;
+  const tasks = item.tasks.length;
+  return [
+    { label: "Needed by", value: needed.length ? `${andWords(needed)} ${needed.length === 1 ? "loses" : "lose"} this link` : "Nothing" },
+    { label: "Depends on", value: deps.length ? andWords(deps) : "Nothing" },
+    { label: "Decisions", value: decisions ? `${decisions === 1 ? "1 decision names" : `${decisions} decisions name`} it; they stay` : "None" },
+    { label: "Milestone", value: item.milestone?.name ?? "None" },
+    { label: "Goal", value: item.goal?.title ?? "None" },
+    { label: "Key result", value: item.goal?.metric ?? "None" },
+    { label: "Tasks", value: tasks ? `${tasks === 1 ? "1 task goes" : `${tasks} tasks go`} with it` : "None" },
+  ];
+}
 
 function Part({ title, children, testId }: { title: string; children: React.ReactNode; testId?: string }) {
   return (
@@ -923,6 +947,15 @@ export function FloatingCard({
   const [pick, setPick] = useState<"merge" | "parent" | null>(null);
   // panel-menu: Delete to Trash, as a row's Delete; in Trash, the panel closes.
   const remove = useFeatureDelete(async () => sendCardChanged(), cornerToast, () => onClose());
+  const neededBy = item.needed_by.map((id) => items.get(id)).filter((i): i is Item => !!i);
+  const cutIt = async () => {
+    const parts = partsWords(item.parts.length, "stay");
+    const rows = [{ label: "Needed by", value: neededBy.length ? `${andWords(neededBy.map(codeName))} ${neededBy.length === 1 ? "loses" : "lose"} it` : "Nothing" }];
+    if (!(await confirmInPage({ action: "Cut", title: `Cut ${item.title}?`, message: parts, rows, cancel: "Cancel" }))) return;
+    await act({ applied: `Cut ${item.title} from the roadmap`, proposed: `cut ${item.title} from the roadmap` }, { op: "set_status", target: { item_id: item.id }, before: { status: item.status }, after: { status: "cut" } }, parts || undefined);
+  };
+  const restore = () =>
+    act({ applied: `Restored ${item.title} to the roadmap`, proposed: `restore ${item.title} to the roadmap` }, { op: "set_status", target: { item_id: item.id }, before: { status: item.status }, after: { status: "planned" } });
   const menuItem = (label: string, run: () => void, warn = false) => (
     <button
       type="button"
@@ -985,8 +1018,16 @@ export function FloatingCard({
               {/* A cut feature stays a part, and can still be taken out (or put under another). */}
               {item.status !== "merged" && menuItem("Part of…", () => setPick("parent"))}
               {!closedItem(item) && menuItem("Merge into…", () => setPick("merge"))}
+              {/* pm1 '⋯ menu by the close' (owner's pick, Nov 5): Cut and Restore live here, not in the Status select. */}
+              {item.status === "cut"
+                ? menuItem(item.can_decide ? "Restore to the roadmap" : "Propose: restore", () => void restore())
+                : item.status !== "merged" && menuItem(item.can_decide ? "Cut from the roadmap" : "Propose: cut", () => void cutIt())}
               {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
-              {menuItem(item.can_decide ? "Delete feature" : "Propose: delete", () => void remove({ id: item.id, title: item.title, parts: item.parts }), true)}
+              {menuItem(
+                item.can_decide ? "Move to Trash…" : "Propose: move to Trash…",
+                () => void remove({ id: item.id, title: item.title, parts: item.parts, rows: pointsAt(item, items) }),
+                true,
+              )}
             </div>
           )}
         </div>
@@ -1076,7 +1117,7 @@ export function FloatingCard({
         </p>
       )}
       {/* removed-tracks: a cut feature's head says who cut it and when (the Removed list's row). */}
-      {cut && <CutBy id={item.id} />}
+      {cut && <CutBy id={item.id} onRestore={canChange ? () => void restore() : undefined} restoreLabel={item.can_decide ? "Restore" : "Propose: restore"} />}
       {pick && <PickFeature key={pick} kind={pick} item={item} items={items} act={act} done={() => setPick(null)} />}
       {item.merged_into && (
         <p className="mt-1 text-sm text-text2" data-testid="item-merged">
@@ -1114,7 +1155,7 @@ export function FloatingCard({
               </button>
             </p>
           )}
-          <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} milestones={milestones} />
+          <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} milestones={milestones} noHorizon={!!onHorizon} />
           <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
           {item.slices.length > 0 && (
             <>
@@ -1258,21 +1299,15 @@ export function FloatingCard({
               </ul>
             </Part>
           )}
-          {item.tasks.length > 0 && (
-            <Part title="Tasks" testId="card-tasks">
-              <ul className="mt-1 space-y-1">
-                {item.tasks.map((t) => (
-                  <li key={t.id} data-testid="card-task" className="[overflow-wrap:anywhere]">
-                    {t.title}
-                    <span className="text-text2">
-                      {" "}
-                      · {t.owner ? t.owner.name : "No owner"}
-                      {t.due_date ? ` · due ${formatDay(t.due_date)}` : ""} · {TASK_WORDS[t.status]}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Part>
+          {(canChange || item.tasks.length > 0) && (
+            <section className="mt-3" data-testid="card-tasks">
+              <TasksPart
+                item={item}
+                act={act}
+                canChange={canChange}
+                title={(words) => <h3 className="text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase">{words}</h3>}
+              />
+            </section>
           )}
           {flowPart}
           <Part title="Proposals on it">

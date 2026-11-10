@@ -1207,6 +1207,7 @@ def item_out(
         if e.owner_id is not None and e.owner_name
         else None,
         own_owner_id=str(row.owner_id) if row.owner_id else None,
+        own_decider_id=str(row.decider_id) if row.decider_id else None,
         depends_keys=list(row.depends_on or []),
         depends_key_of={str(d): k for d, k in e.depends_key_of.items()},
         depends_keys_of={str(d): ks for d, ks in e.depends_keys_of.items()},

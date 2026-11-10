@@ -351,6 +351,9 @@ class SimpleRoadmapItem(BaseModel):
     # one-feature-panel: the item's own owner (set_owner's ``before``; null: its track's
     # owner is shown) and the keys it depends on as stored (set_depends' ``before``).
     own_owner_id: str | None = None
+    # one-feature-panel: the item's own decider (set_decider's ``before``; null: its
+    # roadmap's decider decides).
+    own_decider_id: str | None = None
     depends_keys: list[str] = []
     # roadmap-edit-fixes: the stored key (of depends_keys) that names each item of
     # depends_on, by item id (another PRD's feature key is neither its key nor its code);
