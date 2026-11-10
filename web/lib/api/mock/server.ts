@@ -678,6 +678,12 @@ export const MOCK_SLOW_KEY = "po-mock-slow";
 /** brief-answers review: tests set this localStorage key to a refusal's words to have Start refuse an accepted research run with them. */
 export const MOCK_RUN_START_REFUSED_KEY = "po-mock-run-start-refused";
 export const MOCK_SLOW_MS = 1500;
+/**
+ * QA (Home and the Inbox agree): with the "empty" scenario, tests set this localStorage key so
+ * the new company has one PRD with one open feedback item, a counted Inbox row Home does not
+ * draw itself.
+ */
+export const MOCK_EMPTY_FEEDBACK_KEY = "po-mock-empty-feedback";
 /** A test may hold the slow call longer (ms, in localStorage). */
 export const MOCK_SLOW_MS_KEY = "po-mock-slow-ms";
 /**
@@ -819,6 +825,40 @@ function seedEmpty(): Db {
     status: "active" as const,
     open_tokens: 0,
   }));
+  if (typeof localStorage !== "undefined" && localStorage.getItem(MOCK_EMPTY_FEEDBACK_KEY)) {
+    const doc: DocumentRow = {
+      id: uuid(),
+      slug: FLEET_DOC.slug,
+      title: FLEET_DOC.title,
+      status: "in_review",
+      kind: "prd",
+      template: FLEET_DOC.template ?? null,
+      template_version: FLEET_DOC.template_version ?? null,
+      theme: null,
+      created_at: FLEET_DOC.versions[0].created_at,
+      updated_at: FLEET_DOC.versions.at(-1)!.created_at,
+    };
+    db.documents.push(doc);
+    for (const v of FLEET_DOC.versions) db.versions.push(buildVersion(doc, v));
+    const created_at = "2026-10-19T10:00:00Z";
+    db.feedback.push({
+      id: uuid(),
+      document_id: doc.id,
+      raised_on_version: FLEET_DOC.versions.length,
+      kind: "general",
+      comment_id: null,
+      section_review_id: null,
+      section_key: null,
+      summary: "Say how drivers learn of a changed slot.",
+      anchor: null,
+      verdict: null,
+      status: "open",
+      addressed_in_version: null,
+      resolution_note: null,
+      created_at,
+      updated_at: created_at,
+    });
+  }
   return db;
 }
 

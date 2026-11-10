@@ -37,7 +37,16 @@ export interface RitualsDb {
   mode: "on_demand" | "always";
   /** The Company time zone the rituals last followed (the API moves them on a change). */
   zone?: string;
+  /** MOCK_RITUAL_FAILED_KEY: the failed occurrence was made (once). */
+  failed_seeded?: boolean;
 }
+
+/**
+ * QA (Home and the Inbox agree): tests set this localStorage key so the first active ritual's next
+ * occurrence failed to prepare (three tries), as the ticker leaves one: an owner's counted Inbox row
+ * with Retry.
+ */
+export const MOCK_RITUAL_FAILED_KEY = "po-mock-ritual-failed";
 
 /** A decision as the rituals mock reads it from the decision log (./decisions.ts). */
 type LoggedDecision = { id: string; number: number; title: string; subjects: { [key: string]: unknown }[] };
@@ -534,6 +543,13 @@ function tick(db: RitualsDb, ctx: RitualsContext) {
   wakeOnFirstGoal(ctx, db);
   for (const o of db.occurrences) {
     if (o.status === "ready" && Date.parse(o.ends_at) + MISSED_AFTER_MS <= t) o.status = "missed";
+  }
+  if (!db.failed_seeded && typeof localStorage !== "undefined" && localStorage.getItem(MOCK_RITUAL_FAILED_KEY)) {
+    const r = db.rituals.find((x) => x.status === "active" && x.next_due_at);
+    if (r) {
+      db.failed_seeded = true;
+      db.occurrences.push(occurrence(ctx, r, new Date(r.next_due_at!), { status: "failed", attempts: 3, error: "A block could not be read" }));
+    }
   }
 }
 

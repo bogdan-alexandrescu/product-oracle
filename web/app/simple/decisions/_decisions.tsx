@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import { setToastPlace, toast } from "@/components/ds/Toast";
@@ -40,6 +40,27 @@ const VIEWS: { value: View; label: string }[] = [
   { value: "board", label: "Board" },
   { value: "meetings", label: "By meeting" },
 ];
+/**
+ * QA: a PRD's question codes are numbered per run, so two PRDs' runs both have a Q8 (and one
+ * wrote q4). The codes that more than one decision on the page shares (upper-cased); each of
+ * those reads as its decision's own number (D-12), unique in the list, its PRD's code in the
+ * chip's tooltip.
+ */
+const RepeatedCodes = createContext<Set<string>>(new Set());
+function repeatedCodes(d: Schemas["SimpleDecisionsOut"]): Set<string> {
+  // A question and its own decided row (in a meeting or outside) are one decision, one id; two
+  // decisions of one code and one title are still two.
+  const ids = new Map<string, Set<string>>();
+  const add = (code: string | null | undefined, id: string) => {
+    if (!code) return;
+    const k = code.toUpperCase();
+    ids.set(k, (ids.get(k) ?? new Set()).add(id));
+  };
+  for (const q of d.questions) add(q.code, q.id);
+  for (const r of [...d.meetings.flatMap((g) => g.decisions), ...d.other]) add(r.code, r.id);
+  return new Set([...ids].filter(([, of]) => of.size > 1).map(([k]) => k));
+}
+
 /** The List shows this many questions waiting for you before "Show N more". */
 const FIRST = 5;
 
@@ -90,6 +111,7 @@ export function SimpleDecisions() {
     window.history.replaceState(null, "", s ? `${pathname}?${s}` : pathname);
   };
   const d = q.data;
+  const repeated = useMemo(() => (d ? repeatedCodes(d) : new Set<string>()), [d]);
   // The person's pick this visit, else the remembered one the API returns, else List.
   // qa-simple-decide-36: the view is in the address (?view=), like the filters.
   const inUrl = params.get("view");
@@ -124,7 +146,7 @@ export function SimpleDecisions() {
   useItemChanged(() => Promise.all([q.reload(), roadmap.reload()]));
   const found = useCallback((f: Parameters<OpenFeature>[0]) => !!itemFor(roadmap.data?.items ?? [], f), [roadmap.data]);
   return (
-    <SimplePage title="Decisions" lead={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
+    <SimplePage title="Decisions" info={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
       <OpenFeatureContext.Provider value={setFeature}>
       <FeatureFoundContext.Provider value={found}>
       <DecisionSheetHost onChanged={() => q.reload()}>
@@ -148,6 +170,7 @@ export function SimpleDecisions() {
           {linkedDecided.code} {linkedDecided.title} is decided already{linkedDecided.decided_label ? `. ${linkedDecided.decided_label}` : ""}.
         </p>
       )}
+      <RepeatedCodes.Provider value={repeated}>
       {d && view === "list" && <QuestionList d={d} actions={actions} filtered={filtered} onClear={clear} linked={linked} />}
       {d && view === "board" && <Board questions={questions} actions={actions} linked={linked} />}
       {d && view !== "board" && (
@@ -182,6 +205,7 @@ export function SimpleDecisions() {
           )}
         </>
       )}
+      </RepeatedCodes.Provider>
       {d && d.approvals_waiting > 0 && (
         <p className="simple-plumb" data-testid="decisions-approvals">
           <Icon name="flag" size={16} stroke={1.7} />
@@ -291,6 +315,7 @@ function QuestionCard({ label, testId, questions, count, source, children }: { l
 
 /** List: waiting for you (first five, then Show N more), then waiting for others; decided ones sit with the meeting that took them, or outside meetings. */
 function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["SimpleDecisionsOut"]; actions: Actions; filtered: boolean; onClear: () => void; linked: string }) {
+  const repeated = useContext(RepeatedCodes);
   const open = d.questions.filter((x) => x.column !== "decided");
   // eq2 b: one withdrawn here just now keeps its place, struck through, with Undo.
   const gone = useDecisionSheet()?.withdrawn ?? {};
@@ -327,7 +352,7 @@ function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["S
           )
         ) : (
           <ul>
-            {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} linked={x.id === linked} />)}
+            {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} linked={x.id === linked} listCode={repeated.has(x.code.toUpperCase())} />)}
             {extra.map((i) => <WaitingRow key={i.key} item={i} />)}
           </ul>
         )}
@@ -339,7 +364,7 @@ function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["S
       </QuestionCard>
       {others.length > 0 && (
         <QuestionCard label="Waiting for others" testId="questions-others" questions={others} count={others.length}>
-          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} forOthers linked={x.id === linked} />)}</ul>
+          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} forOthers linked={x.id === linked} listCode={repeated.has(x.code.toUpperCase())} />)}</ul>
         </QuestionCard>
       )}
     </>
@@ -365,6 +390,7 @@ const TWO_COLUMN_PLACE: Record<Question["column"], string> = {
 
 /** Board: three columns by `column`, soonest first (the API's order); on a phone, one column at a time behind tabs. */
 function Board({ questions, actions, linked }: { questions: Question[]; actions: Actions; linked: string }) {
+  const repeated = useContext(RepeatedCodes);
   // On a phone, the tab of a linked question.
   const [tab, setTab] = useState<Question["column"]>(() => questions.find((x) => x.id === linked)?.column ?? "needs_input");
   const of = (k: Question["column"]) => questions.filter((x) => x.column === k);
@@ -396,7 +422,7 @@ function Board({ questions, actions, linked }: { questions: Question[]; actions:
               ) : (
                 <ul>
                   {/* qa4-simple-decide-6: someone else's question says for whom here too, as on the List. */}
-                  {of(c.key).map((x) => <QuestionRow key={x.id} q={x} mode={c.key} actions={actions} forOthers linked={x.id === linked} />)}
+                  {of(c.key).map((x) => <QuestionRow key={x.id} q={x} mode={c.key} actions={actions} forOthers linked={x.id === linked} listCode={repeated.has(x.code.toUpperCase())} />)}
                 </ul>
               )}
             </section>
@@ -603,6 +629,7 @@ function StopRow({ run, s }: { run: RunGroup; s: RunGroup["stops"][number] }) {
 
 /** Decisions taken: the round check (an open one, the flag), "<code> <title>" (a PRD's question keeps its code), then its answer, who decides and the day and time. */
 function Rows({ rows }: { rows: Row[] }) {
+  const repeated = useContext(RepeatedCodes);
   const zone = useCompanyZone();
   const { me } = useMe();
   const sheet = useDecisionSheet();
@@ -612,7 +639,8 @@ function Rows({ rows }: { rows: Row[] }) {
         const done = r.status === "decided";
         // qa-simple-decide-19: a question decided in a meeting shows as one decided outside it:
         // its code, its title, then the answer, as the API sends them (never read out of the title).
-        const code = r.code ?? `D-${r.number}`;
+        // QA: a code another decision here shares reads as the decision's own number (RepeatedCodes).
+        const code = r.code && !repeated.has(r.code.toUpperCase()) ? r.code.toUpperCase() : `D-${r.number}`;
         const { title } = r;
         // ec1 b: an open decision's title opens its sheet; one withdrawn here just now stays, struck through, with Undo.
         const opens = !!sheet && r.status === "proposed" && !!r.can;
@@ -631,7 +659,9 @@ function Rows({ rows }: { rows: Row[] }) {
             </span>
             <span className="simple-rb flex-1">
               <span className="break-words">
-                <span className="simple-code">{code}</span>{" "}
+                <span className="simple-code" title={r.code && code !== r.code.toUpperCase() ? [r.prd_title, r.code.toUpperCase()].filter(Boolean).join(" ") : undefined} data-testid="decision-code">
+                  {code}
+                </span>{" "}
                 {gone ? (
                   <s className="font-[650] text-text2" data-testid="decision-withdrawn" data-user-content>
                     {title}

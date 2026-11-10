@@ -1147,6 +1147,8 @@ function row(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecisionRow"] {
     id: d.id, number: d.number, title: d.question?.title ?? d.title, origin: d.question ? "prd" : d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
     decided_at: d.status === "decided" ? d.at : null, created_at: d.at, subjects: d.subjects, flow: decidedFlow(ctx, d),
     code: d.question?.code ?? null, chosen: d.question?.chosen ?? null,
+    // QA (unique codes): a PRD's question names its PRD (the meeting's, its document subject).
+    prd_title: d.question ? (prds(ctx).find((x) => d.subjects.some((s) => s.kind === "document" && s.id === x.id))?.title ?? null) : null,
     // edit-decisions (ec1 b): every field the sheet shows, what the reader may do there, its last edit.
     question: d.ask ?? null, context: d.context ?? null, options: d.options ?? [], review_at: d.review_at ?? null, can: sheetCan(ctx, d),
     edited_at: d.edited?.at ?? null, edited_by: d.edited ? ref(ctx, d.edited.by) : null,
@@ -1219,7 +1221,7 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
       };
     }),
     // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
-    other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
+    other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d)), ...(meetingQ ? [] : repeatedCodeRows())],
     // qa4-simple-decide-37 (as decisions_page: both from the PRDs the reader reads): every PRD whose questions are shown.
     // prd-order (as decisions_page): the PRD filter lists them in the company PRD order.
     prds: [...new Map([...ps.filter((x) => !x.replaced).map((x) => [x.slug, x.title] as const), ...(questionsPrdReplaced(ctx) ? [] : questionsOut(ctx, qd, null)).map((x) => [x.prd.slug, x.prd.title] as const)])]
@@ -1775,4 +1777,18 @@ export function sheetDecisionMade(db: MeetingsDb, made: Schemas["DecisionOut"], 
     at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))), subjects: [], meeting_id: null, change_ids: [],
     ask: made.question ?? null, context: made.context ?? null, options: (made.options ?? []).map((o) => ({ key: o.key, label: o.label })), review_at: made.review_at ?? null, created_by: by,
   });
+}
+
+/** QA (unique codes): the "repeated-codes" scenario adds a question another PRD's run numbered q5
+ * (lower case, as that run wrote it), decided outside meetings, beside Guided setup's own Q5; and
+ * two runs' Q9 of one title, two different decisions. */
+export const REPEATED_CODES_SCENARIO = "repeated-codes";
+function repeatedCodeRows(): Schemas["SimpleDecisionRow"][] {
+  if (typeof localStorage === "undefined" || localStorage.getItem("po-mock-scenario") !== REPEATED_CODES_SCENARIO) return [];
+  const at = iso(mockNowMs() - 3 * 86_400_000);
+  return [
+    { id: stableUuid("qa-repeated-codes/q5"), number: 140, title: "Trial length for new teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "q5", chosen: "14 days", options: [], prd_title: "Team trials" },
+    { id: stableUuid("qa-repeated-codes/q9-a"), number: 142, title: "Seat price for teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "Q9", chosen: "Per seat", options: [], prd_title: "Team trials" },
+    { id: stableUuid("qa-repeated-codes/q9-b"), number: 141, title: "Seat price for teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "Q9", chosen: "Flat", options: [], prd_title: "Team billing" },
+  ];
 }

@@ -124344,6 +124344,17 @@
             ],
             "title": "Code"
           },
+          "prd_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Title"
+          },
           "chosen": {
             "anyOf": [
               {
@@ -133015,7 +133026,8 @@
               "draft",
               "proposal",
               "goal_suggestion",
-              "goal"
+              "goal",
+              "inbox"
             ],
             "title": "Kind"
           },

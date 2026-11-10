@@ -41556,6 +41556,8 @@ export interface components {
             flow?: components["schemas"]["SimpleDecidedFlow"] | null;
             /** Code */
             code?: string | null;
+            /** Prd Title */
+            prd_title?: string | null;
             /** Chosen */
             chosen?: string | null;
             /** Question */
@@ -45026,7 +45028,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "run_stop" | "question" | "decision" | "broken_link" | "date" | "draft" | "proposal" | "goal_suggestion" | "goal";
+            kind: "run_stop" | "question" | "decision" | "broken_link" | "date" | "draft" | "proposal" | "goal_suggestion" | "goal" | "inbox";
             /** Key */
             key: string;
             /** Ref Id */

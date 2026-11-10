@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { InfoTip } from "@/components/ds/InfoTip";
 import { toast } from "@/components/ds/Toast";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -23,12 +23,23 @@ export function useWaitingList(): { data: Waiting | undefined; error: unknown; r
   const [error, setError] = useState<unknown>(null);
   const [changes, setChanges] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
+  // QA: a read begun before a change still lands while no later one has (never "Loading…" for
+  // as long as the later read takes); an older answer never lands over a newer one.
+  const shown = useRef(-1);
   useEffect(() => {
     let alive = true;
+    const n = changes;
+    const land = (apply: () => void) => {
+      if (shown.current > n) return;
+      shown.current = n;
+      apply();
+    };
     loadWaiting()
-      .then((d) => alive && (setData(d), setError(null)))
-      // counts-failed-part: a failed read drops what the last one read, so no out-of-date number shows beside Could not load.
-      .catch((e) => alive && (setData(undefined), setError(e)));
+      // Review: a read begun before an action never lands after it (the action's own read does).
+      .then((d) => alive && land(() => (setData(d), setError(null))))
+      // counts-failed-part: a failed read drops what the last one read, so no out-of-date number
+      // shows beside Could not load; a failure after a later change is left to the later read.
+      .catch((e) => alive && land(() => (setData(undefined), setError(e))));
     return () => {
       alive = false;
     };
@@ -86,6 +97,10 @@ function actionsOf(i: WaitingItem): Act[] {
       { label: "Not this", done: `${i.title} set aside`, run: () => unwrap(api.POST("/v1/baseline/entities/{entity_id}/reject", entity)) },
     ];
   }
+  // A ritual that failed to prepare is prepared again in place, as the Inbox's row does.
+  if (i.kind === "inbox" && i.key.startsWith("ritual:failed:")) {
+    return [{ label: "Retry", primary: true, done: "Preparing it again", run: () => unwrap(api.POST("/v1/rituals/{ritual_id}/prepare", { params: { path: { ritual_id: i.ref_id } } })) }];
+  }
   if (i.kind === "draft") {
     return [{ label: "Approve", primary: true, done: "Approved", run: () => unwrap(api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: i.ref_id } } })) }];
   }
@@ -103,6 +118,7 @@ export const WAITING_KIND: Record<WaitingItem["kind"], string> = {
   proposal: "Proposal on your item",
   goal_suggestion: "Goal suggestion",
   goal: "Proposed goal",
+  inbox: "Inbox",
 };
 
 /**
@@ -169,11 +185,19 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
             {item.action}
           </button>
         ) : acts.length ? (
-          acts.map((a) => (
-            <button key={a.label} type="button" disabled={busy} className={`simple-button${a.primary ? " simple-button-primary" : ""}`} onClick={() => void act(a.run, a.done)}>
-              {a.label}
-            </button>
-          ))
+          <>
+            {acts.map((a) => (
+              <button key={a.label} type="button" disabled={busy} className={`simple-button${a.primary ? " simple-button-primary" : ""}`} onClick={() => void act(a.run, a.done)}>
+                {a.label}
+              </button>
+            ))}
+            {/* An Inbox row acted on in place still opens where it lives (a failed ritual: Company › Rituals). */}
+            {item.kind === "inbox" && (
+              <Link href={item.href} className="simple-button">
+                Open
+              </Link>
+            )}
+          </>
         ) : (
           <Link href={item.href} className="simple-button simple-button-primary">
             {item.action}

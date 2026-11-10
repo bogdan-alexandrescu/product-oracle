@@ -2528,6 +2528,8 @@ class SimpleDecisionRow(BaseModel):
     flow: SimpleDecidedFlow | None = None
     # prd-questions: a PRD's question keeps its code ("Q10"); a decided one, its answer.
     code: str | None = None
+    # QA (unique codes): a PRD's question names its PRD (one the reader reads).
+    prd_title: str | None = None
     chosen: str | None = None
     # edit-decisions (ec1 b): every field the sheet shows and changes, what the reader may
     # do there, and the last change made from it.
@@ -2740,6 +2742,9 @@ class SimpleWaitingItem(BaseModel):
         "proposal",
         "goal_suggestion",
         "goal",
+        # The Inbox's other counted "Needs you" rows (Add predictions, launches, rituals,
+        # metrics, requests), opened where the Inbox opens them.
+        "inbox",
     ]
     # Unique in the list (kind and id); ``ref_id`` is the id its own endpoint acts on (the
     # checkpoint, question, decision's number, item, date suggestion, draft, change, goal
