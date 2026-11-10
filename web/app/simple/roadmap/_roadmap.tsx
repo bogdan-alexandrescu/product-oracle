@@ -995,7 +995,8 @@ export function SimpleRoadmap() {
   const params = useSearchParams();
   const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, prd: params.get("prd") ?? "", roadmap: params.get("roadmap") ?? "", goal: params.get("goal") ?? "" }));
   const [format, setFormat] = useState<Format>("timeline");
-  // tb-mk: the Gantt starts grouped by track, the Board and the Waterfall by goal, till a person picks a Group by.
+  // tb-mk (owner Nov 10, "Track everywhere"): the Gantt, the Board and the Waterfall start grouped by track, like
+  // the Timeline's bands, till a person picks a Group by.
   const groupPicked = useRef(false);
   const [unit, setUnit] = useState<GanttUnit>("week");
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);
@@ -1598,19 +1599,30 @@ export function SimpleRoadmap() {
     return data.items.some((i) => i.roadmap.id === rm && i.can_decide) ? "Add" : "Propose";
   };
   const onAdd = async (title: string, at: Where, rmId?: string): Promise<boolean> => {
-    // tb-mk: a quick add dropped on a track band is added to Next, then put on that track (set_track).
+    // tb-mk: a quick add dropped on a track band is added to Next on that track (after.track_id, kept by a
+    // proposal till it is accepted); an applied add the roadmap reads elsewhere is then put on it (set_track).
     const band = at.kind === "track" ? (data.tracks ?? []).find((t) => t.id === at.value) : undefined;
     if (at.kind === "track" && !band) return false;
     const w: Where = band ? { kind: "horizon", value: "next", label: band.title } : at;
     try {
-      const r = await propose({ op: "add_item", target: { roadmap_id: rmId ?? target?.id ?? null, where: { kind: w.kind, value: w.value } }, before: {}, after: { title } });
+      const r = await propose({ op: "add_item", target: { roadmap_id: rmId ?? target?.id ?? null, where: { kind: w.kind, value: w.value } }, before: {}, after: band ? { title, track_id: band.id } : { title } });
       const c = r.change;
       const id = c.target.item_id;
       if (band && c.status === "applied" && typeof id === "string") {
         // Its track as the roadmap now reads it (the roadmap's first track), then the band's.
         const now = await unwrap(api.GET("/v1/simple/roadmap", { params: { query: wideQs as never } }));
         const had = now.items.find((i) => i.id === id)?.track?.id ?? null;
-        if (had !== band.id) await propose({ op: "set_track", target: { item_id: id }, before: { track_id: had }, after: { track_id: band.id } });
+        if (had !== band.id) {
+          try {
+            await propose({ op: "set_track", target: { item_id: id }, before: { track_id: had }, after: { track_id: band.id } });
+          } catch (e) {
+            // The add stands: say so, and that the track did not change.
+            toast({ message: `Added ${title}, but Oracle could not put it on ${band.title}${e instanceof ChangeFailed ? `: ${e.message}` : ""}` });
+            await reloadAfter();
+            setCard({ id, ...anchorOf(id) });
+            return true;
+          }
+        }
       }
       if (c.status === "applied")
         toast({
@@ -1910,7 +1922,7 @@ export function SimpleRoadmap() {
               setCard(null);
               setPop(null);
               setFormat(v);
-              if (!groupPicked.current) setF((p) => ({ ...p, group: v === "gantt" ? "track" : "goal" }));
+              if (!groupPicked.current) setF((p) => ({ ...p, group: v === "timeline" ? "goal" : "track" }));
             }}
             items={[
               { value: "timeline", label: "Timeline", testId: "format-timeline" },

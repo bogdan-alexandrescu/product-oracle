@@ -206,7 +206,8 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
         </Field>
       </div>
       <OwnerField value={f.owner ?? null} onChange={(owner) => setF((x) => ({ ...x, owner }))} />
-      {goal?.can_edit && f.on_roadmap !== undefined && (
+      {/* tb-mk: a goal with no target date has no milestone to put on the roadmap. */}
+      {goal?.can_edit && f.on_roadmap !== undefined && !!day && (
         <label className="flex items-center gap-2 text-[13px] font-[650] text-text2">
           <input type="checkbox" role="switch" data-testid="goal-on-roadmap" checked={f.on_roadmap} onChange={(e) => setF((x) => ({ ...x, on_roadmap: e.target.checked }))} className="size-4 accent-[var(--accent)]" />
           On the roadmap

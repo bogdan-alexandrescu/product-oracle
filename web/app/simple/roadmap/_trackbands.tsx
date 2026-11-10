@@ -21,7 +21,8 @@ export function trackLaned(data: Roadmap): Roadmap {
   const order = [...tracks.map((t) => [t.id, t.title] as const), ...extra.entries()];
   const groups = order.map(([id, title]) => ({ key: id, title, item_ids: data.items.filter((i) => i.track?.id === id).map((i) => i.id) }));
   groups.push({ key: "none", title: "No track", item_ids: data.items.filter((i) => !i.track).map((i) => i.id) });
-  return { ...data, group: "track", groups: groups.filter((g) => g.item_ids.length) };
+  // A live track with no work still shows its band, so it can take a quick add.
+  return { ...data, group: "track", groups: groups.filter((g) => g.item_ids.length || known.has(g.key)) };
 }
 
 function Mark({ t }: { t: Track }) {

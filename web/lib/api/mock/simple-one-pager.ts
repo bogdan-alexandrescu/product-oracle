@@ -22,7 +22,7 @@
  * for your review of <PRD>", at most once a day per reviewer (409 when none is due).
  */
 import type { Schemas } from "@/lib/api/client";
-import { planByMonth } from "@/lib/simple-home";
+import { milestoneOf, planByMonth } from "@/lib/simple-home";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
@@ -200,6 +200,8 @@ type SliceItem = {
   milestone: [string, string | null] | null;
   /** The track milestone record naming the item, when any (the strip's row). */
   record?: { id: string; name: string };
+  /** roadmap-milestone-codes: its milestone's roadmap-wide code (one_pager.roadmap_codes_of), when any. */
+  code?: string | null;
   /** The day its milestone starts when the PRD's plan dates it (the strip's row spans it). */
   milestoneStart?: string;
   /** The mock roadmap's item it is (simple-roadmap.ts SEED key), so it carries that feature's mark. */
@@ -653,6 +655,23 @@ function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem
     if (code) codes.add(code);
   }
   const out = roadmapOut(rm, role, new URLSearchParams());
+  // one_pager.roadmap_codes_of: a milestone's roadmap code by its id, else this PRD's milestone of
+  // that written code (or name) on the roadmap; none when it is no roadmap milestone.
+  const byId = new Map<string, string | null | undefined>([...(out?.goal_milestones ?? []), ...((out?.milestones ?? []) as { id: string; roadmap_code?: string | null }[])].map((m) => [m.id, m.roadmap_code]));
+  const own = new Map<string, string>();
+  for (const m of out?.goal_milestones ?? []) {
+    if (!m.prd || m.prd.id !== db.doc.id || !m.roadmap_code) continue;
+    for (const k of [m.code.trim().toUpperCase(), m.name.split(/\s+/).filter(Boolean).join(" ").toLowerCase()]) {
+      if (k && (!own.has(k) || Number(m.roadmap_code.slice(1)) < Number(own.get(k)!.slice(1)))) own.set(k, m.roadmap_code);
+    }
+  }
+  const codeOf = (text: string | null, ...ids: (string | null | undefined)[]): string | null => {
+    for (const i of ids) if (i && byId.get(i)) return byId.get(i)!;
+    if (!text) return null;
+    const [key, label] = milestoneOf(text);
+    const name = label.includes(" · ") ? label.split(" · ").slice(1).join(" · ") : "";
+    return own.get(key) ?? own.get(name.split(/\s+/).filter(Boolean).join(" ").toLowerCase()) ?? null;
+  };
   const items = (out?.items ?? [])
     .filter((i) => i.prd?.slug === db.doc.slug || i.prd?.id === db.doc.id || (!!featureCode(i.code) && codes.has(featureCode(i.code)!)))
     .filter((i) => i.status !== "cut")
@@ -665,6 +684,7 @@ function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem
           ...base, start: x.start_date ?? base.start, end: x.end_date ?? base.end, estimated: !(x.milestone_start && x.milestone_end),
           milestone: [`${x.milestone} · ${x.milestone_name}`, x.milestone_end ?? null] as [string, string | null],
           ...(x.milestone_start ? { milestoneStart: x.milestone_start } : {}),
+          code: codeOf(`${x.milestone} · ${x.milestone_name}`),
         }));
       }
       if (!own) return [{ ...base, milestone: null }];
@@ -673,6 +693,7 @@ function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem
         milestone: i.milestone?.date ? [i.milestone.name ?? "Milestone", i.milestone.date] as [string, string] : null,
         ...(i.milestone?.record_id ? { record: { id: i.milestone.record_id, name: i.milestone.record_name ?? "Milestone" } } : {}),
         ...(i.milestone?.start_date ? { milestoneStart: i.milestone.start_date } : {}),
+        code: i.milestone ? codeOf(i.milestone.name ?? null, i.milestone.id, i.milestone.record_id) : null,
       }];
     });
   // A dated plan's span is the one its timeline draws.
@@ -1050,9 +1071,12 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     blocks,
     timeline: slice.map((x, i) => ({ id: sliceItemId(x, i), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
     plan: planByMonth(
-      placed.map((x, i) => ({ id: sliceItemId(x, i), start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
+      placed.map((x, i) => ({ id: sliceItemId(x, i), start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null, roadmapCode: x.code ?? null })),
       // qa4-simple-prd-10: the company's day, as the API's slice (and the notes' times) read it.
       companyDayIso(new Date(mockNowMs())),
+      null,
+      // roadmap-milestone-codes: rows read the roadmap's codes, never the PRD's written ones.
+      true,
     ),
     // As the API: the sections the page's lines rest on.
     sections: db.sections.filter((s) => db.blocks.some((b) => b.lines.some((l) => l.keys.includes(s.key)))).map((s) => ({ key: s.key, heading: headingNow(db, s.key, sees), body: sectionNow(db, s.key, sees) })),

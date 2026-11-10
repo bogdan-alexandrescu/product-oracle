@@ -80,6 +80,9 @@ const USER_CONTENT = [
   // A one-pager's lines and chat or meeting messages.
   "[data-testid=one-pager-line-text]",
   "[data-testid=chat-message-body]",
+  // Copy the owner picked word for word to show as visible text (named in the PR that adds it), e.g.
+  // the milestone panel's "Work that serves it · tap bars on the chart to add" (owner, Nov 10).
+  "[data-owner-copy]",
 ];
 
 type Role = "owner" | "viewer";

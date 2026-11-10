@@ -81,6 +81,7 @@ import {
   type MockKeyDate,
   type SeedItem,
   type SimpleDb,
+  TRACKS,
 } from "./simple-roadmap";
 import { routeGoalSuggestions } from "./simple-suggestions";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
@@ -1910,6 +1911,11 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     target.item_id = crypto.randomUUID();
     const after: Values = { title, horizon, goal_ids: goal ? [goalId(goal)] : value in MAP_GOALS ? [value] : [], ...(quarter ? { quarter } : {}) };
     if (typeof a.outcome === "string" && a.outcome.trim()) after.outcome = a.outcome.trim();
+    // tb-mk (additions._live_track): a quick add on a track band names the band's track; the item lands on it.
+    if (a.track_id != null) {
+      if (!Object.keys(TRACKS).some((k) => stableUuid(`simple-track/${k}`) === a.track_id)) return json(422, { detail: "after.track_id: a product track" });
+      after.track_id = String(a.track_id);
+    }
     // An item added with its milestone (additions._plan: after.milestone {name, date}).
     const m = a.milestone as { name?: unknown; date?: unknown } | null | undefined;
     if (m && typeof m === "object") {
@@ -2035,7 +2041,8 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
     db.ids[key] = id;
     const added: SeedItem = {
       key, title: String(a.title), horizon: a.horizon as SeedItem["horizon"], roadmap, goal: goalKey,
-      track: db.items.find((x) => x.roadmap === roadmap && x.track)?.track, draft: true, outcome: typeof a.outcome === "string" ? a.outcome : null,
+      // tb-mk: the band's track (after.track_id), else the roadmap's first track.
+      track: Object.keys(TRACKS).find((k) => !!a.track_id && stableUuid(`simple-track/${k}`) === a.track_id) ?? db.items.find((x) => x.roadmap === roadmap && x.track)?.track, draft: true, outcome: typeof a.outcome === "string" ? a.outcome : null,
       drafting_until: mockNowMs() + draftingMs(), quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
       ...(a.milestone ? { milestone: { name: String((a.milestone as Values).name), day: dayIn(a.horizon as SeedItem["horizon"], (a.milestone as Values).date) } } : {}),
       looks_like: lookalikes(db, String(a.title), roadmap),

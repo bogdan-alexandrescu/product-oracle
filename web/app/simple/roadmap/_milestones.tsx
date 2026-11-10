@@ -605,9 +605,16 @@ export function MsLayer(props: MsLayerProps) {
       e.stopPropagation();
       const up = () => {
         window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", cancel);
         ms.edit(m);
       };
+      // A cancelled press (a scroll took it) opens nothing and leaves no listener behind.
+      const cancel = () => {
+        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", cancel);
+      };
       window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", cancel);
       return;
     }
     e.preventDefault();
@@ -624,6 +631,7 @@ export function MsLayer(props: MsLayerProps) {
     const onUp = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
       if (!drag.moved) {
         ms.setMoving(null);
         ms.edit(m);
@@ -633,8 +641,15 @@ export function MsLayer(props: MsLayerProps) {
       const to = dayAt(x, px, from);
       void ms.move(m, to).finally(() => ms.setMoving(null));
     };
+    const onCancel = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      ms.setMoving(null);
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
   };
   // The joined milestone's longer name, as the band and its "+N" list give it.
   const joinedWordsOf = (m: GoalMilestone) => (ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m));
@@ -870,7 +885,8 @@ export function MsLayer(props: MsLayerProps) {
     // The joined milestone's longer name (the owner's "Join whenever names match").
     const bandWords = joinedWordsOf;
     const tipFor = (m: GoalMilestone) => {
-      const g = ms.goals.find((o) => o.id === m.goal_id)?.title ?? goalOf(m)?.title ?? "No goal";
+      // A goal's own target date builds toward that goal, features on the page or not.
+      const g = ms.goals.find((o) => o.id === m.goal_id)?.title ?? goalOf(m)?.title ?? (m.goal_target ? m.name : null) ?? "No goal";
       return {
         head: `${bandWords(m)} · ${fullDay(m.date!)}`,
         also: ms.joined.get(msCode(m))?.also ?? [],
@@ -1301,10 +1317,11 @@ export function MsCard() {
       <div className="flex flex-col gap-1" data-testid="ms-waits-on">
         <span className="flex items-center gap-1 text-xs font-semibold text-text2">
           Work that serves it
+          {/* tb-mk (owner Nov 10): the hint is visible text, the owner's picked copy (data-owner-copy). */}
           {!reads && (
-            <InfoTip label="Work that serves it" align="start" side="bottom" testId="ms-waits-tip">
-              Tap bars on the chart to add
-            </InfoTip>
+            <span className="font-normal" data-owner-copy data-testid="ms-waits-hint">
+              · tap bars on the chart to add
+            </span>
           )}
         </span>
         <div className="flex flex-wrap gap-1.5">
