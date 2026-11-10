@@ -373,6 +373,21 @@ export function PrdPlan({ plan, title, onPlan, prd, loose = [] }: { plan: Plan; 
 export type Loose = { id: string; title: string; code?: string | null };
 
 /**
+ * Owner, Nov 10: the PRD's roadmap items with no plan milestone (the strip's "No milestone" row),
+ * for the When card on the page and on the Present slide alike.
+ */
+export function looseItems(v: Pick<Schemas["OnePagerOut"], "plan" | "timeline">, codes: Map<string, string | null>): Loose[] {
+  const timelineById = new Map(v.timeline.map((t) => [t.id, t]));
+  return (v.plan?.rows ?? [])
+    .filter((r) => !r.milestone)
+    .flatMap((r) => r.item_ids ?? [])
+    .flatMap((id) => {
+      const t = timelineById.get(id);
+      return t ? [{ id, title: t.title, code: codes.get(id) ?? null }] : [];
+    });
+}
+
+/**
  * Owner, Nov 10 ('Add rows to the plan card'): the PRD's roadmap items with no plan milestone, in
  * one group at the end of the When card, each row as the card's others; its name opens the feature's panel.
  */

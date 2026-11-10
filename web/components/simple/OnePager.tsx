@@ -11,7 +11,7 @@ import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
 import { OnePagerSlides } from "@/components/simple/OnePagerSlides";
 import { FeaturePanel } from "@/app/simple/roadmap/_panel";
-import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
+import { dmy, ew, looseItems, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { RunReviewStep } from "@/components/simple/RunReviewStep";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
@@ -479,14 +479,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const plan = planNow ?? planQ.data ?? null;
   const planShown = !!plan && plan.status !== "none" && plan.milestones.length > 0;
   // Owner, Nov 10: the plan's card also lists the PRD's roadmap items with no plan milestone (the strip's "No milestone" row).
-  const timelineById = new Map(v.timeline.map((t) => [t.id, t]));
-  const loose = (v.plan?.rows ?? [])
-    .filter((r) => !r.milestone)
-    .flatMap((r) => r.item_ids ?? [])
-    .flatMap((id) => {
-      const t = timelineById.get(id);
-      return t ? [{ id, title: t.title, code: codes.get(id) ?? null }] : [];
-    });
+  const loose = looseItems(v, codes);
   const summary = docQ.data ?? null;
   // qa-simple-prd-18: a draft whose changes were all undone shows no banner.
   const draftShown = !!v.draft && (v.draft.changes > 0 || v.draft.status === "submitted");
