@@ -199,6 +199,10 @@ interface SimpleDb {
   goal_edits?: Record<string, RoadmapGoalFields>;
   /** pre-demo QA P-6: item id -> the goal it serves on the Goal map (service._ladder_goals), read when the item has no goal of its own. */
   map_goals?: Record<string, Schemas["SimpleGoalRef"]>;
+  /** roadmap-milestone-codes: goal-ladder's Goal map milestones, which are this roadmap's own goal
+   * milestones in the API (goal_map._on_map reads the same rows), so the read codes them too
+   * (server.ts copies them from the map on each request: goalMapMilestones). */
+  map_milestones?: { roadmap: string; milestones: { id: string; name: string; date: string | null; goal_id: string; rank: number }[] };
   goal_jobs?: Record<string, { until: number; job_id: string; origin: "auto" | "on_demand" }>;
   auto_done?: string[];
   /** S7: the seeds a merge changed, as they were (change id -> seeds), for its undo. */
@@ -1677,7 +1681,14 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const goalMilestoneOut = (x: (typeof liveGoalMilestones)[number]) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer", me && { role: me.role, id: me.id, names: me.names, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, (slug) => roadmapTitle(db, slug));
   // roadmap-milestone-codes: each milestone's one code across every readable roadmap and item, numbered
   // before the filters so a filtered read shows the codes Home and the Goal map show (oracle.simple.service).
-  const coded = withRoadmapCodes({ goal_milestones: liveGoalMilestones.map(goalMilestoneOut), milestones: trackMilestones(readable), items }, (id) => goalRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
+  const onMap = db.map_milestones && readable.includes(db.map_milestones.roadmap) ? db.map_milestones : null;
+  const mapRanks = new Map((onMap?.milestones ?? []).map((m) => [m.goal_id, m.rank]));
+  const mapMilestoneOut = (m: NonNullable<typeof onMap>["milestones"][number]): Schemas["SimpleGoalMilestone"] => ({
+    id: m.id, roadmap_id: roadmapId(onMap!.roadmap), code: "", name: m.name, date: m.date, goal_id: m.goal_id, item_ids: [], counts_when: "", progress: "not_started",
+    prd: null, prd_owner: null, pending: null, can_change: false, can_propose: false, carried_from: null,
+  });
+  const goalMilestonesOf = (slug?: string | null) => [...liveGoalMilestones.filter((m) => !slug || m.roadmap === slug).map(goalMilestoneOut), ...(onMap && (!slug || onMap.roadmap === slug) ? onMap.milestones.map(mapMilestoneOut) : [])];
+  const coded = withRoadmapCodes({ goal_milestones: goalMilestonesOf(null), milestones: trackMilestones(readable), items }, (id) => goalRanks.get(id) ?? mapRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
   const codeOf = new Map<string, string | null>([...coded.goal_milestones, ...(coded.milestones as { id: string; roadmap_code?: string | null }[])].map((m) => [m.id, m.roadmap_code ?? null]));
   const withCode = <M extends { id: string }>(m: M) => ({ ...m, roadmap_code: codeOf.get(m.id) ?? null });
   return {
@@ -1686,7 +1697,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     groups: [...groups.entries()].sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
     items: shown,
     milestones: trackMilestones(chosen ? [chosen] : readable).map(withCode),
-    goal_milestones: liveGoalMilestones.filter((m) => !chosen || m.roadmap === chosen).map(goalMilestoneOut).map(withCode),
+    goal_milestones: goalMilestonesOf(chosen).map(withCode),
     old_milestones: oldMilestonesOut(db.goal_milestones ?? [], role, oldCtx(db)),
     // service.build: the span of the shown items' PRDs' plans only (a replaced plan PRD's goes with its items).
     span: db.plan && shown.some((i) => !!i.prd && (i.prd.slug === PLAN_PRD_SLUG || !!db.plan?.prds?.includes(i.prd.slug))) ? planSpan() : null,

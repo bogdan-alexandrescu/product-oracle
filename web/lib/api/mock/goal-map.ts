@@ -825,6 +825,12 @@ export async function routeLadderMilestone(
  * every-field-editable: the map's key results as Simple's change engine reads them (an
  * edit_goal_milestone proposal names one, as goal_milestones._value; the decider accepts it).
  */
+/** roadmap-milestone-codes: the map's live milestones as its roadmap's goal milestones (the API's are one record), each with its goal's place in the map's order. */
+export function goalMapMilestones(map: GoalMap): { id: string; name: string; date: string | null; goal_id: string; rank: number }[] {
+  const rank = new Map(map.goals.map((g, n) => [g.id, n]));
+  return (map.milestones as Held[]).filter((m) => !m.trashed).map((m) => ({ id: m.id, name: m.name, date: m.due_on ?? null, goal_id: m.goal, rank: rank.get(m.goal) ?? map.goals.length }));
+}
+
 export function ladderMilestones(db: { goal_map?: GoalMap; goal_map_decider?: string | null }, me: { id: string; role: string }): LadderMilestones {
   const live = (id: string) => (db.goal_map?.milestones as Held[] | undefined)?.find((x) => x.id === id && !x.trashed);
   return {

@@ -210,7 +210,7 @@ import { openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdOwnerIdsOf, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
-import { goalMapGoals, goalMapIdOf, goalMapItems, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
+import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
@@ -4388,6 +4388,8 @@ function load(): Db {
                     const gb = (rm.goal_buckets = seedGoalBuckets());
                     for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
                     rm.ids = Object.fromEntries(rm.items.map((x) => [x.key, stableUuid(`simple-item/${x.key}`)]));
+                    // roadmap-milestone-codes: the ladder's milestones are this roadmap's goal milestones (route copies them).
+                    rm.map_milestones = { roadmap: "onboarding-roadmap", milestones: [] };
                     return db;
                   }
               : scenario === APPROVED_ROADMAP_SCENARIO
@@ -7823,6 +7825,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_roadmap ??= seedSimpleRoadmap();
   // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
   if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
+  // roadmap-milestone-codes: the Goal map's milestones as they are now (moved, renamed, in Trash).
+  if (db.goal_map && db.simple_roadmap.map_milestones) db.simple_roadmap.map_milestones.milestones = goalMapMilestones(db.goal_map);
   // simple-replaced-prds: the PRDs marked replaced, whose items no longer feed Simple (service.load).
   markReplaced(db, db.simple_roadmap);
   const roadmapItems = db.simple_roadmap;
