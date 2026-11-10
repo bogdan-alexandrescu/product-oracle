@@ -1,4 +1,4 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_SCENARIO_KEY, ONE_PAGER_PLAN_LOOSE_SCENARIO } from "../lib/api/mock/server";
 import { WALK_PROBLEM } from "../lib/api/mock/simple-one-pager";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -30,6 +30,10 @@ import { expect, test, type Page } from "./test";
  * vqa-d: protects = a Problem line over 300 characters (shown cut, "Show all") is edited from its
  * whole words and reads the whole edited text after Save; fails_when = the edit is refused for
  * its length or the line keeps its cut "…".
+ *
+ * vqa-b: protects = a PRD whose plan has its own milestones lists each of its roadmap items with
+ * no plan milestone in its When card, under "No milestone" at the card's end, and the item's
+ * name opens its feature panel; fails_when = the item is on no part of the page.
  */
 
 const URL = "/simple/one-pagers/guided-setup";
@@ -64,6 +68,24 @@ test("vqa one-pager 3: every milestone row of the Timeline strip reads its name"
     "M1 · Measured and mapped · 1 roadmap item",
     "M2 · Ship to beta · 2 roadmap items",
   ]);
+});
+
+test("vqa-b: the plan's When card lists the PRD's item with no plan milestone under No milestone", async ({ page }) => {
+  // Owner, Nov 10 ('Add rows to the plan card'): the plan-led page shows every roadmap item of the PRD.
+  await scenario(page, ONE_PAGER_PLAN_LOOSE_SCENARIO);
+  await login(page);
+  await page.goto(PRD_URL);
+  const card = page.getByRole("region", { name: "Timeline" });
+  await expect(card.getByRole("heading", { name: "When", exact: true })).toBeVisible();
+  const group = card.getByTestId("timeline-no-milestone");
+  await expect(group.getByRole("heading", { name: "No milestone" })).toBeVisible();
+  // The group is the card's last part, after the milestones.
+  await expect(card.locator(":scope > *").last()).toHaveAttribute("data-testid", "timeline-no-milestone");
+  const rows = group.getByTestId("timeline-no-milestone-item");
+  await expect(rows).toHaveText(["Calendar invite sync"]);
+  // Its name opens the feature's panel, as every feature does.
+  await rows.getByRole("button", { name: "Calendar invite sync" }).click();
+  await expect(page.getByTestId("floating-card").getByTestId("card-name")).toContainText("Calendar invite sync");
 });
 
 test.describe("production QA", () => {

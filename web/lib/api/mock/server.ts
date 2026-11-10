@@ -1298,6 +1298,9 @@ function seedSimpleWalkScenario(): Db {
  */
 const UNDATED_PLAN_FEATURE = "F-11";
 
+/** "simple-plan" with one roadmap item of the PRD that no plan milestone holds (the When card's "No milestone" group). */
+export const ONE_PAGER_PLAN_LOOSE_SCENARIO = "one-pager-plan-loose";
+
 function seedSimplePlanScenario(datedAll = false): Db {
   const db = seedSimpleHomeOnePrdScenario();
   const rm = db.simple_roadmap!;
@@ -4151,6 +4154,13 @@ function load(): Db {
                 ? seedGoalBucketsUndatedScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
+              : scenario === ONE_PAGER_PLAN_LOOSE_SCENARIO
+                ? () => {
+                    // Owner, Nov 10 ('Add rows to the plan card'): one of the PRD's roadmap items has no plan milestone.
+                    const db = seedSimplePlanScenario();
+                    db.simple_one_pager!.slice!.push({ title: "Calendar invite sync", horizon: "later", start: "2027-01-04", end: "2027-01-29", estimated: true, milestone: null });
+                    return db;
+                  }
               : scenario === PRIORITIES_PLAN_GOAL_NAMES_SCENARIO
                 ? () => {
                     const db = seedSimplePlanScenario();
