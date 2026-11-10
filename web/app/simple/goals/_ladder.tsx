@@ -234,11 +234,12 @@ export function GoalLadder(props: LadderProps) {
 
   const goals = map.goals;
   const ms = useMemo(() => goals.flatMap((g) => map.milestones.filter((m) => m.goal === g.id)), [goals, map.milestones]);
-  // roadmap-milestone-codes: a milestone's one code across the roadmap (its ladder place while the roadmap has none).
-  const msCode = useMemo(() => {
-    const onRoadmap = new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.roadmap_code ? [[m.id, m.roadmap_code] as const] : [])));
-    return new Map(ms.map((m, i) => [m.id, onRoadmap.get(m.id) ?? `M${i + 1}`]));
-  }, [ms, roadmap.data]);
+  // roadmap-milestone-codes: a milestone's one code across the roadmap; none while the roadmap gives it none
+  // (a ladder place could repeat a code another milestone holds).
+  const msCode = useMemo(
+    () => new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.roadmap_code ? [[m.id, m.roadmap_code] as const] : []))),
+    [roadmap.data],
+  );
   const feats = useMemo(() => {
     // goal-map-editing: the features on no milestone are cards too, under the goal their item serves.
     const loose: GmFeature[] = map.unplaced.map((u) => ({ id: u.id, name: u.name, area: null, milestones: [], lever: "", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [] }));
@@ -348,7 +349,7 @@ export function GoalLadder(props: LadderProps) {
         setFresh(feature);
         const m = map.milestones.find((x) => x.id === to);
         toast({
-          message: `Moved ${named(feature)} to ${msCode.get(to)} ${m?.name ?? ""}`,
+          message: `Moved ${named(feature)} to ${`${msCode.get(to) ?? ""} ${m?.name ?? ""}`.trim()}`,
           action: { label: "Undo", onClick: () => void unwrap(api.POST("/v1/simple/goal-map/links/move", { body: { feature, from_milestone: to, to_milestone: from } })).then(props.setMap, failed) },
         });
       } catch (e) {
@@ -442,7 +443,7 @@ export function GoalLadder(props: LadderProps) {
         }
         await reload();
         setAdding(null);
-        toast({ message: r.change.status === "applied" ? `Added ${title.trim()} under ${msCode.get(milestone)}` : `Suggested: add ${title.trim()}.${map.approver ? ` Sent to ${map.approver}.` : ""}` });
+        toast({ message: r.change.status === "applied" ? `Added ${title.trim()} under ${msCode.get(milestone) ?? map.milestones.find((m) => m.id === milestone)?.name ?? ""}` : `Suggested: add ${title.trim()}.${map.approver ? ` Sent to ${map.approver}.` : ""}` });
       } catch (e) {
         failed(e);
       }
@@ -785,7 +786,7 @@ function periods(map: GoalMap, ms: GmMilestone[], code: Map<string, string>): { 
     for (let w = from, n = 1; w < to; w = addDays(w, 7), n++) {
       const end = addDays(w, 7);
       const due = ms.filter((m) => m.due_on && m.due_on >= w && m.due_on < end);
-      out.push({ n, from: w, today: today >= w && today < end, mark: due.map((m) => `${code.get(m.id)} ${short(m.name)}`).join("\n"), full: due.map((m) => `${code.get(m.id)} ${m.name}`).join("\n") });
+      out.push({ n, from: w, today: today >= w && today < end, mark: due.map((m) => `${code.get(m.id) ?? ""} ${short(m.name)}`.trim()).join("\n"), full: due.map((m) => `${code.get(m.id) ?? ""} ${m.name}`.trim()).join("\n") });
     }
     return out;
   };
@@ -1073,7 +1074,7 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
       <span className="flex items-start gap-2">
         {v.edit && v.krCan(m.id) && !v.phone && <span className="mt-0.5 cursor-grab text-text-faint" aria-hidden><Icon name="grip" size={16} /></span>}
         <span className="text-[14px] leading-[18px] font-semibold">
-          <span className="simple-code mr-1">{v.msCode.get(m.id)}</span>
+          {v.msCode.has(m.id) && <span className="simple-code mr-1">{v.msCode.get(m.id)}</span>}
           {m.name}
         </span>
         {v.edit && v.canChange && <span className="ml-auto"><More label={`More for ${m.name}`} open={v.menu === key} onClick={() => v.setMenu(v.menu === key ? null : key)} /></span>}
@@ -1185,7 +1186,7 @@ function FeatureCard({ x, v, ms, compact }: { x: LdFeature; v: V; ms?: string; c
           Placed by hand · serves {v.msCode.get(f.milestones[0])} {v.map.milestones.find((m) => m.id === f.milestones[0])?.name}
         </span>
       )}
-      {ms && f.milestones.length > 1 && <span className="text-[12px] leading-4 text-text2">Also serves {f.milestones.filter((m) => m !== ms).map((m) => v.msCode.get(m)).join(", ")}</span>}
+      {ms && f.milestones.length > 1 && <span className="text-[12px] leading-4 text-text2">Also serves {f.milestones.filter((m) => m !== ms).map((m) => v.msCode.get(m) ?? v.map.milestones.find((x) => x.id === m)?.name).join(", ")}</span>}
       {/* the edge dot a dependency is drawn from (while editing, on the picked card) */}
       {handles && isSel && !v.phone && (
         <span data-ld-dot={f.id} data-testid="ld-dot" title="Drag onto the card that waits on this one" className="absolute top-1/2 -right-[9px] z-30 h-4 w-4 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-surface bg-accent" />
@@ -1220,7 +1221,7 @@ function AddFeature({ m, v }: { m: GmMilestone; v: V }) {
           void v.act.add(m.id, name);
         }}
       >
-        <input autoFocus aria-label={`New feature under ${v.msCode.get(m.id)}`} value={name} onChange={(e) => setName(e.target.value)} className="rounded-lg border border-line bg-surface px-2 py-1 text-[14px]" />
+        <input autoFocus aria-label={`New feature under ${v.msCode.get(m.id) ?? m.name}`} value={name} onChange={(e) => setName(e.target.value)} className="rounded-lg border border-line bg-surface px-2 py-1 text-[14px]" />
         <span className="flex gap-1.5">
           <button type="submit" className="rounded-full border border-accent bg-accent px-2.5 py-0.5 text-[14px] font-semibold text-on-accent">Add</button>
           <Btn small onClick={() => v.setAdding(null)}>Cancel</Btn>
@@ -1310,7 +1311,7 @@ function Group({ m, v }: { m: GmMilestone; v: V }) {
   return (
     <div data-ld-group={m.id} data-testid="ld-group" className={`flex flex-col gap-1.5 ${drop ? "rounded-xl outline-2 outline-offset-2 outline-accent" : ""} ${v.edit && v.may ? "rounded-xl border border-dashed border-line p-1" : ""}`}>
       <span className="relative w-fit rounded bg-surface2 text-[12px] leading-4 font-semibold text-text2">
-        <span className="simple-code">{v.msCode.get(m.id)}</span> {m.name}
+        {v.msCode.has(m.id) && <span className="simple-code">{v.msCode.get(m.id)}</span>} {m.name}
       </span>
       {fs.map((x) =>
         x.f.milestones[0] === m.id ? (
@@ -1867,7 +1868,7 @@ function Sheet({ v, sheet, onClose }: { v: V; sheet: { kind: "move" | "waits" | 
       {value === from ? " (now)" : ""}
     </label>
   );
-  const title = kr ? `Move ${v.msCode.get(kr.id) ?? ""}` : sheet.kind === "move" ? `Move ${x!.code}` : `${x!.code} waits on`;
+  const title = kr ? `Move ${v.msCode.get(kr.id) ?? kr.name}` : sheet.kind === "move" ? `Move ${x!.code}` : `${x!.code} waits on`;
   return (
     <div className={`fixed inset-0 z-50 bg-black/30 ${v.phone ? "flex flex-col justify-end" : "grid place-items-center"}`} onClick={onClose}>
       <div
@@ -1880,7 +1881,7 @@ function Sheet({ v, sheet, onClose }: { v: V; sheet: { kind: "move" | "waits" | 
         <b className="text-[16px]">
           {kr ? (
             <>
-              Move <span className="simple-code">{v.msCode.get(kr.id)}</span> {kr.name}
+              Move {v.msCode.has(kr.id) && <span className="simple-code">{v.msCode.get(kr.id)}</span>} {kr.name}
             </>
           ) : (
             <>
@@ -1899,7 +1900,7 @@ function Sheet({ v, sheet, onClose }: { v: V; sheet: { kind: "move" | "waits" | 
             {v.goals.map((g, i) => (
               <div key={g.id} className="flex flex-col gap-0.5">
                 <span className="text-[12px] font-bold tracking-wide text-text2 uppercase">Goal {i + 1} · {g.name}</span>
-                {v.ms.filter((m) => m.goal === g.id).map((m) => radio(`ms:${m.id}`, <><span className="simple-code">{v.msCode.get(m.id)}</span> {m.name}</>, m.id))}
+                {v.ms.filter((m) => m.goal === g.id).map((m) => radio(`ms:${m.id}`, <>{v.msCode.has(m.id) && <span className="simple-code">{v.msCode.get(m.id)}</span>} {m.name}</>, m.id))}
                 {radio(`free:${g.id}`, "Not on a key result", `free:${g.id}`)}
               </div>
             ))}

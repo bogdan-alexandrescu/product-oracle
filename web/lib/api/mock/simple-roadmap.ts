@@ -1636,43 +1636,50 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     g.item_ids.push(i.id);
     groups.set(key, g);
   }
-  // roadmap-milestone-codes: each milestone's one code across the read (oracle.simple.roadmap_codes).
   const goalRanks = new Map(Object.keys(GOALS).sort((a, b) => (goalOrderKey(a) < goalOrderKey(b) ? -1 : 1)).map((k, n) => [goalId(k), n]));
-  return withRoadmapCodes({
+  const trackMilestones = (slugs: string[]) => [
+    // The digest's Beta (a new company has no digest, so no Beta).
+    ...(db.ids["alert-digest"]
+      ? [{ id: stableUuid("simple-milestone/beta"), track_id: stableUuid("simple-track/alerts"), name: "Beta", date: addDays(w.now[0], 60), horizon: "now" as const, status: "planned" as const, item_ids: [db.ids["alert-digest"]], ...UNDATED }]
+      : []),
+    ...[...new Set(seeds.flatMap((s) => (s.record ? [s.record] : [])))].map((name) => {
+      const of = seeds.filter((s) => s.record === name);
+      return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: db.record_dates?.[name] ?? null, horizon: "now" as const, status: db.record_dropped?.includes(name) ? ("dropped" as const) : ("planned" as const), item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };
+    }),
+    // approved-roadmap-to-simple: each shown roadmap's applied version's milestones.
+    ...slugs.flatMap((slug) => appliedMilestones(db, slug)),
+    // The plan's dated milestones (M1-M3), each naming the items with a slice in it.
+    // roadmap-gantt: each planned PRD's own records ("simple-plan-two": two PRDs, M1-M3 each).
+    // simple-replaced-prds (service._milestone_out): a replaced PRD's items are not read, so its
+    // track has no PRD and its milestones keep their target day and counts only, no plan.
+    ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) => {
+      const inPlay = items.some((i) => i.prd?.slug === slug);
+      return planMilestones().map((m) => ({
+        id: stableUuid(slug === PLAN_PRD_SLUG ? `simple-plan-milestone/${m.code}` : `simple-plan-milestone/${slug}/${m.code}`),
+        track_id: stableUuid(`simple-track/${slug === PLAN_PRD_SLUG ? "onboarding" : (seeds.find((s) => ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") === slug)?.track ?? "onboarding")}`),
+        name: `${m.code} · ${m.name}`, date: m.end_date,
+        horizon: (m.end_date <= w.now[1] ? "now" : m.end_date <= w.next[1] ? "next" : "later") as Horizon, status: "planned" as const,
+        item_ids: items.filter((i) => i.prd?.slug === slug && i.milestones.includes(m.code)).map((i) => i.id),
+        ...(inPlay ? { start_date: m.start_date, end_date: m.end_date, effort_weeks: m.effort_weeks, done_when: m.done_when, targets: m.targets } : UNDATED),
+      }));
+    }),
+  ];
+  // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them);
+  // while the company roadmap exists, its own alone (older roadmaps are history, company.feeding_ids).
+  const liveGoalMilestones = (db.goal_milestones ?? []).filter((m) => !m.deleted && (!db.company_roadmap || m.roadmap === db.company_roadmap) && readable.includes(m.roadmap));
+  const goalMilestoneOut = (x: (typeof liveGoalMilestones)[number]) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer", me && { role: me.role, id: me.id, names: me.names, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, (slug) => roadmapTitle(db, slug));
+  // roadmap-milestone-codes: each milestone's one code across every readable roadmap and item, numbered
+  // before the filters so a filtered read shows the codes Home and the Goal map show (oracle.simple.service).
+  const coded = withRoadmapCodes({ goal_milestones: liveGoalMilestones.map(goalMilestoneOut), milestones: trackMilestones(readable), items }, (id) => goalRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
+  const codeOf = new Map([...coded.goal_milestones, ...coded.milestones].map((m) => [m.id, m.roadmap_code ?? null]));
+  const withCode = <M extends { id: string }>(m: M) => ({ ...m, roadmap_code: codeOf.get(m.id) ?? null });
+  return {
     today, group,
     windows: { now: { start: w.now[0], end: w.now[1] }, next: { start: w.next[0], end: w.next[1] }, later: { start: w.later[0], end: w.later[1] } },
     groups: [...groups.entries()].sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
     items: shown,
-    milestones: [
-      // The digest's Beta (a new company has no digest, so no Beta).
-      ...(db.ids["alert-digest"]
-        ? [{ id: stableUuid("simple-milestone/beta"), track_id: stableUuid("simple-track/alerts"), name: "Beta", date: addDays(w.now[0], 60), horizon: "now" as const, status: "planned" as const, item_ids: [db.ids["alert-digest"]], ...UNDATED }]
-        : []),
-      ...[...new Set(seeds.flatMap((s) => (s.record ? [s.record] : [])))].map((name) => {
-        const of = seeds.filter((s) => s.record === name);
-        return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: db.record_dates?.[name] ?? null, horizon: "now" as const, status: db.record_dropped?.includes(name) ? ("dropped" as const) : ("planned" as const), item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };
-      }),
-      // approved-roadmap-to-simple: each shown roadmap's applied version's milestones.
-      ...(chosen ? [chosen] : readable).flatMap((slug) => appliedMilestones(db, slug)),
-      // The plan's dated milestones (M1-M3), each naming the items with a slice in it.
-      // roadmap-gantt: each planned PRD's own records ("simple-plan-two": two PRDs, M1-M3 each).
-      // simple-replaced-prds (service._milestone_out): a replaced PRD's items are not read, so its
-      // track has no PRD and its milestones keep their target day and counts only, no plan.
-      ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) => {
-        const inPlay = items.some((i) => i.prd?.slug === slug);
-        return planMilestones().map((m) => ({
-          id: stableUuid(slug === PLAN_PRD_SLUG ? `simple-plan-milestone/${m.code}` : `simple-plan-milestone/${slug}/${m.code}`),
-          track_id: stableUuid(`simple-track/${slug === PLAN_PRD_SLUG ? "onboarding" : (seeds.find((s) => ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") === slug)?.track ?? "onboarding")}`),
-          name: `${m.code} · ${m.name}`, date: m.end_date,
-          horizon: (m.end_date <= w.now[1] ? "now" : m.end_date <= w.next[1] ? "next" : "later") as Horizon, status: "planned" as const,
-          item_ids: items.filter((i) => i.prd?.slug === slug && i.milestones.includes(m.code)).map((i) => i.id),
-          ...(inPlay ? { start_date: m.start_date, end_date: m.end_date, effort_weeks: m.effort_weeks, done_when: m.done_when, targets: m.targets } : UNDATED),
-        }));
-      }),
-    ],
-    // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them);
-    // while the company roadmap exists, its own alone (older roadmaps are history, company.feeding_ids).
-    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (!db.company_roadmap || m.roadmap === db.company_roadmap) && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer", me && { role: me.role, id: me.id, names: me.names, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, (slug) => roadmapTitle(db, slug))),
+    milestones: trackMilestones(chosen ? [chosen] : readable).map(withCode),
+    goal_milestones: liveGoalMilestones.filter((m) => !chosen || m.roadmap === chosen).map(goalMilestoneOut).map(withCode),
     old_milestones: oldMilestonesOut(db.goal_milestones ?? [], role, oldCtx(db)),
     // service.build: the span of the shown items' PRDs' plans only (a replaced plan PRD's goes with its items).
     span: db.plan && shown.some((i) => !!i.prd && (i.prd.slug === PLAN_PRD_SLUG || !!db.plan?.prds?.includes(i.prd.slug))) ? planSpan() : null,
@@ -1689,7 +1696,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       const a = appliedVersionOut(db, slug, role, all);
       return a ? [a] : [];
     }),
-  }, (id) => goalRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
+  };
 }
 
 /** "Dec 2" (Simple's dates in a difference line). */

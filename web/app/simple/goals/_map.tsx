@@ -80,15 +80,14 @@ function Guardrail({ map }: { map: GoalMap }) {
 
 
 
-/** The goal and milestone (with its ladder code, M1...) the ladder puts a feature's card under. */
+/** The goal and milestone (with its roadmap code, M1...) the ladder puts a feature's card under. */
 function placement(map: GoalMap, feature: string, codes?: Map<string, string>): Placement | null {
   const m = map.milestones.find((x) => x.id === map.features.find((f) => f.id === feature)?.milestones[0]);
   const gi = map.goals.findIndex((g) => g.id === m?.goal);
   const g = map.goals[gi];
   if (!m || !g) return null;
-  const n = map.goals.flatMap((x) => map.milestones.filter((y) => y.goal === x.id)).findIndex((y) => y.id === m.id) + 1;
-  // roadmap-milestone-codes: its one code across the roadmap, else its ladder place.
-  return { goal: { id: g.id, title: g.name, metric: g.metric?.title ?? null, target: num(g.target, g.unit), position: gi + 1 }, milestone: `${codes?.get(m.id) ?? `M${n}`} ${m.name}` };
+  // roadmap-milestone-codes: its one code across the roadmap, else its name alone (a ladder place could repeat a code).
+  return { goal: { id: g.id, title: g.name, metric: g.metric?.title ?? null, target: num(g.target, g.unit), position: gi + 1 }, milestone: `${codes?.get(m.id) ?? ""} ${m.name}`.trim() };
 }
 
 const msName = (map: GoalMap, id: string) => map.milestones.find((m) => m.id === id)?.name ?? "";
