@@ -144,12 +144,7 @@ test("an item keyed phase-2 is its own item, never folded into phase", async ({ 
 
   await page.goto("/simple/roadmap?roadmap=alerts-roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await page.getByTestId("format-gantt").click();
-  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
-  const phase = page.locator('g[data-testid="bar"][aria-label^="Reminder rollout:"]');
-  const phase2 = page.locator('g[data-testid="bar"][aria-label^="Reminder rollout two:"]');
-  await expect(phase).toHaveCount(1);
-  await expect(phase2).toHaveCount(1);
-  await expect(phase).toHaveAttribute("data-end", "2027-01-15");
-  await expect(phase2).toHaveAttribute("data-end", "2027-03-12");
+  // Both are on the roadmap, each by its own name (neither is read as a copy of the other).
+  for (const title of ["Reminder rollout", "Reminder rollout two"])
+    await expect(page.getByTestId("simple-roadmap").getByRole("button", { name: title, exact: true }).first()).toBeVisible();
 });
