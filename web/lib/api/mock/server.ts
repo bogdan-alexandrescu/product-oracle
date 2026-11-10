@@ -8993,6 +8993,8 @@ export async function mockFetch(req: Request): Promise<Response> {
   }
   const next = queue.then(async () => {
     const db = load();
+    // The text the call read (after a fresh seed's own save), to tell another tab's write from it.
+    const stored = localStorage.getItem(STORAGE_KEY);
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
     // simple-roadmap-500-paint: the roadmap and its waiting counts read the 500 items once while
     // the roadmap's data is the same; every other call reads afresh. The side menu's waiting list
@@ -9010,7 +9012,10 @@ export async function mockFetch(req: Request): Promise<Response> {
     // saves a stale copy over another tab's line, card or sign-in.
     // chat-reader: unless it read a pending line (the reader's job ended).
     const readerWrote = takeReaderWrote();
-    if (!(req.method === "GET" && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname)) || readerWrote) save(db);
+    // A read never undoes a write (as the API's reads): a GET that another tab wrote under since it
+    // loaded (a page still reading while someone saves) saves nothing; the next call reads theirs.
+    const overwrites = req.method === "GET" && localStorage.getItem(STORAGE_KEY) !== stored;
+    if (!overwrites && (!(req.method === "GET" && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname)) || readerWrote)) save(db);
     return res;
   });
   queue = next.catch(() => undefined);
