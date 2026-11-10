@@ -129,8 +129,6 @@ export function HoverCard({
 
   useLayoutEffect(() => {
     if (open) place();
-    // place only reads refs and sets state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // A card that runs past the window's bottom (its Open link off-screen) moves above the
