@@ -189,8 +189,8 @@ test("a joined milestone's band label reads the longer name, its tip the other",
   await expect(tip).toBeVisible();
   await expect(tip.getByTestId("ms-band-also")).toHaveText(`Also: ${code} Measured`);
   await expect(labels(page).filter({ hasText: /^M\d+ Measured$/ })).toHaveCount(0);
-  // Its card edits the PRD's own milestone and names the joined one's other name.
+  // Its card is the PRD's own milestone's and names the joined one's other name.
   await label.click();
-  await expect(page.getByTestId("ms-card").getByLabel("Name")).toHaveValue("Measured");
-  await expect(page.getByTestId("ms-card-also")).toHaveText(`Also: ${code} Measured and mapped`);
+  await expect(page.getByTestId("ms-prd-card").getByRole("heading")).toHaveText(`${code} Measured`);
+  await expect(page.getByTestId("ms-prd-card").getByTestId("ms-card-also")).toHaveText(`Also: ${code} Measured and mapped`);
 });

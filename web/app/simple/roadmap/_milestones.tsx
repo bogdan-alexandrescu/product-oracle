@@ -914,6 +914,14 @@ export function MsCard() {
   const phone = ms.phone;
   const cls = phone ? "fixed right-0 bottom-0 left-0 z-[60] max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-line" : "fixed top-4 right-6 z-[60] w-[360px] rounded-xl border border-line";
   const goalTitle = ms.goals.find((g) => g.id === d.goal_id)?.title ?? "No goal";
+  // Join whenever names match (the owner, Nov 9): the joined milestone's other names, each once.
+  const joined = d.id ? ms.joined.get(d.code) : undefined;
+  const others = joined ? [`${d.code} ${joined.name}`, ...joined.also].filter((n) => n.toLowerCase() !== `${d.code} ${d.name.trim()}`.toLowerCase()) : [];
+  const also = others.length > 0 && (
+    <span data-testid="ms-card-also" className="-mt-1.5 text-xs text-text2">
+      Also: {others.join(", ")}
+    </span>
+  );
   if (d.prd) {
     const m = ms.list.find((x) => x.id === d.id)!;
     return (
@@ -925,6 +933,7 @@ export function MsCard() {
           </h2>
           <span className="rounded-full bg-na-bg px-2 text-xs leading-5 text-na">From the PRD</span>
         </div>
+        {also}
         <p className="text-sm text-text2">
           From the PRD{" "}
           <a href={`/simple/one-pagers/${m.prd!.slug}`} className="font-semibold text-accent-ink underline">
@@ -953,9 +962,6 @@ export function MsCard() {
   const reads = rights === "read";
   const head = !d.id ? (d.second ? "Next milestone" : "New milestone") : reads ? `${d.code} ${d.name}` : `Edit ${d.code}`;
   const late = (id: string) => (ms.items.get(id)?.end.date ?? "") > d.date;
-  // Join whenever names match (the owner, Nov 9): the joined milestone's other names, each once.
-  const joined = d.id ? ms.joined.get(d.code) : undefined;
-  const others = joined ? [`${d.code} ${joined.name}`, ...joined.also].filter((n) => n.toLowerCase() !== `${d.code} ${d.name.trim()}`.toLowerCase()) : [];
   return (
     <div data-testid="ms-card" data-rights={rights} role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
       {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
@@ -963,11 +969,7 @@ export function MsCard() {
         <h2 className="text-[15px] font-semibold">{head}</h2>
         <span className="text-xs text-text2">{`${goalTitle} · ${day(d.date)}`}</span>
       </div>
-      {others.length > 0 && (
-        <span data-testid="ms-card-also" className="-mt-1.5 text-xs text-text2">
-          Also: {others.join(", ")}
-        </span>
-      )}
+      {also}
       <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
         <Field label="Name">
           <span className="font-semibold" style={{ color: msInk(d.code) }}>
