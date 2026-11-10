@@ -145,7 +145,7 @@ def _items(read_: service.Read) -> dict[str, service.Entry]:
     out: dict[str, service.Entry] = {}
 
     def key(e: service.Entry) -> tuple:
-        h = e.row.horizon
+        h = e.horizon
         return (HORIZONS.index(h) if h in HORIZONS else len(HORIZONS), e.row.item_key)
 
     for e in read_.entries:
@@ -286,7 +286,7 @@ def _unranked(read_: service.Read, ranked: set[str]) -> list[SimplePriorityUnran
     the ranking leaves out), by horizon, then position, then key."""
 
     def key(e: service.Entry) -> tuple:
-        h = e.row.horizon
+        h = e.horizon
         return (
             HORIZONS.index(h) if h in HORIZONS else len(HORIZONS),
             e.row.position,
@@ -632,7 +632,7 @@ def above(e: service.Entry | None, line: SimpleLine) -> bool:
     if e is None:
         return False
     if line.date is None:
-        return e.row.horizon == "now"
+        return e.horizon == "now"
     return e.resolved.end.date <= line.date
 
 
@@ -721,7 +721,7 @@ async def build(
                 title=e.row.title if e is not None else f.title,
                 goal=_goal(f, e),
                 milestone=_milestone_name(e),
-                horizon=e.row.horizon if e is not None else None,  # type: ignore[arg-type]
+                horizon=e.horizon if e is not None else None,  # type: ignore[arg-type]
                 goal_value=_value(f, "goal_value"),
                 effort=_value(f, "effort"),
                 score=f.score,

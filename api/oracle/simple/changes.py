@@ -33,8 +33,10 @@ Ops and the fields they write (``before`` must name the key fields):
   dates now (``before`` names the undated item the suggestion was made for).
 - ``confirm_item`` (S6): draft becomes false (422 unless the item is a draft); merging a
   draft is a ``cut`` with the reason "Merged into <code>".
-- ``change_horizon``: horizon, and the item's own dates (if any) shifted by as many days as
-  the new window starts after the old one's. ``reorder``: position. ``cut`` / ``restore``: cut.
+- ``change_horizon`` (board-quarters): the dates the read shows shifted by whole quarters
+  into the new column's quarter (lengths kept; undated: the quarter), typed; the stored
+  horizon follows as history. ``before.horizon`` is the read's (from the dates).
+- ``reorder``: position. ``cut`` / ``restore``: cut.
 - ``edit_title``: title. ``edit_outcome``: outcome.
 - ``set_milestone`` (S9): the item's own milestone, ``{"milestone": {name, date,
   date_source: "typed"}}`` (date optional), or null to clear it.
@@ -112,7 +114,7 @@ from oracle.baseline.models import Entity
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company as roadmap_company
 from oracle.roadmap.models import HORIZONS, RoadmapItem, TrackMilestone
-from oracle.simple import drafts, service
+from oracle.simple import dates, drafts, service
 from oracle.simple.models import (
     RoadmapDateSuggestion,
     SimpleChange,
@@ -181,6 +183,8 @@ PANEL_DONE = "Marked done in its panel"
 DEPENDS_MAX = 50
 # The ops whose ``before`` is what the read shows, and the row fields each writes.
 SHOWN = {
+    # board-quarters: the column the read shows, from the item's dates.
+    "change_horizon": lambda e: {"horizon": e.horizon},
     "set_confidence": lambda e: {"confidence": e.row.confidence},
     "set_track": lambda e: {"track_id": str(e.track.id) if e.track else None},
     "set_prd": lambda e: {"prd_document_id": str(e.prd.id) if e.prd else None},
@@ -933,13 +937,20 @@ async def _plan(
     elif op == "change_horizon":
         if a.get("horizon") not in HORIZONS:
             raise ChangeError(422, "after.horizon: now, next or later")
-        after = {"horizon": a["horizon"]}
-        if row.start_date or row.end_date:
-            # walkc-roadmap-tasks review: the item's own dates move with it, by as many days
-            # as the new horizon's window starts after the old one's (lengths kept).
-            by = read_.windows[a["horizon"]][0] - entry.window[0]
-            after |= {f: _iso(getattr(row, f) + by if getattr(row, f) else None) for f in DATES}
-            stored = ("horizon", *DATES)
+        # board-quarters: the column is the quarter of the dates, so the dates the read shows
+        # (its own, engineering's, the tracker's) move by whole quarters into the new one,
+        # lengths kept, as typed dates; an undated item takes the quarter. The stored
+        # horizon follows as history.
+        r = entry.resolved
+        start, end = dates.shift_to(
+            None if r.undated else r.start.date,
+            None if r.undated else r.end.date,
+            a["horizon"],
+            read_.windows,
+        )
+        after = {"horizon": a["horizon"], "start_date": _iso(start), "end_date": _iso(end),
+                 "date_source": "typed"}  # fmt: skip
+        stored = ("horizon", *DATES, "date_source")
     elif op == "reorder":
         pos = a.get("position")
         if not isinstance(pos, int) or isinstance(pos, bool) or pos < 0:

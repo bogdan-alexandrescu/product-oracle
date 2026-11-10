@@ -37,7 +37,8 @@ async function drag(page: Page, key: string, dx: number, steps = 12) {
   // The bar in view first (the chart's header grows a row per crowded mark: roadmap-milestones).
   await body(page, key).scrollIntoViewIfNeeded();
   const box = (await body(page, key).boundingBox())!;
-  const x = box.x + box.width / 2;
+  // board-quarters: an undated bar is Later's whole window (wider than the page): grabbed in sight.
+  const x = box.x + Math.min(box.width / 2, 120);
   const y = box.y + box.height / 2;
   await page.mouse.move(x, y);
   await page.mouse.down();

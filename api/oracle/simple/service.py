@@ -100,6 +100,9 @@ class Entry:
     resolved: dates.Resolved
     status: str
     milestone: SimpleItemMilestone | None
+    # board-quarters: the column the item's dates put it in (dates.horizon_of); the stored
+    # horizon is history only.
+    horizon: str = "later"
     depends_on: list[uuid.UUID] = field(default_factory=list)
     needed_by: list[uuid.UUID] = field(default_factory=list)
     # roadmap-edit-fixes: the stored key that names each dependency (another PRD's feature
@@ -488,8 +491,8 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         recs = (
             records.get((track.id, row.item_key), []) if track is not None else []
         ) or prd_records.get((row.prd_document_id, row.item_key), [])
-        window = windows.get(row.horizon, windows["now"])
         cands = _candidates(row, recs, bases_by_key, bases_by_ref)
+        resolved, horizon = dates.resolve_by_dates(cands, windows, effort.get(row.id))
         milestone = _milestone(row, track, track_ms)
         entries.append(
             Entry(
@@ -504,8 +507,9 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 or ladder.get(row.id)
                 or (goals.get(row.feature_id) if row.feature_id else None),
                 goal_ids=[g for g in row.goal_ids or [] if g in linked],
-                window=window,
-                resolved=dates.resolve(cands, window, effort.get(row.id)),
+                window=windows[horizon],
+                resolved=resolved,
+                horizon=horizon,
                 status=_status(row, recs, cut.get(roadmap.id, set())),
                 milestone=milestone,
                 blockers=[blockers[b] for b in row.blocker_ids or [] if b in blockers],
@@ -558,6 +562,8 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     )
     for e in entries:
         e.resolved = moved[e.row.id]
+        e.horizon = dates.horizon_of(e.resolved, windows)
+        e.window = windows[e.horizon]
     # feature-parts: each part's ancestors; with no dates of its own, a part reads its
     # nearest dated ancestor's (a parent in Trash still lends its own typed dates).
     await _ancestors(db, entries)
@@ -1160,7 +1166,7 @@ def item_out(
         title=title,
         outcome=row.outcome,
         note=row.note,
-        horizon=row.horizon,  # type: ignore[arg-type]
+        horizon=e.horizon,  # type: ignore[arg-type]
         roadmap=_ref(e.roadmap),  # type: ignore[arg-type]
         prd=_ref(e.prd),
         goal=SimpleGoalRef(

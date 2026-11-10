@@ -200,8 +200,8 @@ for (const where of ["desktop", "phone"] as const) {
 
 /**
  * Card walkc-review-estimated-moved: protects = after a review meeting moves "Team invites"
- * (F-05, no dates of its own: estimated, as the API reads an undated item) to Later, its
- * Timeline bar and Gantt slice bars start where the Waterfall's bar does, in Later's window, not
+ * (F-05, no dates of its own: estimated, as the API reads an undated item, so Later's: board-quarters) to Next, its
+ * Timeline bar and Gantt slice bars start where the Waterfall's bar does, in Next's quarter, not
  * at the plan's dates; fails_when = an estimated item's slices stay at the plan's dates
  * after a move; no_claim = how long the slices are drawn.
  */
@@ -209,13 +209,15 @@ for (const where of ["desktop", "phone"] as const) {
   test(`an estimated item moved in a review is drawn in its new horizon (${where})`, async ({ page }) => {
     await startReview(page);
     await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));
-    await tap(page.getByRole("button", { name: "Move Team invites to Later" }));
-    await expect(page.getByTestId("roadmap-said")).toHaveText("Moved Team invites to Later.");
+    await tap(page.getByRole("button", { name: "Move Team invites to Next" }));
+    await expect(page.getByTestId("roadmap-said")).toHaveText("Moved Team invites to Next.");
     if (where === "phone") await page.setViewportSize(PHONE);
     await page.goto(`${URL}?roadmap=onboarding-roadmap`);
     await expect(page.getByTestId("simple-chart")).toBeVisible();
     await page.getByTestId("format-waterfall").click();
-    await expect(bar(page, "plan-f-05")).toHaveAttribute("data-kind", "estimated");
+    // board-quarters: the move gives it Next's quarter as its dates.
+    await expect(bar(page, "plan-f-05")).toHaveAttribute("data-kind", "dated");
+    await expect(bar(page, "plan-f-05")).toHaveAttribute("data-start", "2027-01-01");
     const now = (await bar(page, "plan-f-05").getAttribute("data-start"))!;
     if (where === "desktop") {
       // The picked Timeline draws the item itself, not its slices: its bar starts there too.

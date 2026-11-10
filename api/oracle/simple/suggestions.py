@@ -102,7 +102,7 @@ async def regenerate(db: AsyncSession) -> int:
         if wanted is None:
             deps = [(by_id[d].row.title, by_id[d].resolved.end.date) for d in e.depends_on]
             s = dates.suggest(e.window, deps, durations.get(e.row.confidence, []),
-                              e.row.confidence, e.row.horizon)  # fmt: skip
+                              e.row.confidence, e.horizon)  # fmt: skip
             wanted = [(None, _inside(s, view))]
         codes = {c for c, _ in wanted}
         for r in rows:

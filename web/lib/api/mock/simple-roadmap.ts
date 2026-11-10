@@ -707,6 +707,46 @@ export function simpleWindows(today: string): Record<Horizon, [string, string]> 
   return { now: [q, addDays(medium, -1)], next: [medium, addDays(mediumEnd, -1)], later: [mediumEnd, addMonths(today, 24)] };
 }
 
+/** board-quarters (oracle.simple.dates.windows): the roadmap's columns on the mock's day, Now
+ * this calendar quarter, Next the next one, Later from the quarter after on (its end, an undated
+ * bar's estimate only, where the long horizon ends). The seeds' day offsets still count from
+ * simpleWindows, the windows they were written against, so their dates stay put. */
+export function quarterWindows(today: string): Record<Horizon, [string, string]> {
+  const d = new Date(ms(today));
+  const q0 = iso(Date.UTC(d.getUTCFullYear(), 3 * Math.floor(d.getUTCMonth() / 3), 1));
+  const q1 = addMonths(q0, 3);
+  const q2 = addMonths(q0, 6);
+  const q2End = addDays(addMonths(q0, 9), -1);
+  const long = addMonths(today, 24);
+  return { now: [q0, addDays(q1, -1)], next: [q1, addDays(q2, -1)], later: [q2, long > q2End ? long : q2End] };
+}
+
+/** dates.horizon_of: Now when the dates touch this quarter (started earlier and still running,
+ * or overdue), Next when they start next quarter, Later after that; undated: Later. */
+export function horizonOfDates(r: { start: Dated; end: Dated }, q: Record<Horizon, [string, string]>): Horizon {
+  if (r.start.estimated && r.end.estimated) return "later";
+  if (r.start.date <= q.now[1]) return "now";
+  return r.start.date <= q.next[1] ? "next" : "later";
+}
+
+/** dates.shift_to: the dates a move to `to`'s column gives, by whole quarters (length kept), so
+ * the item starts in it (Now: unless it touches this quarter already; Later: unless it starts
+ * later still); undated: the quarter itself. */
+export function shiftToQuarter(start: string | null, end: string | null, to: Horizon, q: Record<Horizon, [string, string]>): [string, string] {
+  if (!start || !end) {
+    const first = q[to][0];
+    return [first, addDays(addMonths(first, 3), -1)];
+  }
+  const a = new Date(ms(start));
+  const b = new Date(ms(q.now[0]));
+  const at = Math.floor(((a.getUTCFullYear() - b.getUTCFullYear()) * 12 + a.getUTCMonth() - b.getUTCMonth()) / 3);
+  let n = { now: 0, next: 1, later: 2 }[to];
+  if (to === "now" && start <= q.now[1]) n = at;
+  if (to === "later" && at >= 2) n = at;
+  const moved = addMonths(start, 3 * (n - at));
+  return [moved, addDays(moved, Math.round((ms(end) - ms(start)) / 86_400_000))];
+}
+
 /**
  * The "simple-deciders" scenario (#734 review, D-a): the pricing roadmap names a decider and
  * each track an owner of another role; the welcome video and tour move to the welcome
@@ -971,7 +1011,7 @@ function leadDays(db: SimpleDb, s: SeedItem): number {
   return weeks && weeks > 0 ? Math.max(1, Math.floor(weeks * 7 + 0.5)) : 28;
 }
 
-function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated; end: Dated } {
+function resolve(db: SimpleDb, s: SeedItem): { start: Dated; end: Dated } {
   const own = db.own[s.key];
   if (own) {
     const source = own.source ?? "accepted";
@@ -982,11 +1022,21 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
     if (s.dates.start) return { start: { date: s.dates.start, source: s.dates.source, estimated: false }, end };
     return { start: { date: addDays(end.date, 1 - leadDays(db, s)), source: "estimated", estimated: true }, end };
   }
-  const end: Dated = s.end !== undefined && s.source ? { date: addDays(w[0], s.end), source: s.source, estimated: false } : { date: w[1], source: "estimated", estimated: true };
-  let start: Dated = { date: w[0], source: "estimated", estimated: true };
-  if (s.start !== undefined && s.source) start = { date: addDays(w[0], s.start), source: s.source, estimated: false };
-  else if (!end.estimated) start = { date: addDays(end.date, 1 - leadDays(db, s)), source: "estimated", estimated: true };
-  return { start, end };
+  // A seed's day offsets count from the window it was written against (simpleWindows); a part
+  // no source gives is estimated in the column its dates put it in (board-quarters), an undated
+  // bar in Later's window.
+  const today = companyToday();
+  const at = simpleWindows(today)[s.horizon][0];
+  const q = quarterWindows(today);
+  const end0 = s.end !== undefined && s.source ? addDays(at, s.end) : null;
+  const start0 = s.start !== undefined && s.source ? addDays(at, s.start) : null;
+  if (!end0 && !start0) return { start: { date: q.later[0], source: "estimated", estimated: true }, end: { date: q.later[1], source: "estimated", estimated: true } };
+  const source = s.source!;
+  if (start0 && end0) return { start: { date: start0, source, estimated: false }, end: { date: end0, source, estimated: false } };
+  if (end0) return { start: { date: addDays(end0, 1 - leadDays(db, s)), source: "estimated", estimated: true }, end: { date: end0, source, estimated: false } };
+  const start: Dated = { date: start0!, source, estimated: false };
+  const w = q[horizonOfDates({ start, end: { date: start0!, source, estimated: false } }, q)];
+  return { start, end: { date: start0! > w[1] ? addDays(start0!, 41) : w[1], source: "estimated", estimated: true } };
 }
 
 /**
@@ -996,17 +1046,24 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
  */
 export function shownDates(db: SimpleDb, key: string): { start: string; end: string } {
   const s = db.items.find((x) => x.key === key)!;
-  const r = resolve(db, s, simpleWindows(companyToday())[s.horizon]);
+  const r = resolve(db, s);
   return { start: r.start.date, end: r.end.date };
 }
 
 /** hotfix-2: the dates the roadmap shows for an item (after what it depends on), a move's `before`. */
 export function readDates(db: SimpleDb, key: string): { start: string; end: string } {
-  const w = simpleWindows(companyToday());
-  const all = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
+  const all = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s) }]));
   afterDependencies(all);
   const r = all.get(key)!.r;
   return { start: r.start.date, end: r.end.date };
+}
+
+/** board-quarters: the dates the roadmap shows for an item and the column they put it in. */
+export function readColumn(db: SimpleDb, key: string): { start: string; end: string; undated: boolean; horizon: Horizon } {
+  const all = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s) }]));
+  afterDependencies(all);
+  const r = all.get(key)!.r;
+  return { start: r.start.date, end: r.end.date, undated: r.start.estimated && r.end.estimated, horizon: horizonOfDates(r, quarterWindows(companyToday())) };
 }
 
 /**
@@ -1409,8 +1466,7 @@ export function itemSuggestion(db: SimpleDb, itemId: string): Suggestion | undef
 
 /** oracle.simple.suggestions.regenerate: one open suggestion per undated item (plan-model: per slice of a planned one). */
 function regenerate(db: SimpleDb, today: string): number {
-  const w = simpleWindows(today);
-  const resolved = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
+  const resolved = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s) }]));
   afterDependencies(resolved);
   const durations = new Map<string, number[]>();
   for (const { s, r } of resolved.values()) {
@@ -1447,9 +1503,10 @@ function regenerate(db: SimpleDb, today: string): number {
       }
       continue;
     }
-    const window = w[s.horizon];
+    // board-quarters: an undated item is Later's, so its suggestion starts with Later's window.
+    const window = quarterWindows(today).later;
     let start = window[0];
-    let why = `starts with the ${s.horizon[0].toUpperCase()}${s.horizon.slice(1)} window`;
+    let why = "starts with the Later window";
     const deps = (s.depends ?? []).map((k) => resolved.get(k)).filter((x) => x !== undefined);
     const latest = deps.sort((a, b) => (a.r.end.date < b.r.end.date ? 1 : -1))[0];
     if (latest && addDays(latest.r.end.date, 1) > start) {
@@ -1602,7 +1659,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const group = (q.get("group") ?? "goal") as Schemas["SimpleRoadmapOut"]["group"];
   if (!["goal", "track", "prd"].includes(group)) return null;
   const seeds = visibleItems(db, role);
-  const all = new Map(seeds.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
+  const all = new Map(seeds.map((s) => [s.key, { s, r: resolve(db, s) }]));
   afterDependencies(all);
   // feature-parts (service._ancestors): each part's ancestors, its parent first, any depth (a loop
   // stops where it would close), and its parent's row when that parent is in Trash.
@@ -1630,7 +1687,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     if (!undated(x.r)) continue;
     const lent = ancestorsOf(x.s).map((a) => own.get(a.key)!);
     const gone = trashedParent(x.s);
-    if (gone) lent.push(resolve(db, gone, w[gone.horizon]));
+    if (gone) lent.push(resolve(db, gone));
     x.r = lent.find((r) => !undated(r)) ?? x.r;
   }
   // additions._parts: a parent or a part by its display code ("" when none) and name.
@@ -1664,7 +1721,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, "-"));
     const suggestion = itemSuggestion(db, db.ids[s.key]);
     return {
-      id: db.ids[s.key], key: s.key, title, outcome: s.outcome ?? null, note: s.note ?? null, horizon: s.horizon,
+      id: db.ids[s.key], key: s.key, title, outcome: s.outcome ?? null, note: s.note ?? null, horizon: horizonOfDates(r, quarterWindows(today)),
       estimate_pending: !!s.estimate_pending,
       // Its feature's code (F-12), else its own (codedTitle: the title's, else its PRD section's), as service.load's Entry.code.
       code: (s.feature_id && db.feature_codes?.[s.feature_id]) || code,
@@ -1920,9 +1977,11 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       order: trackPlace(db, k),
     };
   });
+  // board-quarters: the columns are calendar quarters.
+  const qw = quarterWindows(today);
   return {
     today, group,
-    windows: { now: { start: w.now[0], end: w.now[1] }, next: { start: w.next[0], end: w.next[1] }, later: { start: w.later[0], end: w.later[1] } },
+    windows: { now: { start: qw.now[0], end: qw.now[1] }, next: { start: qw.next[0], end: qw.next[1] }, later: { start: qw.later[0], end: qw.later[1] } },
     groups: [...groups.entries()].sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
     items: shown,
     milestones: trackMilestones(chosen ? [chosen] : readable).map(withCode),
@@ -2376,7 +2435,6 @@ export function approvedPrdToDraft(
     );
   }
   foldPrdCopies(db);
-  const w = simpleWindows(companyToday());
   const keys: string[] = [];
   // approved-prd-shown-once: the PRD's item the roadmap shows already (same key, else same
   // feature, else same title; every key match first, each shown item matched once) is updated,
@@ -2407,7 +2465,7 @@ export function approvedPrdToDraft(
     const start = it.start && it.start <= it.end ? it.start : null;
     const pub = matched.get(it.key);
     if (pub) {
-      const r = resolve(db, pub, w[pub.horizon]);
+      const r = resolve(db, pub);
       if (
         r.end.date === it.end &&
         (start ? r.start.date === start : r.start.estimated) &&

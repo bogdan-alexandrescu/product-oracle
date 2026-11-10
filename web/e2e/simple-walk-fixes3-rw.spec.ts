@@ -58,16 +58,16 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("simple-roadmap")).toBeVisible();
         await page.getByTestId("format-board").click();
         await expect(page.getByTestId("format-board")).toHaveAttribute("aria-pressed", "true");
-        await expect(column(page, "next").locator("header")).toContainText("Jan 1 – Jun 30, 2027");
+        // board-quarters (owner, Nov 10): Next is next quarter and Later starts the day after.
+        await expect(column(page, "next").locator("header")).toContainText("Jan 1 – Mar 31");
         const later = column(page, "later").locator("header");
         await later.scrollIntoViewIfNeeded();
-        await expect(later).toContainText("Jul 1, 2027 – Oct 22, 2028");
+        await expect(later).toContainText("Apr 1, 2027 on");
         await expect(later).not.toContainText("Oct 22, 2027");
         // walkb-roadmap (e4cdf478): an estimated item starts the day after what it depends on
-        // ends, keeping its length. Welcome video's estimate is Later's window (Jul 1, 2027 –
-        // Oct 22, 2028) moved past In-app tour (to Sep 14, 2027); from a window that started a
-        // year from today (Oct 22, 2027) it would not move and read "Oct 22, 2027 –".
-        await expect(boardCard(page, "setup-video").getByTestId("board-dates")).toContainText("Sep 15, 2027 – Jan 6, 2029");
+        // ends, keeping its length. Welcome video has no dates of its own, so its card says so;
+        // its estimate (Later's window moved past In-app tour) is the Timeline's.
+        await expect(boardCard(page, "setup-video").getByTestId("board-dates")).toHaveText("No dates");
       });
     });
   }

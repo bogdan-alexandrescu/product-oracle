@@ -266,7 +266,9 @@ async def test_dates_come_from_each_source(client):
     assert items["tracked"]["status"] == "in_progress"
     undated = items["undated"]
     assert (undated["source"], undated["estimated"]) == ("estimated", True)
-    assert (undated["start"]["date"], undated["end"]["date"]) == ("2027-01-01", "2027-06-30")
+    # board-quarters: an undated item is Later's, its bar Later's estimate.
+    assert undated["horizon"] == "later"
+    assert (undated["start"]["date"], undated["end"]["date"]) == ("2027-04-01", "2028-11-02")
     assert [p["key"] for p in undated["phases"]] == ["discover", "build", "beta", "launch"]
 
 
@@ -312,7 +314,8 @@ async def test_estimated_windows_follow_the_company_day(client, clock):
     body = await get(client, ctx)
     assert body["today"] == "2026-12-31"
     item = by_key(body)["now-item"]
-    assert (item["start"]["date"], item["end"]["date"]) == ("2026-10-01", "2026-12-31")
+    # board-quarters: undated, so Later, from the quarter after next on the company's day.
+    assert (item["horizon"], item["start"]["date"]) == ("later", "2027-04-01")
     assert body["windows"]["now"] == {"start": "2026-10-01", "end": "2026-12-31"}
 
 
@@ -352,9 +355,12 @@ async def test_grouping_and_filters(client):
         goal = await seed.entity("goal", "grow-revenue")
         feature = await seed.entity("feature", "saved-cards")
         await seed.supports(feature, goal)
-        await seed.item(rv, pv, "cards", feature_id=feature.id, track_id=track.id)
+        await seed.item(rv, pv, "cards", feature_id=feature.id, track_id=track.id,
+                        start_date=date(2026, 10, 5), end_date=date(2026, 11, 20),
+                        date_source="typed")  # fmt: skip
         await seed.item(rv, pv, "refunds", horizon="later")
-        await seed.item(rv2, pv2, "tour", horizon="next")
+        await seed.item(rv2, pv2, "tour", horizon="next", start_date=date(2027, 1, 10),
+                        end_date=date(2027, 2, 20), date_source="typed")  # fmt: skip
         await s.commit()
         goal_id, track_id = str(goal.id), str(track.id)
 
@@ -379,7 +385,7 @@ async def test_grouping_and_filters(client):
     assert set(by_key(await get(client, ctx, prd="payments-prd"))) == {"cards", "refunds"}
     assert set(by_key(await get(client, ctx, goal="grow-revenue"))) == {"cards"}
     assert set(by_key(await get(client, ctx, track=track_id))) == {"cards", "refunds"}
-    # Now is Q4 2026, Next Q1-Q2 2027, Later from Nov 2027.
+    # Now is Q4 2026, Next Q1 2027, Later from Apr 2027 (board-quarters).
     assert set(by_key(await get(client, ctx, **{"from": "2027-01-01", "to": "2027-03-31"}))) == {
         "tour"
     }
@@ -588,8 +594,9 @@ async def test_suggestions_regenerate_once_a_day_and_on_demand(client, clock):
         assert await suggestions.daily(s) is True
         await s.commit()
     (first,) = await open_suggestions(ctx)
-    # 30 days, about the same as the one dated item (no confidence either).
-    assert (first.start_date, first.end_date) == (date(2026, 10, 1), date(2026, 10, 30))
+    # 30 days, about the same as the one dated item (no confidence either), from Later's
+    # start: an undated item is Later's (board-quarters).
+    assert (first.start_date, first.end_date) == (date(2027, 4, 1), date(2027, 4, 30))
     async with tenant_session(ctx.tenant_id) as s:
         assert await suggestions.daily(s) is False
     clock["now"] = NOW + timedelta(days=1)
@@ -608,7 +615,7 @@ async def test_suggestions_regenerate_once_a_day_and_on_demand(client, clock):
     assert r.json()["open"] == 1
     body = await get(client, ctx)
     suggestion = by_key(body)["undated"]["suggestion"]
-    assert suggestion["start_date"] == "2026-10-01" and suggestion["basis"]
+    assert suggestion["start_date"] == "2027-04-01" and suggestion["basis"]
     assert by_key(body)["dated"]["suggestion"] is None
 
 

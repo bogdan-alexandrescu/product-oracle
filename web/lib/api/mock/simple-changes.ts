@@ -72,6 +72,9 @@ import {
   draftPrds,
   readableRoadmap,
   readDates,
+  readColumn,
+  quarterWindows,
+  shiftToQuarter,
   roadmapGoal,
   roadmapGoalKey,
   goalInTrash,
@@ -1443,6 +1446,10 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const r = readDates(seen, key);
       const shown = { start_date: r.start, end_date: r.end };
       if (!same(seenNow, shown)) return conflict(db, ctx, shown, [String(target.item_id)], lead);
+    } else if (body.op === "change_horizon") {
+      // board-quarters (changes.py SHOWN): before is the column the read shows, from the dates.
+      const shown = { horizon: readColumn(seen, key).horizon };
+      if (!same(seenNow, shown)) return conflict(db, ctx, shown, [String(target.item_id)], lead);
     } else if (body.op === "edit_title" && !same(seenNow, now_)) {
       // roadmap-edit-fixes: the read shows a title's code apart from its name.
       const s = seed(seen, key);
@@ -1475,7 +1482,12 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       stored = ["start_date", "end_date", "date_source"];
     } else if (body.op === "change_horizon") {
       if (!["now", "next", "later"].includes(String(a.horizon))) return json(422, { detail: "after.horizon: now, next or later" });
-      after = { horizon: a.horizon };
+      // board-quarters (changes.py): the shown dates move by whole quarters into the new
+      // column, length kept, typed; an undated item takes the quarter; horizon is history.
+      const r = readColumn(seen, key);
+      const [start, end] = shiftToQuarter(r.undated ? null : r.start, r.undated ? null : r.end, a.horizon as "now" | "next" | "later", quarterWindows(companyToday()));
+      after = { horizon: a.horizon, start_date: start, end_date: end, date_source: "typed" };
+      stored = ["horizon", "start_date", "end_date", "date_source"];
     } else if (body.op === "reorder") after = { position: Number(a.position) };
     else if (body.op === "cut" || body.op === "restore") after = { cut: body.op === "cut" };
     else if (body.op === "remove_dependency") {

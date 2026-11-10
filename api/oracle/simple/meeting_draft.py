@@ -41,7 +41,9 @@ async def _items(db: AsyncSession, document_id: uuid.UUID) -> list[RoadmapItem]:
     )
 
 
-async def _spans(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, tuple[date, date]]:
+async def _spans(
+    db: AsyncSession, rows: list[RoadmapItem]
+) -> dict[uuid.UUID, tuple[date, date, str]]:
     """Each item's start and end as the Simple roadmap resolves them (its own dates, its
     engineering milestone, else its horizon's window; an end-only item starts its feature's
     effort before its end)."""
@@ -51,9 +53,9 @@ async def _spans(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, t
     effort = await efforts(db, rows)
     out = {}
     for r in rows:
-        window = windows.get(r.horizon, windows["now"])
-        resolved = dates.resolve(_candidates(r, [], {}, {}), window, effort.get(r.id))
-        out[r.id] = (resolved.start.date, resolved.end.date)
+        # board-quarters: the column the dates put it in.
+        resolved, h = dates.resolve_by_dates(_candidates(r, [], {}, {}), windows, effort.get(r.id))
+        out[r.id] = (resolved.start.date, resolved.end.date, h)
     return out
 
 
@@ -99,7 +101,7 @@ async def draft_out(
                 id=r.id,
                 key=r.item_key,
                 title=r.title,
-                horizon=r.horizon,
+                horizon=spans[r.id][2],
                 start=spans[r.id][0],
                 end=spans[r.id][1],
             )  # fmt: skip
@@ -204,7 +206,7 @@ async def approve_dates(db: AsyncSession, principal: Any, meeting_id: uuid.UUID)
         select(func.max(RoadmapItem.position)).where(RoadmapItem.roadmap_version_id == version_id)
     )
     for i, r in enumerate(rows, start=1):
-        r.start_date, r.end_date = spans[r.id]
+        r.start_date, r.end_date = spans[r.id][:2]
         r.date_source = r.date_source or "engineering"
         r.draft_roadmap_id = None
         r.roadmap_document_id, r.roadmap_version_id = roadmap_id, version_id

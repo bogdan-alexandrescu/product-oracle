@@ -139,13 +139,14 @@ def test_a_typed_start_is_never_changed_and_an_estimated_end_keeps_its_rule():
 
 
 def test_horizon_windows_at_a_quarter_boundary():
+    # board-quarters: Now this calendar quarter, Next the next one, Later from the one after.
     dec31 = dates.windows(HORIZONS, date(2026, 12, 31))
     assert dec31["now"] == (date(2026, 10, 1), date(2026, 12, 31))
-    assert dec31["next"] == (date(2027, 1, 1), date(2027, 6, 30))
-    assert dec31["later"] == (date(2027, 7, 1), date(2028, 12, 31))
+    assert dec31["next"] == (date(2027, 1, 1), date(2027, 3, 31))
+    assert dec31["later"] == (date(2027, 4, 1), date(2028, 12, 31))
     jan1 = dates.windows(HORIZONS, date(2027, 1, 1))
     assert jan1["now"] == (date(2027, 1, 1), date(2027, 3, 31))
-    assert jan1["next"] == (date(2027, 4, 1), date(2027, 9, 30))
+    assert jan1["next"] == (date(2027, 4, 1), date(2027, 6, 30))
 
 
 def test_waterfall_split_when_no_named_phases():

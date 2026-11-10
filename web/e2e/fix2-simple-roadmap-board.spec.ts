@@ -72,31 +72,28 @@ for (const [where, use] of [
     test.use(use);
 
     /**
-     * qa-simple-roadmap-3: an item with its own (accepted) dates keeps them when its
-     * horizon moves to another column (the arrow keys, which work the same on a drag);
-     * fails_when = the "Now" column's header still claims "Oct 1 – Dec 31" once it holds a
-     * card dated months later, a false range the card's own dates contradict.
+     * qa-simple-roadmap-3, board-quarters (owner, Nov 10): a card's column is the quarter of
+     * its dates, so a move (the arrow keys, which work the same as a drag) moves its accepted
+     * dates into the new column's quarter; the column keeps its range and no card says its
+     * dates sit outside it; fails_when = the card moves but its dates stay months away.
      */
-    test("a column keeps its range and a card dated outside it says so", async ({ page }) => {
+    test("a moved card takes its column's quarter, never dates outside it", async ({ page }) => {
       // A phone's Timeline (goal lanes) has no suggestion marker to accept from; the desktop run covers it.
       test.skip(where === "phone", "the phone Timeline has no suggestion marker");
       await openBoard(page);
       await acceptSuggestion(page, "alert-sso");
       await page.getByTestId("format-board").click();
       await expect(page.getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
-      await expect(column(page, "next").locator('[data-item="alert-sso"]')).toBeVisible();
-      await expect(column(page, "now").locator("header")).toContainText("Oct 1 – Dec 31");
+      await expect(column(page, "later").locator('[data-item="alert-sso"]')).toBeVisible();
+      await expect(card(page, "alert-sso").getByTestId("board-dates")).toContainText("Apr");
       await card(page, "alert-sso").scrollIntoViewIfNeeded();
       await card(page, "alert-sso").focus();
       await page.keyboard.press("ArrowLeft");
-      await expect(page.getByText("Moved 'Alert routing by team' to Now in your working draft")).toBeVisible();
-      await expect(column(page, "now").locator('[data-item="alert-sso"]')).toBeVisible();
-      // The card moved to Now, but its own (accepted) dates are still months later: the
-      // column keeps its range (fix2 review: hiding it lost the label) and the card says
-      // its dates sit outside the column.
-      await expect(column(page, "now").locator("header")).toContainText("Oct 1 – Dec 31");
-      await expect(card(page, "alert-sso").getByTestId("board-dates")).toContainText("2027");
-      await expect(card(page, "alert-sso").getByTestId("outside-column")).toHaveText("Dates outside Now");
+      await expect(page.getByText("Moved 'Alert routing by team' to Next in your working draft")).toBeVisible();
+      await expect(column(page, "next").locator('[data-item="alert-sso"]')).toBeVisible();
+      await expect(column(page, "next").locator("header")).toContainText("Jan 1 – Mar 31");
+      await expect(card(page, "alert-sso").getByTestId("board-dates")).toContainText("Jan");
+      await expect(page.getByTestId("outside-column")).toHaveCount(0);
     });
 
     /**
@@ -107,7 +104,8 @@ for (const [where, use] of [
     test("an estimated card's dates sit on a plain background", async ({ page }) => {
       await openBoard(page);
       const dates = card(page, "alert-sso").getByTestId("board-dates");
-      await expect(dates).toContainText("estimated");
+      // board-quarters: an undated card sits in Later and says so.
+      await expect(dates).toContainText("No dates");
       await expect(dates).toHaveCSS("background-image", "none");
     });
 

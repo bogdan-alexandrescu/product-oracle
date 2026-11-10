@@ -101,8 +101,10 @@ test.describe("desktop", () => {
     const [f, t] = [await from.inputValue(), await to.inputValue()];
     expect(f).not.toBe("");
     expect(f < t).toBe(true);
-    // Nothing on the alerts track that late: a message and a way back, not a bare axis.
+    // Nothing on the alerts track for Faster activation that late: a message and a way back, not a
+    // bare axis (board-quarters: undated items run to Later's end, so the month alone never empties).
     await filter(page, "Track").selectOption({ label: "Usage alerts track" });
+    await filter(page, "Goal").selectOption({ label: "Faster activation" });
     await from.selectOption({ index: last });
     await to.selectOption({ index: last });
     const empty = page.getByTestId("filters-empty");

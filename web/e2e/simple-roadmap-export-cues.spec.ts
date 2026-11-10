@@ -15,7 +15,7 @@ declare global {
   }
 }
 
-async function openTimeline(page: Page) {
+async function openTimeline(page: Page, zoom: "3m" | "6m" = "3m") {
   await page.context().addInitScript(() => {
     // Keep each SVG picture the export draws onto its canvas.
     const d = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src")!;
@@ -33,8 +33,8 @@ async function openTimeline(page: Page) {
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await page.getByTestId("format-timeline").click();
   await expect(page.getByTestId("format-timeline")).toHaveAttribute("aria-pressed", "true");
-  await page.getByTestId("zoom-3m").click();
-  await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId(`zoom-${zoom}`).click();
+  await expect(page.getByTestId(`zoom-${zoom}`)).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("timeline-row").first()).toBeVisible();
 }
 
@@ -47,7 +47,9 @@ async function exportPdf(page: Page): Promise<{ svg: string; pdf: string }> {
 }
 
 test("the Timeline's PDF: Today's pill on its line, an arrow on each cut bar, its words as text", async ({ page }) => {
-  await openTimeline(page);
+  // board-quarters: undated bars sit in Later (from Apr 1, 2027), so six months show one
+  // running past the last month.
+  await openTimeline(page, "6m");
 
   // The bars the page shows cut by the window's right or left edge (part of each in sight).
   const onScreen = await page.evaluate(() => {
