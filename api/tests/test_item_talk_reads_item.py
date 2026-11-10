@@ -18,7 +18,8 @@ Test cards (protects / fails_when / no_claim):
 - test_a_read_naming_the_item_reads_it: protects=a read the reader calls with the item's own
   id, key, code or name where the route takes a record's id (get_entity, list_edges) reads
   the item's Ground Truth feature, and an item with no feature reads as itself;
-  fails_when=the answer is "I couldn't read that: Entity not found"; no_claim=other talks.
+  fails_when=the answer is "I couldn't read that: Entity not found", for any role that
+  opens the item (a viewer too); no_claim=other talks.
 - test_the_roadmap_read_keeps_the_item: protects=the roadmap read in an item's talk keeps
   the item and the items it is linked to in what the reader gets back (the read is cut at
   ``RESULT_MAX``); fails_when=the item is cut off and the answer is "I couldn't read that
@@ -157,6 +158,11 @@ async def test_a_read_naming_the_item_reads_it(client, named):
     m = await talk(client, w, "tell me about it", ask, key="a")
     assert m["kind"] == "answer", m["body"]
     assert chat.COULD_NOT_READ not in m["body"]
+    # A viewer opens the item too, and reads it the same way.
+    ask, _ = reader([{"action": "get_entity", "args": {"entity_id": value}}], FEATURE,
+                    f"Reliability work builds F-26 {FEATURE}.")  # fmt: skip
+    m = await talk(client, w, "which feature is it?", ask, who="viewer")
+    assert m["kind"] == "answer", m["body"]
 
 
 async def test_the_roadmap_read_keeps_the_item(client):
