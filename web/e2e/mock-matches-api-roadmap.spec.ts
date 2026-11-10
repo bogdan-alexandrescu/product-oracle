@@ -85,14 +85,28 @@ async function setStatus(page: Page, status: string, word: string) {
 }
 
 // changes.py set_status: Planned clears only the panel's own mark and goes back to the tracker's status.
-for (const [first, word] of [["done", "Done"], ["cut", "Cut"]] as const) {
-  test(`an in-progress feature set to ${word} then to Planned reads In progress again`, async ({ page }) => {
-    await login(page);
-    await roadmap(page);
-    await openRoadmapItem(page, "alert-rules");
-    await expect(panel(page).getByTestId("card-status")).toContainText("In progress");
-    await setStatus(page, first, word);
-    await setStatus(page, "planned", "In progress");
-    await expect(panel(page).getByTestId("card-status")).not.toContainText("Planned");
-  });
-}
+test("an in-progress feature set to Done then to Planned reads In progress again", async ({ page }) => {
+  await login(page);
+  await roadmap(page);
+  await openRoadmapItem(page, "alert-rules");
+  await expect(panel(page).getByTestId("card-status")).toContainText("In progress");
+  await setStatus(page, "done", "Done");
+  await setStatus(page, "planned", "In progress");
+  await expect(panel(page).getByTestId("card-status")).not.toContainText("Planned");
+});
+
+// pm1 '⋯ menu by the close': Cut and Restore are the panel menu's; Restore is set_status planned.
+test("an in-progress feature cut then restored from the panel's menu reads In progress again", async ({ page }) => {
+  await login(page);
+  await roadmap(page);
+  await openRoadmapItem(page, "alert-rules");
+  await expect(panel(page).getByTestId("card-status")).toContainText("In progress");
+  await tap(panel(page).getByRole("button", { name: "More actions" }));
+  await tap(panel(page).getByRole("menuitem", { name: "Cut from the roadmap" }));
+  await tap(page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }));
+  await expect(panel(page).getByTestId("card-status")).toContainText("Cut");
+  await tap(panel(page).getByRole("button", { name: "More actions" }));
+  await tap(panel(page).getByRole("menuitem", { name: "Restore to the roadmap" }));
+  await expect(panel(page).getByTestId("card-status")).toContainText("In progress");
+  await expect(panel(page).getByTestId("card-status")).not.toContainText("Planned");
+});
