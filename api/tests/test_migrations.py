@@ -190,8 +190,7 @@ def test_baseline_flow_check_up_down_up(scratch_db):
     script = ScriptDirectory.from_config(cfg)
     previous = script.get_revision(BASELINE_FLOW).down_revision
     # removed-tracks, prd-order, feature-parts, qaC-numfix, item-milestone, milestone-kinds,
-    # tb-mk:
-    # renumbered on merge.
+    # tb-mk: renumbered on merge.
     assert script.get_heads() == ["0126_milestone_track"]
 
     command.upgrade(cfg, previous)
