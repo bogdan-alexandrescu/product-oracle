@@ -314,6 +314,7 @@ export function MsLayer(props: MsLayerProps) {
   const goalNums = useContext(GoalNumbers);
   const [bandTip, setBandTip] = useState<{ id: string; left: number; top: number } | null>(null);
   const [bandMore, setBandMore] = useState<string | null>(null);
+  const [dayList, setDayList] = useState<string | null>(null);
   // A label keeps all its words inside the chart's visible part: it sits right of its diamond when it
   // fits there, else left of it, else after the label it meets, on one line (cut short when the row runs
   // out). The names column (the Timeline's sticky one) counts as an edge, and a label whose
@@ -534,18 +535,44 @@ export function MsLayer(props: MsLayerProps) {
       // diamonds' own boxes, so it never covers the next one at any zoom (its names in its tooltip).
       if (many > 1)
         out.push(
-          <span
+          <button
+            type="button"
             key={`c-${m.id}`}
             data-testid="ms-same-day"
             data-ms-badge
             data-mx={mx}
+            aria-expanded={dayList === date}
             title={`${many} milestones on ${day(date)}: ${shown.filter((o) => o.date === date).map(words).join(", ")}`}
-            className="absolute z-[25] h-3 min-w-3 rounded-full bg-text px-1 text-center text-[10px] leading-3 font-bold text-surface"
+            onClick={() => setDayList((d) => (d === date ? null : date))}
+            className="absolute z-[25] h-3 min-w-3 cursor-pointer rounded-full bg-text px-1 text-center text-[10px] leading-3 font-bold text-surface focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
             style={{ left: mx + 3, top: axisY - 22 }}
           >
             {many}
             <span className="sr-only"> on {day(date)}</span>
-          </span>,
+          </button>,
+        );
+      // A click on the count lists the day's milestones, each opening its card.
+      if (many > 1 && dayList === date)
+        out.push(
+          <ul key={`cl-${m.id}`} data-testid="ms-same-day-list" aria-label={`Milestones on ${day(date)}`} className="absolute z-40 min-w-48 rounded-lg border border-line bg-surface py-1 shadow-lg" style={{ left: mx + 3, top: axisY - 8 }}>
+            {shown
+              .filter((o) => o.date === date)
+              .map((o) => (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    data-testid="ms-same-day-entry"
+                    onClick={() => {
+                      setDayList(null);
+                      ms.edit(o);
+                    }}
+                    className="block w-full px-3 py-1 text-left text-xs whitespace-nowrap text-text hover:bg-surface2 focus-visible:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+                  >
+                    {words(o)}
+                  </button>
+                </li>
+              ))}
+          </ul>,
         );
       out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={msCode(m)} title={`${words(m)}, ${fullDay(date)}`} onPointerDown={grab(m)} />);
     }

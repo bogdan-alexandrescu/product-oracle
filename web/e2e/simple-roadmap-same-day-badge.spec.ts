@@ -85,6 +85,14 @@ for (const [zoom, name] of [
     expect(await badge.evaluate((e) => e.firstChild?.textContent)).toBe("2");
     expect(b.width).toBeLessThanOrEqual(20);
     await expect(badge).toHaveAttribute("title", /^2 milestones on Nov 20: .*M\d+ First alert within a day.*Setup checks for new teams|^2 milestones on Nov 20: .*Setup checks for new teams.*M\d+ First alert within a day/);
+    // A click on the count lists the day's milestones; each opens its card.
+    await badge.click();
+    const entries = page.getByTestId("ms-same-day-list").getByTestId("ms-same-day-entry");
+    await expect(entries).toHaveCount(2);
+    await entries.filter({ hasText: "Setup checks for new teams" }).click();
+    await expect(card(page).getByLabel("Name")).toHaveValue("Setup checks for new teams");
+    await card(page).getByRole("button", { name: "Cancel" }).click();
+    await expect(card(page)).toBeHidden();
     await next.click();
     await expect(page.getByTestId("ms-prd-card")).toBeVisible();
     await expect(page.getByTestId("ms-prd-card")).toContainText("From the PRD Usage alerts");
