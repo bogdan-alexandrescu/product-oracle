@@ -976,6 +976,35 @@ export function publishOnePager(db: OnePagerDb) {
   db.changes = db.changes.filter((c) => c.status === "proposed");
 }
 
+// As docs.schemas.NAMED_PROBLEMS: how many problems a refused draft's detail names.
+const NAMED_PROBLEMS = 3;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** As docs.service's unverified_date problems (doc_dates.problem_message): one per distinct date an
+ * edited line writes, where it is (the section by its heading, its line) and its fix. */
+function unbackedDates(db: OnePagerDb): Schemas["ImportProblem"][] {
+  const out = new Map<string, Schemas["ImportProblem"]>();
+  for (const c of liveChanges(db)) {
+    if (c.op !== "edit_line") continue;
+    const after = (c.after ?? {}) as { line?: string; sections?: Record<string, { heading: string; body: string }> };
+    for (const m of String(after.line ?? "").matchAll(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* (\d{1,2}), (\d{4})\b/g)) {
+      const shown = `${m[1]} ${Number(m[2])}, ${m[3]}`;
+      const day = `${m[3]}-${String(MONTHS.indexOf(m[1]) + 1).padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+      const [key, sec] = Object.entries(after.sections ?? {})[0] ?? [];
+      const line = (sec?.body ?? "").split("\n").findIndex((l) => l.includes(m[0])) + 1;
+      const where = sec ? (line ? `"${sec.heading}", line ${line}` : `the heading "${sec.heading}"`) : "an untitled section";
+      out.set(`${day}|${key}`, {
+        code: "unverified_date",
+        message: `the date ${shown} (${where}) is not backed by a confirmed schedule: no verified estimate, capacity or commitment of the PRD "${db.doc.title}" for this item; add a date source on Plan › Dates (or ask the engineering lead to) or drop the date. Oracle never invents dates`,
+        section_key: key ?? null,
+        refs: { date: m[0], shown, day, prd: db.doc.slug },
+        fix: { action: "add_date_source", prd_document_id: db.doc.id, days: [day] },
+      });
+    }
+  }
+  return [...out.values()];
+}
+
 function liveChanges(db: OnePagerDb) {
   const undone = new Set(db.changes.filter((c) => c.status === "undone").map((c) => c.undoes_id));
   return madeOrder(db.changes, (c) => [c.at]).filter((c) => (c.status === "applied" || c.status === "accepted") && !undone.has(c.id));
@@ -1193,6 +1222,11 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     const viewers = added.filter((i) => ctx.roles?.[i] === "viewer" && !ctx.reviewers.includes(i)).map((i) => ctx.names[i]);
     if (viewers.length)
       return json(422, { detail: `${viewers.length === 1 ? viewers[0] : `${viewers.slice(0, -1).join(", ")} and ${viewers[viewers.length - 1]}`} can only view, so cannot approve: pick someone else` });
+    // As drafts.submit's import (docs.service, vqa-one-pager (e)): a date an edited line writes
+    // with no date source is refused, each problem named with its fix (ImportErrorResponse).
+    // The mock's PRDs record no date source, so every such date is refused.
+    const problems = unbackedDates(db);
+    if (problems.length) return json(422, { detail: `draft rejected: ${[...new Set(problems.map((x) => x.message))].slice(0, NAMED_PROBLEMS).join("; ")}${problems.length > NAMED_PROBLEMS ? ` (and ${problems.length - NAMED_PROBLEMS} more)` : ""}`, errors: problems });
     db.draft.status = "submitted";
     db.draft.waiting_on = [...new Set([...ctx.reviewers, ...added])];
     db.draft.reminders = {};
