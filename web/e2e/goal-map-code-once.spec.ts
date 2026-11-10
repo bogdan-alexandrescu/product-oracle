@@ -6,7 +6,8 @@ import { expect, test, type Page } from "./test";
 /*
  * QA goal map codes: a feature whose stored title already leads with its own code (F-16 in the
  * "goal-ladder" mock, invented data) shows the code once, then its name, on its ladder card, in
- * the card's label and in the feature panel it opens, at 1440 and on a phone.
+ * the card's label, the feature panel it opens, the Attach a feature list and its "Attached:"
+ * line, at 1440 and on a phone.
  *
  * Test card: protects=every feature shows code + name once; fails_when=a card or the panel reads
  * "F-16 F-16 Setup checklist ..."; no_claim=features whose title has no code (the other cards).
@@ -44,6 +45,21 @@ test.describe("Goal map: a feature's code shows once, 1440", () => {
     await card(page).getByTestId("ld-open").click();
     const panel = page.getByTestId("gm-feature-panel");
     await expect(panel.getByTestId("card-name")).toHaveText(coded);
+  });
+
+  test("Attach a feature lists it with its code once, and says so once attached", async ({ page }) => {
+    await open(page);
+    await page.getByTestId("ld-edit").click();
+    const gate = page.getByTestId("ld-milestone").filter({ hasText: "Imports finish without help" });
+    await gate.getByTestId("ld-more").click();
+    await page.getByTestId("ld-ms-menu").getByRole("menuitem", { name: "Attach a feature…" }).click();
+    const ed = page.getByTestId("gm-editor");
+    await ed.getByLabel("Feature").fill(LADDER_CODED.code);
+    const pick = ed.getByTestId("gm-attach-list").getByRole("button").filter({ hasText: LADDER_CODED.name });
+    await expect(pick.locator("span.font-semibold")).toHaveText(coded);
+    await pick.click();
+    await ed.getByTestId("gm-save").click();
+    await expect(page.getByTestId("gm-flash")).toHaveText(`Attached: ${once} now also serves Imports finish without help.`);
   });
 });
 
