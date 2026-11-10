@@ -76,6 +76,7 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError as ImportRejected
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack, RoadmapItem
+from oracle.roadmap.tracks import on_prd
 from oracle.simple.models import (
     RoadmapDateSuggestion,
     SimpleChange,
@@ -414,12 +415,12 @@ async def who(db: AsyncSession, doc_ids: set[uuid.UUID]) -> Who:
         select(ProductTrack).where(
             or_(
                 ProductTrack.roadmap_document_id.in_(doc_ids),
-                ProductTrack.prd_document_id.in_(doc_ids),
+                on_prd(doc_ids),
             ),
             ProductTrack.owner_id.is_not(None),
         )
     ):
-        for doc in {t.roadmap_document_id, t.prd_document_id} & doc_ids:
+        for doc in {t.roadmap_document_id, *t.prd_ids} & doc_ids:
             out.owners.setdefault(doc, set()).add(t.owner_id)
     return out
 

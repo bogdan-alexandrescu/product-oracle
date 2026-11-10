@@ -98,6 +98,7 @@ async def bases_by_status(
     """The bases of this PRD in each of ``statuses``, with their scope: one query for the
     bases and at most one for the tracker records their tracker keys are matched to."""
     from oracle.roadmap.models import ProductTrack, TrackerRecord
+    from oracle.roadmap.tracks import on_prd
 
     statuses = tuple(statuses)
     out: dict[str, list[Basis]] = {s: [] for s in statuses}
@@ -122,7 +123,7 @@ async def bases_by_status(
                 select(TrackerRecord.external_ref, TrackerRecord.item_key)
                 .join(ProductTrack, ProductTrack.id == TrackerRecord.track_id)
                 .where(
-                    ProductTrack.prd_document_id == prd_document_id,
+                    on_prd(prd_document_id),
                     TrackerRecord.external_ref.in_(tracker_keys),
                     TrackerRecord.item_key.is_not(None),
                 )
@@ -357,6 +358,7 @@ async def impact(db: AsyncSession, basis: ScheduleBasis) -> Any:
         ImpactItem,
         ImpactMilestone,
     )
+    from oracle.roadmap.tracks import on_prd
 
     milestones = [
         ImpactMilestone(
@@ -386,7 +388,7 @@ async def impact(db: AsyncSession, basis: ScheduleBasis) -> Any:
         ) | set(
             await db.scalars(
                 select(ProductTrack.roadmap_document_id).where(
-                    ProductTrack.prd_document_id == basis.prd_document_id,
+                    on_prd(basis.prd_document_id),
                     ProductTrack.roadmap_document_id.is_not(None),
                 )
             )

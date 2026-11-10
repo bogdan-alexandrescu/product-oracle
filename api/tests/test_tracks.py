@@ -5,7 +5,7 @@ FakeRuntime."""
 import uuid
 from datetime import timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from oracle import changes
 from oracle.config import get_settings
@@ -45,13 +45,9 @@ async def test_an_accepted_prd_starts_a_track(client, owner, runtime):  # noqa: 
         await client.post(f"/v1/documents/{PRD}/versions/1/approve", headers=auth)
     ).status_code == 200
 
-    # Approving the PRD version (= publishing it, T2) started its track.
-    (started,) = (await client.get("/v1/tracks", headers=auth)).json()
-    assert started["prd"]["slug"] == PRD and started["started_version"] == 1
-    # A PRD approved before tracks existed has none: a person starts it.
-    async with tenant_session(tenant_id) as s:
-        await s.execute(delete(ProductTrack))
-        await s.commit()
+    # tracks-goal: approving the PRD version (= publishing it, T2) starts no track on its
+    # own (owner Nov 9): Oracle suggests one, and a person starts it.
+    assert (await client.get("/v1/tracks", headers=auth)).json() == []
 
     approver = await as_user(tenant_id, "approver")
     viewer = await as_user(tenant_id, "viewer")

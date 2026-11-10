@@ -588,8 +588,10 @@ async def lines(
         code = _code_of(m.name)
         kd = next(
             (from_prd[x] for x in sorted(_same_as(m.name, m.target_date)) if x in from_prd), None
-        ) or (by_code.get((track.prd_document_id, code)) if code else None)
-        prd = prds.get(track.prd_document_id)
+        ) or (next((by_code[(p, code)] for p in track.prd_ids if (p, code) in by_code), None)
+              if code else None)  # fmt: skip
+        # tracks-goal: a track milestone reads the first of the track's PRDs on the roadmap.
+        prd = next((prds[p] for p in track.prd_ids if p in prds), None)
         ref = SimpleDocRef(id=prd.id, slug=prd.slug, title=prd.title) if prd else None
         ln = SimpleLine(key=key, kind="milestone", label=f"{m.name} · {_day(m.target_date)}",
                         date=m.target_date, prd=ref)  # fmt: skip

@@ -17,6 +17,7 @@ from oracle.simple.schemas import (
     InboxSimpleDateSuggestion,
     InboxSimpleGoalSuggestion,
     InboxSimpleMinutes,
+    InboxSimpleTrackSuggestion,
 )
 
 Flow = Literal[
@@ -1663,6 +1664,9 @@ class InboxOut(BaseModel):
     # suggestions I may decide (each in ``total``).
     simple_date_suggestions: list[InboxSimpleDateSuggestion] = []
     simple_goal_suggestions: list[InboxSimpleGoalSuggestion] = []
+    # tracks-goal: newly accepted PRDs of mine on no track, each with the track Oracle
+    # suggests (in ``total``).
+    simple_track_suggestions: list[InboxSimpleTrackSuggestion] = []
     # Simple S8: meeting minutes sent to me as an attendee (not counted in ``total``).
     simple_minutes: list[InboxSimpleMinutes] = []
 

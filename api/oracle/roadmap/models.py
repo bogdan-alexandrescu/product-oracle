@@ -33,12 +33,14 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    event,
     false,
     func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
+from sqlalchemy.orm.attributes import set_committed_value
 
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
@@ -79,12 +81,20 @@ class ProductTrack(Trashable, TenantScoped, Base):
 
     __tablename__ = "product_tracks"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "prd_document_id"),
         CheckConstraint(_in("status", TRACK_STATUSES), name="status"),
         trashed_index("product_tracks"),
     )
 
-    prd_document_id: Mapped[uuid.UUID] = _fk("documents", nullable=False)
+    # tracks-goal: a track holds many PRDs, or none (``track_prds``; a PRD has one track),
+    # read in the order they joined; ``oracle.roadmap.tracks`` writes them.
+    prd_links: Mapped[list["TrackPrd"]] = relationship(
+        foreign_keys="TrackPrd.track_id",
+        lazy="selectin",
+        order_by="(TrackPrd.created_at, TrackPrd.id)",
+        viewonly=True,
+    )
+    # tracks-goal: the company goal the track replaces as the Roadmap's band (none: null).
+    goal_id: Mapped[uuid.UUID | None] = _fk("entities", "SET NULL")
     # The accepted PRD version that started the track, and the one it follows now.
     started_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
     current_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
@@ -102,6 +112,61 @@ class ProductTrack(Trashable, TenantScoped, Base):
     # without making a person's loaded copy stale.
     lock_version: Mapped[int] = _lock_version()
     updated_at: Mapped[datetime] = _updated_at()
+
+    def __init__(self, *, prd_document_id: uuid.UUID | None = None, **kw: Any) -> None:
+        # tracks-goal: a new track with its first PRD; its ``track_prds`` row is added when
+        # the track is flushed (:func:`_first_prd`).
+        super().__init__(**kw)
+        self._first_prd = prd_document_id
+
+    @property
+    def prd_ids(self) -> list[uuid.UUID]:
+        """The track's PRDs, first joined first."""
+        return [link.prd_document_id for link in self.prd_links]
+
+
+TRACK_PRD_STATES = ("linked", "off", "suggested")
+
+
+class TrackPrd(TenantScoped, Base):
+    """tracks-goal (owner Nov 9): which track a PRD belongs to; a track holds many PRDs.
+
+    ``linked``: on ``track_id``. ``off``: a person took the PRD off a track, and Oracle never
+    starts or suggests one for it again. ``suggested``: a newly accepted PRD with no track,
+    for which Oracle suggests ``suggested_track_id`` (none fits: null) in its owner's Inbox
+    until a person confirms it, picks another track or starts a new one."""
+
+    __tablename__ = "track_prds"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "prd_document_id"),
+        CheckConstraint(_in("state", TRACK_PRD_STATES), name="state"),
+        CheckConstraint("(state = 'linked') = (track_id IS NOT NULL)", name="linked"),
+    )
+
+    prd_document_id: Mapped[uuid.UUID] = _fk("documents", nullable=False)
+    track_id: Mapped[uuid.UUID | None] = _fk("product_tracks")
+    suggested_track_id: Mapped[uuid.UUID | None] = _fk("product_tracks", "SET NULL")
+    state: Mapped[str] = mapped_column(
+        Text, nullable=False, default="linked", server_default="linked"
+    )
+
+
+@event.listens_for(Session, "before_flush")
+def _first_prd(session: Session, flush_context: Any, instances: Any) -> None:
+    """A new track made with ``prd_document_id`` holds that PRD (``track_prds``)."""
+    for obj in list(session.new):
+        if isinstance(obj, ProductTrack) and getattr(obj, "_first_prd", None) is not None:
+            obj.id = obj.id or uuid.uuid4()
+            link = TrackPrd(
+                prd_document_id=obj._first_prd, track_id=obj.id, state="linked",
+                tenant_id=obj.tenant_id,
+            )  # fmt: skip
+            session.add(link)
+            set_committed_value(obj, "prd_links", [link])
+            obj._first_prd = None
+        elif isinstance(obj, ProductTrack) and "prd_links" not in obj.__dict__:
+            # A new track holds no PRD: read so, never loaded lazily.
+            set_committed_value(obj, "prd_links", [])
 
 
 class ScheduleBasis(TenantScoped, Base):

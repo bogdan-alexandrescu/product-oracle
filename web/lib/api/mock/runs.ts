@@ -2161,6 +2161,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     // inbox-meeting-proposals fix: open date and goal suggestions are added by the server.
     simple_date_suggestions: [],
     simple_goal_suggestions: [],
+    simple_track_suggestions: [],
     dates: [],
     // Track rows (F2) are added by the server (./roadmap.ts).
     tracks: [],

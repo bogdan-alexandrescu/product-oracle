@@ -388,7 +388,7 @@ DOCUMENT_LINKS_EXEMPT = {
     "brief takes the PRD, not the other way round",
     ("ProductRequest", "document_id"): "a request is its requester's: it outlives the PRD "
     "it fed (SET NULL on purge)",
-    ("ProductTrack", "roadmap_document_id"): "a track is its PRD's (prd_document_id); its "
+    ("ProductTrack", "roadmap_document_id"): "a track is its PRDs' (track_prds); its "
     "roadmap link is cleared on purge",
     ("RoadmapItem", "prd_document_id"): "an item is its roadmap's (roadmap_document_id); "
     "its PRD link is cleared on purge",

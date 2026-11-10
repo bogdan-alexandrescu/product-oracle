@@ -44,6 +44,7 @@ from oracle.members.names import display_name
 from oracle.priorities.scoring import effort_weeks
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company
+from oracle.roadmap import tracks as tracks_mod
 from oracle.roadmap.models import (
     ProductTrack,
     RoadmapChangeSet,
@@ -134,6 +135,8 @@ class Entry:
     # parent is in Trash (null: none, or on the roadmap).
     ancestors: list["Entry"] = field(default_factory=list)
     trashed_parent: RoadmapItem | None = None
+    # tracks-goal: the company goal the item's track is tied to.
+    track_goal: Entity | None = None
 
 
 @dataclass
@@ -396,7 +399,18 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             )
         ).all()
     }
-    track_of_prd = {t.prd_document_id: t for t in tracks.values()}
+    track_of_prd = {p: t for t in tracks.values() for p in t.prd_ids}
+    # tracks-goal: the company goal each track is tied to (a live one).
+    track_goals = {
+        g.id: g
+        for g in await db.scalars(
+            select(Entity).where(
+                Entity.id.in_({t.goal_id for t in tracks.values() if t.goal_id}),
+                Entity.type == "goal",
+                Entity.status != "rejected",
+            )
+        )
+    }
     milestones = list(
         await db.scalars(
             select(TrackMilestone).order_by(
@@ -486,6 +500,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 roadmap=roadmap,
                 prd=prd,
                 track=track,
+                track_goal=track_goals.get(track.goal_id) if track and track.goal_id else None,
                 # one-feature-panel: a goal the item is linked to directly (set in its
                 # panel, dropped on, suggested for) wins over its feature's.
                 goal=next((linked[g] for g in row.goal_ids or [] if g in linked), None)
@@ -707,10 +722,8 @@ async def delivery(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID,
     prds = {r.prd_document_id for r in rows if r.prd_document_id is not None}
     track_of_prd: dict[Any, ProductTrack] = {}
     if prds:
-        tracked = await db.scalars(
-            select(ProductTrack).where(ProductTrack.prd_document_id.in_(prds))
-        )
-        track_of_prd = {t.prd_document_id: t for t in tracked}
+        tracked = await db.scalars(select(ProductTrack).where(tracks_mod.on_prd(prds)))
+        track_of_prd = {p: t for t in tracked for p in t.prd_ids}
     records: dict[tuple[Any, str], list[TrackerRecord]] = defaultdict(list)
     prd_records: dict[tuple[Any, str], list[TrackerRecord]] = defaultdict(list)
     for rec in await db.scalars(select(TrackerRecord).where(TrackerRecord.item_key.in_(keys))):
@@ -1167,7 +1180,14 @@ def item_out(
         )
         if e.goal
         else None,
-        track=SimpleTrackRef(id=e.track.id, title=e.track.title) if e.track else None,
+        track=SimpleTrackRef(
+            id=e.track.id,
+            title=e.track.title,
+            goal_id=e.track_goal.id if e.track_goal else None,
+            goal_name=e.track_goal.title if e.track_goal else None,
+        )
+        if e.track
+        else None,
         confidence=row.confidence,
         status=e.status,  # type: ignore[arg-type]
         draft=row.draft,
@@ -1516,7 +1536,11 @@ async def build(
     # milestones dated by the plan of their track's PRD.
     from oracle.simple import plan as plans
 
-    track_prd = {e.track.id: e.track.prd_document_id for e in read.entries if e.track}
+    # tracks-goal: a track's milestones read the plan of the PRD it follows now.
+    track_prd = {
+        t.id: await tracks_mod.lead_prd(db, t)
+        for t in {e.track.id: e.track for e in read.entries if e.track}.values()
+    }
     # roadmap-keydates: the key dates read with the PRDs' milestones, as priorities reads them.
     kd_prds = await key_dates.key_date_prds(db, principal, kd_docs, read.entries)
     # roadmap-milestone-codes: the codes are numbered over every readable roadmap, so a

@@ -205,14 +205,19 @@ async def _read_history(db: AsyncSession) -> History:
         .join(Document, Document.id == DocumentVersion.document_id)
         .where(roadmap)
     )
+    from oracle.roadmap.models import TrackPrd
+
+    # tracks-goal: one row per (track, PRD); a track with no PRD has one with none.
     tracks = (
         await db.execute(
             select(
                 ProductTrack.id,
                 ProductTrack.roadmap_document_id,
-                ProductTrack.prd_document_id,
+                TrackPrd.prd_document_id,
                 roadmap,
-            ).outerjoin(Document, Document.id == ProductTrack.roadmap_document_id)
+            )
+            .outerjoin(Document, Document.id == ProductTrack.roadmap_document_id)
+            .outerjoin(TrackPrd, TrackPrd.track_id == ProductTrack.id)
         )
     ).all()
     prds: dict[uuid.UUID, set[uuid.UUID]] = {}
@@ -227,7 +232,14 @@ async def _read_history(db: AsyncSession) -> History:
     return History(
         replaced,
         roadmaps,
-        frozenset(t[0] for t in tracks if t[2] in ids or t[1] in ids),
+        # tracks-goal: a track is history when its roadmap is, or every PRD it holds is.
+        frozenset(
+            tid
+            for tid in {t[0] for t in tracks}
+            if any(t[1] in ids for t in tracks if t[0] == tid)
+            or (held := {t[2] for t in tracks if t[0] == tid and t[2]})
+            and held <= ids
+        ),
     )
 
 

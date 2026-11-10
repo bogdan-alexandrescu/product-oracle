@@ -53,6 +53,7 @@ from oracle.plan.schemas import (
     TrackerFieldChange,
 )
 from oracle.roadmap import diff, schedule, tracker, views
+from oracle.roadmap import tracks as tracks_mod
 from oracle.roadmap.models import (
     ProductTrack,
     RoadmapItem,
@@ -423,7 +424,7 @@ async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all"
     lead_id: uuid.UUID | None = None
     read = await _load(db)
     tracks = list(await db.scalars(select(ProductTrack)))
-    track_of_prd = {t.prd_document_id: t for t in tracks}
+    track_of_prd = {p: t for t in tracks for p in t.prd_ids}
     live = [t for t in tracks if t.status in LIVE_TRACKS]
     runs = list(
         await db.scalars(
@@ -507,10 +508,12 @@ async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all"
     for t in live:
         roadmap = read.docs.get(t.roadmap_document_id) if t.roadmap_document_id else None
         version = followed.get(t.id)
-        approved = read.latest_approved(t.prd_document_id)
+        # tracks-goal: every PRD the track holds; the latest approved of the one it follows.
+        lead = await tracks_mod.lead_prd(db, t)
+        approved = read.latest_approved(lead) if lead else None
         base = views.track_out_of(
             t,
-            read.docs.get(t.prd_document_id),
+            [d for p in t.prd_ids if (d := read.docs.get(p)) is not None],
             roadmap,
             version,
             started=read.number(t.started_version_id),
@@ -760,8 +763,12 @@ def _item(
     lead_id: uuid.UUID | None,
     now: date,
 ) -> PlanItem:
-    track = tracks.get(row.track_id) if row.track_id else None
-    track_milestones = milestones.get(row.track_id, []) if row.track_id else []
+    # tracks-goal: an item with no track of its own is its PRD's track's (as Simple reads it).
+    track_id = row.track_id or next(
+        (t.id for t in tracks.values() if row.prd_document_id in t.prd_ids), None
+    )
+    track = tracks.get(track_id) if track_id else None
+    track_milestones = milestones.get(track_id, []) if track_id else []
     dated = views.dated_items(track_milestones)
     if origin == "draft":
         risk = views.ItemRisk()
@@ -800,7 +807,7 @@ def _item(
         roadmap=PlanItemRoadmap(
             slug=roadmap.slug, version=rv.number, anchor=f"{row.horizon}-{row.item_key}"
         ),
-        track_id=row.track_id,
+        track_id=track_id,
         goal_ids=goals.get(row.feature_id, []) if row.feature_id else [],
         feature=views.entity_ref(ctx.entities[row.feature_id])
         if row.feature_id in ctx.entities

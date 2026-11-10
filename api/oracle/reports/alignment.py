@@ -277,8 +277,14 @@ async def _track_content(
 ) -> tuple[dict[str, Any], int]:
     """One track's part of the report, and its Now items without a tracker issue."""
     o = await views.overview(db, track)
-    prd = await db.get(Document, track.prd_document_id)
-    slug = prd.slug if prd else str(track.prd_document_id)
+    from oracle.roadmap.tracks import lead_prd
+
+    lead = await lead_prd(db, track)
+    prd = await db.get(Document, lead) if lead else None
+    # tracks-goal: a track holds many PRDs (it reads by the one it follows now); one with
+    # none reads by its name.
+    held = [d for p in track.prd_ids if (d := await db.get(Document, p)) is not None]
+    slug = prd.slug if prd else track.title
     counts = {"aligned": 0, "drift": 0, "untracked": 0, "done": 0}
     untracked_now = 0
     # Every roadmap item's name as the Plan shows it (qa-plan-41), for drift on items that
@@ -324,6 +330,7 @@ async def _track_content(
         "track_id": str(track.id),
         "status": track.status,
         "prd": {"slug": slug, "title": prd.title if prd else track.title},
+        "prds": [{"slug": d.slug, "title": d.title} for d in held],
         "link": plan_link(slug),
         "health": o.health,
         "health_before": await _health_before(db, track, start, o.health),
@@ -386,7 +393,7 @@ async def content_for(
     tracks = await reported_tracks(db)
     if not tracks:
         raise NoTracks("no active or paused track: nothing to report")
-    dates = await _dates(db, {t.prd_document_id for t in tracks}, start, end)
+    dates = await _dates(db, {p for t in tracks for p in t.prd_ids}, start, end)
     parts: list[dict[str, Any]] = []
     unreadable: list[dict[str, str]] = []
     untracked_now = 0
@@ -396,9 +403,12 @@ async def content_for(
         # in the report, and the others' parts stand.
         try:
             async with db.begin_nested():
-                part, untracked = await _track_content(
-                    db, track, start, dates[track.prd_document_id]
-                )
+                # tracks-goal: the dates of every PRD the track holds.
+                held = {
+                    k: [d for p in track.prd_ids for d in dates[p][k]]
+                    for k in ("verified", "withdrawn")
+                }
+                part, untracked = await _track_content(db, track, start, held)
         except Exception:  # noqa: BLE001 - logged; the report goes on without it
             log.exception("alignment report: track %s could not be read", track_id)
             unreadable.append({"track_id": str(track_id), "title": track_title})

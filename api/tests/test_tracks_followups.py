@@ -32,17 +32,25 @@ async def _tracks(client, auth) -> list[dict]:
     return (await client.get("/v1/tracks", headers=auth)).json()
 
 
-async def test_approving_a_prd_version_starts_its_track(client, owner):  # noqa: F811
+async def test_approving_a_prd_version_suggests_its_track(client, owner):  # noqa: F811
+    """tracks-goal (owner Nov 9): approving starts no track; Oracle suggests one in the
+    Inbox, once, and a person starts it."""
     tenant_id, auth = owner
     await approved_prd(client, auth, approve=False)
     assert await _tracks(client, auth) == []
     resp = await client.post(f"/v1/documents/{PRD}/versions/1/approve", headers=auth)
     assert resp.status_code == 200, resp.text
+    assert await _tracks(client, auth) == []
+    await client.post(f"/v1/documents/{PRD}/versions/1/approve", headers=auth)
+    inbox = (await client.get("/v1/inbox", headers=auth)).json()
+    (suggested,) = inbox["simple_track_suggestions"]
+    assert suggested["track"] is None and suggested["tracks"] == []
+    resp = await client.post("/v1/tracks", json={"prd": PRD}, headers=auth)
+    assert resp.status_code == 201, resp.text
     (track,) = await _tracks(client, auth)
     assert track["prd"]["slug"] == PRD
-    # Approving again starts nothing new.
-    await client.post(f"/v1/documents/{PRD}/versions/1/approve", headers=auth)
-    assert len(await _tracks(client, auth)) == 1
+    inbox = (await client.get("/v1/inbox", headers=auth)).json()
+    assert inbox["simple_track_suggestions"] == []
 
 
 async def test_only_a_prd_has_a_track(client, owner, runtime):  # noqa: F811
