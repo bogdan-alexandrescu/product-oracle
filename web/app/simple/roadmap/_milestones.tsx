@@ -1224,7 +1224,7 @@ export function MsCard() {
               </select>
               {/* Oracle's reason for the status it decided, on a tap or focus as well as a hover. */}
               {!k.status_set && own?.status_reason && (
-                <InfoTip label={`Status: ${MK_STATUS[own.status ?? "on_track"]}`} align="end" side="bottom" testId="ms-status-why">
+                <InfoTip label="Oracle's reason" align="end" side="bottom" testId="ms-status-why">
                   {own.status_reason}
                 </InfoTip>
               )}

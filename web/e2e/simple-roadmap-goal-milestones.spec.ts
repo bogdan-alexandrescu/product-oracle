@@ -132,8 +132,9 @@ test.describe("milestones on the Timeline", () => {
     await card(page).getByLabel("Name").fill("Digest opened by 70%");
     await card(page).getByTestId("ms-save").click();
     // Each by its name: its code is its place by date among the roadmap's milestones.
-    await expect(page.locator('[data-testid="ms-label"][aria-label*=" Digest opened by 70% · "]')).toBeVisible();
-    await expect(page.locator('[data-testid="ms-label"][aria-label*=" Teams set 3 rules in week 1 · "]')).toBeVisible();
+    // (Each by its diamond: at 6 months the goals' own target dates may fold a label into a +N.)
+    await expect(page.locator('[data-testid="ms-diamond"][title*=" Digest opened by 70%,"]')).toHaveCount(1);
+    await expect(page.locator('[data-testid="ms-diamond"][title*=" Teams set 3 rules in week 1,"]')).toHaveCount(1);
   });
 
   test("a click on a milestone opens it to edit; Undo puts it back", async ({ page }) => {
@@ -152,19 +153,20 @@ test.describe("milestones on the Timeline", () => {
 
   test("two on one day share one diamond with their count on the axis", async ({ page }) => {
     await open(page);
-    await expect(page.getByTestId("ms-same-day")).toHaveCount(0);
+    const nov20 = page.getByTestId("ms-same-day").filter({ hasText: "on Nov 20" });
+    await expect(nov20).toHaveCount(0);
     await label(page, "M4 60% of teams active at day 90").click();
     await card(page).getByLabel("Date").fill("2026-11-20");
     await card(page).getByTestId("ms-save").click();
     // On one day and one goal the codes go by name: it is M1 now, the other M2.
     await expect(label(page, "M1 60% of teams active at day 90 · Nov 20")).toBeVisible();
-    await expect(page.getByTestId("ms-same-day")).toHaveText("2 on Nov 20");
+    await expect(nov20).toHaveText("2 on Nov 20");
     await expect(page.locator('[data-testid="ms-diamond"][title$="Nov 20, 2026"]')).toHaveCount(1);
     await expect(label(page, "M2 Alerts live for 50 teams · Nov 20")).toBeVisible();
     await shot(page, "ms2-a-second");
     await toast(page).getByRole("button", { name: "Undo" }).click();
     await expect(label(page, "M4 60% of teams active at day 90 · Dec 22")).toBeVisible();
-    await expect(page.getByTestId("ms-same-day")).toHaveCount(0);
+    await expect(nov20).toHaveCount(0);
   });
 
   test("an item it waits on opens in the item's own panel", async ({ page }) => {

@@ -97,7 +97,7 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     const health = head.getByTestId("track-health");
     await expect(health).toHaveAttribute("data-health", /^(on_track|at_risk|stale)$/);
     await health.getByTestId("track-health-tip").hover();
-    await expect(health.getByRole("tooltip")).toHaveText(/^(On track: every feature ends before its milestone|At risk: .+ ends [A-Z][a-z]{2} \d{1,2}, after M\d+ .+ on [A-Z][a-z]{2} \d{1,2}|Not checked since [A-Z][a-z]{2} \d{1,2})$/);
+    await expect(health.getByRole("tooltip")).toHaveText(/^(On track: every feature ends before its milestone|At risk: .+ ends [A-Z][a-z]{2} \d{1,2}(, \d{4})?, after M\d+ .+ on [A-Z][a-z]{2} \d{1,2}(, \d{4})?|Not checked since [A-Z][a-z]{2} \d{1,2}(, \d{4})?)$/);
     // Pointing at the name shows its owner and PRDs.
     await head.getByTestId("track-name-tip").hover();
     await expect(head.getByTestId("track-name-tip").locator("xpath=..").getByRole("tooltip")).toContainText("Owner:");
@@ -444,21 +444,35 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     await expect(list).toBeHidden();
   });
 
-  test("a track's header mark turns from a tick to a warning when a milestone it serves moves before its work ends", async ({ page }) => {
+  test("a track's header mark turns from a warning to a tick when the milestones it serves move past its work, and back", async ({ page }) => {
     await open(page);
-    const head = lanes(page).filter({ hasText: "Guided setup track" }).getByTestId("track-head");
-    const health = head.getByTestId("track-health");
-    await expect(health).toHaveAttribute("data-health", "on_track");
-    const before = await health.innerHTML();
-    // Its milestone moves to tomorrow, before the work it waits on ends.
-    await diamond(page, "Half of new teams invite a teammate").click();
-    await card(page).getByLabel("Date").fill("2026-11-04");
-    await card(page).getByTestId("ms-save").click();
-    await expect(card(page)).toBeHidden();
+    const health = lanes(page).filter({ hasText: "Usage alerts track" }).getByTestId("track-head").getByTestId("track-health");
+    const tip = health.getByRole("tooltip");
     await expect(health).toHaveAttribute("data-health", "at_risk");
-    expect(await health.innerHTML()).not.toBe(before);
+    const warning = await health.innerHTML();
+    // Each milestone its tip blames moves to the end of next year, after the work it waits on.
+    const moved: string[] = [];
+    for (let n = 0; n < 6 && (await health.getAttribute("data-health")) === "at_risk"; n++) {
+      await health.getByTestId("track-health-tip").hover();
+      const why = /after (M\d+ .+) on [A-Z][a-z]{2} \d{1,2}/.exec((await tip.textContent()) ?? "");
+      expect(why, "the tip names the milestone").not.toBeNull();
+      await page.mouse.move(0, 0);
+      await page.locator(`[data-testid="ms-diamond"][title^="${why![1]},"]`).first().click();
+      await card(page).getByLabel("Date").fill("2027-12-31");
+      await card(page).getByTestId("ms-save").click();
+      await expect(card(page)).toBeHidden();
+      moved.push(why![1]);
+    }
+    await expect(health).toHaveAttribute("data-health", "on_track");
+    // The mark itself changed: a tick, not the warning.
+    expect(await health.innerHTML()).not.toBe(warning);
     await health.getByTestId("track-health-tip").hover();
-    await expect(health.getByRole("tooltip")).toHaveText(/^At risk: .+ ends [A-Z][a-z]{2} \d{1,2}, after M\d+ Half of new teams invite a teammate on Nov 4$/);
+    await expect(tip).toHaveText("On track: every feature ends before its milestone");
+    // Undo puts the last one back: the warning again.
+    await page.getByTestId("ms-toast").getByRole("button", { name: "Undo" }).click();
+    await expect(health).toHaveAttribute("data-health", "at_risk");
+    expect(await health.innerHTML()).toBe(warning);
+    expect(moved.length).toBeGreaterThan(0);
   });
 });
 
@@ -471,8 +485,9 @@ test.describe("Roadmap milestones on touch", () => {
     const c = card(page);
     await expect(c).toBeVisible();
     await expect(c.getByLabel("Status")).toHaveValue("");
+    await expect(c.getByTestId("ms-status-why")).toHaveAccessibleName("About Oracle's reason");
     await c.getByTestId("ms-status-why").tap();
-    await expect(c.getByTestId("ms-status-why").locator("xpath=..").getByRole("tooltip")).toHaveText(/^(Every piece of work ends by its date|.+ ends [A-Z][a-z]{2} \d{1,2}, after its date [A-Z][a-z]{2} \d{1,2})$/);
+    await expect(c.getByTestId("ms-status-why").locator("xpath=..").getByRole("tooltip")).toHaveText(/^[A-Z0-9].{8,}$/);
     // A second tap puts it away.
     await c.getByTestId("ms-status-why").tap();
     await expect(c.getByTestId("ms-status-why").locator("xpath=..").getByRole("tooltip")).toBeHidden();

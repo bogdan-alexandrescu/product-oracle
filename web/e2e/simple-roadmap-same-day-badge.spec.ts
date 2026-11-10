@@ -20,6 +20,8 @@ import { expect, test, type Locator, type Page } from "./test";
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const card = (page: Page) => page.getByTestId("ms-card");
+// The counts of the days this spec fills (the goals' own target dates may share a day too).
+const ours = (page: Page) => page.getByTestId("ms-same-day").filter({ hasText: /on Nov 2[01]$/ });
 
 async function twoOnNov20(page: Page) {
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-prd-milestones"] as const);
@@ -72,7 +74,7 @@ for (const [zoom, name] of [
   test(`${name}: the same-day count never covers the next diamond, which opens on a click`, async ({ page }) => {
     await twoOnNov20(page);
     await page.getByTestId(`zoom-${zoom}`).click();
-    const badge = page.getByTestId("ms-same-day");
+    const badge = ours(page);
     const next = page.locator('[data-testid="ms-prd-diamond"][title*=" Rules in beta"]');
     const b = await boxOf(badge);
     const d = await boxOf(next);
@@ -110,12 +112,12 @@ async function twoPairs(page: Page) {
   await twoOnNov20(page);
   await addOn(page, "Trial teams onboarded", "2026-11-21");
   await addOn(page, "Help pages written", "2026-11-21");
-  await expect(page.getByTestId("ms-same-day")).toHaveCount(2);
+  await expect(ours(page)).toHaveCount(2);
 }
 
 /** Every same-day badge is clear of the others, of the diamonds, of each month's and week's name and of the Today pill. */
 async function badgesClear(page: Page, names: Locator) {
-  const badges = page.getByTestId("ms-same-day");
+  const badges = ours(page);
   await expect(badges).toHaveCount(2);
   const b = [await boxOf(badges.nth(0)), await boxOf(badges.nth(1))];
   expect(overlaps(b[0], b[1])).toBe(false);
@@ -191,7 +193,7 @@ test("phone: on the Gantt, same-day badges on neighbouring days keep apart, clea
  */
 test("the same-day list opens from the keyboard and closes on Escape and on a click outside it", async ({ page }) => {
   await twoOnNov20(page);
-  const count = page.getByTestId("ms-same-day").first();
+  const count = ours(page).first();
   const list = page.getByTestId("ms-same-day-list");
   await count.focus();
   await page.keyboard.press("Enter");
@@ -215,7 +217,7 @@ test("phone: a tap just beside the same-day count still opens its list", async (
   await twoOnNov20(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByTestId("format-gantt").click();
-  const count = page.getByTestId("ms-same-day").first();
+  const count = ours(page).first();
   await count.evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top - 300));
   const b = await boxOf(count);
   expect(b.height).toBeLessThan(16);
