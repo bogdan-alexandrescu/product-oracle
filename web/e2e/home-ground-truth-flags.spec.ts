@@ -24,6 +24,8 @@ async function home(page: Page, email?: string, scenario: string | null = GROUND
 }
 
 const line = (page: Page) => page.getByTestId("gtf-line");
+/** The line's words: its count and name (why is behind its (i)). */
+const count = (page: Page) => page.getByTestId("gtf-open");
 const sheet = (page: Page) => page.getByRole("dialog", { name: /Ground Truth flags/ });
 const row = (page: Page, name: string) => sheet(page).getByTestId("gt-row").filter({ hasText: name });
 const notice = (page: Page) => sheet(page).getByTestId("gt-notice");
@@ -39,7 +41,7 @@ for (const colorScheme of ["light", "dark"] as const)
     await page.emulateMedia({ colorScheme });
     await home(page);
     // The line's words are its count and name; why is behind its (i).
-    await expect(line(page)).toHaveText(/^\s*9 Ground Truth flags\s*$/);
+    await expect(count(page)).toHaveText("9 Ground Truth flags");
     await expect(page.getByRole("region", { name: /^(Summary|Waiting for you)$/ }).getByTestId("gtf-line")).toBeVisible();
     await line(page).getByRole("button", { name: "About Ground Truth flags" }).click();
     await expect(line(page).getByRole("tooltip")).toHaveText("Anything that breaks the Ground Truth is allowed, and flagged here with its fix.");
@@ -63,24 +65,24 @@ for (const colorScheme of ["light", "dark"] as const)
     await expect(picker).toHaveCount(0);
     await expect(notice(page)).toContainText("Linked “Guest seats” to “Digest emails”.");
     await expect(sheet(page).getByRole("heading").first()).toHaveText("Ground Truth flags · 7");
-    await expect(line(page)).toHaveText(/^\s*7 Ground Truth flags\s*$/);
+    await expect(count(page)).toHaveText("7 Ground Truth flags");
 
     await notice(page).getByRole("button", { name: "Undo" }).click();
     await expect(notice(page)).toContainText("Undone.");
     await expect(sheet(page).getByRole("heading").first()).toHaveText("Ground Truth flags · 9");
-    await expect(line(page)).toHaveText(/^\s*9 Ground Truth flags\s*$/);
+    await expect(count(page)).toHaveText("9 Ground Truth flags");
     await sheet(page).getByRole("button", { name: "Close" }).first().click();
     await expect(sheet(page)).toHaveCount(0);
     // Home reads it again: still 9.
     await page.reload();
-    await expect(line(page)).toHaveText(/^\s*9 Ground Truth flags\s*$/);
+    await expect(count(page)).toHaveText("9 Ground Truth flags");
   });
 
 for (const viewport of [DESKTOP, PHONE])
   test(`a viewer sees the line and reads the flags with no fixes (${viewport.width})`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await home(page, "viewer@example.com");
-    await expect(line(page)).toHaveText(/^\s*9 Ground Truth flags\s*$/);
+    await expect(count(page)).toHaveText("9 Ground Truth flags");
     await page.getByTestId("gtf-open").click();
     for (const kind of ["unlinked_item", "prd_feature_missing", "no_code"]) {
       await openKind(page, kind);
