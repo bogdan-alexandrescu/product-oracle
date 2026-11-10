@@ -2019,8 +2019,10 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     new = " ".join(str(body.after.get("line") or "").split())
     if not isinstance(old, str):
         raise ChangeError(422, "before.line: the line as you saw it")
-    if not new or len(new) > LINE_MAX:
-        raise ChangeError(422, f"after.line: 1 to {LINE_MAX} characters")
+    # A line shown cut ("…", its whole text behind it) is edited from its whole words
+    # (vqa-one-pager): the new words may be as long as a whole line, never cut to LINE_MAX.
+    if not new or len(new) > FULL_MAX:
+        raise ChangeError(422, f"after.line: 1 to {FULL_MAX} characters")
     block = line_id.rsplit("-", 1)[0]
     if block == "problem" and len(new.split()) > PROBLEM_WORDS:
         raise ChangeError(422, f"The problem is at most {PROBLEM_WORDS} words")
@@ -2041,7 +2043,11 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
         raise _conflict("This line changed since you read it", text)
     if not bodies:
         raise ChangeError(409, "This line rests on no section of the PRD")
-    patched = patch_all(bodies, text, new)
+    # A published line shown cut patches the facts of its whole text, so the cut tail does
+    # not stay in the section beside the new words (vqa-one-pager).
+    published = _lines(b).get(line_id) or {}
+    whole = published.get("full") if text == published.get("text") else None
+    patched = (patch_all(bodies, whole, new) if whole else None) or patch_all(bodies, text, new)
     if patched is None:
         raise ChangeError(
             409,

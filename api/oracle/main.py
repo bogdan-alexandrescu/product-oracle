@@ -35,7 +35,7 @@ from oracle.decisions.router import router as decisions_router
 from oracle.discussions.router import router as discussions_router
 from oracle.docs.parser import DraftError
 from oracle.docs.router import router as docs_router
-from oracle.docs.schemas import ImportErrorResponse
+from oracle.docs.schemas import ImportErrorResponse, rejected_detail
 from oracle.engineering.router import router as engineering_router
 from oracle.export.router import router as export_router
 from oracle.intake.drafting import DraftGateClosed, draft_gate_closed
@@ -195,9 +195,7 @@ def create_app() -> FastAPI:
         # carry its state labels) is a 422 on every read path (the markdown, the exports,
         # the feedback package, MCP), never a 500. Routes that import drafts answer the
         # same body themselves.
-        body = ImportErrorResponse(
-            detail=f"draft rejected: {len(exc.problems)} problem(s)", errors=exc.problems
-        )
+        body = ImportErrorResponse(detail=rejected_detail(exc.problems), errors=exc.problems)
         return JSONResponse(body.model_dump(mode="json"), 422)
 
     # C5: drafting from an intake waits until its critical questions are decided; the

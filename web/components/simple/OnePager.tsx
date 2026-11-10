@@ -18,7 +18,7 @@ import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { quoteLine } from "@/components/simple/quote-line";
 import { InReviewBar, PresentMenu, SendForApproval } from "@/components/simple/ReviewFlow";
 import { ErrorNote, Loading } from "@/components/ui";
-import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
+import { api, ApiError, fixHref, unwrap, type ImportFix, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
 import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
 import { DecisionNotes, LeftOutLine } from "@/components/simple/DecisionNotes";
@@ -169,6 +169,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
     void reloadDoc();
   }, [refresh, reloadPage, reloadPlan, reloadDoc]);
   const [error, setError] = useState<string | null>(null);
+  const [fixes, setFixes] = useState<ImportFix[]>([]);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
@@ -355,6 +356,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   async function act(run: () => Promise<unknown>, waits = false) {
     setBusy(true);
     setError(null);
+    setFixes([]);
     try {
       await run();
       if (waits) invalidateWaiting();
@@ -364,6 +366,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       onChanged?.();
     } catch (e) {
       setError(errorMessage(e));
+      setFixes(e instanceof ApiError ? [...new Map(e.fixes.map((f) => [fixHref(f), f])).values()] : []);
     } finally {
       setBusy(false);
     }
@@ -419,6 +422,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
 
   async function exportPdf() {
     setError(null);
+    setFixes([]);
     setExporting(true);
     // S-9: the note says the download is starting, then that it is done or why it failed.
     setSaved("Your PDF is downloading…");
@@ -655,6 +659,13 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
         />
         {toast}
         {error && <ErrorNote>{error}</ErrorNote>}
+        {/* vqa-one-pager (e): a refused draft's fix, beside its named problem. */}
+        {error &&
+          fixes.map((f) => (
+            <Link key={fixHref(f)} href={fixHref(f)} data-testid="draft-fix" className="text-[14px] text-accent underline">
+              Add a date source
+            </Link>
+          ))}
         {planShown && updating && (
           <p role="status" data-testid="plan-updating" className="text-[14px] text-text2">
             Oracle is reading the plan again. This is the last plan until it is done.
@@ -1240,7 +1251,8 @@ export function NeedsALook({ items, blocks = [], sections = [], doc, version, co
     <section aria-label="Needs a look" className="simple-noprint mb-4 rounded border border-dashed border-[var(--simple-rule)] px-3 py-2 text-sm text-text2">
       <h2 className="font-semibold">Needs a look</h2>
       <ul className="mt-1 space-y-1">
-        {items.map((x, i) => {
+        {/* vqa-one-pager: the same item (kind, words, sections) shows once. */}
+        {items.filter((x, i) => items.findIndex((y) => y.kind === x.kind && y.text === x.text && y.source_keys.join() === x.source_keys.join()) === i).map((x, i) => {
           const w = at(x);
           const key = x.source_keys[0];
           const line = short(x, w.names.length && w.line ? w.names : w.prd);

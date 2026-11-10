@@ -310,6 +310,19 @@ export function seedHeadingCountOnePager(): OnePagerDb {
 }
 
 /**
+ * The "one-pager-vqa" scenario (vqa-one-pager): the "Not this quarter" count said twice, the
+ * same sentence again (one "Needs a look" item, not two), and a users section with a note on
+ * how sure it is ("Low confidence: ..."), never who has it. Invented data.
+ */
+export function seedVqaOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  const later = db.sections.find((x) => x.key === "later")!;
+  later.body = later.body.replace(/^Eight features wait for next quarter\./, "Eight features wait for next quarter. Eight features wait for next quarter.");
+  db.sections.find((x) => x.key === "who")!.body = "- Studio leads: set up alone\n- Low confidence: we met only a few studios";
+  return db;
+}
+
+/**
  * The "one-pager-two-counts" scenario (review, Nov 7): two numbers to fix in one section, the
  * heading's "Later · 8 items" over six listed and "Five features wait for next quarter" under
  * it, so the section takes two fixes, each with its own Undo; its targets in decimals ("300.5"
@@ -1234,11 +1247,16 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     if (RANK[ctx.role] < RANK.commenter) return json(403, { detail: "Viewers read the one-pager" });
     const old = String(((b.before ?? {}) as Record<string, unknown>).line ?? "");
     const next = String(((b.after ?? {}) as Record<string, unknown>).line ?? "").split(/\s+/).filter(Boolean).join(" ");
-    if (!next || next.length > 300) return json(422, { detail: "after.line: 1 to 300 characters" });
+    // As one_pager.create (vqa-one-pager): a line shown cut is edited from its whole words, up to FULL_MAX.
+    if (!next || next.length > 2000) return json(422, { detail: "after.line: 1 to 2000 characters" });
     if (old !== cur) return json(409, { detail: { message: "This line changed since you read it", current: { line: cur }, changed_by: null, changed_at: null } });
     const keys = seedLine(db, lineId)!.keys;
     const heads = Object.fromEntries(db.sections.map((s) => [s.key, s.heading]));
-    const patched = keys.map((k, i) => patch(sectionNow(db, k, sees), cur, next, i === 0));
+    // A published line shown cut patches the facts of its whole text: no cut tail stays beside the new words.
+    const seeded = seedLine(db, lineId)!;
+    const whole = cur === seeded.text ? seeded.full : undefined;
+    const patchedWhole = whole ? keys.map((k, i) => patch(sectionNow(db, k, sees), whole, next, i === 0)) : null;
+    const patched = patchedWhole && patchedWhole.every((x) => x !== null) ? patchedWhole : keys.map((k, i) => patch(sectionNow(db, k, sees), cur, next, i === 0));
     if (patched.some((x) => x === null)) return json(409, { detail: "Oracle could not find this line's words in its sections; open the detailed view to edit them" });
     if (decides(ctx) && inReview(db)) return json(409, { detail: IN_REVIEW });
     const before = { line: cur, sections: Object.fromEntries(keys.map((k) => [k, { heading: heads[k], body: sectionNow(db, k, sees) }])) };

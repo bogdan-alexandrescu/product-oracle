@@ -71,7 +71,8 @@ const LABEL = /^(?:(primary|main|core|target)(?:\s+(?:users?|personas?|segments?
 // A job story ("When ..., I want ...") or a note on the people ("The primary segment is a
 // hypothesis ...") says what they do or how sure we are, never who they are (CLD's walk B, 2026-11-01).
 const STORY = /^\s*(?:when\b.*\bI\b|as an?\b.*,\s*I\b|I\s+want\b)/i;
-const NOTE_LINE = /\bhypothes|\bassum|\bto be (?:confirmed|validated|tested)\b/i;
+// How sure the PRD is of them ("Low confidence: ...") is never who they are either (vqa-one-pager).
+const NOTE_LINE = /\bhypothes|\bassum|\bto be (?:confirmed|validated|tested)\b|\bconfiden|\bcertaint/i;
 const WHO_WORDS = 30;
 const saidNotWho = (t: string) => STORY.test(t) || NOTE_LINE.test(t);
 const wordCount = (t: string) => t.split(/\s+/).filter(Boolean).length;
@@ -139,10 +140,11 @@ export function whoHasIt(secs: Sec[]): string | null {
     let named: string[] = [];
     for (const b of lines) {
       const p = split(b);
+      if (saidNotWho(p ? p[0] : b)) continue;
       if (p && wordCount(p[0]) <= 8) named.push(p[0]);
       else if (!saidNotWho(b)) named.push(sentence(b));
     }
-    named.push(...r.cells.map((c) => c[0]).filter(Boolean));
+    named.push(...r.cells.map((c) => c[0]).filter((c) => c && !saidNotWho(c)));
     if (!named.length) named = prose.join(" ").split(/(?<=[.!?])\s+/).filter((x) => x && !saidNotWho(x)).map(sentence).slice(0, 1);
     named = named.filter((n) => n.trim());
     if (named.length) return joined(named);
@@ -500,5 +502,16 @@ export function annotate(blocks: Block[], secs: Sec[], checked: Sec[] = secs): L
     const k = [...new Set(keys)];
     return { kind: "code", text: `${code} has no name in the PRD.`, where: k.map((x) => heads[x] ?? x), source_keys: k };
   });
-  return [...looks, ...numbers(checked)];
+  return once([...looks, ...numbers(checked)]);
+}
+
+/** one_pager_checks.once: each item once (vqa-one-pager); the same kind, words and sections twice is one item. */
+export function once(looks: Look[]): Look[] {
+  const seen = new Set<string>();
+  return looks.filter((x) => {
+    const key = JSON.stringify([x.kind, x.text, x.source_keys]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

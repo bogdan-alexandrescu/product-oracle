@@ -149,7 +149,12 @@ _LABEL = re.compile(
 # hypothesis ...") says what they do or how sure we are, never who they are (CLD's walk B,
 # 2026-11-01).
 _STORY = re.compile(r"^\s*(?:when\b.*\bI\b|as an?\b.*,\s*I\b|I\s+want\b)", re.I)
-_NOTE_LINE = re.compile(r"\bhypothes|\bassum|\bto be (?:confirmed|validated|tested)\b", re.I)
+# How sure the PRD is of them ("Low confidence: ...", "Confidence: medium") is never who
+# they are either (vqa-one-pager: "Who has it: Low confidence").
+_NOTE_LINE = re.compile(
+    r"\bhypothes|\bassum|\bto be (?:confirmed|validated|tested)\b|\bconfiden|\bcertaint",
+    re.I,
+)
 WHO_WORDS = 30
 
 
@@ -225,11 +230,13 @@ def who_has_it(sections: list[Section]) -> str | None:
         named = []
         for b in lines:
             p = split.split(b, maxsplit=1)
+            if _said_not_who(p[0]):
+                continue
             if len(p) == 2 and len(p[0].split()) <= 8:
                 named.append(p[0])
             elif not _said_not_who(b):
                 named.append(_sentence(b))
-        named += [r[0] for r in rows if r and r[0]]
+        named += [r[0] for r in rows if r and r[0] and not _said_not_who(r[0])]
         if not named:
             said = re.split(r"(?<=[.!?])\s+", " ".join(prose))
             named = [_sentence(x) for x in said if x and not _said_not_who(x)][:1]
@@ -792,4 +799,17 @@ def annotate(
         looks.append(Look(
             "code", f"{code} has no name in the PRD.", [heads.get(k, k) for k in keys], keys
         ))  # fmt: skip
-    return looks + numbers(sections if checked is None else checked)
+    return once(looks + numbers(sections if checked is None else checked))
+
+
+def once(looks: list[Look]) -> list[Look]:
+    """Each item once (vqa-one-pager): a disagreement the PRD states twice (the same sentence
+    again in its Summary) is one item, not two of the same card; the first is kept."""
+    seen: set[tuple[str, str, tuple[str, ...]]] = set()
+    out: list[Look] = []
+    for x in looks:
+        key = (x.kind, x.text, tuple(x.source_keys))
+        if key not in seen:
+            seen.add(key)
+            out.append(x)
+    return out
