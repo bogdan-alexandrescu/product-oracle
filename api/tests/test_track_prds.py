@@ -28,7 +28,13 @@ Test cards (protects / fails_when / no_claim):
   suggestion back with its actions; fails_when=it stays waiting or gone.
 - test_a_proposed_removal_takes_off_only_that_prd: protects=remove_prd_id takes off only that
   PRD when accepted; fails_when=a PRD added meanwhile is dropped.
+- test_placing_a_prd_directly_closes_its_open_proposal: protects=the track's decider putting a
+  PRD on a track directly (``add_prd_id`` or ``prd_ids``) closes an open proposal for that PRD
+  (declined, by them): it leaves their Inbox and the PRD owner's item, and is no longer
+  decided; fails_when=it stays open, still counts, or its Accept answers 409 "outdated".
 """
+
+import uuid
 
 import pytest
 from sqlalchemy import select
@@ -36,6 +42,7 @@ from sqlalchemy import select
 from oracle import changes, company_time
 from oracle.docs.models import DocumentVersion
 from oracle.roadmap.models import ProductTrack, TrackerRecord, TrackPrd
+from oracle.simple.models import SimpleChange
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 from tests.test_simple_removed_tracks import read_tracks
@@ -287,3 +294,40 @@ async def test_a_proposed_removal_takes_off_only_that_prd(client):
     assert r.status_code == 200, r.text
     t = row(await read_tracks(client, ctx), "Checkout")
     assert [p["id"] for p in t["prds"]] == [ids["second_id"]]
+
+
+@pytest.mark.parametrize("form", ["add_prd_id", "prd_ids"])
+async def test_placing_a_prd_directly_closes_its_open_proposal(client, form):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    tid = ids["track_id"]
+    await owned_by_approver(ctx, ids)
+    prop = (await change(client, ctx, "approver", "edit_track", {"track_id": tid},
+                         {"add_prd_id": ids["second_id"]}))["change"]  # fmt: skip
+    assert prop["status"] == "proposed"
+    (waiting,) = (await client.get("/v1/inbox", headers=ctx.as_("owner"))).json()[
+        "simple_proposals"
+    ]
+    assert waiting["id"] == prop["id"]
+    # The track's decider puts the PRD on the track themselves.
+    after = (
+        {"add_prd_id": ids["second_id"]}
+        if form == "add_prd_id"
+        else {"prd_ids": [ids["prd_id"], ids["second_id"]]}
+    )
+    done = (await change(client, ctx, "owner", "edit_track", {"track_id": tid}, after))["change"]
+    assert done["status"] == "applied"
+    # The proposal is closed: out of every Inbox, and never decided again.
+    assert (await client.get("/v1/inbox", headers=ctx.as_("owner"))).json()[
+        "simple_proposals"
+    ] == []
+    assert await suggestions(client, ctx, "approver") == []
+    async with tenant_session(ctx.tenant_id) as s:
+        c = await s.get(SimpleChange, uuid.UUID(prop["id"]))
+        assert (c.status, c.decided_by) == ("declined", ctx.users["owner"].id)
+        assert c.decided_at is not None
+    r = await client.post(f"{CHANGES}/{prop['id']}/accept", json={}, headers=ctx.as_("owner"))
+    assert r.status_code == 409, r.text
+    assert "outdated" not in r.text
+    t = row(await read_tracks(client, ctx), "Checkout")
+    assert sorted(p["id"] for p in t["prds"]) == sorted([ids["prd_id"], ids["second_id"]])
