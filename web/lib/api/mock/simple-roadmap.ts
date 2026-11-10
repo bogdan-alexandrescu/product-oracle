@@ -1159,6 +1159,16 @@ export function prdTrackOwnerIds(db: SimpleDb, prdSlug: string): string[] {
   return [...tracks].flatMap((t) => (db.track_owners?.[t] ? [db.track_owners[t]] : []));
 }
 
+/** tracks-goal (the API's track.prd_ids): a track's PRDs by title, its first one first, as the Tracks sheet
+ * keeps them (track_state); a track the sheet has not read yet holds its first item's PRD, as the sheet seeds it. */
+export function trackPrdTitles(db: SimpleDb, track: string): string[] {
+  const st = (db as SimpleDb & { track_state?: Record<string, { prd: string; more?: string[] }> }).track_state?.[track];
+  if (st) return [st.prd, ...(st.more ?? [])].filter(Boolean);
+  const on = db.items.find((s) => s.track === track);
+  const first = on ? (on.prd_doc?.title ?? ROADMAPS[on.roadmap]?.prd ?? "") : "";
+  return first ? [first] : [];
+}
+
 /** A PRD's owners (drafts.who on its document), by person id in id order: the owners of its tracks
  * only. An ask of its milestones is sent to them (with none, the company's owners) and theirs to decide. */
 export function prdOwnerIdsOf(db: SimpleDb, prdSlug: string): string[] {
