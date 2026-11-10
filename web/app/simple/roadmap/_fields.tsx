@@ -247,7 +247,21 @@ export function PanelFields({
   const others = [...items.values()].filter(
     (i) => i.id !== item.id && i.status !== "merged",
   );
-  const tracks = refs(items, (i) => i.track);
+  // empty-track: every active track is offered in the Tracks list's order, so a track that holds
+  // nothing yet (a new track with no PRD) can take its first item; then any other track an item names.
+  const trackList = useQuery(`simple-tracks:panel:${canChange}`, () =>
+    canChange ? unwrap(api.GET("/v1/simple/tracks")) : Promise.resolve(null),
+  );
+  const tracks = [
+    ...new Map(
+      [
+        ...(trackList.data?.tracks ?? [])
+          .filter((t) => t.status === "active")
+          .map((t) => ({ id: t.id, title: t.title })),
+        ...refs(items, (i) => i.track),
+      ].map((t) => [t.id, t] as const),
+    ).values(),
+  ];
   // prd-order: the PRD picker in the company PRD order.
   const prds = refs(items, (i) => i.prd).sort(byPrdOrderOf(prdOrderOf));
   const goals = refs(items, (i) => i.goal);

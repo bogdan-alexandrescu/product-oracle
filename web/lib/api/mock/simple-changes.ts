@@ -480,7 +480,8 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   const like = (f: (x: typeof s) => unknown, v: unknown) => db.items.find((x) => f(x) === v);
   if ("feature_id" in values) s.feature_id = (values.feature_id as string | null) ?? null;
   if ("confidence" in values) s.confidence = (values.confidence as typeof s.confidence) ?? undefined;
-  if ("track_id" in values) s.track = values.track_id ? like((x) => x.track && stableUuid(`simple-track/${x.track}`), values.track_id)?.track : undefined;
+  // empty-track (changes._exists): any track the company has, one that holds no item yet too.
+  if ("track_id" in values) s.track = values.track_id ? Object.keys(TRACKS).find((k) => stableUuid(`simple-track/${k}`) === values.track_id) : undefined;
   if ("goal_id" in values) {
     s.goal = values.goal_id ? (Object.keys(GOALS).find((k) => goalId(k) === values.goal_id) ?? like((x) => x.goal && goalId(x.goal), values.goal_id)?.goal) : undefined;
     // goal-map-editing: a confirmed goal named by its id alone (goal-ladder's).
@@ -1382,7 +1383,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const f = fields[0];
       const v = a[f] ?? null;
       const known = (x: (typeof seen.items)[number]) => read(seen, x.key, [f], target)[f];
-      if (v !== null && !seen.items.some((x) => known(x) === v) && !(f === "goal_id" && (Object.keys(GOALS).some((k) => goalId(k) === v && !goalInTrash(seen, k)) || !!mapGoalRef(seen, String(v))))) return json(422, { detail: `after.${f}: ${{ track_id: "a product track", prd_document_id: "a PRD", goal_id: "a goal" }[f]}` });
+      if (v !== null && !seen.items.some((x) => known(x) === v) && !(f === "track_id" && Object.keys(TRACKS).some((k) => stableUuid(`simple-track/${k}`) === v)) && !(f === "goal_id" && (Object.keys(GOALS).some((k) => goalId(k) === v && !goalInTrash(seen, k)) || !!mapGoalRef(seen, String(v))))) return json(422, { detail: `after.${f}: ${{ track_id: "a product track", prd_document_id: "a PRD", goal_id: "a goal" }[f]}` });
       after = { [f]: v };
       // roadmap-edit-fixes (changes._track_of_prd): a track is one PRD's, so it follows the PRD.
       const track = f === "prd_document_id" && v ? seen.items.find((x) => ownPrd(x).id === v && x.track)?.track : undefined;

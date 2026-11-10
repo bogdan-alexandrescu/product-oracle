@@ -65,12 +65,16 @@ test.describe("1440", () => {
     await page.getByTestId("group-goal").click();
     const label = page.getByTestId("chart-label").filter({ has: page.getByTestId("label-title").getByText(FEATURE, { exact: true }) });
     await expect(label).toBeVisible();
-    const group = await label.evaluate((el) => {
-      let e = el.parentElement!.previousElementSibling;
-      while (e && e.getAttribute("data-testid") !== "chart-group") e = e.previousElementSibling;
-      return (e?.querySelector("span")?.textContent ?? "").trim();
-    });
-    expect(group).toBe(goal);
+    // The regroup from track bands lands a frame after the press: read it once it has.
+    await expect
+      .poll(() =>
+        label.evaluate((el) => {
+          let e = el.parentElement!.previousElementSibling;
+          while (e && e.getAttribute("data-testid") !== "chart-group") e = e.previousElementSibling;
+          return (e?.querySelector("span")?.textContent ?? "").trim();
+        }),
+      )
+      .toBe(goal);
 
     // The Roadmap's Goal filter: the goal lists the feature and leaves out one under another goal.
     await page.getByTestId("format-timeline").click();
