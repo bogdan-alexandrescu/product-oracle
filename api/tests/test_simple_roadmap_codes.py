@@ -14,6 +14,12 @@ Test cards (protects / fails_when / no_claim):
   name does not match the track's is its own milestone.
 - test_a_goal_milestone_named_in_brackets_folds_into_its_track_milestone: protects=a name
   in brackets ("[Launch (beta)]") matches the track's "M2 · Launch (beta)", as Home read it.
+- test_a_goal_milestone_joins_its_track_milestone_beside_another_goals_of_the_code:
+  protects=join whenever names match (the owner, Nov 9); fails_when=another goal's milestone
+  of the old code keeps them split.
+- test_a_goal_milestone_joins_a_prd_milestone_whose_name_it_leads: protects=a goal's and a
+  PRD's milestone of one code and matching names are one.
+- test_no_name_is_hidden_by_a_join: protects=a name that matches neither keeps its own code.
 - test_roadmap_read_codes_and_renumber_on_move: protects=``GET /v1/simple/roadmap`` gives each
   goal milestone its roadmap code across goals, and moving one earlier renumbers the later
   ones; fails_when=codes stay per goal or do not follow a move; no_claim=the web.
@@ -109,6 +115,37 @@ def test_a_goal_milestone_named_in_brackets_folds_into_its_track_milestone():
     own = gm("M2", "[Launch (beta)]", None)
     assign([own], [track], [item(track.id)], RANK)
     assert own.roadmap_code == track.roadmap_code == "M1"
+
+
+def test_a_goal_milestone_joins_its_track_milestone_beside_another_goals_of_the_code():
+    """Join whenever names match (the owner, Nov 9): another goal's M1 on the roadmap no longer
+    keeps a goal's "M1 Measured" apart from the track's "M1 Measured and mapped"."""
+    track = tm("M1 Measured and mapped", "2026-11-27", [])
+    own = gm("M1", "Measured", "2026-11-25")
+    other = gm("M1", "Daily scoreboard", "2026-11-20", goal=G2)
+    assign([own, other], [track], [item(track.id)], RANK)
+    assert own.roadmap_code == track.roadmap_code == "M2"
+    assert other.roadmap_code == "M1"
+
+
+def test_a_goal_milestone_joins_a_prd_milestone_whose_name_it_leads():
+    """A goal's "M1 Measured" and a PRD's "M1 Measured and mapped" on one roadmap are one."""
+    prd = gm("M1", "Measured and mapped", "2026-11-27", goal=None, prd=True)
+    own = gm("M1", "Measured", "2026-11-25")
+    assign([own, prd], [], [], RANK)
+    assert own.roadmap_code == prd.roadmap_code == "M1"
+
+
+def test_no_name_is_hidden_by_a_join():
+    """No name hidden: a goal milestone whose name neither leads nor follows the track's keeps
+    its own code, whatever joins beside it; two goals' that both match join the one track."""
+    track = tm("M1 Measured and mapped", "2026-11-27", [])
+    a = gm("M1", "Measured", "2026-11-25")
+    b = gm("M1", "measured and MAPPED", None, goal=G2)
+    c = gm("M1", "Mapped", "2026-11-20", goal=G2)
+    assign([a, b, c], [track], [item(track.id)], RANK)
+    assert a.roadmap_code == b.roadmap_code == track.roadmap_code == "M2"
+    assert c.roadmap_code == "M1"
 
 
 @pytest.fixture
