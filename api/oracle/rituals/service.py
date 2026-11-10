@@ -338,7 +338,7 @@ async def _build(
         occ.attempts += 1
         occ.error = f"{type(exc).__name__}: {exc}"[:2000]
         if occ.attempts >= MAX_ATTEMPTS:
-            occ.status = "failed"
+            occ.status, occ.failed_at = "failed", clock.now()
         return False
     occ.pre_read = {
         "built_at": now.isoformat(),
@@ -922,7 +922,7 @@ async def unskip(db: AsyncSession, principal: Principal, occ_id: uuid.UUID):
     _owner_only(principal, ritual)
     _skipped(occ)
     if not occ.pre_read_built_at:
-        occ.status = "failed"
+        occ.status, occ.failed_at = "failed", clock.now()
     elif occ.ends_at + MISSED_AFTER <= clock.now():
         occ.status = "missed"
     else:
@@ -981,7 +981,7 @@ async def inbox_rows(db: AsyncSession, principal: Principal) -> list[InboxRitual
             continue
         if o.status == "failed":
             if r.status == "active" and has_role(principal.role, "owner"):
-                rows.append(row(o, r, "failed", seen(o), True))
+                rows.append(row(o, r, "failed", seen(o, o.failed_at), True))
         elif now < o.ends_at:
             if me == r.owner_id or me in (r.attendee_ids or []):
                 done = o.id in read

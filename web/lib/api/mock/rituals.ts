@@ -31,6 +31,19 @@ type Occurrence = Omit<OccurrenceOut, "kind" | "title" | "duration_min" | "owner
   read_by: string[];
   /** inbox-ritual-seen: when each reader last opened it (the API's ritual_reads.read_at). */
   read_at?: Record<string, string>;
+  /** When it last failed to prepare (the API's ritual_occurrences.failed_at). */
+  failed_at?: string;
+};
+
+/** Mock-only flags for the rituals scenario: "prepare-failed" seeds the Quarterly goals
+ * review's next meeting as failed to prepare (the ticker's third failed attempt). */
+export const MOCK_RITUALS_KEY = "po-mock-rituals";
+const ritualFlags = (): string[] => {
+  try {
+    return (localStorage.getItem(MOCK_RITUALS_KEY) ?? "").split(",");
+  } catch {
+    return [];
+  }
 };
 
 export interface RitualsDb {
@@ -467,6 +480,13 @@ export function seedRituals(ctx: RitualsContext, scenario: boolean): RitualsDb {
       summary_note: "Summary failed · Summarize with Oracle to retry",
     }),
   );
+  if (ritualFlags().includes("prepare-failed")) {
+    const review = db.rituals.find((r) => r.kind === "goals_review")!;
+    const next = new Date(review.next_due_at!);
+    const failedAt = new Date(t.getTime() - 3_600_000).toISOString();
+    db.occurrences.push(occurrence(ctx, review, next, { status: "failed", attempts: 3, error: "RuntimeError: goals unavailable", failed_at: failedAt }));
+    review.next_due_at = nextOccurrence(review.schedule, next).toISOString();
+  }
   return db;
 }
 
@@ -627,9 +647,10 @@ function occurrenceOut(ctx: RitualsContext, r: Ritual, o: Occurrence): Occurrenc
   const out: Partial<Occurrence> = { ...o };
   delete out.read_by;
   delete out.read_at;
+  delete out.failed_at;
   delete out.summary_reads;
   return {
-    ...(out as Omit<Occurrence, "read_by" | "read_at" | "summary_reads">),
+    ...(out as Omit<Occurrence, "read_by" | "read_at" | "failed_at" | "summary_reads">),
     kind: r.kind,
     title: r.title,
     duration_min: r.duration_min,
@@ -668,7 +689,7 @@ export function ritualInbox(ctx: RitualsContext, db: RitualsDb): Schemas["InboxR
       return opened ? ("open" as const) : ("new" as const);
     };
     if (o.status === "failed") {
-      if (r.status === "active" && atLeast(ctx.me.role, "owner")) row("failed", seen(), true);
+      if (r.status === "active" && atLeast(ctx.me.role, "owner")) row("failed", seen(o.failed_at), true);
     } else if (o.status !== "ready") continue;
     else if (t < Date.parse(o.ends_at)) {
       if (me === r.owner_id || r.attendee_ids.includes(me)) {
@@ -990,6 +1011,7 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
     } else {
       const missed = Date.parse(o.ends_at) + MISSED_AFTER_MS <= now().getTime();
       Object.assign(o, { status: !o.pre_read.built_at ? "failed" : missed ? "missed" : "ready", skip_reason: null });
+      if (o.status === "failed") o.failed_at = now().toISOString();
     }
     return json(200, occurrenceOut(ctx, r, o));
   }

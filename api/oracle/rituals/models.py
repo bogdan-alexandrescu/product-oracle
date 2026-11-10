@@ -98,6 +98,9 @@ class RitualOccurrence(TenantScoped, Base):
     pre_read_built_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     error: Mapped[str | None] = mapped_column(Text)
+    # inbox-ritual-seen: when it last failed to prepare (the ritual clock); its owners' failed
+    # row is new until they open it after this.
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notes: Mapped[str | None] = mapped_column(Text)
     skip_reason: Mapped[str | None] = mapped_column(Text)
     decision_ids: Mapped[list[uuid.UUID]] = _uuids()

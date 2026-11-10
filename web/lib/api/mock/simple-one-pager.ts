@@ -754,19 +754,20 @@ function json(status: number, body: unknown): Response {
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 
 /** As one_pager.decides: an owner; the decider; with none, a track owner while an approver. */
-function decides(ctx: OnePagerCtx): boolean {
+function decides(ctx: Pick<OnePagerCtx, "id" | "role" | "decider" | "trackOwners">): boolean {
   if (ctx.role === "owner") return true;
   if (ctx.decider) return ctx.id === ctx.decider;
   return (ctx.trackOwners ?? []).includes(ctx.id) && RANK[ctx.role] >= RANK.approver;
 }
 
-/** As drafts._approver_of: the draft's final approval is the decider's, with none an owner's. */
-function approverOf(ctx: Pick<OnePagerCtx, "id" | "role" | "decider">): boolean {
-  return ctx.decider ? ctx.id === ctx.decider : ctx.role === "owner";
+/** As drafts._approver_of (-> can_edit): the draft's final approval is the decider's; with none,
+ * an owner's or the PRD's track owner's while an approver. */
+function approverOf(ctx: Pick<OnePagerCtx, "id" | "role" | "decider" | "trackOwners">): boolean {
+  return ctx.decider ? ctx.id === ctx.decider : ctx.role === "owner" || decides(ctx);
 }
 
 /** As drafts.can_approve: submitted, and waiting on me (a reviewer, or its approver whose approval is not in yet). */
-function canApprove(db: OnePagerDb, ctx: Pick<OnePagerCtx, "id" | "role" | "decider">): boolean {
+function canApprove(db: OnePagerDb, ctx: Pick<OnePagerCtx, "id" | "role" | "decider" | "trackOwners">): boolean {
   return db.draft?.status === "submitted" && (((db.draft.waiting_on ?? []).includes(ctx.id)) || (!db.approval && approverOf(ctx)));
 }
 
@@ -1165,6 +1166,8 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   // rest; the decider's, with nobody left, publishes it.
   if (p[2] === "drafts" && p[4] === "approve" && m === "POST" && db.draft && p[3] === db.draft.id) {
     const d = db.draft;
+    // As drafts.approve: a replaced PRD is read-only history (refuse_history's 409), first.
+    if (ctx.replacedBy?.length) return json(409, { detail: `${db.doc.title} is replaced and read-only` });
     if (d.status !== "submitted") return json(409, { detail: `This draft is ${d.status ?? "working"}: only a submitted draft is approved` });
     const approver = approverOf(ctx);
     if (!approver && !(d.waiting_on ?? []).includes(ctx.id) && !ctx.reviewers.includes(ctx.id)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
@@ -1361,7 +1364,7 @@ export function onePagerInboxRows(
   dbs: OnePagerDb[],
   me: { id: string; role: Role },
   seen: string | null,
-  who: { deciderOf?: (d: OnePagerDb) => string | null; names?: Record<string, string> } = {},
+  who: { deciderOf?: (d: OnePagerDb) => string | null; trackOwnersOf?: (d: OnePagerDb) => string[]; names?: Record<string, string> } = {},
 ): { proposals: Schemas["InboxSimpleChange"][]; decisions: Schemas["InboxSimpleChange"][]; approvals: Schemas["InboxSimpleApproval"][] } {
   // What the row is on and what was asked, as changes.inbox_rows (_subject, asked_of) for each kind:
   // a line's wording quotes the line; a number fix names its PRD and the section it changes.
@@ -1405,7 +1408,7 @@ export function onePagerInboxRows(
       .map(([d, c]) => row(d, c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
     // inbox-prd-approval-open (drafts.inbox_rows): a PRD's submitted draft waiting on me, as a roadmap's.
     approvals: dbs
-      .filter((d) => canApprove(d, { ...me, decider: who.deciderOf?.(d) ?? null }))
+      .filter((d) => canApprove(d, { ...me, decider: who.deciderOf?.(d) ?? null, trackOwners: who.trackOwnersOf?.(d) ?? [] }))
       .map((d) => ({
         draft_id: d.draft!.id, document: { id: d.doc.id, slug: d.doc.slug, title: d.doc.title }, document_kind: "prd" as const,
         version: d.draft!.submitted_as ?? d.version + 1, submitted_by: d.draft!.submitted_by ?? null,

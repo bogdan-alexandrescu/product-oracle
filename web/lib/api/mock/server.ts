@@ -8329,6 +8329,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     const onePagerRows = onePagerInboxRows([...(db.simple_one_pager ? [db.simple_one_pager] : []), ...Object.values(db.simple_one_pagers ?? {})], { id: me.id, role: me.role }, seenBefore, {
       // As routeOnePager's context: Guided setup's decider is Dana Decider.
       deciderOf: (d) => (d.doc.slug === "guided-setup" ? (db.members.find((x) => x.email === "dana.decider@example.com")?.id ?? null) : null),
+      // As routeOnePager's trackOwners: with the "track-owner" flag the approver owns Guided setup's track.
+      trackOwnersOf: (d) => (d.doc.slug === "guided-setup" && mockApproverOwnsTrack() ? db.members.filter((x) => x.email === "approver@example.com").map((x) => x.id) : []),
       names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
     });
     const newest = (a: Schemas["InboxSimpleChange"], b: Schemas["InboxSimpleChange"]) => ((b.decided_at ?? b.at) > (a.decided_at ?? a.at) ? 1 : -1);
