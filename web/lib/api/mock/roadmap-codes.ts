@@ -43,17 +43,21 @@ export function withRoadmapCodes<T extends { goal_milestones?: Gm[]; milestones:
   // Join whenever names match (the owner, Nov 9): a goal's milestone is the track's (or a PRD's, or
   // the roadmap's own) milestone of its code on its roadmap whose name it leads or follows.
   const into = new Map<string, string>();
-  const best = (g: Gm, of: (Gm | Tm)[]) => {
+  // One with no name matches only as its roadmap's only one of its code (a bare "M3" never takes every goal's M3).
+  const best = (g: Gm, of: (Gm | Tm)[], alone: boolean) => {
     const name = split(g.name)[1];
+    const ok = (m: Gm | Tm) => (words(name).length && words(split(m.name)[1]).length ? match(name, split(m.name)[1]) : alone);
     const same = (m: Gm | Tm) => words(split(m.name)[1]).join(" ") === words(name).join(" ");
-    const hits = of.filter((m) => match(name, split(m.name)[1])).sort((p, q) => Number(!same(p)) - Number(!same(q)) || (p.id < q.id ? -1 : 1));
+    const hits = of.filter(ok).sort((p, q) => Number(!same(p)) - Number(!same(q)) || (p.id < q.id ? -1 : 1));
     return hits[0]?.id ?? null;
   };
   for (const g of [...goals].sort((p, q) => Number(!!p.goal_id) - Number(!!q.goal_id) || (p.id < q.id ? -1 : 1))) {
     const code = gmCode(g);
     const there = tracks.filter((t) => !!code && split(t.name)[0] === code && !!held.get(t.id)?.has(g.roadmap_id));
     const plain = goals.filter((o) => !!code && !o.goal_id && o !== g && o.roadmap_id === g.roadmap_id && gmCode(o) === code);
-    let to = !g.goal_id && there.length === 1 ? there[0].id : (best(g, there) ?? (g.goal_id ? best(g, plain) : null));
+    const alike = new Set(goals.filter((o) => o.roadmap_id === g.roadmap_id && gmCode(o) === code).map((o) => `${o.goal_id ?? ""}|${o.prd?.id ?? ""}`));
+    const alone = alike.size === 1 && there.length === 1;
+    let to = !g.goal_id && there.length === 1 ? there[0].id : (best(g, there, alone) ?? (g.goal_id ? best(g, plain, false) : null));
     if (!to) {
       groups.set(g.id, [g]);
       continue;

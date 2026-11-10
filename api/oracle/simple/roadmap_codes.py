@@ -9,7 +9,8 @@ track milestone is folded into it and shares its code (the one place of that rul
 plan reads it as one row): the track milestone is the one of that code holding items on the
 goal milestone's roadmap, and either the goal milestone has no goal (a PRD's or the
 roadmap's own) and it is the one such track, or their names match (one's words lead the
-other's, or one has none), whatever else of the code the roadmap holds (the owner's "Join
+other's), whatever else of the code the roadmap holds; one with no name matches only as the
+roadmap's only one of that code (the owner's "Join
 whenever names match", Nov 9). A goal's milestone whose name matches a PRD's (or the roadmap's
 own) milestone of its code on its roadmap is that milestone too. No name is hidden: each
 surface shows the longer name and lists the other ("Also: ...").
@@ -86,10 +87,19 @@ def assign(
     # whose name it leads or follows, whatever else of the code the roadmap holds.
     into: dict[uuid.UUID, uuid.UUID] = {}
 
-    def best(gm: SimpleGoalMilestone, of: list) -> uuid.UUID | None:
+    def best(gm: SimpleGoalMilestone, of: list, alone: bool) -> uuid.UUID | None:
+        # Two names match when one's words lead the other's; one with no name only as the
+        # roadmap's only one of its code (a bare "M3" never takes every goal's M3).
         name = split(gm.name)[1]
-        hits = [m for m in of if _match(name, split(m.name)[1])]
-        hits.sort(key=lambda m: (_words(split(m.name)[1]) != _words(name), str(m.id)))
+
+        def ok(m: SimpleGoalMilestone | SimpleMilestone) -> bool:
+            other = split(m.name)[1]
+            return _match(name, other) if _words(name) and _words(other) else alone
+
+        hits = sorted(
+            (m for m in of if ok(m)),
+            key=lambda m: (_words(split(m.name)[1]) != _words(name), str(m.id)),
+        )
         return hits[0].id if hits else None
 
     for gm in sorted(goal_ms, key=lambda g: (g.goal_id is not None, str(g.id))):
@@ -108,7 +118,15 @@ def assign(
                 if code and g.goal_id is None and g is not gm
                 and g.roadmap_id == gm.roadmap_id and _gm_code(g) == code
             ]  # fmt: skip
-            to = best(gm, there) or (best(gm, plain) if gm.goal_id is not None else None)
+            alike = {
+                (g.goal_id, g.prd.id if g.prd else None)
+                for g in goal_ms
+                if g.roadmap_id == gm.roadmap_id and _gm_code(g) == code
+            }
+            alone = len(alike) == 1 and len(there) == 1
+            to = best(gm, there, alone) or (
+                best(gm, plain, False) if gm.goal_id is not None else None
+            )
         if to is None:
             groups[gm.id] = [gm]
             continue

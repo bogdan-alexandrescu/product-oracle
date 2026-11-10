@@ -148,6 +148,17 @@ def test_no_name_is_hidden_by_a_join():
     assert c.roadmap_code == "M1"
 
 
+def test_a_milestone_of_no_name_joins_only_as_its_roadmaps_only_one_of_its_code():
+    """A bare "M3" is no name to lead another: two goals' nameless M3 beside the track's
+    "M3 Prices live" keep their own codes; one goal's alone joins it."""
+    track = tm("M3 Prices live", "2026-12-01", [])
+    a, b = gm("M3", "", "2026-11-20"), gm("M3", "", "2026-11-22", goal=G2)
+    assign([a, b], [track], [item(track.id)], RANK)
+    assert len({a.roadmap_code, b.roadmap_code, track.roadmap_code}) == 3
+    assign([a], [track], [item(track.id)], RANK)
+    assert a.roadmap_code == track.roadmap_code
+
+
 @pytest.fixture
 def clock(monkeypatch):
     monkeypatch.setattr(company_time, "now", lambda: NOW)

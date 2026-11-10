@@ -489,7 +489,7 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
     return { shown, others };
   };
   for (const [tm, own] of folded) {
-    const got = pick(tm.roadmap_code!, [wholeName(tm.roadmap_code!, restOf(tm.name)), ...own.map(goalMilestoneName)]);
+    const got = pick(tm.roadmap_code!, [wholeName(tm.roadmap_code!, restOf(tm.name)), ...own.map((g) => wholeName(tm.roadmap_code!, restOf(g.name)))]);
     if (!got) continue;
     rowName.set(tm, got.shown);
     if (got.others.length) also.set(tm, got.others);
@@ -498,7 +498,7 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
   const byCode = new Map<string, Gm[]>();
   for (const gm of byName) if (gm.roadmap_code && !into.has(gm)) byCode.set(gm.roadmap_code, [...(byCode.get(gm.roadmap_code) ?? []), gm]);
   const codeRow = new Map([...byCode].flatMap(([code, own]) => {
-    const got = own.length > 1 ? pick(code, own.map(goalMilestoneName)) : null;
+    const got = own.length > 1 ? pick(code, own.map((g) => wholeName(code, restOf(g.name)))) : null;
     return got ? [[code, got] as const] : [];
   }));
   // Whose a row is (its PRD's, else its goal's, else its track's): two rows that read alike are told apart by it.
