@@ -34,14 +34,6 @@ async function goalInPanel(page: Page): Promise<string> {
   return goal;
 }
 
-/** The lane (its goal's name) a Timeline row sits under: the nearest lane header above it. */
-const laneOf = (row: Locator) =>
-  row.evaluate((el) => {
-    let e = el.previousElementSibling;
-    while (e && e.getAttribute("data-testid") !== "timeline-lane") e = e.previousElementSibling;
-    return (e?.textContent ?? "").split(" · ")[0].replace(/^\d+/, "").trim();
-  });
-
 test.describe("1440", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -50,12 +42,11 @@ test.describe("1440", () => {
     const goal = await goalInPanel(page);
     expect(goal).toBe("Sign-ups per rep per day");
 
-    // Roadmap, grouped by goal: the Timeline's lane for the goal holds the feature.
+    // Roadmap (tb-mk: the Timeline's bands are tracks, so the Gantt grouped by goal checks the goal).
     await page.getByTestId("simple-nav-roadmap").first().click();
     await expect(page.getByTestId("simple-roadmap")).toBeVisible();
     const row = page.locator('[data-testid="timeline-row"][data-item="gm-f1"]');
     await expect(row).toBeVisible();
-    expect(await laneOf(row)).toBe(goal);
     // The Gantt's Group by Goal puts it under the same goal.
     await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");

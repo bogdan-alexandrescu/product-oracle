@@ -1763,8 +1763,8 @@ export function SimpleRoadmap() {
         {!phone && <span aria-hidden className="h-6 border-l border-line" />}
         <TracksButton items={data.items} canChange={canChange} onChanged={reload} />
       </span>
-      {/* The Timeline and the Gantt always draw track bands, so they offer no Group by. */}
-      {format !== "timeline" && format !== "gantt" && (
+      {/* The Timeline always draws track bands, so it offers no Group by; the Gantt's starts at Track. */}
+      {format !== "timeline" && (
       <span className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2">
         Group by
         <SegmentedControl<Lane>
@@ -2091,7 +2091,7 @@ export function SimpleRoadmap() {
             }}
           />
           <Chart
-            data={(format === "gantt" ? goalLaned : laned) ?? data}
+            data={(format === "gantt" && f.group === "track" ? goalLaned : laned) ?? data}
             lane={format === "gantt" ? "track" : f.group}
             noWork={noWork}
             format={format}
@@ -2119,7 +2119,7 @@ export function SimpleRoadmap() {
               setCard(null);
               setPop({ id: item.id, ...anchorOf(item.id) });
             }}
-            overlay={(l, sc, keepOff) => <GanttMilestones l={l} sc={sc} data={(format === "gantt" ? goalLaned : laned) ?? data} phone={phone} keepOff={keepOff} />}
+            overlay={(l, sc, keepOff) => <GanttMilestones l={l} sc={sc} data={(format === "gantt" && f.group === "track" ? goalLaned : laned) ?? data} phone={phone} keepOff={keepOff} />}
           />
           </>
         )}

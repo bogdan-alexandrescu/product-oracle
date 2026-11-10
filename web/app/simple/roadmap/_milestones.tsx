@@ -488,7 +488,8 @@ export function MsLayer(props: MsLayerProps) {
   if (!ms) return null;
   const { x, axisY, height, rows, lanes, phone, left = 0 } = props;
   const X = (d: string) => left + x(d);
-  const laneOf = (g: string | null | undefined) => lanes.find((l) => l.key === (g ?? "none"));
+  // tb-mk: the bands are tracks now; a milestone whose goal has no band of its own sits on the first one.
+  const laneOf = (g: string | null | undefined) => lanes.find((l) => l.key === (g ?? "none")) ?? lanes.find((l) => l.key !== "below") ?? lanes[0];
   const rowOf = (id: string) => rows.find((r) => r.id === id);
   const out: ReactNode[] = [];
   const own = ms.list.filter((m) => !m.prd && m.date);
