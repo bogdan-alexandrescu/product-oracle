@@ -1360,7 +1360,8 @@ async def create_entity(
     if (found := await find_entity(db, type_, key)) is not None:
         if found.key != key:
             # A key a feature had before it was given its code stays that feature's.
-            raise ConflictError(f"The key {key} is {found.key} {found.title}'s old key.")
+            name = f"{found.key} {found.title}" if fixes.canonical_code(found.key) else found.title
+            raise ConflictError(f"The key {key} is {name}'s old key.")
         raise ConflictError(f"{type_}:{key} already exists")
     await check_parent(db, type_, parent_id)
     check_managed_attrs(writer, {}, attrs)
