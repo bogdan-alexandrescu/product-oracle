@@ -102,14 +102,15 @@ export function likeness(a: string, b: string): number {
   return both / new Set([...x, ...y]).size;
 }
 
-/** As visuals.pair_alike: each new (by index) with the old it reads most like, at least LIKE, each once. */
-function pairAlike(old: string[][], now: string[][]): Map<number, number> {
-  const pairs: [number, number, number, number, number][] = [];
-  old.forEach((was, i) => now.forEach((n, j) => pairs.push([Math.max(0, ...was.flatMap((a) => n.map((b) => likeness(a, b)))), i === j ? 1 : 0, -Math.abs(i - j), i, j])));
-  pairs.sort((p, q) => { for (let k = 0; k < 5; k++) if (p[k] !== q[k]) return q[k] - p[k]; return 0; });
+/** As visuals.pair_alike: each new (by index) with the old it reads most like, at least LIKE, each once;
+ * on a tie an old in `kept` (a flow a person redrew or commented on) first, then the same place. */
+function pairAlike(old: string[][], now: string[][], kept: Set<number> = new Set()): Map<number, number> {
+  const pairs: [number, number, number, number, number, number][] = [];
+  old.forEach((was, i) => now.forEach((n, j) => pairs.push([Math.max(0, ...was.flatMap((a) => n.map((b) => likeness(a, b)))), kept.has(i) ? 1 : 0, i === j ? 1 : 0, -Math.abs(i - j), i, j])));
+  pairs.sort((p, q) => { for (let k = 0; k < 6; k++) if (p[k] !== q[k]) return q[k] - p[k]; return 0; });
   const out = new Map<number, number>();
   const used = new Set<number>();
-  for (const [score, , , i, j] of pairs) {
+  for (const [score, , , , i, j] of pairs) {
     if (score < LIKE) break;
     if (!out.has(j) && !used.has(i)) { out.set(j, i); used.add(i); }
   }
@@ -119,19 +120,22 @@ function pairAlike(old: string[][], now: string[][]): Map<number, number> {
 /** As visuals.flows_of_bets (vqa one-pager 1): each bet's flow subject and flow. A flow keyed to a
  * bet's line (`key`, a position) shows on the bet its brief reads most like, else on its own, so a
  * bet added above never shifts the flows; a bet with no flow whose key holds another bet's is
- * drawn on its words' subject. */
+ * drawn on a subject built from its key (visuals.own_subject), so it keeps it when reworded. */
 export function flowsOfBets(db: VisualsDb | undefined, prefix: string, bets: { key: string; text: string }[]): { subject: string; flow: Flow | null }[] {
   const keyed = bets.map((b) => betSubject(b.key));
   const has = (s: string) => !!flowFor(db, "one_pager_line", s);
+  const own = bets.map((b) => betSubject(`${b.key}/own`));
   const drawn = keyed.map((s) => (has(s) ? [db!.visuals[`one_pager_line:${s}`].brief] : []));
+  const touched = (s: string) => { const v = db?.visuals[`one_pager_line:${s}`]; return !!v && (v.comments.length > 0 || v.made_by.some(Boolean)); };
+  const kept = new Set(keyed.flatMap((s, i) => (has(s) && touched(s) ? [i] : [])));
   const on = new Map<number, string>();
-  for (const [j, i] of pairAlike(drawn, bets.map((b) => [b.text]))) on.set(j, keyed[i]);
+  for (const [j, i] of pairAlike(drawn, bets.map((b) => [b.text]), kept)) on.set(j, keyed[i]);
   const taken = new Set(on.values());
   keyed.forEach((s, i) => { if (has(s) && !on.has(i) && !taken.has(s)) on.set(i, s); });
   return bets.map((b, j) => {
     const words = wordsSubject(prefix, b.text);
     // A flow still keyed by a bet's words is read by a bet with those words and none.
-    const subject = on.get(j) ?? (has(keyed[j]) || has(words) ? words : keyed[j]);
+    const subject = on.get(j) ?? (has(own[j]) ? own[j] : has(words) ? words : has(keyed[j]) ? own[j] : keyed[j]);
     BET_WORDS.set(subject, b.text.split(/\s+/).filter(Boolean).join(" "));
     return { subject, flow: flowFor(db, "one_pager_line", subject) };
   });
