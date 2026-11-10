@@ -17,7 +17,7 @@ from oracle.db import Base
 from oracle.docs.models import Document, DocumentVersion
 from oracle.models import AuditEvent
 from oracle.review.models import DocumentReviewPolicy, Notification
-from oracle.roadmap.models import ScheduleBasis
+from oracle.roadmap.models import ProductTrack, RoadmapItem, ScheduleBasis, TrackPrd
 from oracle.runs.models import Checkpoint, Run
 from oracle.runtokens import mint_run_token
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
@@ -125,6 +125,33 @@ async def test_dependents_name_each_run_by_its_day_and_what_it_wrote(client, own
     item = next(d for d in body["items"] if d["id"] == run["id"])
     assert item["wrote"] == roadmap["title"]
     assert datetime.fromisoformat(item["created_at"]) <= datetime.now(UTC)
+
+
+async def test_dependents_name_the_roadmap_items_and_tracks_a_prd_feeds(client, owner, runtime):
+    """delete-prd-simple: Simple's Delete PRD asks first naming what the PRD feeds: its roadmap
+    items and its track (they stay, without it) beside what goes to Trash with it."""
+    tenant_id, auth, _ = await _world(client, owner, runtime)
+    async with tenant_session(tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == PRD))
+        tracks = list(
+            await s.scalars(
+                select(ProductTrack.title)
+                .join(TrackPrd, TrackPrd.track_id == ProductTrack.id)
+                .where(TrackPrd.prd_document_id == prd.id, TrackPrd.state == "linked")
+            )
+        )
+        features = {
+            i.title
+            for i in await s.scalars(
+                select(RoadmapItem).where(RoadmapItem.prd_document_id == prd.id)
+            )
+        }
+    assert features and len(tracks) == 1
+    body = (await client.get(f"/v1/documents/{PRD}/dependents", headers=auth)).json()
+    fed = body["feeds"]
+    assert {i["title"] for i in fed if i["type"] == "feature"} == features
+    assert [i["title"] for i in fed if i["type"] == "track"] == tracks
+    assert len({(i["type"], i["title"]) for i in fed}) == len(fed)
 
 
 async def test_trash_names_each_run_as_the_delete_dialog_did(client, owner, runtime):
