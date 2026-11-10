@@ -120,7 +120,8 @@ function readsWhole(scheme: "light" | "dark") {
       const b = (await label.boundingBox())!;
       expect(b.x, "the label starts right of the names column").toBeGreaterThanOrEqual(h.x + h.width);
       expect(b.x + b.width).toBeLessThanOrEqual(v.x + v.width);
-      await expect(label).toHaveText("◆ Beta · Nov 30");
+      // roadmap-milestone-codes: its roadmap code first.
+      await expect(label).toHaveText("◆ M1 Beta · Nov 30");
       // The "+ Milestone" hint on the axis keeps off it.
       const hint = page.getByTestId("ms-add-hint");
       if (await hint.isVisible()) {
