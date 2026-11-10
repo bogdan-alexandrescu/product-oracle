@@ -475,9 +475,13 @@ def _measure(g: Entity | None) -> dict[str, Any] | None:
     """How the item's goal is measured, as its panel shows it."""
     if g is None:
         return None
+    from oracle.simple.chat import _day_words
+
     due = service._goal_due(g)
+    # The target with its unit, the due day month first, as the panel reads them.
     return {"metric": service._metric(g), "current": service._goal_current(g),
-            "target": service._goal_target(g), "due": due.isoformat() if due else None}  # fmt: skip
+            "target": service._goal_target(g),
+            "due": _day_words(due, year=True) if due else None}  # fmt: skip
 
 
 def item_context(c: Any) -> dict[str, Any] | None:

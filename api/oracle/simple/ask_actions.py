@@ -823,7 +823,10 @@ async def undo(db: AsyncSession, principal: Any, c: Any) -> None:
 # item-talk-reads: the params a Ground Truth record's id goes in.
 RECORD_PARAMS = ("entity_id",)
 # A linked item in the roadmap's read of an item's talk: what names it and when.
-LINKED_FIELDS = ("id", "key", "code", "title", "status", "start", "end", "milestone")
+LINKED_FIELDS = ("id", "key", "code", "title", "status", "start", "end", "milestone", "owner",
+                 "track")  # fmt: skip
+# Why a list read naming an item with no Ground Truth feature comes back empty.
+NO_FEATURE_NOTE = "This item has no Ground Truth feature, so it has no record of its own to list."
 
 
 def _names_item(c: Any, value: Any) -> bool:
@@ -840,7 +843,8 @@ def _names_item(c: Any, value: Any) -> bool:
 def _on_item(c: Any, action: Action, args: dict[str, Any]) -> tuple[dict[str, Any], Any]:
     """item-talk-reads: in an item's talk, a read naming the item (its roadmap id, key, code
     or name) where the route takes a record's id reads the item's Ground Truth feature; an
-    item with none reads as itself (the talk's item, as its panel shows it). Returns the
+    item with none reads as itself (the talk's item, as its panel shows it), or, for a read
+    that answers a list, as an empty list with :data:`NO_FEATURE_NOTE`. Returns the
     args and, for that item, what the read returns in place of the route."""
     from oracle.simple import roadmap_talk
 
@@ -849,13 +853,23 @@ def _on_item(c: Any, action: Action, args: dict[str, Any]) -> tuple[dict[str, An
         return args, None
     f = getattr(c, "item_feature", None)
     if f is None:
-        return args, roadmap_talk.item_context(c)
+        # A list read answers its own (empty) list, never the item in place of it.
+        return args, [] if _lists(action) else roadmap_talk.item_context(c)
     return {**args, **{k: str(f.id) for k in ref}}, None
+
+
+def _lists(action: Action) -> bool:
+    """Whether the action's route answers a list (its OpenAPI 200 schema is an array)."""
+    ok = (the_app().openapi().get("paths", {}).get(action.path, {})
+          .get(action.method.lower(), {}).get("responses", {}).get("200", {}))  # fmt: skip
+    schema = ok.get("content", {}).get("application/json", {}).get("schema", {})
+    return schema.get("type") == "array"
 
 
 def _focus(c: Any, action: Action, data: Any) -> Any:
     """item-talk-reads: the roadmap's read in an item's talk puts the item first and then
-    the items it is linked to (by name and dates), so the cut at ``RESULT_MAX`` keeps them."""
+    the items it is linked to (by name, dates, owner and track), so the cut at
+    ``RESULT_MAX`` keeps them."""
     e = getattr(c, "item", None)
     items = data.get("items") if isinstance(data, dict) else None
     if e is None or action.name != "get_simple_roadmap" or not isinstance(items, list):
@@ -911,6 +925,8 @@ async def calls(c: Any, answer: dict[str, Any]) -> tuple[list[dict], list[dict],
                 continue
             text = json.dumps(_focus(c, action, data), default=str)
             results.append({"action": name, "does": action.summary, "result": text[:RESULT_MAX]})
+            if own == []:
+                results[-1]["note"] = NO_FEATURE_NOTE
         else:
             try:
                 cards.append(await card(c.db, c.principal, action, args))
