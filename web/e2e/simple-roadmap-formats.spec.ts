@@ -89,7 +89,8 @@ for (const [where, use] of [
         for (const k of ["alert-rules", "alert-digest", "setup-checklist"]) await expect(column(page, "now").locator(`[data-item="${k}"]`)).toBeVisible();
         for (const k of ["alert-export", "alert-sso", "setup-ideas"]) await expect(column(page, "next").locator(`[data-item="${k}"]`)).toBeVisible();
         await expect(column(page, "later").locator('[data-item="setup-video"]')).toBeVisible();
-        await expect(column(page, "now").getByTestId("board-group").first()).toContainText(/Grow retention|Faster activation/);
+        // tb-mk: the board groups by track first.
+        await expect(column(page, "now").getByTestId("board-group").first()).toContainText(/Usage alerts track|Guided setup track/);
         await expect(card(page, "alert-sso")).toHaveAttribute("data-kind", "estimated");
         await expect(card(page, "alert-sso").getByTestId("board-dates")).toContainText("estimated");
         await expect(card(page, "setup-ideas")).toHaveAttribute("data-kind", "draft");
@@ -197,7 +198,7 @@ for (const [where, use] of [
         ]);
         for (const d of drawn) {
           expect(d.brand).toBe(COMPANY);
-          expect(d.filters).toBe("Grouped by goal · Goal: Faster activation");
+          expect(d.filters).toBe("Grouped by track · Goal: Faster activation");
         }
       });
     });
