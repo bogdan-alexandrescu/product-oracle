@@ -579,9 +579,10 @@ async def on_approved(
     for key, size in recorded["sizes"].items():
         if size not in briefs.SIZES:
             continue
-        entity = await db.scalar(
-            select(Entity).where(Entity.type == "feature", Entity.key == key).limit(1)
-        )
+        # By its key, or the key it had before it was given a code.
+        from oracle.baseline import fixes
+
+        entity = (await fixes.features_by_keys(db, [key])).get(key)
         if entity is None or (entity.attrs or {}).get("effort") == size:
             continue
         before = (entity.attrs or {}).get("effort")

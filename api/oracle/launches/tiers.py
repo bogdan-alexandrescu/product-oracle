@@ -79,15 +79,10 @@ async def _feature(db: AsyncSession, item: RoadmapItem) -> Entity | None:
         found = await db.get(Entity, item.feature_id)
         if found is not None:
             return found
-    found = await db.scalar(
-        select(Entity).where(Entity.type == "feature", Entity.key == item.item_key)
-    )
-    if found is None and item.item_key:
-        # The feature's key before it was given a code (oracle.baseline.fixes).
-        from oracle.baseline import fixes
+    # By its key, or the key it had before it was given a code (oracle.baseline.fixes).
+    from oracle.baseline import fixes
 
-        found = await fixes.by_former_key(db, item.item_key)
-    return found
+    return (await fixes.features_by_keys(db, [item.item_key])).get(item.item_key)
 
 
 async def items_of(db: AsyncSession, launch: Launch) -> list[RoadmapItem]:
@@ -187,14 +182,10 @@ async def item_goal_links(
                 select(Entity).where(Entity.id.in_({r.feature_id for r in rows if r.feature_id}))
             )
         }
-        by_key = {
-            e.key: e
-            for e in await db.scalars(
-                select(Entity).where(
-                    Entity.type == "feature", Entity.key.in_({r.item_key for r in rows})
-                )
-            )
-        }
+        # By its key, or the key it had before it was given a code (oracle.baseline.fixes).
+        from oracle.baseline import fixes
+
+        by_key = await fixes.features_by_keys(db, {r.item_key for r in rows})
         for r in rows:
             found = by_id.get(r.feature_id) if r.feature_id is not None else None
             if (found := found or by_key.get(r.item_key)) is not None:

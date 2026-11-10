@@ -21,6 +21,7 @@
 import type { Schemas } from "@/lib/api/client";
 import type { BaselineState } from "./baseline";
 import { stableUuid } from "./ids";
+import { ANY_CODE as CODE_RE, nextFeatureCode, setCode } from "./feature-codes";
 import { closed, roadmapId, type SimpleDb } from "./simple-roadmap";
 
 export const GROUND_TRUTH_FLAGS_SCENARIO = "ground-truth-flags";
@@ -229,28 +230,18 @@ const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const fail = (status: number, detail: string) => json(status, { detail });
-/** A code a slice's feature lends its number from (F-15), and any feature code (F-15, F-15a). */
-const WHOLE = /^[A-Z]{1,3}-\d+$/;
-const ANY_CODE = /^[A-Z]{1,3}-\d+[a-j]?$/;
+/** Any feature code (F-15, F-15a). */
+const ANY_CODE = CODE_RE;
 
-/**
- * The next code for a feature, as oracle.baseline.fixes.next_code: its feature's number and the next letter for a slice,
- * else the highest F-number + 1 over every feature's code, a code once given (never given again), the PRD's codes and
- * every roadmap item's PRD section (prd_section_key).
- */
+/** The codes next_code reads besides the features' own: every PRD's feature codes and every roadmap item's PRD section. */
+export function codesSeen(simple: SimpleDb | undefined): string[] {
+  return [...PRD_FEATURES.map((f) => f.code), ...(simple?.items ?? []).map((x) => x.section ?? "")];
+}
+
+/** The next code for a feature, as oracle.baseline.fixes.next_code (./feature-codes.ts), or why not (409). */
 function nextCode(baseline: BaselineState, simple: SimpleDb | undefined, e: Entity): string | Response {
-  if (e.status !== "confirmed") return fail(409, "This feature is not in the Ground Truth yet.");
-  if (ANY_CODE.test(e.key)) return fail(409, "This feature already has a code.");
-  const keys = new Set([...baseline.entities.filter((x) => x.type === "feature").map((x) => x.key), ...(baseline.codesGiven ?? [])]);
-  const parent = e.parent_id ? baseline.entities.find((x) => x.id === e.parent_id && x.type === "feature") : undefined;
-  if (parent) {
-    if (!WHOLE.test(parent.key)) return fail(409, "Give its feature a code first.");
-    const letter = [..."abcdefghij"].find((l) => !keys.has(`${parent.key}${l}`));
-    return letter ? `${parent.key}${letter}` : fail(409, "This feature has no slice letter left.");
-  }
-  const sections = (simple?.items ?? []).map((x) => (x.section ?? "").trim().toUpperCase());
-  const numbers = [...keys, ...PRD_FEATURES.map((f) => f.code), ...sections].map((k) => /^F-(\d+)(?:\.\d+)?[A-J]?$/i.exec(k)).filter((m) => !!m).map((m) => Number(m![1]));
-  return `F-${String(Math.max(0, ...numbers) + 1).padStart(2, "0")}`;
+  const next = nextFeatureCode(baseline, e, codesSeen(simple));
+  return "code" in next ? next.code : fail(409, next.refused);
 }
 
 function propose(baseline: BaselineState, userId: string, feature: Entity, fix: Record<string, string>) {
@@ -272,13 +263,36 @@ function propose(baseline: BaselineState, userId: string, feature: Entity, fix: 
   return p;
 }
 
-function giveCode(baseline: BaselineState, simple: SimpleDb | undefined, e: Entity): string | Response {
+/** fixes.give_code: the next code, as the person's own edit (it locks the feature), with its revision. */
+function giveCode(baseline: BaselineState, simple: SimpleDb | undefined, e: Entity, userId: string): string | Response {
   const code = nextCode(baseline, simple, e);
   if (typeof code !== "string") return code;
-  (baseline.codeFrom ??= {})[e.id] = e.key;
-  (baseline.codesGiven ??= []).push(code);
-  e.key = code;
+  const before = snapshot(e);
+  setCode(baseline, e, code);
+  revise(baseline, e, before, userId);
   return code;
+}
+
+function snapshot(e: Entity): Record<string, unknown> {
+  const out: Record<string, unknown> = { type: e.type, key: e.key, title: e.title, body: e.body ?? null, attrs: { ...e.attrs }, status: e.status };
+  if (e.parent_id) out.parent_id = e.parent_id;
+  return out;
+}
+
+/** A revision for a key change, as service._revision records it (a key it had stays its alias). */
+function revise(baseline: BaselineState, e: Entity, before: Record<string, unknown>, userId: string) {
+  const at = new Date().toISOString();
+  Object.assign(e, { locked: true, locked_by: userId, locked_at: at, updated_at: at });
+  (baseline.revisions ??= []).push({
+    id: crypto.randomUUID(),
+    entity_id: e.id,
+    edge_id: null,
+    before,
+    after: snapshot(e),
+    actor: `user:${userId}`,
+    reason: null,
+    created_at: at,
+  });
 }
 
 function link(baseline: BaselineState, prd: string, code: string, featureId: string): Entity | Response {
@@ -313,14 +327,16 @@ export async function routeGroundTruthFixes(baseline: BaselineState, simple: Sim
       const old = baseline.codeFrom?.[e.id];
       if (!old || !ANY_CODE.test(e.key)) return fail(409, "This feature's code was not given here.");
       if (baseline.entities.some((x) => x.type === "feature" && x.key === old)) return fail(409, "Its old key is taken by another feature.");
+      const before = snapshot(e);
       e.key = old;
       delete baseline.codeFrom![e.id];
+      revise(baseline, e, before, me.id);
       return out(e, { status: "done" });
     }
     const code = nextCode(baseline, simple, e);
     if (typeof code !== "string") return code;
     if (!atLeast(me.role, "approver")) return out(e, { status: "proposed", proposal_id: propose(baseline, me.id, e, { action: "give_code" }).id });
-    giveCode(baseline, simple, e);
+    giveCode(baseline, simple, e, me.id);
     return out(e, { status: "done", code });
   }
   if (p[2] === "prd-links" && !p[3] && (m === "POST" || m === "DELETE")) {
@@ -355,7 +371,7 @@ export async function routeGroundTruthFixes(baseline: BaselineState, simple: Sim
     if (prop.status !== "open") return fail(409, `Proposal is already ${prop.status}`);
     const e = baseline.entities.find((x) => x.id === prop.entity_id);
     if (!e) return fail(404, "No such feature");
-    const done = fix.action === "give_code" ? giveCode(baseline, simple, e) : link(baseline, fix.prd_document_id, fix.code, e.id);
+    const done = fix.action === "give_code" ? giveCode(baseline, simple, e, me.id) : link(baseline, fix.prd_document_id, fix.code, e.id);
     if (done instanceof Response) return done;
     return null; // the baseline's route accepts it (no field to change) and serves its ProposalOut.
   }

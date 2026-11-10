@@ -64,8 +64,9 @@ async def _run(client, ctx, expect: int = 201, flow: str = "baseline_to_prd", **
 async def test_a_prd_run_names_the_features_to_add_and_patch_keeps_them(client):
     ctx = await company()
     made = await _features(client, ctx)
+    # Each joined with a code (F-01, F-02); its old key still names it.
     run = await _run(client, ctx, features=["export-logs", made[1]["id"], "export-logs"])
-    assert _named(run) == [("export-logs", "Export logs"), ("usage-meter", "Usage meter")]
+    assert _named(run) == [("F-01", "Export logs"), ("F-02", "Usage meter")]
     assert run["knobs"]["features"][0]["id"] == made[0]["id"]
     owner = ctx.as_("owner")
     resp = await client.patch(
@@ -79,7 +80,7 @@ async def test_a_prd_run_names_the_features_to_add_and_patch_keeps_them(client):
     )
     assert resp.status_code in (200, 204), resp.text
     read = (await client.get(f"/v1/runs/{run['id']}", headers=owner)).json()
-    assert _named(read) == [("usage-meter", "Usage meter")]
+    assert _named(read) == [("F-02", "Usage meter")]
     # Without the knob a run adds none.
     assert (await _run(client, ctx))["knobs"]["features"] == []
 

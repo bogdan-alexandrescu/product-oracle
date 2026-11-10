@@ -533,6 +533,9 @@ async def test_curated_baseline_tools_flag_low_confidence(tenant_id):
         for e in (goal, feature):
             assert "id" in e or "entity" in e, e
         fid = (feature.get("entity") or feature)["id"]
+        # Confirmed by the owner, it joins the Ground Truth with a code.
+        code = (feature.get("entity") or feature)["key"]
+        assert code == "F-01"
         resp = await rest.post(
             f"/v1/baseline/entities/{fid}/evidence",
             json={"url": "https://example.com/notes", "excerpt": "Users drop at shipping."},
@@ -548,7 +551,7 @@ async def test_curated_baseline_tools_flag_low_confidence(tenant_id):
             assert "flag" in tools[name].description
         base = await c.call_tool("get_baseline", {})
         assert not base.is_error, text_of(base)
-        scored = [e for e in base.structured_content["entities"] if e["key"] == "checkout"][0]
+        scored = [e for e in base.structured_content["entities"] if e["key"] == code][0]
         assert isinstance(scored["confidence"], float)
         assert scored["low_confidence"] is (scored["confidence"] < 0.4)
         trace = await c.call_tool("trace_feature", {})
@@ -560,7 +563,7 @@ async def test_curated_baseline_tools_flag_low_confidence(tenant_id):
         await s.commit()
     async with mcp_client(token) as c:
         base = await c.call_tool("get_baseline", {})
-    scored = [e for e in base.structured_content["entities"] if e["key"] == "checkout"][0]
+    scored = [e for e in base.structured_content["entities"] if e["key"] == code][0]
     assert scored["low_confidence"] is True
 
 

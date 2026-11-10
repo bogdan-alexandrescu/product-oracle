@@ -137,7 +137,7 @@ from oracle import audit, autonomy, company_time, confidence, safe_yaml, webhook
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
-from oracle.baseline import yaml_io
+from oracle.baseline import fixes, yaml_io
 from oracle.baseline.goals import target_words
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.claude_accounts.pool import readable_refusal
@@ -2413,6 +2413,14 @@ async def _target_features(
         )
     ).all()
     found = {e.key: e for e in rows} | {str(e.id): e for e in rows}
+    if any(r not in found for r in refs):
+        # A key a feature had before it joined (its code is its key now) still names it.
+        aliases = {k: v for k, v in (await fixes.former_keys(db, live=True)).items()
+                   if k in refs and k not in found}  # fmt: skip
+        for key, fid in aliases.items():
+            feature = await db.get(Entity, fid)
+            if feature is not None and feature.type == "feature" and feature.status != "rejected":
+                found[key] = feature
     missing = [r for r in refs if r not in found]
     if missing:
         raise Invalid(f"not a Ground Truth feature: {', '.join(missing)}")

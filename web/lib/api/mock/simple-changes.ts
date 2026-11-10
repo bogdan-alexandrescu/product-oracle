@@ -1711,6 +1711,10 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     if (!s || s.closed_at || idle(s)) return json(409, { detail: "Its session is closed: undo works only in the change's session" });
     if (c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.after)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "Changed since");
     let undone: { before: Values; after: Values } | undefined;
+    // As changes.undo: the milestone put back is checked as a pick is (it may be in Trash since).
+    const backMs = c.op === "set_milestone" ? (c.before.milestone as Values | null | undefined) : undefined;
+    const gone = backMs && typeof backMs === "object" && backMs.id ? pickRefused(db, c.target.item_id, backMs.id) : null;
+    if (gone) return json(422, { detail: gone });
     if (TARGETS[c.op]) writeTarget(db, c, c.before, true, ctx);
     else if (KEY_DATE_OPS.includes(c.op)) {
       const rm = roadmapOfDoc(db, c.target.document_id)!;

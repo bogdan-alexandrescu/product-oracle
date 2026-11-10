@@ -114,6 +114,9 @@ interface SeedItem {
   draft_roadmap?: boolean;
   /** approved-prd-roadmap: an item an approved PRD put in the draft names that PRD. */
   from_prd?: { slug: string; title: string };
+  /** approved-prd-shown-once: the key the PRD gave it when the mock re-keyed it ("-2", "-3", ...)
+   * because an item holds that key already (the API keeps the key on the draft's copy). */
+  prd_key?: string;
   /** The Ground Truth feature it is (RoadmapItem.feature_id): an approved PRD's item matches by it. */
   feature_id?: string | null;
   /** approved-prd-roadmap: its dates as the PRD has them (ISO days; no start: end-only). */
@@ -2335,17 +2338,18 @@ export interface PrdApproval {
 }
 
 /**
- * approved-prd-shown-once (hotfix PR 1273): a copy of a shown item (same roadmap and PRD, its key
- * the shown one's with "-2", "-3", ... as the mock re-keys an added item) reads as that item, once,
- * as the API's drafts.fold: the copy's title and dates, its own dates and cut on top. Folded for
- * good, so a change made later on the item always takes effect.
+ * approved-prd-shown-once (hotfix PR 1273): a copy of a shown item (same roadmap, PRD and key, as
+ * the API's drafts.twins matches them: the key exactly, here the PRD's key the mock re-keyed with
+ * "-2", "-3", ...) reads as that item, once, as the API's drafts.fold: the copy's title and dates,
+ * its own dates and cut on top. An item whose own key ends in a number ("phase-2") is its own item,
+ * never folded into "phase". Folded for good, so a change made later on the item always takes effect.
  */
 export function foldPrdCopies(db: SimpleDb): void {
   const prdOf = (x: SeedItem) => x.from_prd?.slug ?? ROADMAPS[x.roadmap]?.prd.toLowerCase().replace(/ /g, "-");
   for (const copy of [...db.items]) {
     if (!copy.from_prd) continue;
-    const m = /^(.+)-\d+$/.exec(copy.key);
-    const shown = m && db.items.find((x) => x !== copy && x.key === m[1] && x.roadmap === copy.roadmap && prdOf(x) === prdOf(copy));
+    const key = copy.prd_key;
+    const shown = key && key !== copy.key && db.items.find((x) => x !== copy && x.key === key && x.roadmap === copy.roadmap && prdOf(x) === prdOf(copy));
     if (!shown) continue;
     shown.title = copy.title;
     if (copy.dates) shown.dates = copy.dates;
@@ -2498,6 +2502,7 @@ export function approvedPrdToDraft(
             .map((x) => x.position ?? 0),
         ) + 1,
       from_prd: { slug: a.prd.slug, title: a.prd.title },
+      ...(key !== it.key ? { prd_key: it.key } : {}),
       dates: { start, end: it.end, source: it.source },
     });
     keys.push(key);

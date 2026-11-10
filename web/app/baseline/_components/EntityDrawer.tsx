@@ -334,11 +334,16 @@ export function EntityDrawer({
   const decide = (action: "confirm" | "reject" | "archive", note?: string) =>
     write(async () => {
       const params = { params: { path: { entity_id: entity.id } }, body: { note: note || null } };
-      if (action === "confirm") await unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", params));
+      let code: string | null = null;
+      if (action === "confirm") {
+        // codes-on-join: a feature gets its code as it joins the Ground Truth; the notice says it.
+        const e = await unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", params));
+        code = e.type === "feature" ? named(e.title, e.key).code : null;
+      }
       // Archiving a confirmed item rejects it, as the API does: it leaves the baseline, its history keeps why.
       else await unwrap(api.POST("/v1/baseline/entities/{entity_id}/reject", params));
       setAsking(null);
-      if (action === "confirm") return `Confirmed “${title}”.`;
+      if (action === "confirm") return `Confirmed “${title}”${code ? ` as ${code}` : ""}.`;
       if (action === "archive") {
         const sub = d?.parent_id ? " Its parent no longer counts it." : "";
         return `Archived “${title}”: it leaves the Ground Truth; its history keeps the reason.${sub}`;

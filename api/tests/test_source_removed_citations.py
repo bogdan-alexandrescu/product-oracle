@@ -184,7 +184,7 @@ async def test_priorities_mark_evidence_of_a_removed_item(client, ctx):
     ev_kept = await cite(client, ctx, feat, source_item_id=str(kept))
     await remove(ctx.tenant_id, gone)
     out = (await client.get("/v1/priorities", headers=ctx.as_("viewer"))).json()
-    (f,) = [f for f in out["features"] if f["key"] == "guided-setup"]
+    (f,) = [f for f in out["features"] if f["key"] == feat["key"]]
     used = {e["id"]: e for e in f["explanation"]["confidence"]["evidence"]}
     assert used[ev_gone["id"]]["source_removed"] is True
     assert used[ev_kept["id"]]["source_removed"] is False

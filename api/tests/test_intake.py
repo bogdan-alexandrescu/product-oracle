@@ -174,6 +174,8 @@ async def test_a_feature_serving_no_confirmed_goal_is_flagged_with_its_rationale
                         title="Grow repeat purchases")  # fmt: skip
     feature = await entity(client, ctx, type="feature", key="gift-wrapping",
                            title="Gift wrapping at checkout")  # fmt: skip
+    code = feature["key"]  # confirmed by the owner: it joins with its code
+    assert code == "F-01"
     # The goal link exists, but the goal is only proposed: it does not count.
     await edge(client, ctx, feature, goal, "supports", attrs={"contribution": 2})
 
@@ -182,7 +184,7 @@ async def test_a_feature_serving_no_confirmed_goal_is_flagged_with_its_rationale
         brief="Add gift wrapping at checkout so buyers can send presents directly.",
     )  # fmt: skip
     features = {f["key"]: f for f in out["features"] if f["key"]}
-    flagged = features["gift-wrapping"]
+    flagged = features[code]
     assert "serves_no_goal" in flagged["flags"]
     assert "goal" in flagged["rationale"].lower()
     assert "priorit" in flagged["rationale"].lower()
@@ -192,17 +194,14 @@ async def test_a_feature_serving_no_confirmed_goal_is_flagged_with_its_rationale
     assert gaps["goal_alignment"]["status"] in ("unknown", "asked")
     # The baseline traceability report still flags it too.
     trace = (await client.get("/v1/baseline/trace", headers=ctx.as_("viewer"))).json()
-    assert (
-        "serves_no_goal"
-        in next(f for f in trace["features"] if f["key"] == "gift-wrapping")["flags"]
-    )
+    assert "serves_no_goal" in next(f for f in trace["features"] if f["key"] == code)["flags"]
 
     # Once the goal is confirmed, the feature is no longer flagged and the goal is linked.
     await confirm(client, ctx, goal)
     again = await summary(client, ctx, out["intake"]["id"])
     features = {f["key"]: f for f in again["features"] if f["key"]}
-    assert "serves_no_goal" not in features["gift-wrapping"]["flags"]
-    assert [g["key"] for g in features["gift-wrapping"]["goals"]] == ["repeat-purchases"]
+    assert "serves_no_goal" not in features[code]["flags"]
+    assert [g["key"] for g in features[code]["goals"]] == ["repeat-purchases"]
 
 
 # --- §16.7: answers update gaps; nothing answered is asked again --------------------------

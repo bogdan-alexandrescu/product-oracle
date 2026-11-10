@@ -8,6 +8,10 @@ feature with no goal and no evidence, a duplicate of a person's feature (with ev
 a link to a confirmed goal), a change to an unlocked item, and a proposal on a locked one.
 Made-up names only.
 
+The person's features join the Ground Truth with their codes (every feature has a code,
+given when it joins): ``checkout`` is F-01 and ``f.saved-carts`` F-02; the run's
+``checkout`` still finds F-01 by its old key. Proposed features keep their slug keys.
+
 Test cards (protects / fails_when / no_claim) head each test.
 """
 
@@ -63,7 +67,8 @@ edges:
     attrs: {contribution: 2}
 """
 NEW = {"goal:g.activation", "goal:g.retention", "feature:f.cart-save", "feature:f.saved-carts-2"}
-ALL = NEW | {"feature:f.search", "feature:checkout"}
+CHECKOUT, SAVED_CARTS = "F-01", "F-02"  # the person's checkout and f.saved-carts, coded
+ALL = NEW | {"feature:f.search", f"feature:{CHECKOUT}"}
 LEFT_2 = "2 blocking problems left: fix or waive them, or send back to the agents"
 
 
@@ -81,9 +86,11 @@ async def at_confirm(client, owner, runtime) -> dict:
         f"/v1/baseline/entities/{confirmed['id']}/confirm", json={}, headers=auth
     )
     assert resp.status_code == 200, resp.text
-    await entity(client, auth, type="feature", key="checkout", title="Checkout")  # locked
+    checkout = await entity(client, auth, type="feature", key="checkout", title="Checkout")
+    assert checkout["key"] == CHECKOUT  # locked, and coded on joining
     await entity(client, auth, type="feature", key="f.search", title="Search", origin="agent")
     target = await entity(client, auth, type="feature", key="f.saved-carts", title="Saved carts")
+    assert target["key"] == SAVED_CARTS
     resp = await client.post(
         "/v1/baseline/edges",
         json={"src_id": target["id"], "dst_id": confirmed["id"], "type": "supports",
@@ -155,8 +162,8 @@ async def test_rows_are_what_the_run_created_changed_or_proposed(client, owner, 
     assert set(rows) == ALL
     assert {k for k, r in rows.items() if r["change"] == "new"} == NEW
     assert rows["feature:f.search"]["change"] == "changed"
-    assert rows["feature:checkout"]["change"] == "proposal"
-    assert len(rows["feature:checkout"]["proposal_ids"]) == 1
+    assert rows[f"feature:{CHECKOUT}"]["change"] == "proposal"
+    assert len(rows[f"feature:{CHECKOUT}"]["proposal_ids"]) == 1
     assert rows["feature:f.saved-carts-2"]["edges"] == {"new": 1, "changed": 0}
     assert view["run"]["flow_title"] == "Build the Ground Truth"
     assert view["checkpoint"]["kind"] == "baseline_confirm"
@@ -198,7 +205,7 @@ async def test_each_reason_fires_on_its_fixture(client, owner, runtime):
     assert retention["reasons"][1]["severity"] == "confirm"
     assert codes(rows["feature:f.cart-save"]) == ["no_evidence", "serves_no_goal"]
     assert codes(rows["feature:f.saved-carts-2"]) == []
-    assert codes(rows["feature:checkout"]) == ["changes_your_edit"]
+    assert codes(rows[f"feature:{CHECKOUT}"]) == ["changes_your_edit"]
 
     # low_confidence: below the company's low threshold, following the setting.
     async with tenant_session(tenant_id) as s:
@@ -417,7 +424,8 @@ async def test_merge_moves_evidence_and_edges(client, owner, runtime):
     rows = rows_by_key(await from_run(client, auth, run["id"]))
     source = rows["feature:f.saved-carts-2"]["entity"]
     graph = (await client.get("/v1/baseline/graph", headers=auth)).json()
-    target = next(e for e in graph["entities"] if e["key"] == "f.saved-carts")
+    target = next(e for e in graph["entities"] if e["key"] == SAVED_CARTS)
+    assert target["title"] == "Saved carts"
     async with tenant_session(tenant_id) as s:
         s.add(Proposal(entity_id=uuid.UUID(source["id"]), run_id=uuid.UUID(run["id"]),
                        payload={"op": "update", "kind": "entity", "fields": {"title": "X"}},
@@ -458,8 +466,9 @@ async def test_merge_moves_evidence_and_edges(client, owner, runtime):
     ("source_key", "into_key", "message"),
     [
         ("f.saved-carts-2", "g.confirmed", "Only items of the same type can be merged"),
-        ("f.saved-carts", "f.cart-save", "Only items this run created can be merged here"),
-        ("f.cart-save", "f.saved-carts", "Locked: a person edited it"),
+        # SAVED_CARTS: the person's f.saved-carts, by the code it got on joining.
+        (SAVED_CARTS, "f.cart-save", "Only items this run created can be merged here"),
+        ("f.cart-save", SAVED_CARTS, "Locked: a person edited it"),
     ],
 )
 async def test_merge_refusals_change_nothing(client, owner, runtime, source_key, into_key, message):

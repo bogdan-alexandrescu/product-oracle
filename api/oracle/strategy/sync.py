@@ -122,6 +122,11 @@ async def _set_edges(
 async def _keyed(db: AsyncSession, type_: str, keys: set[str]) -> dict[str, Entity]:
     if not keys:
         return {}
+    if type_ == "feature":
+        # By its key, or the key it had before it was given a code.
+        from oracle.baseline import fixes
+
+        return await fixes.features_by_keys(db, keys)
     rows = await db.scalars(select(Entity).where(Entity.type == type_, Entity.key.in_(keys)))
     return {e.key: e for e in rows}
 

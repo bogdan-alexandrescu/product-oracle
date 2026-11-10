@@ -403,12 +403,11 @@ async def with_dependency_names(
         # This roadmap's own first, the latest last; another roadmap's only if none.
         if doc_id == document.id or key not in names:
             names[key] = title
-    for key, title in await db.execute(
-        select(Entity.key, Entity.title).where(
-            Entity.type == "feature", Entity.key.in_(wanted - set(names))
-        )
-    ):
-        names[key] = title
+    # A feature by its key, or the key it had before it was given a code.
+    from oracle.baseline import fixes
+
+    for key, feature in (await fixes.features_by_keys(db, wanted - set(names))).items():
+        names[key] = feature.title
     return [
         i.model_copy(update={"depends_titles": {k: names[k] for k in i.depends_on if k in names}})
         if any(k in names for k in i.depends_on)

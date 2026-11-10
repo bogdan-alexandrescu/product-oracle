@@ -107,22 +107,23 @@ test.describe("as the owner", () => {
     await open(page);
     await openKind(page, "unlinked_item");
     await row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth/ }).click();
-    await expect(page.getByTestId("gt-notice")).toContainText("Added “Export to sheets” to the Ground Truth.");
+    // codes-on-join: it gets its code as it joins the Ground Truth (the next F-number, past F-112).
+    await expect(page.getByTestId("gt-notice")).toContainText("Added “Export to sheets” to the Ground Truth as F-113.");
     await expect(row(page, "Export to sheets")).toHaveCount(0);
     await expect(count(page, "unlinked_item")).toContainText("2");
-    // The new feature is one feature, named as the item; it had no code and serves no goal yet: it is flagged for both instead.
-    await openKind(page, "no_code");
-    await expect(list(page, "no_code").getByTestId("gt-row").filter({ hasText: "Export to sheets" })).toHaveCount(1);
-    await expect(count(page, "no_code")).toContainText("2");
+    // The new feature is one feature, named as the item, with its code; it serves no goal yet: it is flagged for that instead.
+    await expect(count(page, "no_code")).toContainText("1");
+    await openKind(page, "no_goal");
+    await expect(list(page, "no_goal").getByTestId("gt-row").filter({ hasText: "Export to sheets" })).toHaveCount(1);
     await expect(count(page, "no_goal")).toContainText("2");
-    await expect(total(page)).toHaveText("10");
+    await expect(total(page)).toHaveText("9");
   });
 
   test("Add to Ground Truth adds a PRD's feature with its code and goal, and one slice's feature for both slices", async ({ page }) => {
     await open(page);
     await openKind(page, "prd_feature_missing");
     await row(page, "Guest seats").getByRole("button", { name: /Add to Ground Truth/ }).click();
-    await expect(page.getByTestId("gt-notice")).toContainText("Added “Guest seats” to the Ground Truth.");
+    await expect(page.getByTestId("gt-notice")).toContainText("Added “Guest seats” to the Ground Truth as F-09.");
     await expect(count(page, "prd_feature_missing")).toHaveCount(0);
     // It is F-09 and serves the PRD's goal: no Give it a code nor Pick a goal, and its roadmap item F-09a is in the Ground Truth by that code.
     await expect(count(page, "no_code")).toContainText("1");
@@ -133,7 +134,7 @@ test.describe("as the owner", () => {
     await openKind(page, "slice_parent_missing");
     await expect(row(page, "Usage chart")).toContainText("F-15b");
     await row(page, "Usage report").getByRole("button", { name: /Add to Ground Truth/ }).click();
-    await expect(page.getByTestId("gt-notice")).toContainText("Added “Usage report” to the Ground Truth.");
+    await expect(page.getByTestId("gt-notice")).toContainText("Added “Usage report” to the Ground Truth as F-15.");
     await expect(count(page, "slice_parent_missing")).toHaveCount(0);
     await expect(count(page, "no_code")).toContainText("1");
     // F-15 is a feature with its code, which serves no goal yet; F-09 serves the PRD's.
@@ -185,7 +186,7 @@ test.describe("as the owner", () => {
     await open(page);
     await openKind(page, "unlinked_item");
     await row(page, "Weekly digest").getByRole("button", { name: /Confirm it/ }).click();
-    await expect(page.getByTestId("gt-notice")).toContainText("Confirmed “Weekly digest”.");
+    await expect(page.getByTestId("gt-notice")).toContainText("Confirmed “Weekly digest” as F-14.");
     await expect(row(page, "Weekly digest")).toHaveCount(0);
     await expect(count(page, "unlinked_item")).toContainText("2");
     await expect(total(page)).toHaveText("8");
@@ -229,7 +230,7 @@ for (const viewport of [DESKTOP, PHONE])
       await row(page, "Weekly digest").getByRole("button", { name: /Confirm it/ }).click();
       await expect(row(page, "Weekly digest")).toHaveCount(0);
       await row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth/ }).click();
-      await expect(page.getByTestId("gt-notice")).toContainText("Added “Export to sheets” to the Ground Truth.");
+      await expect(page.getByTestId("gt-notice")).toContainText("Added “Export to sheets” to the Ground Truth as F-113.");
       // The feature is added at once; the item's link is a roadmap change its decider approves.
       await expect(row(page, "Export to sheets").getByTestId("gt-pending")).toHaveText("Waiting for an approver");
       await expect(row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth|Link to a feature/ })).toHaveCount(0);
@@ -237,8 +238,8 @@ for (const viewport of [DESKTOP, PHONE])
       await row(page, "Audit log").getByRole("button", { name: /Pick a goal/ }).click();
       await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Raise activation" }).click();
       await expect(row(page, "Audit log")).toHaveCount(0);
-      // Two flags went; the new feature brings its own no-code and no-goal flags.
-      await expect(total(page)).toHaveText(String(start));
+      // Two flags went; the new feature, coded as it joined, brings only its own no-goal flag.
+      await expect(total(page)).toHaveText(String(start - 1));
     });
 
     test("Take it off the roadmap is sent for approval: the row waits, with no second button", async ({ page }) => {

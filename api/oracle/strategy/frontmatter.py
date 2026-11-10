@@ -144,6 +144,11 @@ def review_on(front_matter: dict[str, Any]) -> date | None:
 async def _missing(db: AsyncSession, type_: str, keys: set[str]) -> list[str]:
     if not keys:
         return []
+    if type_ == "feature":
+        # By its key, or the key it had before it was given a code.
+        from oracle.baseline import fixes
+
+        return sorted(keys - set(await fixes.features_by_keys(db, keys)))
     found = set(
         await db.scalars(select(Entity.key).where(Entity.type == type_, Entity.key.in_(keys)))
     )

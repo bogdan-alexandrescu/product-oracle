@@ -23,6 +23,7 @@ import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from 
 import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type BrandingDb } from "./branding";
 import { capabilitiesOut } from "./capabilities";
 import { daysInWords } from "./days";
+import { stripRawTokens } from "@/lib/raw-tokens";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
@@ -201,7 +202,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
+import { codesSeen, groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
@@ -5092,7 +5093,7 @@ function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] 
   const hidden = member ? hiddenDecisionEntities(db, member) : new Set<string>();
   return routeBaseline(
     db.baseline,
-    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id) },
+    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id), codesSeen: () => codesSeen(db.simple_roadmap) },
     req,
     p.slice(2),
     q,
@@ -5745,6 +5746,107 @@ function versionMarkdown(doc: DocumentRow, v: VersionRow): string {
     .map((s) => `${"#".repeat(s.level)} ${s.heading} {#${s.section_key}}\n\n${s.body_md}\n`)
     .join("\n");
   return `${head}\n${body}`;
+}
+
+/** A fenced code block (``` or ~~~, closed by the same fence or the end), as api/oracle/raw_tokens.py _FENCE. */
+const MD_FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[ \t]*$|(?![\s\S]))/gm;
+/** "[c:c1]" or "[c:c1, c2]", with the space before it (raw_tokens.py _CITE). */
+const MD_CITE = /(?<![ \t])[ \t]*\[c:\s*([^[\]\n]*?)\s*\]/g;
+/** What stays as written when days are put in words (export/render.py _NOT_PROSE). */
+const MD_NOT_PROSE = new RegExp(
+  [
+    "(`+)[^`\\n]*?\\1(?!`)",
+    "\\]\\((?:[^()\\s]|\\([^()\\s]*\\))*(?:\\s+(?:\"[^\"\\n]*\"|'[^'\\n]*'|\\([^()\\n]*\\)))?\\s*\\)",
+    "<!--.*?-->",
+    "<[A-Za-z/!][^<>\\n]*>",
+    "^[ \\t]{0,3}\\[[^\\]\\n]+\\]:[ \\t]*\\S+",
+    "\\b[A-Za-z][\\w+.-]*:\\/\\/[^\\s<>]*[^\\s<>.,;:!?)\\]'\"*_]",
+    "\\bwww\\.[^\\s<>]*[^\\s<>.,;:!?)\\]'\"*_]",
+  ].join("|"),
+  "gm",
+);
+
+/**
+ * As the API's raw_tokens.markdown_footnotes with citation_labels: each `[c:id]` as a footnote
+ * (`[^1]`, numbered in order of first use, skipping numbers the text uses itself) defined at the end
+ * (`[^1]: Title (source: ref)`); one that points to no citation, and any other raw marker, is dropped.
+ */
+function markdownFootnotes(markdown: string, citations: VersionRow["citations"]): string {
+  const byKey = new Map(citations.map((c) => [c.cite_key, c]));
+  const label = (key: string): string | null => {
+    const c = byKey.get(key);
+    if (!c) return null;
+    const title = c.title || c.excerpt || "";
+    const where = [c.source, c.ref].filter(Boolean).join(": ");
+    const text = title && where ? `${title} (${where})` : title || where;
+    return text.split(/\s+/).filter(Boolean).join(" ") || null;
+  };
+  const parts: [string, boolean][] = [];
+  let last = 0;
+  for (const m of markdown.matchAll(MD_FENCE)) {
+    parts.push([markdown.slice(last, m.index), false], [m[0], true]);
+    last = m.index! + m[0].length;
+  }
+  parts.push([markdown.slice(last), false]);
+  const taken = new Set(parts.filter(([, code]) => !code).flatMap(([t]) => [...t.matchAll(/\[\^([^\]\s]+)\]/g)].map((m) => m[1])));
+  const numbers = new Map<string, number>();
+  const notes: string[] = [];
+  const nextNumber = () => {
+    let n = Math.max(0, ...numbers.values()) + 1;
+    while (taken.has(String(n))) n++;
+    return n;
+  };
+  const ref = (_all: string, keys: string) => {
+    const refs: string[] = [];
+    for (const key of keys.split(",").map((k) => k.trim())) {
+      if (!key) continue;
+      if (!numbers.has(key)) {
+        const text = label(key);
+        if (text == null) continue;
+        numbers.set(key, nextNumber());
+        notes.push(`[^${numbers.get(key)}]: ${stripRawTokens(text).trim()}`);
+      }
+      refs.push(`[^${numbers.get(key)}]`);
+    }
+    return refs.join("");
+  };
+  const body = parts.map(([t, code]) => (code ? t : stripRawTokens(t.replace(MD_CITE, ref)))).join("");
+  return notes.length ? `${body.replace(/\n+$/, "")}\n\n${notes.join("\n")}\n` : body;
+}
+
+/** As the API's export/render.py in_prose: `rewrite` applied outside fenced code, code spans, links, URLs and tags. */
+function inProse(text: string, rewrite: (s: string) => string): string {
+  let fence: string | null = null;
+  return (text.match(/[^\n]*\n|[^\n]+$/g) ?? [])
+    .map((line) => {
+      const mark = /^[ \t]{0,3}(`{3,}|~{3,})/.exec(line);
+      if (fence == null && mark) fence = mark[1][0].repeat(mark[1].length);
+      else if (fence != null && line.trim().startsWith(fence)) fence = null;
+      else if (fence == null) {
+        let at = 0;
+        const out: string[] = [];
+        for (const m of line.matchAll(MD_NOT_PROSE)) {
+          out.push(rewrite(line.slice(at, m.index)), m[0]);
+          at = m.index! + m[0].length;
+        }
+        return out.join("") + rewrite(line.slice(at));
+      }
+      return line;
+    })
+    .join("");
+}
+
+/**
+ * The full layer's markdown export, as the API's export/render.py render_markdown (X-17): no banner
+ * comment, `[c:id]` citations as Markdown footnotes, and the days after the front matter month
+ * first ("Oct 31, 2026"); the front matter and each heading's `{#id}` stay so it imports again.
+ */
+function exportMarkdown(doc: DocumentRow, v: VersionRow): string {
+  const markdown = markdownFootnotes(versionMarkdown(doc, v), v.citations);
+  const m = /^---[ \t]*\r?\n[\s\S]*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|$(?![\s\S]))/m.exec(markdown);
+  if (!markdown.startsWith("---") || !m || m.index !== 0) return inProse(markdown, daysInWords);
+  const head = markdown.slice(0, m[0].length);
+  return (head.endsWith("\n") ? head : `${head}\n`) + inProse(markdown.slice(m[0].length), daysInWords);
 }
 
 function escapeHtml(s: string) {
@@ -8960,7 +9062,7 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
       return new Response(exportHtml(doc, brief, db.branding, badge), { headers: { "content-type": "text/html" } });
     }
     if (format === "md") {
-      return new Response(`<!-- ${banner(doc, v)} -->\n${versionMarkdown(doc, v)}`, {
+      return new Response(exportMarkdown(doc, v), {
         headers: { "content-type": "text/markdown" },
       });
     }

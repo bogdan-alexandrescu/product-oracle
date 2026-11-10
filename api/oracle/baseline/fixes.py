@@ -25,6 +25,9 @@ approver's accept applies (:func:`apply_proposal`).
 
 import re
 import uuid
+from collections.abc import AsyncIterator, Iterable
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import func, select, update
@@ -80,7 +83,7 @@ async def code_taken(db: AsyncSession, code: str) -> bool:
     """Whether some feature has ``code`` (read one way, :func:`canonical_code`): as its code
     the check reads (its key, or its published roadmap item's PRD section), or as a code it
     had before, an alias never given again (:func:`next_code`)."""
-    had = set((await _codes(db)).values()) | set(await former_keys(db))
+    had = (await _taken(db)).taken
     return code in {canonical_code(c) or c for c in had}
 
 
@@ -118,10 +121,43 @@ async def former_keys(db: AsyncSession, *, live: bool = False) -> dict[str, uuid
     return {k: i for k, i in out.items() if k not in now}
 
 
+async def features_by_keys(
+    db: AsyncSession, keys: Iterable[str], *, live: bool = False
+) -> dict[str, Entity]:
+    """{key: the feature that has it, else the one that had it before (:func:`former_keys`)}
+    for every key that names one, in two reads however many keys: what names a feature by
+    its key keeps finding it once it is given its code. ``live``: not a rejected feature."""
+    wanted = {k for k in keys if k}
+    if not wanted:
+        return {}
+    holders = list(
+        await db.scalars(select(Entity).where(Entity.type == "feature", Entity.key.in_(wanted)))
+    )
+    out = {e.key: e for e in holders if not (live and e.status == "rejected")}
+    held = {e.key for e in holders}
+    left = wanted - held
+    if not left:
+        return out
+    old = EntityRevision.before["key"].astext
+    query = (
+        select(old, Entity)
+        .join(Entity, Entity.id == EntityRevision.entity_id)
+        .where(Entity.type == "feature", old.in_(left), old != EntityRevision.after["key"].astext)
+        .order_by(EntityRevision.created_at)
+    )
+    if live:
+        query = query.where(Entity.status != "rejected")
+    # The latest holder of each key last, so it wins.
+    for key, e in (await db.execute(query)).all():
+        out[key] = e
+    return out
+
+
 async def by_former_key(db: AsyncSession, key: str) -> Entity | None:
-    """The feature that had ``key`` before (:func:`former_keys`), if no feature has it now."""
-    fid = (await former_keys(db)).get(key)
-    return await db.get(Entity, fid) if fid is not None else None
+    """The feature that had ``key`` before (:func:`former_keys`), if no feature has it now:
+    read by that key alone, never every alias."""
+    found = (await features_by_keys(db, [key])).get(key)
+    return found if found is not None and found.key != key else None
 
 
 async def _prd_codes(db: AsyncSession) -> list[str]:
@@ -151,30 +187,77 @@ async def _prd_codes(db: AsyncSession) -> list[str]:
     return out
 
 
+_TAKEN = "fixes.taken_codes"
+
+
+@dataclass
+class _Taken:
+    codes: dict[uuid.UUID, str]  # every feature's code by its id (:func:`_codes`)
+    taken: set[str]  # those and every former key: never given again
+    top: int  # the highest F-number anywhere (features, aliases, PRDs, roadmap items)
+
+
+@asynccontextmanager
+async def codes_once(db: AsyncSession) -> AsyncIterator[None]:
+    """A batch (a YAML import) reads the codes taken once, not once per feature it adds: each
+    code given in it is added to what was read (:func:`took`)."""
+    if _TAKEN in db.info:
+        yield
+        return
+    db.info[_TAKEN] = None
+    try:
+        yield
+    finally:
+        db.info.pop(_TAKEN, None)
+
+
+async def _taken(db: AsyncSession) -> _Taken:
+    if (cached := db.info.get(_TAKEN)) is not None:
+        return cached
+    codes = await _codes(db)
+    taken = set(codes.values()) | set(await former_keys(db))
+    seen = list(taken) + await _prd_codes(db)
+    seen += [s or "" for s in await db.scalars(select(RoadmapItem.prd_section_key).distinct())]
+    numbers = [int(m[1]) for c in seen if (m := F_NUMBER.fullmatch(c.strip().upper()))]
+    out = _Taken(codes, taken, max(numbers, default=0))
+    if _TAKEN in db.info:
+        db.info[_TAKEN] = out
+    return out
+
+
+def took(db: AsyncSession, feature: Entity, old: str | None = None) -> None:
+    """In a batch (:func:`codes_once`): ``feature``'s code key, given or typed, is taken now
+    (and ``old``, its key before, stays its alias)."""
+    cached: _Taken | None = db.info.get(_TAKEN)
+    code = canonical_code(feature.key)
+    if cached is None or code is None:
+        return
+    cached.codes[feature.id] = code
+    cached.taken |= {code} | ({old} if old else set())
+    if m := F_NUMBER.fullmatch(code):
+        cached.top = max(cached.top, int(m[1]))
+
+
 async def next_code(db: AsyncSession, feature: Entity) -> str:
     """The code ``feature`` would be given (refused when it has one or is not in the Ground
     Truth, or is a slice whose feature has no code)."""
     if feature.status != "confirmed":
         raise ConflictError("This feature is not in the Ground Truth yet.")
-    codes = await _codes(db)
-    if feature.id in codes:
+    t = await _taken(db)
+    if feature.id in t.codes:
         raise ConflictError("This feature already has a code.")
     # A code given once and taken back stays an alias of its feature: never given again.
-    taken = set(codes.values()) | set(await former_keys(db))
     if feature.parent_id is not None:
         parent = await db.get(Entity, feature.parent_id)
         if parent is not None and parent.type == "feature":
-            base = codes.get(parent.id)
+            base = t.codes.get(parent.id)
             if base is None or not WHOLE_CODE.fullmatch(base):
                 raise ConflictError("Give its feature a code first.")
             for letter in LETTERS:
-                if f"{base}{letter}" not in taken:
+                if f"{base}{letter}" not in t.taken:
                     return f"{base}{letter}"
             raise ConflictError("This feature has no slice letter left.")
-    seen = list(taken) + await _prd_codes(db)
-    seen += [s or "" for s in await db.scalars(select(RoadmapItem.prd_section_key).distinct())]
-    numbers = [int(m[1]) for c in seen if (m := F_NUMBER.fullmatch(c.strip().upper()))]
-    return f"F-{max(numbers, default=0) + 1:02d}"
+    return f"F-{t.top + 1:02d}"
 
 
 async def _set_key(db: AsyncSession, feature: Entity, key: str) -> bool:
@@ -186,6 +269,8 @@ async def _set_key(db: AsyncSession, feature: Entity, key: str) -> bool:
             await db.flush()
     except IntegrityError:
         await db.refresh(feature)
+        if _TAKEN in db.info:
+            db.info[_TAKEN] = None  # another writer took a code: read them again
         return False
     return True
 
@@ -203,6 +288,28 @@ async def _rename_refs(db: AsyncSession, old: str, new: str) -> None:
     )
 
 
+async def code_on_join(db: AsyncSession, feature: Entity) -> None:
+    """Every feature has a code, given when it joins the Ground Truth (the owner, Nov 4: "Code
+    + name, all"): a confirmed feature with none gets :func:`next_code` as its key, and what
+    names it by its key follows (:func:`_rename_refs`; its old key stays an alias). A code it
+    has is kept, never renumbered; a slice whose feature has no code waits for Give it a code.
+    The caller writes the revision, so the code is part of the write that confirmed it."""
+    if feature.type != "feature" or feature.status != "confirmed":
+        return
+    old = feature.key
+    for _ in range(2):
+        try:
+            code = await next_code(db, feature)
+        except ConflictError:
+            return
+        if await _set_key(db, feature, code):
+            await _rename_refs(db, old, code)
+            took(db, feature, old)
+            return
+    # Lost the race twice: refused, never a join without its code.
+    raise ConflictError("That code is taken; try again.")
+
+
 async def give_code(db: AsyncSession, writer: Writer, feature: Entity) -> str:
     """Give ``feature`` its next code, as the writer's own edit (it locks the feature); a
     code another writer took at the same moment is tried once more with the next."""
@@ -215,6 +322,7 @@ async def give_code(db: AsyncSession, writer: Writer, feature: Entity) -> str:
     else:
         raise ConflictError("That code is taken; try again.")
     await _rename_refs(db, old, code)
+    took(db, feature, old)
     lock(feature, writer)
     await db.flush()
     _revision(db, writer, before, entity_snapshot(feature), entity=feature)
@@ -248,6 +356,8 @@ async def take_code_back(db: AsyncSession, writer: Writer, feature_id: uuid.UUID
     if not await _set_key(db, feature, old):
         raise taken
     await _rename_refs(db, key, old)
+    if _TAKEN in db.info:
+        db.info[_TAKEN] = None
     lock(feature, writer)
     await db.flush()
     _revision(db, writer, before, entity_snapshot(feature), entity=feature)
