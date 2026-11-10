@@ -1,4 +1,4 @@
-import { AREA_PRDS } from "../lib/api/mock/one-roadmap";
+import { AREA_PRDS, COMPANY_TITLE } from "../lib/api/mock/one-roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { ADMIN, login, seedRoadmapReview } from "./helpers";
@@ -107,11 +107,15 @@ for (const look of LOOKS) {
       await expect(feeds).toContainText("These stay, without it:");
       await expect(feeds.getByText("Report button on every post", { exact: true })).toBeVisible();
       await expect(feeds.getByText("Block list", { exact: true })).toBeVisible();
+      // The company roadmap other PRDs feed never goes with it.
+      await expect(dialog.getByText(COMPANY_TITLE, { exact: true })).toHaveCount(0);
       await dialog.getByRole("button", { name: "Delete PRD" }).click();
       await expect(page.getByTestId("one-pagers-note")).toContainText(`Deleted ${SAFETY}.`);
       await page.goto("/simple/roadmap");
       await expect(page.getByText("Report button on every post", { exact: true }).first()).toBeVisible();
       await expect(page.getByText("Block list", { exact: true }).first()).toBeVisible();
+      // Another PRD's item is still on the Roadmap.
+      await expect(page.getByText("Read replicas in two regions", { exact: true }).first()).toBeVisible();
     });
 
     test("Delete PRD stays off until the published tick, and while a run works on the PRD", async ({ page }) => {

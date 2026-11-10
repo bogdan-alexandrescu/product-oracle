@@ -1801,7 +1801,10 @@ function seedOneRoadmapScenario(): Db {
   const oldRoadmap = doc(uuid(), OLD_ROADMAP[0], OLD_ROADMAP[1], "roadmap");
   // replaced-prd-history: its v2, never sent: read-only history, never approved.
   db.versions.push(buildVersion(oldRoadmap, { number: 2, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: `${OLD_ROADMAP[1]}, a draft never sent.` }], citations: [] }));
-  doc(uuid(), COMPANY_SLUG, COMPANY_TITLE, "roadmap", { company_roadmap: true });
+  const company = doc(uuid(), COMPANY_SLUG, COMPANY_TITLE, "roadmap", { company_roadmap: true });
+  // As the API: a PRD run's company roadmap version is built from that PRD's version.
+  const cv = db.versions.find((v) => v.document_id === company.id);
+  if (cv) (cv as { source?: { document_id: string; version?: number } | null }).source = { document_id: areas[0].id, version: 1 };
   db.simple_roadmap = seedCompanyRoadmap(seedSimpleRoadmap());
   return db;
 }
