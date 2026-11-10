@@ -31,6 +31,8 @@ Test cards (protects / fails_when / no_claim):
 """
 
 # ruff: noqa: E501 - the fixture sections keep their long lines
+import inspect
+
 from oracle.docs.models import Section
 from oracle.simple import one_pager
 from oracle.simple import one_pager_checks as checks
@@ -217,7 +219,20 @@ def test_measure_is_the_lines_own_words_never_a_citation():
         outcome("Sites added a week from 5 to 12", "Sites added a week", "5", "12"),
     ]
     blk = OnePagerBlock(key="outcomes", title="Outcomes", rules="", kind="metrics", lines=lines)
-    checks.annotate([blk], [success])
+    # The version's citations by id (title, excerpt): a meeting's quote, long enough to be cut,
+    # and a feature's title with its label. A build whose annotate still takes them (the read
+    # passed them before vqa one-pager 2) gets them, so one that turns them into a measure or
+    # its source fails here.
+    cites = {
+        "m1": (
+            "Weekly crawl review (current name)",
+            "we look at the fresh pages every morning and the crawl errors every Friday, "
+            "then agree what to fix first and who picks it up before the next review",
+        ),
+        "f2": ("F-02 Fresh index (current name)", "pages crawled again within a day of a change"),
+    }
+    takes = "cites" in inspect.signature(checks.annotate).parameters
+    checks.annotate([blk], [success], **({"cites": cites} if takes else {}))
     assert [(x.measure, x.measure_source) for x in blk.lines] == [
         (None, None),
         (None, None),
