@@ -67,9 +67,12 @@ export function seedGoalNoValue(db: SimpleDb): void {
 /**
  * qa-prio-twins ("priorities-twins", on "one-roadmap"): one feature known to more than one record. Trusted seller
  * badge (only an older roadmap holds it) has a draft on the company roadmap linked to it; a second Block list draft
- * links to nothing; a second Queue backpressure item is its own feature. Invented data.
+ * links to nothing; a second Queue backpressure item is its own feature, and so is a second, confirmed Trusted seller
+ * badge item. Invented data.
  */
 export const PRIORITIES_TWINS_SCENARIO = "priorities-twins";
+/** "priorities-twins-trace": the same, Trusted seller badge's draft linked only by its trace (no feature_id). */
+export const PRIORITIES_TWINS_TRACE_SCENARIO = "priorities-twins-trace";
 export const TWINS = { draft: OLD_ITEM, unlinked: "Block list", item: "Queue backpressure" } as const;
 export function seedPrioritiesTwins(db: SimpleDb): void {
   const add = (s: SeedItem) => {
@@ -79,8 +82,18 @@ export function seedPrioritiesTwins(db: SimpleDb): void {
   add({ key: "trusted-badge-draft", title: TWINS.draft, horizon: "later", roadmap: COMPANY_SLUG, feature: "trusted-badge", draft: true, confidence: "high", source: "engineering" });
   add({ key: "block-list-copy", title: TWINS.unlinked, horizon: "later", roadmap: COMPANY_SLUG, draft: true, confidence: "medium", source: "engineering" });
   add({ key: "queue-backpressure-2", title: TWINS.item, horizon: "later", roadmap: COMPANY_SLUG, confidence: "low", source: "engineering" });
+  // A confirmed Trusted seller badge item that is its own feature: a twin with an item of a row with only a draft.
+  // Its title differs only by a trailing space: same name, ranked after the row (the mock orders unscored rows by title).
+  add({ key: "trusted-badge-2", title: `${TWINS.draft} `, horizon: "later", roadmap: COMPANY_SLUG, confidence: "high", source: "engineering" });
   // Oracle only proposed these two: they rank, but have no mark (Show's All still counts them).
   db.proposed_features = ["block-list", "queue-backpressure"];
+}
+
+export function seedPrioritiesTwinsTrace(db: SimpleDb): void {
+  seedPrioritiesTwins(db);
+  const d = db.items.find((s) => s.key === "trusted-badge-draft")!;
+  d.trace_feature = d.feature;
+  d.feature = undefined;
 }
 
 /** qa-prio-twins (priorities.same_name): two names are the same, case and spacing aside. */
@@ -183,13 +196,20 @@ const CONFIDENCE: Record<string, number> = { high: 0.8, medium: 0.5, low: 0.3 };
 const round = (n: number): number => Math.round(n * 1000) / 1000;
 const featureId = (itemId: string): string => `feature-${itemId}`;
 /** The key of the item standing for `key`'s feature: its own, or the one it was added for (SeedItem.feature). */
-const featureOf = (db: SimpleDb, key: string): string => db.items.find((s) => s.key === key)?.feature ?? key;
+// qa-prio-twins (priorities.link): else its trace's source feature.
+const featureOf = (db: SimpleDb, key: string): string => {
+  const s = db.items.find((x) => x.key === key);
+  return s?.feature ?? s?.trace_feature ?? key;
+};
 /** An item's feature id: one per feature, whichever roadmap's item stands for it. */
 const featureOfItem = (db: SimpleDb, i: { key: string; id: string }): string => featureId(db.ids[featureOf(db, i.key)] ?? i.id);
 
 /** The key of the item standing for the feature `fid`, undefined for no such feature. */
 export function featureItem(db: SimpleDb, fid: string): string | undefined {
-  return Object.keys(db.ids).find((k) => featureId(db.ids[k]) === fid && !db.items.find((s) => s.key === k)?.feature);
+  return Object.keys(db.ids).find((k) => {
+    const s = db.items.find((x) => x.key === k);
+    return featureId(db.ids[k]) === fid && !s?.feature && !s?.trace_feature;
+  });
 }
 
 /**
@@ -203,10 +223,14 @@ export function addToCompany(db: SimpleDb, fid: string, seen: SimpleDb = db): st
   if (!base || !src) return undefined;
   const slug = db.company_roadmap;
   if (!slug) return base;
-  const there = db.items.filter((s) => s.roadmap === slug && featureOf(db, s.key) === base && !closed(s) && s.status !== "cut");
+  // Its first item there by key (a confirmed one first), as targets.add_to_company.
+  const there = db.items.filter((s) => s.roadmap === slug && featureOf(db, s.key) === base && !closed(s) && s.status !== "cut").sort((a, b) => a.key.localeCompare(b.key));
   const kept = there.find((s) => !s.draft) ?? there[0];
   if (kept) {
+    // A draft linked by its trace is confirmed and linked to the feature (its feature_id).
+    if (kept.draft && kept.key !== base) kept.feature = base;
     kept.draft = false;
+    kept.trace_feature = undefined;
     return kept.key;
   }
   // every-field (targets.add_to_company): its code is no other item's own, a title's (its slices share it), in set_code's words.
@@ -614,8 +638,8 @@ export function prioritiesOut(
   }
   // qa-prio-twins (priorities._fold_twins): rows of one name are one row, the best-ranked on the roadmap; the
   // others its twins, each with how it merges into it. Nothing is merged.
-  // A row's names: its title and its feature's own (the seed item's), as priorities.py folds by either.
-  const namesOf = (r: Row) => new Set([sameName(r.title), sameName(db.items.find((x) => x.key === r.code)?.title)].filter(Boolean));
+  // A row's names: its title and its feature's own (the item standing for the feature), as priorities.py folds by either.
+  const namesOf = (r: Row) => new Set([sameName(r.title), sameName(db.items.find((x) => x.key === featureItem(db, r.feature_id))?.title)].filter(Boolean));
   const groups: Row[][] = [];
   const group = new Map<string, number>();
   for (const r of rows) {
@@ -640,9 +664,11 @@ export function prioritiesOut(
       const mine = !!r.item_id && !!l.item_id && readItems.get(r.item_id)!.roadmap.id === readItems.get(l.item_id)!.roadmap.id;
       // No item, an item on another roadmap, or a lead with only a draft: the Ground Truth's Merge into….
       const merge = !can ? null : mine ? ("item" as const) : ("entity" as const);
+      // priorities.merge_twin re-links each of its items first: an approver who decides every one.
+      const theirs = live.filter((i) => featureOfItem(db, i) === r.feature_id);
       (l.twins ??= []).push({
         feature_id: r.feature_id, item_id: r.item_id, code: r.code, title: r.title, goal: r.goal, rank: r.rank, merge,
-        into_id: merge === "item" ? l.item_id : null, applies: merge === "item" ? decides(r.item_id!) : merge === "entity" && (ctx.role === "owner" || ctx.role === "approver"),
+        into_id: merge === "item" ? l.item_id : null, applies: merge === "item" ? decides(r.item_id!) : merge === "entity" && (ctx.role === "owner" || ctx.role === "approver") && theirs.every((i) => decides(i.id)),
       });
     }
   }

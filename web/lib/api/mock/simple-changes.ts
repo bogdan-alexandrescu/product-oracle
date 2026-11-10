@@ -310,6 +310,37 @@ function decides(db: SimpleDb, ctx: SimpleChangesCtx, itemId: unknown): boolean 
   return key ? canDecideItem(db, seed(db, key), ctx) : ctx.role === "owner";
 }
 
+/**
+ * priorities.merge_twin (qa-prio-twins, review of #1503): a Same name record's Merge into… the row's feature. Each
+ * open item of the twin's feature the reader sees is re-linked to the kept feature first (when the kept feature
+ * holds only a draft on that roadmap, the draft is merged into the confirmed item, merge_item); then the feature is
+ * gone (in the mock its items stand for the kept one). 403, nothing written, unless an approver deciding them all.
+ */
+async function mergeTwin(db: SimpleDb, ctx: SimpleChangesCtx, fid: string, body: { into: string }): Promise<Response> {
+  if (ctx.role !== "owner" && ctx.role !== "approver") return json(403, { detail: "Only an approver merges Ground Truth features" });
+  const source = featureItem(db, fid);
+  const kept = featureItem(db, body.into);
+  if (!source || !kept || source === kept) return json(422, { detail: "into: another Ground Truth feature" });
+  const read = (x: SeedItem) => !closed(x) && x.status !== "cut" && !x.trashed && (!db.company_roadmap || x.roadmap === db.company_roadmap);
+  const of = (x: SeedItem) => x.feature ?? x.trace_feature ?? x.key;
+  const theirs = db.items.filter((x) => read(x) && of(x) === source);
+  const blocked = theirs.find((x) => !decides(db, ctx, db.ids[x.key]));
+  if (blocked) return json(403, { detail: `Only the decider of ${ROADMAPS[blocked.roadmap]?.title ?? blocked.roadmap} links ${blocked.title} to another feature: ask them to merge it` });
+  const relinked: string[] = [];
+  for (const x of theirs) {
+    const here = db.items.filter((y) => read(y) && of(y) === kept && y.roadmap === x.roadmap);
+    if (!x.draft && here.length && here.every((y) => y.draft)) {
+      const draft = [...here].sort((a, b) => a.key.localeCompare(b.key))[0];
+      const r = await create(db, ctx, { op: "merge_item", target: { item_id: db.ids[draft.key], into_id: db.ids[x.key] }, before: {}, after: {}, reason: `Merged into ${x.title}` });
+      if (r.status >= 300) return r;
+    }
+    relinked.push(x.key);
+  }
+  // The feature goes: every record of it stands for the kept one.
+  for (const x of db.items) if (x.key !== kept && of(x) === source) x.feature = kept;
+  return json(200, { feature_id: body.into, relinked });
+}
+
 /** S7: the roadmap (slug) an add_item change writes. */
 const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => roadmapId(r) === id);
 
@@ -1491,6 +1522,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     return routeGoalSuggestions(db, ctx, req, p, q, (body) => create(db, ctx, body));
   }
   if (p[2] === "priorities") {
+    if (p[3] === "twins" && p[4] && p[5] === "merge" && !p[6] && m === "POST") return mergeTwin(db, ctx, p[4], (await req.json()) as { into: string });
     if (m !== "GET" || p[3]) return null;
     return json(200, prioritiesOut(db, ctx, (c) => route(db, ctx, c), (itemId) => decides(db, ctx, itemId), q.get("line")));
   }

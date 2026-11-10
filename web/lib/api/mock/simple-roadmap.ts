@@ -97,6 +97,9 @@ interface SeedItem {
   /** prio-company: the key of the item whose feature this one is (an item a move on Priorities
    * added to the company roadmap for a feature it did not hold); else its own feature. */
   feature?: string;
+  /** qa-prio-twins: a draft linked only by its trace's source feature (priorities.link): the key of the item
+   * standing for that feature; no feature of its own until a move confirms it. */
+  trace_feature?: string;
   /** feature-parts: the key of the feature it is a part of (RoadmapItem.parent_key). */
   parent?: string;
   /** S7: the Ground Truth feature (with no item) this draft was linked to by a merge. */

@@ -1275,7 +1275,8 @@ function DraftItem({ d, proposals, mayChange, changed, onRow = false }: { d: Dra
 /**
  * qa-prio-twins: the feature's other ranked records with its name, not linked to it (a second baseline entry, a
  * second item), on its one row: each named with its goal, and Merge into… this one (merge_item for an item of the
- * same roadmap, the Ground Truth's Merge into… for a feature with no item). Oracle never merges them.
+ * same roadmap, else the Ground Truth's Merge into…, which first links the twin's items to this feature). Oracle never
+ * merges them.
  */
 function Twins({ r, proposals, mayChange, changed }: { r: Row; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
   const [merging, setMerging] = useState<string | null>(null);
@@ -1292,9 +1293,11 @@ function Twins({ r, proposals, mayChange, changed }: { r: Row; proposals: Propos
     if (t.merge !== "entity" || !t.feature_id) return;
     setBusy(true);
     try {
-      await unwrap(api.POST("/v1/baseline/entities/{entity_id}/merge", { params: { path: { entity_id: t.feature_id } }, body: { into: r.feature_id, reason: null } }));
+      // Its roadmap items are linked to the kept feature first (priorities.merge_twin), never left with none.
+      const out = await unwrap(api.POST("/v1/simple/priorities/twins/{feature_id}/merge", { params: { path: { feature_id: t.feature_id } }, body: { into: r.feature_id } }));
       window.dispatchEvent(new Event(ITEM_CHANGED_EVENT));
-      toast({ message: mergedWords(t, r) });
+      const n = out.relinked?.length ?? 0;
+      toast({ message: mergedWords(t, r) + (n === 0 ? "" : n === 1 ? ", and its roadmap item now serves it" : `, and its ${n} roadmap items now serve it`) });
     } catch (e) {
       toast({ message: errorMessage(e) });
     } finally {
