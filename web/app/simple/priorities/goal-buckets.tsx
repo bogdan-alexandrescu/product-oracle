@@ -658,7 +658,7 @@ export function DeleteArchivedDialog({ goal, onClose, onDelete }: { goal: Archiv
   }, [onClose]);
   return (
     <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={`Delete ${goal.title}`} className="w-full max-w-lg rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={`Delete ${goal.title}`} className="max-h-[88vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg sm:rounded-[var(--simple-card-radius)]" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
           Delete {goal.title}?
         </h2>
