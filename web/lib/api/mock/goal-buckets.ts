@@ -391,10 +391,14 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
       return json(409, { detail: "This goal changed since you opened it. Look again and save." });
     }
     if (!g) {
-      const undo = signed({ goals: [{ id: p[4], title: was.title, status: "confirmed", attrs: { metric: was.metric, target_text: was.target, due: was.due }, on_roadmap: true }], features: [], added_goal_id: null });
+      // milestone-kinds: a roadmap goal's on_roadmap (goal_buckets._fields), kept by its key.
+      const shown = (simple as { goal_on_roadmap?: Record<string, boolean> }).goal_on_roadmap ??= {};
+      const undo = signed({ goals: [{ id: p[4], title: was.title, status: "confirmed", attrs: { metric: was.metric, target_text: was.target, due: was.due }, on_roadmap: shown[key!] ?? true }], features: [], added_goal_id: null });
       const now = { title: b.title!.trim(), metric: b.measure!.trim(), target: b.target!.trim(), due: b.due! };
       writeRoadmapGoal(simple, key!, now);
-      return json(200, { goal: { id: p[4], title: now.title, order: 1, measure: now.metric, target: now.target, due: now.due, can_edit: true }, undo });
+      const onRoadmap = (b as { on_roadmap?: boolean | null }).on_roadmap;
+      if (onRoadmap != null) shown[key!] = onRoadmap;
+      return json(200, { goal: { id: p[4], title: now.title, order: 1, measure: now.metric, target: now.target, due: now.due, can_edit: true, on_roadmap: shown[key!] ?? true }, undo });
     }
     const owner = ownerIn(b, people);
     if (!owner.ok) return json(422, { detail: "Pick a member as its owner" });
@@ -435,8 +439,10 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
       const a = s.attrs as Record<string, string | number | null>;
       const key = g ? null : roadmapGoalKey(s.id, simple);
       if (key) writeRoadmapGoal(simple, key, { title: s.title, metric: (a.metric as string | null) ?? null, target: (a.target_text as string | null) ?? null, due: (a.due as string | null) ?? null });
+      // goal_buckets undo: the goal's on_roadmap as it was (GoalSnap.on_roadmap).
+      if (key) ((simple as { goal_on_roadmap?: Record<string, boolean> }).goal_on_roadmap ??= {})[key] = s.on_roadmap ?? true;
       if (!g) continue;
-      Object.assign(g, { title: s.title, archived: s.status === "rejected", measure: a.metric ?? null, target: a.target_text ?? null, due: a.due ?? null, owner_id: a.owner ?? null, archived_at: a.archived_at ?? null });
+      Object.assign(g, { title: s.title, archived: s.status === "rejected", measure: a.metric ?? null, target: a.target_text ?? null, due: a.due ?? null, owner_id: a.owner ?? null, archived_at: a.archived_at ?? null, on_roadmap: s.on_roadmap ?? true });
     }
     for (const s of u.features ?? []) {
       const f = db.features.find((x) => x.id === s.feature_id);
