@@ -75,7 +75,8 @@ from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError as ImportRejected
 from oracle.review.models import DocumentReviewPolicy
-from oracle.roadmap.models import ProductTrack, RoadmapItem
+from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackPrd
+from oracle.roadmap.tracks import on_prd
 from oracle.simple.models import (
     RoadmapDateSuggestion,
     SimpleChange,
@@ -414,12 +415,12 @@ async def who(db: AsyncSession, doc_ids: set[uuid.UUID]) -> Who:
         select(ProductTrack).where(
             or_(
                 ProductTrack.roadmap_document_id.in_(doc_ids),
-                ProductTrack.prd_document_id.in_(doc_ids),
+                on_prd(doc_ids),
             ),
             ProductTrack.owner_id.is_not(None),
         )
     ):
-        for doc in {t.roadmap_document_id, t.prd_document_id} & doc_ids:
+        for doc in {t.roadmap_document_id, *t.prd_ids} & doc_ids:
             out.owners.setdefault(doc, set()).add(t.owner_id)
     return out
 
@@ -1859,16 +1860,18 @@ class Waiting:
     drafts: list[SimpleDraft] = field(default_factory=list)
     dates: list[RoadmapDateSuggestion] = field(default_factory=list)
     goals: list[SimpleGoalSuggestion] = field(default_factory=list)
+    tracks: list[TrackPrd] = field(default_factory=list)
 
 
 async def waiting(db: AsyncSession) -> Waiting:
     """In one read: the submitted drafts (oldest first), Oracle's open date suggestions
-    (newest first) and the goals' open suggestions (oldest first). Each kind is outer-joined
-    on its own row of a three-row list, so none multiplies another and an empty kind leaves
-    one row of nulls; the tenant's and the trash's criteria land in each join's ON."""
-    kind = values(column("kind", Integer), name="kind").data([(1,), (2,), (3,)])
+    (newest first), the goals' open suggestions (oldest first) and the PRDs waiting on
+    Oracle's suggested track (tracks-goal, oldest first). Each kind is outer-joined on its
+    own row of a four-row list, so none multiplies another and an empty kind leaves one row
+    of nulls; the tenant's and the trash's criteria land in each join's ON."""
+    kind = values(column("kind", Integer), name="kind").data([(1,), (2,), (3,), (4,)])
     rows = await db.execute(
-        select(SimpleDraft, RoadmapDateSuggestion, SimpleGoalSuggestion)
+        select(SimpleDraft, RoadmapDateSuggestion, SimpleGoalSuggestion, TrackPrd)
         .select_from(kind)
         .outerjoin(SimpleDraft, and_(kind.c.kind == 1, SimpleDraft.status == "submitted"))
         .outerjoin(
@@ -1879,18 +1882,22 @@ async def waiting(db: AsyncSession) -> Waiting:
             SimpleGoalSuggestion,
             and_(kind.c.kind == 3, SimpleGoalSuggestion.status == "open"),
         )
+        .outerjoin(TrackPrd, and_(kind.c.kind == 4, TrackPrd.state == "suggested"))
     )
     out = Waiting()
-    for d, s, g in rows:
+    for d, s, g, t in rows:
         if d is not None:
             out.drafts.append(d)
         if s is not None:
             out.dates.append(s)
         if g is not None:
             out.goals.append(g)
+        if t is not None:
+            out.tracks.append(t)
     out.drafts.sort(key=lambda d: (d.submitted_at is None, d.submitted_at or 0))
     out.dates.sort(key=lambda s: s.created_at, reverse=True)
     out.goals.sort(key=lambda g: (g.created_at, g.id))
+    out.tracks.sort(key=lambda t: (t.created_at, t.id))
     return out
 
 

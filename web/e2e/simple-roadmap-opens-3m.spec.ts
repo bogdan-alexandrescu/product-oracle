@@ -132,7 +132,8 @@ test.describe("desktop", () => {
     await expect(card).toBeHidden();
 
     await slideToEnd(page);
-    await expect(page.getByTestId("ms-label").filter({ hasText: "Trail map launch · Mar 15" })).toBeInViewport();
+    // roadmap-milestone-codes: the band's label shows its code and name; its day is in its tip and accessible name.
+    await expect(page.locator('[data-testid="ms-label"][aria-label*=" Trail map launch · Mar 15, 2027"]')).toBeInViewport();
     const line = page.locator('[data-testid="ms-line"][data-day="2027-03-15"]');
     await expect(line).toBeInViewport();
     const l = (await line.boundingBox())!;

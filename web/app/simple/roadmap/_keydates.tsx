@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ds";
+import { keyDateWords } from "@/lib/milestone-code";
 
 import type { Act } from "./_card";
 import { shortDay, type KeyDate, type Roadmap } from "./_lib";
@@ -154,8 +155,8 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
                 {/* fix4 qa-simple-roadmap-36: one line: the name (its whole in title= when cut), its day and the badge, each kept whole. */}
                 <div className="flex min-w-0 items-baseline gap-x-1.5 font-medium">
                   {/* qa4-simple-roadmap-37: the name wraps, never cut mid-word. */}
-                  <span className="min-w-0 break-words" title={k.name}>
-                    {k.name}
+                  <span className="min-w-0 break-words" title={keyDateWords(k, data.goal_milestones ?? [])}>
+                    {keyDateWords(k, data.goal_milestones ?? [])}
                   </span>
                   <span className="flex-none whitespace-nowrap text-text2" data-testid="key-date-day">
                     · {dayWords(k.date, data.today)}

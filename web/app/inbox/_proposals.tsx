@@ -13,6 +13,7 @@ type Proposal = Schemas["InboxSimpleChange"];
 type DateSuggestion = Schemas["InboxSimpleDateSuggestion"];
 type GoalSuggestion = Schemas["InboxSimpleGoalSuggestion"];
 type Approval = Schemas["InboxSimpleApproval"];
+type TrackSuggestion = Schemas["InboxSimpleTrackSuggestion"];
 
 /** The item's feature panel on its roadmap (Simple's one panel for a feature). */
 const panelHref = (documentId: string, itemId: string) => `/simple/roadmap?roadmap=${documentId}&item=${itemId}`;
@@ -212,6 +213,79 @@ export function goalSuggestionRows(rows: GoalSuggestion[], seenBefore: string | 
         <LinkButton href={where} aria-label={`Open the suggestions for ${s.goal.title}`}>
           Open
         </LinkButton>
+      ),
+    };
+  });
+}
+
+/** tracks-goal: a change to a track, through the change engine (a decider applies it; one who is not proposes it). */
+const trackChange = (body: Record<string, unknown>) => unwrap(api.POST("/v1/simple/changes", { body: { before: {}, ...body } as Schemas["SimpleChangeIn"] }));
+
+/**
+ * tracks-goal (owner Nov 9): a newly accepted PRD of mine on no track (the API's
+ * `simple_track_suggestions`). Oracle suggests the track that fits it best: Confirm puts the PRD
+ * on it, Pick a track on another, New track starts one by the PRD's name. Until then its
+ * features show in the Roadmap's No track band.
+ */
+export function trackSuggestionRows(rows: TrackSuggestion[], busy: string | null, act: Act, seenBefore: string | null | undefined): StatedNeed[] {
+  return rows.map((s) => {
+    const onto = (trackId: string) => act(`track-suggestion-${s.id}`, () => trackChange({ op: "edit_track", target: { track_id: trackId }, after: { add_prd_id: s.prd.id } }));
+    const others = s.tracks.filter((t) => t.id !== s.track?.id);
+    // Asked of a track someone else decides: it waits for them (no actions, not counted) until
+    // they accept (it leaves) or decline (the suggestion is back).
+    const asked = s.proposed;
+    return {
+      key: `track-suggestion-${s.id}`,
+      icon: "roadmap",
+      kind: "Track",
+      item: (
+        <>
+          <span className="min-w-0 truncate" title={s.prd.title} data-testid="track-suggestion-title">
+            {s.prd.title}
+          </span>
+          {asked ? (
+            <span className="block basis-full" data-testid="track-suggestion-proposed" title={`Asked to put ${s.prd.title} on ${asked.track?.title ?? asked.title}`}>
+              <Chip>{asked.to_name ? `Proposed to ${asked.to_name}` : "Proposed"}</Chip>
+            </span>
+          ) : (
+            <span className="block basis-full text-sm break-words whitespace-normal text-text2" data-testid="track-suggestion-context">
+              {s.track ? `Oracle suggests the track ${s.track.title}` : "On no track"}
+            </span>
+          )}
+        </>
+      ),
+      context: <span className="block truncate text-text2">Its features show under No track</span>,
+      at: s.at,
+      state: isNew(s.at, seenBefore) ? "new" : "open",
+      counted: !asked,
+      group: "proposals",
+      action: asked ? null : (
+        <>
+          {s.track && (
+            <Button disabled={busy !== null} onClick={() => onto(s.track!.id)} aria-label={`Put ${s.prd.title} on ${s.track.title}`}>
+              Confirm
+            </Button>
+          )}
+          {others.length > 0 && (
+            <select
+              aria-label={`Pick a track for ${s.prd.title}`}
+              disabled={busy !== null}
+              value=""
+              onChange={(e) => e.target.value && void onto(e.target.value)}
+              className="h-8 rounded-lg border border-line bg-surface px-2 text-sm"
+            >
+              <option value="">Pick a track</option>
+              {others.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+          )}
+          <Button variant="ghost" disabled={busy !== null} onClick={() => act(`track-suggestion-${s.id}`, () => trackChange({ op: "add_track", target: {}, after: { title: s.prd.title, prd_ids: [s.prd.id] } }))}>
+            New track
+          </Button>
+        </>
       ),
     };
   });

@@ -112,6 +112,9 @@ class SimpleGoalRef(BaseModel):
 class SimpleTrackRef(BaseModel):
     id: uuid.UUID
     title: str
+    # tracks-goal: the company goal the track replaces as the Roadmap's band.
+    goal_id: uuid.UUID | None = None
+    goal_name: str | None = None
 
 
 class SimpleItemMilestone(BaseModel):
@@ -437,6 +440,9 @@ class SimpleMilestone(BaseModel):
     effort_weeks: float | None = None
     done_when: list[str] = []
     targets: list["SimpleMilestoneTarget"] = []
+    # roadmap-milestone-codes: its one code across the read (M1, M2 ... by date;
+    # oracle.simple.roadmap_codes); null when dropped or a PRD plan's own.
+    roadmap_code: str | None = None
 
 
 class SimpleAppliedVersion(BaseModel):
@@ -521,6 +527,9 @@ class SimpleGoalMilestone(BaseModel):
     can_propose: bool = False
     # old-milestones: the older per-PRD roadmap it was brought over from, if it was.
     carried_from: "SimpleDocRef | None" = None
+    # roadmap-milestone-codes: its one code across the roadmap read (M1, M2 ... by date;
+    # oracle.simple.roadmap_codes), the code every page shows; null outside a roadmap read.
+    roadmap_code: str | None = None
 
 
 class SimpleGoalMilestoneIn(BaseModel):
@@ -2712,8 +2721,13 @@ class SimpleTrackRow(BaseModel):
     status: Literal["active", "paused", "closed"]
     owner_id: uuid.UUID | None = None
     owner_name: str | None = None
-    prd_id: uuid.UUID
+    # tracks-goal: a track holds many PRDs (``prds``, in the order they joined; ``prd_id``
+    # and ``prd_title`` are the first), or none, and may be tied to one company goal.
+    prd_id: uuid.UUID | None = None
     prd_title: str | None = None
+    prds: list["SimplePrdRef"] = []
+    goal_id: uuid.UUID | None = None
+    goal_name: str | None = None
     # The reader edits or deletes it directly; else it is proposed to ``decider_name``.
     can_decide: bool = False
     decider_name: str | None = None
@@ -2739,9 +2753,26 @@ class SimpleTracks(BaseModel):
     # The reader adds a track directly; else it is proposed to ``add_decider_name``.
     can_add: bool = False
     add_decider_name: str | None = None
-    # Who can own a track (enabled members), and the PRDs a new track can take.
+    # Who can own a track (enabled members), and the PRDs a track can take (tracks-goal: one
+    # on another track names it, and moves from it).
     people: list[SimplePerson]
-    prds: list[SimplePrdRef]
+    prds: list["SimpleTrackPrdChoice"]
+    # tracks-goal: the company's goals a track may be tied to, by name.
+    goals: list["SimpleTrackGoal"] = []
+
+
+class SimpleTrackGoal(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class SimpleTrackPrdChoice(BaseModel):
+    """tracks-goal: an accepted PRD a track can take, with the track it is on now."""
+
+    id: uuid.UUID
+    title: str
+    track_id: uuid.UUID | None = None
+    track_title: str | None = None
 
 
 class InboxSimpleDateSuggestion(BaseModel):
@@ -2759,6 +2790,38 @@ class InboxSimpleDateSuggestion(BaseModel):
     basis: str
     at: dt.datetime
     state: Literal["new", "open"]
+
+
+class InboxSimpleTrackSuggestion(BaseModel):
+    """tracks-goal (owner Nov 9): a newly accepted PRD of mine on no track. Oracle suggests
+    the existing track that fits it best (``track``; none fits: null); Confirm puts the PRD
+    on it, Pick a track on one of ``tracks``, New track starts one (each through the change
+    engine: ``edit_track`` with ``add_prd_id``, ``add_track``)."""
+
+    id: uuid.UUID
+    prd: "SimplePrdRef"
+    track: "SimpleTrackChoice | None" = None
+    tracks: list["SimpleTrackChoice"] = []
+    at: dt.datetime
+    state: Literal["new", "open"]
+    # A track someone else decides was asked for: it waits for them (no actions, not
+    # counted) until they accept (the item leaves) or decline (the suggestion is back).
+    proposed: "SimpleTrackProposed | None" = None
+
+
+class SimpleTrackChoice(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleTrackProposed(BaseModel):
+    """The open proposal a track suggestion waits for: which track (``title`` of a new
+    one), and whom it waits for."""
+
+    change_id: uuid.UUID
+    track: SimpleTrackChoice | None = None
+    title: str
+    to_name: str | None = None
 
 
 class InboxSimpleGoalSuggestion(BaseModel):

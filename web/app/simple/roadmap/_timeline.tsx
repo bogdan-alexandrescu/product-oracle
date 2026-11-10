@@ -5,7 +5,9 @@ import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState
 
 import { FeatureMarks, pillWord, type FeatureState } from "@/components/current-state/CurrentState";
 import { calendarDay } from "@/lib/dates";
+import { useMsBand } from "./_milestones";
 import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
+import { joinedNames, joinedWords } from "@/lib/milestone-code";
 
 import {
   addDays,
@@ -482,14 +484,18 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
       const code = `${codeOf(m.name)}${prd ? ` ${prd.title}` : ""}`;
       list.push({ key: `end-${m.id}`, kind: "end", x: sc.x(m.end_date!) + sc.px, words: compact ? `${code} ends` : `${code} ends ${shortDay(m.end_date!)}`, side: "before" });
     }
-    for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date))) list.push({ key: `track-${m.id}`, kind: "track", x: sc.x(m.date!), words: m.name, side: "after" });
+    const joined = joinedNames(data.goal_milestones ?? [], data.milestones);
+    for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date))) list.push({ key: `track-${m.id}`, kind: "track", x: sc.x(m.date!), words: joinedWords(m, joined), side: "after" });
     for (const k of drawnKeyDates(data)) list.push({ key: `key-${k.id}`, kind: "key", x: sc.x(k.date) + sc.px / 2, words: k.name, side: "after" });
     // finding 18: pack rows in date order left to right, so a later mark never takes a lower
     // row an earlier one needed (the list above is built milestone-ends, then tracks, then key
     // dates, not by date).
     return placeMarks([...list].sort((a, b) => a.x - b.x), chartW, flags);
   }, [data, sc, chartW, compact, flags]);
-  const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1)));
+  // roadmap-milestone-codes: the Gantt's milestone band under the date axis.
+  const band = useMsBand(compact);
+  const msBandH = format === "gantt" ? band : 0;
+  const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1))) + msBandH;
   // qa4-simple-roadmap-16: a phone's waterfall wraps its goals' names and gives each warning a band under its bar.
   const wrapRows = compact && format === "waterfall";
   // The names wrap beside the Current-state pill after them: the pill's width, by item.
@@ -729,9 +735,14 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     <div className="isolate flex border border-line bg-surface" data-testid="simple-chart" data-format={format} data-unit={format === "gantt" ? unit : undefined} data-weeks={weeks ? "true" : undefined}>
       <div className="min-w-0 flex-none border-r border-line" style={{ width: l.labelW }} data-testid="chart-labels">
         {/* fix4 qa-simple-roadmap-34: the grouping as the Group by names it ("PRD", "Goal"), not in capitals. */}
-        <div style={{ height: l.top }} className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2">
+        <div style={{ height: l.top - msBandH }} className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2">
           {laneWord ?? LANE_WORDS[lane]}
         </div>
+        {msBandH > 0 && (
+          <div style={{ height: msBandH }} className="flex items-center border-t border-line px-3 text-xs font-semibold text-text2">
+            Milestones
+          </div>
+        )}
         {l.rows.map((r, n) =>
           r.kind === "group" ? (
             <div

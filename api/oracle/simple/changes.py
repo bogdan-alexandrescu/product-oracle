@@ -1232,12 +1232,13 @@ async def _track_of_prd(
     db: AsyncSession, prd: uuid.UUID | None, roadmap: uuid.UUID | None
 ) -> uuid.UUID | None:
     from oracle.roadmap.models import ProductTrack
+    from oracle.roadmap.tracks import on_prd
 
     if prd is None:
         return None
     return await db.scalar(
         select(ProductTrack.id)
-        .where(ProductTrack.prd_document_id == prd)
+        .where(on_prd(prd))
         .order_by((ProductTrack.roadmap_document_id == roadmap).desc(), ProductTrack.created_at)
         .limit(1)
     )

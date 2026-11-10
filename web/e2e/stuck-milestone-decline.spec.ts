@@ -54,7 +54,7 @@ test("the company's owner declines a stuck milestone ask in the roadmap's Needs 
   await open(page, "/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   const tray = page.getByTestId("decision-tray");
-  const asks = tray.getByTestId("tray-proposal").filter({ hasText: "PRD milestone ‘Digest for all teams’: change a milestone" });
+  const asks = tray.getByTestId("tray-proposal").filter({ hasText: /PRD milestone ‘M\d+ Digest for all teams’: change a milestone/ });
   await page.getByTestId("needs-decision").click();
   await expect(tray).toBeVisible();
   await expect(asks).toHaveCount(2);
@@ -106,7 +106,8 @@ test("the PRD's owner, not a company owner, declines in the roadmap's Needs a de
   const tray = page.getByTestId("decision-tray");
   const proposals = tray.getByTestId("tray-proposal");
   const gone = proposals.filter({ hasText: "PRD milestone ‘Routing by team’: change a milestone" });
-  const digest = proposals.filter({ hasText: "PRD milestone ‘Digest for all teams’: change a milestone" });
+  // A live milestone reads by its roadmap code (roadmap-milestone-codes); the gone one has none.
+  const digest = proposals.filter({ hasText: /PRD milestone ‘M\d+ Digest for all teams’: change a milestone/ });
   await page.getByTestId("needs-decision").click();
   await expect(tray).toBeVisible();
   await expect(gone).toHaveCount(1);

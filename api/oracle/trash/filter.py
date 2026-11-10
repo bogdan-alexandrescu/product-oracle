@@ -70,6 +70,7 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         ScheduleBasis,
         TrackerRecord,
         TrackMilestone,
+        TrackPrd,
     )
     from oracle.runs.models import Checkpoint, Run, RunSegment
     from oracle.runs.scope_models import PrdScope
@@ -124,7 +125,9 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         RoadmapPublicText: [("document_id", docs)],
         RoadmapPublicCheck: [("document_id", docs)],
         DraftRoadmap: [("prd_document_id", docs)],
-        ProductTrack: [("prd_document_id", docs)],
+        # tracks-goal: a track holds many PRDs: one in Trash leaves the track (its link
+        # does), and a track whose every PRD is in Trash leaves with them (below).
+        TrackPrd: [("prd_document_id", docs)],
         ScheduleBasis: [("prd_document_id", docs)],
         TrackerRecord: [("prd_document_id", docs)],
         ArtifactRequest: [("source_document_id", docs)],
@@ -204,6 +207,17 @@ def _question_checkpoint_live(cls: Any) -> ColumnElement[bool]:
     return or_(cls.checkpoint_id.is_(None), cls.checkpoint_id.not_in(trashed))
 
 
+def _some_prd_live(cls: Any) -> ColumnElement[bool]:
+    """tracks-goal: a track holding no PRD, or one PRD at least not in Trash."""
+    from oracle.docs.models import Document
+    from oracle.roadmap.models import TrackPrd
+
+    links, docs = TrackPrd.__table__, Document.__table__
+    held = select(links.c.track_id).where(links.c.track_id.is_not(None))
+    live = held.where(links.c.prd_document_id.not_in(_trashed(docs)))
+    return or_(cls.id.not_in(held), cls.id.in_(live))
+
+
 def _live_parents(parents: list[tuple[str, Any]]) -> Callable[[Any], ColumnElement[bool]]:
     """The clause for a class (or an alias of it): each parent link empty or not trashed."""
     return lambda cls: and_(
@@ -249,8 +263,7 @@ def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
         # removed-tracks: a track is a Trash root of its own too (a track deleted in Simple).
         from oracle.roadmap.models import ProductTrack
 
-        track = _CRITERIA[ProductTrack]
-        _CRITERIA[ProductTrack] = lambda cls: and_(track(cls), cls.deleted_at.is_(None))
+        _CRITERIA[ProductTrack] = lambda cls: and_(_some_prd_live(cls), cls.deleted_at.is_(None))
     return _CRITERIA
 
 

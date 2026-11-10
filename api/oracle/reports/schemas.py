@@ -86,6 +86,8 @@ class ReportTrack(BaseModel):
     track_id: uuid.UUID
     status: Literal["active", "paused"]
     prd: ReportPrd
+    # tracks-goal: every PRD the track holds (older reports have none).
+    prds: list[ReportPrd] = []
     link: str
     health: str
     health_before: str

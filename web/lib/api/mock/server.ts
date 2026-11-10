@@ -188,7 +188,7 @@ import {
   seedPlanKeyResults,
   seedPlanOneWeek,
 } from "./simple-priorities";
-import { restoreTrack, routeRemoved } from "./simple-removed";
+import { restoreTrack, routeRemoved, syncTracks, trackSuggestionRows } from "./simple-removed";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, restoreAgendaItem, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
@@ -210,7 +210,7 @@ import { openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdOwnerIdsOf, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
-import { goalMapGoals, goalMapIdOf, goalMapItems, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
+import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
@@ -1624,6 +1624,37 @@ function seedRoadmapMilestonesHardScenario(): Db {
     { id: stableUuid("simple-gm/m3"), roadmap: "alerts-roadmap", code: "M3", name: "Teams set 3 rules in week 1", date: "2027-01-20", goal: "grow-retention", gates: ["alert-sso"], counts_when: "Holds 7 days in a row", progress: "not_started" },
     { id: stableUuid("simple-gm/m4"), roadmap: "alerts-roadmap", code: "M4", name: "Digest opened by 70%", date: "2027-02-17", goal: "grow-retention", gates: [], counts_when: "Sent to every team 2 weeks in a row", progress: "not_started" },
     { id: stableUuid("simple-gm/a2"), roadmap: "onboarding-roadmap", code: "M2", name: "Half of new teams invite a teammate", date: "2026-12-22", goal: "faster-activation", gates: ["setup-ideas"], counts_when: "Holds 14 days in a row on all teams", progress: "not_started" },
+  ];
+  return db;
+}
+
+// roadmap-milestone-codes ("roadmap-milestones"): 4 goals, milestones over Nov to Feb (two on Dec 22), a PRD's own one
+// and work of no goal: one code per milestone across the roadmap. Invented data.
+function seedRoadmapMilestonesScenario(): Db {
+  const db = seed();
+  const rm = (db.simple_roadmap = seedSimpleRoadmap());
+  GOALS["win-teams"] = "Win larger teams";
+  const set = (key: string, f: Partial<(typeof rm.items)[number]>) => Object.assign(rm.items.find((i) => i.key === key)!, f);
+  set("alert-export", { goal: "quiet-alerts", start: 15, end: 60, source: "typed" });
+  set("price-tiers", { goal: "win-teams", start: 20, end: 70, source: "typed" });
+  set("setup-health-log", { start: 5, end: 35, source: "typed" });
+  set("alert-sso", { start: 50, end: 95, source: "typed" });
+  for (const it of [
+    { source: "typed", key: "quiet-hours", title: "Quiet hours per team", horizon: "next", roadmap: "alerts-roadmap", goal: "quiet-alerts", track: "alerts", start: 40, end: 95 },
+    { source: "typed", key: "seat-billing", title: "Billing by seat", horizon: "later", roadmap: "pricing-roadmap", goal: "win-teams", start: 60, end: 110 },
+    { source: "typed", key: "pricing-faq", title: "Pricing questions page", horizon: "next", roadmap: "pricing-roadmap", start: 25, end: 50 },
+  ] as const) {
+    rm.items.push({ ...it });
+    rm.ids[it.key] = stableUuid(`simple-item/${it.key}`);
+  }
+  const prd = { slug: "usage-alerts", title: "Usage alerts", owner: "Nora Vance" };
+  rm.goal_milestones = [
+    ...seedOwnMilestones(),
+    { id: stableUuid("simple-gm/p2"), roadmap: "alerts-roadmap", code: "M2", name: "Digest for all teams", date: "2026-12-15", goal: "grow-retention", gates: ["alert-digest"], counts_when: "Sent to every team 2 weeks in a row", progress: "at_risk", prd },
+    { id: stableUuid("simple-gm/m3"), roadmap: "alerts-roadmap", code: "M3", name: "Teams set 3 rules in week 1", date: "2027-01-20", goal: "grow-retention", gates: ["alert-sso"], counts_when: "Holds 7 days in a row", progress: "not_started" },
+    { id: stableUuid("simple-gm/m4"), roadmap: "alerts-roadmap", code: "M4", name: "Digest opened by 70%", date: "2027-02-17", goal: "grow-retention", gates: [], counts_when: "Sent to every team 2 weeks in a row", progress: "not_started" },
+    { id: stableUuid("simple-gm/a2"), roadmap: "onboarding-roadmap", code: "M2", name: "Half of new teams invite a teammate", date: "2026-12-22", goal: "faster-activation", gates: ["setup-ideas"], counts_when: "Holds 14 days in a row on all teams", progress: "not_started" },
+    { id: stableUuid("simple-gm/q1"), roadmap: "alerts-roadmap", code: "M1", name: "Under 10% of teams mute alerts", date: "2027-01-13", goal: "quiet-alerts", gates: ["quiet-hours"], counts_when: "Holds 14 days in a row", progress: "not_started" },
   ];
   return db;
 }
@@ -4143,6 +4174,8 @@ function load(): Db {
                     }
                     return db;
                   }
+              : scenario === "roadmap-milestones"
+                ? seedRoadmapMilestonesScenario
               : scenario === ROADMAP_MILESTONES_HARD_SCENARIO
                 ? seedRoadmapMilestonesHardScenario
               : scenario === GOAL_BUCKETS_HARD_SCENARIO
@@ -4355,6 +4388,8 @@ function load(): Db {
                     const gb = (rm.goal_buckets = seedGoalBuckets());
                     for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
                     rm.ids = Object.fromEntries(rm.items.map((x) => [x.key, stableUuid(`simple-item/${x.key}`)]));
+                    // roadmap-milestone-codes: the ladder's milestones are this roadmap's goal milestones (route copies them).
+                    rm.map_milestones = { roadmap: "onboarding-roadmap", milestones: [] };
                     return db;
                   }
               : scenario === APPROVED_ROADMAP_SCENARIO
@@ -4671,7 +4706,7 @@ function load(): Db {
   // items "gm-f1", ...) are on every page from the first load, whichever page opens first.
   // A new company ("empty") has no features on its map yet; the 500-item company ("simple-500",
   // dod-perf) has its own 500 items and none of the default company's map features.
-  db.goal_map ??= scenario === "empty" || scenario === "simple-500" ? { ...seedGoalMap(scenario), features: [] } : seedGoalMap(scenario);
+  db.goal_map ??= scenario === "empty" || scenario === "simple-500" || scenario === "roadmap-milestones" ? { ...seedGoalMap(scenario), features: [] } : seedGoalMap(scenario);
   if (db.simple_roadmap) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   // pre-demo QA P-6 with P-1: the panel reads the goal each map feature serves from the first load too.
   if (db.simple_roadmap) db.simple_roadmap.map_goals = goalMapGoals(db.goal_map, db.baseline.entities.filter((e) => e.type === "goal"));
@@ -7790,6 +7825,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_roadmap ??= seedSimpleRoadmap();
   // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
   if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
+  // roadmap-milestone-codes: the Goal map's milestones as they are now (moved, renamed, in Trash).
+  if (db.goal_map && db.simple_roadmap.map_milestones) db.simple_roadmap.map_milestones.milestones = goalMapMilestones(db.goal_map);
   // simple-replaced-prds: the PRDs marked replaced, whose items no longer feed Simple (service.load).
   markReplaced(db, db.simple_roadmap);
   const roadmapItems = db.simple_roadmap;
@@ -7855,6 +7892,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     knowCompanyGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
     knowGoalOrderGoals(db.baseline.entities);
+    // roadmap-milestones: its fourth goal names its work on every load.
+    if (db.simple_roadmap?.items.some((i) => i.key === "pricing-faq")) GOALS["win-teams"] = "Win larger teams";
     knowGoalParents(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served a page built from its own sections (vqa B-13), with its own draft and changes.
@@ -8306,7 +8345,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     const history = new Set(historyRoadmaps(db));
     simpleRows.simple_approvals = simpleRows.simple_approvals.filter((a) => !history.has(a.document.slug));
     inbox.simple_approvals = simpleRows.simple_approvals;
-    const simpleCounted = simpleRows.simple_proposals.length + simpleRows.simple_approvals.length + inbox.simple_date_suggestions.length + inbox.simple_goal_suggestions.length;
+    // tracks-goal (owner Nov 9): a new PRD of mine on no track, with Oracle's suggested track.
+    if (db.simple_roadmap) syncTracks(db.simple_roadmap);
+    // "track-suggestion-approver": the PRD is approver@example.com's, so a track an owner decides is proposed to them.
+    const suggestionScenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+    const prdOwners = suggestionScenario === "track-suggestion-approver" ? db.members.filter((x) => x.email === "approver@example.com").map((x) => x.id) : simpleCtx.owners;
+    inbox.simple_track_suggestions = db.simple_roadmap ? trackSuggestionRows(db.simple_roadmap, simpleCtx, seenBefore, suggestionScenario === "track-suggestion" || suggestionScenario === "track-suggestion-approver", prdOwners) : [];
+    // One waiting for its track's decider asks nothing of me: not counted.
+    const simpleCounted = simpleRows.simple_proposals.length + simpleRows.simple_approvals.length + inbox.simple_date_suggestions.length + inbox.simple_goal_suggestions.length + inbox.simple_track_suggestions.filter((x) => !x.proposed).length;
     inbox.total += simpleCounted;
     inbox.needs_me = (inbox.needs_me ?? 0) + simpleCounted;
     // Simple S8: minutes sent to me as an attendee (shown, not counted).
@@ -8947,6 +8993,8 @@ export async function mockFetch(req: Request): Promise<Response> {
   }
   const next = queue.then(async () => {
     const db = load();
+    // The text the call read (after a fresh seed's own save), to tell another tab's write from it.
+    const stored = localStorage.getItem(STORAGE_KEY);
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
     // simple-roadmap-500-paint: the roadmap and its waiting counts read the 500 items once while
     // the roadmap's data is the same; every other call reads afresh. The side menu's waiting list
@@ -8964,7 +9012,10 @@ export async function mockFetch(req: Request): Promise<Response> {
     // saves a stale copy over another tab's line, card or sign-in.
     // chat-reader: unless it read a pending line (the reader's job ended).
     const readerWrote = takeReaderWrote();
-    if (!(req.method === "GET" && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname)) || readerWrote) save(db);
+    // A read never undoes a write (as the API's reads): a GET that another tab wrote under since it
+    // loaded (a page still reading while someone saves) saves nothing; the next call reads theirs.
+    const overwrites = req.method === "GET" && localStorage.getItem(STORAGE_KEY) !== stored;
+    if (!overwrites && (!(req.method === "GET" && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname)) || readerWrote)) save(db);
     return res;
   });
   queue = next.catch(() => undefined);

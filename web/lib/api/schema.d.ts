@@ -28303,6 +28303,11 @@ export interface components {
              */
             simple_goal_suggestions: components["schemas"]["InboxSimpleGoalSuggestion"][];
             /**
+             * Simple Track Suggestions
+             * @default []
+             */
+            simple_track_suggestions: components["schemas"]["InboxSimpleTrackSuggestion"][];
+            /**
              * Simple Minutes
              * @default []
              */
@@ -28792,6 +28797,38 @@ export interface components {
              * @enum {string}
              */
             state: "new" | "open";
+        };
+        /**
+         * InboxSimpleTrackSuggestion
+         * @description tracks-goal (owner Nov 9): a newly accepted PRD of mine on no track. Oracle suggests
+         *     the existing track that fits it best (``track``; none fits: null); Confirm puts the PRD
+         *     on it, Pick a track on one of ``tracks``, New track starts one (each through the change
+         *     engine: ``edit_track`` with ``add_prd_id``, ``add_track``).
+         */
+        InboxSimpleTrackSuggestion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            prd: components["schemas"]["SimplePrdRef"];
+            track?: components["schemas"]["SimpleTrackChoice"] | null;
+            /**
+             * Tracks
+             * @default []
+             */
+            tracks: components["schemas"]["SimpleTrackChoice"][];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open";
+            proposed?: components["schemas"]["SimpleTrackProposed"] | null;
         };
         /** InboxSource */
         InboxSource: {
@@ -36859,6 +36896,11 @@ export interface components {
              */
             status: "active" | "paused";
             prd: components["schemas"]["ReportPrd"];
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["ReportPrd"][];
             /** Link */
             link: string;
             /** Health */
@@ -42179,6 +42221,8 @@ export interface components {
              */
             can_propose: boolean;
             carried_from?: components["schemas"]["SimpleDocRef"] | null;
+            /** Roadmap Code */
+            roadmap_code?: string | null;
         };
         /** SimpleGoalMilestoneIn */
         SimpleGoalMilestoneIn: {
@@ -42910,6 +42954,8 @@ export interface components {
              * @default []
              */
             targets: components["schemas"]["SimpleMilestoneTarget"][];
+            /** Roadmap Code */
+            roadmap_code?: string | null;
         };
         /**
          * SimpleMilestonePending
@@ -44478,6 +44524,60 @@ export interface components {
              */
             late: boolean;
         };
+        /** SimpleTrackChoice */
+        SimpleTrackChoice: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /** SimpleTrackGoal */
+        SimpleTrackGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * SimpleTrackPrdChoice
+         * @description tracks-goal: an accepted PRD a track can take, with the track it is on now.
+         */
+        SimpleTrackPrdChoice: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Track Id */
+            track_id?: string | null;
+            /** Track Title */
+            track_title?: string | null;
+        };
+        /**
+         * SimpleTrackProposed
+         * @description The open proposal a track suggestion waits for: which track (``title`` of a new
+         *     one), and whom it waits for.
+         */
+        SimpleTrackProposed: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            track?: components["schemas"]["SimpleTrackChoice"] | null;
+            /** Title */
+            title: string;
+            /** To Name */
+            to_name?: string | null;
+        };
         /** SimpleTrackRef */
         SimpleTrackRef: {
             /**
@@ -44487,6 +44587,10 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Goal Name */
+            goal_name?: string | null;
         };
         /** SimpleTrackRow */
         SimpleTrackRow: {
@@ -44506,13 +44610,19 @@ export interface components {
             owner_id?: string | null;
             /** Owner Name */
             owner_name?: string | null;
-            /**
-             * Prd Id
-             * Format: uuid
-             */
-            prd_id: string;
+            /** Prd Id */
+            prd_id?: string | null;
             /** Prd Title */
             prd_title?: string | null;
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["SimplePrdRef"][];
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Goal Name */
+            goal_name?: string | null;
             /**
              * Can Decide
              * @default false
@@ -44545,7 +44655,12 @@ export interface components {
             /** People */
             people: components["schemas"]["SimplePerson"][];
             /** Prds */
-            prds: components["schemas"]["SimplePrdRef"][];
+            prds: components["schemas"]["SimpleTrackPrdChoice"][];
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["SimpleTrackGoal"][];
         };
         /**
          * SimpleUpcomingMeeting
@@ -47881,7 +47996,12 @@ export interface components {
             status: "active" | "paused" | "closed";
             /** Owner Id */
             owner_id: string | null;
-            prd: components["schemas"]["DocumentRef"];
+            prd: components["schemas"]["DocumentRef"] | null;
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["DocumentRef"][];
             /** Started Version */
             started_version: number | null;
             /** Current Version */
@@ -47948,7 +48068,12 @@ export interface components {
             status: "active" | "paused" | "closed";
             /** Owner Id */
             owner_id: string | null;
-            prd: components["schemas"]["DocumentRef"];
+            prd: components["schemas"]["DocumentRef"] | null;
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["DocumentRef"][];
             /** Started Version */
             started_version: number | null;
             /** Current Version */

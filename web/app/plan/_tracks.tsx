@@ -600,12 +600,16 @@ function MilestoneForm({
   const [status, setStatus] = useState<MilestoneStatus>(m?.status ?? "planned");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const bases = useQuery(`plan|bases|${track.prd.slug}`, () =>
-    unwrap(
-      api.GET("/v1/schedule-bases", {
-        params: { query: { prd: track.prd.slug, status: "verified" } },
-      }),
-    ),
+  // tracks-goal: a track with no PRD has no date bases (a basis is a PRD's).
+  const prdSlug = track.prd?.slug;
+  const bases = useQuery(`plan|bases|${prdSlug ?? ""}`, () =>
+    prdSlug
+      ? unwrap(
+          api.GET("/v1/schedule-bases", {
+            params: { query: { prd: prdSlug, status: "verified" } },
+          }),
+        )
+      : Promise.resolve([]),
   );
   // qa-plan-7: the track's roadmap items by name, as the Plan's table lists them (its approved
   // rows on this track), not the roadmap document's sections.

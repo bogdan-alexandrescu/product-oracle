@@ -8,7 +8,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { UPDATE_SOURCES, type SectionSeed } from "./fixtures";
-import { dateMarks, type RoadmapDb } from "./roadmap";
+import { dateMarks, trackPrdIds, type RoadmapDb } from "./roadmap";
 
 export type UpdateTemplate = "investor-update" | "board-product";
 export type UpdatePeriod = Schemas["UpdatePeriod"];
@@ -260,7 +260,8 @@ export function updateDateMarks(
   sections: { section_key: string; level: number; heading: string; body_md: string }[],
 ): Schemas["DateMarkOut"][] {
   const db: RoadmapDb = roadmap ?? { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
-  const prds = [...new Set(db.tracks.filter((t) => t.status === "active").map((t) => t.prd_id))];
+  // tracks-goal: every PRD of every active track, not only each one's first.
+  const prds = [...new Set(db.tracks.filter((t) => t.status === "active").flatMap(trackPrdIds))];
   const rank = { unverified: 0, withdrawn: 1, verified: 2 } as const;
   const out = new Map<string, Schemas["DateMarkOut"]>();
   for (const prd of prds.length ? prds : [undefined]) {

@@ -16,7 +16,7 @@ import { useActed } from "./_actions";
 import { allNeeds, NeedTable, SOURCE_COLUMNS, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingCount, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 import { useQuestionRows } from "./_questions";
 import { minutesRows } from "./_minutes";
-import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows } from "./_proposals";
+import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows, trackSuggestionRows } from "./_proposals";
 import { useReminderRows } from "./_reminders";
 import { useWebhookRows } from "./_webhooks";
 
@@ -126,7 +126,7 @@ function Inbox() {
   const counted = (questionsQ.data !== undefined || !!questionsQ.error) && webhooks.rows !== null;
   // counts-wait review: a part whose read failed: the count says it is not the whole.
   const partial = !!questionsQ.error || !!webhooks.error;
-  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...(webhooks.rows ?? []), ...reminderRows, ...proposalRows(inbox.simple_proposals ?? [], busy, act, seenBefore), ...approvalRows(inbox.simple_approvals ?? [], seenBefore), ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seenBefore), ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seenBefore), ...minutesRows(inbox.simple_minutes ?? [])] : null;
+  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...(webhooks.rows ?? []), ...reminderRows, ...proposalRows(inbox.simple_proposals ?? [], busy, act, seenBefore), ...approvalRows(inbox.simple_approvals ?? [], seenBefore), ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seenBefore), ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seenBefore), ...trackSuggestionRows(inbox.simple_track_suggestions ?? [], busy, act, seenBefore), ...minutesRows(inbox.simple_minutes ?? [])] : null;
   const kindRows = rows && kind ? rows.filter((r) => needKind(r.group) === kind.id) : rows;
   // Under ?kind= the header counts that kind only, as Home's chip did.
   const waiting = kindRows && counted ? waitingNeeds(kindRows).length : undefined;

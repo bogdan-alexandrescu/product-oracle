@@ -393,7 +393,7 @@ async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
             else []
         )
     }
-    prd_ids = {t.prd_document_id for t in track_rows.values()}
+    prd_ids = {p for t in track_rows.values() for p in t.prd_ids}
     prds = {
         d.id: d
         for d in (
@@ -461,7 +461,7 @@ def out(
     a: TrackAlert, principal: "Principal", lk: Lookups, inbox_state: str | None = None
 ) -> TrackAlertOut:
     track = lk.tracks[a.track_id]
-    prd = lk.prds.get(track.prd_document_id)
+    prd = lk.prds.get(track.prd_ids[0]) if track.prd_ids else None
     may = actions(a, track, principal, lk.leads, lk.level)
     ask_lead = "ask" in may and lk.lead is not None and lk.lead.user_id != principal.user_id
     return TrackAlertOut(
@@ -692,15 +692,20 @@ async def accept_date(
     if reason and reason.strip():
         note += f": {reason.strip()}"
 
+    # tracks-goal: a date's basis is a PRD's: the issue's own, else the track's first.
+    prd_id = record.prd_document_id or (track.prd_ids[0] if track.prd_ids else None)
+    if prd_id is None:
+        # A track with no PRD takes its dates on the roadmap.
+        raise Conflict(f"{track.title} has no PRD to hold this date; change it on the roadmap")
     basis = ScheduleBasis(
         kind="estimate", reference=record.external_ref, supports_date=new_date,
-        detail=note, prd_document_id=track.prd_document_id,
+        detail=note, prd_document_id=prd_id,
         tracker_record_id=record.id, status="verified", verified_by=principal.id,
         verified_at=schedule.now(),
     )  # fmt: skip
     db.add(basis)
     await db.flush()
-    prd = await db.get(Document, track.prd_document_id)
+    prd = await db.get(Document, prd_id)
     await audit.record(
         db, principal, "schedule_basis.verified", "schedule_basis", basis.id,
         {"kind": basis.kind, "reference": basis.reference,
@@ -784,9 +789,10 @@ async def close_for_trash(
     them so a restore reopens the same ones (:func:`reopen_after_trash`)."""
     if not document_ids:
         return []
+    from oracle.roadmap.tracks import on_prd
+
     track_ids = select(ProductTrack.id).where(
-        ProductTrack.prd_document_id.in_(document_ids)
-        | ProductTrack.roadmap_document_id.in_(document_ids)
+        on_prd(document_ids) | ProductTrack.roadmap_document_id.in_(document_ids)
     )
     rows = list(
         await db.scalars(
@@ -876,7 +882,7 @@ async def inbox_rows(
     result: list[InboxTrack] = []
     for track_id, alerts in groups.items():
         track = track_rows[track_id]
-        prd = lk.prds.get(track.prd_document_id)
+        prd = lk.prds.get(track.prd_ids[0]) if track.prd_ids else None
         live = [a for a in alerts if a.state == "open"]
         counts = InboxTrackCounts(
             new=sum(1 for a in live if seen is None or a.opened_at > seen),

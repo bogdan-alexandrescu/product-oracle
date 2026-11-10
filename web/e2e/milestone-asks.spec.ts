@@ -30,14 +30,14 @@ async function open(page: Page, scenario: string, path: string, email?: string) 
   await page.goto(path);
 }
 
-/** Asks the PRD's owner, from M2 Digest for all teams' card on the roadmap, to move it to `date`. */
+/** Asks the PRD's owner, from Digest for all teams' card (its roadmap code, M<n>) on the roadmap, to move it to `date`. */
 async function ask(page: Page, date: string) {
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await page.getByTestId("ms-prd-label").filter({ hasText: "M2 Digest for all teams" }).click();
+  await page.getByTestId("ms-prd-label").filter({ hasText: /^M\d+ Digest for all teams$/ }).click();
   const prd = page.getByTestId("ms-prd-card");
   await prd.getByLabel("Date").fill(date);
   await prd.getByRole("button", { name: "Ask to change it" }).click();
-  await expect(page.getByTestId("ms-toast")).toContainText("to move M2 Digest for all teams");
+  await expect(page.getByTestId("ms-toast")).toContainText(/to move M\d+ Digest for all teams/);
   await page.keyboard.press("Escape");
 }
 
@@ -124,13 +124,13 @@ test("the PRD's owner declines an ask on Home when all its milestones are gone",
 test("an ask is sent to the PRD's track owners only, and the milestone names the first of them", async ({ page }) => {
   await open(page, "simple-prd-milestone-track-owner", "/simple/roadmap", "commenter@example.com");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await page.getByTestId("ms-prd-label").filter({ hasText: "M2 Digest for all teams" }).click();
+  await page.getByTestId("ms-prd-label").filter({ hasText: /^M\d+ Digest for all teams$/ }).click();
   const prd = page.getByTestId("ms-prd-card");
   await expect(prd).toContainText("From the PRD Usage alerts · owned by Rowan Pike");
   await expect(prd).toContainText("A change here goes to Rowan Pike as a change to the PRD");
   await prd.getByLabel("Date").fill("2027-01-20");
   await prd.getByRole("button", { name: "Ask to change it" }).click();
-  await expect(page.getByTestId("ms-toast")).toContainText("Asked Rowan Pike to move M2 Digest for all teams to Jan 20 in the PRD");
+  await expect(page.getByTestId("ms-toast")).toContainText(/Asked Rowan Pike to move M\d+ Digest for all teams to Jan 20 in the PRD/);
   await page.keyboard.press("Escape");
   await page.goto("/simple");
   const proposals = page.getByTestId("home-proposals");
@@ -149,7 +149,7 @@ test("each new browser seeds the same owners: the milestone names Rowan Pike eve
     const page = await context.newPage();
     await open(page, "simple-prd-milestone-track-owner", "/simple/roadmap");
     await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-    await page.getByTestId("ms-prd-label").filter({ hasText: "M2 Digest for all teams" }).click();
+    await page.getByTestId("ms-prd-label").filter({ hasText: /^M\d+ Digest for all teams$/ }).click();
     await expect(page.getByTestId("ms-prd-card")).toContainText("owned by Rowan Pike");
     await context.close();
   }

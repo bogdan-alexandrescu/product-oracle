@@ -11,6 +11,7 @@
 import { byPrdRank, prdRanker } from "./prd-rank";
 import type { Schemas } from "@/lib/api/client";
 import { goalPosition, sortGoals, type OrderedGoal } from "@/lib/goal-order";
+import { withRoadmapCodes } from "./roadmap-codes";
 import { plainFlow } from "./simple-visuals";
 import { leftOut } from "./decision-notes";
 import { mockNowMs } from "./clock";
@@ -198,6 +199,10 @@ interface SimpleDb {
   goal_edits?: Record<string, RoadmapGoalFields>;
   /** pre-demo QA P-6: item id -> the goal it serves on the Goal map (service._ladder_goals), read when the item has no goal of its own. */
   map_goals?: Record<string, Schemas["SimpleGoalRef"]>;
+  /** roadmap-milestone-codes: goal-ladder's Goal map milestones, which are this roadmap's own goal
+   * milestones in the API (goal_map._on_map reads the same rows), so the read codes them too
+   * (server.ts copies them from the map on each request: goalMapMilestones). */
+  map_milestones?: { roadmap: string; milestones: { id: string; name: string; date: string | null; goal_id: string; rank: number }[] };
   goal_jobs?: Record<string, { until: number; job_id: string; origin: "auto" | "on_demand" }>;
   auto_done?: string[];
   /** S7: the seeds a merge changed, as they were (change id -> seeds), for its undo. */
@@ -342,6 +347,13 @@ export const MAP_GOALS: Record<string, string> = {};
  * goal-map-editing: an item's own goal named by a confirmed goal's id (goal-ladder's), as the API's
  * goal_ids; none while that goal is in Trash or unknown (service.load leaves it out).
  */
+/** tracks-goal (service.load): the live company goal a track is tied to (the Tracks sheet's track_state), by id and name. */
+export function trackGoal(db: SimpleDb, track: string): { goal_id: string | null; goal_name: string | null } {
+  const id = (db as SimpleDb & { track_state?: Record<string, { goal?: string | null }> }).track_state?.[track]?.goal;
+  const g = id ? db.goal_buckets?.goals.find((x) => x.id === id && !x.archived && !x.trashed) : undefined;
+  return { goal_id: g?.id ?? null, goal_name: g?.title ?? null };
+}
+
 export function mapGoalRef(db: Pick<SimpleDb, "goal_buckets">, id: string): Schemas["SimpleGoalRef"] | null {
   if (!(id in MAP_GOALS) || db.goal_buckets?.goals.some((g) => g.id === id && g.trashed)) return null;
   return { id, key: id, title: MAP_GOALS[id], metric: null, position: null, target: null, due: null, current: null, unit: null };
@@ -1147,6 +1159,16 @@ export function prdTrackOwnerIds(db: SimpleDb, prdSlug: string): string[] {
   return [...tracks].flatMap((t) => (db.track_owners?.[t] ? [db.track_owners[t]] : []));
 }
 
+/** tracks-goal (the API's track.prd_ids): a track's PRDs by title, its first one first, as the Tracks sheet
+ * keeps them (track_state); a track the sheet has not read yet holds its first item's PRD, as the sheet seeds it. */
+export function trackPrdTitles(db: SimpleDb, track: string): string[] {
+  const st = (db as SimpleDb & { track_state?: Record<string, { prd: string; more?: string[] }> }).track_state?.[track];
+  if (st) return [st.prd, ...(st.more ?? [])].filter(Boolean);
+  const on = db.items.find((s) => s.track === track);
+  const first = on ? (on.prd_doc?.title ?? ROADMAPS[on.roadmap]?.prd ?? "") : "";
+  return first ? [first] : [];
+}
+
 /** A PRD's owners (drafts.who on its document), by person id in id order: the owners of its tracks
  * only. An ask of its milestones is sent to them (with none, the company's owners) and theirs to decide. */
 export function prdOwnerIdsOf(db: SimpleDb, prdSlug: string): string[] {
@@ -1522,7 +1544,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       prd: ownPrd(s),
       // service.load: the first goal it is linked to directly (goal_ids) that is not in Trash, else its Goal map goal.
       goal: linked(s) ? { id: stableUuid(`simple-goal/${linked(s)}`), key: linked(s)!, ...roadmapGoal(reader.full, linked(s)!), position: goalPositionOf(linked(s)!), ...READINGS[linked(s)!] } : s.map_goal ? mapGoalRef(reader.full, s.map_goal) : (reader.full.map_goals?.[db.ids[s.key]] ?? null),
-      track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
+      track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track], ...trackGoal(db, s.track) } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
       draft: !!s.draft,
@@ -1635,41 +1657,57 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     g.item_ids.push(i.id);
     groups.set(key, g);
   }
+  const goalRanks = new Map(Object.keys(GOALS).sort((a, b) => (goalOrderKey(a) < goalOrderKey(b) ? -1 : 1)).map((k, n) => [goalId(k), n]));
+  const trackMilestones = (slugs: string[]) => [
+    // The digest's Beta (a new company has no digest, so no Beta).
+    ...(db.ids["alert-digest"]
+      ? [{ id: stableUuid("simple-milestone/beta"), track_id: stableUuid("simple-track/alerts"), name: "Beta", date: addDays(w.now[0], 60), horizon: "now" as const, status: "planned" as const, item_ids: [db.ids["alert-digest"]], ...UNDATED }]
+      : []),
+    ...[...new Set(seeds.flatMap((s) => (s.record ? [s.record] : [])))].map((name) => {
+      const of = seeds.filter((s) => s.record === name);
+      return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: db.record_dates?.[name] ?? null, horizon: "now" as const, status: db.record_dropped?.includes(name) ? ("dropped" as const) : ("planned" as const), item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };
+    }),
+    // approved-roadmap-to-simple: each shown roadmap's applied version's milestones.
+    ...slugs.flatMap((slug) => appliedMilestones(db, slug)),
+    // The plan's dated milestones (M1-M3), each naming the items with a slice in it.
+    // roadmap-gantt: each planned PRD's own records ("simple-plan-two": two PRDs, M1-M3 each).
+    // simple-replaced-prds (service._milestone_out): a replaced PRD's items are not read, so its
+    // track has no PRD and its milestones keep their target day and counts only, no plan.
+    ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) => {
+      const inPlay = items.some((i) => i.prd?.slug === slug);
+      return planMilestones().map((m) => ({
+        id: stableUuid(slug === PLAN_PRD_SLUG ? `simple-plan-milestone/${m.code}` : `simple-plan-milestone/${slug}/${m.code}`),
+        track_id: stableUuid(`simple-track/${slug === PLAN_PRD_SLUG ? "onboarding" : (seeds.find((s) => ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") === slug)?.track ?? "onboarding")}`),
+        name: `${m.code} · ${m.name}`, date: m.end_date,
+        horizon: (m.end_date <= w.now[1] ? "now" : m.end_date <= w.next[1] ? "next" : "later") as Horizon, status: "planned" as const,
+        item_ids: items.filter((i) => i.prd?.slug === slug && i.milestones.includes(m.code)).map((i) => i.id),
+        ...(inPlay ? { start_date: m.start_date, end_date: m.end_date, effort_weeks: m.effort_weeks, done_when: m.done_when, targets: m.targets } : UNDATED),
+      }));
+    }),
+  ];
+  // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them);
+  // while the company roadmap exists, its own alone (older roadmaps are history, company.feeding_ids).
+  const liveGoalMilestones = (db.goal_milestones ?? []).filter((m) => !m.deleted && (!db.company_roadmap || m.roadmap === db.company_roadmap) && readable.includes(m.roadmap));
+  const goalMilestoneOut = (x: (typeof liveGoalMilestones)[number]) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer", me && { role: me.role, id: me.id, names: me.names, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, (slug) => roadmapTitle(db, slug));
+  // roadmap-milestone-codes: each milestone's one code across every readable roadmap and item, numbered
+  // before the filters so a filtered read shows the codes Home and the Goal map show (oracle.simple.service).
+  const onMap = db.map_milestones && readable.includes(db.map_milestones.roadmap) ? db.map_milestones : null;
+  const mapRanks = new Map((onMap?.milestones ?? []).map((m) => [m.goal_id, m.rank]));
+  const mapMilestoneOut = (m: NonNullable<typeof onMap>["milestones"][number]): Schemas["SimpleGoalMilestone"] => ({
+    id: m.id, roadmap_id: roadmapId(onMap!.roadmap), code: "", name: m.name, date: m.date, goal_id: m.goal_id, item_ids: [], counts_when: "", progress: "not_started",
+    prd: null, prd_owner: null, pending: null, can_change: false, can_propose: false, carried_from: null,
+  });
+  const goalMilestonesOf = (slug?: string | null) => [...liveGoalMilestones.filter((m) => !slug || m.roadmap === slug).map(goalMilestoneOut), ...(onMap && (!slug || onMap.roadmap === slug) ? onMap.milestones.map(mapMilestoneOut) : [])];
+  const coded = withRoadmapCodes({ goal_milestones: goalMilestonesOf(null), milestones: trackMilestones(readable), items }, (id) => goalRanks.get(id) ?? mapRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
+  const codeOf = new Map<string, string | null>([...coded.goal_milestones, ...(coded.milestones as { id: string; roadmap_code?: string | null }[])].map((m) => [m.id, m.roadmap_code ?? null]));
+  const withCode = <M extends { id: string }>(m: M) => ({ ...m, roadmap_code: codeOf.get(m.id) ?? null });
   return {
     today, group,
     windows: { now: { start: w.now[0], end: w.now[1] }, next: { start: w.next[0], end: w.next[1] }, later: { start: w.later[0], end: w.later[1] } },
     groups: [...groups.entries()].sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
     items: shown,
-    milestones: [
-      // The digest's Beta (a new company has no digest, so no Beta).
-      ...(db.ids["alert-digest"]
-        ? [{ id: stableUuid("simple-milestone/beta"), track_id: stableUuid("simple-track/alerts"), name: "Beta", date: addDays(w.now[0], 60), horizon: "now" as const, status: "planned" as const, item_ids: [db.ids["alert-digest"]], ...UNDATED }]
-        : []),
-      ...[...new Set(seeds.flatMap((s) => (s.record ? [s.record] : [])))].map((name) => {
-        const of = seeds.filter((s) => s.record === name);
-        return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: db.record_dates?.[name] ?? null, horizon: "now" as const, status: db.record_dropped?.includes(name) ? ("dropped" as const) : ("planned" as const), item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };
-      }),
-      // approved-roadmap-to-simple: each shown roadmap's applied version's milestones.
-      ...(chosen ? [chosen] : readable).flatMap((slug) => appliedMilestones(db, slug)),
-      // The plan's dated milestones (M1-M3), each naming the items with a slice in it.
-      // roadmap-gantt: each planned PRD's own records ("simple-plan-two": two PRDs, M1-M3 each).
-      // simple-replaced-prds (service._milestone_out): a replaced PRD's items are not read, so its
-      // track has no PRD and its milestones keep their target day and counts only, no plan.
-      ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) => {
-        const inPlay = items.some((i) => i.prd?.slug === slug);
-        return planMilestones().map((m) => ({
-          id: stableUuid(slug === PLAN_PRD_SLUG ? `simple-plan-milestone/${m.code}` : `simple-plan-milestone/${slug}/${m.code}`),
-          track_id: stableUuid(`simple-track/${slug === PLAN_PRD_SLUG ? "onboarding" : (seeds.find((s) => ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") === slug)?.track ?? "onboarding")}`),
-          name: `${m.code} · ${m.name}`, date: m.end_date,
-          horizon: (m.end_date <= w.now[1] ? "now" : m.end_date <= w.next[1] ? "next" : "later") as Horizon, status: "planned" as const,
-          item_ids: items.filter((i) => i.prd?.slug === slug && i.milestones.includes(m.code)).map((i) => i.id),
-          ...(inPlay ? { start_date: m.start_date, end_date: m.end_date, effort_weeks: m.effort_weeks, done_when: m.done_when, targets: m.targets } : UNDATED),
-        }));
-      }),
-    ],
-    // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them);
-    // while the company roadmap exists, its own alone (older roadmaps are history, company.feeding_ids).
-    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (!db.company_roadmap || m.roadmap === db.company_roadmap) && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer", me && { role: me.role, id: me.id, names: me.names, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, (slug) => roadmapTitle(db, slug))),
+    milestones: trackMilestones(chosen ? [chosen] : readable).map(withCode),
+    goal_milestones: goalMilestonesOf(chosen).map(withCode),
     old_milestones: oldMilestonesOut(db.goal_milestones ?? [], role, oldCtx(db)),
     // service.build: the span of the shown items' PRDs' plans only (a replaced plan PRD's goes with its items).
     span: db.plan && shown.some((i) => !!i.prd && (i.prd.slug === PLAN_PRD_SLUG || !!db.plan?.prds?.includes(i.prd.slug))) ? planSpan() : null,
