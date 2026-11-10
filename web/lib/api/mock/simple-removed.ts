@@ -8,7 +8,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { mockNowMs } from "./clock";
-import { seedGoalBuckets } from "./goal-buckets";
+import { lazyGoalBuckets, seedGoalBuckets } from "./goal-buckets";
 import { stableUuid } from "./ids";
 import { canDecideItem, canEditRoadmap, closed, deciderIds, GOALS, ROADMAPS, TRACKS, trackGoal, type SimpleDb } from "./simple-roadmap";
 import type { MockMilestone } from "./simple-milestones";
@@ -63,7 +63,7 @@ const closeAsked = (db: Db, by: string, prds: string[]) => {
 const asked = (db: Db, prds: string[]) => prds.some((p) => askedFor(db, p) || (db.changes ?? []).some((c) => c.status === "proposed" && c.op === "edit_track" && (c.after as { remove_prd_id?: string }).remove_prd_id === p));
 
 /** The company's goals a track may be tied to: neither archived nor in Trash, in their order. */
-const liveGoals = (db: Db) => (db.goal_buckets ??= seedGoalBuckets()).goals.filter((g) => !g.archived && !g.trashed).sort((a, b) => a.order - b.order);
+const liveGoals = (db: Db) => (db.goal_buckets ??= lazyGoalBuckets()).goals.filter((g) => !g.archived && !g.trashed).sort((a, b) => a.order - b.order);
 /** tracks-goal: a track's PRDs, its first one first. */
 export const prdsOf = (st: TrackState | undefined): string[] => (st ? [st.prd, ...(st.more ?? [])].filter(Boolean) : []);
 const setPrds = (st: TrackState, titles: string[]) => {
@@ -122,7 +122,7 @@ function seed(db: Db, ctx: RemovedCtx): Log {
   const owner = ctx.owners[0] ?? ctx.id;
   const other = Object.keys(ctx.names).find((x) => x !== owner) ?? owner;
   db.items.filter((s) => s.status === "cut").forEach((s, n) => (log[`feature:${s.key}`] = { at: daysAgo(15 + 7 * n), by: n % 2 ? other : owner }));
-  const gb = (db.goal_buckets ??= seedGoalBuckets());
+  const gb = (db.goal_buckets ??= lazyGoalBuckets());
   const gid = stableUuid(`goal-bucket/${ARCHIVED_GOAL}`);
   if (!gb.goals.some((g) => g.id === gid)) gb.goals.push({ id: gid, key: "fewer-billing-tickets", title: ARCHIVED_GOAL, order: gb.goals.length + 1, measure: "Billing tickets a month", target: "Under 40", due: "2027-06-30", archived: true });
   log[`goal:${gid}`] = { at: daysAgo(17), by: other };

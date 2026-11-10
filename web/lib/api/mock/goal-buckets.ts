@@ -18,7 +18,8 @@ import { GOALS, goalPositionOf, goalRank, goalInTrash, roadmapGoal, roadmapGoalK
 type Goal = { id: string; key: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null; position?: number | null; on_roadmap?: boolean };
 /** assumed_goal_ids: the links whose contribution is assumed (an approved order's, api ASSUMED_LINK). */
 type Feature = { id: string; key: string; title: string; goal_ids: string[]; assumed_goal_ids?: string[] };
-export type GoalBucketsDb = { goals: Goal[]; features: Feature[] };
+/** lazy: the default goals, seeded by the first route that read them rather than by the scenario. */
+export type GoalBucketsDb = { goals: Goal[]; features: Feature[]; lazy?: string[] };
 type Undo = Schemas["GoalBucketsUndo"];
 
 const keyOf = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "goal";
@@ -80,6 +81,13 @@ export function seedGoalBuckets(): GoalBucketsDb {
  * all 15 of the plan's features that fall only in M2 and M3 (the plan's F-07..F-20 confined to
  * those two, plus F-22, the scenario's extra one), four of which also serve Growth. Invented data.
  */
+/** The default goals for a route that reads them first; the roadmap's goal targets leave them out (lazy), so a
+ * roadmap read is the same before and after another page seeds them. */
+export function lazyGoalBuckets(): GoalBucketsDb {
+  const db = seedGoalBuckets();
+  return { ...db, lazy: db.goals.map((g) => g.id) };
+}
+
 export function seedGoalBucketsHard(): GoalBucketsDb {
   const base = seedGoalBuckets();
   const bigId = stableUuid("goal-bucket/grow-partner-network");
@@ -318,7 +326,7 @@ function goalKeyResultsBuckets(simple: { items?: { key: string; title: string; g
 
 /** The goal buckets' db, its seeded owners matched to the members by email. */
 export function goalBucketsDb(simple: { goal_buckets?: GoalBucketsDb; items?: { key: string; title: string; goal?: string; draft?: boolean }[] }, people: GoalPeople = []): GoalBucketsDb {
-  const db = (simple.goal_buckets ??= goalKeyResultsBuckets(simple) ?? seedGoalBuckets());
+  const db = (simple.goal_buckets ??= goalKeyResultsBuckets(simple) ?? lazyGoalBuckets());
   for (const g of db.goals) {
     if (g.owner_email && g.owner_id === undefined) g.owner_id = people.find((x) => x.email === g.owner_email)?.id ?? null;
   }

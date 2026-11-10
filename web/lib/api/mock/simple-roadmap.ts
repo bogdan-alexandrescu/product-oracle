@@ -1699,7 +1699,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       const f = roadmapGoal(db, k);
       goals.push({ key: k, id: goalId(k), title: f.title ?? GOALS[k], due: b?.due ?? f.due, on: b?.on_roadmap ?? db.goal_on_roadmap?.[k] ?? true, metric: f.metric });
     }
-    for (const b of buckets) if (!matched.has(b.id) && !b.archived) goals.push({ key: b.key, id: b.id, title: b.title, due: b.due, on: b.on_roadmap ?? true, metric: b.measure });
+    // The default goals a route seeded on first read (lazyGoalBuckets) are not this roadmap's goals.
+    const lazy = new Set(db.goal_buckets?.lazy ?? []);
+    for (const b of buckets) if (!matched.has(b.id) && !b.archived && !lazy.has(b.id)) goals.push({ key: b.key, id: b.id, title: b.title, due: b.due, on: b.on_roadmap ?? true, metric: b.measure });
     const company = db.company_roadmap && readable.includes(db.company_roadmap) ? db.company_roadmap : null;
     return goals.flatMap((g) => {
       if (!g.due || !g.on) return [];
