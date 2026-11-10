@@ -478,6 +478,15 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const notesFor = (id: string) => v.notes.filter((n) => n.line_id === id);
   const plan = planNow ?? planQ.data ?? null;
   const planShown = !!plan && plan.status !== "none" && plan.milestones.length > 0;
+  // Owner, Nov 10: the plan's card also lists the PRD's roadmap items with no plan milestone (the strip's "No milestone" row).
+  const timelineById = new Map(v.timeline.map((t) => [t.id, t]));
+  const loose = (v.plan?.rows ?? [])
+    .filter((r) => !r.milestone)
+    .flatMap((r) => r.item_ids ?? [])
+    .flatMap((id) => {
+      const t = timelineById.get(id);
+      return t ? [{ id, title: t.title, code: codes.get(id) ?? null }] : [];
+    });
   const summary = docQ.data ?? null;
   // qa-simple-prd-18: a draft whose changes were all undone shows no banner.
   const draftShown = !!v.draft && (v.draft.changes > 0 || v.draft.status === "submitted");
@@ -678,7 +687,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
         )}
         {planShown && (
           <div aria-busy={updating} className={updating ? "opacity-60" : undefined}>
-            <PrdPlan plan={plan!} title={v.document.title} prd={v.document.slug} onPlan={(p) => {
+            <PrdPlan plan={plan!} title={v.document.title} prd={v.document.slug} loose={loose} onPlan={(p) => {
               setPlanNote(null);
               if (p.status === "reading") setUpdating(true);
               else setPlanNow(p);
