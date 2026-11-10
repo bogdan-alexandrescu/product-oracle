@@ -15,6 +15,22 @@ import { expect, test, type Page } from "./test";
  * its From and To tracks, kept after a reload; fails_when = the kind or the tracks are not saved.
  * Card milestone-kind-first: protects = "+ Milestone" asks for the kind first and the new milestone
  * has that kind; fails_when = the card opens with no kind asked.
+ *
+ * Fidelity to the picks (tb-variants ?tb=c, mk-variants ?mk=b):
+ * Card tb-phone-list: protects = on a phone, an item row in a band reads its dates only, the No
+ * track band reads "No track", and each quarter's milestone row leads with its kind's icon and ends
+ * with its status mark; fails_when = a row carries its goal, or a milestone row is a plain diamond.
+ * Card tb-no-track-head: protects = the desktop Timeline's No track header reads "No track" with no
+ * count at 3 and 6 months; fails_when = it reads "No track · N items".
+ * Card ms-axis-clear: protects = an approved milestone's chip never lies under a band diamond, and at
+ * 6 months no band label is cut to its code; fails_when = they overlap, or a label reads "M…".
+ * Card tb-phone-gantt-long: protects = a long track name in the phone Gantt ends in an ellipsis with
+ * its health mark and goal line in view; fails_when = the name pushes them out of its column.
+ * Card ms-tip-words: protects = a label's tooltip reads "Builds toward <goal>", "Served by N items"
+ * and its measure line; fails_when = it reads "Advances" or "Waits on", or lacks the measure.
+ * Card ms-panel-rows: protects = the panel sets Date and Track side by side (a hand-off: its From and
+ * To instead), Builds toward and Sub-goal of side by side under the measure, the Track kept after a
+ * reload; fails_when = they stack, or the Track is lost.
  */
 
 async function open(page: Page) {
@@ -157,5 +173,134 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     await card(page).getByTestId("ms-save").click();
     await expect(card(page)).toBeHidden();
     await expect(page.getByTestId("ms-label").filter({ hasText: "Pick the alert sound" }).getByTestId("mk-icon")).toHaveAttribute("data-kind", "decision");
+  });
+
+  test("on a phone the quarter list reads each row's dates only, No track bare, and each milestone with its kind's icon and status mark", async ({ page }) => {
+    await open(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await expect(page.getByTestId("timeline-list")).toBeVisible();
+    // Each item row in a band: its dates only (its goal is in the band's header).
+    const dates = page.getByTestId("timeline-row-dates");
+    expect(await dates.count()).toBeGreaterThan(3);
+    for (const t of await dates.allInnerTexts()) expect(t.trim()).toMatch(/^[A-Z][a-z]{2} \d{1,2}(, \d{4})? – [A-Z][a-z]{2} \d{1,2}(, \d{4})?$/);
+    // The No track band reads just "No track", as the track bands' headers name no count.
+    const bands = (await page.getByTestId("timeline-band").allInnerTexts()).map((t) => t.trim());
+    expect(bands).toContain("No track");
+    expect(bands.some((t) => /^No track .*item/.test(t))).toBe(false);
+    // Each quarter's milestone row: its kind's icon first, its status mark last, the reason in its tap text.
+    const row = page.getByTestId("ms-quarter-row").first();
+    await expect(row.getByTestId("mk-icon")).toHaveAttribute("data-kind", /^(goal|sub_goal|delivery|decision|outside|handoff)$/);
+    await expect(row.getByTestId("ms-status")).toHaveAttribute("data-status", /^(on_track|at_risk|hit|missed)$/);
+    await expect(row).toHaveAttribute("title", /^(Goal|Sub-goal|Delivery|Decision|Outside date|Hand-off) · (On track|At risk|Hit|Missed)/);
+    await expect(page.getByTestId("ms-quarter").locator("i.rotate-45")).toHaveCount(0);
+  });
+
+  test("the No track header reads No track with no count, at 3 and 6 months", async ({ page }) => {
+    await open(page);
+    for (const z of ["3m", "6m"]) {
+      await page.getByTestId(`zoom-${z}`).click();
+      const none = lanes(page).filter({ hasText: /^No track/ });
+      await expect(none).toHaveCount(1);
+      await expect(none).toHaveText("No track");
+    }
+  });
+
+  test("the axis: an approved milestone's chip clears every diamond; at 6 months no band label is cut to its code", async ({ page }) => {
+    await open(page);
+    const boxes = async (id: string) => (await page.getByTestId(id).evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ l: r.left, r: r.right, t: r.top, b: r.bottom }))));
+    for (const z of ["3m", "6m"]) {
+      await page.getByTestId(`zoom-${z}`).click();
+      await expect(page.getByTestId("timeline-milestone").first()).toBeVisible();
+      const chips = await boxes("timeline-milestone");
+      const gems = [...(await boxes("ms-diamond")), ...(await boxes("ms-prd-diamond"))];
+      expect(gems.length).toBeGreaterThan(0);
+      for (const c of chips) for (const g of gems) expect(c.r <= g.l || c.l >= g.r || c.b <= g.t || c.t >= g.b, `chip ${JSON.stringify(c)} on diamond ${JSON.stringify(g)}`).toBe(true);
+    }
+    // 6 months: each label keeps more than its code ("M3 F…", never "M…").
+    const widths = await page.getByTestId("ms-label").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
+    expect(widths.length).toBeGreaterThan(4);
+    for (const w of widths) expect(w).toBeGreaterThan(70);
+  });
+
+  test("on a phone the Gantt's long track name ends in an ellipsis, its health mark and goal in view", async ({ page }) => {
+    await open(page);
+    await page.getByTestId("tracks-open").click();
+    const sheet = page.getByTestId("tracks-sheet");
+    await sheet.getByRole("button", { name: "Change Usage alerts track" }).click();
+    const long = "Usage alerts and partner marketplace listings track";
+    await sheet.getByRole("button", { name: "Rename Usage alerts track" }).click();
+    await sheet.getByLabel("Track name").fill(long);
+    await sheet.getByLabel("Track name").press("Enter");
+    const row = sheet.getByTestId("track-row").filter({ has: page.getByText(long, { exact: true }) });
+    const goal = row.getByLabel("Goal", { exact: true });
+    const goalName = (await goal.locator("option").nth(1).textContent())!.trim();
+    await goal.selectOption({ label: goalName });
+    await expect(page.getByTestId("toasts")).toContainText(`goal is now ${goalName}`);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await page.getByTestId("format-gantt").click();
+    const group = page.getByTestId("chart-group").filter({ hasText: long.slice(0, 8) }).first();
+    await expect(group).toBeVisible();
+    const box = (await group.boundingBox())!;
+    const name = group.getByTestId("track-name-tip").locator("span").first();
+    expect(await name.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true);
+    const mark = (await group.getByTestId("track-health").boundingBox())!;
+    expect(mark.x + mark.width).toBeLessThanOrEqual(box.x + box.width);
+    expect(mark.width).toBeGreaterThan(4);
+    const goalLine = group.getByText(goalName, { exact: true });
+    await expect(goalLine).toBeVisible();
+    const g = (await goalLine.boundingBox())!;
+    expect(g.y + g.height).toBeLessThanOrEqual(box.y + box.height + 1);
+  });
+
+  test("a label's tooltip reads Builds toward, Served by and its measure line", async ({ page }) => {
+    await open(page);
+    const l = label(page, "M1 Alerts live for 50 teams");
+    await l.hover();
+    const tip = page.getByTestId("ms-band-tip");
+    await expect(tip).toContainText(/Builds toward \S/);
+    await expect(tip).toContainText(/Served by \d+ items?/);
+    await expect(tip).not.toContainText("Advances");
+    await expect(tip).not.toContainText("Waits on");
+    await l.click();
+    await card(page).getByLabel("Measure").fill("Teams set up");
+    await card(page).getByLabel("Baseline").fill("35");
+    await card(page).getByLabel("Target").fill("60");
+    await card(page).getByTestId("ms-save").click();
+    await expect(card(page)).toBeHidden();
+    await label(page, "M1 Alerts live for 50 teams").hover();
+    await expect(page.getByTestId("ms-tip-done")).toHaveText(/^Teams set up: 35 → 60( \(now .+\))?$/);
+  });
+
+  test("the panel sets Date and Track side by side, Builds toward and Sub-goal of under the measure; the Track holds after a reload", async ({ page }) => {
+    await open(page);
+    await label(page, "M1 Alerts live for 50 teams").click();
+    const c = card(page);
+    const dateRow = c.getByTestId("ms-date-row");
+    const top = async (l: ReturnType<Page["getByTestId"]>) => (await l.boundingBox())!.y;
+    // Two fields side by side: the row's two labels (Date | Track; Builds toward | Sub-goal of) share a top.
+    const pair = async (row: ReturnType<Page["getByTestId"]>, a: string, b: string) => {
+      const fields = row.locator(":scope > label");
+      await expect(fields).toHaveCount(2);
+      await expect(fields.nth(0)).toContainText(a);
+      await expect(fields.nth(1)).toContainText(b);
+      expect(Math.abs((await top(fields.nth(0))) - (await top(fields.nth(1))))).toBeLessThan(2);
+    };
+    await pair(dateRow, "Date", "Track");
+    const toward = c.getByTestId("ms-toward-row");
+    await pair(toward, "Builds toward", "Sub-goal of");
+    expect(await top(toward)).toBeGreaterThan(await top(c.getByTestId("ms-measure")));
+    await dateRow.getByLabel("Track").selectOption({ label: "Guided setup track" });
+    await c.getByTestId("ms-save").click();
+    await expect(c).toBeHidden();
+    await page.reload();
+    await label(page, "M1 Alerts live for 50 teams").click();
+    await expect(card(page).getByTestId("ms-date-row").getByLabel("Track").locator("option:checked")).toHaveText("Guided setup track");
+    // A hand-off names its From and To tracks instead.
+    await card(page).getByLabel("Kind").selectOption({ label: "Hand-off" });
+    await expect(card(page).getByTestId("ms-date-row").getByLabel("Track")).toHaveCount(0);
+    await expect(card(page).getByLabel("From track")).toBeVisible();
+    await expect(card(page).getByLabel("To track")).toBeVisible();
   });
 });
