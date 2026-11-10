@@ -126224,7 +126224,9 @@
           "baseline": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "exclusiveMaximum": 100000000000000.0,
+                "exclusiveMinimum": -100000000000000.0
               },
               {
                 "type": "null"
@@ -126235,7 +126237,9 @@
           "target": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "exclusiveMaximum": 100000000000000.0,
+                "exclusiveMinimum": -100000000000000.0
               },
               {
                 "type": "null"
@@ -126246,7 +126250,9 @@
           "current": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "exclusiveMaximum": 100000000000000.0,
+                "exclusiveMinimum": -100000000000000.0
               },
               {
                 "type": "null"
@@ -126451,7 +126457,9 @@
           "baseline": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "exclusiveMaximum": 100000000000000.0,
+                "exclusiveMinimum": -100000000000000.0
               },
               {
                 "type": "null"
@@ -126462,7 +126470,9 @@
           "target": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "exclusiveMaximum": 100000000000000.0,
+                "exclusiveMinimum": -100000000000000.0
               },
               {
                 "type": "null"
@@ -126473,7 +126483,9 @@
           "current": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "exclusiveMaximum": 100000000000000.0,
+                "exclusiveMinimum": -100000000000000.0
               },
               {
                 "type": "null"

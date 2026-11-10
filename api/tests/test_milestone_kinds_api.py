@@ -359,7 +359,8 @@ async def test_numbers_fit_the_column(client, bad):
     assert r.status_code == 422, r.text
     seen = {k: m[k] for k in ("name", "date", "goal_id", "item_ids", "counts_when")}
     ask = {"op": "edit_goal_milestone", "target": {"milestone_id": m["id"]},
-           "before": {"milestone": seen}, "after": {"milestone": {**seen, "current": bad}}}  # fmt: skip
+           "before": {"milestone": seen},
+           "after": {"milestone": {**seen, "current": bad}}}  # fmt: skip
     r = await send(client, ctx, "POST", CHANGES, "approver", ask)
     assert r.status_code == 422, r.text
 

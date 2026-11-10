@@ -3,7 +3,7 @@ change engine's sessions and changes; S3b: working drafts."""
 
 import datetime as dt
 import uuid
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -465,6 +465,9 @@ class SimpleAppliedVersion(BaseModel):
 # milestone-kinds (owner): every roadmap milestone is one of six kinds, with a status.
 MilestoneKind = Literal["sub_goal", "goal", "delivery", "decision", "outside", "handoff"]
 MilestoneStatus = Literal["on_track", "at_risk", "hit", "missed"]
+# A milestone's baseline, target or reading: fits its Numeric(20, 6) column (14 digits before
+# the point), never NaN or infinity.
+MilestoneNumber = Annotated[float, Field(gt=-1e14, lt=1e14, allow_inf_nan=False)]
 
 
 class SimpleKeyDate(BaseModel):
@@ -581,9 +584,9 @@ class SimpleGoalMilestoneIn(BaseModel):
     status_set: MilestoneStatus | None = None
     status_reason: str | None = Field(default=None, max_length=300)
     measure: str | None = Field(default=None, max_length=120)
-    baseline: float | None = None
-    target: float | None = None
-    current: float | None = None
+    baseline: MilestoneNumber | None = None
+    target: MilestoneNumber | None = None
+    current: MilestoneNumber | None = None
     sub_goal_of_id: uuid.UUID | None = None
     home_track_id: uuid.UUID | None = None
     from_track_id: uuid.UUID | None = None
@@ -602,9 +605,9 @@ class SimpleGoalMilestonePatch(BaseModel):
     status_set: MilestoneStatus | None = None
     status_reason: str | None = Field(default=None, max_length=300)
     measure: str | None = Field(default=None, max_length=120)
-    baseline: float | None = None
-    target: float | None = None
-    current: float | None = None
+    baseline: MilestoneNumber | None = None
+    target: MilestoneNumber | None = None
+    current: MilestoneNumber | None = None
     sub_goal_of_id: uuid.UUID | None = None
     home_track_id: uuid.UUID | None = None
     from_track_id: uuid.UUID | None = None
