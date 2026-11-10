@@ -17,6 +17,7 @@ export function InfoTip({
   trigger,
   testId = "info-tip",
   id: given,
+  lazy = false,
 }: {
   /** What the tip is about; the button's name is "About <label>". */
   label: string;
@@ -32,6 +33,8 @@ export function InfoTip({
   testId?: string;
   /** The tip text's id, for a control the tip explains to name in its aria-describedby. */
   id?: string;
+  /** Renders the tip's text only while it shows, so the text round it (a band's header) reads without it. */
+  lazy?: boolean;
 }) {
   const own = useId();
   const id = given ?? own;
@@ -150,7 +153,7 @@ export function InfoTip({
         hidden={!shown}
         className="fixed z-50 w-max max-w-[min(380px,calc(100vw-24px))] rounded-button bg-tip px-3.5 py-2.5 text-left text-sm leading-5 font-normal tracking-normal whitespace-normal text-tip-text not-italic shadow-tip"
       >
-        {children}
+        {lazy && !shown ? null : children}
       </span>
     </span>
   );

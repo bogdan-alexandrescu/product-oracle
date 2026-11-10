@@ -45,7 +45,7 @@ export function TrackHead({ data, laneKey, title, stack = false }: { data: Roadm
   const name = <span className="truncate font-semibold">{t.title}</span>;
   const prds = t.prds.map((p) => p.title).join(", ");
   const nameTip = (
-    <InfoTip label={t.title} align="start" side="bottom" testId="track-name-tip" trigger={name}>
+    <InfoTip label={t.title} align="start" side="bottom" testId="track-name-tip" trigger={name} lazy>
       <span className="block font-semibold">{t.title}</span>
       <span className="block">Owner: {t.owner_name ?? "none"}</span>
       <span className="block">PRD: {prds || "none"}</span>
@@ -53,7 +53,7 @@ export function TrackHead({ data, laneKey, title, stack = false }: { data: Roadm
   );
   const health = (
     <span data-testid="track-health" data-health={t.health}>
-      <InfoTip label={t.health === "on_track" ? "On track" : "Needs a look"} align="start" side="bottom" testId="track-health-tip" trigger={<Mark t={t} />}>
+      <InfoTip label={t.health === "on_track" ? "On track" : "Needs a look"} align="start" side="bottom" testId="track-health-tip" trigger={<Mark t={t} />} lazy>
         {t.health_reason}
       </InfoTip>
     </span>
