@@ -213,11 +213,12 @@ export function seedPrdMilestones(): MockMilestone[] {
 }
 
 /** roadmap-decide: a change asked of a PRD's milestone (goal_milestones._propose_prd_change), waiting on the PRD's owners. */
-function prdAsk(m: MockMilestone, id: string, after: { date: string | null; counts_when: string | null }, by: string, byName: string, at: string, routed: string[]): Schemas["SimpleChangeOut"] {
+function prdAsk(m: MockMilestone, id: string, after: { date: string | null; counts_when: string | null; name?: string }, by: string, byName: string, at: string, routed: string[]): Schemas["SimpleChangeOut"] {
   return {
     id, session_id: null, document_id: stableUuid(`simple-doc/${m.prd!.slug}`), op: "edit_goal_milestone", draft_ids: [],
     target: { milestone_id: m.id, roadmap_id: stableUuid(`simple-doc/${m.roadmap}`), name: m.name },
-    before: { date: m.date, counts_when: m.counts_when }, after,
+    // milestone-rename: an asked name holds the name it had too.
+    before: { date: m.date, counts_when: m.counts_when, ...(after.name !== undefined ? { name: m.name } : {}) }, after,
     status: "proposed", by, by_name: byName, at,
     decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: routed, undoes_id: null, undone: false,
     can_decide: false, can_undo: false, words: "", from_meeting: null, off_agenda: false,
@@ -375,15 +376,21 @@ export async function routeMilestones(
     if (isHistory(m.roadmap)) return history;
     const b = (await req.json()) as Schemas["SimpleGoalMilestonePatch"];
     if (m.prd) {
-      // Its name, goal and items are the PRD's own: only date and counts_when are proposed.
+      // Its goal and items are the PRD's own: only name, date and counts_when are proposed.
       const sent = Object.keys(b);
-      if (sent.some((k) => k === "name" || k === "goal_id" || k === "item_ids") || !sent.some((k) => k === "date" || k === "counts_when"))
-        return json(422, { detail: "A PRD's milestone: only date and counts_when may be proposed (name, goal and items are the roadmap's own)" });
+      if (sent.some((k) => k !== "name" && k !== "date" && k !== "counts_when") || !sent.length || ("name" in b && !String(b.name ?? "").trim()))
+        return json(422, { detail: "A PRD's milestone: only name, date and counts_when may be proposed (goal and items are the roadmap's own)" });
+      // milestone-rename (_propose_prd_change): the PRD's owner (or a company owner) renames it directly.
+      const name = "name" in b ? String(b.name).trim() : undefined;
+      if (sent.join() === "name" && decidesAsk(m, me)) {
+        m.name = name!;
+        return json(200, milestoneOut(m, db.ids, true, false, me));
+      }
       // A change to the PRD's milestone asks its owner (a proposed change to the PRD); it stays put.
       m.pending = null;
       // roadmap-decide: the ask is a proposed change on the PRD (goal_milestones.create), the PRD owner's to decide.
       // As goal_milestones._propose_prd_change, an older ask on it stays proposed (it waits no more: only declining closes it).
-      if (b.date !== m.date || b.counts_when) {
+      if (b.date !== m.date || b.counts_when || (name !== undefined && name !== m.name)) {
         const changes = (db.changes ??= []);
         // Each ask its own id (two asks of one date too), so each is decided on its own.
         let n = changes.length;
@@ -393,8 +400,8 @@ export async function routeMilestones(
         // it waits for the first of them (asked_of_name).
         const owners = me.prdOwners?.(m.prd.slug) ?? [];
         const routed = owners.length ? owners : (me.owners ?? []);
-        m.pending = { date: b.date ?? m.date, counts_when: b.counts_when ?? null, asked_of: routed[0] ? (me.names?.[routed[0]] ?? null) : null, change_id: id, can_decide: false };
-        changes.push(prdAsk(m, id, { date: m.pending.date ?? null, counts_when: m.pending.counts_when ?? m.counts_when }, me.id ?? "", (me.id && me.names?.[me.id]) || me.name || "someone", new Date().toISOString(), routed));
+        m.pending = { date: b.date ?? m.date, counts_when: b.counts_when ?? null, name: name !== undefined && name !== m.name ? name : null, asked_of: routed[0] ? (me.names?.[routed[0]] ?? null) : null, change_id: id, can_decide: false };
+        changes.push(prdAsk(m, id, { date: m.pending.date ?? null, counts_when: m.pending.counts_when ?? m.counts_when, ...(name !== undefined ? { name } : {}) }, me.id ?? "", (me.id && me.names?.[me.id]) || me.name || "someone", new Date().toISOString(), routed));
       }
       return json(200, milestoneOut(m, db.ids, true, false, me));
     }

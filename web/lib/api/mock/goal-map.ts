@@ -29,6 +29,7 @@ import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderMa
 import { stableUuid } from "./ids";
 import { codedTitle, shownTitle } from "./item-code";
 import { COMPANY_SLUG } from "./one-roadmap";
+import { canEditRoadmap, type SimpleDb } from "./simple-roadmap";
 
 export type GoalMap = Schemas["GoalMapOut"];
 export type GmGoal = Schemas["GmGoal"];
@@ -568,9 +569,19 @@ export function mayChangeMilestone(me: { id?: string; role: string }, decider: s
   return trackOwner && me.role === "approver";
 }
 
+/** milestone-rename: the map's milestones are its roadmap's own (TrackMilestone rows in the API): while
+ * the Simple roadmap reads them (map_milestones), who changes that roadmap changes them (drafts.can_edit),
+ * as its other milestones; else as mayChangeMilestone. */
+type MapRightsDb = { goal_map_decider?: string | null; simple_roadmap?: SimpleDb };
+export function mapCanChange(db: MapRightsDb, me: { id?: string; role: string }): boolean {
+  const on = db.simple_roadmap?.map_milestones?.roadmap;
+  if (db.goal_map_decider || !on || !me.id) return mayChangeMilestone(me, db.goal_map_decider);
+  return me.role !== "viewer" && me.role !== "commenter" && canEditRoadmap(db.simple_roadmap!, on, { id: me.id, role: me.role as Schemas["Me"]["role"] });
+}
+
 /** /v1/simple/goal-map and its edits; null for any other path. Edits need approver and up. */
 export async function routeGoalMap(
-  db: { goal_map?: GoalMap; goal_map_decider?: string | null; goal_map_places?: Record<string, Record<string, [number, number]>>; simple_roadmap?: { feature_codes?: Record<string, string> } },
+  db: { goal_map?: GoalMap; goal_map_decider?: string | null; goal_map_places?: Record<string, Record<string, [number, number]>>; simple_roadmap?: SimpleDb },
   scenario: string | null,
   me: { role: string; name: string; id?: string },
   req: Request,
@@ -596,7 +607,7 @@ export async function routeGoalMap(
     const milestones = map.milestones.filter((m) => !(m as Held).trashed && goals.some((g) => g.id === m.goal)).map((m) => {
         const { trashed, ...rest } = m as Held;
         void trashed;
-        return { ...rest, can_change: mayChangeMilestone(me, db.goal_map_decider) };
+        return { ...rest, can_change: mapCanChange(db, me) };
       });
     const on = new Set(milestones.map((m) => m.id));
     // panel-menu (goal_map.build): a feature merged into another is no longer one of the map's.
@@ -775,7 +786,7 @@ type Held = GmMilestone & { trashed?: boolean };
  * change the roadmap (an owner here) does it; others get the API's 403. Null for any other id.
  */
 export async function routeLadderMilestone(
-  db: { goal_map?: GoalMap; goal_map_decider?: string | null },
+  db: { goal_map?: GoalMap } & MapRightsDb,
   me: { id: string; role: string; name: string },
   req: Request,
   p: string[],
@@ -787,8 +798,8 @@ export async function routeLadderMilestone(
   const m = map.milestones.find((x) => x.id === p[4]) as Held | undefined;
   if (!m) return null;
   const out = (status = 200) =>
-    json(status, { id: m.id, roadmap_id: id("roadmap"), code: "", name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "", progress: "not_started", prd: null, prd_owner: null, pending: null, can_change: mayChangeMilestone(me, db.goal_map_decider), can_propose: false, carried_from: null });
-  if (!mayChangeMilestone(me, db.goal_map_decider)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) changes its milestones" });
+    json(status, { id: m.id, roadmap_id: id("roadmap"), code: "", name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "", progress: "not_started", prd: null, prd_owner: null, pending: null, can_change: mapCanChange(db, me), can_propose: !mapCanChange(db, me) && me.role !== "viewer", carried_from: null });
+  if (!mapCanChange(db, me)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) changes its milestones" });
   if (req.method === "POST" && p[5] === "restore") {
     if (!m.trashed) return json(404, { detail: "No such deleted milestone" });
     m.trashed = false;
@@ -835,18 +846,25 @@ export function goalMapMilestones(map: GoalMap): { id: string; name: string; dat
   return (map.milestones as Held[]).filter((m) => !m.trashed).map((m) => ({ id: m.id, name: m.name, date: m.due_on ?? null, goal_id: m.goal, rank: rank.get(m.goal) ?? map.goals.length }));
 }
 
-export function ladderMilestones(db: { goal_map?: GoalMap; goal_map_decider?: string | null }, me: { id: string; role: string }): LadderMilestones {
+export function ladderMilestones(db: { goal_map?: GoalMap } & MapRightsDb, me: { id: string; role: string }): LadderMilestones {
   const live = (id: string) => (db.goal_map?.milestones as Held[] | undefined)?.find((x) => x.id === id && !x.trashed);
+  // milestone-rename: a proposal on one is its roadmap's, sent to that roadmap's decider.
+  const on = db.simple_roadmap?.map_milestones?.roadmap ?? null;
   return {
     find: (id) => {
       const m = live(id);
       if (!m) return null;
-      return { value: { name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "" }, can_change: mayChangeMilestone(me, db.goal_map_decider), name: m.name, decider: db.goal_map_decider ?? null };
+      const decider = db.goal_map_decider ?? (on ? db.simple_roadmap?.deciders?.[on] : null) ?? null;
+      return { value: { name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "" }, can_change: mapCanChange(db, me), name: m.name, decider, roadmap: on };
     },
-    write: (id, goal_id) => {
+    // milestone-rename: an accepted proposal's name, date and goal.
+    write: (id, after) => {
       const m = live(id);
-      const g = db.goal_map?.goals.find((x) => x.id === goal_id);
-      if (m && g) Object.assign(m, { goal: g.id, measure: g.measure, unit: g.unit });
+      if (!m) return;
+      if (typeof after.name === "string" && after.name.trim()) m.name = after.name.trim();
+      if ("date" in after) m.due_on = (after.date as string | null) ?? null;
+      const g = db.goal_map?.goals.find((x) => x.id === after.goal_id);
+      if (g) Object.assign(m, { goal: g.id, measure: g.measure, unit: g.unit });
     },
   };
 }

@@ -26,6 +26,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type PointerEvent as RPointerEvent, type RefObject, type WheelEvent as RWheelEvent } from "react";
 
 import Link from "next/link";
+import { Button } from "@/components/ds/Button";
 import { Icon } from "@/components/ds/Icon";
 import { confirmInPage } from "@/components/ds/ConfirmDialog";
 import { InfoTip } from "@/components/ds/InfoTip";
@@ -106,6 +107,8 @@ interface V {
   /** Whether this milestone is changed directly (its own can_change), not map.can_edit. */
   krCan: (milestone: string) => boolean;
   may: boolean;
+  /** milestone-rename: each milestone's open proposal (the roadmap's read): "Proposed · waits for <name>". */
+  asked: Map<string, { name?: string | null; asked_of?: string | null }>;
   phone: boolean;
   places: Map<string, { x: number; y: number }>;
   live: { id: string; dx: number; dy: number } | null;
@@ -150,6 +153,8 @@ interface Acts {
   orderGoal: (goal: string, to: number) => Promise<void>;
   trashGoal: (goal: string) => Promise<void>;
   trashKr: (milestone: string) => Promise<void>;
+  /** milestone-rename: its name, by who changes it directly, else proposed to the roadmap's decider. */
+  renameKr: (milestone: string, name: string) => Promise<void>;
   /** A move the reader may not make: why, and the card snaps back. */
   refuse: (why: string) => void;
 }
@@ -217,6 +222,7 @@ export function GoalLadder(props: LadderProps) {
   const canChange = map.can_edit;
   // A milestone changes (Trash, move, drag) for the roadmap's owner or decider, not every approver.
   const krCan = (milestone: string) => !!map.milestones.find((x) => x.id === milestone)?.can_change;
+  const asked = useMemo(() => new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.pending ? [[m.id, m.pending] as const] : []))), [roadmap.data]);
   const may = canChange || can("create_simple_change");
   const [edit, setEdit] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
@@ -660,6 +666,26 @@ export function GoalLadder(props: LadderProps) {
         failed(e);
       }
     },
+    renameKr: async (milestone, name) => {
+      const m = map.milestones.find((x) => x.id === milestone);
+      const to = name.trim();
+      if (!m || !to || to === m.name) return;
+      const coded = (n: string) => `${msCode.get(m.id) ?? ""} ${n}`.trim();
+      try {
+        if (krCan(milestone)) {
+          const set = (n: string) => unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } }, body: { name: n } }));
+          await set(to);
+          await reload();
+          toast({ message: `${coded(to)} saved`, action: { label: "Undo", onClick: () => void set(m.name).then(reload, failed) } });
+        } else {
+          await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: milestone }, before: { milestone: { name: m.name } }, after: { milestone: { name: to } } } }));
+          await reload();
+          toast({ message: `Proposed: ${coded(to)}; it waits in Needs a decision` });
+        }
+      } catch (e) {
+        failed(e);
+      }
+    },
     trashKr: async (milestone) => {
       setMenu(null);
       const name = krName(milestone);
@@ -724,7 +750,7 @@ export function GoalLadder(props: LadderProps) {
   }, [menu, arrow, sel, sheet, edit, may]);
 
   const firstLoose = goals.find((g) => feats.some((x) => x.free && x.goal === g.id));
-  const v: V = { map, goals, ms, msCode, feats, byId, sel, setSel: (id) => { setSel(id); setRefused(null); }, edit, canChange, krCan, may, phone, places, live, menu, setMenu, arrow, setArrow: (key) => setArrowAt(key ? { key, sel } : null), adding, setAdding, drop, refused, fresh, flash, flashGoal: firstLoose?.id ?? null, onOpen: props.onOpen, act };
+  const v: V = { map, goals, ms, msCode, feats, byId, sel, setSel: (id) => { setSel(id); setRefused(null); }, edit, canChange, krCan, may, asked, phone, places, live, menu, setMenu, arrow, setArrow: (key) => setArrowAt(key ? { key, sel } : null), adding, setAdding, drop, refused, fresh, flash, flashGoal: firstLoose?.id ?? null, onOpen: props.onOpen, act };
   const drag = { setLive, setDrop };
 
   return (
@@ -1056,6 +1082,16 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
   const live = v.live?.id === m.id ? v.live : null;
   const krs = v.ms.filter((x) => x.goal === m.goal);
   const at = krs.findIndex((x) => x.id === m.id);
+  // milestone-rename: its name in place, the code fixed before it (who may only propose proposes it).
+  const [naming, setNaming] = useState<string | null>(null);
+  const renames = v.krCan(m.id) || v.may;
+  const asked = v.asked.get(m.id);
+  const code = v.msCode.get(m.id);
+  const keep = () => {
+    const to = naming;
+    setNaming(null);
+    if (to !== null) void v.act.renameKr(m.id, to);
+  };
   return (
     <div
       data-ld-ms={m.id}
@@ -1073,10 +1109,40 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
     >
       <span className="flex items-start gap-2">
         {v.edit && v.krCan(m.id) && !v.phone && <span className="mt-0.5 cursor-grab text-text-faint" aria-hidden><Icon name="grip" size={16} /></span>}
-        <span className="text-[14px] leading-[18px] font-semibold">
-          {v.msCode.has(m.id) && <span className="simple-code mr-1">{v.msCode.get(m.id)}</span>}
-          {m.name}
-        </span>
+        {naming !== null ? (
+          <span className="flex min-w-0 flex-1 items-center gap-1 text-[14px] leading-[18px] font-semibold" data-testid="ld-ms-naming">
+            {code && <span className="simple-code">{code}</span>}
+            <input
+              aria-label="Name"
+              autoFocus
+              value={naming}
+              onChange={(e) => setNaming(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") keep();
+                if (e.key === "Escape") setNaming(null);
+              }}
+              className="min-w-0 flex-1 rounded border border-line-strong bg-surface px-1 font-normal"
+            />
+            <Button variant="solid" className="!h-6 !px-2 !text-xs" onClick={keep}>
+              {v.krCan(m.id) ? "Save" : "Propose"}
+            </Button>
+            <Button className="!h-6 !px-2 !text-xs" onClick={() => setNaming(null)}>
+              Cancel
+            </Button>
+          </span>
+        ) : renames ? (
+          // A span, not a button: a drag that starts on the name still moves the card (the canvas skips buttons).
+          <span role="button" tabIndex={0} data-testid="ld-ms-name" aria-label={`Rename ${code ? `${code} ` : ""}${m.name}`} onClick={(e) => { e.stopPropagation(); setNaming(m.name); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setNaming(m.name); } }} className="cursor-text text-left text-[14px] leading-[18px] font-semibold hover:underline">
+            {code && <span className="simple-code mr-1">{code}</span>}
+            {m.name}
+          </span>
+        ) : (
+          <span className="text-[14px] leading-[18px] font-semibold">
+            {code && <span className="simple-code mr-1">{code}</span>}
+            {m.name}
+          </span>
+        )}
         {v.edit && v.canChange && <span className="ml-auto"><More label={`More for ${m.name}`} open={v.menu === key} onClick={() => v.setMenu(v.menu === key ? null : key)} /></span>}
       </span>
       <span className="text-[12px] leading-4 text-text2" title={m.measure}>
@@ -1085,6 +1151,11 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
         {area ? ` · ${area}` : ""}
       </span>
       <b data-testid="ld-ms-status" className={`text-[12px] leading-4 ${m.proposed ? "text-accent-ink" : KR[m.status]}`}>{m.proposed ? "Proposed" : KR_WORD[m.status]}</b>
+      {asked && (
+        <span data-testid="ms-proposed-state" className="text-[12px] leading-4 font-semibold text-warn">
+          Proposed{asked.name ? `: ${asked.name}` : ""} · waits for {asked.asked_of ?? "the owner"}
+        </span>
+      )}
       {v.menu === key && (
         <MenuList
           testId="ld-ms-menu"

@@ -62,6 +62,9 @@ import {
   ROADMAP_SLUGS,
   ROADMAPS,
   prdOwnerIdsOf,
+  decidesMilestoneAsk,
+  goalTargetOf,
+  setTargetName,
   readerDb,
   readsRoadmap,
   roadmapId,
@@ -119,8 +122,10 @@ export interface SimpleChangesCtx {
 
 /** every-field-editable: a Goal ladder key result as an edit_goal_milestone reads and writes it. */
 export interface LadderMilestones {
-  find: (id: string) => { value: Record<string, unknown>; can_change: boolean; name: string; decider: string | null } | null;
-  write: (id: string, goal_id: string) => void;
+  /** milestone-rename: `roadmap`, the roadmap (slug) the map's milestones sit on. */
+  find: (id: string) => { value: Record<string, unknown>; can_change: boolean; name: string; decider: string | null; roadmap?: string | null } | null;
+  /** milestone-rename: writes an accepted proposal's name, date and goal. */
+  write: (id: string, after: Record<string, unknown>) => void;
 }
 
 /** edit-goals-prds (oracle.simple.goal_asks): a goal archived or restored, asked by who may not
@@ -339,7 +344,9 @@ function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op"
   // (drafts.who on the change's document) or a company owner's (goal_milestones.decide), its
   // milestone live or gone (its other milestones gone too).
   if (c.op === "edit_goal_milestone" && c.before && !("milestone" in c.before)) return ctx.role === "owner" || prdOwnerIds(db, c.document_id).includes(ctx.id);
-  if (KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP) {
+  // milestone-rename: a roadmap's own milestone's (a goal's, the Goal map's) as goal_milestones.with_asks reads it.
+  if (c.op === MILESTONE_OP) return decidesMilestoneAsk(db, c as Change, ctx);
+  if (KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
   }
@@ -1045,6 +1052,8 @@ function createMilestoneChange(db: SimpleDb, ctx: SimpleChangesCtx, body: Schema
   if (ctx.role === "viewer") return json(403, { detail: "Viewers may not propose a change" });
   const m = (db.goal_milestones ?? []).find((x) => x.id === body.target.milestone_id && !x.deleted);
   const kr = m ? null : ctx.ladder?.find(String(body.target.milestone_id));
+  const gt = m || kr || (db.goal_milestones ?? []).some((x) => x.id === body.target.milestone_id) ? null : goalTargetOf(db, body.target.milestone_id);
+  if (gt) return proposeTargetName(db, ctx, gt, body);
   if (!m && !kr) return json(404, { detail: "No such milestone" });
   if (m?.prd) return json(422, { detail: "A PRD's milestone: change it on its card (it asks the PRD's owner)" });
   if (m ? canEditRoadmap(db, m.roadmap, ctx) : kr!.can_change) return json(409, { detail: "You change this milestone directly" });
@@ -1057,11 +1066,37 @@ function createMilestoneChange(db: SimpleDb, ctx: SimpleChangesCtx, body: Schema
   const wanted = body.after?.milestone as Record<string, unknown> | null;
   const after = wanted ? { ...current, ...Object.fromEntries(Object.entries(wanted).filter(([k, v]) => k in current && (v !== null || k === "goal_id"))) } : null;
   if (after && same(after, current)) return json(422, { detail: "after.milestone: nothing changes" });
-  const doc = m ? stableUuid(`simple-doc/${m.roadmap}`) : null;
+  // milestone-rename: a Goal map milestone's proposal is its roadmap's, as a roadmap milestone's is.
+  const doc = m ? stableUuid(`simple-doc/${m.roadmap}`) : kr!.roadmap ? stableUuid(`simple-doc/${kr!.roadmap}`) : null;
   const decider = m ? db.deciders?.[m.roadmap] : kr!.decider;
   const change: Change = {
     id: crypto.randomUUID(), session_id: null, document_id: doc, draft_ids: [], op: body.op, target: { milestone_id: String(body.target.milestone_id), roadmap_id: doc, name: m?.name ?? kr!.name },
     before: { milestone: current }, after: { milestone: after }, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
+    decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
+    routed_to: decider ? [decider] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  (db.changes ??= []).push(change);
+  return json(201, { change: view(db, ctx, change), flags: [] });
+}
+
+/** milestone-rename (goal_milestones._propose_target): a proposed name for a goal's own milestone
+ * (before and after.milestone: its name alone), routed to who decides its roadmap. */
+function proposeTargetName(db: SimpleDb, ctx: SimpleChangesCtx, gt: NonNullable<ReturnType<typeof goalTargetOf>>, body: Schemas["SimpleChangeIn"]): Response {
+  if (canEditRoadmap(db, gt.roadmap, ctx)) return json(409, { detail: "You change this milestone directly" });
+  const seenMs = (body.before ?? {}).milestone as Values | null | undefined;
+  const wanted = (body.after ?? {}).milestone as Values | null | undefined;
+  const nameOnly = (v: Values | null | undefined): v is Values => !!v && typeof v === "object" && Object.keys(v).join() === "name";
+  if (!nameOnly(seenMs) || !nameOnly(wanted) || !String(wanted.name ?? "").trim()) return json(422, { detail: "A goal's milestone: before.milestone and after.milestone name it alone" });
+  const current = gt.goal.name;
+  if (seenMs.name !== current) return json(409, { detail: { message: "Changed since you saw it", current: { milestone: { name: current } }, changed_by: null, changed_at: null } });
+  const name = String(wanted.name).trim().slice(0, 200);
+  if (name === current) return json(422, { detail: "after.milestone: nothing changes" });
+  const doc = stableUuid(`simple-doc/${gt.roadmap}`);
+  const decider = db.deciders?.[gt.roadmap];
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: null, document_id: doc, draft_ids: [], op: MILESTONE_OP,
+    target: { milestone_id: gt.goal.id, roadmap_id: doc, name: current, goal_target: true },
+    before: { milestone: { name: current } }, after: { milestone: { name } }, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
     decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
     routed_to: decider ? [decider] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
   };
@@ -1642,12 +1677,18 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   else if (p[4] === "accept" && c.op === MILESTONE_OP && "milestone" in (c.before ?? {})) {
     const ms = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id && !x.deleted);
     const kr = ms ? null : ctx.ladder?.find(String(c.target.milestone_id));
-    if (kr) {
-      // every-field-editable: a Goal ladder key result's new goal.
+    // milestone-rename: a goal's own milestone takes the name asked.
+    const gt = ms || kr || !c.target.goal_target ? null : goalTargetOf(db, c.target.milestone_id);
+    if (gt) {
+      const before = (c.before.milestone as Values).name;
+      if (gt.goal.name !== before) return json(409, { detail: { message: "outdated: the milestone changed since the proposal", current: { milestone: { name: gt.goal.name } }, changed_by: null, changed_at: null } });
+      setTargetName(db, gt.goal, String((c.after.milestone as Values).name));
+    } else if (kr) {
+      // every-field-editable: a Goal ladder key result's new goal (milestone-rename: its name and date too).
       if (!same(kr.value, c.before.milestone)) return json(409, { detail: { message: "outdated: the milestone changed since the proposal", current: { milestone: kr.value }, changed_by: null, changed_at: null } });
-      const goal = (c.after.milestone as Record<string, unknown> | null)?.goal_id;
-      if (goal) ctx.ladder!.write(String(c.target.milestone_id), String(goal));
-    } else if (!ms) return json(404, { detail: "The milestone is gone" });
+      const after = c.after.milestone as Record<string, unknown> | null;
+      if (after) ctx.ladder!.write(String(c.target.milestone_id), after);
+    } else if (c.target.goal_target || !ms) return json(404, { detail: "The milestone is gone" });
     else {
     if (!same(milestoneValue(ms, db.ids), c.before.milestone)) return json(409, { detail: { message: "outdated: the milestone changed since the proposal", current: { milestone: milestoneValue(ms, db.ids) }, changed_by: null, changed_at: null } });
     writeMilestone(ms, db.ids, c.after.milestone as Record<string, unknown> | null);
@@ -1682,6 +1723,8 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     if (p[4] === "accept" && (!m || m.deleted)) return json(404, { detail: "The milestone is gone" });
     if (p[4] === "accept" && !waits) return json(409, { detail: { message: "This proposal no longer waits on this milestone", current: null, changed_by: null, changed_at: null } });
     if (m && p[4] === "accept") Object.assign(m, { date: (c.after.date as string | null) ?? m.date, counts_when: (c.after.counts_when as string | null) ?? m.counts_when });
+    // milestone-rename (goal_milestones._apply_prd): an asked name too.
+    if (m && p[4] === "accept" && typeof c.after.name === "string" && c.after.name.trim()) m.name = c.after.name.trim();
     if (m && waits) m.pending = null;
   } else if (p[4] === "decline" && c.op === "add_item") reopenSuggestion(db, c);
   else if (p[4] === "accept" && (c.op === "add_track" || c.op === "edit_track")) {

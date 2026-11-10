@@ -1451,12 +1451,15 @@ async def _goal_targets(
     ends: dict[uuid.UUID, tuple[str, date | None]],
     today: date,
     goals: list[Entity],
+    principal: Any = None,
 ) -> list[SimpleGoalMilestone]:
     """milestone-kinds: each company goal with a target date and ``on_roadmap`` as a goal
     milestone (id: the goal's) on the company roadmap (else the roadmap its features are on,
     else the first one), measured by the goal's metric from its ``start`` toward its target
     in its comparison's direction (at most, below: downward); changed on the goal, not
-    here. ``goals``: the company's goals, read once per roadmap read."""
+    here. ``goals``: the company's goals, read once per roadmap read. milestone-rename: its
+    name is its own (``milestone_name``, else the goal's title); who decides its roadmap
+    renames it, anyone else who may propose proposes it (``goal_milestones.rename_target``)."""
     from oracle.simple import goal_milestones
 
     if not readable:
@@ -1482,10 +1485,13 @@ async def _goal_targets(
             down=comparison in _DOWN if comparison else None,
         )  # fmt: skip
         out.append(SimpleGoalMilestone(
-            id=g.id, roadmap_id=rid, code="", name=g.title, date=due, goal_id=g.id,
+            id=g.id, roadmap_id=rid, code="", name=goal_milestones.target_name(g), date=due,
+            goal_id=g.id,
             item_ids=item_ids, kind="goal", status=st, status_reason=why, measure=_metric(g),
             baseline=baseline, target=target, current=current, goal_target=True,
         ))  # fmt: skip
+    if out and principal is not None:
+        await goal_milestones.target_rights(db, principal, out)
     return out
 
 
@@ -1725,7 +1731,7 @@ async def build(
     # milestone-kinds: the goals' own target dates, coded with the other milestones.
     # The company's goals, read once for the goal targets and the track bands.
     goals = await goal_buckets._goals(db)
-    targets = await _goal_targets(db, readable, read.entries, ends, read.today, goals)
+    targets = await _goal_targets(db, readable, read.entries, ends, read.today, goals, principal)
     if all_goal_milestones is shown_goal_milestones:
         shown_goal_milestones = all_goal_milestones = [*shown_goal_milestones, *targets]
     else:

@@ -186,6 +186,12 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             name = _quoted(target.get("name")) or item
             if "milestone" in before and after.get("milestone") is None:
                 return f"removed the milestone {name}" if name else "removed a milestone"
+            # milestone-rename: a new name (a roadmap's own: in ``milestone``; a PRD's: as is).
+            was, to = (before.get("milestone") or before), (after.get("milestone") or after)
+            new = _quoted(to.get("name")) if isinstance(to, dict) else None
+            old = was.get("name") if isinstance(was, dict) else None
+            if new and old and old != to.get("name"):
+                return f"renamed the milestone {_quoted(old)} to {new}"
             return f"changed the milestone {name}" if name else "changed a milestone"
         # trash-features-goals: a feature deleted to Trash (oracle.simple.trash_items).
         case "delete_item":

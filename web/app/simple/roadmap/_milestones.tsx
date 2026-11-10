@@ -246,13 +246,24 @@ export function useMilestones({
       const d = draft;
       if (d.prd) {
         const m = list.find((x) => x.id === d.id)!;
-        await patch(d.id!, { date: d.date, counts_when: d.counts_when === m.counts_when ? null : d.counts_when });
+        // milestone-rename: a new name alone goes straight in for the PRD's owner, else it asks them.
+        const name = d.name.trim() && d.name.trim() !== m.name ? d.name.trim() : null;
+        const moved = d.date !== (m.pending?.date ?? m.date) || d.counts_when !== m.counts_when;
+        const got = await patch(d.id!, name && !moved ? { name } : { ...(name ? { name } : {}), date: d.date, counts_when: d.counts_when === m.counts_when ? null : d.counts_when });
         setDraft(null);
-        await done({ words: `Asked ${m.prd_owner ?? "the PRD's owner"} to move ${words(m)} to ${day(d.date)} in the PRD`, undo: () => patch(m.id, { date: m.date }) });
+        if (name && !got.pending) await done({ words: `${words({ ...m, name })} saved`, undo: () => patch(m.id, { name: m.name }) });
+        else await done({ words: name && !moved ? `Asked ${m.prd_owner ?? "the PRD's owner"} to rename ${words(m)}` : `Asked ${m.prd_owner ?? "the PRD's owner"} to move ${words(m)} to ${day(d.date)} in the PRD`, undo: name && !moved ? null : () => patch(m.id, { date: m.date }) });
         return;
       }
       if (d.id) {
         const was = list.find((x) => x.id === d.id)!;
+        // milestone-rename: a goal's own milestone takes a name alone (the goal keeps its title).
+        if (was.goal_target) {
+          await patch(d.id, { name: d.name.trim() || was.name });
+          setDraft(null);
+          await done({ words: `${words({ code: d.code, name: d.name.trim() || was.name })} saved`, undo: () => patch(was.id, { name: was.name }) });
+          return;
+        }
         await patch(d.id, { name: d.name, date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when, ...(d.k ? forKind(d.k) : {}) });
         setDraft(null);
         await done({ words: `${words({ code: d.code, name: d.name })} saved`, undo: () => patch(was.id, { name: was.name, date: was.date, goal_id: was.goal_id, item_ids: was.item_ids, counts_when: was.counts_when, ...kindFields(was) }) });
@@ -277,6 +288,12 @@ export function useMilestones({
     propose: async (remove) => {
       const m = draft?.id ? list.find((x) => x.id === draft.id) : null;
       if (!draft || !m) return;
+      if (m.goal_target) {
+        await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: m.id }, before: { milestone: { name: m.name } }, after: { milestone: { name: draft.name.trim() || m.name } } } }));
+        setDraft(null);
+        await done({ words: `Proposed a change to ${words(m)} · it waits in Needs a decision`, undo: null });
+        return;
+      }
       const before = { name: m.name, date: m.date ?? null, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, ...kindFields(m) };
       const after = remove ? null : { name: draft.name.trim() || m.name, date: draft.date, goal_id: draft.goal_id, item_ids: draft.item_ids, counts_when: draft.counts_when, ...(draft.k ? forKind(draft.k) : {}) };
       await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: m.id }, before: { milestone: before }, after: { milestone: after } } }));
@@ -610,7 +627,7 @@ export function MsLayer(props: MsLayerProps) {
   // A drag on a diamond moves it; a click (no move) opens it.
   const grab = (m: GoalMilestone) => (e: ReactPointerEvent) => {
     // One that is not the reader's to move (a goal's own target date) still opens on a click, to read.
-    if (!m.can_change) {
+    if (!m.can_change || m.goal_target) {
       e.stopPropagation();
       const up = () => {
         window.removeEventListener("pointerup", up);
@@ -1032,6 +1049,35 @@ function RuleField({ value, onChange }: { value: string; onChange: (v: string) =
 }
 
 /** milestone-rights: the reasons, as tooltips (the card adds no sentences). */
+/** milestone-rename: a milestone's name with its roadmap-wide code fixed before it (read only for a viewer). */
+function NameField({ code, value, reads, onChange, tip }: { code: string; value: string; reads: boolean; onChange: (v: string) => void; tip?: string }) {
+  return (
+    <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
+      <Field label="Name">
+        <span className="font-semibold" style={{ color: msInk(code) }}>
+          {code}
+        </span>
+        <input aria-label="Name" value={value} onChange={(e) => onChange(e.target.value)} placeholder="What is true by then" className={bare} />
+        {tip && (
+          <InfoTip label="Name" align="end" testId="ms-name-tip">
+            {tip}
+          </InfoTip>
+        )}
+      </Field>
+    </fieldset>
+  );
+}
+
+/** milestone-rename: an open proposal on it: "Proposed · waits for <name>". */
+function Asked({ m }: { m: GoalMilestone }) {
+  if (!m.pending) return null;
+  return (
+    <span data-testid="ms-proposed-state" className="-mt-1 text-xs font-semibold text-warn">
+      Proposed{m.pending.name ? `: ${m.pending.name}` : ""} · waits for {m.pending.asked_of ?? "the owner"}
+    </span>
+  );
+}
+
 const WHO_CHANGES = "Only an owner or the roadmap's decider (with none, its owner) changes its milestones";
 const PROPOSE_WHY = "Goes to the roadmap's decider, who accepts or declines it in Needs a decision";
 
@@ -1145,6 +1191,8 @@ export function MsCard() {
           </a>
           {m.prd_owner && <> · owned by {m.prd_owner}</>}
         </p>
+        <NameField code={msCode(m)} value={d.name} reads={!m.can_change} onChange={(name) => set({ name })} />
+        <Asked m={m} />
         <DateField value={d.date} onChange={(date) => set({ date })} />
         <RuleField value={d.counts_when} onChange={(counts_when) => set({ counts_when })} />
         <p className="text-xs text-text2">A change here goes to {m.prd_owner ?? "the PRD's owner"} as a change to the PRD. It shows dashed until they say yes.</p>
@@ -1166,6 +1214,35 @@ export function MsCard() {
   const reads = rights === "read";
   const head = !d.id ? (d.second ? "Next milestone" : "New milestone") : reads ? `${d.code} ${d.name}` : `Edit ${d.code}`;
   const late = (id: string) => (ms.items.get(id)?.end.date ?? "") > d.date;
+  // milestone-rename: a goal's own milestone: its name, in place (its date and measure are the goal's).
+  if (own?.goal_target)
+    return (
+      <div data-testid="ms-card" data-rights={rights} role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
+        {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
+        <div className="flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold">{head}</h2>
+          <span className="text-xs text-text2">{`${goalTitle} · ${day(d.date)}`}</span>
+        </div>
+        <NameField code={d.code} value={d.name} reads={reads} onChange={(name) => set({ name })} tip="The goal keeps its own name; its date and measure change on the goal." />
+        <Asked m={own} />
+        {error}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {rights === "change" && (
+            <Btn primary testid="ms-save" onClick={() => run(() => ms.save(false))}>
+              Save
+            </Btn>
+          )}
+          {rights === "propose" && (
+            <Btn primary testid="ms-propose" title={PROPOSE_WHY} onClick={() => run(() => ms.propose(false))}>
+              Propose
+            </Btn>
+          )}
+          <button type="button" className="px-1 text-sm leading-8 text-text2" onClick={() => ms.setDraft(null)}>
+            {reads ? "Close" : "Cancel"}
+          </button>
+        </div>
+      </div>
+    );
   // tb-mk: "+ Milestone" asks for the kind first.
   if (!d.id && !d.k)
     return (
@@ -1235,6 +1312,7 @@ export function MsCard() {
           </span>
           <input aria-label="Name" autoFocus={!phone && !reads} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="What is true by then" className={bare} />
         </Field>
+        {own && <Asked m={own} />}
         {k && (
           <div className="grid grid-cols-2 gap-2">
             <Field label="Kind" testid="ms-kind">

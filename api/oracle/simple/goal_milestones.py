@@ -179,6 +179,7 @@ async def _out(
         pending = SimpleMilestonePending(
             date=date.fromisoformat(pc["date"]) if pc.get("date") else None,
             counts_when=pc.get("counts_when"),
+            name=pc.get("name"),
             asked_of=pc.get("asked_of_name"),
             change_id=uuid.UUID(pc["change_id"]) if pc.get("change_id") else None,
             can_decide=prd is not None
@@ -237,6 +238,55 @@ async def _lookups(db: AsyncSession, rows: list[TrackMilestone]) -> dict[uuid.UU
         for t in await db.scalars(select(ProductTrack).where(ProductTrack.id.in_(tracks))):
             out[t.id] = t.title
     return out
+
+
+async def with_asks(
+    db: AsyncSession, principal: Any, out: list[SimpleGoalMilestone], w: drafts.Who | None = None
+) -> None:
+    """milestone-rename: a roadmap's own milestone (or a goal's) with an open
+    ``edit_goal_milestone`` proposal reads it as ``pending`` (the name and date asked for,
+    who it waits for, whether this person decides it): "Proposed · waits for <name>"."""
+    from oracle.simple import key_dates
+
+    mine = {str(m.id): m for m in out if m.prd is None and m.pending is None}
+    if not mine:
+        return
+    asks = list(
+        await db.scalars(
+            select(SimpleChange)
+            .where(
+                SimpleChange.op == "edit_goal_milestone",
+                SimpleChange.status == "proposed",
+                SimpleChange.target["milestone_id"].astext.in_(list(mine)),
+            )
+            .order_by(SimpleChange.at)
+        )
+    )
+    if not asks:
+        return
+    if w is None:
+        w = await drafts.who(db, {c.document_id for c in asks if c.document_id})
+    view = type("V", (), {"deciders": w.deciders, "owners": w.owners})
+    users = {c.routed_to[0] for c in asks if c.routed_to}
+    names = {
+        u.id: display_name(u.email, u.name)
+        for u in await db.scalars(select(User).where(User.id.in_(users)))
+    } if users else {}  # fmt: skip
+    for c in asks:
+        m = mine.get(str(c.target.get("milestone_id")))
+        after = (c.after or {}).get("milestone")
+        if m is None or not isinstance(after, dict):
+            continue
+        to = date.fromisoformat(after["date"]) if after.get("date") else None
+        cw = after.get("counts_when")
+        m.pending = SimpleMilestonePending(
+            name=after.get("name") if after.get("name") not in (None, m.name) else None,
+            date=to if to != m.date else None,
+            counts_when=cw if cw not in (None, m.counts_when) else None,
+            asked_of=names.get(c.routed_to[0]) if c.routed_to else None,
+            change_id=c.id,
+            can_decide=key_dates.may_decide(principal, c, view),
+        )
 
 
 async def list_for_roadmaps(
@@ -339,6 +389,7 @@ async def list_for_roadmaps(
         )
         for r in shown
     ]
+    await with_asks(db, principal, out, w)
     subs: dict[uuid.UUID, list[uuid.UUID]] = {}
     for m in out:
         if m.sub_goal_of_id is not None:
@@ -514,6 +565,10 @@ async def _get_or_404(db: AsyncSession, milestone_id: uuid.UUID) -> TrackMilesto
 async def patch(
     db: AsyncSession, principal: Any, milestone_id: uuid.UUID, body: SimpleGoalMilestonePatch
 ) -> SimpleGoalMilestone:
+    if await db.get(TrackMilestone, milestone_id) is None:
+        found = await _target(db, milestone_id)
+        if found is not None:
+            return await rename_target(db, principal, *found, body)
     row = await _get_or_404(db, milestone_id)
     if row.deleted_at is not None:
         raise _error(status.HTTP_404_NOT_FOUND, "No such milestone")
@@ -545,6 +600,99 @@ async def patch(
     return await _out(db, principal, row, roadmap, None, w)
 
 
+# --------------------------------------------------------------------------- goal targets
+
+
+def target_name(goal: Any) -> str:
+    """milestone-rename: a goal's own milestone's name: its own once renamed, else the
+    goal's title (renaming the milestone never renames the goal)."""
+    own = (goal.attrs or {}).get("milestone_name")
+    return own if isinstance(own, str) and own.strip() else goal.title
+
+
+async def target_rights(db: AsyncSession, principal: Any, out: list[SimpleGoalMilestone]) -> None:
+    """Who decides the roadmap a goal's milestone sits on renames it; anyone else who may
+    propose proposes it; its open proposal reads as ``pending``."""
+    w = await drafts.who(db, {m.roadmap_id for m in out})
+    for m in out:
+        m.can_change = drafts.can_edit(principal, m.roadmap_id, w)
+        m.can_propose = not m.can_change and _may_propose(principal)
+    await with_asks(db, principal, out, w)
+
+
+async def _target(db: AsyncSession, goal_id: uuid.UUID) -> tuple[Any, uuid.UUID] | None:
+    """A goal on the roadmap with a date (its milestone's id is the goal's) and the roadmap
+    its milestone sits on (the company roadmap, else the first roadmap), else None."""
+    from oracle.baseline.models import Entity
+    from oracle.simple.service import _goal_due
+
+    goal = await db.get(Entity, goal_id, with_for_update=True)
+    if goal is None or goal.type != "goal" or not goal.on_roadmap or _goal_due(goal) is None:
+        return None
+    active = await company.active(db)
+    rid = getattr(active, "id", None) or await db.scalar(
+        select(Document.id).where(Document.kind == "roadmap").order_by(Document.created_at).limit(1)
+    )
+    return (goal, rid) if rid is not None else None
+
+
+def _set_target_name(goal: Any, name: str) -> None:
+    attrs = dict(goal.attrs or {})
+    if name.strip() == goal.title:
+        attrs.pop("milestone_name", None)
+    else:
+        attrs["milestone_name"] = name.strip()
+    goal.attrs = attrs
+
+
+async def rename_target(
+    db: AsyncSession, principal: Any, goal: Any, rid: uuid.UUID, body: SimpleGoalMilestonePatch
+) -> SimpleGoalMilestone:
+    """PATCH on a goal's own milestone: its name alone (date, goal and items are the
+    goal's, changed on the goal)."""
+    from oracle.simple.service import _goal_due
+
+    fields = body.model_fields_set
+    if fields != {"name"} or not (body.name or "").strip():
+        raise _error(422, "A goal's milestone: only its name changes here (the rest is the goal's)")
+    w = await drafts.who(db, {rid})
+    if not drafts.can_edit(principal, rid, w):
+        raise _error(status.HTTP_403_FORBIDDEN,
+                     "Only an owner or the roadmap's decider (with none, its owner) "
+                     "changes its milestones")  # fmt: skip
+    _set_target_name(goal, body.name)  # type: ignore[arg-type]
+    await db.flush()
+    await audit.record(db, principal, "goal_milestone.rename", "entity", goal.id, data={})
+    await db.commit()
+    return SimpleGoalMilestone(
+        id=goal.id, roadmap_id=rid, code="", name=target_name(goal), date=_goal_due(goal),
+        goal_id=goal.id, kind="goal", goal_target=True, can_change=True,
+    )  # fmt: skip
+
+
+async def _apply_prd(db: AsyncSession, row: TrackMilestone, after: dict[str, Any]) -> None:
+    """Writes a PRD milestone's accepted change; a new name also goes into the PRD's
+    stored plan (the milestone is re-read from it)."""
+    from oracle.simple.models import SimplePrdPlan
+
+    if "date" in after:
+        row.target_date = date.fromisoformat(after["date"]) if after.get("date") else None
+    if "counts_when" in after:
+        row.counts_when = after.get("counts_when") or ""
+    if after.get("name"):
+        row.name = after["name"]
+        plan = await db.scalar(
+            select(SimplePrdPlan).where(SimplePrdPlan.document_id == row.origin_prd_id)
+        )
+        if plan is not None and isinstance(plan.data, dict):
+            ms = [
+                {**m, "name": after["name"]} if isinstance(m, dict) and m.get("code") == row.code
+                else m
+                for m in plan.data.get("milestones") or []
+            ]  # fmt: skip
+            plan.data = {**plan.data, "milestones": ms}
+
+
 async def _propose_prd_change(
     db: AsyncSession,
     principal: Any,
@@ -553,12 +701,14 @@ async def _propose_prd_change(
     body: SimpleGoalMilestonePatch,
     fields: set[str],
 ) -> SimpleGoalMilestone:
-    if fields & {"name", "goal_id", "item_ids", *KIND_FIELDS} or not (
-        fields & {"date", "counts_when"}
+    if (
+        fields & {"goal_id", "item_ids", *KIND_FIELDS}
+        or not (fields & {"name", "date", "counts_when"})
+        or ("name" in fields and not (body.name or "").strip())
     ):
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY,
-                     "A PRD's milestone: only date and counts_when may be proposed "
-                     "(name, goal and items are the roadmap's own)")  # fmt: skip
+                     "A PRD's milestone: only name, date and counts_when may be proposed "
+                     "(goal and items are the roadmap's own)")  # fmt: skip
     if not _may_propose(principal):
         raise _error(status.HTTP_403_FORBIDDEN, "Viewers may not propose a change")
     w = await drafts.who(db, {row.origin_prd_id})
@@ -573,6 +723,19 @@ async def _propose_prd_change(
         else before["date"],
         "counts_when": body.counts_when if "counts_when" in fields else before["counts_when"],
     }  # fmt: skip
+    if "name" in fields:
+        before["name"], after["name"] = row.name, (body.name or "").strip()
+    # milestone-rename: the PRD's owner (or a company owner) renames its milestone directly;
+    # the PRD's stored plan takes the name, so a later read keeps it.
+    me = _me(principal)
+    if fields == {"name"} and (has_role(principal.role, "owner") or me in owners):
+        await _apply_prd(db, row, after)
+        await db.flush()
+        await audit.record(db, principal, "goal_milestone.edit", "track_milestone", row.id,
+                           data={})  # fmt: skip
+        await db.commit()
+        prd = await db.get(Document, row.origin_prd_id)
+        return await _out(db, principal, row, roadmap, prd, w)
     c = SimpleChange(
         document_id=row.origin_prd_id, op="edit_goal_milestone",
         target={"milestone_id": str(row.id), "roadmap_id": str(row.roadmap_id),
@@ -583,7 +746,8 @@ async def _propose_prd_change(
     db.add(c)
     await db.flush()
     row.pending_change = {
-        **after, "change_id": str(c.id),
+        **after, "name": after["name"] if after.get("name") != before.get("name") else None,
+        "change_id": str(c.id),
         "asked_of_name": await _name_of(db, routed[0]) if routed else None,
     }  # fmt: skip
     await db.flush()
@@ -714,6 +878,8 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
         raise _error(status.HTTP_403_FORBIDDEN, "Viewers may not propose a change")
     milestone_id = changes._uuid(body.target.get("milestone_id"), "milestone_id")
     row = await db.get(TrackMilestone, milestone_id, with_for_update=True)
+    if row is None and (found := await _target(db, milestone_id)) is not None:
+        return await _propose_target(db, principal, *found, body)
     if row is None or row.roadmap_id is None or row.deleted_at is not None:
         raise _error(status.HTTP_404_NOT_FOUND, "No such milestone")
     if row.origin_prd_id is not None:
@@ -761,6 +927,45 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
     return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
 
 
+async def _propose_target(db: AsyncSession, principal: Any, goal: Any, rid: uuid.UUID,
+                          body: Any) -> Any:  # fmt: skip
+    """milestone-rename: a proposed name for a goal's own milestone (``before`` and
+    ``after.milestone``: its name alone), routed to who decides its roadmap."""
+    from oracle.simple import changes, key_dates
+    from oracle.simple.schemas import SimpleChangeResult
+
+    w = await drafts.who(db, {rid})
+    if drafts.can_edit(principal, rid, w):
+        raise _error(status.HTTP_409_CONFLICT, "You change this milestone directly")
+    seen_, wanted = (body.before or {}).get("milestone"), (body.after or {}).get("milestone")
+    if not isinstance(seen_, dict) or set(seen_) != {"name"} or not isinstance(wanted, dict) \
+            or set(wanted) != {"name"} or not str(wanted["name"] or "").strip():  # fmt: skip
+        raise _error(422, "A goal's milestone: before.milestone and after.milestone name it alone")
+    current = target_name(goal)
+    if seen_["name"] != current:
+        raise _error(status.HTTP_409_CONFLICT,
+                     {"message": "Changed since you saw it",
+                      "current": {"milestone": {"name": current}},
+                      "changed_by": None, "changed_at": None})  # fmt: skip
+    name = str(wanted["name"]).strip()[:200]
+    if name == current:
+        raise _error(422, "after.milestone: nothing changes")
+    c = SimpleChange(
+        document_id=rid, op="edit_goal_milestone",
+        target={"milestone_id": str(goal.id), "roadmap_id": str(rid), "name": current,
+                "goal_target": True},
+        before={"milestone": {"name": current}}, after={"milestone": {"name": name}},
+        status="proposed", by=_me(principal), at=company_time.now(), reason=body.reason,
+        routed_to=await key_dates.route(db, rid, w),
+    )  # fmt: skip
+    db.add(c)
+    await db.flush()
+    await audit.record(db, principal, "simple_change.proposed", "simple_change", c.id,
+                       data={"op": c.op, "target": c.target})  # fmt: skip
+    await db.commit()
+    return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
+
+
 def may_decide(principal: Any, c: SimpleChange, view: Any) -> bool:
     """A PRD's milestone: an owner or the PRD's owner; a roadmap's own: as a key date's."""
     from oracle.simple import key_dates
@@ -783,7 +988,16 @@ async def _decide_own(db: AsyncSession, principal: Any, c: SimpleChange, action:
     if not may_decide(principal, c, view):
         raise ChangeError(403, "Only an owner or the roadmap's decider (with none, its owner) "
                                "decides this proposal")  # fmt: skip
-    if action == "accept":
+    if action == "accept" and c.target.get("goal_target"):
+        found = await _target(db, uuid.UUID(c.target["milestone_id"]))
+        if found is None:
+            raise ChangeError(404, "The milestone is gone")
+        if target_name(found[0]) != c.before["milestone"]["name"]:
+            raise ChangeError(409, {"message": "outdated: the milestone changed since the proposal",
+                                    "current": {"milestone": {"name": target_name(found[0])}},
+                                    "changed_by": None, "changed_at": None})  # fmt: skip
+        _set_target_name(found[0], c.after["milestone"]["name"])
+    elif action == "accept":
         row = await db.get(TrackMilestone, uuid.UUID(c.target["milestone_id"]),
                            with_for_update=True)  # fmt: skip
         if row is None or row.deleted_at is not None:
@@ -862,9 +1076,7 @@ async def decide(db: AsyncSession, principal: Any, c: SimpleChange, action: str,
                                 "current": None, "changed_by": None,
                                 "changed_at": None})  # fmt: skip
     if action == "accept":
-        after = c.after
-        row.target_date = date.fromisoformat(after["date"]) if after.get("date") else None
-        row.counts_when = after.get("counts_when") or ""
+        await _apply_prd(db, row, c.after)
     if waits:
         row.pending_change = None
     c.status = "accepted" if action == "accept" else "declined"

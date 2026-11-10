@@ -59,10 +59,11 @@ test("a goal's On the roadmap switch takes its target-date milestone off the Mil
   await roadmap(page);
   // The goal's target date, drawn as a goal milestone named for the goal.
   expect(await goalOnBand(page, TITLE)).toBe(1);
-  // Its diamond opens its card to read (it changes on the goal, not here).
+  // Its diamond opens its card: milestone-rename, its name changes here; its date stays the goal's.
   await page.locator(`[data-testid="ms-diamond"][data-kind="goal"][data-day="2027-02-12"]`).click();
-  await expect(page.getByTestId("ms-card")).toHaveAttribute("data-rights", "read");
-  await page.getByTestId("ms-card").getByRole("button", { name: "Close" }).click();
+  await expect(page.getByTestId("ms-card")).toHaveAttribute("data-rights", "change");
+  await expect(page.getByTestId("ms-card").getByLabel("Date")).toHaveCount(0);
+  await page.getByTestId("ms-card").getByRole("button", { name: "Cancel" }).click();
 
   await setOnRoadmap(page, TITLE, false);
   await roadmap(page);

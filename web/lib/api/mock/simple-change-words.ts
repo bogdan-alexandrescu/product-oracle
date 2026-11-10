@@ -120,6 +120,11 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "edit_goal_milestone": {
       const name = quoted(target.name) ?? item;
       if ("milestone" in before && after.milestone === null) return name ? `removed the milestone ${name}` : "removed a milestone";
+      // milestone-rename: a new name (a roadmap's own: in milestone; a PRD's: as is), as change_words says it.
+      const was = (before.milestone ?? before) as Record<string, unknown> | null;
+      const to = (after.milestone ?? after) as Record<string, unknown> | null;
+      const fresh = quoted(to?.name);
+      if (fresh && was?.name && was.name !== to?.name) return `renamed the milestone ${quoted(was.name)} to ${fresh}`;
       return name ? `changed the milestone ${name}` : "changed a milestone";
     }
     case "name_decider": return `named who decides ${x}`;

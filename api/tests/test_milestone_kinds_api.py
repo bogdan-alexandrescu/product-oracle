@@ -237,7 +237,8 @@ async def test_a_goal_target_shows_and_hides_with_on_roadmap(client):
     [g] = targets(await read(client, ctx))
     assert (g["id"], g["goal_id"], g["kind"], g["date"], g["name"]) == (
         ids["goal_id"], ids["goal_id"], "goal", "2026-12-15", "Activation")  # fmt: skip
-    assert (g["can_change"], g["measure"], g["target"]) == (False, "Teams set up", 10.0)
+    # milestone-rename: its name is the roadmap decider's to change (the rest is the goal's).
+    assert (g["can_change"], g["measure"], g["target"]) == (True, "Teams set up", 10.0)
     body = {"title": "Activation", "measure": "Teams set up", "target": "10 teams",
             "due": "2026-12-15", "on_roadmap": False}  # fmt: skip
     r = await client.patch(f"{GOALS}/{ids['goal_id']}", json=body, headers=ctx.as_("owner"))

@@ -513,6 +513,8 @@ class SimpleMilestonePending(BaseModel):
 
     date: dt.date | None = None
     counts_when: str | None = None
+    # milestone-rename: the name asked for (None: the name stays).
+    name: str | None = None
     asked_of: str | None = None
     change_id: uuid.UUID | None = None
     # roadmap-decide: the viewer is the PRD's owner (or a company owner) and decides it.
