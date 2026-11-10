@@ -11,7 +11,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
-import { closed, codedTitle, companyToday, goalRank, prdCode, roadmapOut, type SeedItem, type SimpleDb } from "./simple-roadmap";
+import { closed, codedTitle, companyToday, goalRank, prdCode, roadmapOut, trackPrdTitles, TRACKS, type SeedItem, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
 import { madeOrder } from "./made-order";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
@@ -404,10 +404,12 @@ const readable = (name: string | null | undefined): string | null => {
 /** priorities._code_of: a milestone's code ("M1" of "M1 · Measured"), null for a name with none. */
 const codeOf = (name: string): string | null => (/^[A-Z][A-Z0-9]*-?[0-9]+[a-z]?/.test(name) ? name.split(/[\s·:.–—]/)[0] : null);
 
-function linesOf(read: Schemas["SimpleRoadmapOut"]): { lines: Line[]; same: Map<string, Line> } {
+function linesOf(read: Schemas["SimpleRoadmapOut"], prdsOfTrack: (trackId: string) => string[]): { lines: Line[]; same: Map<string, Line> } {
   const tracks = new Set(read.items.map((i) => i.track?.id).filter(Boolean));
   // prio-company: each line names its PRD (a milestone its track's); a PRD's code on any day, or a line already listed, once.
-  const prdOf = new Map(read.items.filter((i) => i.track && i.prd).map((i) => [i.track!.id, i.prd!]));
+  // tracks-goal: a track's PRDs (track.prd_ids) by title; those on the roadmap read, and every PRD's id.
+  const onRoadmap = new Map(read.items.flatMap((i) => (i.prd ? [[i.prd.title, i.prd] as const] : [])));
+  const idOf = new Map([...(read.key_dates ?? []).flatMap((k) => (k.prd ? [[k.prd.title, k.prd.id] as const] : [])), ...[...onRoadmap].map(([t, p]) => [t, p.id] as const)]);
   const keyDates = (read.key_dates ?? []).filter((k) => readable(k.name)).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date, prd: k.prd ?? null }));
   const fromPrd = new Map<string, Line>();
   const byCode = new Map<string, Line>();
@@ -423,11 +425,14 @@ function linesOf(read: Schemas["SimpleRoadmapOut"]): { lines: Line[]; same: Map<
   for (const m of read.milestones) {
     if (!m.date || !tracks.has(m.track_id) || m.status === "dropped" || !readable(m.name)) continue;
     const key = `milestone:${m.id}`;
-    const prd = prdOf.get(m.track_id);
+    // tracks-goal: a track milestone reads the first of the track's PRDs on the roadmap; its code is looked up in each of them.
+    const titles = prdsOfTrack(m.track_id);
+    const prd = titles.map((t) => onRoadmap.get(t)).find(Boolean);
     const ref = prd ? { id: prd.id, slug: prd.slug, title: prd.title } : null;
     const label = `${m.name} · ${lineDay(m.date)}`;
     const code = codeOf(m.name);
-    const kd = sameAs(m.name, m.date).map((x) => fromPrd.get(x)).find(Boolean) ?? (code && ref ? byCode.get(`${ref.id}|${code}`) : undefined) ?? seen.get(`${label}|${ref?.id ?? ""}`);
+    const coded = code ? titles.map((t) => byCode.get(`${idOf.get(t)}|${code}`)).find(Boolean) : undefined;
+    const kd = sameAs(m.name, m.date).map((x) => fromPrd.get(x)).find(Boolean) ?? coded ?? seen.get(`${label}|${ref?.id ?? ""}`);
     if (kd) same.set(key, kd);
     else {
       const ln: Line = { key, kind: "milestone", label, date: m.date, prd: ref };
@@ -464,7 +469,11 @@ export function prioritiesOut(
 ): Schemas["SimplePrioritiesOut"] {
   const today = companyToday();
   const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
-  const { lines, same } = linesOf(read);
+  const trackKeys = new Map(Object.keys(TRACKS).map((k) => [stableUuid(`simple-track/${k}`), k]));
+  const { lines, same } = linesOf(read, (id) => {
+    const k = trackKeys.get(id);
+    return k ? trackPrdTitles(db, k) : [];
+  });
   const line = pickLine(lineKey, lines, same);
   const readItems = new Map(read.items.map((i) => [i.id, i]));
   // A cut draft reads as "draft" on the roadmap: the seed says it is cut (as the API's cut set).

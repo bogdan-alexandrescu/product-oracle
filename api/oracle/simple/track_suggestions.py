@@ -44,8 +44,11 @@ async def prd_owners(db: AsyncSession, prd_id: uuid.UUID) -> set[uuid.UUID]:
     return set(await company_owners(db))
 
 
-async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[Any]:
-    """The suggested tracks of the PRDs I own, oldest first."""
+async def inbox_rows(
+    db: AsyncSession, principal: Any, seen: Any, suggested: list[TrackPrd] | None = None
+) -> list[Any]:
+    """The suggested tracks of the PRDs I own, oldest first. ``suggested``: the PRDs
+    waiting on a suggested track, when ``oracle.simple.drafts.waiting`` read them already."""
     from oracle.simple.plan_changes import name_of, waiting_for
     from oracle.simple.schemas import (
         InboxSimpleTrackSuggestion,
@@ -57,13 +60,15 @@ async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[Any]:
     me = getattr(principal, "user_id", None)
     if me is None or getattr(principal, "is_run", False):
         return []
-    rows = list(
-        await db.scalars(
-            select(TrackPrd)
-            .where(TrackPrd.state == "suggested")
-            .order_by(TrackPrd.created_at, TrackPrd.id)
+    if suggested is None:
+        suggested = list(
+            await db.scalars(
+                select(TrackPrd)
+                .where(TrackPrd.state == "suggested")
+                .order_by(TrackPrd.created_at, TrackPrd.id)
+            )
         )
-    )
+    rows = suggested
     rows = [r for r in rows if me in await prd_owners(db, r.prd_document_id)]
     if not rows:
         return []

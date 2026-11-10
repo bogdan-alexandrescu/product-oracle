@@ -204,6 +204,10 @@ interface SimpleDb {
   goal_on_roadmap?: Record<string, boolean>;
   /** pre-demo QA P-6: item id -> the goal it serves on the Goal map (service._ladder_goals), read when the item has no goal of its own. */
   map_goals?: Record<string, Schemas["SimpleGoalRef"]>;
+  /** roadmap-milestone-codes: goal-ladder's Goal map milestones, which are this roadmap's own goal
+   * milestones in the API (goal_map._on_map reads the same rows), so the read codes them too
+   * (server.ts copies them from the map on each request: goalMapMilestones). */
+  map_milestones?: { roadmap: string; milestones: { id: string; name: string; date: string | null; goal_id: string; rank: number }[] };
   goal_jobs?: Record<string, { until: number; job_id: string; origin: "auto" | "on_demand" }>;
   auto_done?: string[];
   /** S7: the seeds a merge changed, as they were (change id -> seeds), for its undo. */
@@ -1160,6 +1164,16 @@ export function prdTrackOwnerIds(db: SimpleDb, prdSlug: string): string[] {
   return [...tracks].flatMap((t) => (db.track_owners?.[t] ? [db.track_owners[t]] : []));
 }
 
+/** tracks-goal (the API's track.prd_ids): a track's PRDs by title, its first one first, as the Tracks sheet
+ * keeps them (track_state); a track the sheet has not read yet holds its first item's PRD, as the sheet seeds it. */
+export function trackPrdTitles(db: SimpleDb, track: string): string[] {
+  const st = (db as SimpleDb & { track_state?: Record<string, { prd: string; more?: string[] }> }).track_state?.[track];
+  if (st) return [st.prd, ...(st.more ?? [])].filter(Boolean);
+  const on = db.items.find((s) => s.track === track);
+  const first = on ? (on.prd_doc?.title ?? ROADMAPS[on.roadmap]?.prd ?? "") : "";
+  return first ? [first] : [];
+}
+
 /** A PRD's owners (drafts.who on its document), by person id in id order: the owners of its tracks
  * only. An ask of its milestones is sent to them (with none, the company's owners) and theirs to decide. */
 export function prdOwnerIdsOf(db: SimpleDb, prdSlug: string): string[] {
@@ -1724,7 +1738,17 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   })();
   // roadmap-milestone-codes: each milestone's one code across every readable roadmap and item, numbered
   // before the filters so a filtered read shows the codes Home and the Goal map show (oracle.simple.service).
-  const coded = withRoadmapCodes({ goal_milestones: [...liveGoalMilestones.map(goalMilestoneOut), ...goalTargets], milestones: trackMilestones(readable), items }, (id) => goalRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
+  const onMap = db.map_milestones && readable.includes(db.map_milestones.roadmap) ? db.map_milestones : null;
+  const mapRanks = new Map((onMap?.milestones ?? []).map((m) => [m.goal_id, m.rank]));
+  const mapMilestoneOut = (m: NonNullable<typeof onMap>["milestones"][number]): Schemas["SimpleGoalMilestone"] => ({
+    id: m.id, roadmap_id: roadmapId(onMap!.roadmap), code: "", name: m.name, date: m.date, goal_id: m.goal_id, item_ids: [], counts_when: "", progress: "not_started",
+    prd: null, prd_owner: null, pending: null, can_change: false, can_propose: false, carried_from: null, kind: "goal", done_when_line: "", status: "on_track",
+    status_reason: null, status_set: null, status_set_by_name: null, measure: null, baseline: null, target: null, current: null,
+    sub_goal_of_id: null, sub_goal_ids: [], home_track_id: null, home_track_name: null, from_track_id: null, to_track_id: null,
+    from_track_name: null, to_track_name: null, goal_target: false,
+  });
+  const ownGoalMilestones = [...liveGoalMilestones.map(goalMilestoneOut), ...(onMap?.milestones ?? []).map(mapMilestoneOut), ...goalTargets];
+  const coded = withRoadmapCodes({ goal_milestones: ownGoalMilestones, milestones: trackMilestones(readable), items }, (id) => goalRanks.get(id) ?? mapRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
   const codeOf = new Map<string, string | null>([...coded.goal_milestones, ...(coded.milestones as { id: string; roadmap_code?: string | null }[])].map((m) => [m.id, m.roadmap_code ?? null]));
   const withCode = <M extends { id: string }>(m: M) => ({ ...m, roadmap_code: codeOf.get(m.id) ?? null });
   // tb-mk: each milestone's status and reason (goal_milestones.status_of), and every live track as a band.
@@ -1734,7 +1758,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     return k ? TRACKS[k] : null;
   };
   const statusOf = (outs: Schemas["SimpleGoalMilestone"][]) => outs.map((m) => withKindStatus(m, outs, (id) => itemOf.get(id), today, trackTitle, m.goal_target ? goalTargetDown.get(m.id) : undefined));
-  const allGoalMilestones = statusOf([...liveGoalMilestones.map(goalMilestoneOut), ...goalTargets].map(withCode));
+  const allGoalMilestones = statusOf(ownGoalMilestones.map(withCode));
   const shownGoalMilestones = allGoalMilestones.filter((m) => !chosen || m.roadmap_id === roadmapId(chosen));
   // service._track_bands: every live track (company.history_track_ids left out: a history roadmap's
   // track, a replaced PRD's), in the Tracks order; at risk when a feature of it ends after a milestone
