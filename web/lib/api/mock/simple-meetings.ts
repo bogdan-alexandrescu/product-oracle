@@ -1778,12 +1778,15 @@ export function sheetDecisionMade(db: MeetingsDb, made: Schemas["DecisionOut"], 
 }
 
 /** QA (unique codes): the "repeated-codes" scenario adds a question another PRD's run numbered q5
- * (lower case, as that run wrote it), decided outside meetings, beside Guided setup's own Q5. */
+ * (lower case, as that run wrote it), decided outside meetings, beside Guided setup's own Q5; and
+ * two runs' Q9 of one title, two different decisions. */
 export const REPEATED_CODES_SCENARIO = "repeated-codes";
 function repeatedCodeRows(): Schemas["SimpleDecisionRow"][] {
   if (typeof localStorage === "undefined" || localStorage.getItem("po-mock-scenario") !== REPEATED_CODES_SCENARIO) return [];
   const at = iso(mockNowMs() - 3 * 86_400_000);
   return [
     { id: stableUuid("qa-repeated-codes/q5"), number: 140, title: "Trial length for new teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "q5", chosen: "14 days", options: [] },
+    { id: stableUuid("qa-repeated-codes/q9-a"), number: 142, title: "Seat price for teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "Q9", chosen: "Per seat", options: [] },
+    { id: stableUuid("qa-repeated-codes/q9-b"), number: 141, title: "Seat price for teams", origin: "prd", status: "decided", approver: null, decided_at: at, created_at: at, subjects: [], code: "Q9", chosen: "Flat", options: [] },
   ];
 }

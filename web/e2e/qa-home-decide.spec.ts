@@ -1,4 +1,5 @@
-import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/ids";
+import { MOCK_EMPTY_FEEDBACK_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
 import { REPEATED_CODES_SCENARIO } from "../lib/api/mock/simple-meetings";
 import { login } from "./helpers";
 import { expect, test } from "./test";
@@ -12,6 +13,12 @@ import { expect, test } from "./test";
  * "Waiting for you"; fails_when = Home says nothing waits while the Inbox shows it;
  * no_claim = the API's list (pytest test_simple_waiting_read_budget.py).
  *
+ * Card inbox-more: protects = an Inbox row Home does not draw itself (open feedback, for an
+ * approver) counts on Home as on the rail and the Inbox: Home reads "1 thing in your Inbox" and
+ * one row "1 more in your Inbox" that opens Simple's Inbox, the rail's Inbox count reads 1 and the
+ * Inbox says 1 waiting; fails_when = Home says "Nothing waits on you today." while the rail and
+ * the Inbox count it.
+ *
  * Card waiting-prompt: protects = with the waiting list and the decisions list both slow, the
  * rail's read of the list is shared by Decisions' "Waiting for you" once it arrives, so the
  * section shows its rows without a second wait; fails_when = it sits on "Loading what waits on
@@ -19,7 +26,9 @@ import { expect, test } from "./test";
  *
  * Card unique-codes: protects = every decision on the Decisions list reads with a code unique
  * in the list, upper case, beside its name: a PRD's per-run code another decision shares (Q5 and
- * another run's q5) reads as the decision's D- number; fails_when = two rows read Q5, or q5.
+ * another run's q5) reads as the decision's D- number, its PRD and code in the tooltip; two
+ * different decisions with one code and one title read two D- numbers; fails_when = two rows
+ * read Q5 or Q9, or q5, or a decided row's tooltip leaves its PRD out.
  *
  * Card info-tips: protects = the explanation lines of Meetings and Decisions sit behind an (i)
  * beside the heading; fails_when = they show under the heading.
@@ -41,6 +50,29 @@ for (const phone of [false, true]) {
       await expect(row.getByRole("link", { name: "Open" })).toHaveAttribute("href", /^\/plan\/outcomes\?outcome=/);
       await page.goto("/simple/decisions");
       await expect(page.getByTestId("questions-mine").getByRole("listitem", { name: /^Inbox: Add predictions · / })).toBeVisible();
+    });
+
+    test("inbox-more: open feedback counts on Home as on the rail and the Inbox", async ({ page }) => {
+      await page.addInitScript(
+        ([key, value, feedback]) => {
+          localStorage.setItem(key, value);
+          localStorage.setItem(feedback, "1");
+        },
+        [MOCK_SCENARIO_KEY, "empty", MOCK_EMPTY_FEEDBACK_KEY] as const,
+      );
+      await login(page);
+      await page.goto("/simple/inbox");
+      await expect(page.getByText("1 waiting", { exact: true })).toBeVisible();
+      await page.goto("/simple");
+      const sentence = page.getByTestId("simple-page").getByTestId("home-sentence");
+      await expect(sentence).toContainText("1 thing in your Inbox");
+      await expect(page.getByText("Nothing waits on you today.")).toHaveCount(0);
+      const more = page.getByTestId("home-also-waiting").getByTestId("home-inbox-more");
+      await expect(more).toHaveText(/^1 more in your Inbox\s*Open$/);
+      if (!phone) await expect(page.getByTestId("simple-nav-inbox-count")).toHaveText("1");
+      await more.getByRole("link", { name: "Open" }).click();
+      await expect(page).toHaveURL(/\/simple\/inbox$/);
+      await expect(page.getByText("1 waiting", { exact: true })).toBeVisible();
     });
 
     test("waiting-prompt: Decisions' Waiting for you shows its rows without a second wait", async ({ page }) => {
@@ -78,7 +110,10 @@ for (const phone of [false, true]) {
       await expect(q5.getByTestId("question-code")).toHaveAttribute("title", "Guided setup Q5");
       const other = page.getByTestId("decision-row").filter({ hasText: "Trial length for new teams" });
       await expect(other.getByTestId("decision-code")).toHaveText("D-140");
-      await expect(other.getByTestId("decision-code")).toHaveAttribute("title", "Q5");
+      await expect(other.getByTestId("decision-code")).toHaveAttribute("title", "Team trials Q5");
+      // Two different decisions with one code and one title still read two numbers.
+      const q9 = page.getByTestId("decision-row").filter({ hasText: "Seat price for teams" });
+      await expect(q9.getByTestId("decision-code")).toHaveText(["D-142", "D-141"]);
       // A code no other decision shares keeps it.
       expect(codes.filter((c) => /^Q\d+$/.test(c)).length).toBeGreaterThan(0);
     });
