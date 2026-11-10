@@ -177,6 +177,7 @@ import {
   PRIORITIES_GOAL_NO_VALUE_SCENARIO,
   PRIORITIES_TWINS_SCENARIO,
   PRIORITIES_TWINS_TRACE_SCENARIO,
+  PRIORITIES_TWINS_OLD_SCENARIO,
   PRIORITIES_PLAN_GOAL_CODES_SCENARIO,
   PRIORITIES_PLAN_GOAL_NAMES_SCENARIO,
   PRIORITIES_PLAN_GOAL_TWINS_SCENARIO,
@@ -186,6 +187,7 @@ import {
   seedGoalNoValue,
   seedPrioritiesTwins,
   seedPrioritiesTwinsTrace,
+  seedPrioritiesTwinsOld,
   seedPlanGoalCodes,
   seedPlanGoalNames,
   seedPlanGoalTwins,
@@ -4408,6 +4410,12 @@ function load(): Db {
                 ? () => {
                     const db = seedOneRoadmapScenario();
                     seedPrioritiesTwins(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_TWINS_OLD_SCENARIO
+                ? () => {
+                    const db = seedOneRoadmapScenario();
+                    seedPrioritiesTwinsOld(db.simple_roadmap!);
                     return db;
                   }
               : scenario === PRIORITIES_TWINS_TRACE_SCENARIO

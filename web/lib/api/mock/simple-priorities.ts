@@ -15,7 +15,7 @@ import { closed, codedTitle, companyToday, goalRank, prdCode, roadmapOut, trackP
 import { flowFor } from "./simple-visuals";
 import { madeOrder } from "./made-order";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
-import { COMPANY_SLUG, COMPANY_TITLE, OLD_ITEM } from "./one-roadmap";
+import { COMPANY_SLUG, COMPANY_TITLE, OLD_ITEM, OLD_ROADMAP } from "./one-roadmap";
 import { seedGoalBuckets } from "./goal-buckets";
 
 type Row = Schemas["SimplePriorityRow"];
@@ -87,6 +87,20 @@ export function seedPrioritiesTwins(db: SimpleDb): void {
   add({ key: "trusted-badge-2", title: `${TWINS.draft} `, horizon: "later", roadmap: COMPANY_SLUG, confidence: "high", source: "engineering" });
   // Oracle only proposed these two: they rank, but have no mark (Show's All still counts them).
   db.proposed_features = ["block-list", "queue-backpressure"];
+}
+
+/**
+ * "priorities-twins-old" (re-review of #1503): "priorities-twins" plus a Block list item on the older Trust plan
+ * roadmap that is its own feature: a twin of the company roadmap's Block list whose only item Simple does not read.
+ * Someone else decides Trust plan roadmap, so the approver may not merge it. Invented data.
+ */
+export const PRIORITIES_TWINS_OLD_SCENARIO = "priorities-twins-old";
+export const OLD_TWIN = { key: "block-list-old", decider: stableUuid("member/old-decider@example.com") } as const;
+export function seedPrioritiesTwinsOld(db: SimpleDb): void {
+  seedPrioritiesTwins(db);
+  db.items.push({ key: OLD_TWIN.key, title: TWINS.unlinked, horizon: "later", roadmap: OLD_ROADMAP[0], confidence: "medium", source: "engineering" });
+  db.ids[OLD_TWIN.key] = stableUuid(`simple-item/${OLD_TWIN.key}`);
+  db.deciders = { ...db.deciders, [OLD_ROADMAP[0]]: OLD_TWIN.decider };
 }
 
 export function seedPrioritiesTwinsTrace(db: SimpleDb): void {
