@@ -22,7 +22,7 @@
  * for your review of <PRD>", at most once a day per reviewer (409 when none is due).
  */
 import type { Schemas } from "@/lib/api/client";
-import { planByMonth } from "@/lib/simple-home";
+import { milestoneOf, planByMonth } from "@/lib/simple-home";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
@@ -663,7 +663,39 @@ function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem
       }];
     });
   // A dated plan's span is the one its timeline draws.
-  return { items, span: plan?.dated && plan.span ? [plan.span.start, plan.span.end] : null };
+  const names = Object.fromEntries((plan?.milestones ?? []).filter((m) => m.name).map((m) => [m.code, m.name]));
+  return { items: namedMilestones(items, names), span: plan?.dated && plan.span ? [plan.span.start, plan.span.end] : null };
+}
+
+/**
+ * vqa one-pager 3, as one_pager.plan_items and plan_strip.strip: a milestone said only by its code
+ * ("M2", an item with no slice or its milestone record) reads with the name the PRD's plan gives
+ * that code (`names`), else the name another of the strip's items gives it ("M2 · Ship to beta").
+ */
+function namedMilestones(items: SliceItem[], names: Record<string, string>): SliceItem[] {
+  const named = (t: string) => {
+    const [code, label] = milestoneOf(t);
+    return label === code && names[code] ? `${code} · ${names[code]}` : t;
+  };
+  const out = items.map((x) => ({
+    ...x,
+    ...(x.milestone ? { milestone: [named(x.milestone[0]), x.milestone[1]] as [string, string | null] } : {}),
+    ...(x.record ? { record: { ...x.record, name: named(x.record.name) } } : {}),
+  }));
+  const said: Record<string, string> = {};
+  for (const t of out.flatMap((x) => [x.milestone?.[0], x.record?.name])) {
+    const [code, label] = milestoneOf(t ?? "");
+    if (t && label !== code) said[code] ??= label;
+  }
+  const other = (t: string) => {
+    const [code, label] = milestoneOf(t);
+    return label === code && said[code] ? said[code] : t;
+  };
+  return out.map((x) => ({
+    ...x,
+    ...(x.milestone ? { milestone: [other(x.milestone[0]), x.milestone[1]] as [string, string | null] } : {}),
+    ...(x.record ? { record: { ...x.record, name: other(x.record.name) } } : {}),
+  }));
 }
 
 /** As one_pager._says_not_in_prd: a line that only says the PRD lacks it; the block's mark says it, once. */
