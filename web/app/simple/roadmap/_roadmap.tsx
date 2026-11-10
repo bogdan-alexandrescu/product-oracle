@@ -1,5 +1,6 @@
 "use client";
 
+import { tbData, tbOf } from "./_trackbands"; // MOCK-HOOK
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from "react";
@@ -1223,13 +1224,14 @@ export function SimpleRoadmap() {
   // The filters' choices: every PRD, goal and track seen, so narrowing keeps the others.
   // roadmap-done (owner, Nov 4): a done (shipped) item leaves the plan: no view draws it and no
   // count reads it (the API checks it no more); it is kept under the Done list, which opens it.
-  const all = roadmap.data;
+  const tb = useMemo(tbOf, []); // MOCK-HOOK
+  const all = useMemo(() => (tb && roadmap.data ? tbData(roadmap.data) : roadmap.data), [tb, roadmap.data]); // MOCK-HOOK
   const data = useMemo(() => (all ? { ...all, items: all.items.filter((i) => i.status !== "done") } : undefined), [all]);
   const doneItems = useMemo(() => (all?.items ?? []).filter((i) => i.status === "done"), [all]);
   // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
-  const laned = useMemo(() => (data ? oneLane(lanes(data, f.group), f.group) : null), [data, f.group]);
+  const laned = useMemo(() => (data ? (tb ? oneLane(lanes(data, "track"), "track") : oneLane(lanes(data, f.group), f.group)) : null), [data, f.group, tb]); // MOCK-HOOK
   // The Timeline always draws goal lanes, the same groups the goal cards count.
-  const goalLaned = useMemo(() => (data ? oneLane(lanes(data, "goal"), "goal") : null), [data]);
+  const goalLaned = useMemo(() => (data ? (tb ? oneLane(lanes(data, "track"), "track") : oneLane(lanes(data, "goal"), "goal")) : null), [data, tb]); // MOCK-HOOK
   const planPrds = useMemo(() => [...new Set((data?.items ?? []).flatMap((i) => (i.slices.length && i.prd ? [i.prd.slug] : [])))].sort(), [data]);
   // A plan the reader cannot open (404) leaves the other plans' no-work weeks.
   const plans = useQuery(`simple-plan-no-work:${planPrds.join(",")}`, async () =>
@@ -2084,7 +2086,7 @@ export function SimpleRoadmap() {
           />
           <Chart
             data={laned ?? data}
-            lane={f.group}
+            lane={tb ? "track" : f.group} // MOCK-HOOK
             noWork={noWork}
             format={format}
             unit={unit}

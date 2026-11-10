@@ -1,5 +1,6 @@
 "use client";
 
+import { TbHead, tbOf } from "./_trackbands"; // MOCK-HOOK
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
@@ -451,6 +452,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   const numbers = useContext(GoalNumbers);
   const laneNum = (r: { key: string; title: string; below?: boolean }) => (lane === "goal" && !r.below && goalLane(r.key) ? (numbers.get(r.key) ?? numbers.get(r.title) ?? null) : null);
   const [width, setWidth] = useState(900);
+  const tb = useMemo(tbOf, []); // MOCK-HOOK
   const flash = useAppliedFlash();
   useEffect(() => {
     const el = box.current;
@@ -752,7 +754,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               style={{ height: l.hs[n] }}
               className={`flex min-w-0 flex-col justify-center bg-surface2 px-3 ${r.below ? "text-text2" : ""}`}
             >
-              {gantt ? (
+              {tb && !r.below ? <TbHead tb={tb} laneKey={r.key} title={r.title} stack /> : gantt ? ( // MOCK-HOOK
                 // D: the goal's name and, under it, its metric. The row's height must fit both
                 // lines (finding 6): a phone's tighter leading keeps the subtitle from being
                 // painted over by the next row.

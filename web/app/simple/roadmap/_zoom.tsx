@@ -3,6 +3,8 @@
 // state has its own look with the key on top (QR2 A), broken links sit in a panel above the
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
+import { TbHead, tbBand, tbOf, tbRank } from "./_trackbands"; // MOCK-HOOK
+import { Fragment } from "react"; // MOCK-HOOK
 import { MsLayer, msCode, useMsBand, useMsCtl, type MsLane, type MsRow } from "./_milestones";
 import {
   memo,
@@ -443,6 +445,7 @@ function DayChart(props: TimelineProps) {
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
   const rows = useMemo(() => rowsOf(data), [data]);
+  const tb = useMemo(tbOf, []); // MOCK-HOOK
   // The owner (Nov 9): the Timeline opens on 3 months; a person's pick holds for the visit
   // (back from the Gantt too), never stored: a new visit opens on 3 months again.
   const [zoom, pickZoom] = useState<Zoom>(() => visit.zoom);
@@ -1086,8 +1089,9 @@ function DayChart(props: TimelineProps) {
                 <div
                   key={`l-${r.key}`}
                   data-testid="timeline-lane"
-                  className="pointer-events-none relative z-[11] flex h-8 items-end border-b border-line bg-surface2/70"
+                  className={`pointer-events-none relative ${tb ? "z-[25] hover:z-[30] focus-within:z-[30]" : "z-[11]"} flex h-8 items-end border-b border-line bg-surface2/70`} // MOCK-HOOK
                 >
+                  {/* MOCK-HOOK */}{tb && r.key !== "below" ? (<div className="sticky left-0 px-3 pb-1 text-sm whitespace-nowrap"><TbHead tb={tb} laneKey={r.key} title={r.title} /></div>) : ( // MOCK-HOOK
                   <div className="sticky left-0 px-3 pb-1 text-sm font-semibold whitespace-nowrap">
                     {data.group === "goal" && r.key !== "none" && r.key !== "below" && <GoalNum n={numbers.get(r.key) ?? numbers.get(r.title)} />}
                     {r.title}{" "}
@@ -1095,6 +1099,7 @@ function DayChart(props: TimelineProps) {
                       · {r.count} {r.count === 1 ? "item" : "items"}
                     </span>
                   </div>
+                  )} {/* MOCK-HOOK */}
                 </div>
               );
             const i = r.item;
@@ -1419,6 +1424,7 @@ function QuarterMilestones({ from, to }: { from: string; to: string }) {
  * this one, when it started before and runs on). */
 function QuarterList(props: TimelineProps) {
   const { data, openKey, onOpen } = props;
+  const tb = tbOf(); // MOCK-HOOK
   const days = data.items
     .flatMap((i) => [i.start.date, i.end.date])
     .concat(data.today)
@@ -1436,6 +1442,7 @@ function QuarterList(props: TimelineProps) {
               (q === tq && i.start.date < q.start && i.end.date >= q.start),
           )
           .sort((a, b) => (a.start.date < b.start.date ? -1 : 1));
+        if (tb) inQ.sort((a, b) => tbRank(data, a) - tbRank(data, b)); // MOCK-HOOK
         if (!inQ.length) return null;
         // feature-parts: the quarter's parts under their parents, as a tree.
         const tree = partsTree([inQ.map((i) => i.id)], byId)[0];
@@ -1476,12 +1483,15 @@ function QuarterList(props: TimelineProps) {
               ))}
             <QuarterMilestones from={q.start} to={q.end} />
             <ul className="divide-y divide-line/60">
-              {items.map((i) => {
+              {items.map((i, n) => { // MOCK-HOOK
                 const lk = lookOf(i);
                 const sel = openKey === i.key;
+                const band = tb && (n === 0 || tbRank(data, items[n - 1]) !== tbRank(data, i)) ? tbBand(data, i) : null; // MOCK-HOOK
                 // ah2-roadmap-specs review: the goal its Gantt lane names (its PRD's, else its own).
-                const goal = planGoal(i) ?? i.goal?.title;
+                const goal = tb ? null : (planGoal(i) ?? i.goal?.title); // MOCK-HOOK
                 return (
+                  <Fragment key={i.id}>{/* MOCK-HOOK */}
+                  {band && <li className="bg-surface2/70 px-3 py-1 text-sm">{band.below ? <b className="text-text2">Below the line</b> : <TbHead tb={tb!} laneKey={band.key} title={band.title} />}</li>}{/* MOCK-HOOK */}
                   <li
                     key={i.id}
                     data-testid="timeline-row"
@@ -1534,6 +1544,7 @@ function QuarterList(props: TimelineProps) {
                       </span>
                     </button>
                   </li>
+                  {/* MOCK-HOOK */}</Fragment>
                 );
               })}
             </ul>

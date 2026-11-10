@@ -7,6 +7,7 @@
  * goal's rows; a drag on the diamond moves it, a click opens it to edit or remove; every change has
  * Undo. A PRD's own milestones are hollow and dashed: a change to one asks the PRD's owner. */
 
+import { tbOf } from "./_trackbands"; // MOCK-HOOK
 import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { Button } from "@/components/ds";
@@ -554,14 +555,15 @@ export function MsLayer(props: MsLayerProps) {
   const d = ms.draft;
   if (ms.canAdd) {
     // The hint steps right past any name it would cover.
+    const keep: [number, number][] = [...(props.keepOff ?? []), ...(tbOf() ? ms.band.filter((m) => m.date).map((m) => [X(m.date!) - 10, X(m.date!) + 10] as [number, number]) : [])]; // MOCK-HOOK
     let hintL: number | null = X(addDays(ms.today, 97));
-    for (const [a, b] of [...(props.keepOff ?? [])].sort((p, q) => p[0] - q[0])) if (hintL < b + 6 && hintL + 92 > a - 6) hintL = b + 8;
+    for (const [a, b] of [...keep].sort((p, q) => p[0] - q[0])) if (hintL < b + 6 && hintL + 92 > a - 6) hintL = b + 8; // MOCK-HOOK
     // On the Timeline it stays in sight, right of the names column: the free place nearest its
     // day, past a name or before it; with none, no hint.
     if (props.span) {
       const [lo, hi] = props.span;
       const want = X(addDays(ms.today, 97));
-      const spans = props.keepOff ?? [];
+      const spans = keep; // MOCK-HOOK
       const free = (l: number) => l >= lo + 6 && l + 92 <= hi - 6 && spans.every(([a, b]) => l >= b + 6 || l + 92 <= a - 6);
       const near = [Math.min(Math.max(want, lo + 6), hi - 98), ...spans.flatMap(([a, b]) => [b + 8, a - 100])].filter(free);
       hintL = near.length ? near.reduce((p, q) => (Math.abs(q - want) < Math.abs(p - want) ? q : p)) : null;
