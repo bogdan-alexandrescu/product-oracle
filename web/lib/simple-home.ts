@@ -235,16 +235,25 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
     const counts = new Map<string, number>();
     for (const x of of) counts.set(x.label, (counts.get(x.label) ?? 0) + 1);
     // A named label ("M4 · Rollout") before the bare code ("M4"), then the commonest.
-    const name = [...counts].sort((a, b) => Number(a[0] === key) - Number(b[0] === key) || b[1] - a[1] || byCodePoint(a[0], b[0]))[0][0];
+    const named = [...counts].sort((a, b) => Number(milestoneOf(a[0])[0] === a[0]) - Number(milestoneOf(b[0])[0] === b[0]) || b[1] - a[1] || byCodePoint(a[0], b[0]))[0][0];
+    // A record named only by its code ("M2") reads the name its own items give that code
+    // (vqa one-pager 3, as plan_strip.strip), never another record's.
+    const said = new Map<string, number>();
+    for (const x of of) {
+      const label = milestoneOf(x.i.milestone)[1];
+      if (label !== named && milestoneOf(label)[0] === named) said.set(label, (said.get(label) ?? 0) + 1);
+    }
+    const name = said.size ? [...said].sort((a, b) => b[1] - a[1] || byCodePoint(a[0], b[0]))[0][0] : named;
     const dates = of.flatMap((x) => (x.i.milestoneDate ? [x.i.milestoneDate] : []));
     const date = dates.length ? maxOf(dates) : null;
     // A dated plan milestone (the PRD dates it): its row spans its start to its end.
     const starts = of.flatMap((x) => (x.i.milestoneStart ? [x.i.milestoneStart] : []));
-    // A record's row is its own (two PRDs' "M1 · Launch" on one date are two rows); texts by name and date.
+    // A record's row is its own (two PRDs' "M1 · Launch" on one date are two rows).
     const whose = of.find((x) => x.i.record?.of)?.i.record?.of ?? null;
     // Names its items' records read beside the row's own (a track's on two roadmaps), the row's own never.
     const also = [...new Set(of.flatMap((x) => x.i.record?.also ?? []))].filter((n) => !sameWords(n, name.replace(" · ", " ")));
-    groups.set(key.startsWith("record:") ? key : `${name}|${date ?? ""}`, { name, date, begins: starts.length ? minOf(starts) : null, of: of.map((x) => x.i), whose, also });
+    // Each record (or code) is its own row: two records sharing a name and date stay two.
+    groups.set(key, { name, date, begins: starts.length ? minOf(starts) : null, of: of.map((x) => x.i), whose, also });
   }
   const dated = [...groups.values()].flatMap((g) => (g.date ? [g.date] : []));
   const committed = items.filter((i) => !i.estimated).map((i) => i.end);

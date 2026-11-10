@@ -281,7 +281,8 @@ export function seedBetAddedOnePager(): OnePagerDb {
 
 /**
  * The "one-pager-milestone-names" scenario (vqa one-pager 3): the plan's M2 milestone record is
- * named only by its code ("M2") while another item names it ("M2 · Ship to beta"). Invented data.
+ * named only by its code ("M2") while another of its items names it ("M2 · Ship to beta"): one
+ * row, read by that name. Invented data.
  */
 export function seedMilestoneNamesOnePager(): OnePagerDb {
   const item = (title: string, start: string, end: string, milestone: [string, string], record?: { id: string; name: string }): SliceItem =>
@@ -291,7 +292,7 @@ export function seedMilestoneNamesOnePager(): OnePagerDb {
     slice: [
       item("Setup checklist", "2026-11-02", "2026-11-27", ["M1 · Measured and mapped", "2026-12-04"]),
       item("Calendar invites", "2026-11-09", "2026-12-04", ["M2", "2026-12-11"], { id: stableUuid("op-milestone/m2"), name: "M2" }),
-      item("Sample project", "2026-11-16", "2026-12-11", ["M2 · Ship to beta", "2026-12-18"]),
+      item("Sample project", "2026-11-16", "2026-12-11", ["M2 · Ship to beta", "2026-12-18"], { id: stableUuid("op-milestone/m2"), name: "M2" }),
     ],
   };
 }
@@ -711,33 +712,19 @@ function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem
 }
 
 /**
- * vqa one-pager 3, as one_pager.plan_items and plan_strip.strip: a milestone said only by its code
- * ("M2", an item with no slice or its milestone record) reads with the name the PRD's plan gives
- * that code (`names`), else the name another of the strip's items gives it ("M2 · Ship to beta").
+ * vqa one-pager 3, as one_pager.plan_items: a milestone said only by its code ("M2", an item
+ * with no slice or its milestone record) reads with the name the PRD's plan gives that code
+ * (`names`); a record's own items name it in the strip (planByMonth), never another record's.
  */
 function namedMilestones(items: SliceItem[], names: Record<string, string>): SliceItem[] {
   const named = (t: string) => {
     const [code, label] = milestoneOf(t);
     return label === code && names[code] ? `${code} · ${names[code]}` : t;
   };
-  const out = items.map((x) => ({
+  return items.map((x) => ({
     ...x,
     ...(x.milestone ? { milestone: [named(x.milestone[0]), x.milestone[1]] as [string, string | null] } : {}),
     ...(x.record ? { record: { ...x.record, name: named(x.record.name) } } : {}),
-  }));
-  const said: Record<string, string> = {};
-  for (const t of out.flatMap((x) => [x.milestone?.[0], x.record?.name])) {
-    const [code, label] = milestoneOf(t ?? "");
-    if (t && label !== code) said[code] ??= label;
-  }
-  const other = (t: string) => {
-    const [code, label] = milestoneOf(t);
-    return label === code && said[code] ? said[code] : t;
-  };
-  return out.map((x) => ({
-    ...x,
-    ...(x.milestone ? { milestone: [other(x.milestone[0]), x.milestone[1]] as [string, string | null] } : {}),
-    ...(x.record ? { record: { ...x.record, name: other(x.record.name) } } : {}),
   }));
 }
 
