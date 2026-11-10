@@ -144,8 +144,11 @@ test.describe("desktop, format", () => {
     const pop = page.getByTestId("suggestion-popover");
     await pop.getByRole("button", { name: "Accept" }).click();
     await expect(page.getByText("Dates accepted in your working draft")).toBeVisible();
-    const outline = page.locator('[data-testid="suggestion-open"]').first();
-    const key = await outline.getAttribute("data-item");
+    // The toast comes before the reload: wait till the accepted item's outline is gone, then
+    // edit the item read (`.first()` again could be another one once the reload lands).
+    await expect(page.locator('[data-testid="suggestion-open"][data-item="alert-sso"]')).toHaveCount(0);
+    const key = await page.locator('[data-testid="suggestion-open"]').first().getAttribute("data-item");
+    const outline = page.locator(`[data-testid="suggestion-open"][data-item="${key}"]`);
     await outline.click();
     await pop.getByRole("button", { name: "Edit dates" }).click();
     await pop.getByLabel("Start").fill("2026-12-01");

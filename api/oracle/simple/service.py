@@ -1436,7 +1436,9 @@ def _group_of(
     return NONE, "No PRD", (1,)
 
 
-def _number(v: Any) -> float | None:
+def _measure_value(v: Any) -> float | None:
+    """A goal measure's number (``start``, ``target``); effort reads through
+    scoring.effort_weeks."""
     return float(v) if isinstance(v, int | float) and not isinstance(v, bool) else None
 
 
@@ -1475,7 +1477,7 @@ async def _goal_targets(
         rid = active.id if active is not None and active.id in readable else on
         rid = rid or next(iter(readable))
         attrs = g.attrs or {}
-        baseline, target = _number(attrs.get("start")), _number(attrs.get("target"))
+        baseline, target = _measure_value(attrs.get("start")), _measure_value(attrs.get("target"))
         current = _goal_current(g)
         item_ids = [e.row.id for e in mine]
         comparison = attrs.get("comparison")

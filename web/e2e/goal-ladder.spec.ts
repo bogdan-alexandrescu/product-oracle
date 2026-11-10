@@ -486,9 +486,10 @@ test.describe("Goal ladder findings: numbers, first view, week captions, 1440", 
     // $20000" or "$10000"; no_claim=the guardrail's tooltip reading.
     await open(page, "light");
     await expect(page.getByTestId("ld-goal").filter({ hasText: "Larger teams add paid seats" })).toContainText("$11,200 of $20,000");
-    const m4 = page.getByTestId("ld-milestone").filter({ hasText: "M4" });
-    await expect(m4).toContainText("$10,000 of $10,000");
-    await expect(page.getByTestId("ld-milestone").filter({ hasText: "M10" })).toContainText("— of $20,000");
+    // Milestones by name: their codes are numbered roadmap-wide.
+    const first = page.getByTestId("ld-milestone").filter({ hasText: "Seat revenue first measured for large teams" });
+    await expect(first).toContainText("$10,000 of $10,000");
+    await expect(page.getByTestId("ld-milestone").filter({ hasText: "Seat revenue of $20,000 per month" })).toContainText("— of $20,000");
     await expect(page.getByTestId("ld-goal").first()).toContainText("81% of 88%");
   });
 
@@ -537,15 +538,16 @@ test.describe("Goal ladder findings: numbers, first view, week captions, 1440", 
   });
 
   test("V-6: the week strip's captions name the whole milestone and never end on a small word", async ({ page }) => {
-    // protects=ld1-d-rest's strip: "M10 Seat revenue of $20,000" with the full name as its title;
+    // protects=ld1-d-rest's strip: "M15 Seat revenue of $20,000" with the full name as its title;
     // fails_when=a caption is cut ("M10 Seat revenue of $20,000 per") with no way to read the rest;
     // no_claim=where the captions sit.
     await open(page, "light");
-    const m8 = page.getByTestId("ld-week-mark").filter({ hasText: "M8 Renewal" });
-    await expect(m8).toHaveAttribute("title", /M8 Renewal rate at 85% for spring renewals/);
-    const m10 = page.getByTestId("ld-week-mark").filter({ hasText: "M10 Seat" });
-    await expect(m10).toHaveText("M10 Seat revenue of $20,000");
-    await expect(m10).toHaveAttribute("title", /M10 Seat revenue of \$20,000 per month/);
+    // Marks by name: milestone codes are numbered roadmap-wide.
+    const renewal = page.getByTestId("ld-week-mark").filter({ hasText: /^M\d+ Renewal/ });
+    await expect(renewal).toHaveAttribute("title", /M\d+ Renewal rate at 85% for spring renewals/);
+    const seats = page.getByTestId("ld-week-mark").filter({ hasText: /^M\d+ Seat revenue of/ });
+    await expect(seats).toHaveText(/^M\d+ Seat revenue of \$20,000$/);
+    await expect(seats).toHaveAttribute("title", /M\d+ Seat revenue of \$20,000 per month/);
     // Wrapped, not clipped: no caption is wider than its box.
     for (const mark of await page.getByTestId("ld-week-mark").all()) {
       expect(await mark.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);

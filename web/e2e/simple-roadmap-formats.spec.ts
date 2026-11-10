@@ -77,7 +77,7 @@ for (const [where, use] of [
       /**
        * Card simple-board-draws: protects = the Now / Next / Later board shows the same
        * items as the timeline in three columns by their horizon (each with its window and
-       * count, with its years when not this year's), grouped by goal inside a column, estimated dates hatched, the draft dashed,
+       * count, with its years when not this year's), in track bands inside a column (by goal on Group by Goal), estimated dates hatched, the draft dashed,
        * a broken link red with its reason, the cut item below the line; on a phone the
        * columns stack and the page never scrolls sideways; fails_when = an item sits in the
        * wrong column, a column or group is missing, or a phone scrolls sideways; no_claim =
@@ -89,7 +89,12 @@ for (const [where, use] of [
         for (const k of ["alert-rules", "alert-digest", "setup-checklist"]) await expect(column(page, "now").locator(`[data-item="${k}"]`)).toBeVisible();
         for (const k of ["alert-export", "alert-sso", "setup-ideas"]) await expect(column(page, "next").locator(`[data-item="${k}"]`)).toBeVisible();
         await expect(column(page, "later").locator('[data-item="setup-video"]')).toBeVisible();
-        // The board groups by goal (tb-mk: only the Timeline and the Gantt start by track).
+        // Track everywhere (owner Nov 10): the board opens on track bands; Group by Goal groups it by goal.
+        await expect(column(page, "now").getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
+        const toggle = page.getByTestId("filters-toggle");
+        if (await toggle.isVisible()) await toggle.click();
+        await page.getByTestId("group-goal").click();
+        await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
         await expect(column(page, "now").getByTestId("board-group").first()).toContainText(/Grow retention|Faster activation/);
         await expect(card(page, "alert-sso")).toHaveAttribute("data-kind", "estimated");
         await expect(card(page, "alert-sso").getByTestId("board-dates")).toContainText("estimated");
@@ -196,11 +201,8 @@ for (const [where, use] of [
           "png:Roadmap · Waterfall",
           "pdf:Roadmap · Waterfall",
         ]);
-        // tb-mk: the Timeline's and the Gantt's track bands, the board's and the Waterfall's goal lanes.
-        expect(drawn.map((d) => d.filters)).toEqual([
-          ...Array(4).fill("Grouped by track · Goal: Faster activation"),
-          ...Array(4).fill("Grouped by goal · Goal: Faster activation"),
-        ]);
+        // Track everywhere (owner Nov 10): every format starts in track bands, and its export says so.
+        expect(drawn.map((d) => d.filters)).toEqual(Array(8).fill("Grouped by track · Goal: Faster activation"));
         for (const d of drawn) expect(d.brand).toBe(COMPANY);
       });
     });
