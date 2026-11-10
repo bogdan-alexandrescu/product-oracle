@@ -666,7 +666,8 @@ function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem
     }
   }
   const byName = new Map<string, string>();
-  for (const m of (out?.milestones ?? []) as { name?: string | null; roadmap_code?: string | null }[]) {
+  // A roadmap milestone (a track's, or a roadmap's own; a goal's target date holds no item).
+  for (const m of [...((out?.milestones ?? []) as { name?: string | null; roadmap_code?: string | null }[]), ...(out?.goal_milestones ?? []).filter((g) => !g.goal_target)]) {
     const k = (m.name ?? "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
     if (k && m.roadmap_code && (!byName.has(k) || Number(m.roadmap_code.slice(1)) < Number(byName.get(k)!.slice(1)))) byName.set(k, m.roadmap_code);
   }

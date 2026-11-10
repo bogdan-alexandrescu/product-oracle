@@ -417,7 +417,12 @@ def roadmap_codes_of(read: Any, prd_id: uuid.UUID) -> Callable[..., str | None]:
                 own[k] = m.roadmap_code
 
     by_name: dict[str, str] = {}
-    for m in read.milestones:
+    # A roadmap milestone (a track's, or a roadmap's own; a goal's target date holds no item).
+    named = [
+        *read.milestones,
+        *(m for m in read.goal_milestones if not getattr(m, "goal_target", False)),
+    ]
+    for m in named:
         k = " ".join((m.name or "").split()).casefold()
         code = m.roadmap_code
         if k and code and (k not in by_name or int(code[1:]) < int(by_name[k][1:])):
