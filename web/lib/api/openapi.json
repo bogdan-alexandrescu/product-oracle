@@ -49293,7 +49293,7 @@
           "simple"
         ],
         "summary": "Merge Simple Priority Twin",
-        "description": "A Same name record's Merge into\u2026 the row's feature (qa-prio-twins): its roadmap items\nare linked to the kept feature first, then its feature is merged into it. 403 unless the\ncaller is an approver who decides each of those items' roadmaps; nothing is written.",
+        "description": "A Same name record's Merge into\u2026 the row's feature (qa-prio-twins): its roadmap items\nare linked to the kept feature first, on every roadmap, then its feature is merged into it.\n403 unless the caller is an approver; 409, naming why, when they do not decide one of those\nitems' roadmaps or the kept feature has its own item there; nothing is written.",
         "operationId": "merge_simple_priority_twin",
         "security": [
           {
@@ -129672,6 +129672,17 @@
             "type": "boolean",
             "title": "Applies",
             "default": false
+          },
+          "blocked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocked"
           }
         },
         "type": "object",

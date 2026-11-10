@@ -24,6 +24,9 @@ nothing. :func:`load` is also what the daily suggestions read, as Oracle (no pri
 import re
 import uuid
 from collections import defaultdict, deque
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from types import SimpleNamespace
@@ -306,9 +309,25 @@ def _versions(
     return out
 
 
+# qa-prio-twins (re-review of #1503): inside every_roadmap(), load reads every roadmap, the
+# older ones beside the company roadmap included, so a write that must reach a feature's items
+# wherever they are (a twin's Merge into…, priorities.merge_twin) finds and changes them.
+_EVERY_ROADMAP: ContextVar[bool] = ContextVar("simple_every_roadmap", default=False)
+
+
+@contextmanager
+def every_roadmap() -> Iterator[None]:
+    token = _EVERY_ROADMAP.set(True)
+    try:
+        yield
+    finally:
+        _EVERY_ROADMAP.reset(token)
+
+
 async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | None = None) -> Read:
     """Everything the read needs, as the session's principal may see it; ``overlays``
-    (roadmap document id -> {item id -> fields}): the working drafts the reader sees."""
+    (roadmap document id -> {item id -> fields}): the working drafts the reader sees. Inside
+    every_roadmap(), every roadmap's items, not only the company roadmap's."""
     from oracle.simple import drafts
 
     today = await company_time.company_today(db)
@@ -318,9 +337,9 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         for d in await db.scalars(select(Document).where(Document.kind.in_(("roadmap", "prd"))))
     }
     # one-roadmap-many-prds: the company roadmap alone while there is one.
-    roadmap_ids = await company.feeding_ids(
-        db, [d.id for d in docs.values() if d.kind == "roadmap"]
-    )
+    roadmap_ids = [d.id for d in docs.values() if d.kind == "roadmap"]
+    if not _EVERY_ROADMAP.get():
+        roadmap_ids = await company.feeding_ids(db, roadmap_ids)
     entries: list[Entry] = []
     if not roadmap_ids:
         return Read(today, windows, entries, [], {})

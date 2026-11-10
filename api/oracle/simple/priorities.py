@@ -750,7 +750,6 @@ def _fold_twins(
     principal: Any,
     deciders: Any,
     can_change: bool,
-    items_of: dict[str, list[service.Entry]] | None = None,
 ) -> tuple[list[SimplePriorityRow], dict[str, SimplePriorityRow]]:
     """qa-prio-twins: rows of separate features with one name (a row's title or its feature's
     own, ``titles``: feature id -> title) are one feature not linked as one: one row, the
@@ -793,14 +792,9 @@ def _fold_twins(
             else:
                 # No item, an item on another roadmap, or a lead with only a draft: the
                 # baseline's Merge into… of its feature into the row's (merge_twin), which
-                # first re-links each of its items: it applies for an approver who decides
-                # every one of them.
-                theirs = (items_of or {}).get(r.feature_id, [])
-                merge, applies = (
-                    "entity",
-                    has_role(principal.role, "approver")
-                    and all(service.can_decide(principal, x, deciders) for x in theirs),
-                )
+                # first re-links each of its items on every roadmap: whether it applies is
+                # worked out over them (build, _twin_block).
+                merge, applies = "entity", has_role(principal.role, "approver")
             lead.twins.append(
                 SimplePriorityTwin(
                     feature_id=r.feature_id, item_id=r.item_id, code=r.code, title=r.title,
@@ -817,7 +811,8 @@ async def build(
     db: AsyncSession, principal: Any, line_key: str | None = None
 ) -> SimplePrioritiesOut:
     ranking = await priorities.compute(db, METHOD, principal, overrides=True)
-    read_ = await service.load(db, await drafts.overlays_for(db, principal))
+    overlays = await drafts.overlays_for(db, principal)
+    read_ = await service.load(db, overlays)
     items = _items(read_)
     offered, same = await lines(db, principal, read_)
     line = pick_line(line_key, offered, same)
@@ -912,7 +907,18 @@ async def build(
         for r, pid in zip(rows, prd_of, strict=True):
             r.in_plan = pid == str(plan_out.prd.id)
     rows, named = _fold_twins(rows, {f.entity_id: f.title for f in features}, by_id, principal,
-                              read_.deciders, can_change, _items_of(read_))  # fmt: skip
+                              read_.deciders, can_change)  # fmt: skip
+    entity = [(r, t) for r in rows for t in r.twins if t.merge == "entity" and t.applies]
+    if entity:
+        # A twin's items on every roadmap, the older ones too (merge_twin re-links them all).
+        every = read_
+        if the_company is not None:
+            with service.every_roadmap():
+                every = await service.load(db, overlays)
+        items_of = _items_of(every)
+        for r, t in entity:
+            t.blocked = _twin_block(principal, every, items_of, t.feature_id, r.feature_id, r.title)
+            t.applies = t.blocked is None
     twin_items = {t.item_id for r in rows for t in r.twins if t.item_id is not None}
     goal_rows = await db.scalars(select(Entity).where(Entity.type == "goal"))
     order = {g.key: i for i, g in enumerate(sort_goals(goal_rows))}
@@ -943,15 +949,16 @@ async def build(
 async def merge_twin(
     db: AsyncSession, principal: Any, feature_id: uuid.UUID, into_id: uuid.UUID
 ) -> SimpleTwinMergeOut:
-    """qa-prio-twins (review of #1503): a twin's Merge into… the row's feature. Each open item
-    of the twin's feature is first re-linked to the kept feature (``set_feature``; when the
-    kept feature holds only a draft on that item's roadmap, that draft is merged into the
-    item first, ``merge_item``, so the confirmed item stays), then the feature is merged
-    (baseline.merge_entity) and deleted: no item is left with no feature. Refused, nothing
-    written, unless the caller is an approver who decides every one of those items.
-    Not committed."""
+    """qa-prio-twins (review of #1503): a twin's Merge into… the row's feature (422 unless it
+    has one of its names). Each open item of the twin's feature, on every roadmap, is first
+    re-linked to the kept feature (``set_feature``; when the kept feature holds only a draft
+    on that item's roadmap, that draft is merged into the item first, ``merge_item``, so the
+    confirmed item stays), then the feature is merged (baseline.merge_entity) and deleted: no
+    item is left with no feature. Refused, nothing written, unless the caller is an approver
+    (403) who decides every one of those items' roadmaps (409, naming it), and none would sit
+    beside a confirmed item of the kept feature on its roadmap (409: merge those items first,
+    merge_item). Not committed."""
     from oracle.baseline import service as baseline
-    from oracle.simple.schemas import SimpleChangeIn
 
     if not has_role(principal.role, "approver"):
         raise changes.ChangeError(403, "Only an approver merges Ground Truth features")
@@ -962,17 +969,59 @@ async def merge_twin(
         raise changes.ChangeError(exc.status_code, str(exc)) from exc
     if source.type != "feature" or into.type != "feature" or source.id == into.id:
         raise changes.ChangeError(422, "into: another Ground Truth feature")
+    # Every roadmap's items, the older ones beside the company roadmap too: none is left with
+    # no feature when the twin's goes (re-review of #1503).
+    with service.every_roadmap():
+        return await _merge_twin(db, principal, source, into)
+
+
+def _twin_block(
+    principal: Any,
+    read_: service.Read,
+    items_of: dict[str, list[service.Entry]],
+    source_id: str | None,
+    into_id: str,
+    into_title: str,
+) -> str | None:
+    """Why the caller may not merge the twin feature ``source_id`` into ``into_id`` (its items
+    re-linked first, merge_twin), else None: an item on a roadmap they do not decide, or a
+    confirmed item where the kept feature has a confirmed item of its own (merge those items
+    first). ``items_of``: _items_of over every roadmap."""
+    theirs = items_of.get(source_id or "", [])
+    for e in theirs:
+        if not service.can_decide(principal, e, read_.deciders):
+            return (
+                f"Only the decider of {e.roadmap.title} links {e.row.title} ({e.row.item_key}) "
+                "to another feature: ask them to merge it"
+            )
+    for e in theirs:
+        if e.row.draft:
+            continue
+        for d in items_of.get(into_id, []):
+            if d.roadmap.id == e.roadmap.id and not d.row.draft:
+                return (
+                    f"{into_title} already has {d.row.title} ({d.row.item_key}) on "
+                    f"{e.roadmap.title}: merge {e.row.title} ({e.row.item_key}) into it first"
+                )
+    return None
+
+
+async def _merge_twin(
+    db: AsyncSession, principal: Any, source: Entity, into: Entity
+) -> SimpleTwinMergeOut:
+    from oracle.baseline import service as baseline
+    from oracle.simple.schemas import SimpleChangeIn
+
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     items = _items_of(read_)
     theirs = items.get(str(source.id), [])
     ours = items.get(str(into.id), [])
-    for e in theirs:
-        if not service.can_decide(principal, e, read_.deciders):
-            raise changes.ChangeError(
-                403,
-                f"Only the decider of {e.roadmap.title} links {e.row.title} to another "
-                "feature: ask them to merge it",
-            )
+    # Only into the row it shows on: one of its names (its own, its items') is the kept one's.
+    names = {same_name(source.title), *(same_name(e.row.title) for e in theirs)}
+    if not names & {same_name(into.title), *(same_name(d.row.title) for d in ours)}:
+        raise changes.ChangeError(422, f"into: a feature named {source.title}")
+    if why := _twin_block(principal, read_, items, str(source.id), str(into.id), into.title):
+        raise changes.ChangeError(409, why)
     relinked: list[str] = []
     for e in theirs:
         if not e.row.draft:
@@ -1010,8 +1059,9 @@ async def post_merge_twin(
     feature_id: uuid.UUID, body: SimpleTwinMergeIn, principal: Reader, db: TenantDB
 ) -> SimpleTwinMergeOut:
     """A Same name record's Merge into… the row's feature (qa-prio-twins): its roadmap items
-    are linked to the kept feature first, then its feature is merged into it. 403 unless the
-    caller is an approver who decides each of those items' roadmaps; nothing is written."""
+    are linked to the kept feature first, on every roadmap, then its feature is merged into it.
+    403 unless the caller is an approver; 409, naming why, when they do not decide one of those
+    items' roadmaps or the kept feature has its own item there; nothing is written."""
     try:
         out = await merge_twin(db, principal, feature_id, body.into)
     except (changes.ChangeError, drafts.DraftError) as e:

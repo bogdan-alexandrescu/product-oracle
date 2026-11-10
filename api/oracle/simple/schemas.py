@@ -1125,6 +1125,9 @@ class SimplePriorityTwin(BaseModel):
     into_id: uuid.UUID | None = None
     # The caller's merge applies (else it is proposed).
     applies: bool = False
+    # Why an approver's ``entity`` merge does not apply (merge_twin's 409): one of its items is
+    # on a roadmap they do not decide, or beside the kept feature's own item; else None.
+    blocked: str | None = None
 
 
 class SimpleTwinMergeIn(BaseModel):

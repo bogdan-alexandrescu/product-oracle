@@ -14609,8 +14609,9 @@ export interface paths {
         /**
          * Merge Simple Priority Twin
          * @description A Same name record's Merge into… the row's feature (qa-prio-twins): its roadmap items
-         *     are linked to the kept feature first, then its feature is merged into it. 403 unless the
-         *     caller is an approver who decides each of those items' roadmaps; nothing is written.
+         *     are linked to the kept feature first, on every roadmap, then its feature is merged into it.
+         *     403 unless the caller is an approver; 409, naming why, when they do not decide one of those
+         *     items' roadmaps or the kept feature has its own item there; nothing is written.
          */
         post: operations["merge_simple_priority_twin"];
         delete?: never;
@@ -43762,6 +43763,8 @@ export interface components {
              * @default false
              */
             applies: boolean;
+            /** Blocked */
+            blocked?: string | null;
         };
         /**
          * SimplePriorityUnranked
