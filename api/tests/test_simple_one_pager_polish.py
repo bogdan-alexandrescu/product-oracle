@@ -31,6 +31,11 @@ Test cards (protects / fails_when / no_claim):
 - test_a_merged_feature_is_not_on_the_plan (panel-menu): protects=a published feature
   merged into another (merged_into) is left off the one-pager's timeline and plan strip
   counts, as a cut one is; fails_when=it is listed or counted as live; no_claim=the web.
+- test_every_milestone_row_has_its_name (vqa one-pager 3): protects=each milestone row of the
+  strip reads its code with its name: an item of the PRD with no slice whose milestone (or
+  milestone record) says only its code takes the name the PRD's plan gives that code, or the
+  name another row of the strip gives it; fails_when=a row reads a bare code ("Milestone M2")
+  while the PRD names it; no_claim=which code a row shows (an owner's decision).
 """
 
 from datetime import date
@@ -280,3 +285,45 @@ async def test_a_merged_feature_is_not_on_the_plan(client):
     assert "Merged away" not in [i["title"] for i in view["timeline"]]
     rows = {r["name"]: r["items"] for r in view["plan"]["rows"]}
     assert rows["M1"] == 3
+
+
+def test_every_milestone_row_has_its_name():
+    from types import SimpleNamespace as N
+
+    from oracle.simple import plan_strip
+
+    def item(milestone=None, slices=(), n=0):
+        return N(id=None, status="planned", slices=list(slices), estimated=False,
+                 start=N(date=date(2026, 11, 2 + n)), end=N(date=date(2026, 11, 20 + n)),
+                 milestone=milestone)  # fmt: skip
+
+    def ms(name, day, record_id=None, record_name=None):
+        return N(name=name, date=date(2026, 12, day), record_id=record_id,
+                 record_name=record_name, start_date=None)  # fmt: skip
+
+    sliced = N(milestone="M1", milestone_name="Measured and mapped", start_date=None,
+               end_date=None, milestone_start=None, milestone_end=date(2026, 12, 4))  # fmt: skip
+    items = [
+        item(slices=[sliced]),
+        item(ms("M2", 11), n=1),  # the PRD's own item, its milestone only its code
+        item(ms("M3", 18, "c3a1", "M3"), n=2),  # its milestone record named only by its code
+        item(ms("M4", 24), n=3),
+        item(ms("M4 · Rollout", 24), n=4),
+    ]
+    names = {"M1": "Measured and mapped", "M2": "Ship to beta", "M3": "Open to all"}
+    rows = plan_strip.strip(one_pager.plan_items(items, names), date(2026, 11, 2)).rows
+    assert [r.name for r in rows] == [
+        "M1 · Measured and mapped",
+        "M2 · Ship to beta",
+        "M3 · Open to all",
+        "M4 · Rollout",
+    ]
+    # A record row whose code another row names reads that name too.
+    rows = plan_strip.strip(
+        [
+            plan_strip.PlanItem(date(2026, 11, 2), date(2026, 11, 20), False, "M2 · Ship to beta", date(2026, 12, 11)),
+            plan_strip.PlanItem(date(2026, 11, 3), date(2026, 11, 21), False, "M2", date(2026, 12, 11), "c3a2", "M2"),
+        ],
+        date(2026, 11, 2),
+    ).rows
+    assert [r.name for r in rows] == ["M2 · Ship to beta", "M2 · Ship to beta"]

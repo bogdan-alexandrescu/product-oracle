@@ -23,6 +23,11 @@ Test cards (protects / fails_when / no_claim):
   above its scope, exit and date lines is no disagreement; a count against a list of the
   same things still is; fails_when=the milestone is a "Needs a look" item, or the real one
   is not.
+- test_measure_is_the_lines_own_words_never_a_citation: protects=an outcome shows only the
+  measure its PRD line says in words (what is counted and where); one whose definition is
+  only citations (a meeting's, a feature's) has none ("How it is measured is not in the PRD
+  yet"); fails_when=a citation's excerpt (one quote on several outcomes, or cut with "…") or
+  a citation's title with its label ("(current name)") is a measure or its source.
 """
 
 # ruff: noqa: E501 - the fixture sections keep their long lines
@@ -187,3 +192,35 @@ def test_pdf_span_reads_month_first():
         one_pager.span_words(date(2026, 11, 2), date(2027, 2, 26)) == "Nov 2, 2026 – Feb 26, 2027"
     )
     assert one_pager.span_words(date(2026, 11, 2), date(2026, 12, 23)) == "Nov 2 – Dec 23, 2026"
+
+
+def test_measure_is_the_lines_own_words_never_a_citation():
+    cites = {
+        "m1": ("Weekly planning meeting", "We agreed to move two people onto the crawl queue before the holidays and to look again in a month"),
+        "f2": ("Crawl priority (current name)", "Pages crawled again within a day of a change, per site and per week, counted from the crawl log and from the change feed each site sends us every Monday"),
+    }
+    success = sec(
+        "success",
+        "Success measures",
+        "- Pages fresh within a day from 40% to 70%, counted as: [c:m1]\n"
+        "- Cost per crawled page from $0.02 to $0.01, measured by: [c:m1]\n"
+        "- Crawl errors a week from 300 to 100, defined as: [c:m1] [c:f2]\n"
+        "- Faster fresh results, measured as: [c:f2]\n"
+        "- Sites added a week from 5 to 12, counted as: sites with a first full crawl [c:m1]; source: the crawl log",
+    )
+    lines = [
+        outcome("Pages fresh within a day from 40% to 70%", "Pages fresh within a day", "40%", "70%"),
+        outcome("Cost per crawled page from $0.02 to $0.01", "Cost per crawled page", "$0.02", "$0.01"),
+        outcome("Crawl errors a week from 300 to 100", "Crawl errors a week", "300", "100"),
+        outcome("Faster fresh results", "Faster fresh results", "", ""),
+        outcome("Sites added a week from 5 to 12", "Sites added a week", "5", "12"),
+    ]
+    blk = OnePagerBlock(key="outcomes", title="Outcomes", rules="", kind="metrics", lines=lines)
+    checks.annotate([blk], [success], cites)
+    assert [(x.measure, x.measure_source) for x in blk.lines] == [
+        (None, None),
+        (None, None),
+        (None, None),
+        (None, None),
+        ("sites with a first full crawl", "the crawl log"),
+    ]
