@@ -227,7 +227,7 @@ async def test_link_an_issue_to_an_approved_item(client):
     async with tenant_session(ctx.tenant_id) as s:
         track = await s.scalar(select(ProductTrack))
     assert out["track_id"] == str(track.id)
-    assert out["prd_document_id"] == str(track.prd_document_id)
+    assert out["prd_document_id"] == str(track.prd_ids[0])
 
     items = (await client.get("/v1/roadmaps/prd-a-roadmap/items",
                               headers=ctx.as_("viewer"))).json()["items"]  # fmt: skip

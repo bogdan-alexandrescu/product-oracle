@@ -12010,6 +12010,12 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     simple_date_suggestions = await date_suggestion_rows(db, principal, seen, simple_open.dates)
     simple_goal_suggestions = await goal_suggestion_rows(db, principal, seen, simple_open.goals)
     counted += len(simple_date_suggestions) + len(simple_goal_suggestions)
+    # tracks-goal: Oracle's suggested track for a newly accepted PRD of mine with none.
+    from oracle.simple.track_suggestions import inbox_rows as track_suggestion_rows
+
+    simple_track_suggestions = await track_suggestion_rows(db, principal, seen)
+    # One waiting for its track's decider asks nothing of me: not counted.
+    counted += sum(1 for s in simple_track_suggestions if s.proposed is None)
     # Simple S8: meeting minutes sent to me as an attendee (nothing to decide: not counted).
     from oracle.simple.meetings import inbox_rows as simple_minutes_rows
 
@@ -12085,6 +12091,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         simple_approvals=simple_approvals,
         simple_date_suggestions=simple_date_suggestions,
         simple_goal_suggestions=simple_goal_suggestions,
+        simple_track_suggestions=simple_track_suggestions,
         simple_minutes=simple_minutes,
     )
 

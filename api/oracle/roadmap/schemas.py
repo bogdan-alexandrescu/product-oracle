@@ -599,7 +599,10 @@ class TrackOut(BaseModel):
     title: str
     status: TrackStatus
     owner_id: uuid.UUID | None
-    prd: DocumentRef
+    # tracks-goal: a track holds many PRDs, or none: ``prds`` in the order they joined;
+    # ``prd`` is the first.
+    prd: DocumentRef | None
+    prds: list[DocumentRef] = []
     started_version: int | None
     current_version: int | None
     latest_approved_version: int | None

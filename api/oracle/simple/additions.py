@@ -61,6 +61,7 @@ from oracle.docs.models import Document, DocumentVersion
 from oracle.jobs.models import LlmJob
 from oracle.members.names import display_name
 from oracle.roadmap import company
+from oracle.roadmap import tracks as tracks_mod
 from oracle.roadmap.models import HORIZONS, ProductTrack, RoadmapItem
 from oracle.simple import changes, drafts, quality, service
 from oracle.simple.models import (
@@ -351,15 +352,17 @@ async def _home(
     if not tracks:
         return None, None, None
     replaced = (await company.history(db)).prds
-    if live := next((t for t in tracks if t.prd_document_id not in replaced), None):
-        return live, live.prd_document_id, live.current_version_id
-    first, prd, seen = tracks[0], tracks[0].prd_document_id, set[uuid.UUID]()
+    # tracks-goal: a track's lead PRD (the one it follows now, else its first).
+    lead = {t.id: await tracks_mod.lead_prd(db, t) for t in tracks}
+    if live := next((t for t in tracks if lead[t.id] not in replaced), None):
+        return live, lead[live.id], live.current_version_id
+    first, prd, seen = tracks[0], lead[tracks[0].id], set[uuid.UUID]()
     while prd in replaced and prd not in seen:
         seen.add(prd)
         prd = replaced[prd][0]
     if prd in replaced:
-        return first, first.prd_document_id, first.current_version_id
-    own = await db.scalar(select(ProductTrack).where(ProductTrack.prd_document_id == prd))
+        return first, lead[first.id], first.current_version_id
+    own = await tracks_mod.track_of_prd(db, prd) if prd else None
     version = own.current_version_id if own is not None else None
     if version is None:
         version = await db.scalar(

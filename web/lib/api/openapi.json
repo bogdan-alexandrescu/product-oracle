@@ -87731,6 +87731,14 @@
             "title": "Simple Goal Suggestions",
             "default": []
           },
+          "simple_track_suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/InboxSimpleTrackSuggestion"
+            },
+            "type": "array",
+            "title": "Simple Track Suggestions",
+            "default": []
+          },
           "simple_minutes": {
             "items": {
               "$ref": "#/components/schemas/InboxSimpleMinutes"
@@ -88967,6 +88975,68 @@
         ],
         "title": "InboxSimpleMinutes",
         "description": "A meeting's minutes, sent to each attendee (``simple_minutes``)."
+      },
+      "InboxSimpleTrackSuggestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/SimplePrdRef"
+          },
+          "track": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleTrackChoice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleTrackChoice"
+            },
+            "type": "array",
+            "title": "Tracks",
+            "default": []
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open"
+            ],
+            "title": "State"
+          },
+          "proposed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleTrackProposed"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "prd",
+          "at",
+          "state"
+        ],
+        "title": "InboxSimpleTrackSuggestion",
+        "description": "tracks-goal (owner Nov 9): a newly accepted PRD of mine on no track. Oracle suggests\nthe existing track that fits it best (``track``; none fits: null); Confirm puts the PRD\non it, Pick a track on one of ``tracks``, New track starts one (each through the change\nengine: ``edit_track`` with ``add_prd_id``, ``add_track``)."
       },
       "InboxSource": {
         "properties": {
@@ -111104,6 +111174,14 @@
           "prd": {
             "$ref": "#/components/schemas/ReportPrd"
           },
+          "prds": {
+            "items": {
+              "$ref": "#/components/schemas/ReportPrd"
+            },
+            "type": "array",
+            "title": "Prds",
+            "default": []
+          },
           "link": {
             "type": "string",
             "title": "Link"
@@ -131428,6 +131506,128 @@
         "title": "SimpleTaskWaiting",
         "description": "An open task waiting on the reader (Home's \"Waiting for you\"), with its item."
       },
+      "SimpleTrackChoice": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleTrackChoice"
+      },
+      "SimpleTrackGoal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "SimpleTrackGoal"
+      },
+      "SimpleTrackPrdChoice": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "track_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleTrackPrdChoice",
+        "description": "tracks-goal: an accepted PRD a track can take, with the track it is on now."
+      },
+      "SimpleTrackProposed": {
+        "properties": {
+          "change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Id"
+          },
+          "track": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleTrackChoice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "to_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "title"
+        ],
+        "title": "SimpleTrackProposed",
+        "description": "The open proposal a track suggestion waits for: which track (``title`` of a new\none), and whom it waits for."
+      },
       "SimpleTrackRef": {
         "properties": {
           "id": {
@@ -131438,6 +131638,29 @@
           "title": {
             "type": "string",
             "title": "Title"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "goal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Name"
           }
         },
         "type": "object",
@@ -131491,8 +131714,15 @@
             "title": "Owner Name"
           },
           "prd_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Prd Id"
           },
           "prd_title": {
@@ -131505,6 +131735,37 @@
               }
             ],
             "title": "Prd Title"
+          },
+          "prds": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePrdRef"
+            },
+            "type": "array",
+            "title": "Prds",
+            "default": []
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "goal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Name"
           },
           "can_decide": {
             "type": "boolean",
@@ -131537,8 +131798,7 @@
         "required": [
           "id",
           "title",
-          "status",
-          "prd_id"
+          "status"
         ],
         "title": "SimpleTrackRow"
       },
@@ -131576,10 +131836,18 @@
           },
           "prds": {
             "items": {
-              "$ref": "#/components/schemas/SimplePrdRef"
+              "$ref": "#/components/schemas/SimpleTrackPrdChoice"
             },
             "type": "array",
             "title": "Prds"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleTrackGoal"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
           }
         },
         "type": "object",
@@ -141053,7 +141321,22 @@
             "title": "Owner Id"
           },
           "prd": {
-            "$ref": "#/components/schemas/DocumentRef"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prds": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentRef"
+            },
+            "type": "array",
+            "title": "Prds",
+            "default": []
           },
           "started_version": {
             "anyOf": [
@@ -141297,7 +141580,22 @@
             "title": "Owner Id"
           },
           "prd": {
-            "$ref": "#/components/schemas/DocumentRef"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prds": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentRef"
+            },
+            "type": "array",
+            "title": "Prds",
+            "default": []
           },
           "started_version": {
             "anyOf": [

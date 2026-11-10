@@ -137,9 +137,9 @@ async def _item_of(db: AsyncSession, record: TrackerRecord) -> tuple[str | None,
     """(PRD slug, item title) of the item a record is linked to."""
     prd_id = record.prd_document_id
     if prd_id is None and record.track_id is not None:
-        prd_id = await db.scalar(
-            select(ProductTrack.prd_document_id).where(ProductTrack.id == record.track_id)
-        )
+        # tracks-goal: a track holds many PRDs; a record with none reads the first.
+        track = await db.get(ProductTrack, record.track_id)
+        prd_id = track.prd_ids[0] if track is not None and track.prd_ids else None
     slug = await db.scalar(select(Document.slug).where(Document.id == prd_id)) if prd_id else None
     title = None
     if prd_id is not None and record.item_key:
@@ -252,8 +252,10 @@ async def link(
     )
     if roadmap_item is None:
         raise LinkError(f"'{body.item_key}' is not a roadmap item of {prd.slug}")
+    from oracle.roadmap.tracks import on_prd
+
     track_id = roadmap_item.track_id or await db.scalar(
-        select(ProductTrack.id).where(ProductTrack.prd_document_id == prd.id)
+        select(ProductTrack.id).where(on_prd(prd.id))
     )
     read = await read_issue(db, item)
     ref = read["external_ref"]
@@ -400,12 +402,13 @@ async def items_gone(db: AsyncSession, item_ids: set[uuid.UUID]) -> None:
     await db.flush()
 
 
-async def adopt(db: AsyncSession, track: ProductTrack) -> None:
-    """A PRD's track started: its linked records with no track get it."""
+async def adopt(db: AsyncSession, track: ProductTrack, prd_document_id: uuid.UUID) -> None:
+    """A PRD joined a track (tracks-goal: one of its PRDs): its linked records with no track
+    get it."""
     await db.execute(
         update(TrackerRecord)
         .where(
-            TrackerRecord.prd_document_id == track.prd_document_id,
+            TrackerRecord.prd_document_id == prd_document_id,
             TrackerRecord.track_id.is_(None),
             TrackerRecord.item_key.is_not(None),
         )

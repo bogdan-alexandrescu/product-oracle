@@ -49,6 +49,7 @@ from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionP
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
 from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem
+from oracle.roadmap.tracks import on_prd as tracks_on_prd
 from oracle.simple import (
     agenda,
     card_order,
@@ -439,7 +440,7 @@ class Ctx:
         if self.prd is not None:
             # The plan's milestones of the meeting's PRD only (never another PRD's M1).
             tracks = set(await self.db.scalars(
-                select(ProductTrack.id).where(ProductTrack.prd_document_id == self.prd.document.id)
+                select(ProductTrack.id).where(tracks_on_prd(self.prd.document.id))
             ))  # fmt: skip
             self.read.milestones = [m for m in self.read.milestones if m.track_id in tracks]
         from oracle.simple import plan
