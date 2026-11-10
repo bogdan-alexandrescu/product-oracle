@@ -1,5 +1,6 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/ids";
 import { MOCK_EMPTY_FEEDBACK_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
+import { MOCK_RITUAL_FAILED_KEY } from "../lib/api/mock/rituals";
 import { REPEATED_CODES_SCENARIO } from "../lib/api/mock/simple-meetings";
 import { login } from "./helpers";
 import { expect, test } from "./test";
@@ -18,6 +19,10 @@ import { expect, test } from "./test";
  * one row "1 more in your Inbox" that opens Simple's Inbox, the rail's Inbox count reads 1 and the
  * Inbox says 1 waiting; fails_when = Home says "Nothing waits on you today." while the rail and
  * the Inbox count it.
+ *
+ * Card ritual-retry: protects = a ritual that failed to prepare waits on Home with Retry, which
+ * prepares it again and takes the row away (from the Inbox too), and Open, which opens Company ›
+ * Rituals, as the Inbox's row does; fails_when = it offers only Open on the failed occurrence.
  *
  * Card waiting-prompt: protects = with the waiting list and the decisions list both slow, the
  * rail's read of the list is shared by Decisions' "Waiting for you" once it arrives, so the
@@ -73,6 +78,29 @@ for (const phone of [false, true]) {
       await more.getByRole("link", { name: "Open" }).click();
       await expect(page).toHaveURL(/\/simple\/inbox$/);
       await expect(page.getByText("1 waiting", { exact: true })).toBeVisible();
+    });
+
+    test("ritual-retry: a ritual that failed to prepare offers Retry on Home, as the Inbox does", async ({ page }) => {
+      await page.addInitScript((key) => localStorage.setItem(key, "1"), MOCK_RITUAL_FAILED_KEY);
+      await login(page);
+      // An open row (not new) is under the Inbox's Seen tab.
+      const seen = async () => {
+        const tab = page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ });
+        await tab.click();
+        await expect(tab).toHaveAttribute("aria-selected", "true");
+      };
+      await page.goto("/simple/inbox");
+      await seen();
+      const need = page.getByTestId("ritual-need").filter({ visible: true, hasText: /^Ritual failed to prepare · / });
+      await expect(need).toHaveCount(1);
+      await page.goto("/simple");
+      const row = page.getByTestId("home-also-waiting").getByRole("listitem", { name: /^Inbox: Ritual failed to prepare · / });
+      await expect(row.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/company/rituals");
+      await row.getByRole("button", { name: "Retry" }).click();
+      await expect(row).toHaveCount(0);
+      await page.goto("/simple/inbox");
+      await seen();
+      await expect(need).toHaveCount(0);
     });
 
     test("waiting-prompt: Decisions' Waiting for you shows its rows without a second wait", async ({ page }) => {
