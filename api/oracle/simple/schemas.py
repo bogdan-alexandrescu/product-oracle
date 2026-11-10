@@ -462,6 +462,11 @@ class SimpleAppliedVersion(BaseModel):
     can_apply: bool = False
 
 
+# milestone-kinds (owner): every roadmap milestone is one of six kinds, with a status.
+MilestoneKind = Literal["sub_goal", "goal", "delivery", "decision", "outside", "handoff"]
+MilestoneStatus = Literal["on_track", "at_risk", "hit", "missed"]
+
+
 class SimpleKeyDate(BaseModel):
     """Roadmap-plus: one of a roadmap's key dates (a conference, a product launch, a board
     meeting), as the reader reads it (the working draft's when they see it)."""
@@ -477,6 +482,10 @@ class SimpleKeyDate(BaseModel):
     # PRD's plan (its latest approved version): read-only, changed in the PRD. None: the
     # roadmap's own key date.
     prd: "SimpleDocRef | None" = None
+    # milestone-kinds: its kind and status (a person's, else on track), and why.
+    kind: MilestoneKind = "delivery"
+    status: MilestoneStatus = "on_track"
+    status_reason: str | None = None
 
 
 class SimpleKeyDateRoadmap(BaseModel):
@@ -530,6 +539,31 @@ class SimpleGoalMilestone(BaseModel):
     # roadmap-milestone-codes: its one code across the roadmap read (M1, M2 ... by date;
     # oracle.simple.roadmap_codes), the code every page shows; null outside a roadmap read.
     roadmap_code: str | None = None
+    # milestone-kinds (owner): its kind, its one "done when" line, and its status: a person's
+    # (``status_set``, by ``status_set_by_name``, why: ``status_reason``), else computed
+    # (oracle.simple.goal_milestones.status_of) with a short reason.
+    kind: MilestoneKind = "delivery"
+    done_when_line: str = ""
+    status: MilestoneStatus = "on_track"
+    status_reason: str | None = None
+    status_set: MilestoneStatus | None = None
+    status_set_by_name: str | None = None
+    # A measured (sub-)goal's numbers.
+    measure: str | None = None
+    baseline: float | None = None
+    target: float | None = None
+    current: float | None = None
+    # A sub-goal: the measured-goal milestone it builds toward; a goal: its sub-goals.
+    sub_goal_of_id: uuid.UUID | None = None
+    sub_goal_ids: list[uuid.UUID] = []
+    # A hand-off: from one track to another.
+    from_track_id: uuid.UUID | None = None
+    to_track_id: uuid.UUID | None = None
+    from_track_name: str | None = None
+    to_track_name: str | None = None
+    # A company goal's own target date (id: the goal's), shown while the goal is on the
+    # roadmap (``on_roadmap``); changed on the goal, not here.
+    goal_target: bool = False
 
 
 class SimpleGoalMilestoneIn(BaseModel):
@@ -539,6 +573,17 @@ class SimpleGoalMilestoneIn(BaseModel):
     goal_id: uuid.UUID | None = None
     item_ids: list[uuid.UUID] = []
     counts_when: str = ""
+    kind: MilestoneKind = "delivery"
+    done_when_line: str = Field(default="", max_length=300)
+    status_set: MilestoneStatus | None = None
+    status_reason: str | None = Field(default=None, max_length=300)
+    measure: str | None = Field(default=None, max_length=120)
+    baseline: float | None = None
+    target: float | None = None
+    current: float | None = None
+    sub_goal_of_id: uuid.UUID | None = None
+    from_track_id: uuid.UUID | None = None
+    to_track_id: uuid.UUID | None = None
 
 
 class SimpleGoalMilestonePatch(BaseModel):
@@ -547,6 +592,38 @@ class SimpleGoalMilestonePatch(BaseModel):
     goal_id: uuid.UUID | None = None
     item_ids: list[uuid.UUID] | None = None
     counts_when: str | None = None
+    # milestone-kinds: only the fields sent change; ``status_set`` null clears the override.
+    kind: MilestoneKind | None = None
+    done_when_line: str | None = Field(default=None, max_length=300)
+    status_set: MilestoneStatus | None = None
+    status_reason: str | None = Field(default=None, max_length=300)
+    measure: str | None = Field(default=None, max_length=120)
+    baseline: float | None = None
+    target: float | None = None
+    current: float | None = None
+    sub_goal_of_id: uuid.UUID | None = None
+    from_track_id: uuid.UUID | None = None
+    to_track_id: uuid.UUID | None = None
+
+
+class SimplePrdRef(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleRoadmapTrack(BaseModel):
+    """milestone-kinds: a track band on the roadmap read, in the Tracks order, with its
+    health: ``at_risk`` (a feature ends after a milestone it serves), ``stale`` (not checked
+    in 14 days) or ``on_track``, and a short reason."""
+
+    id: uuid.UUID
+    title: str
+    goal_id: uuid.UUID | None = None
+    goal_name: str | None = None
+    owner_name: str | None = None
+    prds: list[SimplePrdRef] = []
+    health: Literal["on_track", "at_risk", "stale"] = "on_track"
+    health_reason: str = ""
 
 
 class SimpleOldMilestone(BaseModel):
@@ -614,6 +691,8 @@ class SimpleRoadmapOut(BaseModel):
     left_out: "SimpleLeftOut | None" = None
     # approved-roadmap-to-simple: one line per shown roadmap applied from an approved version.
     applied_versions: list[SimpleAppliedVersion] = []
+    # milestone-kinds: every live track, in the Tracks order, with its health.
+    tracks: list[SimpleRoadmapTrack] = []
 
 
 class DateSuggestionEdit(BaseModel):
@@ -2741,11 +2820,6 @@ class SimpleTrackRow(BaseModel):
 class SimplePerson(BaseModel):
     id: uuid.UUID
     name: str
-
-
-class SimplePrdRef(BaseModel):
-    id: uuid.UUID
-    title: str
 
 
 class SimpleTracks(BaseModel):

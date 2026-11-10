@@ -39,7 +39,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
+from sqlalchemy.orm import Mapped, Session, declared_attr, mapped_column, relationship
 from sqlalchemy.orm.attributes import set_committed_value
 
 from oracle.db import Base, TenantScoped
@@ -55,6 +55,52 @@ MILESTONE_STATUSES = ("planned", "done", "dropped")
 # build-milestones-on-roadmap: a goal milestone's progress (the status column above keeps
 # its own planned/done/dropped semantics for track milestones).
 MILESTONE_PROGRESS = ("on_track", "at_risk", "not_started", "met")
+# milestone-kinds (owner): every roadmap milestone is one of six kinds, with a status a
+# person may set over the computed one (migration 0125_milestone_kinds).
+MILESTONE_KINDS = ("sub_goal", "goal", "delivery", "decision", "outside", "handoff")
+MILESTONE_KIND_STATUSES = ("on_track", "at_risk", "hit", "missed")
+
+
+class MilestoneKindFields:
+    """milestone-kinds: a goal milestone's and a key date's kind, its one "done when" line,
+    a person's status override (and why, and who), a measured (sub-)goal's numbers, the
+    measured-goal milestone a sub-goal builds toward, and a hand-off's tracks."""
+
+    kind: Mapped[str] = mapped_column(
+        Text, nullable=False, default="delivery", server_default="delivery"
+    )
+    done_when_line: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    status_set: Mapped[str | None] = mapped_column(Text)
+    status_set_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    status_reason: Mapped[str | None] = mapped_column(Text)
+    measure: Mapped[str | None] = mapped_column(Text)
+    baseline: Mapped[Decimal | None] = mapped_column(Numeric(20, 6))
+    target: Mapped[Decimal | None] = mapped_column(Numeric(20, 6))
+    current: Mapped[Decimal | None] = mapped_column(Numeric(20, 6))
+
+    @declared_attr
+    def sub_goal_of_id(cls) -> Mapped[uuid.UUID | None]:  # noqa: N805
+        return mapped_column(Uuid, ForeignKey("track_milestones.id", ondelete="SET NULL"))
+
+    @declared_attr
+    def from_track_id(cls) -> Mapped[uuid.UUID | None]:  # noqa: N805
+        return mapped_column(Uuid, ForeignKey("product_tracks.id", ondelete="SET NULL"))
+
+    @declared_attr
+    def to_track_id(cls) -> Mapped[uuid.UUID | None]:  # noqa: N805
+        return mapped_column(Uuid, ForeignKey("product_tracks.id", ondelete="SET NULL"))
+
+
+def kind_checks() -> tuple[CheckConstraint, CheckConstraint]:
+    return (
+        CheckConstraint(_in("kind", MILESTONE_KINDS), name="kind"),
+        CheckConstraint(
+            "status_set IS NULL OR " + _in("status_set", MILESTONE_KIND_STATUSES),
+            name="status_set",
+        ),
+    )
+
+
 BASIS_KINDS = ("estimate", "capacity", "commitment")
 BASIS_STATUSES = ("verified", "withdrawn", "proposed", "rejected")
 TRACKERS = ("linear", "jira", "github", "other")
@@ -223,7 +269,7 @@ class ScheduleBasis(TenantScoped, Base):
     rejected_reason: Mapped[str | None] = mapped_column(Text)
 
 
-class TrackMilestone(TenantScoped, Base):
+class TrackMilestone(MilestoneKindFields, TenantScoped, Base):
     """A milestone of a track, undated by default (Now/Next/Later, O4); a date needs at
     least one verified schedule basis supporting exactly that date.
 
@@ -243,6 +289,7 @@ class TrackMilestone(TenantScoped, Base):
         CheckConstraint(_in("horizon", HORIZONS), name="horizon"),
         CheckConstraint(_in("status", MILESTONE_STATUSES), name="status"),
         CheckConstraint(_in("progress", MILESTONE_PROGRESS), name="progress"),
+        *kind_checks(),
         CheckConstraint(
             "roadmap_id IS NOT NULL OR target_date IS NULL OR cardinality(basis_ids) > 0",
             name="dated_needs_basis",

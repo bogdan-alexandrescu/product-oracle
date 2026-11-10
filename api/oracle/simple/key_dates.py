@@ -95,6 +95,13 @@ def _checked(v: dict[str, Any], name: str) -> dict[str, Any]:
     return {"name": title, "date": day.isoformat(), "note": note}
 
 
+def _kind_of(r: RoadmapKeyDate | None) -> dict[str, Any]:
+    if r is None:
+        return {}
+    return {"kind": r.kind, "status": r.status_set or "on_track",
+            "status_reason": r.status_reason}  # fmt: skip
+
+
 async def published(
     db: AsyncSession, doc_ids: set[uuid.UUID]
 ) -> dict[uuid.UUID, dict[str, dict[str, Any]]]:
@@ -240,6 +247,18 @@ async def roadmap_key_dates(
     pub = await published(db, set(docs))
     w = await drafts.who(db, set(docs))
     open_ = {d.document_id: d for d in await drafts.open_drafts(db) if d.document_id in docs}
+    # milestone-kinds: a published key date's kind and status (a person's, else on track);
+    # one only in a draft reads as a delivery, on track.
+    rows = (
+        {
+            str(r.id): r
+            for r in await db.scalars(
+                select(RoadmapKeyDate).where(RoadmapKeyDate.roadmap_document_id.in_(set(docs)))
+            )
+        }
+        if docs
+        else {}
+    )
     out: list[SimpleKeyDate] = []
     for doc_id, doc in docs.items():
         d = open_.get(doc_id)
@@ -258,6 +277,7 @@ async def roadmap_key_dates(
                     date=date.fromisoformat(v["date"]),
                     note=v.get("note"),
                     in_draft=k in changed,
+                    **_kind_of(rows.get(k)),
                 )  # fmt: skip
             )
     out.sort(key=lambda k: (k.date, k.name))
