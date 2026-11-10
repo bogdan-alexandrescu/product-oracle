@@ -519,7 +519,7 @@ async def _number(db: AsyncSession, version_id: uuid.UUID | None) -> int | None:
 
 def track_out_of(
     track: ProductTrack,
-    prd: Document | None,
+    prds: list[Document],
     roadmap: Document | None,
     roadmap_version: DocumentVersion | None,
     *,
@@ -534,7 +534,8 @@ def track_out_of(
         title=track.title,
         status=track.status,  # type: ignore[arg-type]
         owner_id=track.owner_id,
-        prd=DocumentRef(id=prd.id, slug=prd.slug, title=prd.title) if prd else None,
+        prd=DocumentRef(id=prds[0].id, slug=prds[0].slug, title=prds[0].title) if prds else None,
+        prds=[DocumentRef(id=p.id, slug=p.slug, title=p.title) for p in prds],
         started_version=started,
         current_version=current,
         latest_approved_version=latest_approved,
@@ -554,20 +555,23 @@ def track_out_of(
 
 
 async def track_out(db: AsyncSession, track: ProductTrack) -> TrackOut:
-    prd = await db.get(Document, track.prd_document_id) if track.prd_document_id else None
+    prds = [d for p in track.prd_ids if (d := await db.get(Document, p)) is not None]
     roadmap = (
         await db.get(Document, track.roadmap_document_id) if track.roadmap_document_id else None
     )
     roadmap_version = await items_version(db, roadmap, approved_first=True) if roadmap else None
+    # The latest approved version of the PRD the track follows now (else its first PRD).
+    from oracle.roadmap.tracks import lead_prd
+
     latest = await db.scalar(
         select(func.max(DocumentVersion.number)).where(
-            DocumentVersion.document_id == track.prd_document_id,
+            DocumentVersion.document_id == await lead_prd(db, track),
             DocumentVersion.approved_at.is_not(None),
         )
     )
     return track_out_of(
         track,
-        prd,
+        prds,
         roadmap,
         roadmap_version,
         started=await _number(db, track.started_version_id),
@@ -894,7 +898,7 @@ def owner_of(item: RoadmapItem, sharing: list[ProductTrack]) -> uuid.UUID | None
     if not sharing:
         return None
     for t in sharing:
-        if t.prd_document_id is not None and t.prd_document_id == item.prd_document_id:
+        if item.prd_document_id in t.prd_ids:
             return t.id
     if any(t.id == item.track_id for t in sharing):
         return item.track_id
@@ -1016,7 +1020,8 @@ async def monitor(
     ]
     event_id = None
     if changed:
-        prd = await db.get(Document, track.prd_document_id) if track.prd_document_id else None
+        first = next(iter(track.prd_ids), None)
+        prd = await db.get(Document, first) if first else None
         event = await changes.record_change(
             db,
             "product_track",
@@ -1024,7 +1029,7 @@ async def monitor(
             actor=actor,
             subject_id=track.id,
             subject_ref=f"track:{prd.slug if prd else track.id}",
-            document_id=track.prd_document_id,
+            document_id=first,
             data={"before": before or None, "after": after, "changed": changed},
         )
         event_id = event.id

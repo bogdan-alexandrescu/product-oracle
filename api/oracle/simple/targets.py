@@ -76,6 +76,7 @@ from oracle.priorities.scoring import effort_weeks, goal_value_estimate
 from oracle.requests.models import CHANNELS as REQUEST_CHANNELS
 from oracle.requests.models import REQUESTER_KINDS, ProductRequest
 from oracle.roadmap import company
+from oracle.roadmap import tracks as tracks_mod
 from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.simple import changes, service
 from oracle.simple.changes import ChangeError
@@ -831,7 +832,7 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
         horizon="later",
         feature_id=fid,
         track_id=track.id if track is not None else None,
-        prd_document_id=track.prd_document_id if track is not None else None,
+        prd_document_id=await tracks_mod.lead_prd(db, track) if track is not None else None,
         prd_version_id=track.current_version_id if track is not None else None,
         note="added from Priorities",
     )

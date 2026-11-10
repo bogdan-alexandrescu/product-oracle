@@ -1722,7 +1722,7 @@ async def prd_of(
     matter names (``prd:``). Never a PRD its text merely links to: a roadmap with none of
     these has no PRD, and every date it writes is unverified."""
     from oracle.docs.models import Document, DocumentVersion
-    from oracle.roadmap.models import ProductTrack
+    from oracle.roadmap.models import ProductTrack, TrackPrd
 
     if source_version_id is not None:
         prd = await db.scalar(
@@ -1742,9 +1742,10 @@ async def prd_of(
             .scalar_subquery()
         )
         track = (
-            select(ProductTrack.prd_document_id)
+            select(TrackPrd.prd_document_id)
+            .join(ProductTrack, ProductTrack.id == TrackPrd.track_id)
             .where(ProductTrack.roadmap_document_id == document_id)
-            .order_by(ProductTrack.created_at)
+            .order_by(ProductTrack.created_at, TrackPrd.created_at)
             .limit(1)
             .scalar_subquery()
         )
@@ -1773,14 +1774,15 @@ DATED_KINDS = ("roadmap", "update")
 async def prds_with_active_track(db: AsyncSession) -> list[uuid.UUID]:
     """The PRDs an update's dates rest on (H8): every PRD with an active product track,
     not the single PRD of a roadmap."""
-    from oracle.roadmap.models import ProductTrack
+    from oracle.roadmap.models import ProductTrack, TrackPrd
 
     return list(
         await db.scalars(
-            select(ProductTrack.prd_document_id)
+            select(TrackPrd.prd_document_id)
+            .join(ProductTrack, ProductTrack.id == TrackPrd.track_id)
             .where(ProductTrack.status == "active")
             .distinct()
-            .order_by(ProductTrack.prd_document_id)
+            .order_by(TrackPrd.prd_document_id)
         )
     )
 

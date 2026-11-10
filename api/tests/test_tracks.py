@@ -5,7 +5,7 @@ FakeRuntime."""
 import uuid
 from datetime import timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from oracle import changes
 from oracle.config import get_settings

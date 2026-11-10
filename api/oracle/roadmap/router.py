@@ -681,7 +681,7 @@ async def create_schedule_basis(
                 f"tracker_key {tracker_key} is not the record's issue {record.external_ref}",
             )
         track = await db.get(ProductTrack, record.track_id) if record.track_id else None
-        if track is not None and track.prd_document_id != prd.id:
+        if track is not None and prd.id not in track.prd_ids:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 f"tracker record {record.external_ref} belongs to another PRD's track",
@@ -812,7 +812,7 @@ async def verify_schedule_basis(
         await schedule.recheck_tracker_milestones(db, [row.tracker_key])
     for track in await db.scalars(
         select(ProductTrack).where(
-            ProductTrack.prd_document_id == row.prd_document_id, ProductTrack.status == "active"
+            tracks.on_prd(row.prd_document_id), ProductTrack.status == "active"
         )
     ):
         await views.monitor(db, track, principal)
@@ -1152,7 +1152,9 @@ async def create_track_roadmap_run(
     version into its roadmap. Nothing runs or is spent until it is estimated and started
     (the $50 owner approval and the 1.5x pause apply as for every run)."""
     track = await _track(db, track_id)
-    prd = await db.get(Document, track.prd_document_id) if track.prd_document_id else None
+    # tracks-goal: the PRD the track follows now, else its first.
+    first = await tracks.lead_prd(db, track)
+    prd = await db.get(Document, first) if first else None
     if prd is None:
         raise HTTPException(status.HTTP_409_CONFLICT, f"{track.title} has no PRD to draft from")
     roadmap = (

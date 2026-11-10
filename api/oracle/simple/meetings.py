@@ -62,6 +62,7 @@ from oracle.docs.parser import DraftError as ImportRejected
 from oracle.docs.prd_order import sort_prds
 from oracle.models import AuditEvent
 from oracle.roadmap.models import ProductTrack, RoadmapItem
+from oracle.roadmap.tracks import on_prd as tracks_on_prd
 from oracle.simple import change_words, drafts, minutes
 from oracle.simple.models import (
     SimpleChange,
@@ -528,7 +529,7 @@ async def _reviewed_roadmap(
         return next(iter(on), None)
     # On several: the roadmap of the PRD's own track (one per PRD), else all of them.
     home = await db.scalar(
-        select(ProductTrack.roadmap_document_id).where(ProductTrack.prd_document_id == document.id)
+        select(ProductTrack.roadmap_document_id).where(tracks_on_prd(document.id))
     )
     return home if home in on else None
 

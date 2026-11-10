@@ -62,6 +62,7 @@ from oracle.docs import visibility
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack, RoadmapItem
+from oracle.roadmap.tracks import on_prd as tracks_on_prd
 from oracle.simple import drafts, one_pager_checks, plan_strip, quality
 from oracle.simple import plan as plan_model
 from oracle.simple.changes import IDLE, ChangeError, _session_for_change
@@ -1146,7 +1147,7 @@ async def who(db: AsyncSession, document: Document) -> Who:
         for u in await db.scalars(
             select(User)
             .join(ProductTrack, ProductTrack.owner_id == User.id)
-            .where(ProductTrack.prd_document_id == document.id, User.disabled_at.is_(None))
+            .where(tracks_on_prd(document.id), User.disabled_at.is_(None))
         )
     }
     company = list(

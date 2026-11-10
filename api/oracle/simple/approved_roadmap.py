@@ -433,7 +433,7 @@ async def _milestones(
             list(
                 await db.scalars(
                     select(ScheduleBasis.id).where(
-                        ScheduleBasis.prd_document_id == track.prd_document_id,
+                        ScheduleBasis.prd_document_id.in_(track.prd_ids),
                         ScheduleBasis.status == "verified",
                         ScheduleBasis.supports_date == p.date,
                     )
