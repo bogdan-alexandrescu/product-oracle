@@ -6,8 +6,8 @@ state ``suggested``), shown as one Inbox item to the PRD's owner, with Confirm, 
 and New track. Each goes through the change engine; once the PRD is on a track the row is
 ``linked`` and the item leaves every Inbox at once. Asked of a track someone else decides,
 it is a proposal to that decider and the item waits for it (``proposed``: no actions, not
-counted; one proposal at a time); a decline brings the suggestion back. Until then its features read in the
-Roadmap's No track band.
+counted; one proposal at a time); a decline brings the suggestion back. Until then its
+features read in the Roadmap's No track band.
 
 The PRD's owner: who brought in its first version, else who accepted its latest accepted
 version, while an enabled member; else the company's owners.
