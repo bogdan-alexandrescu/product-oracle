@@ -63680,6 +63680,7 @@
                   "restore_goal_milestone",
                   "add_track",
                   "edit_track",
+                  "move_track",
                   "delete_track",
                   "edit_decision",
                   "edit_question",
@@ -64111,6 +64112,7 @@
               "restore_goal_milestone",
               "add_track",
               "edit_track",
+              "move_track",
               "delete_track",
               "edit_decision",
               "edit_question",
@@ -88581,6 +88583,7 @@
               "restore_goal_milestone",
               "add_track",
               "edit_track",
+              "move_track",
               "delete_track",
               "edit_decision",
               "edit_question",
@@ -123694,6 +123697,7 @@
               "restore_goal_milestone",
               "add_track",
               "edit_track",
+              "move_track",
               "delete_track",
               "edit_decision",
               "edit_question",
@@ -123859,6 +123863,7 @@
               "restore_goal_milestone",
               "add_track",
               "edit_track",
+              "move_track",
               "delete_track",
               "edit_decision",
               "edit_question",
@@ -131441,6 +131446,17 @@
             "type": "string",
             "title": "Health Reason",
             "default": ""
+          },
+          "order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order"
           }
         },
         "type": "object",
@@ -132337,6 +132353,17 @@
               }
             ],
             "title": "Goal Name"
+          },
+          "order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order"
           }
         },
         "type": "object",
@@ -132468,6 +132495,17 @@
             "type": "integer",
             "title": "Moves Count",
             "default": 0
+          },
+          "order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order"
           }
         },
         "type": "object",

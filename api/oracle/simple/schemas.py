@@ -115,6 +115,9 @@ class SimpleTrackRef(BaseModel):
     # tracks-goal: the company goal the track replaces as the Roadmap's band.
     goal_id: uuid.UUID | None = None
     goal_name: str | None = None
+    # track-order (owner Nov 9): the track's place number in the company's track order (lower
+    # first; none: after every numbered one), so a picker of tracks lists them in that order.
+    order: int | None = None
 
 
 class SimpleItemMilestone(BaseModel):
@@ -635,6 +638,9 @@ class SimpleRoadmapTrack(BaseModel):
     prds: list[SimplePrdRef] = []
     health: Literal["on_track", "at_risk", "stale"] = "on_track"
     health_reason: str = ""
+    # track-order (owner Nov 9): its place number in the company's track order (lower first;
+    # none: after every numbered one, oldest first). The list comes in that order.
+    order: int | None = None
 
 
 class SimpleOldMilestone(BaseModel):
@@ -815,6 +821,8 @@ ChangeOp = Literal[
     "restore_goal_milestone",
     "add_track",
     "edit_track",
+    # track-order: a track moved one step up or down in the company's track order.
+    "move_track",
     "delete_track",
     # edit-decisions (oracle.simple.decision_sheet): an open decision's or a PRD question's
     # fields, its withdrawal (the "not now"), and a question added to a PRD.
@@ -2830,6 +2838,10 @@ class SimpleTrackRow(BaseModel):
     feature_count: int = 0
     # Every feature on it, cut and merged ones too: what Move to Trash sends to no track.
     moves_count: int = 0
+    # track-order (owner Nov 9): its place number in the company's track order (lower first;
+    # none: after every numbered one, oldest first), which Move up and Move down change (op
+    # ``move_track``). The list comes in that order.
+    order: int | None = None
 
 
 class SimplePerson(BaseModel):

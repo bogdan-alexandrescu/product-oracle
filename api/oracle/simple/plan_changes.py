@@ -18,6 +18,11 @@ the change engine (``POST /v1/simple/changes``, wired in ``oracle.simple.changes
   features to no track): an owner, or the track's own owner while an approver or owner,
   applies it; else it is proposed to the track's owner (an approver or owner), else to
   the company's owners.
+- ``move_track`` (target ``{track_id}``, after ``{to: up|down}``; track-order, owner Nov 9):
+  the track moves one step in the company's track order (``product_tracks.position``),
+  which every read listing tracks follows; not past either end. Who decides as for
+  ``edit_track``. Applied, it holds the whole order before (``before.order``) and after
+  (``after.order``), so its undo puts the order back while it is as it left it.
 
 Each applied change undoes (``POST /v1/simple/changes/{id}/undo``) by whom made it, at
 any time, while what it changed is as it left it.
@@ -36,14 +41,14 @@ from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document
 from oracle.members.names import display_name
-from oracle.roadmap.models import TRACK_STATUSES, ProductTrack, TrackMilestone
+from oracle.roadmap.models import TRACK_ORDER, TRACK_STATUSES, ProductTrack, TrackMilestone
 from oracle.simple import drafts
 from oracle.simple.models import SimpleChange
 
 OPS: frozenset[str] = frozenset(
-    {"restore_goal_milestone", "add_track", "edit_track", "delete_track"}
+    {"restore_goal_milestone", "add_track", "edit_track", "move_track", "delete_track"}
 )
-TRACK_OPS = ("edit_track", "delete_track")
+TRACK_OPS = ("edit_track", "move_track", "delete_track")
 # tracks-goal (owner Nov 9): ``prd_ids``, the track's PRDs (a track holds many).
 TRACK_FIELDS = ("title", "owner_id", "status", "prd_ids", "goal_id")
 
@@ -130,6 +135,37 @@ async def _track(db: AsyncSession, track_id: uuid.UUID) -> ProductTrack:
     if t is None:
         raise _err(404, "No such track")
     return t
+
+
+async def track_order(db: AsyncSession) -> list[ProductTrack]:
+    """track-order: the tracks the Tracks sheet lists (not in Trash, not a replaced PRD's
+    history), in the company's track order."""
+    from oracle.roadmap import company
+
+    history = await company.history_track_ids(db)
+    rows = await db.scalars(select(ProductTrack).order_by(*TRACK_ORDER))
+    return [t for t in rows if t.id not in history]
+
+
+def _stepped(ids: list[str], track_id: str, to: str, code: int) -> list[str]:
+    """``ids`` with ``track_id`` one step ``to`` (up: earlier); ``code`` past either end."""
+    at = ids.index(track_id) if track_id in ids else -1
+    to_at = at - 1 if to == "up" else at + 1
+    if at < 0 or not 0 <= to_at < len(ids):
+        where = "first" if to == "up" else "last"
+        raise _err(code, f"{'outdated: ' if code == 409 else ''}the track is {where} already")
+    out = list(ids)
+    out[at], out[to_at] = out[to_at], out[at]
+    return out
+
+
+async def _place(db: AsyncSession, ids: list[str]) -> None:
+    """Store ``ids`` (track ids, first first) as the tracks' places, 1 = first."""
+    rows = {str(t.id): t for t in await track_order(db)}
+    for n, i in enumerate(ids, 1):
+        if (t := rows.get(i)) is not None:
+            t.position = n
+    await db.flush()
 
 
 def _iso(at: datetime | None) -> str | None:
@@ -450,6 +486,12 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
             after = wanted
             both = [*before.get("prd_ids", []), *wanted.get("prd_ids", [])]
             await _named(db, target, {**wanted, "prd_ids": both})
+        elif body.op == "move_track":
+            to = body.after.get("to")
+            if to not in ("up", "down"):
+                raise _err(422, "after.to: up or down")
+            _stepped([str(x.id) for x in await track_order(db)], str(t.id), to, 422)
+            after = {"to": to}
         applies = decides_track(principal, t)
         route = [] if applies else await track_decider(db, t)
     if not applies and await _asked(db, _prds_of(body.op, after)):
@@ -488,7 +530,9 @@ async def _apply(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
     elif c.op == "add_track":
         await _check_prds(db, None, c.after.get("prd_ids"))
         c.target = {**c.target, "prior": await _prior(db, c.after.get("prd_ids") or [])}
-        t = ProductTrack(title=c.after["title"], status="active", created_by=_me(principal))
+        # track-order: a new track goes last.
+        t = ProductTrack(title=c.after["title"], status="active", created_by=_me(principal),
+                         position=await tracks.next_position(db))  # fmt: skip
         db.add(t)
         await db.flush()
         await db.refresh(t, ["prd_links"])
@@ -530,6 +574,12 @@ async def _apply(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
             moved = [p for p in c.after["prd_ids"] if p not in current["prd_ids"]]
             c.target = {**c.target, "prior": await _prior(db, moved)}
         await _write_track(db, t, c.after)
+    elif c.op == "move_track":
+        await _track(db, uuid.UUID(c.target["track_id"]))
+        ids = [str(x.id) for x in await track_order(db)]
+        moved = _stepped(ids, c.target["track_id"], c.after["to"], 409)
+        c.before, c.after = {"order": ids}, {"to": c.after["to"], "order": moved}
+        await _place(db, moved)
     elif c.op == "delete_track":
         t = await _track(db, uuid.UUID(c.target["track_id"]))
         entry = await trash.delete_track(db, principal, t)
@@ -698,6 +748,14 @@ async def undo(db: AsyncSession, principal: Any, c: SimpleChange) -> Any:
                     raise _err(409, "Changed since: that PRD has another track now")
         await _write_track(db, t, c.before)
         await _put_back(db, c.target.get("prior") or {}, t)
+    elif c.op == "move_track":
+        # The tracks it moved are as it left them (one added or removed since aside).
+        ids = [str(x.id) for x in await track_order(db)]
+        moved = c.after.get("order") or []
+        if [i for i in ids if i in moved] != [i for i in moved if i in ids]:
+            raise _err(409, "Changed since: the track order changed")
+        was = [i for i in c.before.get("order") or [] if i in ids]
+        await _place(db, [*was, *(i for i in ids if i not in was)])
     elif c.op == "delete_track":
         from oracle.trash.models import TrashEntry
 
@@ -730,6 +788,10 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None = 
             return f"added the track {after.get('title') or item or ''}".rstrip()
         case "delete_track":
             return f"moved the track {title} to Trash"
+        case "move_track":
+            # track-order: an undo reads as the step back.
+            back = {"up": "down", "down": "up"}.get(before.get("to") or "")
+            return f"moved the track {title} {after.get('to') or back or ''}".rstrip()
         case "edit_track":
             parts = []
             if "title" in after and after.get("title") != before.get("title"):

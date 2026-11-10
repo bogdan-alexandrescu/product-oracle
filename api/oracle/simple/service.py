@@ -46,6 +46,7 @@ from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company
 from oracle.roadmap import tracks as tracks_mod
 from oracle.roadmap.models import (
+    TRACK_ORDER,
     ProductTrack,
     RoadmapChangeSet,
     RoadmapItem,
@@ -1180,6 +1181,7 @@ def item_out(
             title=e.track.title,
             goal_id=e.track_goal.id if e.track_goal else None,
             goal_name=e.track_goal.title if e.track_goal else None,
+            order=e.track.position,
         )
         if e.track
         else None,
@@ -1412,9 +1414,10 @@ def _group_of(
     prd_ranks: dict[uuid.UUID, int],
     parents: dict[uuid.UUID, Entity] | None = None,
 ) -> tuple[str, str, tuple]:
-    """(key, title, sort key) of the item's group; goals in the one goal order, PRDs in the
-    company PRD order (``prd_ranks``, oracle.docs.prd_order), each "No ..." group last. A key
-    result's items sit in its parent goal's group (kr-in-goal-card)."""
+    """(key, title, sort key) of the item's group; goals in the one goal order, tracks in the
+    company's track order, PRDs in the company PRD order (``prd_ranks``,
+    oracle.docs.prd_order), each "No ..." group last. A key result's items sit in its parent
+    goal's group (kr-in-goal-card)."""
     if group == "goal":
         goal = _lane_goal(e, parents or {})
         if goal is not None:
@@ -1422,7 +1425,10 @@ def _group_of(
         return NONE, "No goal", (1,)
     if group == "track":
         if e.track is not None:
-            return str(e.track.id), e.track.title, (0, f"{e.track.title.casefold()}{e.track.id}")
+            # track-order: tracks in the company's track order (TRACK_ORDER).
+            t = e.track
+            place = (t.position is None, t.position or 0, t.created_at, str(t.id))
+            return str(t.id), t.title, (0, *place)
         return NONE, "No track", (1,)
     if e.prd is not None:
         rank = prd_ranks.get(e.prd.id, len(prd_ranks) + 1)
@@ -1490,12 +1496,10 @@ async def _track_bands(
     today: date,
     goals: list[Entity],
 ) -> list[SimpleRoadmapTrack]:
-    """milestone-kinds: every live track, in the Tracks order (oracle.simple.removed), with
+    """milestone-kinds: every live track, in the Tracks order (track-order: the stored one), with
     its health: at risk when a feature of it ends after a milestone it serves, else stale
     when not checked in 14 days, else on track. ``goals``: as ``_goal_targets`` read them."""
-    rows = list(
-        await db.scalars(select(ProductTrack).order_by(ProductTrack.created_at, ProductTrack.id))
-    )
+    rows = list(await db.scalars(select(ProductTrack).order_by(*TRACK_ORDER)))
     history = await company.history_track_ids(db)
     rows = [t for t in rows if t.id not in history]
     if not rows:
@@ -1558,7 +1562,7 @@ async def _track_bands(
             goal_name=goal_names.get(t.goal_id) if t.goal_id else None,
             owner_name=owners.get(t.owner_id) if t.owner_id else None,
             prds=[SimplePrdRef(id=p, title=prds.get(p) or "") for p in t.prd_ids],
-            health=health, health_reason=why,  # type: ignore[arg-type]
+            health=health, health_reason=why, order=t.position,  # type: ignore[arg-type]
         ))  # fmt: skip
     return out
 

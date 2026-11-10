@@ -1,7 +1,7 @@
 /**
  * Mock of Simple's removed list and tracks (oracle.simple.removed, oracle.simple.plan_changes):
  * GET /v1/simple/removed, GET /v1/simple/tracks, and the change ops restore_goal_milestone,
- * add_track, edit_track and delete_track through POST /v1/simple/changes. A cut feature is put
+ * add_track, edit_track, move_track and delete_track through POST /v1/simple/changes. A cut feature is put
  * back with the engine's own "restore" op, an archived goal with the goal asks' unarchive_goal
  * (./simple-changes.ts).
  */
@@ -10,7 +10,7 @@ import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { lazyGoalBuckets, seedGoalBuckets } from "./goal-buckets";
 import { stableUuid } from "./ids";
-import { canDecideItem, canEditRoadmap, closed, deciderIds, GOALS, ROADMAPS, TRACKS, trackGoal, type SimpleDb } from "./simple-roadmap";
+import { canDecideItem, canEditRoadmap, closed, deciderIds, GOALS, ROADMAPS, TRACKS, trackGoal, trackKeys, trackPlace, type SimpleDb } from "./simple-roadmap";
 import type { MockMilestone } from "./simple-milestones";
 import type { TrashEntryRow } from "./trash";
 
@@ -163,7 +163,17 @@ function change(ctx: RemovedCtx, body: Schemas["SimpleChangeIn"], applied: boole
   return { change: c as unknown as Schemas["SimpleChangeOut"], flags: [] } as unknown as Schemas["SimpleChangeResult"];
 }
 
-const OPS = new Set(["restore_goal_milestone", "add_track", "edit_track", "delete_track"]);
+/** replaced-prd-history (company.history_track_ids): a replaced PRD's own track and its roadmap's track are history, not in Tracks. */
+function historyKeys(db: Db, states: Record<string, TrackState>): Set<string | undefined> {
+  const history = new Set(db.history_roadmaps ?? []);
+  const replaced = new Set(db.replaced_prd_titles ?? []);
+  return new Set([
+    ...Object.entries(db.extra_roadmaps ?? {}).filter(([slug]) => history.has(slug)).map(([, r]) => r.track),
+    ...Object.keys(TRACKS).filter((k) => replaced.has(states[k]?.prd)),
+  ]);
+}
+
+const OPS = new Set(["restore_goal_milestone", "add_track", "edit_track", "move_track", "delete_track"]);
 
 /** GET /v1/simple/removed, GET /v1/simple/tracks and the plan ops; null when not one of them. */
 /**
@@ -214,17 +224,14 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
   if (p[2] === "tracks" && m === "GET" && !p[3]) {
     // replaced-prd-history (company.history_track_ids): a replaced PRD's own track and its
     // roadmap's track are history.
-    const history = new Set(db.history_roadmaps ?? []);
-    const replaced = new Set(db.replaced_prd_titles ?? []);
-    const gone = new Set([
-      ...Object.entries(db.extra_roadmaps ?? {}).filter(([slug]) => history.has(slug)).map(([, r]) => r.track),
-      ...Object.keys(TRACKS).filter((k) => replaced.has(states[k]?.prd)),
-    ]);
-    const tracks = Object.entries(TRACKS).filter(([k]) => !gone.has(k)).map(([k, title]) => {
+    const gone = historyKeys(db, states);
+    // track-order: in the company's track order (order, 1 = first).
+    const tracks = trackKeys(db).filter((k) => !gone.has(k)).map((k) => {
+      const title = TRACKS[k];
       const own = db.track_owners?.[k];
       const decides = owner || (own === ctx.id && RANK[ctx.role] >= RANK.approver);
       const st = states[k];
-      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: st.prd ? prdId(st.prd) : null, prd_title: st.prd || null, prds: prdsOf(st).map((t) => ({ id: prdId(t), title: t })), ...trackGoal(db, k), can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: db.items.filter((s) => s.track === k && !closed(s)).length, moves_count: db.items.filter((s) => s.track === k).length };
+      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: st.prd ? prdId(st.prd) : null, prd_title: st.prd || null, prds: prdsOf(st).map((t) => ({ id: prdId(t), title: t })), ...trackGoal(db, k), can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: db.items.filter((s) => s.track === k && !closed(s)).length, moves_count: db.items.filter((s) => s.track === k).length, order: trackPlace(db, k) };
     });
     // As takeable_prds: every accepted PRD not on a track in Trash, with the track it is on now.
     const prds = allPrds()
@@ -249,7 +256,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
   }
   // tracks-goal (owner Nov 9): accepting a proposed track change (in the decider's Inbox) applies it as it is then, putting on or
   // taking off only its PRD; ./simple-changes.ts then marks it accepted.
-  const proposal = p[2] === "changes" && m === "POST" && p[4] === "accept" ? (db.changes ?? []).find((c) => c.id === p[3] && c.status === "proposed" && (c.op === "add_track" || c.op === "edit_track")) : undefined;
+  const proposal = p[2] === "changes" && m === "POST" && p[4] === "accept" ? (db.changes ?? []).find((c) => c.id === p[3] && c.status === "proposed" && (c.op === "add_track" || c.op === "edit_track" || c.op === "move_track")) : undefined;
   if (proposal && ctx.role !== "owner" && !proposal.routed_to.includes(ctx.id)) return null;
   if (!proposal && (p[2] !== "changes" || m !== "POST" || p[3])) return null;
   const body = (proposal ? { op: proposal.op, target: proposal.target, before: {}, after: proposal.after } : await req.clone().json().catch(() => ({}))) as Schemas["SimpleChangeIn"];
@@ -345,6 +352,26 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
   const decides = owner || (own === ctx.id && RANK[ctx.role] >= RANK.approver);
   const route = own && own !== ctx.id ? [own] : ctx.owners;
   const title = TRACKS[k];
+  if (body.op === "move_track") {
+    // track-order (plan_changes.move_track): one step up or down the company's track order, not past either end; Undo puts the order back.
+    const to = a.to;
+    if (to !== "up" && to !== "down") return json(422, { detail: "after.to: up or down" });
+    const all = trackKeys(db);
+    const shown = all.filter((x) => !historyKeys(db, states).has(x));
+    const at = shown.indexOf(k);
+    const next = to === "up" ? at - 1 : at + 1;
+    if (next < 0 || next >= shown.length) return json(proposal ? 409 : 422, { detail: `${proposal ? "outdated: " : ""}the track is ${to === "up" ? "first" : "last"} already` });
+    const was = db.track_order ? [...db.track_order] : undefined;
+    const step = () => {
+      // As plan_changes._place: the listed tracks swap places; every track keeps a place number.
+      const [i, j] = [all.indexOf(shown[at]), all.indexOf(shown[next])];
+      [all[i], all[j]] = [all[j], all[i]];
+      db.track_order = all;
+    };
+    if (proposal) return (step(), null);
+    if (decides) step();
+    return done(change(ctx, { ...body, target: { ...t, title } }, decides, route, `moved the track ${title} ${to}`), () => void (db.track_order = was), true);
+  }
   if (body.op === "delete_track") {
     if (decides) trashTrack(k);
     return done(change(ctx, body, decides, route, `moved the track ${title} to Trash`), () => {

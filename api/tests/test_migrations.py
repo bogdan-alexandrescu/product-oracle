@@ -190,8 +190,8 @@ def test_baseline_flow_check_up_down_up(scratch_db):
     script = ScriptDirectory.from_config(cfg)
     previous = script.get_revision(BASELINE_FLOW).down_revision
     # removed-tracks, prd-order, feature-parts, qaC-numfix, item-milestone, milestone-kinds,
-    # tb-mk, feature-panel: renumbered on merge.
-    assert script.get_heads() == ["0127_trash_tasks"]
+    # tb-mk, feature-panel, track-order: renumbered on merge.
+    assert script.get_heads() == ["0128_track_order"]
 
     command.upgrade(cfg, previous)
     assert "'baseline'" not in _flow_check()

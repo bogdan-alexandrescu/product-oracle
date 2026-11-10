@@ -179,6 +179,8 @@ interface SimpleDb {
   track_owners?: Record<string, string>;
   /** tb-mk: a track last checked on that day (long ago: its band's warning mark). */
   track_checked?: Record<string, string>;
+  /** track-order (owner Nov 9): the company's track order as moved (track keys, first first; product_tracks.position). A track not in it follows, in TRACKS' order (when it was made): a new one goes last. */
+  track_order?: string[];
   /** RP2 'Draft layer on roadmap': each draft PRD's run (PRD id -> run), as DraftRoadmap.run_id
    * and prd_version_id hold it (./meeting-draft.ts draftPrdsOut). */
   draft_runs?: Record<string, { run_id: string; version: number; cancelled?: boolean }>;
@@ -552,6 +554,19 @@ export const closed = (s: SeedItem): boolean => s.status === "cut" || !!s.merged
 /** roadmap-done (owner, Nov 4), as the API's status: a done (shipped) item is off the roadmap, never checked, and holds nothing up. */
 export const doneItem = (s: SeedItem): boolean => !closed(s) && !s.draft && s.status === "done";
 export const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
+/** track-order (the API's TRACK_ORDER): TRACKS' keys in the company's track order, every read that lists tracks in order follows it. */
+export function trackKeys(db: { track_order?: string[] }): string[] {
+  const at = (k: string) => {
+    const n = (db.track_order ?? []).indexOf(k);
+    return n < 0 ? Infinity : n;
+  };
+  return Object.keys(TRACKS)
+    .map((k, n) => [k, n] as const)
+    .sort((a, b) => at(a[0]) - at(b[0]) || a[1] - b[1])
+    .map(([k]) => k);
+}
+/** track-order: a track's place number (product_tracks.position, lower first) as the reads carry it as `order`. */
+export const trackPlace = (db: { track_order?: string[] }, k: string): number => trackKeys(db).indexOf(k) + 1;
 
 const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
@@ -1549,7 +1564,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       prd: ownPrd(s),
       // service.load: the first goal it is linked to directly (goal_ids) that is not in Trash, else its Goal map goal.
       goal: linked(s) ? { id: stableUuid(`simple-goal/${linked(s)}`), key: linked(s)!, ...roadmapGoal(reader.full, linked(s)!), position: goalPositionOf(linked(s)!), ...READINGS[linked(s)!] } : s.map_goal ? mapGoalRef(reader.full, s.map_goal) : (reader.full.map_goals?.[db.ids[s.key]] ?? null),
-      track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track], ...trackGoal(db, s.track) } : null,
+      track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track], ...trackGoal(db, s.track), order: trackPlace(db, s.track) } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
       draft: !!s.draft,
@@ -1648,6 +1663,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   );
   const groups = new Map<string, { title: string; sort: string; item_ids: string[] }>();
   const prdRank = prdRanker();
+  // track-order: track groups in the company's track order.
+  const trackRank = new Map(trackKeys(db).map((k, n) => [stableUuid(`simple-track/${k}`), n]));
   for (const i of shown) {
     const ref = group === "goal" ? laneGoal(i) : group === "track" ? i.track : i.prd;
     const none = { goal: "No goal", track: "No track", prd: "No PRD" }[group];
@@ -1659,7 +1676,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         ? goalOrderKey(String(ref.key))
         : group === "prd"
           ? `0${String(prdRank(ref)).padStart(16, "0")}${ref.title}`
-          : `0${ref.title}`;
+          : `0${String(trackRank.get(ref.id) ?? 1e9).padStart(16, "0")}${ref.title}`;
     const g = groups.get(key) ?? { title: ref?.title ?? none, sort, item_ids: [] };
     g.item_ids.push(i.id);
     groups.set(key, g);
@@ -1773,7 +1790,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     }),
   ]);
   const byMilestone = new Map(allGoalMilestones.map((m) => [m.id, m]));
-  const roadmapTracks = Object.keys(TRACKS).filter((k) => !historyTracks.has(k)).map((k) => {
+  const roadmapTracks = trackKeys(db).filter((k) => !historyTracks.has(k)).map((k) => {
     const id = stableUuid(`simple-track/${k}`);
     const own = items.filter((i) => i.track?.id === id);
     const late: { days: number; title: string; end: string; m: Schemas["SimpleGoalMilestone"] }[] = [];
@@ -1794,6 +1811,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       prds: [...new Set(own.flatMap((i) => (i.prd ? [i.prd.title] : [])))].map((t) => ({ id: stableUuid(`simple-doc/${t}`), title: t })),
       health: why ? ("at_risk" as const) : stale ? ("stale" as const) : ("on_track" as const),
       health_reason: why ?? (stale ? `Not checked since ${calendarDay(stale.slice(0, 10))}` : "On track: every feature ends before its milestone"),
+      order: trackPlace(db, k),
     };
   });
   return {

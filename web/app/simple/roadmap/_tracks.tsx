@@ -18,6 +18,7 @@ const ROW = "grid grid-cols-[84px_minmax(0,1fr)] items-center gap-2 py-1";
 
 /** What a proposal asks, as its toast names it ("Rename proposed · waits for …"). */
 function asking(after: Record<string, string | string[] | null>): string {
+  if ("to" in after) return "Move";
   if ("title" in after) return "Rename";
   if ("owner_id" in after) return "Owner change";
   if ("goal_id" in after) return "Goal change";
@@ -50,7 +51,8 @@ function stampOf(items: Item[]): string {
 /**
  * removed-tracks (et B): "Tracks · N" beside the roadmap's filters opens a sheet of every track
  * (paused, closed and empty ones too) with its owner, state and features; a row opens to Name,
- * Owner, State and Move to Trash; "+ Add track" in its head. One who does not decide proposes.
+ * Owner, State, Move up and Move down (track-order: the company's track order) and Move to Trash;
+ * "+ Add track" in its head. One who does not decide proposes.
  */
 export function TracksButton({ items, canChange, onChanged }: { items: Item[]; canChange: boolean; onChanged: () => Promise<unknown> }) {
   const [open, setOpen] = useState(false);
@@ -61,6 +63,7 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
   const [opened, setOpened] = useState<string | null>(null);
   const [trashing, setTrashing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [moving, setMoving] = useState(false);
   const data = q.data;
   const tracks = data?.tracks ?? [];
   const refresh = async () => {
@@ -93,6 +96,11 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
   };
   const edit = (t: Track, after: Record<string, string | string[] | null>, done: string) =>
     send({ op: "edit_track", target: { track_id: t.id }, before: {}, after } as Schemas["SimpleChangeIn"], done, t.decider_name ?? null, asking(after), t.title);
+  // track-order: one step up or down the company's track order per press, as the One-pagers rows' PRD order.
+  const move = (t: Track, to: "up" | "down") => {
+    setMoving(true);
+    void send({ op: "move_track", target: { track_id: t.id }, before: {}, after: { to } } as Schemas["SimpleChangeIn"], `Moved ${t.title} ${to}.`, t.decider_name ?? null, "Move", t.title).finally(() => setMoving(false));
+  };
   const toTrash = (t: Track) => {
     // Every feature on it moves, cut ones too: the API's count of what moves.
     const n = t.moves_count ?? 0;
@@ -116,7 +124,7 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
           )}
           {adding && data && <AddTrack data={data} onCancel={() => setAdding(false)} onAdd={async (after) => (await send({ op: "add_track", target: {}, before: {}, after } as Schemas["SimpleChangeIn"], `Added ${after.title}`, data.add_decider_name ?? null, "New track", after.title)) && setAdding(false)} />}
           <ul className="flex flex-col">
-            {tracks.map((t) => {
+            {tracks.map((t, n) => {
               const expanded = opened === t.id;
               const count = t.feature_count ?? 0;
               const moves = t.moves_count ?? 0;
@@ -137,6 +145,16 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
                   {expanded && (
                     <div className="mt-1">
                       <TrackFields t={t} may={canChange} people={data?.people ?? []} prds={data?.prds ?? []} goals={data?.goals ?? []} onEdit={(after, done) => edit(t, after, done)} />
+                      {canChange && tracks.length > 1 && (
+                        <div className="mt-1 flex gap-1.5">
+                          <Button className="!h-8" disabled={moving || n === 0} onClick={() => move(t, "up")}>
+                            Move up
+                          </Button>
+                          <Button className="!h-8" disabled={moving || n === tracks.length - 1} onClick={() => move(t, "down")}>
+                            Move down
+                          </Button>
+                        </div>
+                      )}
                       {canChange && t.can_decide && trashing !== t.id && (
                         <button
                           type="button"

@@ -157,6 +157,10 @@ class ProductTrack(Trashable, TenantScoped, Base):
     )
     owner_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # track-order (owner Nov 9): the track's place in the company's track order (1 = first;
+    # null: after every placed one, oldest first, so a new track goes last). Every read
+    # that lists tracks in order sorts by :data:`TRACK_ORDER`; Move up / Move down write it.
+    position: Mapped[int | None] = mapped_column(Integer)
     # The last monitoring snapshot (health, at-risk item keys, next milestone, when).
     monitor: Mapped[dict[str, Any]] = _json()
     monitored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -176,6 +180,13 @@ class ProductTrack(Trashable, TenantScoped, Base):
         """The track's PRDs, first joined first."""
         return [link.prd_document_id for link in self.prd_links]
 
+
+# track-order: the company's track order, for ``select(ProductTrack).order_by(*TRACK_ORDER)``.
+TRACK_ORDER = (
+    ProductTrack.position.asc().nulls_last(),
+    ProductTrack.created_at,
+    ProductTrack.id,
+)
 
 TRACK_PRD_STATES = ("linked", "off", "suggested")
 

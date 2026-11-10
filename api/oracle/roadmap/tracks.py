@@ -50,6 +50,11 @@ class Conflict(TrackError):
     status_code = 409
 
 
+async def next_position(db: AsyncSession) -> int:
+    """track-order (owner Nov 9): a new track's place, last in the company's track order."""
+    return (await db.scalar(select(func.max(ProductTrack.position))) or 0) + 1
+
+
 async def latest_approved(db: AsyncSession, document_id: uuid.UUID) -> DocumentVersion | None:
     return await db.scalar(
         select(DocumentVersion)
@@ -211,6 +216,7 @@ async def ensure_track(
             status="active",
             created_by=actor.id if isinstance(actor, Principal) else None,
             roadmap_document_id=roadmap_document_id or await _latest_roadmap_of(db, prd.id),
+            position=await next_position(db),
         )
         db.add(track)
     else:

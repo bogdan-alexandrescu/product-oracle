@@ -22,6 +22,7 @@ import { keyResults, topGoalSuggestions, type KeyResults } from "@/lib/key-resul
 import { InfoTip } from "@/components/ds/InfoTip";
 import { useMe } from "@/lib/me";
 import { byPrdOrderOf, usePrdOrder } from "@/lib/prd-order";
+import { inTrackOrder } from "@/lib/track-order";
 import { useQuery } from "@/lib/use-query";
 
 import { QuickAdd } from "./_add";
@@ -1773,7 +1774,7 @@ export function SimpleRoadmap() {
         onChange={(prd) => pickFilter("prd", prd)}
       />
       <Select label="Goal" value={f.goal} options={goalOptions} onChange={(goal) => pickFilter("goal", goal)} />
-      <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
+      <Select label="Track" value={f.track} options={inTrackOrder(seen.track, data.tracks)} onChange={(track) => pickFilter("track", track)} />
       <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setRange(from, f.to)} testId="filter-from" />
       <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setRange(f.from, to)} testId="filter-to" />
     </>
