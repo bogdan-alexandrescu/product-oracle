@@ -33,7 +33,8 @@ import { expect, test, type Page } from "./test";
  *
  * vqa-b: protects = a PRD whose plan has its own milestones lists each of its roadmap items with
  * no plan milestone in its When card, under "No milestone" at the card's end, and the item's
- * name opens its feature panel; fails_when = the item is on no part of the page.
+ * name opens its feature panel; the When slide of Present and a phone's timeline list it the same
+ * way; fails_when = the item is on no part of the page, of the When slide or of the phone's timeline.
  */
 
 const URL = "/simple/one-pagers/guided-setup";
@@ -89,6 +90,41 @@ test("vqa-b: the plan's When card lists the PRD's item with no plan milestone un
   const panel = page.getByRole("complementary", { name: "Calendar invite sync" });
   await expect(panel).toBeVisible();
   await expect(panel).not.toContainText("not on a roadmap you can see");
+});
+
+test("vqa-b: Present's When slide lists the PRD's item with no plan milestone under No milestone", async ({ page }) => {
+  await scenario(page, ONE_PAGER_PLAN_LOOSE_SCENARIO);
+  await login(page);
+  await page.goto(PRD_URL);
+  await page.getByRole("button", { name: "Present" }).click();
+  await expect(page.getByTestId("slides")).toBeVisible();
+  // The When card is the last slide.
+  await page.keyboard.press("End");
+  const group = page.getByTestId("slides").getByTestId("timeline-no-milestone");
+  await expect(group.getByRole("heading", { name: "No milestone" })).toBeVisible();
+  const rows = group.getByTestId("timeline-no-milestone-item");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.getByRole("button", { name: "Calendar invite sync" })).toBeVisible();
+});
+
+test.describe("vqa-b on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test("the phone's timeline lists the PRD's item with no plan milestone under No milestone", async ({ page }) => {
+    await scenario(page, ONE_PAGER_PLAN_LOOSE_SCENARIO);
+    await login(page);
+    await page.goto(PRD_URL);
+    const timeline = page.getByTestId("timeline-vertical");
+    await expect(timeline).toBeVisible();
+    const group = timeline.getByTestId("timeline-no-milestone");
+    await expect(group.getByRole("heading", { name: "No milestone" })).toBeVisible();
+    // The group closes the timeline, after the milestones.
+    await expect(timeline.locator(":scope > *").last()).toHaveAttribute("data-testid", "timeline-no-milestone");
+    const rows = group.getByTestId("timeline-no-milestone-item");
+    await expect(rows).toHaveCount(1);
+    await rows.getByRole("button", { name: "Calendar invite sync" }).click();
+    await expect(page.getByRole("complementary", { name: "Calendar invite sync" })).toBeVisible();
+  });
 });
 
 test.describe("production QA", () => {
