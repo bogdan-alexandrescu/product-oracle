@@ -1767,6 +1767,7 @@ async def read(
             ],
             reviewers=[SimplePersonRef(id=i, name=names.get(i, "someone")) for i in required],
             can_submit=d.status == "working" and decides(principal, w),
+            can_approve=drafts.can_approve(principal, d, await drafts.who(db, {d.document_id})),
             reminded_at=reminded_at(d),
             can_remind=may_remind(principal, w) and bool(due_reminders(d, now)),
             approved_in=titles.get(uuid.UUID(approved_sid)) if approved_sid else None,

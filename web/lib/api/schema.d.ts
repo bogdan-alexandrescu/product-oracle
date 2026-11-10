@@ -28604,6 +28604,12 @@ export interface components {
              */
             draft_id: string;
             document: components["schemas"]["SimpleDocRef"];
+            /**
+             * Document Kind
+             * @default roadmap
+             * @enum {string}
+             */
+            document_kind: "roadmap" | "prd";
             /** Version */
             version: number | null;
             /** Submitted By */
@@ -33016,6 +33022,11 @@ export interface components {
             reviewers: components["schemas"]["SimplePersonRef"][];
             /** Can Submit */
             can_submit: boolean;
+            /**
+             * Can Approve
+             * @default false
+             */
+            can_approve: boolean;
             /** Reminded At */
             reminded_at?: string | null;
             /**

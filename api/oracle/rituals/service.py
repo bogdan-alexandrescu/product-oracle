@@ -834,12 +834,16 @@ async def pre_read_markdown(
 
 
 async def mark_read(db: AsyncSession, principal: Principal, occ_id: uuid.UUID) -> None:
+    """The caller opened the occurrence: its pre-read is done for them, and its Record notes
+    or failed row seen (inbox-ritual-seen: ``read_at`` is the last time they opened it)."""
     await get_occurrence(db, occ_id)
+    now = clock.now()
     await db.execute(
         insert(RitualRead)
         .values(id=uuid.uuid4(), tenant_id=current_tenant(db), occurrence_id=occ_id,
-                user_id=principal.id)
-        .on_conflict_do_nothing(index_elements=["occurrence_id", "user_id"])
+                user_id=principal.id, read_at=now)
+        .on_conflict_do_update(index_elements=["occurrence_id", "user_id"],
+                               set_={"read_at": now})
     )  # fmt: skip
     await db.commit()
 
@@ -950,14 +954,22 @@ async def inbox_rows(db: AsyncSession, principal: Principal) -> list[InboxRitual
     ).all()
     if not pairs:
         return rows
-    read = set(
-        await db.scalars(
-            select(RitualRead.occurrence_id).where(
-                RitualRead.user_id == me,
-                RitualRead.occurrence_id.in_([o.id for o, _ in pairs]),
+    read = dict(
+        (
+            await db.execute(
+                select(RitualRead.occurrence_id, RitualRead.read_at).where(
+                    RitualRead.user_id == me,
+                    RitualRead.occurrence_id.in_([o.id for o, _ in pairs]),
+                )
             )
-        )
+        ).all()
     )
+
+    def seen(o: RitualOccurrence, since: datetime | None = None) -> str:
+        """inbox-ritual-seen: new until I opened the occurrence after ``since``; a visit to
+        the Inbox never makes it seen."""
+        at = read.get(o.id)
+        return "open" if at is not None and (since is None or at >= since) else "new"
 
     def row(o: RitualOccurrence, r: Ritual, reason: str, state: str, counts: bool) -> InboxRitual:
         return InboxRitual(occurrence_id=o.id, ritual_id=r.id, title=r.title, due_at=o.due_at,
@@ -969,13 +981,13 @@ async def inbox_rows(db: AsyncSession, principal: Principal) -> list[InboxRitual
             continue
         if o.status == "failed":
             if r.status == "active" and has_role(principal.role, "owner"):
-                rows.append(row(o, r, "failed", "open", True))
+                rows.append(row(o, r, "failed", seen(o), True))
         elif now < o.ends_at:
             if me == r.owner_id or me in (r.attendee_ids or []):
                 done = o.id in read
                 rows.append(row(o, r, "pre_read", "done" if done else "new", not done))
         elif me == r.owner_id:
-            rows.append(row(o, r, "record_notes", "open", True))
+            rows.append(row(o, r, "record_notes", seen(o, o.ends_at), True))
     return rows
 
 
