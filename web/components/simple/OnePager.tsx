@@ -1251,8 +1251,8 @@ export function NeedsALook({ items, blocks = [], sections = [], doc, version, co
     <section aria-label="Needs a look" className="simple-noprint mb-4 rounded border border-dashed border-[var(--simple-rule)] px-3 py-2 text-sm text-text2">
       <h2 className="font-semibold">Needs a look</h2>
       <ul className="mt-1 space-y-1">
-        {/* vqa-one-pager: the same item (kind, words, sections) shows once. */}
-        {items.filter((x, i) => items.findIndex((y) => y.kind === x.kind && y.text === x.text && y.source_keys.join() === x.source_keys.join()) === i).map((x, i) => {
+        {/* vqa-one-pager: the same item (kind, words, sections) shows once: the API's annotate (and the mock) keeps one each. */}
+        {items.map((x, i) => {
           const w = at(x);
           const key = x.source_keys[0];
           const line = short(x, w.names.length && w.line ? w.names : w.prd);
