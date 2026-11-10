@@ -1339,7 +1339,8 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
     const named = (ids: string[]) => ids.map((id) => items.find((x) => x.id === id)).filter((x): x is Item => !!x).map((x) => (x.code ? `${x.code} ${x.title}` : x.title));
     const listed = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
     const roadmap = `From the roadmap · ${about(i)}`;
-    if (new RegExp(`\\b(?:what|who|which)\\b.*\\b(?:needs|depends on|waits on) ${it}\\b`, "i").test(t)) {
+    // "Which items depend on it?" asks what needs it, as "What needs it?" does.
+    if (new RegExp(`\\b(?:what|who|which)\\b.*\\b(?:needs?|depends? on|wait(?:s|ing)? on) ${it}\\b`, "i").test(t)) {
       const by = named(i.needed_by);
       return { kind: "answer", body: by.length ? `${listed(by)} ${by.length === 1 ? "depends" : "depend"} on ${i.title}.` : `Nothing depends on ${i.title}.`, cards: [], source: roadmap };
     }
@@ -1349,7 +1350,10 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
     }
     if (/\b(?:goal|measured?)\b/i.test(t) && i.goal) {
       const g = i.goal;
-      const measure = g.metric ? `, measured by ${g.metric}${g.current != null ? ` (now ${g.current}${g.unit ?? ""}${g.target ? `, target ${g.target}` : ""})` : ""}` : "";
+      // As the API's goal_measure: the target with its unit (goal_buckets._target), its due day month first.
+      const target = g.target ? (/^[\d.]+$/.test(g.target) && g.unit ? (g.unit === "%" ? `${g.target}%` : `${g.target} ${g.unit}`) : g.target) : null;
+      const now = [g.current != null ? `now ${g.current}${g.unit === "%" ? "%" : g.unit ? ` ${g.unit}` : ""}` : "", target ? `target ${target}${g.due ? ` by ${dayWords(g.due, true)}` : ""}` : ""].filter(Boolean).join(", ");
+      const measure = g.metric ? `, measured by ${g.metric}${now ? ` (${now})` : ""}` : "";
       return { kind: "answer", body: `${i.title} serves the goal ${g.title}${measure}.`, cards: [], source: roadmap };
     }
     const why = i.reasons[0] ? ` ${i.reasons[0]}` : "";
