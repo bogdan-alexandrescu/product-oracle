@@ -1628,6 +1628,46 @@ function seedRoadmapMilestonesHardScenario(): Db {
   return db;
 }
 
+// MOCK-HOOK milestone-kinds ("milestone-kinds", temporary for the owner's pick): five tracks as the bands,
+// MOCK-HOOK ten milestones Dec to Mar of all six kinds (their kind data in app/simple/roadmap/_mk.ts). Invented data.
+function seedMilestoneKindsScenario(): Db { // MOCK-HOOK
+  const db = seed(); // MOCK-HOOK
+  const rm = (db.simple_roadmap = seedSimpleRoadmap()); // MOCK-HOOK
+  Object.assign(GOALS, { scale: "Scale", safety: "Safety", conversions: "Conversions", "growth-revenue": "Growth & Revenue", "account-mgmt": "Account Management" }); // MOCK-HOOK
+  const items = [ // MOCK-HOOK
+    { key: "mk-queue", title: "Faster message queue", horizon: "now", goal: "scale", start: 35, end: 74 }, // MOCK-HOOK
+    { key: "mk-shards", title: "Split inbox storage", horizon: "next", goal: "scale", start: 0, end: 18 }, // MOCK-HOOK
+    { key: "mk-dm-test", title: "Daily message limit test", horizon: "now", goal: "safety", start: 40, end: 64 }, // MOCK-HOOK
+    { key: "mk-report", title: "Report button in chats", horizon: "next", goal: "safety", start: 5, end: 46 }, // MOCK-HOOK
+    { key: "mk-signup", title: "One-step signup", horizon: "now", goal: "conversions", start: 30, end: 68 }, // MOCK-HOOK
+    { key: "mk-trial", title: "Trial reminder emails", horizon: "now", goal: "conversions", start: 70, end: 100 }, // MOCK-HOOK
+    { key: "mk-checkout", title: "Team plan checkout", horizon: "next", goal: "growth-revenue", start: 0, end: 55 }, // MOCK-HOOK
+    { key: "mk-referral", title: "Referral credits", horizon: "next", goal: "growth-revenue", start: 30, end: 60 }, // MOCK-HOOK
+    { key: "mk-seats", title: "Seat admin page", horizon: "now", goal: "account-mgmt", start: 45, end: 75 }, // MOCK-HOOK
+    { key: "mk-renewals", title: "Renewal reminders", horizon: "next", goal: "account-mgmt", start: 15, end: 32 }, // MOCK-HOOK
+  ] as const; // MOCK-HOOK
+  rm.items = items.map((it) => ({ ...it, source: "typed" as const, roadmap: "alerts-roadmap", track: "alerts", confidence: "medium" as const })); // MOCK-HOOK
+  rm.ids = Object.fromEntries(items.map((it) => [it.key, stableUuid(`simple-item/${it.key}`)])); // MOCK-HOOK
+  rm.decisions = {}; // MOCK-HOOK
+  rm.goal_suggestions = []; // MOCK-HOOK
+  for (const k of ["grow-retention", "faster-activation", "quiet-alerts"]) delete GOALS[k]; // MOCK-HOOK
+  rm.key_dates = {}; // MOCK-HOOK
+  const m = (n: string, name: string, date: string, goal: string, gates: string[], progress: "on_track" | "at_risk" | "not_started") => ({ id: stableUuid(`simple-gm/mk-${n}`), roadmap: "alerts-roadmap", code: `M${n}`, name, date, goal, gates, counts_when: "Holds 7 days in a row", progress }); // MOCK-HOOK
+  rm.goal_milestones = [ // MOCK-HOOK
+    m("1", "Safe daily DM limit found", "2026-12-07", "safety", ["mk-dm-test"], "at_risk"), // MOCK-HOOK
+    m("2", "Signup in 2 min for 60%", "2026-12-10", "conversions", ["mk-signup"], "on_track"), // MOCK-HOOK
+    m("3", "Queue ready for checkout", "2026-12-17", "scale", ["mk-queue"], "on_track"), // MOCK-HOOK
+    m("4", "Holiday code freeze", "2026-12-17", "account-mgmt", ["mk-seats"], "on_track"), // MOCK-HOOK
+    m("5", "Trial to paid at 6%", "2027-01-14", "conversions", ["mk-trial"], "at_risk"), // MOCK-HOOK
+    m("6", "Beta", "2027-01-21", "scale", ["mk-shards"], "on_track"), // MOCK-HOOK
+    m("7", "Partner app launch", "2027-02-04", "account-mgmt", ["mk-renewals"], "on_track"), // MOCK-HOOK
+    m("8", "Reports answered in 1 day", "2027-02-18", "safety", ["mk-report"], "on_track"), // MOCK-HOOK
+    m("9", "400 paying teams", "2027-03-04", "growth-revenue", ["mk-checkout", "mk-referral"], "on_track"), // MOCK-HOOK
+    m("10", "Public launch", "2027-03-18", "growth-revenue", ["mk-referral"], "on_track"), // MOCK-HOOK
+  ]; // MOCK-HOOK
+  return db; // MOCK-HOOK
+} // MOCK-HOOK
+// MOCK-HOOK
 // roadmap-milestone-codes ("roadmap-milestones"): 4 goals, milestones over Nov to Feb (two on Dec 22), a PRD's own one
 // and work of no goal: one code per milestone across the roadmap. Invented data.
 function seedRoadmapMilestonesScenario(): Db {
@@ -4176,6 +4216,8 @@ function load(): Db {
                   }
               : scenario === "roadmap-milestones"
                 ? seedRoadmapMilestonesScenario
+              : scenario === "milestone-kinds" // MOCK-HOOK
+                ? seedMilestoneKindsScenario // MOCK-HOOK
               : scenario === ROADMAP_MILESTONES_HARD_SCENARIO
                 ? seedRoadmapMilestonesHardScenario
               : scenario === GOAL_BUCKETS_HARD_SCENARIO
@@ -4704,7 +4746,7 @@ function load(): Db {
   // items "gm-f1", ...) are on every page from the first load, whichever page opens first.
   // A new company ("empty") has no features on its map yet; the 500-item company ("simple-500",
   // dod-perf) has its own 500 items and none of the default company's map features.
-  db.goal_map ??= scenario === "empty" || scenario === "simple-500" || scenario === "roadmap-milestones" ? { ...seedGoalMap(scenario), features: [] } : seedGoalMap(scenario);
+  db.goal_map ??= scenario === "empty" || scenario === "simple-500" || scenario === "roadmap-milestones" || scenario === "milestone-kinds" /* MOCK-HOOK */ ? { ...seedGoalMap(scenario), features: [] } : seedGoalMap(scenario);
   if (db.simple_roadmap) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   // pre-demo QA P-6 with P-1: the panel reads the goal each map feature serves from the first load too.
   if (db.simple_roadmap) db.simple_roadmap.map_goals = goalMapGoals(db.goal_map, db.baseline.entities.filter((e) => e.type === "goal"));
@@ -7890,6 +7932,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     knowGoalOrderGoals(db.baseline.entities);
     // roadmap-milestones: its fourth goal names its work on every load.
     if (db.simple_roadmap?.items.some((i) => i.key === "pricing-faq")) GOALS["win-teams"] = "Win larger teams";
+    if (db.simple_roadmap?.items.some((i) => i.key === "mk-queue")) for (const k of ["grow-retention", "faster-activation", "quiet-alerts"]) delete GOALS[k]; // MOCK-HOOK
+    if (db.simple_roadmap?.items.some((i) => i.key === "mk-queue")) Object.assign(GOALS, { scale: "Scale", safety: "Safety", conversions: "Conversions", "growth-revenue": "Growth & Revenue", "account-mgmt": "Account Management" }); // MOCK-HOOK
     knowGoalParents(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served a page built from its own sections (vqa B-13), with its own draft and changes.

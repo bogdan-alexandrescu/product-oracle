@@ -4,6 +4,7 @@
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
 import { MsLayer, msCode, useMsBand, useMsCtl, type MsLane, type MsRow } from "./_milestones";
+import { isGoalKind, kindName, MK_STATUS, MkIcon, mkInfo, MkLegend, MkStatusMark, mkVariant, statusColor } from "./_mk"; // MOCK-HOOK
 import {
   memo,
   useContext,
@@ -879,6 +880,19 @@ function DayChart(props: TimelineProps) {
             <div className="flex" style={{ height: msBandH }}>
               <div className="sticky left-0 z-20 flex flex-none items-center border-r border-b border-line bg-surface px-3 text-xs font-semibold text-text2" style={{ width: labelW }}>
                 Milestones
+                {mkVariant() && ( // MOCK-HOOK the band's (i): its legend
+                  <span className="ml-1.5 font-normal"> {/* MOCK-HOOK */}
+                    <InfoTip label="the milestone marks" align="start" side="bottom" testId="mk-legend-tip"> {/* MOCK-HOOK */}
+                      <MkLegend v={mkVariant()!} /> {/* MOCK-HOOK */}
+                    </InfoTip> {/* MOCK-HOOK */}
+                  </span> // MOCK-HOOK
+                )} {/* MOCK-HOOK */}
+                {mkVariant() === "d" && ( // MOCK-HOOK D: each row's mark
+                  <span className="ml-auto flex flex-col gap-[11px]" aria-hidden> {/* MOCK-HOOK */}
+                    <MkIcon kind="goal" size={10} color="var(--text2)" /> {/* MOCK-HOOK */}
+                    <MkIcon kind="delivery" size={10} color="var(--text2)" /> {/* MOCK-HOOK */}
+                  </span> // MOCK-HOOK
+                )} {/* MOCK-HOOK */}
               </div>
             </div>
           )}
@@ -1404,16 +1418,20 @@ const TimelineRow = memo(function TimelineRow({
 /** roadmap-milestone-codes: on a phone, the quarter's milestones across the roadmap, one line each, by date. */
 function QuarterMilestones({ from, to }: { from: string; to: string }) {
   const ms = useMsCtl();
-  const list = (ms?.band ?? []).filter((m) => from <= m.date! && m.date! <= to);
+  const mkv = mkVariant(); // MOCK-HOOK
+  const all = (ms?.band ?? []).filter((m) => from <= m.date! && m.date! <= to); // MOCK-HOOK
+  // MOCK-HOOK D: goals first, then the rest
+  const list = mkv === "d" ? [...all.filter((m) => isGoalKind(mkInfo(m.name).kind)), ...all.filter((m) => !isGoalKind(mkInfo(m.name).kind))] : all; // MOCK-HOOK
   if (!list.length) return null;
   return (
     <ul data-testid="ms-quarter" className="border-b border-line/60 bg-surface2/60 px-3 py-1.5 text-xs">
-      {list.map((m) => (
-        <li key={m.id} className="flex items-center gap-1.5 py-0.5">
-          <i aria-hidden className="h-2 w-2 flex-none rotate-45 rounded-[1px]" style={{ background: msEdge(msCode(m)) }} />
+      {list.map((m, k /* MOCK-HOOK */) => (
+        <li key={m.id} title={mkv ? `${kindName(mkInfo(m.name).kind)} · ${MK_STATUS[mkInfo(m.name).status]}` : undefined} /* MOCK-HOOK */ className={`flex items-center gap-1.5 py-0.5 ${mkv === "d" && k > 0 && isGoalKind(mkInfo(list[k - 1].name).kind) && !isGoalKind(mkInfo(m.name).kind) ? "mt-1 border-t border-dashed border-line pt-1.5" : ""}` /* MOCK-HOOK */}>
+          {mkv === "a" || mkv === "b" ? <MkIcon kind={mkInfo(m.name).kind} size={11} color={msEdge(msCode(m))} /> : /* MOCK-HOOK */ <i aria-hidden className="h-2 w-2 flex-none rotate-45 rounded-[1px]" style={{ background: mkv === "c" ? statusColor(mkInfo(m.name).status) : /* MOCK-HOOK */ msEdge(msCode(m)) }} />}
           <span className="min-w-0 truncate font-semibold" style={{ color: msInk(msCode(m)) }}>
             {msCode(m)} {m.name}
           </span>
+          {mkv === "b" && <MkStatusMark status={mkInfo(m.name).status} size={11} />} {/* MOCK-HOOK */}
           <span className="ml-auto flex-none text-text2">{shortDay(m.date!)}</span>
         </li>
       ))}

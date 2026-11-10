@@ -16,6 +16,7 @@ import { addDays, calendarDay } from "@/lib/dates";
 
 import { decide as decideChange, shortDay, type Item, type Roadmap } from "./_lib";
 import { msEdge, msFill, msInk } from "./_timeline";
+import { doneLine, isGoalKind, kindName, MK_GOALS, MK_KINDS, MK_STATUS, MkIcon, mkInfo, MkStatusMark, mkVariant, statusColor, type MkInfo, type MkKind, type MkStatus } from "./_mk"; // MOCK-HOOK
 
 export type GoalMilestone = Schemas["SimpleGoalMilestone"];
 
@@ -42,7 +43,7 @@ const RULES = ["Holds 7 days in a row", "Holds 14 days in a row", "Holds 4 weeks
 /** How far (px) past its corner a same-day count may move to keep clear: farther, it reads as another day's. */
 const BADGE_NEAR = 24;
 
-type Draft = { id: string | null; code: string; name: string; date: string; goal_id: string | null; item_ids: string[]; counts_when: string; second: boolean; prd: boolean };
+type Draft = { id: string | null; code: string; name: string; date: string; goal_id: string | null; item_ids: string[]; counts_when: string; second: boolean; prd: boolean; mk?: MkInfo /* MOCK-HOOK */ };
 type Toast = { words: string; undo: (() => Promise<unknown>) | null };
 
 export interface MsCtl {
@@ -109,7 +110,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
   const applies = new Set((data.key_date_roadmaps ?? []).filter((r) => r.applies).map((r) => r.roadmap.id));
   const canAddTo = (goal: string | null) => applies.has(roadmapOf(goal) ?? "");
   const lateOf = (ids: string[], date: string) => ids.filter((id) => (items.get(id)?.end.date ?? "") > date).length;
-  const fresh = (date: string, goal: string | null, second = false): Draft => ({ id: null, code: nextCode(date, second ? 1 : 0), name: "", date, goal_id: goal, item_ids: [], counts_when: RULES[0], second, prd: false });
+  const fresh = (date: string, goal: string | null, second = false): Draft => ({ id: null, code: nextCode(date, second ? 1 : 0), name: "", date, goal_id: goal, item_ids: [], counts_when: RULES[0], second, prd: false, mk: mkVariant() ? { kind: null, status: "on_track", done_when: "", toward: MK_GOALS[0] } : undefined /* MOCK-HOOK */ });
   const done = async (t: Toast) => {
     await reload();
     setToast(t);
@@ -157,7 +158,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
     },
     edit: (m) => {
       setToast(null);
-      setDraft({ id: m.id, code: msCode(m), name: m.name, date: m.pending?.date ?? m.date ?? data.today, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, second: false, prd: !!m.prd });
+      setDraft({ id: m.id, code: msCode(m), name: m.name, date: m.pending?.date ?? m.date ?? data.today, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, second: false, prd: !!m.prd, mk: mkVariant() ? mkInfo(m.name) : undefined /* MOCK-HOOK */ });
     },
     pick: (itemId) => {
       if (!draft || draft.prd) return false;
@@ -231,7 +232,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
 }
 
 /** One milestone's mark: a diamond on the time axis. */
-function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title, testid = "ms-diamond", color, onPointerDown, onClick }: { x: number; y: number; code: string; size?: number; hollow?: boolean; dashed?: boolean; title: string; testid?: string; color?: string; onPointerDown?: (e: ReactPointerEvent) => void; onClick?: () => void }) {
+function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title, testid = "ms-diamond", color, onPointerDown, onClick, mark }: { x: number; y: number; code: string; size?: number; hollow?: boolean; dashed?: boolean; title: string; testid?: string; color?: string; onPointerDown?: (e: ReactPointerEvent) => void; onClick?: () => void; mark?: ReactNode /* MOCK-HOOK */ }) {
   const edge = color ?? msEdge(code);
   const hit = onClick || onPointerDown;
   return (
@@ -245,7 +246,7 @@ function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title,
       onPointerDown={onPointerDown}
       onClick={onClick}
     >
-      <i aria-hidden className="block h-full w-full rotate-45 rounded-[2px]" style={{ background: hollow ? "var(--surface)" : edge, border: `1.5px ${dashed ? "dashed" : "solid"} ${edge}` }} />
+      {mark ?? /* MOCK-HOOK */ <i aria-hidden className="block h-full w-full rotate-45 rounded-[2px]" style={{ background: hollow ? "var(--surface)" : edge, border: `1.5px ${dashed ? "dashed" : "solid"} ${edge}` }} />}
     </span>
   );
 }
@@ -445,6 +446,9 @@ export function MsLayer(props: MsLayerProps) {
     };
   });
   if (!ms) return null;
+  const mkv = mkVariant(); // MOCK-HOOK
+  const mkOf = (m: GoalMilestone) => mkInfo(m.name); // MOCK-HOOK
+  const lineColor = (m: GoalMilestone) => (mkv === "c" ? statusColor(mkOf(m).status) : msEdge(msCode(m))); // MOCK-HOOK
   const { x, axisY, height, rows, lanes, phone, left = 0 } = props;
   const X = (d: string) => left + x(d);
   const laneOf = (g: string | null | undefined) => lanes.find((l) => l.key === (g ?? "none"));
@@ -544,10 +548,26 @@ export function MsLayer(props: MsLayerProps) {
             <span className="sr-only"> on {day(date)}</span>
           </span>,
         );
-      out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={msCode(m)} title={`${words(m)}, ${fullDay(date)}`} onPointerDown={grab(m)} />);
+      out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={msCode(m)} size={mkv === "a" ? 14 : 12} /* MOCK-HOOK */ color={mkv === "c" ? statusColor(mkOf(m).status) : undefined} /* MOCK-HOOK */ mark={mkv === "a" ? <MkIcon kind={mkOf(m).kind} size={14} color={msEdge(msCode(m))} /> : undefined} /* MOCK-HOOK */ title={`${words(m)}, ${fullDay(date)}`} onPointerDown={grab(m)} />);
     }
     // A line through every group, its words in the band under the date axis.
-    out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(msCode(m))}` }} />);
+    out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${lineColor(m)}` /* MOCK-HOOK */ }} />);
+    // MOCK-HOOK A: a hand-off draws a short arrow from its from-track's rows to its to-track's, at its day.
+    const ho = mkv === "a" ? mkOf(m) : null; // MOCK-HOOK
+    const fromL = ho?.kind === "handoff" ? lanes.find((l) => l.title === ho.from) : undefined; // MOCK-HOOK
+    const toL = ho?.kind === "handoff" ? lanes.find((l) => l.title === ho.to) : undefined; // MOCK-HOOK
+    if (fromL && toL) { // MOCK-HOOK
+      const down = toL.y0 > fromL.y0; // MOCK-HOOK
+      const y0 = down ? fromL.y0 + 14 : fromL.y0 + 14; // MOCK-HOOK
+      const y1 = toL.y0 + 14; // MOCK-HOOK
+      out.push( // MOCK-HOOK
+        <svg key={`ho-${m.id}`} data-testid="mk-handoff" aria-hidden className="pointer-events-none absolute z-[13] overflow-visible" style={{ left: mx + 3, top: Math.min(y0, y1), width: 12, height: Math.abs(y1 - y0) }}> {/* MOCK-HOOK */}
+          <path d={down ? `M5 0 V${Math.abs(y1 - y0)}` : `M5 ${Math.abs(y1 - y0)} V0`} stroke={msEdge(msCode(m))} strokeWidth="2" strokeDasharray="4 3" fill="none" /> {/* MOCK-HOOK */}
+          <path d={down ? `M0 ${Math.abs(y1 - y0) - 7} L5 ${Math.abs(y1 - y0)} L10 ${Math.abs(y1 - y0) - 7}` : "M0 7 L5 0 L10 7"} stroke={msEdge(msCode(m))} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /> {/* MOCK-HOOK */}
+          <circle cx="5" cy={down ? 0 : Math.abs(y1 - y0)} r="3" fill={msEdge(msCode(m))} /> {/* MOCK-HOOK */}
+        </svg>, // MOCK-HOOK
+      ); // MOCK-HOOK
+    } // MOCK-HOOK
     // Each item it waits on tied to it by a dotted line; one that ends after it is late (red).
     for (const id of m.item_ids) {
       const r = rowOf(id);
@@ -698,10 +718,16 @@ export function MsLayer(props: MsLayerProps) {
     const MIN = 62;
     for (const m of list) {
       const mx = X(m.date!);
-      const w = Math.min(textW(words(m)), phone ? 150 : 230);
+      const w = Math.min(textW(words(m)) + (mkv === "b" ? 30 : 0) /* MOCK-HOOK */, phone ? 150 : 230);
       let l = mx + 6;
       if (l + MIN > props.width - 4) l = mx - 6 - Math.min(w, MIN + 40);
-      const row = last.findIndex((p) => !p || p.left + MIN + (p.more.length ? 30 : 0) <= l - 4);
+      const fits = (p: Placed | null) => !p || p.left + MIN + (p.more.length ? 30 : 0) <= l - 4; // MOCK-HOOK
+      const own = mkv === "d" && !phone ? (isGoalKind(mkOf(m).kind) ? 0 : 1) : -1; // MOCK-HOOK D: goals above, the rest below
+      if (own >= 0 && !fits(last[own])) { // MOCK-HOOK
+        last[own]!.more.push(m); // MOCK-HOOK
+        continue; // MOCK-HOOK
+      } // MOCK-HOOK
+      const row = own >= 0 ? own : /* MOCK-HOOK */ last.findIndex((p) => !p || p.left + MIN + (p.more.length ? 30 : 0) <= l - 4);
       if (row < 0) {
         const host = last.reduce((a, b) => (b && (!a || b.left > a.left) ? b : a), null as Placed | null)!;
         host.more.push(m);
@@ -715,6 +741,7 @@ export function MsLayer(props: MsLayerProps) {
     }
     for (const p of placed) p.w = Math.min(p.w, props.width - 4 - p.left - (p.more.length ? 30 : 0));
     out.push(<div key="band" data-testid="ms-band" aria-hidden className="pointer-events-none absolute z-[11] border-b border-line bg-surface2/60" style={{ left, top: props.bandTop, width: props.width - left, height: band }} />);
+    if (mkv === "d" && !phone) out.push(<div key="mk-d-split" aria-hidden className="pointer-events-none absolute z-[11] border-t border-dashed border-line-strong" style={{ left, top: props.bandTop + 26, width: props.width - left }} />); // MOCK-HOOK
     const tipFor = (m: GoalMilestone) => {
       const g = ms.goals.find((o) => o.id === m.goal_id)?.title ?? goalOf(m)?.title ?? "No goal";
       const n = goalNums.get(m.goal_id ?? "");
@@ -722,6 +749,7 @@ export function MsLayer(props: MsLayerProps) {
         head: `${words(m)} · ${fullDay(m.date!)}`,
         goal: `Advances ${n ? `goal ${n}, ` : ""}${g}`,
         prd: m.prd ? `From the PRD ${m.prd.title}` : null,
+        mk: mkv ? mkOf(m) : null, // MOCK-HOOK
       };
     };
     for (const p of placed) {
@@ -729,8 +757,10 @@ export function MsLayer(props: MsLayerProps) {
       const top = props.bandTop + (phone ? 5 : 4 + p.row * BAND_ROW);
       const show = () => setBandTip({ id: m.id, left: p.left, top: top + 24 });
       out.push(
-        <span key={`rb-${m.id}`} data-testid={m.prd ? "ms-prd-label" : "ms-label"} data-day={m.date} data-prd={m.prd ? "" : undefined} role="button" tabIndex={0} aria-label={`${tipFor(m).head}. ${tipFor(m).goal}`} onPointerEnter={show} onFocus={show} onPointerLeave={() => setBandTip(null)} onBlur={() => setBandTip(null)} onClick={() => ms.edit(m)} className="absolute z-[14] flex cursor-pointer items-center gap-1 overflow-hidden rounded-full px-1.5 text-xs leading-5 font-semibold whitespace-nowrap" style={{ left: p.left, top, maxWidth: Math.max(p.w, 40), background: msFill(msCode(m)), color: msInk(msCode(m)), border: `1px solid ${msEdge(msCode(m))}` }}>
+        <span key={`rb-${m.id}`} data-testid={m.prd ? "ms-prd-label" : "ms-label"} data-day={m.date} data-prd={m.prd ? "" : undefined} role="button" tabIndex={0} aria-label={`${tipFor(m).head}. ${tipFor(m).goal}`} onPointerEnter={show} onFocus={show} onPointerLeave={() => setBandTip(null)} onBlur={() => setBandTip(null)} onClick={() => ms.edit(m)} className="absolute z-[14] flex cursor-pointer items-center gap-1 overflow-hidden rounded-full px-1.5 text-xs leading-5 font-semibold whitespace-nowrap" style={{ left: p.left, top, maxWidth: Math.max(p.w, 40), background: msFill(msCode(m)), color: msInk(msCode(m)), border: `1px solid ${mkv === "c" ? statusColor(mkOf(m).status) : msEdge(msCode(m))}` /* MOCK-HOOK */ }}>
+          {mkv === "b" && <MkIcon kind={mkOf(m).kind} size={11} color={msEdge(msCode(m))} />} {/* MOCK-HOOK */}
           <span className="min-w-0 overflow-hidden text-ellipsis">{words(m)}</span>
+          {mkv === "b" && <span data-testid="mk-status" data-status={mkOf(m).status}><MkStatusMark status={mkOf(m).status} size={11} /></span>} {/* MOCK-HOOK */}
         </span>,
       );
       if (p.more.length)
@@ -746,9 +776,12 @@ export function MsLayer(props: MsLayerProps) {
       out.push(
         <span key="band-tip" data-testid="ms-band-tip" role="tooltip" className="pointer-events-none absolute z-40 flex max-w-80 flex-col rounded bg-tip px-2 py-1 text-xs text-tip-text" style={{ left: Math.min(bandTip.left, props.width - 300), top: bandTip.top }}>
           <b>{t.head}</b>
+          {t.mk && <span data-testid="mk-tip-kind">{kindName(t.mk.kind)}{t.mk.kind === "handoff" ? ` · ${t.mk.from} → ${t.mk.to}` : ""} · {MK_STATUS[t.mk.status]}</span>} {/* MOCK-HOOK */}
+          {t.mk?.why && <span>{t.mk.why}</span>} {/* MOCK-HOOK */}
+          {t.mk && <span>{doneLine(t.mk)}</span>} {/* MOCK-HOOK */}
           {t.prd && <span>{t.prd}</span>}
-          <span>{t.goal}</span>
-          <span>Waits on {tm.item_ids.length} {tm.item_ids.length === 1 ? "item" : "items"}</span>
+          {t.mk ? <span>Builds toward {t.mk.toward}</span> : /* MOCK-HOOK */ <span>{t.goal}</span>}
+          <span>{t.mk ? "Served by" : /* MOCK-HOOK */ "Waits on"} {tm.item_ids.length} {tm.item_ids.length === 1 ? "item" : "items"}</span>
         </span>,
       );
     }
@@ -882,6 +915,44 @@ export function MsCard() {
   const reads = rights === "read";
   const head = !d.id ? (d.second ? "Next milestone" : "New milestone") : reads ? `${d.code} ${d.name}` : `Edit ${d.code}`;
   const late = (id: string) => (ms.items.get(id)?.end.date ?? "") > d.date;
+  const mk = d.mk; // MOCK-HOOK
+  const setMk = (p: Partial<MkInfo>) => set({ mk: { ...mk!, ...p } }); // MOCK-HOOK
+  const goalMs = ms.band.filter((m) => mkInfo(m.name).kind === "goal"); // MOCK-HOOK
+  if (mk && !d.id && !mk.kind) // MOCK-HOOK "+ Milestone" asks for the kind first.
+    return ( // MOCK-HOOK
+      <div data-testid="mk-kind-picker" role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}> {/* MOCK-HOOK */}
+        {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />} {/* MOCK-HOOK */}
+        <div className="flex items-center justify-between"> {/* MOCK-HOOK */}
+          <h2 className="text-[15px] font-semibold">{head}</h2> {/* MOCK-HOOK */}
+          <span className="text-xs text-text2">{fullDay(d.date)}</span> {/* MOCK-HOOK */}
+        </div> {/* MOCK-HOOK */}
+        <span className="text-xs font-semibold text-text2">Kind</span> {/* MOCK-HOOK */}
+        <div role="listbox" aria-label="Kind" className="grid grid-cols-2 gap-1.5"> {/* MOCK-HOOK */}
+          {MK_KINDS.map((k) => ( // MOCK-HOOK
+            <button key={k.kind} type="button" role="option" aria-selected={false} title={k.tip} data-testid="mk-kind-option" onClick={() => setMk({ kind: k.kind, done_when: isGoalKind(k.kind) ? undefined : "", measure: isGoalKind(k.kind) ? { name: "", baseline: "", target: "" } : undefined, from: k.kind === "handoff" ? ms.goals[0]?.title : undefined, to: k.kind === "handoff" ? ms.goals[1]?.title : undefined })} className="flex items-center gap-2 rounded-lg border border-line-strong px-2.5 text-left text-sm leading-9 font-semibold hover:border-accent hover:bg-accent-soft"> {/* MOCK-HOOK */}
+              <MkIcon kind={k.kind} size={14} color="var(--accent-ink)" /> {k.name} {/* MOCK-HOOK */}
+            </button> // MOCK-HOOK
+          ))} {/* MOCK-HOOK */}
+        </div> {/* MOCK-HOOK */}
+        <div className="flex gap-2 pt-1"> {/* MOCK-HOOK */}
+          <button type="button" className="px-1 text-sm leading-8 text-text2" onClick={() => ms.setDraft(null)}> {/* MOCK-HOOK */}
+            Cancel {/* MOCK-HOOK */}
+          </button> {/* MOCK-HOOK */}
+        </div> {/* MOCK-HOOK */}
+      </div> // MOCK-HOOK
+    ); // MOCK-HOOK
+  const trackSel = (label: string, value: string | undefined, on: (t: string) => void) => ( // MOCK-HOOK
+    <Field label={label}> {/* MOCK-HOOK */}
+      <select aria-label={label} value={value ?? ""} onChange={(e) => on(e.target.value)} className={bare}> {/* MOCK-HOOK */}
+        {ms.goals.map((g) => <option key={g.id}>{g.title}</option>)} {/* MOCK-HOOK */}
+      </select> {/* MOCK-HOOK */}
+    </Field> // MOCK-HOOK
+  ); // MOCK-HOOK
+  const text = (label: string, value: string | undefined, on: (v: string) => void, ph = "") => ( // MOCK-HOOK
+    <Field label={label}> {/* MOCK-HOOK */}
+      <input aria-label={label} value={value ?? ""} placeholder={ph} onChange={(e) => on(e.target.value)} className={bare} /> {/* MOCK-HOOK */}
+    </Field> // MOCK-HOOK
+  ); // MOCK-HOOK
   return (
     <div data-testid="ms-card" data-rights={rights} role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
       {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
@@ -896,9 +967,32 @@ export function MsCard() {
           </span>
           <input aria-label="Name" autoFocus={!phone && !reads} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="What is true by then" className={bare} />
         </Field>
+        {mk && ( // MOCK-HOOK
+          <div className="grid grid-cols-2 gap-2"> {/* MOCK-HOOK */}
+            <Field label="Kind" testid="mk-kind"> {/* MOCK-HOOK */}
+              <MkIcon kind={mk.kind} size={13} color="var(--accent-ink)" /> {/* MOCK-HOOK */}
+              <select aria-label="Kind" value={mk.kind ?? ""} onChange={(e) => setMk({ kind: e.target.value as MkKind })} className={bare}> {/* MOCK-HOOK */}
+                {MK_KINDS.map((k) => <option key={k.kind} value={k.kind}>{k.name}</option>)} {/* MOCK-HOOK */}
+              </select> {/* MOCK-HOOK */}
+            </Field> {/* MOCK-HOOK */}
+            <Field label="Status" testid="mk-status-field"> {/* MOCK-HOOK */}
+              <MkStatusMark status={mk.status} size={12} /> {/* MOCK-HOOK */}
+              <select aria-label="Status" value={mk.status} onChange={(e) => setMk({ status: e.target.value as MkStatus })} className={bare}> {/* MOCK-HOOK */}
+                {(Object.keys(MK_STATUS) as MkStatus[]).map((k) => <option key={k} value={k}>{MK_STATUS[k]}</option>)} {/* MOCK-HOOK */}
+              </select> {/* MOCK-HOOK */}
+            </Field> {/* MOCK-HOOK */}
+          </div> // MOCK-HOOK
+        )} {/* MOCK-HOOK */}
+        {mk && (mk.status === "at_risk" || mk.status === "missed") && text("Why", mk.why, (why) => setMk({ why }))} {/* MOCK-HOOK */}
+        {mk?.kind === "handoff" && ( // MOCK-HOOK
+          <div className="grid grid-cols-2 gap-2"> {/* MOCK-HOOK */}
+            {trackSel("From track", mk.from, (from) => setMk({ from }))} {/* MOCK-HOOK */}
+            {trackSel("To track", mk.to, (to) => setMk({ to }))} {/* MOCK-HOOK */}
+          </div> // MOCK-HOOK
+        )} {/* MOCK-HOOK */}
         <div className="grid grid-cols-2 gap-2">
           <DateField value={d.date} onChange={(date) => set({ date })} />
-          <Field label="Goal">
+          {mk?.kind === "handoff" ? null : /* MOCK-HOOK */ <Field label={mk ? "Track" /* MOCK-HOOK */ : "Goal"}>
             <select aria-label="Goal" value={d.goal_id ?? ""} onChange={(e) => set({ goal_id: e.target.value || null })} className={bare}>
               {ms.goals.map((g) => (
                 <option key={g.id} value={g.id}>
@@ -906,12 +1000,51 @@ export function MsCard() {
                 </option>
               ))}
             </select>
-          </Field>
+          </Field>} {/* MOCK-HOOK */}
         </div>
+        {mk && isGoalKind(mk.kind) && ( // MOCK-HOOK
+          <div className="grid grid-cols-[1fr_72px_72px] gap-2" data-testid="mk-measure"> {/* MOCK-HOOK */}
+            {text("Measure", mk.measure?.name, (name) => setMk({ measure: { ...mk.measure!, name } }), "What is counted")} {/* MOCK-HOOK */}
+            {text("Baseline", mk.measure?.baseline, (baseline) => setMk({ measure: { ...mk.measure!, baseline } }))} {/* MOCK-HOOK */}
+            {text("Target", mk.measure?.target, (target) => setMk({ measure: { ...mk.measure!, target } }))} {/* MOCK-HOOK */}
+          </div> // MOCK-HOOK
+        )} {/* MOCK-HOOK */}
+        {mk && !isGoalKind(mk.kind) && text("Done when", mk.done_when, (done_when) => setMk({ done_when }), "What is true then")} {/* MOCK-HOOK */}
+        {mk && ( // MOCK-HOOK
+          <div className={mk.kind === "sub" ? "grid grid-cols-2 gap-2" : ""}> {/* MOCK-HOOK */}
+            <Field label="Builds toward"> {/* MOCK-HOOK */}
+              <select aria-label="Builds toward" value={mk.toward} onChange={(e) => setMk({ toward: e.target.value })} className={bare}> {/* MOCK-HOOK */}
+                {MK_GOALS.map((g) => <option key={g}>{g}</option>)} {/* MOCK-HOOK */}
+              </select> {/* MOCK-HOOK */}
+            </Field> {/* MOCK-HOOK */}
+            {mk.kind === "sub" && ( // MOCK-HOOK
+              <Field label="Sub-goal of"> {/* MOCK-HOOK */}
+                <select aria-label="Sub-goal of" value={mk.parent ?? ""} onChange={(e) => setMk({ parent: e.target.value })} className={bare}> {/* MOCK-HOOK */}
+                  {goalMs.map((g) => <option key={g.id} value={g.name}>{words(g)}</option>)} {/* MOCK-HOOK */}
+                </select> {/* MOCK-HOOK */}
+              </Field> // MOCK-HOOK
+            )} {/* MOCK-HOOK */}
+          </div> // MOCK-HOOK
+        )} {/* MOCK-HOOK */}
+        {mk?.kind === "goal" && mk.subs && ( // MOCK-HOOK
+          <div className="flex flex-col gap-1" data-testid="mk-subs"> {/* MOCK-HOOK */}
+            <span className="text-xs font-semibold text-text2">Sub-goals</span> {/* MOCK-HOOK */}
+            <div className="flex flex-wrap gap-1.5"> {/* MOCK-HOOK */}
+              {mk.subs.map((n) => { // MOCK-HOOK
+                const sm = ms.band.find((x) => x.name === n); // MOCK-HOOK
+                return ( // MOCK-HOOK
+                  <span key={n} title={sm ? fullDay(sm.date!) : "No milestone"} className={`inline-flex items-center gap-1 rounded-full border px-2 text-xs leading-6 ${sm ? "border-line-strong bg-surface2" : "border-dashed border-line-strong text-text2"}`}> {/* MOCK-HOOK */}
+                    <MkIcon kind="sub" size={10} color={sm ? msEdge(msCode(sm)) : "var(--text2)"} /> {sm ? words(sm) : n} {/* MOCK-HOOK */}
+                  </span> // MOCK-HOOK
+                ); // MOCK-HOOK
+              })} {/* MOCK-HOOK */}
+            </div> {/* MOCK-HOOK */}
+          </div> // MOCK-HOOK
+        )} {/* MOCK-HOOK */}
       </fieldset>
       <div className="flex flex-col gap-1" data-testid="ms-waits-on">
         <span className="text-xs font-semibold text-text2">
-          Items it waits on {!reads && <span className="font-normal">· tap bars on the chart to add</span>}
+          {mk ? "Work that serves it" : /* MOCK-HOOK */ "Items it waits on"} {!reads && <span className="font-normal">· tap bars on the chart to add</span>}
         </span>
         <div className="flex flex-wrap gap-1.5">
           {d.item_ids.map((id) => {
@@ -938,7 +1071,7 @@ export function MsCard() {
         </div>
       </div>
       <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
-        <RuleField value={d.counts_when} onChange={(counts_when) => set({ counts_when })} />
+        {!mk && /* MOCK-HOOK */ <RuleField value={d.counts_when} onChange={(counts_when) => set({ counts_when })} />}
       </fieldset>
       {error}
       <div className="flex flex-wrap items-center gap-2 pt-1">
