@@ -121,6 +121,7 @@ async def test_draft_approval_names_who_submitted_it(client):
     [row] = (await _inbox(client, w, "approver"))["simple_approvals"]
     assert row["draft_id"] == d["id"]
     assert row["document"]["id"] == w.roadmap_id
+    assert row["document_kind"] == "roadmap"
     assert row["submitted_by_name"] == _name(w, "decider")
 
 
