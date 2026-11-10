@@ -14,7 +14,8 @@ Test cards (protects / fails_when / no_claim):
 - test_item_context_carries_what_its_panel_shows: protects=the reader gets the item as its
   panel shows it: its key, its Ground Truth feature, its track, what it depends on and what
   depends on it (by name, with codes), its goal and how that is measured;
-  fails_when=one is missing (the reader then reads the API for it); no_claim=the model.
+  fails_when=one is missing (the reader then reads the API for it), or the goal's due day
+  reaches it as an ISO day; no_claim=the model.
 - test_a_read_naming_the_item_reads_it: protects=a read the reader calls with the item's own
   id, key, code or name where the route takes a record's id (get_entity, list_edges) reads
   the item's Ground Truth feature, and an item with no feature reads as itself;
@@ -49,6 +50,8 @@ from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_roadmap_talk import last, page, say, world
 
 FEATURE = "Keys out of checkpoints"
+# The status Reliability work has in tests.test_simple_roadmap_talk's world.
+STATUS = "planned"
 
 
 async def talk_world() -> World:
@@ -63,7 +66,8 @@ async def talk_world() -> World:
         await s.flush()
         g = await s.get(Entity, uuid.UUID(w.goal))  # type: ignore[attr-defined]
         assert g is not None
-        g.attrs = {"metric": "Weekly active teams", "current": 25}
+        g.attrs = {"metric": "Weekly active teams", "current": 25, "target": 40, "unit": "teams",
+                   "due": "2026-12-31"}  # fmt: skip
         b.feature_id, b.goal_ids = f.id, [g.id]
         track = await s.get(ProductTrack, b.track_id)
         assert track is not None
@@ -133,6 +137,9 @@ async def test_item_context_carries_what_its_panel_shows(client):
     assert item["goal"] == "Growth"
     assert item["goal_measure"]["metric"] == "Weekly active teams"
     assert item["goal_measure"]["current"] == 25
+    assert item["goal_measure"]["target"] == "40 teams"
+    assert item["goal_measure"]["due"] == "Dec 31, 2026"
+    assert item["status"] == STATUS
     ask, seen = reader([], "-", "-")
     await talk(client, w, "what needs it?", ask, key="a")
     assert seen[0]["context"]["item"]["needed_by"] == ["F-26 Reliability work"]
@@ -175,6 +182,35 @@ async def test_the_roadmap_read_keeps_the_item(client):
     assert m["body"] == "Reliability work depends on Adaptive pacing."
     got = seen[-1]["results"][0]["result"]
     assert "Adaptive pacing" in got
+    # The read is cut at RESULT_MAX: the linked item is decoded where it starts.
+    start = got.index(f'{{"id": "{w.ids["move_dates-a"]}"')
+    linked = json.JSONDecoder().raw_decode(got[start:])[0]
+    assert linked["title"] == "Adaptive pacing"
+    assert {"owner", "track"} <= set(linked)
+    assert linked["track"]["title"]
+
+
+async def test_a_list_read_of_an_item_with_no_feature(client):
+    w = await talk_world()
+    ask, seen = reader([{"action": "list_edges", "args": {"entity_id": w.ids["move_dates-a"]}}],
+                       "[", "Adaptive pacing has no links yet.")  # fmt: skip
+    m = await talk(client, w, "what is it linked to?", ask, key="a")
+    assert m["kind"] == "answer", m["body"]
+    got = seen[-1]["results"][0]
+    assert got["result"] == "[]"
+    assert got["note"] and "Ground Truth" in got["note"]
+
+
+async def test_reader_prompt_is_v7(client):
+    from oracle.jobs import prompting
+
+    name, text = prompting.current("chat_reader")
+    assert name == "chat_reader.v7"
+    for field in ("`key`", "`feature`", "`depends_on`", "`needed_by`", "`goal_measure`"):
+        assert field in text
+    assert "month first" in text and "`start`" in text
+    v6 = prompting.load("chat_reader.v6")
+    assert "`goal_measure`" not in v6 and "`needed_by`" not in v6
 
 
 async def test_every_item_shape_is_read(client):

@@ -62,4 +62,13 @@ test("Talk to Oracle in a feature's panel answers naming the items it is linked 
   await expect(answer.getByTestId("answer-source")).toHaveText("From the roadmap · Alert SLA report");
   const again = await ask(talk, "What needs it?");
   await expect(again.getByTestId("chat-message-body")).toHaveText("Nothing depends on Alert SLA report.");
+  // "Which items depend on it?" asks what needs it, not what it waits on.
+  const which = await ask(talk, "Which items depend on it?");
+  await expect(which.getByTestId("chat-message-body")).toHaveText("Nothing depends on Alert SLA report.");
+  // Its goal and how that is measured: the reading and the target with their units, the day month first.
+  const goal = await ask(talk, "How is its goal measured?");
+  await expect(goal.getByTestId("chat-message-body")).toHaveText(
+    "Alert SLA report serves the goal Grow retention, measured by Teams active after 90 days (now 61%, target 70% of teams by Mar 31, 2027).",
+  );
+  await expect(goal.getByTestId("answer-source")).toHaveText("From the roadmap · Alert SLA report");
 });
