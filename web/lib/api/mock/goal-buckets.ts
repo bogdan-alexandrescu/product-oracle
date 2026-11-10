@@ -15,7 +15,7 @@ import { GOALS, goalPositionOf, goalRank, goalInTrash, roadmapGoal, roadmapGoalK
 // `key`: the Entity.key the API gives a goal at creation (goal_buckets._slug), named in its Trash entry.
 // edit-goals-prds EG1: a goal's owner (a member's id; seeded by email, matched to the member on first read) and when it was archived.
 // goal-order: `position`, the place Move up and Move down store on it (attrs.position, as the API's goals).
-type Goal = { id: string; key: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null; position?: number | null };
+type Goal = { id: string; key: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null; position?: number | null; on_roadmap?: boolean };
 /** assumed_goal_ids: the links whose contribution is assumed (an approved order's, api ASSUMED_LINK). */
 type Feature = { id: string; key: string; title: string; goal_ids: string[]; assumed_goal_ids?: string[] };
 export type GoalBucketsDb = { goals: Goal[]; features: Feature[] };
@@ -144,8 +144,8 @@ function out(db: GoalBucketsDb, edits: boolean, people: GoalPeople = []): Schema
 }
 
 const nameOf = (people: GoalPeople, id: string | null | undefined) => (id ? (people.find((x) => x.id === id)?.name ?? null) : null);
-const goalOut = (g: Goal, people: GoalPeople = []): Schemas["GoalBucketGoal"] => ({ id: g.id, title: g.title, order: goalPositionOf(orderKey(g)) ?? g.order, measure: g.measure, target: g.target, due: g.due, can_edit: true, owner_id: g.owner_id ?? null, owner_name: nameOf(people, g.owner_id) });
-const goalSnap = (g: Goal) => ({ id: g.id, title: g.title, status: g.archived ? "rejected" : "confirmed", attrs: { metric: g.measure, target_text: g.target, due: g.due, position: g.order, owner: g.owner_id ?? null, archived_at: g.archived_at ?? null } });
+const goalOut = (g: Goal, people: GoalPeople = []): Schemas["GoalBucketGoal"] => ({ id: g.id, title: g.title, order: goalPositionOf(orderKey(g)) ?? g.order, measure: g.measure, target: g.target, due: g.due, can_edit: true, owner_id: g.owner_id ?? null, owner_name: nameOf(people, g.owner_id), on_roadmap: g.on_roadmap ?? true });
+const goalSnap = (g: Goal) => ({ id: g.id, title: g.title, status: g.archived ? "rejected" : "confirmed", attrs: { metric: g.measure, target_text: g.target, due: g.due, position: g.order, owner: g.owner_id ?? null, archived_at: g.archived_at ?? null }, on_roadmap: g.on_roadmap ?? true });
 // The mock keeps links in order, and Undo puts that order back; each link is snapshotted whole, as the API does.
 const featureSnap = (f: Feature) => ({
   feature_id: f.id,
@@ -391,7 +391,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
       return json(409, { detail: "This goal changed since you opened it. Look again and save." });
     }
     if (!g) {
-      const undo = signed({ goals: [{ id: p[4], title: was.title, status: "confirmed", attrs: { metric: was.metric, target_text: was.target, due: was.due } }], features: [], added_goal_id: null });
+      const undo = signed({ goals: [{ id: p[4], title: was.title, status: "confirmed", attrs: { metric: was.metric, target_text: was.target, due: was.due }, on_roadmap: true }], features: [], added_goal_id: null });
       const now = { title: b.title!.trim(), metric: b.measure!.trim(), target: b.target!.trim(), due: b.due! };
       writeRoadmapGoal(simple, key!, now);
       return json(200, { goal: { id: p[4], title: now.title, order: 1, measure: now.metric, target: now.target, due: now.due, can_edit: true }, undo });
@@ -401,6 +401,8 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     const undo = signed({ goals: [goalSnap(g)], features: [], added_goal_id: null });
     Object.assign(g, { title: b.title!.trim(), measure: b.measure!.trim(), target: b.target!.trim(), due: b.due! });
     if (owner.set) g.owner_id = owner.id;
+    const onRoadmap = (b as { on_roadmap?: boolean | null }).on_roadmap;
+    if (onRoadmap != null) g.on_roadmap = onRoadmap;
     return json(200, { goal: { ...goalOut(g, people), id: p[4] }, undo });
   }
   if (p[3] === "goals" && p[5] === "archive" && m === "POST") {

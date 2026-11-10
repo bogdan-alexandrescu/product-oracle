@@ -4,7 +4,10 @@
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
 import { MsLayer, msCode, useMsBand, useMsCtl, type MsLane, type MsRow } from "./_milestones";
+import { MkLegend } from "./_mk";
+import { TrackHead } from "./_trackbands";
 import {
+  Fragment,
   memo,
   useContext,
   useEffect,
@@ -886,6 +889,11 @@ function DayChart(props: TimelineProps) {
             <div className="flex" style={{ height: msBandH }}>
               <div className="sticky left-0 z-20 flex flex-none items-center border-r border-b border-line bg-surface px-3 text-xs font-semibold text-text2" style={{ width: labelW }}>
                 Milestones
+                <span className="ml-1.5 font-normal">
+                  <InfoTip label="the milestone marks" align="start" side="bottom" testId="ms-legend-tip">
+                    <MkLegend />
+                  </InfoTip>
+                </span>
               </div>
             </div>
           )}
@@ -1101,8 +1109,13 @@ function DayChart(props: TimelineProps) {
                 <div
                   key={`l-${r.key}`}
                   data-testid="timeline-lane"
-                  className="pointer-events-none relative z-[11] flex h-8 items-end border-b border-line bg-surface2/70"
+                  className="pointer-events-none relative z-[25] flex h-8 items-end border-b border-line bg-surface2/70 focus-within:z-[30] hover:z-[30]"
                 >
+                  {data.group === "track" && r.key !== "below" && r.key !== "none" ? (
+                    <div className="sticky left-0 px-3 pb-1 text-sm whitespace-nowrap">
+                      <TrackHead data={data} laneKey={r.key} title={r.title} />
+                    </div>
+                  ) : (
                   <div className="sticky left-0 px-3 pb-1 text-sm font-semibold whitespace-nowrap">
                     {data.group === "goal" && r.key !== "none" && r.key !== "below" && <GoalNum n={numbers.get(r.key) ?? numbers.get(r.title)} />}
                     {r.title}{" "}
@@ -1110,6 +1123,7 @@ function DayChart(props: TimelineProps) {
                       · {r.count} {r.count === 1 ? "item" : "items"}
                     </span>
                   </div>
+                  )}
                 </div>
               );
             const i = r.item;
@@ -1432,6 +1446,18 @@ function QuarterMilestones({ from, to }: { from: string; to: string }) {
 
 /** A phone's Timeline: a list by quarter; an item sits in the quarter it starts in (or in
  * this one, when it started before and runs on). */
+/** tb-mk: an item's band on the phone's list: its track's place, No track, then Below the line. */
+function bandRank(data: Roadmap, i: Item): number {
+  if (closedItem(i)) return 1e6;
+  const n = data.groups.findIndex((g) => g.item_ids.includes(i.id));
+  return n < 0 ? 1e5 : n;
+}
+function bandOf(data: Roadmap, i: Item): { key: string; title: string } | null {
+  if (closedItem(i)) return { key: "below", title: "Below the line" };
+  const g = data.groups.find((x) => x.item_ids.includes(i.id));
+  return g ? { key: g.key, title: g.title } : null;
+}
+
 function QuarterList(props: TimelineProps) {
   const { data, openKey, onOpen } = props;
   // Join whenever names match (the owner, Nov 9): a track milestone reads the joined milestone's longer name.
@@ -1452,7 +1478,9 @@ function QuarterList(props: TimelineProps) {
               (q.start <= i.start.date && i.start.date <= q.end) ||
               (q === tq && i.start.date < q.start && i.end.date >= q.start),
           )
-          .sort((a, b) => (a.start.date < b.start.date ? -1 : 1));
+          .sort((a, b) => (a.start.date < b.start.date ? -1 : 1))
+          // tb-mk: by band (the tracks' order, No track, then Below the line), by start in each.
+          .sort((a, b) => bandRank(data, a) - bandRank(data, b));
         if (!inQ.length) return null;
         // feature-parts: the quarter's parts under their parents, as a tree.
         const tree = partsTree([inQ.map((i) => i.id)], byId)[0];
@@ -1493,12 +1521,19 @@ function QuarterList(props: TimelineProps) {
               ))}
             <QuarterMilestones from={q.start} to={q.end} />
             <ul className="divide-y divide-line/60">
-              {items.map((i) => {
+              {items.map((i, n) => {
                 const lk = lookOf(i);
                 const sel = openKey === i.key;
                 // ah2-roadmap-specs review: the goal its Gantt lane names (its PRD's, else its own).
                 const goal = planGoal(i) ?? i.goal?.title;
+                const band = n === 0 || bandRank(data, items[n - 1]) !== bandRank(data, i) ? bandOf(data, i) : null;
                 return (
+                  <Fragment key={i.id}>
+                  {band && (
+                    <li data-testid="timeline-band" className="bg-surface2/70 px-3 py-1 text-sm">
+                      {band.key === "below" || band.key === "none" ? <b className={band.key === "below" ? "text-text2" : ""}>{band.title}</b> : <TrackHead data={data} laneKey={band.key} title={band.title} />}
+                    </li>
+                  )}
                   <li
                     key={i.id}
                     data-testid="timeline-row"
@@ -1551,6 +1586,7 @@ function QuarterList(props: TimelineProps) {
                       </span>
                     </button>
                   </li>
+                  </Fragment>
                 );
               })}
             </ul>

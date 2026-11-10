@@ -9,13 +9,14 @@
 
 import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
-import { Button } from "@/components/ds";
+import { Button, InfoTip } from "@/components/ds";
 import { GoalNumbers } from "@/components/simple/GoalOrder";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { addDays, calendarDay } from "@/lib/dates";
 import { joinedNames } from "@/lib/milestone-code";
 
 import { decide as decideChange, shortDay, type Item, type Roadmap } from "./_lib";
+import { doneLine, isMeasured, kindName, MK_KINDS, MK_STATUS, MkIcon, MkStatusMark, type MkKind, type MkStatus } from "./_mk";
 import { msEdge, msFill, msInk } from "./_timeline";
 
 export type GoalMilestone = Schemas["SimpleGoalMilestone"];
@@ -43,7 +44,36 @@ const RULES = ["Holds 7 days in a row", "Holds 14 days in a row", "Holds 4 weeks
 /** How far (px) past its corner a same-day count may move to keep clear: farther, it reads as another day's. */
 const BADGE_NEAR = 24;
 
-type Draft = { id: string | null; code: string; name: string; date: string; goal_id: string | null; item_ids: string[]; counts_when: string; second: boolean; prd: boolean };
+/** tb-mk: a milestone's kind and the fields that kind reads (the card's Kind, Status and their fields). */
+type KindFields = {
+  kind: MkKind;
+  status_set: MkStatus | null;
+  status_reason: string | null;
+  done_when_line: string;
+  measure: string | null;
+  baseline: number | null;
+  target: number | null;
+  current: number | null;
+  sub_goal_of_id: string | null;
+  from_track_id: string | null;
+  to_track_id: string | null;
+};
+const kindFields = (m: GoalMilestone): KindFields => ({
+  kind: m.kind ?? "delivery",
+  status_set: m.status_set ?? null,
+  status_reason: m.status_reason && m.status_set ? m.status_reason : null,
+  done_when_line: m.done_when_line ?? "",
+  measure: m.measure ?? null,
+  baseline: m.baseline ?? null,
+  target: m.target ?? null,
+  current: m.current ?? null,
+  sub_goal_of_id: m.sub_goal_of_id ?? null,
+  from_track_id: m.from_track_id ?? null,
+  to_track_id: m.to_track_id ?? null,
+});
+const NO_KIND: Omit<KindFields, "kind"> = { status_set: null, status_reason: null, done_when_line: "", measure: null, baseline: null, target: null, current: null, sub_goal_of_id: null, from_track_id: null, to_track_id: null };
+
+type Draft = { id: string | null; code: string; name: string; date: string; goal_id: string | null; item_ids: string[]; counts_when: string; second: boolean; prd: boolean; k: KindFields | null };
 type Toast = { words: string; undo: (() => Promise<unknown>) | null };
 
 export interface MsCtl {
@@ -59,6 +89,8 @@ export interface MsCtl {
   phone: boolean;
   canAdd: boolean;
   goals: { id: string; title: string }[];
+  /** tb-mk: the roadmap's tracks, a hand-off's From and To. */
+  tracks: { id: string; title: string }[];
   items: Map<string, Item>;
   today: string;
   setHover: (d: string | null) => void;
@@ -113,7 +145,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
   const applies = new Set((data.key_date_roadmaps ?? []).filter((r) => r.applies).map((r) => r.roadmap.id));
   const canAddTo = (goal: string | null) => applies.has(roadmapOf(goal) ?? "");
   const lateOf = (ids: string[], date: string) => ids.filter((id) => (items.get(id)?.end.date ?? "") > date).length;
-  const fresh = (date: string, goal: string | null, second = false): Draft => ({ id: null, code: nextCode(date, second ? 1 : 0), name: "", date, goal_id: goal, item_ids: [], counts_when: RULES[0], second, prd: false });
+  const fresh = (date: string, goal: string | null, second = false): Draft => ({ id: null, code: nextCode(date, second ? 1 : 0), name: "", date, goal_id: goal, item_ids: [], counts_when: RULES[0], second, prd: false, k: null });
   const done = async (t: Toast) => {
     await reload();
     setToast(t);
@@ -144,6 +176,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
     phone,
     canAdd: canChange && [null, ...goals.map((g) => g.id)].some(canAddTo),
     goals,
+    tracks: (data.tracks ?? []).map((t) => ({ id: t.id, title: t.title })),
     items,
     today: data.today,
     setHover,
@@ -162,7 +195,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
     },
     edit: (m) => {
       setToast(null);
-      setDraft({ id: m.id, code: msCode(m), name: m.name, date: m.pending?.date ?? m.date ?? data.today, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, second: false, prd: !!m.prd });
+      setDraft({ id: m.id, code: msCode(m), name: m.name, date: m.pending?.date ?? m.date ?? data.today, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, second: false, prd: !!m.prd, k: kindFields(m) });
     },
     pick: (itemId) => {
       if (!draft || draft.prd) return false;
@@ -183,14 +216,14 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
       }
       if (d.id) {
         const was = list.find((x) => x.id === d.id)!;
-        await patch(d.id, { name: d.name, date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when });
+        await patch(d.id, { name: d.name, date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when, ...(d.k ?? {}) });
         setDraft(null);
-        await done({ words: `${words({ code: d.code, name: d.name })} saved`, undo: () => patch(was.id, { name: was.name, date: was.date, goal_id: was.goal_id, item_ids: was.item_ids, counts_when: was.counts_when }) });
+        await done({ words: `${words({ code: d.code, name: d.name })} saved`, undo: () => patch(was.id, { name: was.name, date: was.date, goal_id: was.goal_id, item_ids: was.item_ids, counts_when: was.counts_when, ...kindFields(was) }) });
         return;
       }
-      const made = await unwrap(api.POST("/v1/simple/roadmap/milestones", { body: { roadmap_id: roadmapOf(d.goal_id)!, name: d.name.trim() || "New milestone", date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when } }));
+      const made = await unwrap(api.POST("/v1/simple/roadmap/milestones", { body: { roadmap_id: roadmapOf(d.goal_id)!, name: d.name.trim() || "New milestone", date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when, ...(d.k ?? { kind: "delivery" as const, ...NO_KIND }) } }));
       const late = lateOf(d.item_ids, d.date);
-      setDraft(again ? fresh(addDays(d.date, 28), d.goal_id, true) : null);
+      setDraft(again ? { ...fresh(addDays(d.date, 28), d.goal_id, true), k: d.k ? { ...d.k, ...NO_KIND } : null } : null);
       await done({
         // roadmap-milestone-codes: the code its saved day gives it (the card's day may have changed since it opened).
         words: late ? `${words({ ...made, roadmap_code: nextCode(d.date) })} added · ${late} ${late === 1 ? "item it waits on ends" : "items it waits on end"} after it` : `${words({ ...made, roadmap_code: nextCode(d.date) })} added to ${goalTitle(made.goal_id ?? null)}`,
@@ -207,8 +240,8 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
     propose: async (remove) => {
       const m = draft?.id ? list.find((x) => x.id === draft.id) : null;
       if (!draft || !m) return;
-      const before = { name: m.name, date: m.date ?? null, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when };
-      const after = remove ? null : { name: draft.name.trim() || m.name, date: draft.date, goal_id: draft.goal_id, item_ids: draft.item_ids, counts_when: draft.counts_when };
+      const before = { name: m.name, date: m.date ?? null, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, ...kindFields(m) };
+      const after = remove ? null : { name: draft.name.trim() || m.name, date: draft.date, goal_id: draft.goal_id, item_ids: draft.item_ids, counts_when: draft.counts_when, ...(draft.k ?? {}) };
       await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: m.id }, before: { milestone: before }, after: { milestone: after } } }));
       setDraft(null);
       await done({ words: `${remove ? `Proposed removing ${words(m)}` : `Proposed a change to ${words(m)}`} · it waits in Needs a decision`, undo: null });
@@ -732,7 +765,8 @@ export function MsLayer(props: MsLayerProps) {
     const MIN = 62;
     for (const m of list) {
       const mx = X(m.date!);
-      const w = Math.min(textW(ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m)), phone ? 150 : 230);
+      // tb-mk: room for the kind's icon before the words and the status mark after them.
+      const w = Math.min(textW(ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m)) + 30, phone ? 150 : 230);
       let l = mx + 6;
       if (l + MIN > props.width - 4) l = mx - 6 - Math.min(w, MIN + 40);
       const row = last.findIndex((p) => !p || p.left + MIN + (p.more.length ? 30 : 0) <= l - 4);
@@ -769,7 +803,11 @@ export function MsLayer(props: MsLayerProps) {
       const asked = m.prd ? ((ms.moving?.id === m.id ? ms.moving.date : null) ?? m.pending?.date ?? null) : null;
       out.push(
         <span key={`rb-${m.id}`} data-testid={m.prd ? "ms-prd-label" : "ms-label"} data-day={m.date} data-prd={m.prd ? "" : undefined} role="button" tabIndex={0} aria-label={`${tipFor(m).head}. ${tipFor(m).goal}`} onPointerEnter={show} onFocus={show} onPointerLeave={() => setBandTip(null)} onBlur={() => setBandTip(null)} onClick={() => ms.edit(m)} className="absolute z-[14] flex cursor-pointer items-center gap-1 overflow-hidden rounded-full px-1.5 text-xs leading-5 font-semibold whitespace-nowrap" style={{ left: p.left, top, maxWidth: Math.max(p.w, 40), background: msFill(msCode(m)), color: msInk(msCode(m)), border: `1px solid ${msEdge(msCode(m))}`, opacity: asked && asked !== m.date ? 0.5 : 1 }}>
+          <MkIcon kind={m.kind} size={11} color={msEdge(msCode(m))} />
           <span className="min-w-0 overflow-hidden text-ellipsis">{bandWords(m)}</span>
+          <span data-testid="ms-status" data-status={m.status} className="flex-none">
+            <MkStatusMark status={m.status ?? "on_track"} size={11} />
+          </span>
         </span>,
       );
       // The milestones folded into "+N": its list on hover, focus or a click, each opening its card.
@@ -817,6 +855,12 @@ export function MsLayer(props: MsLayerProps) {
         <span key="band-tip" data-testid="ms-band-tip" role="tooltip" className="pointer-events-none absolute z-40 flex max-w-80 flex-col rounded bg-tip px-2 py-1 text-xs text-tip-text" style={{ left: Math.min(bandTip.left, props.width - 300), top: bandTip.top }}>
           <b>{t.head}</b>
           {t.also.length > 0 && <span data-testid="ms-band-also">Also: {t.also.join(", ")}</span>}
+          <span data-testid="ms-tip-kind">
+            {kindName(tm.kind)}
+            {tm.kind === "handoff" && tm.from_track_name && tm.to_track_name ? ` · ${tm.from_track_name} → ${tm.to_track_name}` : ""} · {MK_STATUS[tm.status ?? "on_track"]}
+          </span>
+          {tm.status_reason && <span data-testid="ms-tip-reason">{tm.status_reason}</span>}
+          {doneLine(tm) && <span>{doneLine(tm)}</span>}
           {t.prd && <span>{t.prd}</span>}
           <span>{t.goal}</span>
           <span>Waits on {tm.item_ids.length} {tm.item_ids.length === 1 ? "item" : "items"}</span>
@@ -962,6 +1006,64 @@ export function MsCard() {
   const reads = rights === "read";
   const head = !d.id ? (d.second ? "Next milestone" : "New milestone") : reads ? `${d.code} ${d.name}` : `Edit ${d.code}`;
   const late = (id: string) => (ms.items.get(id)?.end.date ?? "") > d.date;
+  // tb-mk: "+ Milestone" asks for the kind first.
+  if (!d.id && !d.k)
+    return (
+      <div data-testid="ms-kind-picker" role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
+        {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
+        <div className="flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold">{head}</h2>
+          <span className="text-xs text-text2">{fullDay(d.date)}</span>
+        </div>
+        <span className="text-xs font-semibold text-text2">Kind</span>
+        <div role="listbox" aria-label="Kind" className="grid grid-cols-2 gap-1.5">
+          {MK_KINDS.map((k) => (
+            <button
+              key={k.kind}
+              type="button"
+              role="option"
+              aria-selected={false}
+              title={k.tip}
+              data-testid="ms-kind-option"
+              data-kind={k.kind}
+              onClick={() => set({ k: { kind: k.kind, ...NO_KIND, from_track_id: k.kind === "handoff" ? (ms.tracks[0]?.id ?? null) : null, to_track_id: k.kind === "handoff" ? (ms.tracks[1]?.id ?? null) : null } })}
+              className="flex items-center gap-2 rounded-lg border border-line-strong px-2.5 text-left text-sm leading-9 font-semibold hover:border-accent hover:bg-accent-soft"
+            >
+              <MkIcon kind={k.kind} size={14} color="var(--accent-ink)" /> {k.name}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button type="button" className="px-1 text-sm leading-8 text-text2" onClick={() => ms.setDraft(null)}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  const k = d.k;
+  const setK = (p: Partial<KindFields>) => set({ k: { ...(k ?? { kind: "delivery", ...NO_KIND }), ...p } });
+  const num = (v: string) => (v.trim() === "" || Number.isNaN(Number(v)) ? null : Number(v));
+  const text = (label: string, value: string | number | null | undefined, on: (v: string) => void, ph = "") => (
+    <Field label={label}>
+      <input aria-label={label} value={value ?? ""} placeholder={ph} onChange={(e) => on(e.target.value)} className={bare} />
+    </Field>
+  );
+  const trackSel = (label: string, value: string | null, on: (t: string | null) => void) => (
+    <Field label={label}>
+      <select aria-label={label} value={value ?? ""} onChange={(e) => on(e.target.value || null)} className={bare}>
+        <option value="">No track</option>
+        {ms.tracks.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.title}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+  // A measured goal's milestones a sub-goal may sit under (a goal's own target is not one).
+  const parents = ms.list.filter((m) => m.kind === "goal" && !m.goal_target && m.id !== d.id);
+  const subs = own ? ms.list.filter((m) => m.sub_goal_of_id === own.id) : [];
+  const status = k?.status_set ?? own?.status ?? "on_track";
   return (
     <div data-testid="ms-card" data-rights={rights} role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
       {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
@@ -977,9 +1079,41 @@ export function MsCard() {
           </span>
           <input aria-label="Name" autoFocus={!phone && !reads} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="What is true by then" className={bare} />
         </Field>
+        {k && (
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Kind" testid="ms-kind">
+              <MkIcon kind={k.kind} size={13} color="var(--accent-ink)" />
+              <select aria-label="Kind" value={k.kind} onChange={(e) => setK({ kind: e.target.value as MkKind })} className={bare}>
+                {MK_KINDS.map((o) => (
+                  <option key={o.kind} value={o.kind}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Status" testid="ms-status-field">
+              <MkStatusMark status={status} size={12} />
+              <select aria-label="Status" value={k.status_set ?? ""} onChange={(e) => setK({ status_set: (e.target.value || null) as MkStatus | null })} className={bare}>
+                <option value="">Oracle decides</option>
+                {(Object.keys(MK_STATUS) as MkStatus[]).map((o) => (
+                  <option key={o} value={o}>
+                    {MK_STATUS[o]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        )}
+        {k?.status_set && (k.status_set === "at_risk" || k.status_set === "missed") && text("Why", k.status_reason, (v) => setK({ status_reason: v || null }))}
+        {k?.kind === "handoff" && (
+          <div className="grid grid-cols-2 gap-2">
+            {trackSel("From track", k.from_track_id, (from_track_id) => setK({ from_track_id }))}
+            {trackSel("To track", k.to_track_id, (to_track_id) => setK({ to_track_id }))}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <DateField value={d.date} onChange={(date) => set({ date })} />
-          <Field label="Goal">
+          <Field label="Builds toward">
             <select aria-label="Goal" value={d.goal_id ?? ""} onChange={(e) => set({ goal_id: e.target.value || null })} className={bare}>
               {ms.goals.map((g) => (
                 <option key={g.id} value={g.id}>
@@ -989,10 +1123,47 @@ export function MsCard() {
             </select>
           </Field>
         </div>
+        {k && isMeasured(k.kind) && (
+          <div className="grid grid-cols-[1fr_72px_72px] gap-2" data-testid="ms-measure">
+            {text("Measure", k.measure, (v) => setK({ measure: v || null }), "What is counted")}
+            {text("Baseline", k.baseline, (v) => setK({ baseline: num(v) }))}
+            {text("Target", k.target, (v) => setK({ target: num(v) }))}
+          </div>
+        )}
+        {k?.kind === "sub_goal" && (
+          <Field label="Sub-goal of">
+            <select aria-label="Sub-goal of" value={k.sub_goal_of_id ?? ""} onChange={(e) => setK({ sub_goal_of_id: e.target.value || null })} className={bare}>
+              <option value="">None</option>
+              {parents.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {words(g)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {k?.kind === "goal" && subs.length > 0 && (
+          <div className="flex flex-col gap-1" data-testid="ms-subs">
+            <span className="text-xs font-semibold text-text2">Sub-goals</span>
+            <div className="flex flex-wrap gap-1.5">
+              {subs.map((sm) => (
+                <span key={sm.id} title={sm.date ? fullDay(sm.date) : undefined} className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface2 px-2 text-xs leading-6">
+                  <MkIcon kind="sub_goal" size={10} color={msEdge(msCode(sm))} /> {words(sm)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {k && !isMeasured(k.kind) && text("Done when", k.done_when_line, (v) => setK({ done_when_line: v }), "What is true then")}
       </fieldset>
       <div className="flex flex-col gap-1" data-testid="ms-waits-on">
-        <span className="text-xs font-semibold text-text2">
-          Items it waits on {!reads && <span className="font-normal">· tap bars on the chart to add</span>}
+        <span className="flex items-center gap-1 text-xs font-semibold text-text2">
+          Work that serves it
+          {!reads && (
+            <InfoTip label="Work that serves it" align="start" side="bottom" testId="ms-waits-tip">
+              Tap bars on the chart to add
+            </InfoTip>
+          )}
         </span>
         <div className="flex flex-wrap gap-1.5">
           {d.item_ids.map((id) => {
@@ -1018,9 +1189,11 @@ export function MsCard() {
           {d.item_ids.length === 0 && <span className="text-xs text-text2">None yet</span>}
         </div>
       </div>
-      <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
-        <RuleField value={d.counts_when} onChange={(counts_when) => set({ counts_when })} />
-      </fieldset>
+      {(!k || isMeasured(k.kind)) && (
+        <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
+          <RuleField value={d.counts_when} onChange={(counts_when) => set({ counts_when })} />
+        </fieldset>
+      )}
       {error}
       <div className="flex flex-wrap items-center gap-2 pt-1">
         {rights === "change" && (

@@ -17,7 +17,7 @@ import { leftOut } from "./decision-notes";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
-import { milestoneOut, oldMilestonesOut, routeMilestones, type MockMilestone, type OldCtx } from "./simple-milestones";
+import { milestoneOut, oldMilestonesOut, routeMilestones, withKindStatus, type MockMilestone, type OldCtx } from "./simple-milestones";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, planRowState, rowCodeTaken, type AppliedRecord } from "./approved-roadmap";
@@ -177,6 +177,8 @@ interface SimpleDb {
   agenda_midway?: { topic: string; by: string } | null;
   /** D-a: each track's owner (track key -> person id); their role (Who.roles) says whether they decide. */
   track_owners?: Record<string, string>;
+  /** tb-mk: a track last checked on that day (long ago: its band's warning mark). */
+  track_checked?: Record<string, string>;
   /** RP2 'Draft layer on roadmap': each draft PRD's run (PRD id -> run), as DraftRoadmap.run_id
    * and prd_version_id hold it (./meeting-draft.ts draftPrdsOut). */
   draft_runs?: Record<string, { run_id: string; version: number; cancelled?: boolean }>;
@@ -1680,13 +1682,41 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const coded = withRoadmapCodes({ goal_milestones: liveGoalMilestones.map(goalMilestoneOut), milestones: trackMilestones(readable), items }, (id) => goalRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
   const codeOf = new Map<string, string | null>([...coded.goal_milestones, ...(coded.milestones as { id: string; roadmap_code?: string | null }[])].map((m) => [m.id, m.roadmap_code ?? null]));
   const withCode = <M extends { id: string }>(m: M) => ({ ...m, roadmap_code: codeOf.get(m.id) ?? null });
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const shortDay = (d: string) => `${MON[Number(d.slice(5, 7)) - 1]} ${Number(d.slice(8, 10))}`;
+  // tb-mk: each milestone's status and reason (goal_milestones.status_of), and the read's tracks as the bands.
+  const itemOf = new Map(items.map((i) => [i.id, { title: i.title, end: i.end.date }]));
+  const trackKeys = Object.keys(TRACKS).filter((k) => items.some((i) => i.track?.id === stableUuid(`simple-track/${k}`)));
+  const trackTitle = (id: string) => (trackKeys.find((k) => stableUuid(`simple-track/${k}`) === id) ? TRACKS[trackKeys.find((k) => stableUuid(`simple-track/${k}`) === id)!] : null);
+  const shownGoalMilestones = (() => {
+    const outs = liveGoalMilestones.filter((m) => !chosen || m.roadmap === chosen).map(goalMilestoneOut).map(withCode);
+    return outs.map((m) => withKindStatus(m, outs, (id) => itemOf.get(id), today, trackTitle));
+  })();
+  const roadmapTracks = trackKeys.map((k) => {
+    const id = stableUuid(`simple-track/${k}`);
+    const own = items.filter((i) => i.track?.id === id);
+    let late: string | null = null;
+    for (const m of shownGoalMilestones)
+      for (const i of own) if (!late && m.date && m.item_ids.includes(i.id) && i.end.date > m.date) late = `At risk: ${i.title} ends ${shortDay(i.end.date)}, after ${m.roadmap_code ?? m.code} ${m.name} on ${shortDay(m.date)}`;
+    const stale = db.track_checked?.[k];
+    return {
+      id,
+      title: TRACKS[k],
+      ...trackGoal(db, k),
+      owner_name: db.track_owners?.[k] ? ((db as { names?: Record<string, string> }).names?.[db.track_owners[k]] ?? null) : null,
+      prds: [...new Set(own.flatMap((i) => (i.prd ? [i.prd.title] : [])))].map((t) => ({ id: stableUuid(`simple-doc/${t}`), title: t })),
+      health: late ? ("at_risk" as const) : stale ? ("stale" as const) : ("on_track" as const),
+      health_reason: late ?? (stale ? `Not checked since ${shortDay(stale)}` : "On track: every feature ends before its milestone"),
+    };
+  });
   return {
     today, group,
     windows: { now: { start: w.now[0], end: w.now[1] }, next: { start: w.next[0], end: w.next[1] }, later: { start: w.later[0], end: w.later[1] } },
     groups: [...groups.entries()].sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
     items: shown,
     milestones: trackMilestones(chosen ? [chosen] : readable).map(withCode),
-    goal_milestones: liveGoalMilestones.filter((m) => !chosen || m.roadmap === chosen).map(goalMilestoneOut).map(withCode),
+    goal_milestones: shownGoalMilestones,
+    tracks: roadmapTracks,
     old_milestones: oldMilestonesOut(db.goal_milestones ?? [], role, oldCtx(db)),
     // service.build: the span of the shown items' PRDs' plans only (a replaced plan PRD's goes with its items).
     span: db.plan && shown.some((i) => !!i.prd && (i.prd.slug === PLAN_PRD_SLUG || !!db.plan?.prds?.includes(i.prd.slug))) ? planSpan() : null,
@@ -1792,7 +1822,7 @@ function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: st
       const own = (db.key_dates?.[slug] ?? []).filter((k) => !copies.has(`${k.id}/${k.name}/${k.note}`)).map((k) => {
         const was = pub?.find((x) => x.id === k.id);
         const inDraft = pub !== null && (!was || JSON.stringify(was) !== JSON.stringify(k));
-        return { id: k.id, roadmap: ref(slug), name: k.name, date: k.date, note: k.note, in_draft: inDraft, prd: null };
+        return { id: k.id, roadmap: ref(slug), name: k.name, date: k.date, note: k.note, in_draft: inDraft, prd: null, kind: "delivery" as const, status: "on_track" as const, status_reason: null };
       });
       return [...own, ...fromPrds];
     })
@@ -1824,6 +1854,9 @@ function prdKeyDates(db: SimpleDb, slug: string, roadmap: Schemas["SimpleDocRef"
         date: m.date,
         note: null,
         in_draft: false,
+        kind: "delivery" as const,
+        status: "on_track" as const,
+        status_reason: null,
         prd,
       })),
     );

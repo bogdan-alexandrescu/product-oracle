@@ -37,6 +37,7 @@ import { DraftLayer, DraftPrdsRead, useShowDrafts, type DraftItem, type DraftPrd
 import { KeyDatesEditor } from "./_keydates";
 import { FeaturePanel } from "./_panel";
 import { Lanes, pmItem } from "./_lanes";
+import { trackLaned } from "./_trackbands";
 import {
   addDays,
   broken,
@@ -99,7 +100,7 @@ async function brandOf(): Promise<Brand | null> {
 }
 
 type Filters = { group: Lane; roadmap: string; prd: string; goal: string; track: string; from: string; to: string };
-const NO_FILTERS: Filters = { group: "goal", roadmap: "", prd: "", goal: "", track: "", from: "", to: "" };
+const NO_FILTERS: Filters = { group: "track", roadmap: "", prd: "", goal: "", track: "", from: "", to: "" };
 type Picks = Record<"prd" | "goal" | "track", Set<string>>;
 const PICKS = ["prd", "goal", "track"] as const;
 /** roadmap-stale-filters: the PRDs, goals and tracks a roadmap's items are on (what its filters may pick). */
@@ -1235,8 +1236,8 @@ export function SimpleRoadmap() {
   const doneItems = useMemo(() => (all?.items ?? []).filter((i) => i.status === "done"), [all]);
   // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
   const laned = useMemo(() => (data ? oneLane(lanes(data, f.group), f.group) : null), [data, f.group]);
-  // The Timeline always draws goal lanes, the same groups the goal cards count.
-  const goalLaned = useMemo(() => (data ? oneLane(lanes(data, "goal"), "goal") : null), [data]);
+  // tb-mk: the Timeline and the Gantt always draw track bands, in the tracks' order, then No track.
+  const goalLaned = useMemo(() => (data ? oneLane(trackLaned(data), "track") : null), [data]);
   const planPrds = useMemo(() => [...new Set((data?.items ?? []).flatMap((i) => (i.slices.length && i.prd ? [i.prd.slug] : [])))].sort(), [data]);
   // A plan the reader cannot open (404) leaves the other plans' no-work weeks.
   const plans = useQuery(`simple-plan-no-work:${planPrds.join(",")}`, async () =>
@@ -1762,8 +1763,8 @@ export function SimpleRoadmap() {
         {!phone && <span aria-hidden className="h-6 border-l border-line" />}
         <TracksButton items={data.items} canChange={canChange} onChanged={reload} />
       </span>
-      {/* The Timeline always draws its rows under their goal (rowsOf), so it offers no Group by. */}
-      {format !== "timeline" && (
+      {/* The Timeline and the Gantt always draw track bands, so they offer no Group by. */}
+      {format !== "timeline" && format !== "gantt" && (
       <span className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2">
         Group by
         <SegmentedControl<Lane>
@@ -2090,8 +2091,8 @@ export function SimpleRoadmap() {
             }}
           />
           <Chart
-            data={laned ?? data}
-            lane={f.group}
+            data={(format === "gantt" ? goalLaned : laned) ?? data}
+            lane={format === "gantt" ? "track" : f.group}
             noWork={noWork}
             format={format}
             unit={unit}
@@ -2118,7 +2119,7 @@ export function SimpleRoadmap() {
               setCard(null);
               setPop({ id: item.id, ...anchorOf(item.id) });
             }}
-            overlay={(l, sc, keepOff) => <GanttMilestones l={l} sc={sc} data={laned ?? data} phone={phone} keepOff={keepOff} />}
+            overlay={(l, sc, keepOff) => <GanttMilestones l={l} sc={sc} data={(format === "gantt" ? goalLaned : laned) ?? data} phone={phone} keepOff={keepOff} />}
           />
           </>
         )}

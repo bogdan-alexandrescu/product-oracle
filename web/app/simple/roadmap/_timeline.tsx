@@ -1,6 +1,9 @@
 "use client";
 
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
+import { InfoTip } from "@/components/ds";
+import { MkLegend } from "./_mk";
+import { TrackHead } from "./_trackbands";
 import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { FeatureMarks, pillWord, type FeatureState } from "@/components/current-state/CurrentState";
@@ -741,6 +744,11 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
         {msBandH > 0 && (
           <div style={{ height: msBandH }} className="flex items-center border-t border-line px-3 text-xs font-semibold text-text2">
             Milestones
+                <span className="ml-1.5 font-normal">
+                  <InfoTip label="the milestone marks" align="start" side="bottom" testId="ms-legend-tip">
+                    <MkLegend />
+                  </InfoTip>
+                </span>
           </div>
         )}
         {l.rows.map((r, n) =>
@@ -753,7 +761,9 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               style={{ height: l.hs[n] }}
               className={`flex min-w-0 flex-col justify-center bg-surface2 px-3 ${r.below ? "text-text2" : ""}`}
             >
-              {gantt ? (
+              {lane === "track" && !r.below ? (
+                <TrackHead data={data} laneKey={r.key} title={r.title} stack />
+              ) : gantt ? (
                 // D: the goal's name and, under it, its metric. The row's height must fit both
                 // lines (finding 6): a phone's tighter leading keeps the subtitle from being
                 // painted over by the next row.
