@@ -50,6 +50,18 @@ async function pickKind(page: Page, kind = "Sub-goal", head = "New milestone") {
   await expect(card(page).getByRole("heading", { name: head })).toBeVisible();
 }
 
+/** A dashed line runs the chart's full height: from a saved milestone's line top to its foot, through every band. */
+async function spansChart(page: Page, line: ReturnType<Page["getByTestId"]>) {
+  await expect(line).toHaveCount(1);
+  const box = await line.evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect);
+  const saved = await page.getByTestId("ms-line").first().evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect);
+  expect(Math.abs(box.top - saved.top)).toBeLessThan(2);
+  expect(Math.abs(box.bottom - saved.bottom)).toBeLessThan(2);
+  const lanes = await page.getByTestId("timeline-lane").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
+  expect(lanes.length).toBeGreaterThan(0);
+  for (const l of lanes) expect(box.top <= l.top + 1 && box.bottom >= l.bottom - 1, `line ${box.top}-${box.bottom} through band ${l.top}-${l.bottom}`).toBe(true);
+}
+
 async function pointAtAxis(page: Page, at = 0.7) {
   // The axis runs the whole chart; point at the part in sight (its scroller's box, past the names).
   const axis = page.getByTestId("ms-axis").first();
@@ -83,12 +95,14 @@ test.describe("milestones on the Timeline", () => {
     await pickKind(page, "Sub-goal");
     await card(page).getByLabel("Name").fill("Teams set 3 rules in week 1");
     await card(page).getByLabel("Date").fill("2027-01-20");
-    await card(page).getByLabel("Goal", { exact: true }).selectOption({ label: "Grow retention" });
+    await card(page).getByLabel("Builds toward", { exact: true }).selectOption({ label: "Grow retention" });
     await page.locator('[data-testid="timeline-bar"][aria-label^="Mobile alert push,"]').click();
     await page.locator('[data-testid="timeline-bar"][aria-label^="Alert routing by team,"]').click();
     await expect(card(page).getByTestId("ms-waits-chip")).toHaveCount(2);
     await expect(card(page).getByTestId("ms-waits-chip").filter({ hasText: "Alert routing by team" })).toContainText("after it");
     await card(page).getByLabel("It counts when").selectOption("Holds 7 days in a row on one live team");
+    // The new milestone's dashed line runs through every band, as a saved one's does.
+    await spansChart(page, page.getByTestId("ms-new-line"));
     // A tapped bar far off scrolls the chart to it; back to today shows the new milestone's day.
     await page.getByRole("button", { name: "Back to today" }).click();
     await expect(card(page)).toBeVisible();
@@ -108,7 +122,7 @@ test.describe("milestones on the Timeline", () => {
     await page.mouse.click(at.x, at.y);
     await pickKind(page, "Sub-goal");
     await card(page).getByLabel("Name").fill("Teams set 3 rules in week 1");
-    await card(page).getByLabel("Goal", { exact: true }).selectOption({ label: "Grow retention" });
+    await card(page).getByLabel("Builds toward", { exact: true }).selectOption({ label: "Grow retention" });
     await card(page).getByTestId("ms-add-another").click();
     await expect(card(page).getByRole("heading", { name: "Next milestone" })).toBeVisible();
     await expect(toast(page)).toContainText("M5 Teams set 3 rules in week 1 added to Grow retention");
@@ -201,7 +215,7 @@ test.describe("milestones on the Gantt and Now / Next / Later", () => {
     await page.mouse.click(at.x, at.y);
     await pickKind(page, "Sub-goal");
     await card(page).getByLabel("Name").fill("Teams set 3 rules in week 1");
-    await card(page).getByLabel("Goal", { exact: true }).selectOption({ label: "Grow retention" });
+    await card(page).getByLabel("Builds toward", { exact: true }).selectOption({ label: "Grow retention" });
     await page.locator('[data-testid="bar"][data-item="alert-mobile"]').first().click();
     await expect(card(page).getByTestId("ms-waits-chip")).toHaveCount(1);
     await card(page).getByTestId("ms-save").click();
@@ -217,7 +231,7 @@ test.describe("milestones on the Gantt and Now / Next / Later", () => {
     await now.getByTestId("ms-board-add").click();
     await pickKind(page, "Sub-goal");
     await card(page).getByLabel("Name").fill("Teams set 3 rules in week 1");
-    await card(page).getByLabel("Goal", { exact: true }).selectOption({ label: "Grow retention" });
+    await card(page).getByLabel("Builds toward", { exact: true }).selectOption({ label: "Grow retention" });
     await card(page).getByTestId("ms-save").click();
     await expect(now.getByTestId("ms-board-chip").filter({ hasText: /^M\d+ Teams set 3 rules in week 1/ })).toBeVisible();
     await shot(page, "ms1-a-board");
@@ -259,6 +273,8 @@ test.describe("a PRD's own milestones", () => {
     await expect(page.getByTestId("ms-asked")).toHaveText("Asked the PRD: move M4 Digest for all teams to Jan 5 · waits for Nora Vance");
     await expect(page.locator('[data-testid="ms-prd-diamond"][title^="M4 Digest for all teams"]')).toBeVisible();
     await expect(page.getByTestId("ms-proposed")).toHaveCount(1);
+    // The asked day's dashed line runs through every band, not just the first one.
+    await spansChart(page, page.getByTestId("ms-asked-line"));
     await shot(page, "ms3-a-done");
   });
 

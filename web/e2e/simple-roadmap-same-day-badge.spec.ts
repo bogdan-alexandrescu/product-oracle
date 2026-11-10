@@ -53,7 +53,7 @@ async function addOn(page: Page, name: string, date: string) {
   await page.getByTestId("ms-kind-picker").getByRole("option", { name: "Delivery" }).click();
   await card(page).getByLabel("Name").fill(name);
   await card(page).getByLabel("Date").fill(date);
-  await card(page).getByLabel("Goal", { exact: true }).selectOption({ index: 1 });
+  await card(page).getByLabel("Builds toward", { exact: true }).selectOption({ index: 1 });
   await card(page).getByTestId("ms-save").click();
   await expect(card(page)).toBeHidden();
 }
@@ -88,8 +88,12 @@ for (const [zoom, name] of [
     expect(b.width).toBeLessThanOrEqual(20);
     await expect(badge).toHaveAttribute("title", /^2 milestones on Nov 20: .*M\d+ First alert within a day.*Setup checks for new teams|^2 milestones on Nov 20: .*Setup checks for new teams.*M\d+ First alert within a day/);
     // A click on the count lists the day's milestones; each opens its card.
+    // Its words: the count and its day to a screen reader, the day's list named by its day.
+    await expect(badge).toHaveAccessibleName("2 on Nov 20");
     await badge.click();
+    await expect(page.getByTestId("ms-same-day-list")).toHaveAccessibleName("Milestones on Nov 20");
     const entries = page.getByTestId("ms-same-day-list").getByTestId("ms-same-day-entry");
+    await expect(entries.filter({ hasText: "Setup checks for new teams" })).toHaveText(/^M\d+ Setup checks for new teams$/);
     await expect(entries).toHaveCount(2);
     await entries.filter({ hasText: "Setup checks for new teams" }).click();
     await expect(card(page).getByLabel("Name")).toHaveValue("Setup checks for new teams");

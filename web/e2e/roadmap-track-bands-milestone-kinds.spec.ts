@@ -1,4 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { TRACKS } from "../lib/api/mock/simple-roadmap";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
@@ -31,6 +32,22 @@ import { expect, test, type Page } from "./test";
  * Card ms-panel-rows: protects = the panel sets Date and Track side by side (a hand-off: its From and
  * To instead), Builds toward and Sub-goal of side by side under the measure, the Track kept after a
  * reload; fails_when = they stack, or the Track is lost.
+ *
+ * Review round (PR 1499):
+ * Card ms-measured-fields: protects = a measured milestone's panel reads Measure, Start, Target,
+ * Builds toward, Sub-goal of, its sub-goals and the work that serves it, never "Baseline";
+ * fails_when = a field is missing or named Baseline.
+ * Card ms-kind-clears: protects = a save after switching kind drops the old kind's fields, and a
+ * status put back to On track drops its reason; fails_when = they come back when the kind or status does.
+ * Card ms-every-kind-diamond: protects = a milestone of each of the six kinds has its diamond on
+ * the axis; fails_when = a kind draws none.
+ * Card ms-band-more-close: protects = the band's +N list closes on Escape (focus back on +N) and on
+ * a click outside it; fails_when = it stays open.
+ * Card tb-health-mark: protects = a track's header mark turns from a tick to a warning when a
+ * milestone it serves moves before its work ends; fails_when = the mark does not change.
+ * Card ms-touch-reason: protects = on touch, the panel's Status (i) gives Oracle's reason and the
+ * kind picker's (i) each kind's meaning; the picker is a listbox the arrow keys move along;
+ * fails_when = the reason or meanings are hover-only, or the arrow keys do nothing.
  */
 
 async function open(page: Page) {
@@ -45,6 +62,8 @@ async function open(page: Page) {
 const lanes = (page: Page) => page.getByTestId("timeline-lane");
 const label = (page: Page, start: string) => page.getByTestId("ms-label").filter({ hasText: start });
 const card = (page: Page) => page.getByTestId("ms-card");
+/** A milestone's diamond on the axis, by its name (its title: "<code> <name>, <day>"). */
+const diamond = (page: Page, name: string) => page.locator(`[data-testid="ms-diamond"][title*=" ${name},"]`).first();
 
 test.describe("Roadmap: track bands and milestone kinds", () => {
   test("the Timeline's bands are the tracks, in order, then No track; a header names the goal and its health tick says why", async ({ page }) => {
@@ -66,6 +85,10 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     expect(names[0]).toContain(goalName);
     const none = names.findIndex((t) => t.startsWith("No track"));
     expect(none).toBeGreaterThan(0);
+    // The full order: every track with work, in the Tracks order, then No track.
+    const order = names.map((t) => Object.values(TRACKS).find((n) => t.startsWith(n)) ?? (t.startsWith("No track") ? "No track" : t));
+    expect(order).toEqual([...Object.values(TRACKS).filter((n) => order.includes(n)), "No track", ...order.slice(none + 1)]);
+    expect(order.slice(0, 2)).toEqual(["Usage alerts track", "Guided setup track"]);
     expect(names.slice(0, none).every((t) => /track/.test(t))).toBe(true);
     // No goal bands and no PM-owned band.
     expect(names.some((t) => t.startsWith("PM-owned"))).toBe(false);
@@ -165,7 +188,16 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     const picker = page.getByTestId("ms-kind-picker");
     await expect(picker).toBeVisible();
     await expect(page.getByTestId("ms-card")).toHaveCount(0);
-    await picker.getByRole("option", { name: "Decision" }).click();
+    // A listbox, one tab stop: the arrow keys move along the kinds (two columns), Enter picks.
+    const options = picker.getByRole("listbox", { name: "Kind" }).getByRole("option");
+    await expect(options).toHaveCount(6);
+    await options.first().focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(options.nth(2)).toBeFocused();
+    await expect(options.nth(2)).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("ArrowRight");
+    await expect(picker.getByRole("option", { name: "Decision" })).toBeFocused();
+    await page.keyboard.press("Enter");
     await expect(card(page).getByLabel("Kind")).toHaveValue("decision");
     await card(page).getByLabel("Name").fill("Pick the alert sound");
     await card(page).getByLabel("Date").fill("2027-03-10");
@@ -265,7 +297,7 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     await expect(tip).not.toContainText("Waits on");
     await l.click();
     await card(page).getByLabel("Measure").fill("Teams set up");
-    await card(page).getByLabel("Baseline").fill("35");
+    await card(page).getByLabel("Start", { exact: true }).fill("35");
     await card(page).getByLabel("Target").fill("60");
     await card(page).getByTestId("ms-save").click();
     await expect(card(page)).toBeHidden();
@@ -302,5 +334,169 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     await expect(card(page).getByTestId("ms-date-row").getByLabel("Track")).toHaveCount(0);
     await expect(card(page).getByLabel("From track")).toBeVisible();
     await expect(card(page).getByLabel("To track")).toBeVisible();
+  });
+
+  test("a measured milestone's panel reads Measure, Start, Target, Builds toward, Sub-goal of, its sub-goals and the work that serves it", async ({ page }) => {
+    await open(page);
+    // M3 becomes a measured goal M1 builds toward.
+    await diamond(page, "Teams set 3 rules in week 1").click();
+    await card(page).getByLabel("Kind").selectOption({ label: "Goal" });
+    await card(page).getByTestId("ms-save").click();
+    await expect(card(page)).toBeHidden();
+    await label(page, "M1 Alerts live for 50 teams").click();
+    const c = card(page);
+    for (const f of ["Measure", "Start", "Target", "Builds toward", "Sub-goal of"]) await expect(c.getByLabel(f, { exact: true })).toBeVisible();
+    await expect(c.getByLabel("Baseline")).toHaveCount(0);
+    await expect(c.getByTestId("ms-toward-row").locator("select").first()).toHaveAccessibleName("Builds toward");
+    await expect(c).not.toContainText("Baseline");
+    await expect(c.getByTestId("ms-waits-on")).toContainText("Work that serves it");
+    await expect(c.getByTestId("ms-waits-chip")).toHaveCount(1);
+    await expect(c.getByTestId("ms-waits-chip")).toContainText("Alert rules engine");
+    await c.getByLabel("Sub-goal of").selectOption({ label: (await c.getByLabel("Sub-goal of").locator("option", { hasText: "Teams set 3 rules in week 1" }).textContent())!.trim() });
+    await c.getByTestId("ms-save").click();
+    await expect(c).toBeHidden();
+    // The goal lists it among its sub-goals.
+    await diamond(page, "Teams set 3 rules in week 1").click();
+    await expect(c.getByLabel("Measure")).toBeVisible();
+    await expect(c.getByLabel("Sub-goal of")).toHaveCount(0);
+    await expect(c.getByTestId("ms-subs")).toContainText("Sub-goals");
+    await expect(c.getByTestId("ms-subs")).toContainText(/M\d+ Alerts live for 50 teams/);
+  });
+
+  test("a save after switching kind drops the old kind's fields; a status back on track drops its reason", async ({ page }) => {
+    await open(page);
+    await label(page, "M1 Alerts live for 50 teams").click();
+    const c = card(page);
+    await c.getByLabel("Measure").fill("Teams set up");
+    await c.getByLabel("Start", { exact: true }).fill("35");
+    await c.getByLabel("Target", { exact: true }).fill("60");
+    await c.getByLabel("Status").selectOption({ label: "At risk" });
+    await c.getByLabel("Why").fill("Rules API is late");
+    await c.getByTestId("ms-save").click();
+    await expect(c).toBeHidden();
+    await label(page, "M1 Alerts live for 50 teams").click();
+    await c.getByLabel("Kind").selectOption({ label: "Delivery" });
+    await c.getByLabel("Done when").fill("Alerts ship to every team");
+    await c.getByLabel("Status").selectOption({ label: "On track" });
+    await c.getByTestId("ms-save").click();
+    await expect(c).toBeHidden();
+    // Its tip no longer gives the old reason.
+    await label(page, "M1 Alerts live for 50 teams").hover();
+    await expect(page.getByTestId("ms-tip-kind")).toHaveText("Delivery · On track");
+    await expect(page.getByTestId("ms-tip-reason")).not.toHaveText("Rules API is late");
+    await page.reload();
+    await label(page, "M1 Alerts live for 50 teams").click();
+    await expect(c.getByLabel("Done when")).toHaveValue("Alerts ship to every team");
+    // Back to a sub-goal: its old measure is gone; At risk again asks for a new reason.
+    await c.getByLabel("Kind").selectOption({ label: "Sub-goal" });
+    await expect(c.getByLabel("Measure")).toHaveValue("");
+    await expect(c.getByLabel("Start", { exact: true })).toHaveValue("");
+    await expect(c.getByLabel("Target", { exact: true })).toHaveValue("");
+    await c.getByLabel("Status").selectOption({ label: "At risk" });
+    await expect(c.getByLabel("Why")).toHaveValue("");
+  });
+
+  test("a milestone of each of the six kinds has its diamond on the axis", async ({ page }) => {
+    await open(page);
+    for (const [name, kind] of [
+      ["Alerts live for 50 teams", "Hand-off"],
+      ["Teams set 3 rules in week 1", "Goal"],
+      ["Digest opened by 70%", "Decision"],
+      ["Under 10% of teams mute alerts", "Outside date"],
+    ] as const) {
+      await diamond(page, name).click();
+      await card(page).getByLabel("Kind").selectOption({ label: kind });
+      if (kind !== "Goal") await card(page).getByLabel("Done when").fill("It is done");
+      await card(page).getByTestId("ms-save").click();
+      await expect(card(page)).toBeHidden();
+    }
+    const gems = page.locator('[data-testid="ms-diamond"], [data-testid="ms-prd-diamond"]');
+    for (const kind of ["goal", "sub_goal", "delivery", "decision", "outside", "handoff"]) {
+      const of = gems.and(page.locator(`[data-kind="${kind}"]`));
+      expect(await of.count(), kind).toBeGreaterThan(0);
+      // One diamond on its day, the diamond's own shape.
+      const day = (await of.first().getAttribute("data-day"))!;
+      await expect(gems.and(page.locator(`[data-day="${day}"]`))).toHaveCount(1);
+      await expect(of.first().locator("i.rotate-45")).toHaveCount(1);
+    }
+  });
+
+  test("the band's +N list closes on Escape and on a click outside it", async ({ page }) => {
+    await open(page);
+    await page.getByTestId("zoom-all").click();
+    const more = page.getByTestId("ms-band-more").first();
+    await expect(more).toBeVisible();
+    const list = more.locator("xpath=..").getByTestId("ms-band-list");
+    await more.click();
+    await expect(list).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(list).toBeHidden();
+    await expect(more).toBeFocused();
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    await more.click();
+    await expect(list).toBeVisible();
+    await expect(more).toHaveAttribute("aria-expanded", "true");
+    // A click on the chart's empty band, outside the list.
+    const band = (await page.getByTestId("ms-band").boundingBox())!;
+    await page.mouse.click(band.x + 4, band.y + band.height - 3);
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    await page.mouse.move(0, 0);
+    await expect(list).toBeHidden();
+  });
+
+  test("a track's header mark turns from a tick to a warning when a milestone it serves moves before its work ends", async ({ page }) => {
+    await open(page);
+    const head = lanes(page).filter({ hasText: "Guided setup track" }).getByTestId("track-head");
+    const health = head.getByTestId("track-health");
+    await expect(health).toHaveAttribute("data-health", "on_track");
+    const before = await health.innerHTML();
+    // Its milestone moves to tomorrow, before the work it waits on ends.
+    await diamond(page, "Half of new teams invite a teammate").click();
+    await card(page).getByLabel("Date").fill("2026-11-04");
+    await card(page).getByTestId("ms-save").click();
+    await expect(card(page)).toBeHidden();
+    await expect(health).toHaveAttribute("data-health", "at_risk");
+    expect(await health.innerHTML()).not.toBe(before);
+    await health.getByTestId("track-health-tip").hover();
+    await expect(health.getByRole("tooltip")).toHaveText(/^At risk: .+ ends [A-Z][a-z]{2} \d{1,2}, after M\d+ Half of new teams invite a teammate on Nov 4$/);
+  });
+});
+
+test.describe("Roadmap milestones on touch", () => {
+  test.use({ hasTouch: true });
+
+  test("on touch the panel's Status (i) gives Oracle's reason and the kind picker's (i) each kind's meaning", async ({ page }) => {
+    await open(page);
+    await label(page, "M1 Alerts live for 50 teams").tap();
+    const c = card(page);
+    await expect(c).toBeVisible();
+    await expect(c.getByLabel("Status")).toHaveValue("");
+    await c.getByTestId("ms-status-why").tap();
+    await expect(c.getByTestId("ms-status-why").locator("xpath=..").getByRole("tooltip")).toHaveText(/^(Every piece of work ends by its date|.+ ends [A-Z][a-z]{2} \d{1,2}, after its date [A-Z][a-z]{2} \d{1,2})$/);
+    // A second tap puts it away.
+    await c.getByTestId("ms-status-why").tap();
+    await expect(c.getByTestId("ms-status-why").locator("xpath=..").getByRole("tooltip")).toBeHidden();
+    await c.getByRole("button", { name: "Cancel" }).tap();
+    await expect(c).toBeHidden();
+    // + Milestone: the picker's (i) names what each kind means.
+    await page.getByTestId("zoom-6m").tap();
+    const axis = page.getByTestId("ms-axis").first();
+    const box = (await axis.boundingBox())!;
+    const seen = await axis.evaluate((el) => {
+      let sc = el.parentElement;
+      while (sc && !/auto|scroll/.test(getComputedStyle(sc).overflowX)) sc = sc.parentElement;
+      const r = (sc ?? document.body).getBoundingClientRect();
+      return { left: r.left, right: r.right };
+    });
+    const from = Math.max(box.x, seen.left);
+    await page.touchscreen.tap(from + (Math.min(box.x + box.width, seen.right) - from) * 0.6, box.y + box.height / 2);
+    const picker = page.getByTestId("ms-kind-picker");
+    await expect(picker).toBeVisible();
+    await picker.getByTestId("ms-kind-tip").tap();
+    const tips = picker.getByTestId("ms-kind-tips");
+    await expect(tips).toBeVisible();
+    await expect(tips).toContainText("Goal: A measured goal that must be hit, from a start to a target");
+    await expect(tips).toContainText("Decision: By its date the team knows something and decides");
+    await expect(tips).toContainText("Hand-off: One track delivers what another track waits on");
   });
 });
