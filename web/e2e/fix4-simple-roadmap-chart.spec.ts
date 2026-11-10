@@ -190,7 +190,9 @@ for (const who of ["commenter", "viewer"] as const) {
       for (const l of await lanes.all()) {
         const lb = (await l.boundingBox())!;
         expect(lb.height).toBeGreaterThanOrEqual(31.5);
-        await expect(l).toHaveText(/\S.* · \d+ items?$/);
+        // tb-mk: a track band reads its name, goal and health; No track reads bare; Below the line keeps its count.
+        if (await l.getByTestId("track-head").count()) await expect(l.getByTestId("track-head")).toHaveText(/\S.*(On track|Needs a look)$/);
+        else await expect(l).toHaveText(/^No track$|\S.* · \d+ items?$/);
         const name = l.locator(":scope > div");
         const nb = (await name.boundingBox())!;
         expect(nb.y, "the name and count sit inside their lane").toBeGreaterThanOrEqual(lb.y - 0.5);

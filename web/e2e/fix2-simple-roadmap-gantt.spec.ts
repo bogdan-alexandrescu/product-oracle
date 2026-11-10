@@ -140,7 +140,10 @@ test.describe("phone", () => {
     await expect(nudges.getByTestId("draft-tag")).toBeVisible();
     await expect(nudges.getByTestId("pending-tag")).toHaveText("Pending decision");
 
-    // finding 6: the goal's metric line fits inside its own row, not spilling into the next one.
+    // finding 6: the goal's metric line fits inside its own row, not spilling into the next one
+    // (tb-mk: the Gantt starts by track; Group by Goal draws the goal's two lines).
+    await page.getByTestId("group-goal").click();
+    await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
     const activation = page.getByTestId("chart-group").filter({ hasText: "Faster activation" });
     const groupBox = (await activation.boundingBox())!;
     const metricBox = (await activation.getByTestId("group-metric").boundingBox())!;

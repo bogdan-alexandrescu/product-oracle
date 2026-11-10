@@ -93,7 +93,8 @@ test.describe("desktop", () => {
       const rows = [...root.querySelectorAll<HTMLElement>('[data-testid="timeline-lane"], [data-testid="timeline-row"]')];
       let lane: { name: string; count: number; seen: number } | null = null;
       const close = () => {
-        if (lane && lane.seen !== lane.count) out.push(`${lane.name}: says ${lane.count}, draws ${lane.seen}`);
+        // tb-mk: a track band names no count (the owner's pick C); it draws at least one row, never an empty band.
+        if (lane && (lane.count < 0 ? lane.seen < 1 : lane.seen !== lane.count)) out.push(`${lane.name}: says ${lane.count}, draws ${lane.seen}`);
       };
       for (const r of rows) {
         if (r.dataset.testid === "timeline-lane") {
