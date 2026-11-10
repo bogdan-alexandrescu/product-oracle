@@ -960,7 +960,7 @@ export function MsLayer(props: MsLayerProps) {
     <div
       ref={ref}
       data-testid="ms-layer"
-      className="pointer-events-none absolute inset-0 [&>*]:pointer-events-auto"
+      className="pointer-events-none absolute inset-0 [&>*:not(.pointer-events-none)]:pointer-events-auto"
       onPointerMoveCapture={(e) => {
         const y = e.clientY - (ref.current?.getBoundingClientRect().top ?? 0);
         const lane = lanes.find((l) => y >= l.y0 && y < l.y1);

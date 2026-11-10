@@ -106,7 +106,7 @@ test("the PRD's owner, not a company owner, declines in the roadmap's Needs a de
   const tray = page.getByTestId("decision-tray");
   const proposals = tray.getByTestId("tray-proposal");
   const gone = proposals.filter({ hasText: "PRD milestone ‘Routing by team’: change a milestone" });
-  const digest = proposals.filter({ hasText: "PRD milestone ‘Digest for all teams’: change a milestone" });
+  const digest = proposals.filter({ hasText: /PRD milestone ‘M\d+ Digest for all teams’: change a milestone/ });
   await page.getByTestId("needs-decision").click();
   await expect(tray).toBeVisible();
   await expect(gone).toHaveCount(1);
