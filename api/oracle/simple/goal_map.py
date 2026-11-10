@@ -54,7 +54,7 @@ from oracle.launches.models import Launch
 from oracle.metrics import pull
 from oracle.metrics.models import Metric, MetricValue
 from oracle.preferences.models import UserPreference
-from oracle.roadmap import company
+from oracle.roadmap import codes, company
 from oracle.roadmap.models import RoadmapItem, TrackMilestone
 from oracle.simple import drafts
 from oracle.simple.goal_milestones import _next_code
@@ -504,7 +504,10 @@ async def _unplaced(db: AsyncSession, principal: Any, placed: set[uuid.UUID]) ->
         if e.status in ("draft", "cut", "merged") or e.row.id in placed or e.row.id in out:
             continue
         goal = e.goal.id if e.goal is not None else None
-        out[e.row.id] = GmUnplaced(id=e.row.id, name=e.row.title, goal=goal)
+        # QA goal map codes: its name as the roadmap reads it (the card shows its code).
+        code = e.code or service._prd_code(e.row.prd_section_key)
+        name = service.coded_title(e.row.title, code)[1]
+        out[e.row.id] = GmUnplaced(id=e.row.id, name=name, goal=goal)
     return list(out.values())
 
 
@@ -628,8 +631,13 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
     goal_of = {m.id: m.goal for m in ms_out}
     around: dict[tuple[uuid.UUID, date], tuple[float | None, float | None]] = {}
     feats: dict[uuid.UUID, GmFeature] = {}
+    from oracle.simple.service import coded_title
+
+    by_feature = await codes.feature_codes(db) if any(i.feature_id for _, i in links) else {}
     for link, item in links:
-        title = item.title
+        # QA goal map codes: its name as the roadmap reads it, without a leading code of its
+        # own (the card shows the code before it: "F-07 Crawl", never "F-07 F-07 Crawl").
+        title = coded_title(item.title, codes.code_of(item, by_feature))[1]
         # panel-menu: a feature merged into another (as the reader's draft has it, as the
         # roadmap reads it) is no longer one of the map's.
         mine_ = (overlays.get(item.roadmap_document_id) or {}).get(str(link.item_id)) or {}
