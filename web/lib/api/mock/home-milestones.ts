@@ -337,8 +337,8 @@ export const HOME_MILESTONE_BARE_TRACK_SCENARIO = "home-milestones-bare-track";
 /**
  * home-milestones-bare-track (review of PR 1489): Onboarding's own M1 of no goal, "Measured"
  * (Setup checklist), joins the Guided setup track's bare "M1" (Health log) and names its row;
- * Faster activation's "M1 · Measured and mapped" (Sample data import) is a goal's beside another
- * of its code, so it keeps its own row: the bare track takes a goal's only as the only one.
+ * Faster activation's "M1 · Measured and mapped" (Sample data import) leads with its name, so it
+ * joins too (the owner's "Join whenever names match"): one row, the longer name.
  */
 export function seedHomeMilestoneBareTrack(): SimpleDb {
   const rm = seedSimpleRoadmap();
