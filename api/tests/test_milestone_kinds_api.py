@@ -32,6 +32,16 @@ Test cards (protects / fails_when):
   a missing milestone, a hand-off from a track to itself, and a missing home, from or to
   track are 422 on create, patch and a proposal; a proposal whose refs went bad meanwhile
   is refused on accept (422, not a 500); fails_when=any is stored or a 500.
+- test_a_goal_is_not_its_own_sub_goal: a goal milestone set as its own sub_goal_of_id is a
+  422 (the goal-kind check alone lets it through); fails_when=the self guard goes.
+- test_a_sub_goal_shares_its_goals_roadmap: a sub-goal on another roadmap than its goal
+  milestone is a 422 on create and patch; fails_when=it is stored.
+- test_a_goal_with_sub_goals_keeps_its_kind: a goal milestone sub-goals build toward cannot
+  change kind (422 naming them) until none does; fails_when=the kind changes under them.
+- test_a_history_track_is_no_milestone_track: a replaced PRD's track (history) is a 422 as a
+  home, from or to track; fails_when=it is stored.
+- test_goals_read_once_per_roadmap_read: one roadmap read selects the company's goals from
+  entities once; fails_when=a part of the read reads them again.
 - test_tracks_served_in_order_with_health: the read's track bands, in the Tracks order,
   each with its health and reason; fails_when=order, health or reason is wrong.
 """
@@ -44,6 +54,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from oracle import company_time
+from oracle.docs.models import Document
 from oracle.simple.goal_milestones import status_of
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
@@ -64,7 +75,7 @@ async def seed(ctx: Ctx, due: str | None = None) -> dict:
     async with tenant_session(ctx.tenant_id) as s:
         sd = Seed(s)
         _, pv, rm, rv = await sd.roadmap("launch")
-        prd2, pv2, _, _ = await sd.roadmap("search")
+        prd2, pv2, rm2, _ = await sd.roadmap("search")
         attrs = {"metric": "Teams set up", "target": 10, "unit": "teams"}
         if due:
             attrs["due"] = due
@@ -84,7 +95,7 @@ async def seed(ctx: Ctx, due: str | None = None) -> dict:
         await s.commit()
         return {"roadmap_id": str(rm.id), "goal_id": str(goal.id), "checkout": str(checkout.id),
                 "search": str(search.id), "early": str(early.id), "late": str(late.id),
-                "prd2": str(prd2.id)}  # fmt: skip
+                "prd2": str(prd2.id), "roadmap2": str(rm2.id)}  # fmt: skip
 
 
 async def read(client, ctx: Ctx, role: str = "owner") -> dict:
@@ -413,3 +424,116 @@ async def test_refs_checked_on_create_patch_and_proposal(client):
     r = await client.post(f"{CHANGES}/{c['id']}/accept", headers=ctx.as_("owner"))
     assert r.status_code == 422, r.text
     assert by_id(await read(client, ctx))[plain["id"]]["kind"] == "delivery"
+
+
+async def test_a_goal_is_not_its_own_sub_goal(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    goal = await make(client, ctx, ids, name="Activation doubles", kind="goal")
+    for kw in ({"sub_goal_of_id": goal["id"]}, {"kind": "sub_goal", "sub_goal_of_id": goal["id"]}):
+        r = await client.patch(f"{MILESTONES}/{goal['id']}", json=kw, headers=ctx.as_("owner"))
+        assert r.status_code == 422, (kw, r.text)
+        assert "another milestone" in r.text
+    assert by_id(await read(client, ctx))[goal["id"]]["sub_goal_of_id"] is None
+
+
+async def test_a_sub_goal_shares_its_goals_roadmap(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    goal = await make(client, ctx, ids, name="Activation doubles", kind="goal")
+    other = {**ids, "roadmap_id": ids["roadmap2"]}
+    body = {"roadmap_id": ids["roadmap2"], "name": "Eight teams", "date": "2026-11-27",
+            "kind": "sub_goal", "sub_goal_of_id": goal["id"]}  # fmt: skip
+    r = await client.post(MILESTONES, json=body, headers=ctx.as_("owner"))
+    assert r.status_code == 422, r.text
+    assert "same roadmap" in r.text
+    there = await make(client, ctx, other, name="Eight teams", kind="sub_goal")
+    r = await client.patch(f"{MILESTONES}/{there['id']}", headers=ctx.as_("owner"),
+                           json={"sub_goal_of_id": goal["id"]})  # fmt: skip
+    assert r.status_code == 422, r.text
+    assert "same roadmap" in r.text
+    here = await make(client, ctx, ids, name="Nine teams", kind="sub_goal",
+                      sub_goal_of_id=goal["id"])  # fmt: skip
+    assert here["sub_goal_of_id"] == goal["id"]
+
+
+async def test_a_goal_with_sub_goals_keeps_its_kind(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    goal = await make(client, ctx, ids, name="Activation doubles", kind="goal")
+    sub = await make(client, ctx, ids, name="Eight teams", kind="sub_goal",
+                     sub_goal_of_id=goal["id"])  # fmt: skip
+    r = await client.patch(f"{MILESTONES}/{goal['id']}", json={"kind": "delivery"},
+                           headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 422, r.text
+    assert "Eight teams" in r.text
+    assert by_id(await read(client, ctx))[goal["id"]]["kind"] == "goal"
+    # Still a goal: a write of the same kind, or of anything else, goes through.
+    r = await client.patch(f"{MILESTONES}/{goal['id']}", json={"kind": "goal", "name": "Doubled"},
+                           headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await client.patch(f"{MILESTONES}/{sub['id']}", json={"sub_goal_of_id": None},
+                           headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await client.patch(f"{MILESTONES}/{goal['id']}", json={"kind": "delivery"},
+                           headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+
+
+async def test_a_history_track_is_no_milestone_track(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        sd = Seed(s)
+        rm = await s.get(Document, uuid.UUID(ids["roadmap_id"]))
+        new = await sd.doc("ledger-prd")
+        old = await sd.doc("old-ledger-prd")
+        old.replaced_by = [new.id]
+        past = await sd.track(await sd.version(old), rm, title="Old ledger")
+        await s.commit()
+        past_id = str(past.id)
+    search = ids["search"]
+    for kw in ({"home_track_id": past_id},
+               {"kind": "handoff", "from_track_id": past_id, "to_track_id": search},
+               {"kind": "handoff", "from_track_id": search, "to_track_id": past_id}):  # fmt: skip
+        body = {"roadmap_id": ids["roadmap_id"], "name": "Bad", "date": "2026-11-27", **kw}
+        r = await client.post(MILESTONES, json=body, headers=ctx.as_("owner"))
+        assert r.status_code == 422, (kw, r.text)
+        assert "replaced PRD" in r.text, r.text
+    m = await make(client, ctx, ids, name="Checkout beta", home_track_id=ids["checkout"])
+    r = await client.patch(f"{MILESTONES}/{m['id']}", json={"home_track_id": past_id},
+                           headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 422, r.text
+
+
+async def test_goals_read_once_per_roadmap_read(client):
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+
+    ctx = await make_ctx()
+    ids = await seed(ctx, due="2026-12-18")
+    goal = await make(client, ctx, ids, name="Activation doubles", kind="goal")
+    await make(client, ctx, ids, name="Eight teams", kind="sub_goal", sub_goal_of_id=goal["id"])
+    await read(client, ctx)  # warm: the first read may seed what later reads find
+    seen: list[str] = []
+
+    def count(conn, cursor, statement, params, context, executemany) -> None:
+        # A read of goals: a select on entities for type goal, or of entities by id alone
+        # (the goals a part of the read already had).
+        s = " ".join(statement.split()).lower()
+        if not s.startswith("select") or "entities" not in s:
+            return
+        where = s.split(" where ", 1)[-1]
+        by_id = " from entities where " in s and "entities.type" not in where
+        if "goal" in (params or ()) or by_id:
+            seen.append(f"{s.split(' from ', 1)[1]} {params!r}")
+
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        body = await read(client, ctx)
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+    assert any(m["goal_target"] for m in body["goal_milestones"])
+    assert len(seen) == 1, "\n".join(seen)
