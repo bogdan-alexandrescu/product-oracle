@@ -85645,7 +85645,42 @@
           "errors"
         ],
         "title": "ImportErrorResponse",
-        "description": "422 body when a draft cannot be imported. Lists every problem, not just the first."
+        "description": "422 body when a draft cannot be imported. Lists every problem, not just the first;\nthe detail names them (:func:`rejected_detail`)."
+      },
+      "ImportFix": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "add_date_source",
+            "title": "Action"
+          },
+          "prd_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Document Id"
+          },
+          "days": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Days",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "ImportFix",
+        "description": "The action that resolves a refused draft's problem (vqa-one-pager (e)):\n``add_date_source`` opens Plan \u203a Dates for the PRD (``prd_document_id``, none when the\nroadmap has no known PRD) filtered to the ``days`` (YYYY-MM-DD) that need a source."
       },
       "ImportIssue": {
         "properties": {
@@ -85782,6 +85817,16 @@
             "type": "object",
             "title": "Refs",
             "default": {}
+          },
+          "fix": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportFix"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
