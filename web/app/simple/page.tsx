@@ -418,12 +418,27 @@ export default function SimpleHome() {
   const brokenMine = broken.filter((b) => b.item.can_decide).length;
   const brokenOthers = broken.length - brokenMine;
   // Review: what the rail's Inbox counts and Home draws no row for (open feedback, cost approvals,
-  // discussions, reports, ...) is one row, "N more in your Inbox"; with nothing drawn here at all,
-  // all the rail counts is, so Home never says nothing waits while the rail counts something.
-  const railCount = inbox.data && asked.data ? waitingCount(inbox.data, asked.data) : 0;
-  const drawnElsewhere = inbox.data && asked.data ? Math.max(0, railCount - drawnOnHome(inbox.data, asked.data)) : 0;
-  const drawnHere = decisionCount + toDecide.length + brokenMine + stopCount + myTasks.length + alsoWaiting.length;
-  const moreInInbox = drawnHere === 0 ? railCount : drawnElsewhere;
+  // discussions, reports, ...) is one row, "N more in your Inbox", so Home never says nothing
+  // waits while the rail counts something.
+  const listed = waiting.data?.items ?? [];
+  const ofKind = (kind: Schemas["SimpleWaitingItem"]["kind"]) => listed.filter((i) => i.kind === kind).length;
+  const moreInInbox =
+    inbox.data && asked.data
+      ? Math.max(
+          0,
+          waitingCount(inbox.data, asked.data) -
+            drawnOnHome(inbox.data, asked.data, {
+              stops: stopCount,
+              questions: waiting.data?.questions.length ?? 0,
+              decisions: ofKind("decision"),
+              drafts: ofKind("draft"),
+              proposals: toDecide.length,
+              dates: listed.filter((i) => i.kind === "date" && !i.op).length,
+              goalSuggestions: ofKind("goal_suggestion"),
+              inboxRows: ofKind("inbox"),
+            }),
+        )
+      : 0;
   const inboxCount = alsoWaiting.filter((i) => i.kind === "inbox").length + moreInInbox;
   const parts: [number, string, string][] = [
     [decisionCount, "decision", "decisions"],
