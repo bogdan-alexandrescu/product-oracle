@@ -227,6 +227,8 @@ export function cutDependents(items: Schemas["SimpleRoadmapItem"][], id: string)
   }
   return out;
 }
+/** The item task ops (targets.py KIND "task"). */
+const KIND_TASK = new Set(["add_item_task", "edit_item_task", "set_item_task_status"]);
 /** S3b: non-versioned ops (api/oracle/simple/targets.py) and the target id each creates. */
 const TARGETS: Record<string, { id: string; adds?: boolean }> = {
   add_item_task: { id: "task_id", adds: true },
@@ -904,6 +906,27 @@ function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false, ctx?
   // walkc-roadmap-tasks: a task is stored under its item, open, as RoadmapItemTask is.
   else if (c.op === "add_item_task") targets[id] = { status: "todo", owner_id: null, due_date: null, ...values, kind: "item_task", item_id: c.target.item_id, at: c.at };
   else targets[id] = { ...(targets[id] ?? {}), ...values };
+  // feature-panel (trash.drop_task, targets._task_trash): a dropped task goes to Settings › Trash
+  // with the status it had; set back from dropped (an undo, a later status) it leaves Trash.
+  if (KIND_TASK.has(c.op)) {
+    const trash = (ctx ? (ctx.trash ??= { entries: [], estimates: {} }) : undefined);
+    const t = targets[id] as { title?: string; status?: string } | undefined;
+    const left = !t || (undo && c.op === "add_item_task") || t.status !== "dropped";
+    if (trash && left) trash.entries = trash.entries.filter((e) => !(e.out.root.type === "task" && e.out.root.id === id));
+    else if (trash && t && c.op === "set_item_task_status" && values.status === "dropped" && !trash.entries.some((e) => e.out.root.type === "task" && e.out.root.id === id)) {
+      const now = iso(mockNowMs());
+      const was = (undo ? c.after : c.before) as { status?: string };
+      trash.entries.push({
+        out: {
+          id: crypto.randomUUID(),
+          root: { type: "task", id, slug: null, title: String(t.title ?? ""), kind: "Task" },
+          items: [], deleted_by: ctx!.id, deleted_by_name: ctx!.names[ctx!.id] ?? "someone", deleted_at: now,
+          reason: null, published: false, purge_after: new Date(Date.parse(now) + 30 * DAY).toISOString(),
+        },
+        documents: [], versions: [], runs: [], intakes: [], task_status: was.status && was.status !== "dropped" ? was.status : "todo",
+      });
+    }
+  }
   // feature-panel: a task's owner changed in its panel (or undone) reads by the person's name, as service._tasks does.
   if (c.op === "edit_item_task" && "owner_id" in values) targets[id].owner_name = values.owner_id ? (ctx?.names[String(values.owner_id)] ?? null) : null;
   // An item's own milestone (set_milestone, and its undo) is what the roadmap reads of it.

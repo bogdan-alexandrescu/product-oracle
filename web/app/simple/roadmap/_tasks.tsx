@@ -2,7 +2,7 @@
 // ec1 'Edit each row in place' (owner's pick, Nov 5): the feature panel's Tasks. Each part of a
 // row is a control where it sits, as the panel's other fields are: the title retitles it, the
 // owner picks a person, the date picks a day; the status pill opens To do, Doing, Done and, last,
-// Drop this task. '+ Add a task' ends the list. Each save is one Simple change (Undo; a
+// Drop this task (to Settings › Trash, restored from there). '+ Add a task' ends the list. Each save is one Simple change (Undo; a
 // commenter's or a non-deciding approver's waits under Proposals on it). A viewer reads.
 
 import { useEffect, useRef, useState } from "react";
@@ -12,7 +12,7 @@ import { formatDay } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
 import type { Act } from "./_card";
-import type { Item } from "./_lib";
+import type { ChangeWords, Item } from "./_lib";
 
 type Task = Item["tasks"][number];
 type Status = Task["status"];
@@ -298,7 +298,7 @@ function TaskRow({
                 warn
                 onPick={() => (
                   done(),
-                  void save.status(task, "dropped", `Dropped “${task.title}”`)
+                  void save.status(task, "dropped", { applied: `Moved the task “${task.title}” to Trash`, proposed: `drop the task “${task.title}”` })
                 )}
               />
             </Pop>
@@ -319,7 +319,7 @@ type Save = {
     },
     what: string,
   ) => Promise<void>;
-  status: (t: Task, status: Status, what: string) => Promise<void>;
+  status: (t: Task, status: Status, what: ChangeWords) => Promise<void>;
 };
 
 /** The Tasks part: its heading counts what is done. Hidden for a viewer when there are none. */

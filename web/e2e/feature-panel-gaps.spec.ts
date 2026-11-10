@@ -7,8 +7,9 @@ import { expect, test, type Locator, type Page } from "./test";
  *
  * Card fp-tasks (ec1 'Edit each row in place', Nov 5): protects = a task is added, retitled, given
  * an owner, a due day (month first) and a status in place, and dropped with Undo; a commenter's add
- * is a proposal; a viewer reads with no add row; fails_when = no '+ Add a task', no in-place
- * controls, or Drop this task has no Undo.
+ * is a proposal; a viewer reads with no add row; a dropped task waits in Settings › Trash and
+ * Restore puts it back; fails_when = no '+ Add a task', no in-place controls, or Drop this task
+ * has no Undo or no Trash row.
  * Card fp-menu (pm1 '⋯ menu by the close', pm2 'List what points at it', Nov 5): protects = Cut
  * and Restore live in the ⋯ menu (not the Status select), Cut asks first naming what needs it, and
  * Move to Trash… always asks, listing what points at the feature; fails_when = Cut in the Status
@@ -79,10 +80,23 @@ test("an owner adds a task and edits each part of its row in place; Drop this ta
   // Drop this task, last in the status list: it leaves the list; Undo brings it back.
   await tap(row.getByRole("button", { name: "Status of Write the export help page" }));
   await tap(row.getByRole("menuitem", { name: "Drop this task" }));
-  await expect(toasts(page)).toContainText("Dropped “Write the export help page”");
+  await expect(toasts(page)).toContainText("Moved the task “Write the export help page” to Trash");
   await expect(row).toHaveCount(0);
   await tap(toasts(page).getByRole("button", { name: "Undo" }).last());
   await expect(task(page, "Write the export help page")).toBeVisible();
+
+  // Dropped again, it waits in Settings › Trash, and Restore puts it back as it was (Done).
+  await tap(task(page, "Write the export help page").getByRole("button", { name: "Status of Write the export help page" }));
+  await tap(task(page, "Write the export help page").getByRole("menuitem", { name: "Drop this task" }));
+  await expect(task(page, "Write the export help page")).toHaveCount(0);
+  await page.goto("/settings/trash");
+  const entry = page.getByTestId("trash-entry").filter({ hasText: "Write the export help page" });
+  await expect(entry).toBeVisible();
+  await tap(entry.getByRole("button", { name: /^Restore/ }).first());
+  await expect(entry).toHaveCount(0);
+  await page.goto("/simple/roadmap");
+  await openRoadmapItem(page, "alert-export");
+  await expect(task(page, "Write the export help page").getByTestId("task-status")).toHaveText("Done ▾");
 });
 
 test("a commenter's new task is a proposal", async ({ page }) => {
