@@ -51,7 +51,10 @@ async def test_user_edit_locks_and_writes_revisions(client, ctx):
     revs = await client.get(f"{B}/entities/{feat['id']}/revisions", headers=ctx.as_("viewer"))
     revs = revs.json()
     assert len(revs) == 3
-    latest, coded, created = revs
+    # Created and coded are written in one transaction (one timestamp): told apart by shape.
+    latest = revs[0]
+    created = next(r for r in revs[1:] if r["before"] is None)
+    coded = next(r for r in revs[1:] if r["before"] is not None)
     assert created["before"] is None and created["after"]["key"] == "guided-setup"
     assert coded["before"]["key"] == "guided-setup" and coded["after"]["key"] == "F-01"
     assert latest["before"]["title"] == "Guided setup"

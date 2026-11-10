@@ -219,3 +219,51 @@ test("the Scale track keeps its own PRD in the Tracks sheet and its owner is not
   await expect(prd).toContainText("From the PRD User Safety · owned by Marta Moss");
   await expect(prd).not.toContainText("Priya Raman");
 });
+
+/**
+ * protects = Undo of a milestone pick never puts the feature back in a milestone moved to Trash
+ * since: on the "simple-milestones" roadmap (its own milestones, no PRD's) Mobile alert push is
+ * put in M1 Alerts live for 50 teams, then in M2; M1 is removed from its card on the roadmap, and
+ * the second pick's Undo says "That milestone was deleted." while the panel still reads M2;
+ * fails_when = Undo puts it back in the removed milestone, or fails without saying why;
+ * no_claim = the API's check (api pytest).
+ */
+test("undoing a pick refuses a milestone moved to Trash since", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize(DESKTOP.viewport);
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-milestones"] as const);
+  await login(page, ADMIN.email);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+
+  const mobile = "alert-mobile";
+  await openRoadmapItem(page, mobile);
+  await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
+  // The picker's words for the roadmap's own milestones (code and name, no PRD).
+  await card(page).getByRole("button", { name: "Change the milestone" }).click();
+  const option = (name: string) => card(page).getByLabel("Milestone", { exact: true }).locator("option", { hasText: name });
+  const first = (await option("Alerts live for 50 teams").textContent())!.trim();
+  const second = (await option("60% of teams active at day 90").textContent())!.trim();
+  await card(page).getByRole("button", { name: "Cancel" }).click();
+
+  await pick(page, first);
+  await expect(card(page).getByTestId("card-milestone")).toHaveText(first);
+  await pick(page, second);
+  await expect(card(page).getByTestId("card-milestone")).toHaveText(second);
+  const toasts = page.getByTestId("toasts");
+  await expect(toasts.getByRole("button", { name: "Undo" })).toBeVisible();
+  await card(page).getByRole("button", { name: "Close" }).click();
+  await expect(card(page)).toHaveCount(0);
+
+  // The first milestone goes to Trash from its card on the roadmap.
+  await page.locator('[data-testid="ms-label"][aria-label^="M1 Alerts live for 50 teams"]').click();
+  await page.getByTestId("ms-card").getByTestId("ms-remove").click();
+  await expect(page.getByTestId("ms-toast")).toContainText("M1 Alerts live for 50 teams removed");
+
+  // The second pick's Undo would put it back in the removed milestone: refused, in plain words.
+  await toasts.getByRole("button", { name: "Undo" }).click();
+  await expect(toasts).toContainText("That milestone was deleted.");
+  // Still in M2 (its code may move up now M1 is gone: roadmap-milestone-codes).
+  await openRoadmapItem(page, mobile);
+  await expect(card(page).getByTestId("card-milestone")).toHaveText(/^M\d+ 60% of teams active at day 90$/);
+});

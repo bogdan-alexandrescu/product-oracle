@@ -117,13 +117,20 @@ export function HoverCard({
     return () => watch.disconnect();
   }, [open, at]);
 
-  useLayoutEffect(() => {
-    if (!open || !button.current) return;
+  /** The card's place by the chip as it is now on screen. */
+  const place = () => {
+    if (!button.current) return;
     const r = button.current.getBoundingClientRect();
     const vw = document.documentElement.clientWidth;
     const phone = window.matchMedia(PHONE).matches;
     setAbove(false);
     setAt({ top: r.top, bottom: r.bottom, left: Math.max(12, Math.min(r.left, vw - 332)), phone });
+  };
+
+  useLayoutEffect(() => {
+    if (open) place();
+    // place only reads refs and sets state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // A card that runs past the window's bottom (its Open link off-screen) moves above the
@@ -160,8 +167,12 @@ export function HoverCard({
       const t = e.target as Node;
       if (!button.current?.contains(t) && !card.current?.contains(t)) hide();
     };
+    // A hover card closes when the page scrolls under it; a pinned one (clicked or tapped open)
+    // stays until it is closed, with Escape, its chip or a click outside, and moves with its chip.
     const onScroll = (e: Event) => {
-      if (!card.current?.contains(e.target as Node) && !window.matchMedia(PHONE).matches) hide();
+      if (card.current?.contains(e.target as Node) || window.matchMedia(PHONE).matches) return;
+      if (pinned.current) place();
+      else hide();
     };
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onDown);
@@ -172,7 +183,7 @@ export function HoverCard({
       document.removeEventListener("pointerdown", onDown);
       window.removeEventListener("scroll", onScroll, true);
     };
-    // hide only touches refs and state setters.
+    // hide and place only touch refs and state setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
