@@ -72,3 +72,25 @@ test("a goal's On the roadmap switch takes its target-date milestone off the Mil
   await roadmap(page);
   await expect.poll(() => goalOnBand(page, TITLE)).toBe(1);
 });
+
+/*
+ * Card goal-on-roadmap-no-date (review of PR 1499): protects = a goal with no target date has no
+ * milestone to put on the roadmap, so its form hides the On the roadmap switch, and shows it again
+ * once the date is back; fails_when = the switch shows with the By field empty.
+ */
+test("a goal with no target date offers no On the roadmap switch", async ({ page }) => {
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
+  await login(page);
+  await page.goto("/simple/priorities?tab=buckets");
+  const bucket = page.locator(`[data-testid="plan-goal"][data-goal="${TITLE}"]`);
+  await bucket.getByRole("button", { name: `Edit ${TITLE}` }).click();
+  const form = bucket.getByTestId("goal-form");
+  const sw = form.getByRole("switch", { name: "On the roadmap" });
+  await expect(sw).toBeVisible();
+  const by = form.getByLabel("By");
+  const due = await by.inputValue();
+  await by.fill("");
+  await expect(sw).toHaveCount(0);
+  await by.fill(due);
+  await expect(sw).toBeVisible();
+});
