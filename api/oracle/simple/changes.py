@@ -1866,6 +1866,15 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
         if entry is None:
             raise ChangeError(404, "The item is gone")
         await _parent(db, entry, back["parent_key"], dict(c.target), read_)
+    picked = back.get("milestone") if c.op == "set_milestone" else None
+    if isinstance(picked, dict) and picked.get("id"):
+        # item-milestone: the milestone put back is checked as a pick is: it may be in Trash
+        # since.
+        read_ = await service.load(db, await drafts.overlays_for(db, principal))
+        entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
+        if entry is None:
+            raise ChangeError(404, "The item is gone")
+        await _roadmap_milestone(db, entry, picked["id"])
     if c.op in ("set_code", "edit_title") and back.get("title"):
         # every-field: the code the old title carries may be another item's or a Ground Truth
         # feature's since: refused in propose's and accept's words, so no two items share it.

@@ -203,6 +203,25 @@ async def _rename_refs(db: AsyncSession, old: str, new: str) -> None:
     )
 
 
+async def code_on_join(db: AsyncSession, feature: Entity) -> None:
+    """Every feature has a code, given when it joins the Ground Truth (the owner, Nov 4: "Code
+    + name, all"): a confirmed feature with none gets :func:`next_code` as its key, and what
+    names it by its key follows (:func:`_rename_refs`; its old key stays an alias). A code it
+    has is kept, never renumbered; a slice whose feature has no code waits for Give it a code.
+    The caller writes the revision, so the code is part of the write that confirmed it."""
+    if feature.type != "feature" or feature.status != "confirmed":
+        return
+    old = feature.key
+    for _ in range(2):
+        try:
+            code = await next_code(db, feature)
+        except ConflictError:
+            return
+        if await _set_key(db, feature, code):
+            await _rename_refs(db, old, code)
+            return
+
+
 async def give_code(db: AsyncSession, writer: Writer, feature: Entity) -> str:
     """Give ``feature`` its next code, as the writer's own edit (it locks the feature); a
     code another writer took at the same moment is tried once more with the next."""

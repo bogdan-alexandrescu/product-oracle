@@ -1381,6 +1381,8 @@ async def create_entity(
     lock(entity, writer)
     db.add(entity)
     await db.flush()
+    if type_ == "feature":
+        await fixes.code_on_join(db, entity)
     _revision(db, writer, None, entity_snapshot(entity), entity=entity)
     await db.flush()
     return WriteResult(entity=entity, kept_as_text=kept)
@@ -1455,6 +1457,10 @@ async def update_entity(
         setattr(entity, f, value)
     lock(entity, writer)
     await db.flush()
+    if diff.get("status") == "confirmed":
+        from oracle.baseline import fixes
+
+        await fixes.code_on_join(db, entity)
     _revision(db, writer, before, entity_snapshot(entity), entity=entity)
     if entity.type == "goal" and ("title" in diff or "body" in diff):
         # A goal's name or description changed (the goal panel's Edit): who, from what, to what.
@@ -1490,6 +1496,10 @@ async def set_entity_status(
         entity.status = status
         lock(entity, writer)
         await db.flush()
+        if status == "confirmed":
+            from oracle.baseline import fixes
+
+            await fixes.code_on_join(db, entity)
         _revision(db, writer, before, entity_snapshot(entity), entity=entity)
         await scoring.rescore_around(db, [entity.id], include_supporters=True)
         await db.flush()

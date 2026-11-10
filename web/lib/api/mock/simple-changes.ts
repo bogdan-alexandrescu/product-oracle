@@ -1592,6 +1592,10 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       // As changes.undo: the code the old title carries may be another item's or a feature's since.
       const taken = (c.op === "set_code" || c.op === "edit_title") && c.before.title ? titleCodeTaken(db, readerDb(db, ctx), keyOf(db, c.target.item_id)!, String(c.before.title)) : null;
       if (taken) return json(409, { detail: taken });
+      // As changes.undo: the milestone put back is checked as a pick is (it may be in Trash since).
+      const back = c.op === "set_milestone" ? (c.before.milestone as Values | null | undefined) : undefined;
+      const gone = back && typeof back === "object" && back.id ? pickRefused(db, c.target.item_id, back.id) : null;
+      if (gone) return json(422, { detail: gone });
       const drafts = intoDrafts(db, c, s, true);
       if (drafts instanceof Response) return drafts;
       apply(db, c, c.before, true);
