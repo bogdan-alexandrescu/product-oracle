@@ -1011,7 +1011,7 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
     } else {
       const missed = Date.parse(o.ends_at) + MISSED_AFTER_MS <= now().getTime();
       Object.assign(o, { status: !o.pre_read.built_at ? "failed" : missed ? "missed" : "ready", skip_reason: null });
-      if (o.status === "failed") o.failed_at = now().toISOString();
+      if (!o.pre_read.built_at) o.failed_at = now().toISOString();
     }
     return json(200, occurrenceOut(ctx, r, o));
   }
