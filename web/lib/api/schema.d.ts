@@ -43522,6 +43522,13 @@ export interface components {
              * @default []
              */
             merge_into: components["schemas"]["SimplePriorityMerge"][];
+            /** Row Feature Id */
+            row_feature_id?: string | null;
+            /**
+             * Linked
+             * @default false
+             */
+            linked: boolean;
         };
         /** SimplePriorityGoal */
         SimplePriorityGoal: {
@@ -43701,6 +43708,36 @@ export interface components {
             before_override?: {
                 [key: string]: unknown;
             } | null;
+            /** Draft Item Id */
+            draft_item_id?: string | null;
+            /** Twins */
+            twins?: components["schemas"]["SimplePriorityTwin"][];
+        };
+        /**
+         * SimplePriorityTwin
+         * @description qa-prio-twins: another ranked record of a row's feature, not linked to it (a baseline
+         *     feature of the same name), shown on that row, never as a row of its own: a person merges it
+         *     into the row's record (``merge``) or keeps both; Oracle never merges it.
+         */
+        SimplePriorityTwin: {
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Item Id */
+            item_id?: string | null;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            /** Merge */
+            merge?: ("item" | "entity") | null;
+            /** Into Id */
+            into_id?: string | null;
+            /**
+             * Applies
+             * @default false
+             */
+            applies: boolean;
         };
         /**
          * SimplePriorityUnranked

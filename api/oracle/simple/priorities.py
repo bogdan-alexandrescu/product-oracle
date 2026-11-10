@@ -6,7 +6,14 @@ applied; each row keeps Oracle's rank as ``oracle_rank``) joined with the roadma
 reader sees (oracle.simple.service.load over the working drafts they see): a feature's row
 takes its item in the earliest horizon (now, next, later), then the lowest key, never a
 draft item (drafts are not ranked yet: they sit among the drafts); a feature with no visible
-non-draft item is still a row (no item, not reorderable, no weeks in a bucket). Besides the
+non-draft item is still a row (no item, not reorderable, no weeks in a bucket); one whose item
+is a draft is on the roadmap (``draft_item_id``: a move confirms it).
+
+**One feature, one row** (qa-prio-twins): records join by their link (an item's
+``feature_id``, else its trace's source feature), never by name; separate features with one
+name are one row (the best-ranked on a roadmap), the others its ``twins`` with how each merges
+into it, and a draft shows on its feature's row (else a row of its name's: ``row_feature_id``),
+not as a draft of its own. Nothing is merged or deleted here. Besides the
 rows: the open ``override_priority`` and ``estimate_feature`` proposals the caller may see
 (each with its item's feature, so one on a feature's other item shows under its row) and
 the ``confirm_item``, ``merge_item`` (S7's Merge; train T's was a ``cut`` with a note) and
@@ -63,6 +70,7 @@ from oracle.simple.schemas import (
     SimplePriorityOverride,
     SimplePriorityProposal,
     SimplePriorityRow,
+    SimplePriorityTwin,
     SimplePriorityUnranked,
     SimpleQuarter,
 )
@@ -157,6 +165,37 @@ def _items(read_: service.Read) -> dict[str, service.Entry]:
     return out
 
 
+def link(row: Any) -> str | None:
+    """qa-prio-twins: the baseline feature an item stands for, by its link: its ``feature_id``,
+    else the source feature its trace names; None for an item linked to none."""
+    if row.feature_id is not None:
+        return str(row.feature_id)
+    for t in row.trace or []:
+        if isinstance(t, dict) and t.get("target") == "feature" and t.get("id"):
+            return str(t["id"])
+    return None
+
+
+def _live_drafts(read_: service.Read) -> list[service.Entry]:
+    return [e for e in read_.entries if e.row.draft and e.status not in ("cut", "merged")]
+
+
+def _held(read_: service.Read) -> dict[str, service.Entry]:
+    """qa-prio-twins: feature id -> its draft item (by its link; the lowest key) for a feature
+    with no other item: on the roadmap, not yet confirmed (a move confirms it)."""
+    out: dict[str, service.Entry] = {}
+    for e in sorted(_live_drafts(read_), key=lambda e: e.row.item_key):
+        fid = link(e.row)
+        if fid is not None:
+            out.setdefault(fid, e)
+    return out
+
+
+def same_name(title: str | None) -> str:
+    """What makes two records' names the same (qa-prio-twins): case and spacing aside."""
+    return " ".join((title or "").split()).casefold()
+
+
 def _goal(f: RankedFeature, e: service.Entry | None) -> SimplePriorityGoal | None:
     if e is not None and e.goal is not None:
         return SimplePriorityGoal(
@@ -245,16 +284,32 @@ async def _proposals(
     ]
 
 
-def _drafts(read_: service.Read, principal: Any) -> list[SimplePriorityDraft]:
+def _drafts(
+    read_: service.Read,
+    principal: Any,
+    rows: list[SimplePriorityRow] | None = None,
+    named: dict[str, SimplePriorityRow] | None = None,
+) -> list[SimplePriorityDraft]:
+    """The visible drafts, each with the items it may merge into; qa-prio-twins: one that is a
+    ranked row's feature (by its link, else by name: ``named``) shows on that row, its item
+    first to merge into."""
     out = []
     live = [e for e in read_.entries if e.status not in ("cut", "merged")]
+    by_feature = {r.feature_id: r for r in rows or []}
     for e in live:
         if not e.row.draft:
             continue
+        fid = link(e.row)
+        row = by_feature.get(fid) if fid is not None else None
+        linked = row is not None
+        if row is None and fid is None:
+            row = (named or {}).get(same_name(e.row.title))
         goal = e.goal.id if e.goal is not None else None
+        into = row.item_id if row is not None else None
         cands = sorted(
             (o for o in live if o.roadmap.id == e.roadmap.id and not o.row.draft),
             key=lambda o: (
+                o.row.id != into,
                 not (goal is not None and o.goal is not None and o.goal.id == goal),
                 o.row.position,
                 o.row.item_key,
@@ -276,6 +331,8 @@ def _drafts(read_: service.Read, principal: Any) -> list[SimplePriorityDraft]:
                     SimplePriorityMerge(item_id=o.row.id, code=o.row.item_key, title=o.row.title)
                     for o in cands
                 ],
+                row_feature_id=row.feature_id if row is not None else None,
+                linked=linked,
             )  # fmt: skip
         )
     return out
@@ -665,12 +722,73 @@ def _milestone_name(e: service.Entry | None) -> str | None:
     return readable(e.milestone.name) or readable(e.milestone.record_name)
 
 
+def _fold_twins(
+    rows: list[SimplePriorityRow],
+    titles: dict[str, str],
+    by_id: dict[uuid.UUID, service.Entry],
+    principal: Any,
+    deciders: Any,
+    can_change: bool,
+) -> tuple[list[SimplePriorityRow], dict[str, SimplePriorityRow]]:
+    """qa-prio-twins: rows of separate features with one name (a row's title or its feature's
+    own, ``titles``: feature id -> title) are one feature not linked as one: one row, the
+    best-ranked of those on a roadmap (else the best-ranked), listing the others as its
+    ``twins`` with how each merges into it; nothing is merged. Also each name -> its row."""
+    group: dict[str, int] = {}
+    groups: list[list[SimplePriorityRow]] = []
+    for r in rows:
+        names = {n for n in (same_name(r.title), same_name(titles.get(r.feature_id))) if n}
+        found = sorted({group[n] for n in names if n in group})
+        if found:
+            g = found[0]
+            for other in found[1:]:
+                groups[g] += groups[other]
+                groups[other] = []
+                group |= {n: g for n, x in group.items() if x == other}
+            groups[g].append(r)
+        else:
+            g = len(groups)
+            groups.append([r])
+        group |= dict.fromkeys(names, g)
+    lead_of: dict[str, SimplePriorityRow] = {}
+    for members in groups:
+        if not members:
+            continue
+        members.sort(key=lambda r: r.rank)
+        lead = next((r for r in members if r.on_roadmap), members[0])
+        for r in members:
+            lead_of[r.feature_id] = lead
+            if r is lead:
+                continue
+            e = by_id.get(r.item_id) if r.item_id is not None else None
+            lead_e = by_id.get(lead.item_id) if lead.item_id is not None else None
+            merge: str | None = None
+            applies = False
+            if not can_change:
+                pass
+            elif e is not None and lead_e is not None and e.roadmap.id == lead_e.roadmap.id:
+                merge, applies = "item", service.can_decide(principal, e, deciders)
+            elif e is None:
+                merge, applies = "entity", has_role(principal.role, "approver")
+            lead.twins.append(
+                SimplePriorityTwin(
+                    feature_id=r.feature_id, item_id=r.item_id, code=r.code, title=r.title,
+                    goal=r.goal, merge=merge,  # type: ignore[arg-type]
+                    into_id=lead.item_id if merge == "item" else None, applies=applies,
+                )
+            )  # fmt: skip
+    kept = [r for r in rows if lead_of[r.feature_id] is r]
+    named = {n: lead_of[gr[0].feature_id] for n, g in group.items() if (gr := groups[g])}
+    return kept, named
+
+
 async def build(
     db: AsyncSession, principal: Any, line_key: str | None = None
 ) -> SimplePrioritiesOut:
     ranking = await priorities.compute(db, METHOD, principal, overrides=True)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     items = _items(read_)
+    held = _held(read_)
     offered, same = await lines(db, principal, read_)
     line = pick_line(line_key, offered, same)
     active = {str(o.id): o for o in await priorities.active_overrides(db)}
@@ -741,7 +859,11 @@ async def build(
                 estimate_pending=e is not None and e.row.estimate_pending,
                 no_goal=not f.serves_goal,
                 can_reorder=can_change and (e is not None or owner),
-                on_roadmap=e is not None,
+                # qa-prio-twins: a draft item of the feature is on the roadmap too.
+                on_roadmap=e is not None or f.entity_id in held,
+                draft_item_id=held[f.entity_id].row.id
+                if e is None and f.entity_id in held
+                else None,
                 applies=service.can_decide(principal, e, read_.deciders) if e else owner,
                 part_of=extras.get(e.row.id, {}).get("part_of") if e is not None else None,
                 parts=extras.get(e.row.id, {}).get("parts", []) if e is not None else [],
@@ -754,13 +876,15 @@ async def build(
         r.own_key = r.short_code if FEATURE_CODE.fullmatch(r.short_code) else None
     _after(rows, deps)
     this_quarter, inside = await plan_quarter(db, read_)
-    goal_rows = await db.scalars(select(Entity).where(Entity.type == "goal"))
-    order = {g.key: i for i, g in enumerate(sort_goals(goal_rows))}
-    buckets, total = _buckets(rows, inside, order)
     _, plan_out = await plan_in_play(db, read_)
     if plan_out is not None:
         for r, pid in zip(rows, prd_of, strict=True):
             r.in_plan = pid == str(plan_out.prd.id)
+    rows, named = _fold_twins(rows, {f.entity_id: f.title for f in features}, by_id, principal,
+                              read_.deciders, can_change)  # fmt: skip
+    goal_rows = await db.scalars(select(Entity).where(Entity.type == "goal"))
+    order = {g.key: i for i, g in enumerate(sort_goals(goal_rows))}
+    buckets, total = _buckets(rows, inside, order)
     return SimplePrioritiesOut(
         today=read_.today,
         quarter=this_quarter,
@@ -769,7 +893,7 @@ async def build(
         formula=ranking.formula,
         rows=rows,
         proposals=await _proposals(db, principal, read_.by_id()),
-        drafts=_drafts(read_, principal),
+        drafts=_drafts(read_, principal, rows, named),
         unranked=_unranked(read_, {f.entity_id for f in features}),
         buckets=buckets,
         weeks_total=total,

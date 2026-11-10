@@ -129023,6 +129023,22 @@
             "type": "array",
             "title": "Merge Into",
             "default": []
+          },
+          "row_feature_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Feature Id"
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked",
+            "default": false
           }
         },
         "type": "object",
@@ -129478,6 +129494,25 @@
               }
             ],
             "title": "Before Override"
+          },
+          "draft_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Item Id"
+          },
+          "twins": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePriorityTwin"
+            },
+            "type": "array",
+            "title": "Twins"
           }
         },
         "type": "object",
@@ -129488,6 +129523,90 @@
           "title"
         ],
         "title": "SimplePriorityRow"
+      },
+      "SimplePriorityTwin": {
+        "properties": {
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePriorityGoal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "merge": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "item",
+                  "entity"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merge"
+          },
+          "into_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Into Id"
+          },
+          "applies": {
+            "type": "boolean",
+            "title": "Applies",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "title"
+        ],
+        "title": "SimplePriorityTwin",
+        "description": "qa-prio-twins: another ranked record of a row's feature, not linked to it (a baseline\nfeature of the same name), shown on that row, never as a row of its own: a person merges it\ninto the row's record (``merge``) or keeps both; Oracle never merges it."
       },
       "SimplePriorityUnranked": {
         "properties": {
