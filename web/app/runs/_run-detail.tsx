@@ -405,7 +405,7 @@ export function RunDetail({ id }: { id: string }) {
                 title={`the ${runName(run)} run`}
                 // Deleting a run removes its record only, never the document it wrote.
                 what={`This removes the run's record: its steps, decisions and spend.${run.document_id ? ` ${runDocName(run)} stays as it is.` : ""}`}
-                dependents={async () => ({ root: { type: "run", id: run.id, slug: null, title: run.flow_title, kind: run.flow }, items: [], published: false, working_runs: WORKING.has(run.status) ? [run.id] : [], feeds: [] })}
+                dependents={async () => ({ root: { type: "run", id: run.id, slug: null, title: run.flow_title, kind: run.flow }, items: [], published: false, working_runs: WORKING.has(run.status) ? [run.id] : [], feeds: [], feeds_going: [] })}
                 remove={(query) => unwrap(api.DELETE("/v1/runs/{run_id}", { params: { path: { run_id: run.id }, query: { reason: query.reason } } }))}
                 onDeleted={() => router.push("/runs")}
               />

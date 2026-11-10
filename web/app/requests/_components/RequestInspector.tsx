@@ -139,6 +139,7 @@ export function RequestInspector({
             published: false,
             working_runs: [],
             feeds: [],
+            feeds_going: [],
           })}
           remove={(query) => unwrap(api.DELETE("/v1/requests/{request_id}", { params: { path: { request_id: request.id }, query: { reason: query.reason } } }))}
           onDeleted={onDeleted}
