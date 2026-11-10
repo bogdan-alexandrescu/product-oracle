@@ -35,7 +35,8 @@ test("vqa one-pager 1: a drawn flow stays on its bet when a bet is added above i
   await expect(checklist).toContainText("Finish setup from the checklist");
   await expect(page.getByRole("button", { name: "Draw the flow for “A setup checklist" })).toHaveCount(0);
   // The new bet has no flow of its own: it offers to draw one, never the checklist's.
-  await expect(page.getByRole("group", { name: "User flow of “Workspace templates for common" })).not.toContainText("Finish setup from the checklist");
+  await expect(page.getByRole("group", { name: "User flow of “Workspace templates for common" })).toHaveCount(0);
+  await expect(bets.locator('[data-line="bets-1"]')).not.toContainText("Finish setup from the checklist");
   await expect(page.getByRole("button", { name: "Draw the flow for “Workspace templates for common" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Draw the flow for “Invite suggestions from the admin's" })).toBeVisible();
 });
