@@ -515,7 +515,7 @@ async def test_deleting_or_narrowing_the_source_deletes_its_maps(client, map_run
     # protects=S5's narrowing rule: a repo dropped from the source's allowlist, or the
     # source deleted, takes its maps with it; fails_when=a map outlives its source.
     tenant_id = await make_tenant()
-    owner = await make_person(tenant_id, "dev@example.com", "commenter")
+    owner = await make_person(tenant_id, "dev@example.com", "approver")
     source_id = await github_source(tenant_id, owner, repos=(REPO, "example-org/web"))
     first = (await request_map(client, owner, source_id)).json()
     await tick(client, tenant_id)
@@ -592,7 +592,7 @@ async def test_a_merge_marks_the_map_stale_and_the_tick_refreshes_it_once(
     # or refreshes more than daily; no_claim=the pull request's base branch (the GitHub
     # list does not say it).
     tenant_id = await make_tenant()
-    owner = await make_person(tenant_id, "dev@example.com", "commenter")
+    owner = await make_person(tenant_id, "dev@example.com", "approver")
     got = await built_map(client, tenant_id, owner)
     source_id = got["source_id"]
     await age(tenant_id, got["id"], 25)
@@ -639,7 +639,7 @@ async def test_a_refresh_keeps_the_maps_sharing(client, map_runtime, monkeypatch
     # protects=a refreshed map is shared as the one it replaces; fails_when=a refresh
     # makes a shared map private (runs lose it) or a private one shared.
     tenant_id = await make_tenant()
-    owner = await make_person(tenant_id, "dev@example.com", "commenter")
+    owner = await make_person(tenant_id, "dev@example.com", "approver")
     got = await built_map(client, tenant_id, owner)
     await client.post(f"/v1/code-maps/{got['id']}/sharing", json={"sharing": "full"},
                       headers=owner.headers)  # fmt: skip

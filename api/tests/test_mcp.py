@@ -597,7 +597,7 @@ async def test_rest_client_fixture_still_works(client):
 async def test_update_source_over_mcp_requires_the_version_that_was_read(tenant_id):
     """Owner 2026-10-20: base_version is required wherever config or connection change,
     MCP included; the tool says to read the source first."""
-    pm = await user_with_role(tenant_id, "commenter")
+    pm = await user_with_role(tenant_id, "approver")
     token = await user_token(tenant_id, pm)
     async with await _rest(token) as rest:
         src = (await rest.post("/v1/sources", json={"kind": "upload", "name": "Notes"})).json()
