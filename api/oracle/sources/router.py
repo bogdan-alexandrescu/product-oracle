@@ -61,8 +61,11 @@ READ_ONLY = (
     "This sign-in can only read: approve the MCP client with oracle:write to add, edit, "
     "sync or delete sources"
 )
-# Who may change a source: not a viewer, nor an MCP client limited to oracle:read.
+# Who may add a source: not a viewer, nor an MCP client limited to oracle:read.
 SourceWriter = Annotated[Principal, Depends(require_role("commenter"))]
+# Who may change one (edit, sync, pause, resume, delete): an approver or owner; a commenter
+# only sees theirs, those that need attention too (owner 2026-11-10).
+SourceChanger = Annotated[Principal, Depends(require_role("approver"))]
 
 
 def _user(principal: Principal) -> uuid.UUID:
@@ -301,7 +304,7 @@ async def get_source(source_id: uuid.UUID, principal: CurrentPrincipal, db: Tena
     },
 )
 async def update_source(
-    source_id: uuid.UUID, body: SourcePatch, principal: SourceWriter, db: TenantDB
+    source_id: uuid.UUID, body: SourcePatch, principal: SourceChanger, db: TenantDB
 ) -> SourceOut | JSONResponse:
     source = await _owned(db, principal, source_id, write=True)
     changes = body.model_dump(exclude_unset=True)
@@ -327,20 +330,20 @@ async def update_source(
 
 
 @router.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> Response:
+async def delete_source(source_id: uuid.UUID, principal: SourceChanger, db: TenantDB) -> Response:
     source = await _owned(db, principal, source_id, write=True)
     await service.delete_source(db, source, actor=principal)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/sources/{source_id}/pause", response_model=SourceOut)
-async def pause_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> SourceOut:
+async def pause_source(source_id: uuid.UUID, principal: SourceChanger, db: TenantDB) -> SourceOut:
     source = await service.set_paused(db, await _owned(db, principal, source_id, write=True), True)
     return await _one_out(db, source, principal)
 
 
 @router.post("/sources/{source_id}/resume", response_model=SourceOut)
-async def resume_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> SourceOut:
+async def resume_source(source_id: uuid.UUID, principal: SourceChanger, db: TenantDB) -> SourceOut:
     source = await service.set_paused(db, await _owned(db, principal, source_id, write=True), False)
     return await _one_out(db, source, principal)
 
@@ -353,7 +356,7 @@ async def resume_source(source_id: uuid.UUID, principal: SourceWriter, db: Tenan
         422: {"description": "No connector registered for the kind"},
     },
 )
-async def sync_source(source_id: uuid.UUID, principal: SourceWriter, db: TenantDB) -> SyncResult:
+async def sync_source(source_id: uuid.UUID, principal: SourceChanger, db: TenantDB) -> SyncResult:
     """Run the connector now. A rejected credential puts the source in status error;
     a rate limit stops cleanly and the next sync resumes from the saved cursor."""
     source = await _owned(db, principal, source_id, write=True)

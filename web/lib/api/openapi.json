@@ -13367,7 +13367,7 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "approver"
       },
       "delete": {
         "tags": [
@@ -13410,7 +13410,7 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "approver"
       }
     },
     "/v1/sources/{source_id}/pause": {
@@ -13462,7 +13462,7 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "approver"
       }
     },
     "/v1/sources/{source_id}/resume": {
@@ -13514,7 +13514,7 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "approver"
       }
     },
     "/v1/sources/{source_id}/sync": {
@@ -13563,7 +13563,7 @@
             "description": "No connector registered for the kind"
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "approver"
       }
     },
     "/v1/sources/{source_id}/uploads": {

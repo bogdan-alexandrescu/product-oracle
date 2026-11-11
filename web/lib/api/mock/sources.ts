@@ -641,9 +641,11 @@ const ROLE_ORDER: readonly Role[] = ["viewer", "commenter", "approver", "owner"]
 
 async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParams, ctx: SourcesContext): Promise<Response> {
   const m = req.method;
-  // As the API's SourceWriter: a source's writes (add, edit, delete, pause, resume, sync, uploads) need a commenter.
-  if (p[1] === "sources" && m !== "GET" && ROLE_ORDER.indexOf(ctx.me.role) < ROLE_ORDER.indexOf("commenter")) {
-    return json(403, { detail: "Requires the commenter role" });
+  // As the API's SourceWriter: adding a source and its uploads need a commenter; SourceChanger: a change to
+  // one (edit, delete, pause, resume, sync) an approver (owner 2026-11-10).
+  if (p[1] === "sources" && m !== "GET") {
+    const need: Role = p.length === 2 || p[3] === "uploads" ? "commenter" : "approver";
+    if (ROLE_ORDER.indexOf(ctx.me.role) < ROLE_ORDER.indexOf(need)) return json(403, { detail: `Requires the ${need} role` });
   }
   if (p[1] === "search") return json(200, search(db, q));
   if (p[1] === "snapshots") {

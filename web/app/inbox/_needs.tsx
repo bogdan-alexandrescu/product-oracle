@@ -1899,7 +1899,7 @@ export function sourceNeeds(sources: Schemas["SourceOut"][], mayEdit = true): Ne
           {fix.action}
         </LinkButton>
       ) : (
-        <ByRole who="View only" title="Your role cannot edit sources: commenters and above can" />
+        <ByRole who="View only" title="Your role cannot edit sources: approvers and owners can" />
       ),
     };
   });
