@@ -206,6 +206,22 @@ def _revision(
     )
 
 
+def revise(
+    db: AsyncSession,
+    actor: str,
+    entity: Entity,
+    before: dict[str, Any] | None,
+    reason: str | None = None,
+) -> None:
+    """goal-target-kept: a write made outside :func:`update_entity` (Simple's goal edits)
+    still leaves its revision, ``before`` being :func:`entity_snapshot` taken before it
+    (None: it was created); nothing when it changed nothing."""
+    after = entity_snapshot(entity)
+    if after != before:
+        db.add(EntityRevision(entity_id=entity.id, before=before, after=after, actor=actor,
+                              reason=reason))  # fmt: skip
+
+
 def merge_attrs(current: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     """``patch`` merged into ``current``; a None value removes the key."""
     out = dict(current or {})

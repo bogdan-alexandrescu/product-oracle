@@ -224,9 +224,9 @@ async def test_undo_puts_links_back_exactly(client):
 @pytest.mark.asyncio
 async def test_edit_keeps_typed_target_when_unchanged(client):
     """protects=editing a goal whose target Baseline typed (a number and a unit) keeps that
-    typed target when the target text is the same; a new target is stored as text;
-    fails_when=an edit that leaves the target alone drops Baseline's typed target;
-    no_claim=parsing a new target."""
+    typed target when the target text is the same; a new number is its new typed target and
+    words are kept as text beside the number (goal-target-kept);
+    fails_when=an edit drops Baseline's typed target or unit; no_claim=text-only goals."""
     w = await World().build()
     async with tenant_session(w.ctx.tenant_id) as s:
         typed = await Seed(s).entity("goal", "typed", position=3, metric="Shops live",
@@ -247,7 +247,17 @@ async def test_edit_keeps_typed_target_when_unchanged(client):
     assert r.status_code == 200, r.text
     async with tenant_session(w.ctx.tenant_id) as s:
         attrs = (await s.get(Entity, typed.id)).attrs
-    assert attrs.get("target_text") == "55 shops" and "target" not in attrs
+    assert (attrs.get("target"), attrs.get("unit")) == (55, "shops")
+    assert "target_text" not in attrs
+
+    r = await client.patch(f"{URL}/goals/{typed.id}", headers=w.as_("owner"),
+                           json={**body, "target": "about sixty"})  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert r.json()["goal"]["target"] == "about sixty"
+    async with tenant_session(w.ctx.tenant_id) as s:
+        attrs = (await s.get(Entity, typed.id)).attrs
+    assert attrs.get("target_text") == "about sixty"
+    assert (attrs.get("target"), attrs.get("unit")) == (55, "shops")
 
 
 @pytest.mark.asyncio

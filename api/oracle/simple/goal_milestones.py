@@ -636,13 +636,18 @@ async def _target(db: AsyncSession, goal_id: uuid.UUID) -> tuple[Any, uuid.UUID]
     return (goal, rid) if rid is not None else None
 
 
-def _set_target_name(goal: Any, name: str) -> None:
+def _set_target_name(db: AsyncSession, goal: Any, name: str, actor: str) -> None:
+    """The goal's own milestone's name, in the goal's attrs, with the goal's revision."""
+    from oracle.baseline import service as baseline
+
+    before = baseline.entity_snapshot(goal)
     attrs = dict(goal.attrs or {})
     if name.strip() == goal.title:
         attrs.pop("milestone_name", None)
     else:
         attrs["milestone_name"] = name.strip()
     goal.attrs = attrs
+    baseline.revise(db, actor, goal, before, "Goal milestone renamed")
 
 
 async def rename_target(
@@ -660,7 +665,7 @@ async def rename_target(
         raise _error(status.HTTP_403_FORBIDDEN,
                      "Only an owner or the roadmap's decider (with none, its owner) "
                      "changes its milestones")  # fmt: skip
-    _set_target_name(goal, body.name)  # type: ignore[arg-type]
+    _set_target_name(db, goal, body.name, principal.actor)  # type: ignore[arg-type]
     await db.flush()
     await audit.record(db, principal, "goal_milestone.rename", "entity", goal.id, data={})
     await db.commit()
@@ -996,7 +1001,7 @@ async def _decide_own(db: AsyncSession, principal: Any, c: SimpleChange, action:
             raise ChangeError(409, {"message": "outdated: the milestone changed since the proposal",
                                     "current": {"milestone": {"name": target_name(found[0])}},
                                     "changed_by": None, "changed_at": None})  # fmt: skip
-        _set_target_name(found[0], c.after["milestone"]["name"])
+        _set_target_name(db, found[0], c.after["milestone"]["name"], principal.actor)
     elif action == "accept":
         row = await db.get(TrackMilestone, uuid.UUID(c.target["milestone_id"]),
                            with_for_update=True)  # fmt: skip

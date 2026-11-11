@@ -37,7 +37,9 @@ from oracle import company_time
 from oracle.auth.deps import TenantDB
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline import service as baseline
 from oracle.baseline.goal_order import goal_position, sort_goals
+from oracle.baseline.goals import unit_ok
 from oracle.baseline.models import Edge, Entity
 from oracle.config import get_settings
 from oracle.roadmap.models import RoadmapItem
@@ -174,6 +176,57 @@ def _target(attrs: dict[str, Any]) -> str | None:
     n = attrs["target"]
     n = int(n) if isinstance(n, float) and n.is_integer() else n
     return f"{n}{unit}" if unit == "%" else f"{n} {unit}".strip()
+
+
+# goal-target-kept: a target typed as a number, with or without its unit ("60",
+# "60 conversions", "1,200 shops", "60%").
+_TYPED_TARGET = re.compile(r"(-?\d[\d,]*(?:\.\d+)?)\s*(.*)")
+
+
+class TargetKept(ValueError):
+    """A measured goal's target cleared from a quick field: refused (422)."""
+
+
+def _words(v: Any) -> str | None:
+    if v is None:
+        return None
+    return " ".join(str(v).split()) or None
+
+
+def typed_target(attrs: dict[str, Any], typed: str | None) -> dict[str, Any]:
+    """goal-target-kept: ``attrs`` with the target a person typed in Simple (the goal form,
+    the feature panel). The target as it reads now (whitespace aside) changes nothing. A
+    measured goal (a number in ``target``) never loses its number or unit here: a number
+    typed, with or without a unit, is its new target (its unit kept when none is typed);
+    other words are kept as ``target_text`` beside the number; clearing it is refused
+    (``TargetKept``). A goal with no number keeps what is typed as text, as before."""
+    out = dict(attrs)
+    if _words(typed) == _words(_target(attrs)):
+        return out
+    measured = isinstance(attrs.get("target"), int | float) and not isinstance(
+        attrs.get("target"), bool
+    )
+    if typed is None or not typed.strip():
+        if measured:
+            raise TargetKept("A measured goal keeps its target: type its new number")
+        out.pop("target_text", None)
+        return out
+    m = _TYPED_TARGET.fullmatch(" ".join(typed.split()))
+    unit = m.group(2).strip() if m else ""
+    if measured and m and (not unit or unit_ok(unit)):
+        n = float(m.group(1).replace(",", ""))
+        out["target"] = int(n) if n.is_integer() else n
+        if unit:
+            out["unit"] = unit
+        elif isinstance(out.get("unit"), str):
+            out["unit"] = out["unit"].strip()
+        out.pop("target_text", None)
+        return out
+    # A new target is kept as typed; a measured goal keeps its number and unit beside it.
+    out["target_text"] = typed
+    if not measured:
+        out.pop("target", None)
+    return out
 
 
 def _due(attrs: dict[str, Any]) -> date | None:
@@ -364,10 +417,10 @@ def _fields(g: Entity, body: GoalIn) -> None:
             attrs["owner"] = str(body.owner_id)
     if body.on_roadmap is not None:
         g.on_roadmap = body.on_roadmap
-    if body.target != _target(attrs):
-        # A new target is kept as typed; one left as it was keeps Baseline's number and unit.
-        attrs["target_text"] = body.target
-        attrs.pop("target", None)
+    try:
+        attrs = typed_target(attrs, body.target)
+    except TargetKept as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
     g.attrs = attrs
 
 
@@ -476,6 +529,7 @@ async def create_bucket_goal(body: GoalIn, principal: Approver, db: TenantDB) ->
     _fields(g, body)
     db.add(g)
     await db.flush()
+    baseline.revise(db, principal.actor, g, None, "Added in Simple")
     out = await _goal_full(db, g, last + 1)
     await db.commit()
     undo = _signed(principal.tenant_id, GoalBucketsUndo(added_goal_id=g.id))
@@ -492,8 +546,10 @@ async def update_bucket_goal(
         raise HTTPException(status.HTTP_409_CONFLICT, GOAL_CHANGED)
     undo = GoalBucketsUndo(goals=[_goal_snap(g)])
     await _check_owner(db, body)
+    before = baseline.entity_snapshot(g)
     _fields(g, body)
     await db.flush()
+    baseline.revise(db, principal.actor, g, before, "Edited in Simple")
     order = next((i + 1 for i, x in enumerate(await _goals(db)) if x.id == g.id), 1)
     out = await _goal_full(db, g, order)
     await db.commit()
@@ -529,15 +585,20 @@ async def archive_bucket_goal(
     goal_id: uuid.UUID, body: ArchiveIn, principal: Approver, db: TenantDB
 ) -> GoalBucketWrite:
     """Archive a goal and move its features' links in one step."""
-    undo = await archive(db, goal_id, body.to_goal_id, principal.user_id)
+    undo = await archive(db, goal_id, body.to_goal_id, principal.user_id, principal.actor)
     await db.commit()
     return GoalBucketWrite(undo=_signed(principal.tenant_id, undo))
 
 
 async def archive(
-    db: AsyncSession, goal_id: uuid.UUID, to_goal_id: uuid.UUID | None, by: uuid.UUID | None
+    db: AsyncSession,
+    goal_id: uuid.UUID,
+    to_goal_id: uuid.UUID | None,
+    by: uuid.UUID | None,
+    actor: str | None = None,
 ) -> GoalBucketsUndo:
-    """Archive the goal, its features moved off it (also an accepted Ask to archive)."""
+    """Archive the goal, its features moved off it (also an accepted Ask to archive).
+    ``actor``: its revision's (default: ``by``'s)."""
     g = await _entity(db, goal_id, "goal")
     if g.status == "rejected":
         raise HTTPException(status.HTTP_409_CONFLICT, f"{g.title} is archived already")
@@ -546,12 +607,14 @@ async def archive(
         if to.id == g.id or to.status == "rejected":
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick another goal")
     undo = GoalBucketsUndo(goals=[_goal_snap(g)], features=await move_off(db, g, to_goal_id))
+    before = baseline.entity_snapshot(g)
     g.status = "rejected"
     now = company_time.now()
     g.attrs = {**(g.attrs or {}), "archived_at": now.isoformat()}
     # removed-tracks: who archived it and when (Simple's Removed list).
     g.archived_at, g.archived_by = now, by
     await db.flush()
+    baseline.revise(db, actor or (f"user:{by}" if by else "system"), g, before, "Archived")
     return undo
 
 
@@ -563,22 +626,25 @@ async def unarchive_bucket_goal(
 ) -> GoalBucketWrite:
     """Restore an archived goal to the buckets (its features stay where Archive moved them)."""
     g = await _entity(db, goal_id, "goal")
-    undo = await unarchive(db, g)
+    undo = await unarchive(db, g, principal.actor)
     order = next((i + 1 for i, x in enumerate(await _goals(db)) if x.id == g.id), 1)
     out = await _goal_full(db, g, order)
     await db.commit()
     return GoalBucketWrite(goal=out, undo=_signed(principal.tenant_id, undo))
 
 
-async def unarchive(db: AsyncSession, g: Entity) -> GoalBucketsUndo:
-    """Put an archived goal back in the buckets (Restore, and an accepted ask)."""
+async def unarchive(db: AsyncSession, g: Entity, actor: str = "system") -> GoalBucketsUndo:
+    """Put an archived goal back in the buckets (Restore, and an accepted ask); ``actor``:
+    its revision's."""
     if g.status != "rejected":
         raise HTTPException(status.HTTP_409_CONFLICT, f"{g.title} is not archived")
     undo = GoalBucketsUndo(goals=[_goal_snap(g)])
+    before = baseline.entity_snapshot(g)
     g.status = "confirmed"
     g.attrs = {k: v for k, v in (g.attrs or {}).items() if k != "archived_at"}
     g.archived_at = g.archived_by = None
     await db.flush()
+    baseline.revise(db, actor, g, before, "Restored")
     return undo
 
 
@@ -607,10 +673,12 @@ async def undo_goal_buckets(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "This Undo is not one Oracle gave")
     for snap in body.goals:
         g = await _entity(db, snap.id, "goal")
+        before = baseline.entity_snapshot(g)
         g.title, g.status, g.attrs = snap.title, snap.status, snap.attrs
         g.on_roadmap = snap.on_roadmap
         if g.status != "rejected":
             g.archived_at = g.archived_by = None
+        baseline.revise(db, principal.actor, g, before, "Undone in Simple")
     for f in body.features:
         await _entity(db, f.feature_id, "feature")
         await _restore_links(db, f)
