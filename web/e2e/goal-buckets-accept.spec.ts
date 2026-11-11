@@ -14,8 +14,7 @@ import { expect, test, type Page } from "./test";
  * Card tasks-roadmap-goal: protects = with no dated plan ("goal-buckets-undated"), a bucket for one
  * of the roadmap's own goals (Grow retention, not one of the plan's) has "+ Add a task" and a grip
  * on each task, as the plan's goals do: a task added there shows as a Draft, one of its tasks moves
- * to Growth by keys, and Undo puts it back (the alerts work is dated past this quarter, so the task
- * moved is the one added); fails_when = that bucket has no add row or no grips.
+ * to Growth by keys, and Undo puts it back; fails_when = that bucket has no add row or no grips.
  */
 
 async function open(page: Page, who: string) {
@@ -83,9 +82,7 @@ test("with no dated plan, a bucket for one of the roadmap's own goals takes new 
   const card = (goal: string) => page.locator('[data-testid="goal-bucket"]').filter({ has: page.getByRole("heading", { name: goal, exact: true }) });
   const note = page.getByTestId("bucket-note");
   const retention = card("Grow retention");
-  // This quarter is the calendar quarter of the dates (board-quarters): the alerts roadmap's work
-  // is dated past it, so the bucket starts with no task of this quarter; the one added here moves.
-  await expect(retention).toBeVisible();
+  await expect(retention.locator("[data-code]").first()).toBeVisible();
 
   const add = retention.getByTestId("add-task");
   await add.getByRole("button", { name: "+ Add a task" }).click();
@@ -96,8 +93,8 @@ test("with no dated plan, a bucket for one of the roadmap's own goals takes new 
   await expect(note).toContainText("Added Saved wishlists to Grow retention.");
   await expect(retention.getByTestId("plan-feature").filter({ hasText: "Saved wishlists" })).toContainText("Draft");
 
-  const task = (goal: string) => card(goal).getByTestId("plan-feature").filter({ hasText: "Saved wishlists" });
-  const grip = task("Grow retention").getByTestId("feature-grip");
+  const row = retention.locator('[data-code="ARE"]');
+  const grip = row.getByTestId("feature-grip");
   const name = ((await grip.getAttribute("aria-label")) ?? "").replace(/^Move (.*) to another goal$/, "$1");
   expect(name).not.toBe("");
   await grip.focus();
@@ -113,8 +110,8 @@ test("with no dated plan, a bucket for one of the roadmap's own goals takes new 
   await expect(card("Growth")).toHaveAttribute("data-drop", "");
   await page.keyboard.press("Enter");
   await expect(note).toContainText(`Moved ${name} to Growth.`);
-  await expect(task("Growth")).toBeVisible();
-  await expect(task("Grow retention")).toHaveCount(0);
+  await expect(card("Growth").locator('[data-code="ARE"]')).toBeVisible();
+  await expect(retention.locator('[data-code="ARE"]')).toHaveCount(0);
   await note.getByRole("button", { name: "Undo" }).click();
-  await expect(task("Grow retention")).toBeVisible();
+  await expect(retention.locator('[data-code="ARE"]')).toBeVisible();
 });
