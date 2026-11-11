@@ -27,6 +27,11 @@ import { expect, test, type Page } from "./test";
  * again; a page change or a change to what waits reads it too, and while it keeps failing the
  * wait keeps growing. fails_when: a page change, an action or a meetings read sends the failed
  * part's wait back to 15 s; the wait stays long after the part read again.
+ *
+ * Read again and failed: the rail's counts are read stale-ok (lib/api/shared-reads); when the page's
+ * own read of the same list, or the rail's read behind the count it shows, fails, that count drops
+ * its number at once, as the page does. fails_when: the rail keeps the last number it read
+ * (Decisions, the Inbox, the Roadmap's light count or goal suggestions, Meetings).
  */
 
 /** Every GET of `path` answers 500 from the first page on. */
@@ -173,18 +178,83 @@ test("the rail: a re-read of the meetings that fails shows no number, not the la
   await login(page);
   await startMeeting(page);
   await page.goto("/simple/one-pagers");
-  const meetings = page.getByTestId("simple-nav-meetings-count");
-  await expect(meetings).toHaveText("1", { timeout: 15_000 });
-  // simple-call-budget: an answer read a moment ago (2 s) is shared rather than read again; past that,
-  // opening Meetings reads them again.
+  await expect(page.getByTestId("simple-nav-meetings-count")).toHaveText("1", { timeout: 15_000 });
+  await failedReRead(page, "/v1/simple/meetings", "simple-nav-meetings", "simple-nav-meetings");
+});
+
+/**
+ * The review's probe: the rail's counts are read stale-ok (a moment ago, shown as they are), so
+ * past the page's own 2 s the page reads `path` again; when that read fails, the rail's count
+ * built on it drops its number at once, as the page does, and never keeps the last one.
+ */
+async function failedReRead(page: Page, path: string, open: string, count: string) {
+  const rail = page.getByTestId(`${count}-count`);
+  await expect(rail).toHaveText(/^\d+$/, { timeout: 15_000 });
   await page.waitForTimeout(2_500);
-  // The meetings fail from now on; opening Meetings reads them again.
-  await page.evaluate((key) => localStorage.setItem(key, "/v1/simple/meetings"), MOCK_FAIL_KEY);
-  await page.getByTestId("simple-nav-meetings").click();
-  await expect(page).toHaveURL(/\/simple\/meetings$/);
-  await expect(meetings).toHaveAttribute("title", "Could not load", { timeout: 15_000 });
-  await expect(meetings).toHaveAttribute("aria-label", "Could not load");
-  await expect(meetings).not.toHaveText(/\d/);
+  await page.evaluate(([key, p]) => localStorage.setItem(key, p), [MOCK_FAIL_KEY, path] as const);
+  const before = await calls(page, path);
+  await page.getByTestId(open).click();
+  // The page reads it again, and that read fails.
+  await expect.poll(() => calls(page, path), { timeout: 15_000 }).toBeGreaterThan(before);
+  // At once, not after the rail's back-off (15 s) reads it again.
+  await expect(rail).toHaveAttribute("title", "Could not load", { timeout: 3_000 });
+  await expect(rail).toHaveAttribute("aria-label", "Could not load");
+  await expect(rail).not.toHaveText(/\d/);
+}
+
+for (const [name, path, open, count] of [
+  ["Decisions", "/v1/simple/decisions/waiting", "simple-nav-decisions", "simple-nav-decisions"],
+  ["Inbox (its rows)", "/v1/inbox", "simple-nav-inbox", "simple-nav-inbox"],
+  ["Inbox (my questions)", "/v1/inbox/questions", "simple-nav-inbox", "simple-nav-inbox"],
+  // The goal suggestions the Roadmap count adds up, read again by Priorities (the Goal map reads none).
+  ["Priorities (goal suggestions)", "/v1/simple/goal-suggestions?status=open", "simple-nav-priorities", "simple-nav-roadmap"],
+] as const) {
+  test(`the rail: ${name}'s read again that fails on its page shows no number, not the last one`, async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await login(page);
+    await page.goto("/simple/one-pagers");
+    await failedReRead(page, path, open, count);
+  });
+}
+
+test("the rail: a failed read again of the roadmap's light count shows the count without it, not the last one", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+  const roadmap = page.getByTestId("simple-nav-roadmap-count");
+  // What the Roadmap count says when its light count fails (it falls back to the one list).
+  await page.evaluate(([key, p]) => localStorage.setItem(key, p), [MOCK_FAIL_KEY, "/v1/simple/roadmap/waiting"] as const);
+  await page.goto("/simple/one-pagers");
+  await expect(roadmap).toHaveText(/^\d+$/, { timeout: 15_000 });
+  const without = await roadmap.getAttribute("title");
+  await page.evaluate((key) => localStorage.removeItem(key), MOCK_FAIL_KEY);
+  await page.reload();
+  await expect(roadmap).toHaveText(/^\d+$/, { timeout: 15_000 });
+  expect(await roadmap.getAttribute("title")).not.toBe(without);
+  await page.waitForTimeout(2_500);
+  await page.evaluate(([key, p]) => localStorage.setItem(key, p), [MOCK_FAIL_KEY, "/v1/simple/roadmap/waiting"] as const);
+  const before = await calls(page, "/v1/simple/roadmap/waiting");
+  await page.getByTestId("simple-nav-roadmap").click();
+  await expect.poll(() => calls(page, "/v1/simple/roadmap/waiting"), { timeout: 15_000 }).toBeGreaterThan(before);
+  await expect(roadmap).toHaveAttribute("title", without!, { timeout: 3_000 });
+});
+
+test("the rail: a count read again behind the one shown, that fails, shows no number, not the last one", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+  await page.goto("/simple/one-pagers");
+  const inbox = page.getByTestId("simple-nav-inbox-count");
+  await expect(inbox).toHaveText(/^\d+$/, { timeout: 15_000 });
+  // Past 10 s the rail shows the count it read at once and reads it again behind it.
+  await page.waitForTimeout(10_500);
+  await page.evaluate(([key, p]) => localStorage.setItem(key, p), [MOCK_FAIL_KEY, "/v1/inbox"] as const);
+  const before = await calls(page, "/v1/inbox");
+  await page.getByTestId("simple-nav-priorities").click();
+  await expect.poll(() => calls(page, "/v1/inbox"), { timeout: 15_000 }).toBeGreaterThan(before);
+  await expect(inbox).toHaveAttribute("title", "Could not load", { timeout: 3_000 });
+  await expect(inbox).not.toHaveText(/\d/);
 });
 
 test("Inbox: failed notifications mark the Needs you count and the tab counts as partial", async ({ page }) => {
