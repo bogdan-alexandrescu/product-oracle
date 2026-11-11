@@ -522,12 +522,16 @@ async def move_off(db: AsyncSession, g: Entity, to_goal_id: uuid.UUID | None) ->
 
 
 async def move_items_off(
-    db: AsyncSession, goal_id: uuid.UUID, to_goal_id: uuid.UUID | None
+    db: AsyncSession,
+    goal_id: uuid.UUID,
+    to_goal_id: uuid.UUID | None,
+    after: dict[uuid.UUID, list[uuid.UUID]] | None = None,
 ) -> list[ItemGoalsSnap]:
     """The roadmap items that name the goal (those in Trash too, so one restored later does
     not name it) lose it: an item that serves another live goal too keeps that one as its
     own (now first), as :func:`move_off` keeps a feature's; the rest serve ``to_goal_id``
-    instead, or no goal. Their goals as they were, for Undo."""
+    instead, or no goal. Their goals as they were, for Undo (and as they are now in
+    ``after``, so Restore knows an item untouched since)."""
     rows = list(
         await db.scalars(
             select(RoadmapItem)
@@ -554,6 +558,8 @@ async def move_items_off(
             row.goal_ids = ids
         else:
             row.goal_ids = [to_goal_id, *ids]
+        if after is not None:
+            after[row.id] = list(row.goal_ids)
     return before
 
 

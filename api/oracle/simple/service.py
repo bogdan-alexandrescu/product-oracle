@@ -498,6 +498,7 @@ async def load(
         for g in (every_goal.get(i) for i in {g for r in rows for g in r.goal_ids or []})
         if g is not None
     }
+    live_linked = {i for i, g in linked.items() if g.status != "rejected"}
     blockers = await _blockers(db, {b for r in rows for b in r.blocker_ids or []})
     cut = await _cut(db, roadmap_ids)
     # The item's first open suggestion (plan-model: its first slice's, shown with the span
@@ -557,7 +558,8 @@ async def load(
                 track_goal=track_goals.get(track.goal_id) if track and track.goal_id else None,
                 # one-feature-panel: a goal the item is linked to directly (set in its
                 # panel, dropped on, suggested for) wins over its feature's.
-                goal=next((linked[g] for g in row.goal_ids or [] if g in linked), None)
+                # An archived goal stays in goal_ids (for Undo) but is no item's goal.
+                goal=next((linked[g] for g in row.goal_ids or [] if g in live_linked), None)
                 or ladder.get(row.id)
                 or (goals.get(row.feature_id) if row.feature_id else None),
                 goal_ids=[g for g in row.goal_ids or [] if g in linked],
