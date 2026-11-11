@@ -12,14 +12,16 @@ import { SimplePage } from "@/components/simple/SimplePage";
  * after the longest greeting word and the widest 12-letter first name measured (Mohammadreza,
  * wider than Christabelle): measured every px around each step (Inter Tight, Linux), they take 6
  * lines in a header up to 290 px, 5 up to 345, 4 up to 455, 3 up to 607 and 2 from 612. Each step
- * comes 5 px or more past where it is needed, but the 3-line one, right where it is (456 px: the
- * header beside the rail at 800 px is 457), so a phone at 390 px and a window at 800 px keep no
- * spare line. Kept on the skeleton and on the page's own sentence while what waits is unknown
+ * comes 5 px or more past where it is needed; the 3-line one (the owner's pick, Nov 11) at 468 px,
+ * 12 px (2.6%) past the 456 it needs, so a font a little wider still fits: in a header of 456 to
+ * 467 px (beside the rail at 800 px, 457) the skeleton keeps a spare fourth line, which the band
+ * leaves once what waits is known (up a line, 28 px, once; never down). A phone at 390 px (358)
+ * keeps no spare line. Kept on the skeleton and on the page's own sentence while what waits is unknown
  * ("Checking what waits on you..."); once known, the sentence takes the lines it needs, so a
  * short greeting leaves no empty lines (the band moves up once, never down). The header is the
  * container.
  */
-export const LEAD = "simple-lead min-h-[6lh] @[18.5rem]:min-h-[5lh] @[22rem]:min-h-[4lh] @[28.5rem]:min-h-[3lh] @[39.5rem]:min-h-[2lh]";
+export const LEAD = "simple-lead min-h-[6lh] @[18.5rem]:min-h-[5lh] @[22rem]:min-h-[4lh] @[29.25rem]:min-h-[3lh] @[39.5rem]:min-h-[2lh]";
 
 const RESERVE =
   "min-[600px]:[body:not(:has(nav[aria-label=Simple]))_&]:pl-[var(--simple-rail-width)] max-[600px]:[body:not(:has([data-testid=phone-header]))_&]:pt-[var(--phone-top-bar)]";
