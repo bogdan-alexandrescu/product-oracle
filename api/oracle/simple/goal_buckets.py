@@ -541,17 +541,28 @@ async def move_items_off(
         )
     )
     others = {i for r in rows for i in r.goal_ids or [] if i != goal_id}
-    # The goal's own key results go with it: an item on one is not kept there by it.
-    live = set(
-        await db.scalars(
-            select(Entity.id).where(
-                Entity.id.in_(others),
-                Entity.type == "goal",
-                Entity.status != "rejected",
-                Entity.parent_id.is_distinct_from(goal_id),
-            )
+    # The goal's key results go with it, at any depth, as do those under an archived goal:
+    # an item on one is not kept there by it (the dialog lifts a key result to its top goal).
+    goals = {
+        r.id: r
+        for r in await db.execute(
+            select(Entity.id, Entity.parent_id, Entity.status).where(Entity.type == "goal")
         )
-    )
+    }
+
+    def is_live(i: uuid.UUID) -> bool:
+        seen: set[uuid.UUID] = set()
+        while i not in seen:
+            g = goals.get(i)
+            if g is None:  # past the top goal (or no goal at all)
+                return bool(seen)
+            if g.id == goal_id or g.status == "rejected":
+                return False
+            seen.add(i)
+            i = g.parent_id
+        return False
+
+    live = {i for i in others if is_live(i)}
     before = []
     for row in rows:
         before.append(ItemGoalsSnap(item_id=row.id, goal_ids=list(row.goal_ids)))
