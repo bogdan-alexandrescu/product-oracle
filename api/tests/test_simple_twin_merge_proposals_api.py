@@ -19,6 +19,12 @@ Test cards (protects / fails_when / no_claim):
   does not decide the twin's roadmap is refused (409, naming it) and writes nothing; the
   proposal stays open; fails_when=it merges anyway.
 - test_a_viewer_cannot_propose_a_twin_merge: protects=a viewer's merge_twin is 403.
+- test_a_waiting_twin_merge_shows_on_its_twin: protects=Priorities lists the open merge_twin
+  under the twin's feature (the proposer may withdraw it, the owner decide it) and a second
+  proposal is 409; fails_when=the proposal shows nowhere on Priorities.
+- test_a_direct_twin_merge_closes_its_waiting_proposal: protects=an owner's Merge into… closes
+  the twin's open proposal (declined; gone from Priorities and the Inbox; a later accept is 409,
+  never 404); fails_when=the proposal stays open after the merge.
 """
 
 import uuid
@@ -29,7 +35,13 @@ from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import CHANGES, clock, make_people  # noqa: F401
 from tests.test_simple_meeting_agenda import INBOX
 from tests.test_simple_priorities_company_roadmap_api import company_world
-from tests.test_simple_priorities_twins_api import _devices, _feature_of, _features
+from tests.test_simple_priorities_twins_api import (
+    _devices,
+    _feature_of,
+    _features,
+    _merge_url,
+    by_feature,
+)
 from tests.test_simple_targets_api import no_llm  # noqa: F401
 
 
@@ -112,3 +124,44 @@ async def test_a_viewer_cannot_propose_a_twin_merge(client):
     r = await _propose(client, w, who="viewer")
     assert r.status_code == 403, r.text
     assert await _twin_left(w)
+
+
+def _twin_merges(out: dict, w) -> list[dict]:
+    return [p for p in out["proposals"]
+            if p["op"] == "merge_twin" and p["feature_id"] == w.ids["ledger-copy"]]  # fmt: skip
+
+
+async def test_a_waiting_twin_merge_shows_on_its_twin(client):
+    w = await company_world()
+    await _features(w, ("ledger-copy", "Ledger", 9))
+    await _devices(w, ("dev-1", "ledger-copy"))
+    change = (await _propose(client, w)).json()["change"]
+    mine = await w.read(client, "commenter")
+    [twin] = by_feature(mine, w)["ledger"]["twins"]
+    assert twin["feature_id"] == w.ids["ledger-copy"]
+    [p] = _twin_merges(mine, w)
+    assert (p["change_id"], p["can_withdraw"], p["can_decide"]) == (change["id"], True, False)
+    [p] = _twin_merges(await w.read(client), w)
+    assert p["can_decide"], p
+    r = await _propose(client, w)
+    assert r.status_code == 409, r.text
+
+
+async def test_a_direct_twin_merge_closes_its_waiting_proposal(client):
+    w = await company_world()
+    await _features(w, ("ledger-copy", "Ledger", 9))
+    await _devices(w, ("dev-1", "ledger-copy"))
+    change = (await _propose(client, w)).json()["change"]
+    r = await client.post(_merge_url(w, "ledger-copy"), json={"into": w.ids["ledger"]},
+                          headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert not await _twin_left(w)
+    r = await client.get(CHANGES, headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    [c] = [c for c in r.json() if c["id"] == change["id"]]
+    assert c["status"] == "declined", c
+    assert _twin_merges(await w.read(client), w) == []
+    inbox = await client.get(INBOX, headers=w.ctx.as_("owner"))
+    assert change["id"] not in [x["id"] for x in inbox.json()["simple_proposals"]], inbox.text
+    r = await client.post(f"{CHANGES}/{change['id']}/accept", headers=w.ctx.as_("owner"))
+    assert r.status_code == 409, r.text

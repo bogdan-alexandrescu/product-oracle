@@ -32,10 +32,8 @@ async function priorities(page: Page): Promise<void> {
 const twinOf = (page: Page): Locator =>
   page.getByTestId("prio-row").filter({ has: page.getByTestId("prio-title").getByText(TWINS.unlinked, { exact: true }) }).getByTestId("prio-twin");
 
-/** The commenter proposes merging Block list's twin into its row, then the owner opens the Inbox. */
-async function propose(page: Page): Promise<Locator> {
-  await login(page, "commenter@example.com");
-  await priorities(page);
+/** The commenter, signed in on Priorities, proposes merging Block list's twin into its row. */
+async function proposeOn(page: Page): Promise<void> {
   const twin = twinOf(page);
   await expect(twin).toHaveCount(1);
   await expect(twin.getByRole("button", { name: "Merge into…" })).toHaveCount(0);
@@ -44,6 +42,13 @@ async function propose(page: Page): Promise<Locator> {
   await expect(page.getByText(/^Proposed: /)).toBeVisible();
   // Nothing is merged until it is decided.
   await expect(twinOf(page)).toHaveCount(1);
+}
+
+/** The commenter proposes merging Block list's twin into its row, then the owner opens the Inbox. */
+async function propose(page: Page): Promise<Locator> {
+  await login(page, "commenter@example.com");
+  await priorities(page);
+  await proposeOn(page);
   await as(page, ADMIN.email);
   await page.goto("/inbox");
   const row = page.getByRole("row").filter({ hasText: `into “${TWINS.unlinked}”` });
@@ -72,6 +77,44 @@ for (const phone of [false, true]) {
       await expect(page.getByRole("row").filter({ hasText: `into “${TWINS.unlinked}”` })).toHaveCount(0);
       await priorities(page);
       await expect(twinOf(page)).toHaveCount(0);
+    });
+
+    test("a waiting twin merge shows on its twin, with no second merge offered", async ({ page }) => {
+      test.setTimeout(120_000);
+      await login(page, "commenter@example.com");
+      await priorities(page);
+      await proposeOn(page);
+      // The commenter sees their proposal on the twin, and may take it back; no second Propose.
+      await expect(twinOf(page).getByTestId("prio-proposal")).toHaveCount(1);
+      await expect(twinOf(page).getByTestId("prio-proposal").getByRole("button", { name: "Withdraw" })).toBeVisible();
+      await expect(twinOf(page).getByRole("button", { name: "Propose a merge…" })).toBeDisabled();
+      // The owner sees it waiting there too, and decides it in place rather than merging around it.
+      await as(page, ADMIN.email);
+      await priorities(page);
+      await expect(twinOf(page).getByRole("button", { name: "Merge into…" })).toBeDisabled();
+      await twinOf(page).getByTestId("prio-proposal").getByRole("button", { name: "Accept" }).click();
+      await expect(twinOf(page)).toHaveCount(0);
+      await page.goto("/inbox");
+      await expect(page.getByRole("row").filter({ hasText: `into “${TWINS.unlinked}”` })).toHaveCount(0);
+    });
+
+    test("a twin merged directly closes its waiting proposal", async ({ page, context }) => {
+      test.setTimeout(120_000);
+      // The owner has Priorities open; meanwhile the commenter proposes the merge in another tab.
+      await login(page, ADMIN.email);
+      await priorities(page);
+      const theirs = await context.newPage();
+      await theirs.setViewportSize(page.viewportSize()!);
+      await login(theirs, "commenter@example.com");
+      await priorities(theirs);
+      await proposeOn(theirs);
+      await twinOf(page).getByRole("button", { name: "Merge into…" }).click();
+      await twinOf(page).getByRole("button", { name: "Merge", exact: true }).click();
+      await expect(twinOf(page)).toHaveCount(0);
+      // The proposal is closed: nothing is left to decide.
+      await page.goto("/inbox");
+      await expect(page.getByRole("heading").first()).toBeVisible();
+      await expect(page.getByRole("row").filter({ hasText: `into “${TWINS.unlinked}”` })).toHaveCount(0);
     });
 
     test("a declined twin merge changes nothing", async ({ page }) => {
