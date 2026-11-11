@@ -1617,7 +1617,8 @@ function seedGoalBucketsDatedScenario(): Db {
  * the archived goal Cut support tickets in half: Team alert digest serves it first, then Grow
  * retention and Faster activation; Snooze for a day serves Grow retention, then it; Alert tone picker
  * serves Grow retention, then a key result of Faster activation; Alert history export serves Grow retention, then
- * its own key result (goal-delete-r4). Invented data.
+ * its own key result (goal-delete-r4); Alert quiet hours serves Grow retention, then a key result of that key result
+ * (goal-delete-r5). Invented data.
  */
 export const GOAL_BUCKETS_THREE_GOALS_SCENARIO = "goal-buckets-three-goals";
 
@@ -1635,7 +1636,10 @@ function seedGoalBucketsThreeGoalsScenario(): Db {
   const grow = db.baseline.entities.find((e) => e.type === "goal" && e.key === "grow-retention") ?? parent;
   db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-week-two"), key: "kr-week-two", title: "KR 1 Teams come back in week two", parent_id: grow.id, status: "confirmed", attrs: { metric: "teams", weight: 1 } });
   rm.items.push({ key: "alert-history", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-week-two"], draft: true });
-  for (const k of ["alert-team-digest", "alert-snooze-day", "alert-tone", "alert-history"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
+  // goal-delete-r5: an item on Grow retention and a key result of its key result: Archive moves it to the goal picked too.
+  db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-week-two-mute"), key: "kr-week-two-mute", title: "KR 1.1 Teams set quiet hours in week two", parent_id: stableUuid("simple-goal/kr-week-two"), status: "confirmed", attrs: { metric: "teams", weight: 1 } });
+  rm.items.push({ key: "alert-quiet-hours", title: "Alert quiet hours", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-week-two-mute"], draft: true });
+  for (const k of ["alert-team-digest", "alert-snooze-day", "alert-tone", "alert-history", "alert-quiet-hours"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
   return db;
 }
 

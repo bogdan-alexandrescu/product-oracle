@@ -23,6 +23,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card goal-archive-own-key-result (goal-delete-r4): protects = Archive Grow retention with Growth picked, and Alert
  * history export (on Grow retention and its own key result) reads Growth, as the dialog says (the API's
  * move_items_off counts no key result of the archived goal as live); fails_when = it stays on the key result.
+ * Card goal-archive-nested-key-result (goal-delete-r5): protects = Archive Grow retention with Growth picked, and Alert
+ * quiet hours (on Grow retention and a key result of its key result) reads Growth, as the dialog says (move_items_off
+ * walks a key result up to its top goal); fails_when = it stays on the nested key result.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -124,4 +127,20 @@ test("An item on the archived goal and its own key result moves to the goal pick
   await ranked(page);
   await expect(draft(page, "Alert history export")).toContainText("Growth");
   await expect(draft(page, "Alert history export")).not.toContainText("Teams come back in week two");
+});
+
+test("An item on the archived goal and a key result of its key result moves to the goal picked", async ({ page }) => {
+  await openPage(page);
+  const dialog = await goalDialog(page, "Archive");
+  await expect(dialog.getByTestId("goal-feature").filter({ hasText: "Alert quiet hours" })).toBeVisible();
+  await expect(dialog).not.toContainText("Alert quiet hours stays on");
+  const pick = dialog.getByLabel("Goal", { exact: true });
+  const label = (await pick.locator("option").allTextContents()).find((o) => o.endsWith("Growth"))!;
+  await pick.selectOption({ label });
+  await tap(dialog.getByRole("button", { name: "Archive goal" }));
+  await expect(goal(page, "Grow retention")).toHaveCount(0);
+
+  await ranked(page);
+  await expect(draft(page, "Alert quiet hours")).toContainText("Growth");
+  await expect(draft(page, "Alert quiet hours")).not.toContainText("Teams set quiet hours in week two");
 });
