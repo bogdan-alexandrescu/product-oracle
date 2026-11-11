@@ -12069,7 +12069,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     # Simple S3a: proposals waiting for me, and the decisions on mine.
     from oracle.simple.changes import inbox_rows as simple_rows
 
-    simple_proposals, simple_decisions = await simple_rows(db, principal, seen)
+    with batched():
+        # inbox-perf: each meeting's agenda (oracle.simple.agenda) in one read for them all.
+        simple_proposals, simple_decisions = await simple_rows(db, principal, seen)
     counted += len(simple_proposals)
     # Simple S3b: versions from Simple drafts waiting for my approval as a required reviewer;
     # inbox-meeting-proposals fix: open date and goal suggestions I may decide; tracks-goal:

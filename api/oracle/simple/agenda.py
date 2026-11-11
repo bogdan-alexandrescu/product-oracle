@@ -16,7 +16,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.roadmap.models import RoadmapItem
+from oracle.runs import batch
 from oracle.simple.models import SimpleMeeting
+
+# The roadmaps a PRD's items are on (oracle.runs.batch).
+ROADMAPS = "agenda_roadmaps"
 
 
 @dataclass
@@ -49,21 +53,13 @@ async def of(db: AsyncSession, m: SimpleMeeting | None) -> Agenda | None:
         # The roadmap it was started on (meetings.start): only that one.
         return Agenda(meeting_id=m.id, title=m.title, prd_id=m.prd_document_id,
                       roadmap_ids={uuid.UUID(str(pinned))}, session_id=m.session_id)  # fmt: skip
-    docs = set(
-        await db.scalars(
-            select(RoadmapItem.roadmap_document_id)
-            .where(
-                RoadmapItem.prd_document_id == m.prd_document_id,
-                RoadmapItem.roadmap_document_id.is_not(None),
-            )
-            .distinct()
-        )
-    )
+    prd_id = m.prd_document_id
+    docs = await batch.many(ROADMAPS, [prd_id], lambda ids: _roadmaps(db, ids))
     return Agenda(
         meeting_id=m.id,
         title=m.title,
         prd_id=m.prd_document_id,
-        roadmap_ids=docs,
+        roadmap_ids=set(docs.get(prd_id, ())),
         session_id=m.session_id,
     )
 
@@ -85,10 +81,33 @@ async def meetings_of(db: AsyncSession, session_ids: set) -> dict[uuid.UUID, Sim
     ids = {i for i in session_ids if i}
     if not ids:
         return {}
-    return {
+    found = {
         m.session_id: m
         for m in await db.scalars(select(SimpleMeeting).where(SimpleMeeting.session_id.in_(ids)))
     }
+    if batch.active():
+        # In one Inbox call (oracle.runs.batch): the roadmaps of every one of these
+        # meetings' PRDs in one read, for each meeting's :func:`of`.
+        prds = [m.prd_document_id for m in found.values() if not (m.agenda or {}).get("roadmap_id")]
+        await batch.many(ROADMAPS, prds, lambda keys: _roadmaps(db, keys))
+    return found
+
+
+async def _roadmaps(db: AsyncSession, prd_ids: list[uuid.UUID]) -> dict[uuid.UUID, set[uuid.UUID]]:
+    """Every roadmap each of these PRDs' items are on, by PRD."""
+    out: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for prd_id, roadmap_id in (
+        await db.execute(
+            select(RoadmapItem.prd_document_id, RoadmapItem.roadmap_document_id)
+            .where(
+                RoadmapItem.prd_document_id.in_(prd_ids),
+                RoadmapItem.roadmap_document_id.is_not(None),
+            )
+            .distinct()
+        )
+    ).all():
+        out.setdefault(prd_id, set()).add(roadmap_id)
+    return out
 
 
 def elsewhere_words(title: str | None) -> str:

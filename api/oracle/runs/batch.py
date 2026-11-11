@@ -25,6 +25,11 @@ def batched() -> Iterator[None]:
         _memo.reset(token)
 
 
+def active() -> bool:
+    """Whether a :func:`batched` block is open: reads ahead are worth making."""
+    return _memo.get() is not None
+
+
 async def once[T](key: Hashable, load: Callable[[], Awaitable[T]]) -> T:
     """``load()``, read once per :func:`batched` block for ``key``; the result is shared, so
     callers never change it."""
