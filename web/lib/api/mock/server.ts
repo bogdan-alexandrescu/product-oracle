@@ -1589,8 +1589,25 @@ export const GOAL_BUCKETS_UNDATED_SCENARIO = "goal-buckets-undated";
 
 function seedGoalBucketsUndatedScenario(): Db {
   const db = seedSimplePlanScenario(true);
+  db.simple_roadmap!.plan_undated = true;
+  return withRoadmapGoalBuckets(db);
+}
+
+/**
+ * "goal-buckets-dated" (goal-delete-dated): "simple-plan" (dated) with the goal buckets the API
+ * reads, as "goal-buckets-undated" has them, and a draft serving Grow retention: its goal holds
+ * roadmap items and a draft, none in the plan. Invented data.
+ */
+export const GOAL_BUCKETS_DATED_SCENARIO = "goal-buckets-dated";
+
+function seedGoalBucketsDatedScenario(): Db {
+  const db = seedSimplePlanScenario(true);
+  db.simple_roadmap!.items.push({ key: "alert-recap", title: "Monthly alert recap", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", draft: true });
+  return withRoadmapGoalBuckets(db);
+}
+
+function withRoadmapGoalBuckets(db: Db): Db {
   const rm = db.simple_roadmap!;
-  rm.plan_undated = true;
   const goalOf = new Map(planSlices().map((x) => [x.feature_code.toLowerCase(), x.goal]));
   for (const s of rm.items) {
     const goal = s.section ? goalOf.get(s.section) : undefined;
@@ -4248,6 +4265,8 @@ function load(): Db {
                 ? seedGoalBucketsHardScenario
               : scenario === GOAL_BUCKETS_UNDATED_SCENARIO
                 ? seedGoalBucketsUndatedScenario
+              : scenario === GOAL_BUCKETS_DATED_SCENARIO
+                ? seedGoalBucketsDatedScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
               : scenario === PRIORITIES_PLAN_GOAL_NAMES_SCENARIO
