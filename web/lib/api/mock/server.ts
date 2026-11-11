@@ -1596,7 +1596,8 @@ function seedGoalBucketsUndatedScenario(): Db {
 /**
  * "goal-buckets-dated" (goal-delete-dated): "simple-plan" (dated) with the goal buckets the API
  * reads, as "goal-buckets-undated" has them, and a draft serving Grow retention: its goal holds
- * roadmap items and a draft, none in the plan. Invented data.
+ * roadmap items and a draft, none in the plan, and a draft serving Faster activation first and
+ * Grow retention too. Invented data.
  */
 export const GOAL_BUCKETS_DATED_SCENARIO = "goal-buckets-dated";
 
@@ -1605,6 +1606,9 @@ function seedGoalBucketsDatedScenario(): Db {
   const rm = db.simple_roadmap!;
   rm.items.push({ key: "alert-recap", title: "Monthly alert recap", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", draft: true });
   rm.ids["alert-recap"] = stableUuid("simple-item/alert-recap");
+  // A draft that serves Faster activation first and Grow retention too (goal-delete-two-goals).
+  rm.items.push({ key: "alert-summary", title: "Alert summary for leads", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "faster-activation", goals: ["grow-retention"], draft: true });
+  rm.ids["alert-summary"] = stableUuid("simple-item/alert-summary");
   return withRoadmapGoalBuckets(db);
 }
 
