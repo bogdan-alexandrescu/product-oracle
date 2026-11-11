@@ -19,14 +19,23 @@ Test cards (protects / fails_when / no_claim):
 - test_batched_reads_answer_as_each_alone: protects=the Inbox read with its shared reads
   (oracle.runs.batch) answers exactly as each stop reading alone (the read before
   inbox-perf), for the owner, an approver and an API token; fails_when=a shared read
-  returns another stop's rows or a stale count.
+  returns another stop's rows or a stale count the Inbox shows; no_claim=what the Inbox
+  does not show of a run: its withdrawn proposals and other runs' edges it revised
+  (tests/test_from_run_members.py reads those directly).
 - test_answers_as_before_inbox_perf: protects=the Inbox answers exactly as the code before
   inbox-perf (its changed modules read from git at BEFORE and run in this process) on
   the same company, for the owner, an approver and an API token; fails_when=any row,
-  count or field differs (the seed's cross-run case included: runs revising and proposing
-  on each other's items, a withdrawn proposal, a material conflict, an owner-only stop, a
-  company time zone not the default); no_claim=a checkout that cannot
-  fetch that commit off CI (skipped; in CI it fails).
+  count or field the Inbox shows differs (the seed's cross-run case included: runs
+  revising and proposing on each other's items, a material conflict, an owner-only stop,
+  a company time zone not the default); no_claim=what the Inbox does not show (the seed's
+  withdrawn proposal and cross-run edge revision: tests/test_from_run_members.py), and a
+  checkout that cannot fetch that commit off CI, or whose fetch hangs past FETCH_TIMEOUT_S
+  (skipped; in CI it fails).
+- test_ci_is_on_only_when_true: protects=CI counts as on only for "1", "true" or "yes"
+  (any case); fails_when=CI=false, CI=0 or an empty CI makes an unfetchable BEFORE fail
+  instead of skip.
+- test_hung_fetch_counts_as_failed: protects=a fetch of BEFORE that times out skips off CI
+  and fails on CI; fails_when=its TimeoutExpired escapes as an error.
 - test_inbox_answers_in_time (timing): protects=the owner's Inbox answers under BUDGET_MS
   (best of three warm reads); fails_when=the read slows past it; no_claim=production's
   network round trips (the statement budget covers them).
@@ -122,6 +131,16 @@ BEFORE = "e191493d1580ea712e31566fb69a9976be819f2c"
 CHANGED = (from_run, actions, runs_service, agenda, company_time)
 
 
+# How long a fetch of BEFORE may take before it counts as failed.
+FETCH_TIMEOUT_S = 300
+
+
+def on_ci(env: dict[str, str] | None = None) -> bool:
+    """Whether CI is set to a true value ("1", "true", "yes", any case): CI=false is off."""
+    value = (os.environ if env is None else env).get("CI", "")
+    return value.strip().lower() in ("1", "true", "yes")
+
+
 def _show(root: Path, path: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", "show", f"{BEFORE}:{path.relative_to(root)}"],
@@ -138,15 +157,43 @@ def before(module: types.ModuleType) -> dict:
     got = _show(root, path)
     if got.returncode != 0:
         fetch = ["git", "fetch", "--no-tags", "--depth=1", "origin", BEFORE]
-        subprocess.run(fetch, cwd=root, capture_output=True, check=False, timeout=300)
+        try:
+            subprocess.run(
+                fetch, cwd=root, capture_output=True, check=False, timeout=FETCH_TIMEOUT_S
+            )
+        except subprocess.TimeoutExpired:
+            pass  # a hung fetch is a failed one: BEFORE is still missing below
         got = _show(root, path)
     if got.returncode != 0:
-        if os.environ.get("CI"):
+        if on_ci():
             pytest.fail(f"{BEFORE} is not in this checkout and could not be fetched")
         pytest.skip(f"{BEFORE} is not in this checkout and could not be fetched")
     ns: dict = {"__name__": module.__name__, "__file__": str(path)}
     exec(compile(got.stdout, str(path), "exec"), ns)  # noqa: S102 - our own code, from git
     return {k: v for k, v in ns.items() if isinstance(v, types.FunctionType)}
+
+
+def test_ci_is_on_only_when_true():
+    for value in ("1", "true", "TRUE", "True", "yes", "Yes"):
+        assert on_ci({"CI": value}), value
+    for value in ("", "0", "false", "False", "no", "off"):
+        assert not on_ci({"CI": value}), value
+    assert not on_ci({})
+
+
+def test_hung_fetch_counts_as_failed(monkeypatch):
+    def hang(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+
+    missing = subprocess.CompletedProcess([], 128, "", "")
+    monkeypatch.setattr(subprocess, "run", hang)
+    monkeypatch.setitem(globals(), "_show", lambda root, path: missing)
+    monkeypatch.setenv("CI", "false")
+    with pytest.raises(pytest.skip.Exception):
+        before(company_time)
+    monkeypatch.setenv("CI", "true")
+    with pytest.raises(pytest.fail.Exception):
+        before(company_time)
 
 
 async def test_answers_as_before_inbox_perf(client, monkeypatch):
