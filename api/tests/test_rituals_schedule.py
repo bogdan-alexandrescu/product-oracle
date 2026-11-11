@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from oracle.rituals.blocks import distance_text
+from oracle.rituals.blocks import distance_text, figure_text
 from oracle.rituals.schedule import Schedule, next_occurrence
 
 LA = "America/Los_Angeles"
@@ -107,6 +107,9 @@ def test_invalid_schedules_are_refused(bad):
         ({"target": "below 200ms", "current": "260 ms"}, "60 ms to go"),
         ({"target": "45%"}, "No current value yet"),
         ({"target": "$4M", "current": "$3.1M"}, "$900k to go"),
+        # goal-money-full: a typed money goal reads in full, as every page but Home shows it.
+        ({"target": 50000, "unit": "usd", "comparison": "at_least", "current": 30000}, "$20,000 to go"),
+        ({"target": 4_000_000, "unit": "USD", "comparison": "at_least", "current": 2_800_000}, "$1,200,000 to go"),
     ],
 )
 def test_distance_to_go_reads_like_home(attrs, text):
@@ -114,3 +117,13 @@ def test_distance_to_go_reads_like_home(attrs, text):
     (text and B5 typed values); fails_when=a different number or wording than
     _goals.ts's assess(); no_claim=goals with a history-derived direction."""
     assert distance_text(attrs) == text
+
+
+def test_typed_money_figures_read_in_full():
+    """protects=goal-money-full (owner, Nov 11: short on Home only): the goals block writes a
+    typed money goal as figure_words does ("$50,000"); fails_when=it reads "$50k"; no_claim=a
+    figure written as text ("$4M"), which reads as written."""
+    attrs = {"target": 50000, "unit": "usd", "comparison": "at_least", "current": 30000}
+    assert figure_text(attrs, "target") == "$50,000"
+    assert figure_text(attrs, "current") == "$30,000"
+    assert figure_text({"target": "$4M"}, "target") == "$4M"
