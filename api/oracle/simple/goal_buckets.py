@@ -541,10 +541,14 @@ async def move_items_off(
         )
     )
     others = {i for r in rows for i in r.goal_ids or [] if i != goal_id}
+    # The goal's own key results go with it: an item on one is not kept there by it.
     live = set(
         await db.scalars(
             select(Entity.id).where(
-                Entity.id.in_(others), Entity.type == "goal", Entity.status != "rejected"
+                Entity.id.in_(others),
+                Entity.type == "goal",
+                Entity.status != "rejected",
+                Entity.parent_id.is_distinct_from(goal_id),
             )
         )
     )
