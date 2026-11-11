@@ -1,7 +1,7 @@
 import { GM_TRACKS_HARD_SCENARIO, GM_TRACKS_SCENARIO } from "../lib/api/mock/goal-map-tracks";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { expect, test, type Locator, type Page } from "./test";
 
 /*
  * Goal map, "Goals by tracks grid" (the owner's pick of Nov 11, proposal B), driven through the
@@ -27,6 +27,13 @@ const track = (page: Page, name: string) => page.getByTestId("gm-track").filter(
 const chip = (page: Page, name: string) => page.getByTestId("gm-chip").filter({ hasText: name });
 const strip = (page: Page, name: string) => page.getByTestId("gm-strip-milestone").filter({ hasText: name });
 const toast = (page: Page, text: string | RegExp) => page.getByRole("status").filter({ hasText: text });
+
+/** Press Tab, as a person would, until `to` has focus (at most `max` times). */
+async function tabTo(page: Page, to: Locator, max = 80) {
+  const on = async () => (await to.count()) === 1 && (await to.evaluate((el) => el === document.activeElement));
+  for (let i = 0; i < max && !(await on()); i++) await page.keyboard.press("Tab");
+  await expect(to).toBeFocused();
+}
 
 test.describe("Goal map: goals by tracks grid", () => {
   test.use(DESKTOP);
@@ -138,6 +145,40 @@ test.describe("Goal map: goals by tracks grid", () => {
     await input.press("Enter");
     await expect(strip(page, "33 demos per rep")).toBeVisible();
     await expect(chip(page, "Rep calendar sync")).toContainText("33 demos per rep");
+  });
+
+  test("the keyboard reaches each milestone's and chip's ⋯, and Escape closes its menu", async ({ page }) => {
+    // protects: a strip milestone's ⋯ is reached by Tab and shows on focus, as a chip's is; Escape
+    // closes an open menu (strip or chip) and puts focus back on its ⋯.
+    // fails_when: Tab skips the milestone's ⋯, it stays hidden while focused, or Escape leaves the
+    // menu open or drops focus. no_claim: arrow keys within a menu.
+    await open(page);
+    const m = strip(page, "32 demos per rep");
+    // Tab from the top of the page with the mouse away: only the keyboard reveals the ⋯.
+    await page.mouse.move(0, 0);
+    const more = m.getByRole("button", { name: /More for .*32 demos per rep/ });
+    await tabTo(page, more);
+    await expect(more).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("menuitem", { name: "Rename" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await expect(more).toBeFocused();
+    await expect(more).toBeVisible();
+    // A chip's menu, from one of its items.
+    const c = chip(page, "Rep calendar sync");
+    await tabTo(page, c.getByRole("button", { name: /Rep calendar sync/ }).first());
+    const cmore = c.getByRole("button", { name: /More for .*Rep calendar sync/ });
+    await tabTo(page, cmore, 2);
+    await expect(cmore).toBeVisible();
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("menuitem", { name: "Move to…" })).toBeVisible();
+    await expect(page.getByRole("menu").getByRole("menuitem").first()).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await expect(cmore).toBeFocused();
+    await expect(cmore).toBeVisible();
   });
 
   test("the hard case: long names stay in two lines, features with no track get a No track row", async ({ page }) => {
