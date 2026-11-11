@@ -249,10 +249,20 @@ export function twinBlock(db: SimpleDb, may: (s: SeedItem) => boolean, source: s
 
 /** The key of the item standing for the feature `fid`, undefined for no such feature. */
 export function featureItem(db: SimpleDb, fid: string): string | undefined {
-  return Object.keys(db.ids).find((k) => {
-    const s = db.items.find((x) => x.key === k);
-    return featureId(db.ids[k]) === fid && !s?.feature && !s?.trace_feature;
-  });
+  return featureItems(db).get(fid);
+}
+
+/** featureItem for every feature at once, read in one pass (a read asks it per row: 500 items, dod-perf). */
+function featureItems(db: SimpleDb): Map<string, string> {
+  const item = new Map<string, SeedItem>();
+  for (const x of db.items) if (!item.has(x.key)) item.set(x.key, x);
+  const out = new Map<string, string>();
+  for (const k of Object.keys(db.ids)) {
+    const s = item.get(k);
+    const fid = featureId(db.ids[k]);
+    if (!out.has(fid) && !s?.feature && !s?.trace_feature) out.set(fid, k);
+  }
+  return out;
 }
 
 /**
@@ -682,7 +692,13 @@ export function prioritiesOut(
   // qa-prio-twins (priorities._fold_twins): rows of one name are one row, the best-ranked on the roadmap; the
   // others its twins, each with how it merges into it. Nothing is merged.
   // A row's names: its title and its feature's own (the item standing for the feature), as priorities.py folds by either.
-  const namesOf = (r: Row) => new Set([sameName(r.title), sameName(db.items.find((x) => x.key === featureItem(db, r.feature_id))?.title)].filter(Boolean));
+  const itemOf = featureItems(db);
+  const titleOf = new Map<string, string>();
+  for (const x of db.items) if (!titleOf.has(x.key)) titleOf.set(x.key, x.title);
+  const namesOf = (r: Row) => {
+    const k = itemOf.get(r.feature_id);
+    return new Set([sameName(r.title), sameName(k === undefined ? undefined : titleOf.get(k))].filter(Boolean));
+  };
   const groups: Row[][] = [];
   const group = new Map<string, number>();
   for (const r of rows) {
@@ -710,8 +726,8 @@ export function prioritiesOut(
       // priorities.merge_twin re-links each of its items first, on every roadmap: an approver who decides every one,
       // none beside a confirmed item of the kept feature; else why not (blocked).
       const approver = ctx.role === "owner" || ctx.role === "approver";
-      const source = featureItem(db, r.feature_id);
-      const keptKey = featureItem(db, l.feature_id);
+      const source = itemOf.get(r.feature_id);
+      const keptKey = itemOf.get(l.feature_id);
       const blocked = merge === "entity" && approver && source && keptKey ? twinBlock(db, (x) => canDecideItem(db, x, ctx), source, keptKey, l.title) : null;
       (l.twins ??= []).push({
         feature_id: r.feature_id, item_id: r.item_id, code: r.code, title: r.title, goal: r.goal, rank: r.rank, merge,
