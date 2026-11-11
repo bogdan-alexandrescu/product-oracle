@@ -44,6 +44,7 @@ test.describe("desktop", () => {
     await expect(goals.nth(1)).toContainText("At risk");
     await goals.nth(2).getByRole("button", { name: "About Revenue per day" }).click();
     await expect(page.getByRole("tooltip")).toContainText("Reps × conversions per rep × value");
+    await page.keyboard.press("Escape");
     const rail = page.getByTestId("gm-legend-guardrail");
     await expect(rail).toHaveText("Guardrails: on track ✓");
     await rail.hover();
