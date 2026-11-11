@@ -505,7 +505,8 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, 
           <div className="mt-3 grid gap-2 text-[15px]">
             {multi.length > 0 && (
               <p>
-                {multi.length} {multi.length === 1 ? "serves" : "serve"} another goal too and {multi.length === 1 ? "goes" : "go"} there:{" "}
+                {/* Each one left on a key result keeps that goal: none goes anywhere. */}
+                {multi.length} {multi.every((f) => f.kept_kr) ? (multi.length === 1 ? "keeps another goal" : "keep another goal") : `${multi.length === 1 ? "serves" : "serve"} another goal too and ${multi.length === 1 ? "goes" : "go"} there`}:{" "}
                 <span className="text-text2">{multi.map((f) => (f.kept_kr ? `${[f.tag === null ? "" : (f.tag ?? f.code), f.name].join(" ").trim()} stays on ${f.kept_kr}` : `${f.name} → ${titleOf(otherGoal(gb, f, goal.id)!)}`)).join("; ")}</span>
               </p>
             )}
