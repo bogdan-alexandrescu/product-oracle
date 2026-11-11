@@ -43794,12 +43794,9 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "override_priority" | "estimate_feature" | "confirm_item" | "cut" | "merge_item";
-            /**
-             * Item Id
-             * Format: uuid
-             */
-            item_id: string;
+            op: "override_priority" | "estimate_feature" | "confirm_item" | "cut" | "merge_item" | "merge_twin";
+            /** Item Id */
+            item_id: string | null;
             /** Feature Id */
             feature_id?: string | null;
             /** Code */

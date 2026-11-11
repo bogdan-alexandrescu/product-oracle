@@ -129913,13 +129913,21 @@
               "estimate_feature",
               "confirm_item",
               "cut",
-              "merge_item"
+              "merge_item",
+              "merge_twin"
             ],
             "title": "Op"
           },
           "item_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Item Id"
           },
           "feature_id": {

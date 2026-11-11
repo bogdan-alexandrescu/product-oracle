@@ -1791,6 +1791,10 @@ async def merge_entity(
         await audit.record(
             db, principal, "baseline.proposal.rejected", "proposal", p.id, {"note": note}
         )
+    from oracle.simple import twin_merges
+
+    # A commenter's waiting proposal to merge it (Priorities' Propose a merge…) is closed too.
+    await twin_merges.close_open(db, principal, source.id, note)
     snapshot = entity_snapshot(into)
     _revision(
         db, writer, snapshot, {**snapshot, "merged_from": f"{source.type}:{source.key}"},

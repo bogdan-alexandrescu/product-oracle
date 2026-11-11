@@ -1435,9 +1435,13 @@ class SimpleVisualRequestIn(BaseModel):
 
 class SimplePriorityProposal(BaseModel):
     change_id: uuid.UUID
-    op: Literal["override_priority", "estimate_feature", "confirm_item", "cut", "merge_item"]
-    item_id: uuid.UUID
-    # The item's baseline feature (the row it shows under); None for a draft with none.
+    op: Literal[
+        "override_priority", "estimate_feature", "confirm_item", "cut", "merge_item", "merge_twin"
+    ]
+    # None: a ``merge_twin`` of a twin with no item on the roadmap read.
+    item_id: uuid.UUID | None
+    # The item's baseline feature (the row it shows under); None for a draft with none; a
+    # ``merge_twin``'s twin feature (it shows on that twin).
     feature_id: str | None = None
     code: str
     title: str

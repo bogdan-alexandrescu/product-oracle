@@ -252,15 +252,17 @@ async def _proposals(
     principal: Any,
     by_id: dict[uuid.UUID, service.Entry],
     twin_items: set[uuid.UUID] | None = None,
+    twins: dict[str, SimplePriorityTwin] | None = None,
 ) -> list[SimplePriorityProposal]:
     """qa-prio-twins: also a ``merge_item`` of a row's twin's item (``twin_items``): it shows
-    on that row."""
+    on that row; prio-twin-propose: and a ``merge_twin`` of a row's twin (``twins``, by its
+    feature), which has no ``item_id`` target."""
     rows = list(
         await db.scalars(
             select(SimpleChange)
             .where(
                 SimpleChange.status == "proposed",
-                SimpleChange.op.in_(PROPOSED_OPS + DRAFT_OPS),
+                SimpleChange.op.in_(PROPOSED_OPS + DRAFT_OPS + ("merge_twin",)),
             )
             .order_by(SimpleChange.at, SimpleChange.seq)
         )
@@ -268,30 +270,37 @@ async def _proposals(
     if not rows:
         return []
     v = await changes._view(db, principal, rows)
-    shown = []
+    # (change, item_id, feature_id, code, title) of each one shown.
+    shown: list[tuple[SimpleChange, uuid.UUID | None, str | None, str, str]] = []
     for c in rows:
+        if c.op == "merge_twin":
+            t = (twins or {}).get(str(c.target.get("feature_id")))
+            if t is not None and v.sees(c):
+                shown.append((c, t.item_id, t.feature_id, t.code, t.title))
+            continue
         try:
             e = by_id.get(uuid.UUID(str(c.target.get("item_id"))))
         except ValueError:
             e = None
         twin = c.op == "merge_item" and e is not None and e.row.id in (twin_items or ())
         if e is not None and (c.op in PROPOSED_OPS or e.row.draft or twin) and v.sees(c):
-            shown.append((c, e))
+            fid = str(e.row.feature_id) if e.row.feature_id is not None else None
+            shown.append((c, e.row.id, fid, e.row.item_key, e.row.title))  # type: ignore[arg-type]
     from oracle.simple import visuals
 
-    by_change = await visuals.flows_for(db, "change", [c.id for c, _ in shown])
-    by_item = await visuals.flows_for(db, "feature", [e.row.id for _, e in shown])
-    names = await changes._names(db, {c.by for c, _ in shown} | {
-        p for c, _ in shown for p in v.route(c)
+    by_change = await visuals.flows_for(db, "change", [s[0].id for s in shown])
+    by_item = await visuals.flows_for(db, "feature", [s[1] for s in shown if s[1] is not None])
+    names = await changes._names(db, {s[0].by for s in shown} | {
+        p for s in shown for p in v.route(s[0])
     })  # fmt: skip
     return [
         SimplePriorityProposal(
             change_id=c.id,
             op=c.op,
-            item_id=e.row.id,
-            feature_id=str(e.row.feature_id) if e.row.feature_id is not None else None,
-            code=e.row.item_key,  # type: ignore[arg-type]
-            title=e.row.title,
+            item_id=item_id,
+            feature_id=feature_id,
+            code=code,
+            title=title,
             by_name=names.get(c.by, "someone"),
             at=c.at,
             reason=c.reason,
@@ -299,9 +308,9 @@ async def _proposals(
             waiting_for=[names.get(p, "someone") for p in v.route(c)],
             can_decide=v.may_decide(c),
             can_withdraw=c.by == getattr(principal, "user_id", None),
-            flow=by_change.get(c.id) or by_item.get(e.row.id),
+            flow=by_change.get(c.id) or (by_item.get(item_id) if item_id is not None else None),
         )  # fmt: skip
-        for c, e in shown
+        for c, item_id, feature_id, code, title in shown
     ]
 
 
@@ -920,6 +929,7 @@ async def build(
             t.blocked = _twin_block(principal, every, items_of, t.feature_id, r.feature_id, r.title)
             t.applies = t.blocked is None
     twin_items = {t.item_id for r in rows for t in r.twins if t.item_id is not None}
+    twins = {t.feature_id: t for r in rows for t in r.twins if t.feature_id is not None}
     goal_rows = await db.scalars(select(Entity).where(Entity.type == "goal"))
     order = {g.key: i for i, g in enumerate(sort_goals(goal_rows))}
     buckets, total = _buckets(rows, inside, order)
@@ -930,7 +940,7 @@ async def build(
         method=METHOD,
         formula=ranking.formula,
         rows=rows,
-        proposals=await _proposals(db, principal, read_.by_id(), twin_items),
+        proposals=await _proposals(db, principal, read_.by_id(), twin_items, twins),
         drafts=_drafts(read_, principal, rows, named),
         unranked=_unranked(read_, {f.entity_id for f in features}),
         buckets=buckets,

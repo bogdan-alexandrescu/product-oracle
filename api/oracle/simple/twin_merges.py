@@ -8,7 +8,8 @@ Ground Truth features (below approver, as merge_twin needs) proposes it.
   An approver's or owner's runs merge_twin at once (``applied``); a commenter's is ``proposed``,
   routed to the company's owners, one open proposal per twin. An approver or owner accepts it:
   the same merge_twin runs (every roadmap; its 409 and 422 refusals, nothing written); a
-  decline changes nothing.
+  decline changes nothing. A waiting proposal shows on its twin on Priorities; when the twin's
+  feature is merged by any other way (an approver's Merge into…), it is closed (``close_open``).
 """
 
 import uuid
@@ -50,6 +51,22 @@ async def _apply(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
         db, principal, _id(c.target.get("feature_id"), "feature_id"),
         _id(c.target.get("into_id"), "into_id"),
     )  # fmt: skip
+
+
+async def close_open(db: AsyncSession, principal: Any, feature_id: uuid.UUID, note: str) -> None:
+    """The open proposals to merge ``feature_id``, merged just now, are closed (declined,
+    ``note``): nothing is left to accept (baseline.merge_entity). Not committed."""
+    from oracle.simple.changes import _me
+
+    for c in await db.scalars(
+        select(SimpleChange).where(
+            SimpleChange.op.in_(OPS),
+            SimpleChange.status == "proposed",
+            SimpleChange.target["feature_id"].astext == str(feature_id),
+        )
+    ):
+        c.status, c.decision_reason = "declined", note
+        c.decided_by, c.decided_at = _me(principal), company_time.now()
 
 
 async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
@@ -103,6 +120,7 @@ async def decide(
     if c.status != "proposed":
         raise ChangeError(409, f"This change is {c.status} already")
     if action == "accept":
+        # The merge closes its open proposals (close_open), this one too: it is accepted below.
         await _apply(db, principal, c)
     c.status = "accepted" if action == "accept" else "declined"
     c.decided_by, c.decided_at, c.decision_reason = _me(principal), company_time.now(), reason

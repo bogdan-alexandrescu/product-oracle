@@ -1068,7 +1068,7 @@ function proposalWords(p: Proposal): string {
   }
   if (p.op === "confirm_item") return `${p.by_name} proposes confirming it`;
   // S7: a Merge is a merge_item change (train T's was a cut with this note).
-  if (p.op === "cut" || p.op === "merge_item") return `${p.by_name} proposes merging it: “${p.reason ?? ""}”`;
+  if (p.op === "cut" || p.op === "merge_item" || p.op === "merge_twin") return `${p.by_name} proposes merging it: “${p.reason ?? ""}”`;
   const parts = [a.goal_value != null ? `goal value ${a.goal_value}` : null, a.effort != null ? `effort ${weeksWords(Number(a.effort))}` : null].filter(Boolean);
   return `${p.by_name} proposes ${parts.join(" and ")}`;
 }
@@ -1321,10 +1321,12 @@ function Twins({ r, proposals, mayChange, changed }: { r: Row; proposals: Propos
         // A merge the caller may start: merge_item (applied or proposed), or the Ground Truth's for who may approve, else
         // proposed (prio-twin-propose) unless an approver is told why it cannot be merged.
         const may = mayChange && (t.merge === "item" || (t.merge === "entity" && (t.applies || !t.blocked)));
-        // Its own waiting proposals (a move, an estimate, a merge): they show here, its row being folded into this one;
+        // Its own waiting proposals (a move, an estimate, a merge of its item or of its feature): they show here, its row being folded into this one;
         // none more until they are decided (as a draft's).
         const pending = proposals.filter(
-          (p) => (p.feature_id != null && p.feature_id === t.feature_id && (p.op === "override_priority" || p.op === "estimate_feature")) || (p.op === "merge_item" && p.item_id === t.item_id),
+          (p) =>
+            (p.feature_id != null && p.feature_id === t.feature_id && (p.op === "override_priority" || p.op === "estimate_feature" || p.op === "merge_twin")) ||
+            (p.op === "merge_item" && p.item_id === t.item_id),
         );
         return (
           <li key={id} data-testid="prio-twin" data-code={t.code} className="rounded-lg border border-dashed border-line-strong px-2 py-1.5 text-[length:var(--simple-small)]">

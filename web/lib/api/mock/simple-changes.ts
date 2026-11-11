@@ -418,6 +418,11 @@ async function mergeTwin(db: SimpleDb, ctx: SimpleChangesCtx, fid: string, body:
   }
   // The feature goes: every record of it stands for the kept one.
   for (const x of db.items) if (x.key !== kept && (x.feature ?? x.trace_feature ?? x.key) === source) x.feature = kept;
+  // twin_merges.close_open (baseline.merge_entity): its waiting proposals are closed, nothing left to accept.
+  const at = iso(mockNowMs());
+  for (const c of db.changes ?? [])
+    if (c.op === "merge_twin" && c.status === "proposed" && c.target.feature_id === fid)
+      Object.assign(c, { status: "declined", decided_by: ctx.id, decided_at: at, decision_reason: `Merged into ${keptTitle}` });
   return json(200, { feature_id: body.into, relinked });
 }
 

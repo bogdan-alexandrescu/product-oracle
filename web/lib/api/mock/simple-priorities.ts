@@ -721,14 +721,23 @@ export function prioritiesOut(
   }
   const kept = rows.filter((r) => lead.get(r.feature_id) === r);
   const twinItems = new Set(kept.flatMap((r) => (r.twins ?? []).map((t) => t.item_id).filter((x): x is string => !!x)));
+  // prio-twin-propose: a twin's waiting merge_twin, by its feature (it has no item_id).
+  const twins = new Map(kept.flatMap((r) => (r.twins ?? []).filter((t) => !!t.feature_id).map((t) => [t.feature_id!, t])));
   const codes = new Map(read.items.map((i) => [i.id, i]));
   // As priorities.py lists them: by at, a tie in the order made.
   const proposals: Schemas["SimplePriorityProposal"][] = madeOrder(db.changes ?? [], (c) => [c.at])
     // Ranking proposals, and a draft's Confirm or Merge (S7: a merge_item), as priorities.py; qa-prio-twins: a twin's Merge too.
-    .filter((c) => c.status === "proposed" && codes.has(String(c.target.item_id)))
-    .filter((c) => c.op === "override_priority" || c.op === "estimate_feature" || ((c.op === "confirm_item" || c.op === "cut" || c.op === "merge_item") && (codes.get(String(c.target.item_id))!.draft || (c.op === "merge_item" && twinItems.has(String(c.target.item_id))))))
+    .filter((c) => c.status === "proposed" && (codes.has(String(c.target.item_id)) || (c.op === "merge_twin" && twins.has(String(c.target.feature_id)))))
+    .filter((c) => c.op === "override_priority" || c.op === "estimate_feature" || c.op === "merge_twin" || ((c.op === "confirm_item" || c.op === "cut" || c.op === "merge_item") && (codes.get(String(c.target.item_id))!.draft || (c.op === "merge_item" && twinItems.has(String(c.target.item_id))))))
     .filter((c) => ctx.role === "owner" || c.by === ctx.id || route(c).includes(ctx.id))
-    .map((c) => {
+    .map((c): Schemas["SimplePriorityProposal"] => {
+      const t = c.op === "merge_twin" ? twins.get(String(c.target.feature_id)) : undefined;
+      if (t)
+        return {
+          change_id: c.id, op: "merge_twin", item_id: t.item_id ?? null, feature_id: t.feature_id, code: t.code, title: t.title, by_name: c.by_name, at: c.at, reason: c.reason,
+          after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: ctx.role === "owner" || ctx.role === "approver", can_withdraw: c.by === ctx.id,
+          flow: flowFor(db.visuals, "change", c.id) ?? (t.item_id ? flowFor(db.visuals, "feature", t.item_id) : null),
+        };
       const i = codes.get(String(c.target.item_id))!;
       return {
         change_id: c.id, op: c.op as Schemas["SimplePriorityProposal"]["op"], item_id: i.id, feature_id: featureOfItem(db, i), code: i.key, title: i.title, by_name: c.by_name, at: c.at, reason: c.reason,
