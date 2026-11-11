@@ -17,13 +17,17 @@ Test cards (protects / fails_when / no_claim):
   read, which reads each PRD's questions in once) stay under MAX_STATEMENTS with several
   hundred waiting items (any per-row read passes it many times
   over); fails_when=a source reads per item, change or suggestion; no_claim=wall-clock time.
-- test_waiting_says_what_it_said_before: protects=for every role, a roadmap's decider and a
-  track owner, the response is identical to the one the former list built from the roadmap,
-  changes and suggestions pages' own reads (``former_items`` below, kept verbatim);
-  fails_when=any item, its order, words, link or time differs; no_claim=kinds this seed
-  does not hold (the Inbox's rows, read as before).
+- test_waiting_says_what_it_said_before: protects=for every role, a roadmap's decider, its
+  required reviewer, a track owner, an approver track owner deciding a roadmap with no
+  decider, a member's API token, a read-only one and a service token, the response is
+  identical to the one the former list built from the roadmap, changes and suggestions pages'
+  own reads (``former_items`` below, kept verbatim), with working drafts that change and add
+  items, a replaced PRD, goal suggestions that failed their checks and items in Trash, with
+  and without a company roadmap; fails_when=any item, its order, words, link or time differs;
+  no_claim=kinds this seed does not hold (the Inbox's rows, read as before).
 """
 
+import re
 import time
 from typing import Any
 
@@ -31,9 +35,11 @@ import pytest
 from sqlalchemy import event
 
 from oracle import company_time
+from oracle.auth.service import create_api_token
 from oracle.db import get_engine
 from oracle.simple import waiting_list
 from oracle.simple.schemas import SimpleWaitingItem
+from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.test_simple_roadmap_api import NOW
 from tests.waiting_seed import big_company
@@ -45,6 +51,8 @@ BUDGET_S = 0.6
 # Counted on a warm read (the first reads each PRD's questions in once, questions.ensure).
 # Before: 224 statements (sign-in included), the list's sources 142 of them.
 MAX_STATEMENTS = 110
+# Roadmap 1's items in Trash (tests/waiting_seed.py).
+TRASHED = re.compile(r"Item 1-(0|1|60)(?!\d)")
 
 
 @pytest.fixture(autouse=True)
@@ -105,13 +113,30 @@ async def test_waiting_reads_no_statement_per_row(client, company):
         assert n <= MAX_STATEMENTS, n
 
 
-async def test_waiting_says_what_it_said_before(client, company, monkeypatch):
-    ctx, seeded = company
+async def token(ctx, name: str, user: str | None, scope: str | None = None) -> dict:
+    async with tenant_session(ctx.tenant_id) as s:
+        row, raw = await create_api_token(
+            s, name, user_id=ctx.users[user].id if user else None, scope=scope
+        )
+        if user is None:
+            row.role = "owner"
+        await s.commit()
+    return {"Authorization": f"Bearer {raw}"}
+
+
+@pytest.mark.parametrize("company_roadmap", [False, True], ids=["roadmaps", "company_roadmap"])
+async def test_waiting_says_what_it_said_before(client, monkeypatch, company_roadmap):
+    ctx = await make_ctx()
+    seeded = await big_company(ctx, company_roadmap=company_roadmap)
     people = {role: ctx.as_(role) for role in ("owner", "approver", "commenter", "viewer")}
-    # member-5 decides roadmap 3; member-6 is every roadmap's required reviewer.
-    for name in ("member-5", "member-6", "member-7"):
+    # member-1 decides roadmap 3; member-2 is every roadmap's required reviewer; member-3 owns
+    # tracks 0 and 2; member-5, an approver, owns track 4, whose roadmap has no decider.
+    for name in ("member-1", "member-2", "member-3", "member-5"):
         ctx.users[name] = seeded["members"][name]
         people[name] = ctx.as_(name)
+    people["approver's token"] = await token(ctx, "example-bot", "approver")
+    people["owner's read-only token"] = await token(ctx, "example-read", "owner", "oracle:read")
+    people["service token"] = await token(ctx, "example-service", None)
     now = {}
     for name, headers in people.items():
         _, _, now[name] = await read(client, headers)
@@ -119,7 +144,18 @@ async def test_waiting_says_what_it_said_before(client, company, monkeypatch):
     for name, headers in people.items():
         _, _, before = await read(client, headers)
         assert now[name] == before, name
-    assert len(now["approver"]["items"]) > 500 and len(now["owner"]["items"]) > 500
+    least = 100 if company_roadmap else 500
+    assert len(now["approver"]["items"]) > least and len(now["owner"]["items"]) > least
+    # The seed's cases are on the list: a working draft's renamed item; not an item in Trash
+    # nor a proposal on one.
+    titles = [i["title"] for i in now["owner"]["items"]]
+    assert any("renamed" in t for t in titles), titles
+    assert company_roadmap or "Item 1-3" in titles, titles
+    assert not any(TRASHED.search(t) for t in titles), titles
+    assert now["approver's token"] == now["approver"]
+    # member-5 decides roadmap 4's proposals (the company roadmap's, when there is one, are
+    # the approver's).
+    assert any(i["kind"] == "proposal" for i in now["member-5"]["items"]) != company_roadmap
 
 
 # --- The former list, verbatim: each source read as its own page reads it. ---------------
