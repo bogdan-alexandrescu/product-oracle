@@ -9,8 +9,10 @@
  * none too; a goal's own joins a PRD milestone only if its group holds no other goal's milestone, checked
  * after every join by code (to a track, to the roadmap's own, a PRD's to either: unchecked, so such a group
  * may join several goals) is made, whatever the goal order (the closest in date, then the exact name; one
- * goal's own per group joined by a PRD milestone, by goal order).
- * A joined group goes by its track milestone's date, else its earliest goal's own milestone's, else its earliest.
+ * goal's own per group joined by a PRD milestone, by goal order; a later goal's own joins another PRD
+ * milestone it may join by these rules, else keeps its own code).
+ * A group with a track milestone goes by its date, or, if it has none, the earliest date of any member (a PRD's
+ * too); any other group by its earliest goal's own milestone's date, else its earliest.
  * Beyond ordering milestones of one date, codes do not depend on goal order, except the one tie-break above: when
  * two goals' own milestones contend for one PRD milestone, the first goal in goal order takes it.
  */

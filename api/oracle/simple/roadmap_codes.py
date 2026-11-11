@@ -20,8 +20,10 @@ track milestone, to the roadmap's own, and a PRD's to either) are made first, un
 group a track or the roadmap's own milestone holds may join several goals; then a goal's own
 joins a PRD milestone, seeing every goal that group already holds, whatever the goal order. Of
 several such PRD milestones the closest in date joins, then the one of its exact name; at most
-one goal's own milestone joins a given group by a PRD milestone (goal order first), the others
-keep their own codes. A joined group is dated by its track milestone, else by its earliest
+one goal's own milestone joins a given group by a PRD milestone (goal order first), so a later
+goal's own joins another PRD milestone it may join by these rules (another "Beta launch"),
+else keeps its own code. A group with a track milestone is dated by it, or, if it has no
+date, by the earliest date of any member (a PRD's too); any other group by its earliest
 goal's own milestone, else by its earliest. No name is hidden: each surface shows the longer
 name and lists the other ("Also: ...").
 
