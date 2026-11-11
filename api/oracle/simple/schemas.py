@@ -836,6 +836,9 @@ ChangeOp = Literal[
     "edit_question",
     "withdraw_decision",
     "add_question",
+    # prio-twin-propose: a same-name twin's Ground Truth feature merged into its row's
+    # (oracle.simple.twin_merges; an approver's applies, a commenter's is proposed).
+    "merge_twin",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).

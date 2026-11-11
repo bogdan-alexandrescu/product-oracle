@@ -213,7 +213,7 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { codesSeen, groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
-import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
+import { PRIORITIES_PLAN_MILESTONES_SCENARIO, seedOldMilestones, seedOwnMilestones, seedPlanPrdMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
 import { codedTitle, openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
@@ -4236,6 +4236,13 @@ function load(): Db {
                 ? seedGoalBucketsUndatedScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
+              : scenario === PRIORITIES_PLAN_MILESTONES_SCENARIO
+                ? () => {
+                    // milestone-rename on Priorities: the plan's PRD's milestones on its roadmap.
+                    const db = seedSimplePlanScenario();
+                    db.simple_roadmap!.goal_milestones = seedPlanPrdMilestones();
+                    return db;
+                  }
               : scenario === PRIORITIES_PLAN_GOAL_NAMES_SCENARIO
                 ? () => {
                     const db = seedSimplePlanScenario();

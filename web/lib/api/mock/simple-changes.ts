@@ -392,15 +392,11 @@ function decides(db: SimpleDb, ctx: SimpleChangesCtx, itemId: unknown): boolean 
  */
 async function mergeTwin(db: SimpleDb, ctx: SimpleChangesCtx, fid: string, body: { into: string }): Promise<Response> {
   if (ctx.role !== "owner" && ctx.role !== "approver") return json(403, { detail: "Only an approver merges Ground Truth features" });
-  const source = featureItem(db, fid);
-  const kept = featureItem(db, body.into);
-  if (!source || !kept || source === kept) return json(422, { detail: "into: another Ground Truth feature" });
+  const pair = twinPair(db, fid, body.into);
+  if (pair instanceof Response) return pair;
+  const { source, kept, keptTitle } = pair;
   const theirs = itemsOfFeature(db, source);
   const ours = itemsOfFeature(db, kept);
-  const sourceTitle = db.items.find((x) => x.key === source)!.title;
-  const keptTitle = db.items.find((x) => x.key === kept)!.title;
-  const names = new Set([sourceTitle, ...theirs.map((x) => x.title)].map(sameName));
-  if (![keptTitle, ...ours.map((x) => x.title)].some((t) => names.has(sameName(t)))) return json(422, { detail: `into: a feature named ${sourceTitle}` });
   const why = twinBlock(db, (x) => decides(db, ctx, db.ids[x.key]), source, kept, keptTitle);
   if (why) return json(409, { detail: why });
   const lock = db.items.find((x) => x.key === source)!.gt_lock;
@@ -422,6 +418,46 @@ async function mergeTwin(db: SimpleDb, ctx: SimpleChangesCtx, fid: string, body:
   // The feature goes: every record of it stands for the kept one.
   for (const x of db.items) if (x.key !== kept && (x.feature ?? x.trace_feature ?? x.key) === source) x.feature = kept;
   return json(200, { feature_id: body.into, relinked });
+}
+
+/** priorities.twin_pair and its same-name check: the twin's feature and the kept one (422 unless two features, one of
+ * the twin's names the kept one's). */
+function twinPair(db: SimpleDb, fid: string, into: string): Response | { source: string; kept: string; sourceTitle: string; keptTitle: string } {
+  const source = featureItem(db, fid);
+  const kept = featureItem(db, into);
+  if (!source || !kept || source === kept) return json(422, { detail: "into: another Ground Truth feature" });
+  const sourceTitle = db.items.find((x) => x.key === source)!.title;
+  const keptTitle = db.items.find((x) => x.key === kept)!.title;
+  const names = new Set([sourceTitle, ...itemsOfFeature(db, source).map((x) => x.title)].map(sameName));
+  if (![keptTitle, ...itemsOfFeature(db, kept).map((x) => x.title)].some((t) => names.has(sameName(t)))) return json(422, { detail: `into: a feature named ${sourceTitle}` });
+  return { source, kept, sourceTitle, keptTitle };
+}
+
+/**
+ * prio-twin-propose (oracle.simple.twin_merges): op merge_twin, target {feature_id, into_id}. An approver's runs
+ * mergeTwin at once; a commenter's is proposed to the company's owners (one open per twin); a viewer's is 403.
+ */
+async function createTwinMerge(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Promise<Response> {
+  if (ctx.role === "viewer") return json(403, { detail: "Only a commenter or above proposes a merge" });
+  const fid = String(body.target.feature_id ?? "");
+  const into = String(body.target.into_id ?? "");
+  const pair = twinPair(db, fid, into);
+  if (pair instanceof Response) return pair;
+  const applies = ctx.role === "owner" || ctx.role === "approver";
+  if (!applies && (db.changes ?? []).some((c) => c.op === body.op && c.status === "proposed" && c.target.feature_id === fid)) return json(409, { detail: "This merge is proposed already" });
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: null, document_id: null, draft_ids: [],
+    op: body.op, target: { feature_id: fid, into_id: into, title: pair.sourceTitle, into_title: pair.keptTitle }, before: {}, after: {},
+    status: applies ? "applied" : "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
+    decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
+    routed_to: applies ? [] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  if (applies) {
+    const r = await mergeTwin(db, ctx, fid, { into });
+    if (r.status >= 300) return r;
+  }
+  (db.changes ??= []).push(change);
+  return json(201, { change: view(db, ctx, change), flags: [] });
 }
 
 /** S7: the roadmap (slug) an add_item change writes. */
@@ -446,6 +482,8 @@ function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op"
   if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
   // A goal ask is decided by the owners it is sent to (goal_asks.may_decide).
   if (GOAL_ASK_OPS.includes(c.op)) return ctx.role === "owner";
+  // prio-twin-propose (twin_merges.may_decide): who may run merge_twin.
+  if (c.op === "merge_twin") return ctx.role === "owner" || ctx.role === "approver";
   // roadmap-decide: a change asked of a PRD's milestone (before.date) is any of the PRD's owners'
   // (drafts.who on the change's document) or a company owner's (goal_milestones.decide), its
   // milestone live or gone (its other milestones gone too).
@@ -1401,6 +1439,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   if (body.op === "delete_item") return createDeleteItem(db, ctx, body);
   if (body.op === MILESTONE_OP) return createMilestoneChange(db, ctx, body);
   if (GOAL_ASK_OPS.includes(body.op) || body.op === "delete_goal") return createGoalAsk(db, ctx, body);
+  if (body.op === "merge_twin") return createTwinMerge(db, ctx, body);
   if (body.op === MAP_LINK_OP) return createMapLink(db, ctx, body);
   const now = iso(mockNowMs());
   if (KEY_DATE_OPS.includes(body.op)) {
@@ -1867,7 +1906,11 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   else if (p[4] === "accept" && (c.op === "add_track" || c.op === "edit_track")) {
     // tracks-goal (owner Nov 9): a proposed track change, applied already by ./simple-removed.ts (only its PRD).
   }
-  else if (p[4] === "accept" && GOAL_ASK_OPS.includes(c.op)) {
+  else if (p[4] === "accept" && c.op === "merge_twin") {
+    // twin_merges.decide: the same merge_twin, as the decider (its 409 and 422, nothing written).
+    const r = await mergeTwin(db, ctx, String(c.target.feature_id), { into: String(c.target.into_id) });
+    if (r.status >= 300) return r;
+  } else if (p[4] === "accept" && GOAL_ASK_OPS.includes(c.op)) {
     const err = applyGoalAsk(db, ctx, c);
     if (err) return err;
   } else if (p[4] === "accept" && c.op === MAP_LINK_OP) {

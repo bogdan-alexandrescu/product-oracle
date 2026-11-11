@@ -63749,7 +63749,8 @@
                   "edit_decision",
                   "edit_question",
                   "withdraw_decision",
-                  "add_question"
+                  "add_question",
+                  "merge_twin"
                 ]
               },
               {
@@ -64182,7 +64183,8 @@
               "edit_decision",
               "edit_question",
               "withdraw_decision",
-              "add_question"
+              "add_question",
+              "merge_twin"
             ],
             "title": "Op"
           },
@@ -88689,7 +88691,8 @@
               "edit_decision",
               "edit_question",
               "withdraw_decision",
-              "add_question"
+              "add_question",
+              "merge_twin"
             ],
             "title": "Op"
           },
@@ -123809,7 +123812,8 @@
               "edit_decision",
               "edit_question",
               "withdraw_decision",
-              "add_question"
+              "add_question",
+              "merge_twin"
             ],
             "title": "Op"
           },
@@ -123976,7 +123980,8 @@
               "edit_decision",
               "edit_question",
               "withdraw_decision",
-              "add_question"
+              "add_question",
+              "merge_twin"
             ],
             "title": "Op"
           },

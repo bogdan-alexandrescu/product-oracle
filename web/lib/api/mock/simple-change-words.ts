@@ -143,6 +143,8 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "delete_item": return `moved ${x} to Trash`;
     // edit-goals-prds: a goal archived or moved to Trash (goal_asks).
     case "archive_goal": return `archived the goal ${quoted(target.title) ?? "a goal"}`;
+    // prio-twin-propose (change_words: merge_twin): a same-name twin's feature merged into its row's.
+    case "merge_twin": return `merged ${quoted(target.title) ?? "a feature"} into ${quoted(target.into_title) ?? "its same name"}`;
     case "delete_goal": return `moved the goal ${quoted(target.title) ?? "a goal"} to Trash`;
     case "unarchive_goal": return `restored the goal ${quoted(target.title) ?? "a goal"}`;
     // goal-map-link-asks (goal_map_asks, change_words.py): a feature put on a goal milestone, or moved there.

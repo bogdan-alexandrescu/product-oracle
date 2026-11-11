@@ -958,10 +958,21 @@ async def merge_twin(
     (403) who decides every one of those items' roadmaps (409, naming it), and none would sit
     beside a confirmed item of the kept feature on its roadmap (409: merge those items first,
     merge_item). Not committed."""
-    from oracle.baseline import service as baseline
-
     if not has_role(principal.role, "approver"):
         raise changes.ChangeError(403, "Only an approver merges Ground Truth features")
+    source, into = await twin_pair(db, feature_id, into_id)
+    # Every roadmap's items, the older ones beside the company roadmap too: none is left with
+    # no feature when the twin's goes (re-review of #1503).
+    with service.every_roadmap():
+        return await _merge_twin(db, principal, source, into)
+
+
+async def twin_pair(
+    db: AsyncSession, feature_id: uuid.UUID, into_id: uuid.UUID
+) -> tuple[Entity, Entity]:
+    """The twin's feature and the kept one, two Ground Truth features (422 else; 404 unknown)."""
+    from oracle.baseline import service as baseline
+
     try:
         source = await baseline.get_entity(db, feature_id)
         into = await baseline.get_entity(db, into_id)
@@ -969,10 +980,27 @@ async def merge_twin(
         raise changes.ChangeError(exc.status_code, str(exc)) from exc
     if source.type != "feature" or into.type != "feature" or source.id == into.id:
         raise changes.ChangeError(422, "into: another Ground Truth feature")
-    # Every roadmap's items, the older ones beside the company roadmap too: none is left with
-    # no feature when the twin's goes (re-review of #1503).
+    return source, into
+
+
+def _same_named(items: dict[str, list[service.Entry]], source: Entity, into: Entity) -> None:
+    """Only into the row it shows on: one of its names (its own, its items') is the kept one's
+    (422 else). ``items``: _items_of over every roadmap."""
+    theirs, ours = items.get(str(source.id), []), items.get(str(into.id), [])
+    names = {same_name(source.title), *(same_name(e.row.title) for e in theirs)}
+    if not names & {same_name(into.title), *(same_name(d.row.title) for d in ours)}:
+        raise changes.ChangeError(422, f"into: a feature named {source.title}")
+
+
+async def check_twin_merge(
+    db: AsyncSession, principal: Any, feature_id: uuid.UUID, into_id: uuid.UUID
+) -> tuple[Entity, Entity]:
+    """prio-twin-propose: merge_twin's 422 refusals for a proposal of it, nothing written."""
+    source, into = await twin_pair(db, feature_id, into_id)
     with service.every_roadmap():
-        return await _merge_twin(db, principal, source, into)
+        read_ = await service.load(db, await drafts.overlays_for(db, principal))
+    _same_named(_items_of(read_), source, into)
+    return source, into
 
 
 def _twin_block(
@@ -1016,10 +1044,7 @@ async def _merge_twin(
     items = _items_of(read_)
     theirs = items.get(str(source.id), [])
     ours = items.get(str(into.id), [])
-    # Only into the row it shows on: one of its names (its own, its items') is the kept one's.
-    names = {same_name(source.title), *(same_name(e.row.title) for e in theirs)}
-    if not names & {same_name(into.title), *(same_name(d.row.title) for d in ours)}:
-        raise changes.ChangeError(422, f"into: a feature named {source.title}")
+    _same_named(items, source, into)
     if why := _twin_block(principal, read_, items, str(source.id), str(into.id), into.title):
         raise changes.ChangeError(409, why)
     relinked: list[str] = []

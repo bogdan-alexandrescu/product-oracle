@@ -24,7 +24,8 @@ import { expect, test } from "./test";
  * - a twin whose feature is locked is not merged: the person is told why, and the twin and the row's draft stay;
  * - the score's formula sits behind an (i) by the list's heading, never as a line of text;
  * - the Show filter's All counts every feature listed, Block list and Queue backpressure too (only proposed by
- *   Oracle, so with no mark yet).
+ *   Oracle, so with no mark yet), and each line it shows: a row's same-name lines and the items with no ranked
+ *   feature too, never only the rows they are grouped in.
  * Desktop 1440x900 and phone 390x844.
  */
 
@@ -209,7 +210,10 @@ for (const phone of [false, true]) {
     test("the Show filter's All counts every feature listed, one with no mark yet too", async ({ page }) => {
       await setUp(page, phone);
       await expect(page.getByTestId("cs-legend")).toBeVisible();
-      const n = await page.getByTestId("prio-row").count();
+      // Every line the list shows: each row, each same-name line folded into one, each item with no ranked feature.
+      const rows = await page.getByTestId("prio-row").count();
+      const n = rows + (await page.getByTestId("prio-twin").count()) + (await page.getByTestId("prio-unranked-row").count());
+      expect(n).toBeGreaterThan(rows);
       await expect(page.getByTestId("cs-legend").getByRole("button", { name: /^All / })).toHaveText(`All ${n}`);
     });
   });

@@ -1556,6 +1556,7 @@ async def create(
         questions,
         targets,
         trash_items,
+        twin_merges,
     )
 
     ag = await agenda.for_session(db, body.session_id) or await agenda.for_meeting(db, meeting_id)
@@ -1581,6 +1582,8 @@ async def create(
         return await plan_changes.create_change(db, principal, body)
     if body.op in decision_sheet.OPS:
         return await decision_sheet.create(db, principal, body)
+    if body.op in twin_merges.OPS:
+        return await twin_merges.create_change(db, principal, body)
     me, now = _me(principal), company_time.now()
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
@@ -1728,6 +1731,10 @@ async def decide(
 
     if c.op in decision_sheet.OPS:
         return await decision_sheet.decide(db, principal, c, action, reason)
+    from oracle.simple import twin_merges
+
+    if c.op in twin_merges.OPS:
+        return await twin_merges.decide(db, principal, c, action, reason)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
@@ -2001,6 +2008,7 @@ class _View:
             plan_changes,
             questions,
             targets,
+            twin_merges,
         )
 
         if c.op in decision_sheet.OPS:
@@ -2023,6 +2031,8 @@ class _View:
             return trash_items.may_decide_goal(self.principal)
         if c.op in goal_asks.OPS:
             return goal_asks.may_decide(self.principal)
+        if c.op in twin_merges.OPS:
+            return twin_merges.may_decide(self.principal)
         if c.op in goal_map_asks.OPS:
             return goal_map_asks.may_decide(self.principal, c, self)
         if c.op in PLAN_OPS:

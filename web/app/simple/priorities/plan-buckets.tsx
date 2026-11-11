@@ -189,7 +189,18 @@ function GoalBar({ plan, goal, code, parts, total, max }: { plan: Plan; goal: st
 }
 
 /** plan-charts (the owner's pick B): where each goal's engineer-weeks land, milestone by milestone. */
-export function PlanBucketsHead({ plan, codeOf }: { plan: Plan; codeOf: (goal: string) => string | null }) {
+export function PlanBucketsHead<G extends { name: string }>({
+  plan,
+  codeOf,
+  milestoneOf,
+  onMilestone,
+}: {
+  plan: Plan;
+  codeOf: (goal: string) => string | null;
+  /** milestone-rename: the roadmap's own milestone a plan milestone is (its name and rights), if the reader sees it. */
+  milestoneOf?: (code: string, name: string) => G | null;
+  onMilestone?: (m: G) => void;
+}) {
   const rows = goalRows(plan);
   // The longest bar stops short of the column's end, as B draws it.
   const max = Math.max(1, ...rows.map((r) => r.total)) * 1.07;
@@ -202,10 +213,19 @@ export function PlanBucketsHead({ plan, codeOf }: { plan: Plan; codeOf: (goal: s
       <ul className="mb-1.5 flex flex-wrap gap-x-[18px] gap-y-1" aria-label="Milestones">
         {plan.milestones.map((m) => {
           const { dates, full } = legendParts(m);
+          // milestone-rename: its code opens the milestone's card, its name in place (the code stays).
+          const own = milestoneOf?.(m.code, m.name) ?? null;
+          const name = own?.name ?? m.name;
           return (
-            <li key={m.code} data-testid="milestone-chip" title={`${m.code} ${m.name}`} className="inline-flex items-center gap-1.5 text-[14px] leading-5 tabular-nums">
+            <li key={m.code} data-testid="milestone-chip" title={`${m.code} ${name}`} className="inline-flex items-center gap-1.5 text-[14px] leading-5 tabular-nums">
               <span aria-hidden className="inline-block h-3.5 w-3.5 flex-none rounded-[3px]" style={{ background: milestoneColour(plan, m.code).bar }} />
-              <b className="font-[650]">{m.code} </b>
+              {own && onMilestone ? (
+                <button type="button" data-testid="milestone-chip-edit" aria-label={`${m.code} ${name}`} className="font-[650] hover:underline" onClick={() => onMilestone(own)}>
+                  {m.code}{" "}
+                </button>
+              ) : (
+                <b className="font-[650]">{m.code} </b>
+              )}
               {dates && <span className="whitespace-nowrap">{dates}</span>}
               {` · ${full}`}
             </li>

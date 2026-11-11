@@ -24,6 +24,7 @@ import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, 
 import { useBucketDrag } from "./goal-drag";
 import { goalKeysOf, KeyResultList, liftedMoves, topGoalBuckets, topGoalPlan, topGoalPriorities, usePriorityKeyResults, type PriorityKeyResults } from "./key-results";
 import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
+import { MsCard, MsProvider, MsToast, useMilestones } from "../roadmap/_milestones";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan, weeksWords } from "./plan-buckets";
 import { CrowdMark, CrowdSheet, MARK_R, markLayout, type Box, type Crowd } from "./mark-counts";
 
@@ -206,6 +207,9 @@ export function Priorities() {
     }
     return c;
   }, [data, marks]);
+  // The All chip counts each line the full list shows: a row, each same-name line folded into it and each item with
+  // no ranked feature (a goal's list leaves those out), never only the rows they are grouped in.
+  const allCount = data ? data.rows.reduce((n, r) => n + 1 + (r.twins?.length ?? 0), 0) + (params.get("goal") ? 0 : data.unranked.length) : 0;
   const shownData = data && show && marks ? { ...data, rows: data.rows.filter((r) => { const f = marks.get(r.feature_id); return !!f && showsAs(f.mark) === show; }), unranked: [] } : null;
   // Roles through can() and the rows' own fields: the API says who applies and who proposes.
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
@@ -355,7 +359,7 @@ export function Priorities() {
       )}
       {data && !blank && tab === "ranked" && marks && (
         <div className="mb-3" data-testid="cs-prio-bar">
-          <ShowFilter counts={showCounts} total={data.rows.length} pick={show} onPick={setShow} />
+          <ShowFilter counts={showCounts} total={allCount} pick={show} onPick={setShow} />
           {show && (
             <p className="mt-2 text-[length:var(--simple-small)] text-text2">
               {SHOW_NOTE[show](showCounts[show])} <InfoTip label="ranks shown">Ranks stay as in the full list.</InfoTip>
@@ -1291,6 +1295,12 @@ function Twins({ r, proposals, mayChange, changed }: { r: Row; proposals: Propos
       return;
     }
     if (t.merge !== "entity" || !t.feature_id) return;
+    // prio-twin-propose: who may not merge Ground Truth features proposes it (twin_merges); the decider's
+    // approval runs the same merge.
+    if (!t.applies) {
+      await changed(await send({ op: "merge_twin", target: { feature_id: t.feature_id, into_id: r.feature_id }, before: {}, after: {}, reason: `Merged into ${r.title}` }), mergedWords(t, r));
+      return;
+    }
     setBusy(true);
     try {
       // Its roadmap items are linked to the kept feature first (priorities.merge_twin), never left with none.
@@ -1308,8 +1318,9 @@ function Twins({ r, proposals, mayChange, changed }: { r: Row; proposals: Propos
     <ul className="mt-2 flex flex-col gap-2 sm:pl-12" aria-label="Also listed as">
       {(r.twins ?? []).map((t) => {
         const id = t.feature_id ?? t.code;
-        // A merge the caller may start: merge_item (applied or proposed), or the Ground Truth's for who may approve.
-        const may = mayChange && (t.merge === "item" || (t.merge === "entity" && t.applies));
+        // A merge the caller may start: merge_item (applied or proposed), or the Ground Truth's for who may approve, else
+        // proposed (prio-twin-propose) unless an approver is told why it cannot be merged.
+        const may = mayChange && (t.merge === "item" || (t.merge === "entity" && (t.applies || !t.blocked)));
         // Its own waiting proposals (a move, an estimate, a merge): they show here, its row being folded into this one;
         // none more until they are decided (as a draft's).
         const pending = proposals.filter(
@@ -2711,9 +2722,24 @@ function PlanBuckets({ data, plan: read, suggestions, reload, kr }: { data: Out;
     },
   });
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
+  // milestone-rename (the owner, Nov 10): each milestone in place, through the Roadmap's own card and rights (a PRD
+  // milestone's name goes straight in for the PRD's owner, else asks them); the roadmap's read gives its milestones.
+  const roadmapQ = useQuery<Schemas["SimpleRoadmapOut"]>("simple-priorities-milestones", () => unwrap(api.GET("/v1/simple/roadmap", {})));
+  const ms = useMilestones({ data: roadmapQ.data, phone, canChange: can("create_simple_change"), reload: async () => { await roadmapQ.reload(); await reload(); }, openItem: () => {} });
+  // The plan's code is the PRD's own (its roadmap-wide code may differ); else its name.
+  const milestoneOf = (code: string, name: string) => {
+    const mine = ms?.list.filter((m) => m.prd?.slug === read.prd.slug) ?? [];
+    return mine.find((m) => m.code === code) ?? mine.find((m) => m.name === name) ?? null;
+  };
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
-      <PlanBucketsHead plan={plan} codeOf={codeOf} />
+      {ms && (
+        <MsProvider value={ms}>
+          <MsCard />
+          <MsToast />
+        </MsProvider>
+      )}
+      <PlanBucketsHead plan={plan} codeOf={codeOf} milestoneOf={milestoneOf} onMilestone={(m) => ms?.edit(m)} />
       <div ref={noteSlot} className="scroll-mt-4" />
       {note && <UndoNote id={note.id} clear='[data-testid="plan-goal"] h3' onUndo={undoOf(note, writes, tasks)}>{note.text}</UndoNote>}
       {error && (

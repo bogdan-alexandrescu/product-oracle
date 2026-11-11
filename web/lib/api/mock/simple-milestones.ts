@@ -212,6 +212,16 @@ export function seedPrdMilestones(): MockMilestone[] {
   ];
 }
 
+/** milestone-rename on Priorities: "simple-plan" whose plan's PRD (Guided setup) has its milestones on the roadmap. */
+export const PRIORITIES_PLAN_MILESTONES_SCENARIO = "priorities-plan-milestones";
+
+/** Guided setup's own milestones, as its plan names them (M1 Prove it, M2 Scale volume, M3 Open to all). */
+export function seedPlanPrdMilestones(): MockMilestone[] {
+  const prd = { slug: "guided-setup", title: "Guided setup" };
+  const at = (code: string, name: string, date: string): MockMilestone => ({ id: stableUuid(`simple-gm/guided-setup/${code}`), roadmap: "onboarding-roadmap", code, name, date, goal: null, gates: [], counts_when: "", progress: "not_started", prd });
+  return [at("M1", "Prove it", "2026-11-27"), at("M2", "Scale volume", "2026-12-25"), at("M3", "Open to all", "2027-02-12")];
+}
+
 /** roadmap-decide: a change asked of a PRD's milestone (goal_milestones._propose_prd_change), waiting on the PRD's owners. */
 function prdAsk(m: MockMilestone, id: string, after: { date: string | null; counts_when: string | null; name?: string }, by: string, byName: string, at: string, routed: string[]): Schemas["SimpleChangeOut"] {
   return {
