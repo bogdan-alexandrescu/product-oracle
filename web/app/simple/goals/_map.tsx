@@ -632,11 +632,15 @@ function AttachDrawer({ map, milestone, codes, mcode, onClose, onSave }: { map: 
           {!roadmap.data && <li className="simple-small">{roadmap.error ? errorMessage(roadmap.error) : "Loading the roadmap…"}</li>}
           {list.map((i) => (
             <li key={i.id}>
-              <button type="button" onClick={() => setFeature(i.id)} className={`w-full rounded-xl border px-3 py-2 text-left font-semibold ${feature === i.id ? "border-accent bg-accent-soft" : "border-line"}`}>
+              <button type="button" aria-describedby={i.from ? `gm-from-${i.id}` : undefined} onClick={() => setFeature(i.id)} className={`w-full rounded-xl border px-3 py-2 text-left font-semibold ${feature === i.id ? "border-accent bg-accent-soft" : "border-line"}`}>
                 {i.code && <span className="simple-code mr-1">{i.code}</span>}
                 {i.name}
-                {i.from && <span className="simple-small block font-normal">Move from {mWords(i.from, { mcode })}</span>}
               </button>
+              {i.from && (
+                <span id={`gm-from-${i.id}`} className="simple-small block px-3">
+                  Move from {mWords(i.from, { mcode })}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -718,13 +722,12 @@ export function GoalMapPage() {
     if (!map) return [];
     const ms = new Map(map.milestones.map((m) => [m.id, m]));
     const goals = new Set(map.goals.map((g) => g.id));
-    // One chip for each goal a feature serves, naming every milestone of that goal it is on.
+    // A chip under the goal of its first milestone, naming every milestone of that goal it is on.
     const placed = map.features.flatMap((f): Chip[] => {
-      const on = f.milestones.flatMap((id) => ms.get(id) ?? []).filter((m) => goals.has(m.goal)).sort(byDate);
-      return [...new Set(on.map((m) => m.goal))].map((goal) => {
-        const mine = on.filter((m) => m.goal === goal);
-        return { id: f.id, name: f.name, f, m: mine[0], ms: mine, goal, track: trackOf.get(f.id) ?? null, done: f.released, lift: f.lift };
-      });
+      const first = ms.get(f.milestones[0] ?? "");
+      if (!first || !goals.has(first.goal)) return [];
+      const mine = f.milestones.flatMap((id) => ms.get(id) ?? []).filter((m) => m.goal === first.goal).sort(byDate);
+      return [{ id: f.id, name: f.name, f, m: mine[0], ms: mine, goal: first.goal, track: trackOf.get(f.id) ?? null, done: f.released, lift: f.lift }];
     });
     const on = new Set(placed.map((c) => c.id));
     const loose = map.unplaced.flatMap((u): Chip[] => (u.goal && goals.has(u.goal) && !on.has(u.id) ? [{ id: u.id, name: u.name, f: null, m: null, ms: [], goal: u.goal, track: trackOf.get(u.id) ?? null, done: doneOf.has(u.id), lift: "not_measured" }] : []));

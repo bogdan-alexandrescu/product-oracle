@@ -71,7 +71,7 @@ test.describe("Goal map editors in the tracks grid", () => {
     await open(page);
     await milestoneMenu(page, "32 demos per rep", "New PRD from it");
     const drawer = page.getByRole("dialog", { name: "New PRD from a milestone" });
-    await drawer.getByRole("checkbox").first().check();
+    await drawer.getByText("1. Scale").click();
     await drawer.getByRole("button", { name: "Start the PRD" }).click();
     await expect(page.getByPlaceholder("For example: Saved shipping addresses")).toHaveValue("32 demos per rep");
   });
@@ -143,9 +143,9 @@ test.describe("A feature on two milestones of one goal", () => {
     await milestoneMenu(page, "40 demos per rep", "Add a feature");
     const drawer = page.getByRole("dialog", { name: "Add a feature" });
     await drawer.getByPlaceholder("Search the roadmap").fill("Rep calendar sync");
-    const pick = drawer.getByTestId("gm-attach-list").getByRole("button", { name: /Rep calendar sync/ });
-    await expect(pick).toContainText("Move from");
-    await pick.click();
+    const row = drawer.getByTestId("gm-attach-list").getByRole("listitem").filter({ hasText: "Rep calendar sync" });
+    await expect(row).toContainText(/Move from .*32 demos per rep/);
+    await row.getByRole("button", { name: /Rep calendar sync/ }).click();
     await drawer.getByRole("button", { name: "Move here" }).click();
     await expect(chip(page, "Rep calendar sync")).toContainText("40 demos per rep");
     await expect(chip(page, "Rep calendar sync")).not.toContainText("32 demos per rep");
