@@ -49347,7 +49347,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/priorities": {
@@ -130401,7 +130402,7 @@
           "title"
         ],
         "title": "SimplePriorityTwin",
-        "description": "qa-prio-twins: another ranked record of a row's feature, not linked to it (a baseline\nfeature of the same name), shown on that row, never as a row of its own: a person merges it\ninto the row's record (``merge``) or keeps both; Oracle never merges it."
+        "description": "qa-prio-twins: another ranked record of a row's feature, not linked to it (a Ground Truth\nfeature of the same name), shown on that row, never as a row of its own: a person merges it\ninto the row's record (``merge``) or keeps both; Oracle never merges it."
       },
       "SimplePriorityUnranked": {
         "properties": {

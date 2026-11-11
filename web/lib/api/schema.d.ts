@@ -43932,7 +43932,7 @@ export interface components {
         };
         /**
          * SimplePriorityTwin
-         * @description qa-prio-twins: another ranked record of a row's feature, not linked to it (a baseline
+         * @description qa-prio-twins: another ranked record of a row's feature, not linked to it (a Ground Truth
          *     feature of the same name), shown on that row, never as a row of its own: a person merges it
          *     into the row's record (``merge``) or keeps both; Oracle never merges it.
          */
