@@ -21,14 +21,16 @@ group a track or the roadmap's own milestone holds may join several goals; then 
 joins a PRD milestone, seeing every goal that group already holds, whatever the goal order. Of
 several such PRD milestones the closest in date joins, then the one of its exact name; at most
 one goal's own milestone joins a given group by a PRD milestone (goal order first), the others
-keep their own codes. A joined group is dated by its goal's own milestone (else its track
-milestone's, else its earliest). No name is hidden: each surface shows the longer name and
-lists the other ("Also: ...").
+keep their own codes. A joined group is dated by its track milestone, else by its earliest
+goal's own milestone, else by its earliest. No name is hidden: each surface shows the longer
+name and lists the other ("Also: ...").
 
 Codes go by date (undated last); on one date by goal order (``oracle.baseline.goal_order``,
 no goal last), then by name. No suffixes, no repeats: a milestone added or moved earlier
 renumbers the later ones. A dropped track milestone and a PRD plan's own track milestone
-(start and end dated; its PRD milestone is listed) get none.
+(start and end dated; its PRD milestone is listed) get none. Beyond ordering milestones of one
+date, codes do not depend on goal order, except the one tie-break above: when two goals' own
+milestones contend for one PRD milestone, the first goal in goal order takes it.
 """
 
 import re
@@ -202,7 +204,8 @@ def assign(
     def key(members: list[SimpleGoalMilestone | SimpleMilestone]) -> tuple:
         lead = members[0]
         dates = [m.date for m in members if m.date is not None]
-        # A joined group goes by its goal's own milestone's date (its track milestone's first).
+        # A joined group goes by its earliest goal's own milestone (its track milestone's first),
+        # never by the first goal's, so goal order does not move it (round-3 review).
         own = [
             m.date
             for m in members
@@ -211,7 +214,7 @@ def assign(
         if isinstance(lead, SimpleMilestone):
             when: date | None = lead.date or (min(dates) if dates else None)
         else:
-            when = own[0] if own else (min(dates) if dates else None)
+            when = min(own) if own else (min(dates) if dates else None)
         ranks = [
             goal_rank.get(m.goal_id, far)
             for m in members

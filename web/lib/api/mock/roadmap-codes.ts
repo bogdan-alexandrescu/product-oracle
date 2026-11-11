@@ -10,7 +10,9 @@
  * after every join by code (to a track, to the roadmap's own, a PRD's to either: unchecked, so such a group
  * may join several goals) is made, whatever the goal order (the closest in date, then the exact name; one
  * goal's own per group joined by a PRD milestone, by goal order).
- * A joined group goes by its goal's own milestone's date (its track milestone's first, else its earliest).
+ * A joined group goes by its track milestone's date, else its earliest goal's own milestone's, else its earliest.
+ * Beyond ordering milestones of one date, codes do not depend on goal order, except the one tie-break above: when
+ * two goals' own milestones contend for one PRD milestone, the first goal in goal order takes it.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -111,7 +113,7 @@ export function withRoadmapCodes<T extends { goal_milestones?: Gm[]; milestones:
   const key = (ms: (Gm | Tm)[]) => {
     const lead = ms[0];
     const dates = ms.flatMap((m) => (m.date ? [m.date] : [])).sort();
-    const own = ms.flatMap((m) => ("goal_id" in m && m.goal_id && !m.prd && m.date ? [m.date] : []));
+    const own = ms.flatMap((m) => ("goal_id" in m && m.goal_id && !m.prd && m.date ? [m.date] : [])).sort();
     const when = "track_id" in lead ? (lead.date ?? dates[0] ?? null) : (own[0] ?? dates[0] ?? null);
     const rank = Math.min(far, ...ms.flatMap((m) => ("goal_id" in m && m.goal_id ? [goalRank(m.goal_id)] : [])));
     const name = "track_id" in lead ? split(lead.name)[1] : lead.name;

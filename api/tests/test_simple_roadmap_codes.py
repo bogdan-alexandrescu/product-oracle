@@ -282,9 +282,9 @@ def _order_cases():
 
 @pytest.mark.parametrize("case", list(_order_cases()))
 def test_codes_do_not_depend_on_goal_or_list_order(case):
-    """Every goal order and list order give the same codes. The one documented exception, not
-    exercised here: when two goals' own milestones contend for one PRD milestone, the first goal in
-    goal order takes it."""
+    """With no two dates alike, every goal order and list order give the same codes. The one
+    documented exception, not exercised here: when two goals' own milestones contend for one PRD
+    milestone, the first goal in goal order takes it."""
     goal_ms, track_ms, items = case
     seen = set()
     for rank in (RANK, {G1: 1, G2: 0}):
