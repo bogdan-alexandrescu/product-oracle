@@ -2593,7 +2593,7 @@ function seedEveryWaitOne(): Db {
     if (item.key !== "alert-digest") delete item.depends;
   }
   const me = db.members.find((m) => m.id === db.user_id)!;
-  me.name = "Christabelle Stone";
+  me.name = "Mohammadreza Vale";
   return db;
 }
 

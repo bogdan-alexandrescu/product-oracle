@@ -152,7 +152,7 @@ async function spareLines(page: Page): Promise<number> {
   });
 }
 
-for (const width of [390, 601, 800, 1024, 1366, 1512]) {
+for (const width of [375, 390, 601, 610, 685, 800, 1024, 1366, 1512]) {
   const phone = width < 600;
   test.describe(`${width} px`, () => {
     test.use(phone ? { viewport: { width, height: 844 }, hasTouch: true, isMobile: true } : { viewport: { width, height: 820 } });
@@ -163,9 +163,9 @@ for (const width of [390, 601, 800, 1024, 1366, 1512]) {
        * the person's permissions are still on their way (the greeting, the goal band and cards as
        * skeleton placeholders, the rail's frame beside it), then fills them in place: with one of
        * each kind of work waiting (the "every-wait-one" scenario), in the afternoon, for an owner
-       * with a 12-letter first name, the owner's greeting is its longest form (three kinds in the
+       * with a wide 12-letter first name (Mohammadreza), the owner's greeting is its longest form (three kinds in the
        * singular, then "and more", then the Inbox) and the goal band starts where its skeleton
-       * stood, within 1 px, at 390, 601 (beside the rail), 800, 1024, 1366 and 1512 px, and
+       * stood, within 1 px, at 375, 390, 601 and 610 (beside the rail), 685, 800, 1024, 1366 and 1512 px, and
        * stands there too while Home checks what waits (the waiting read held): the skeleton and
        * the page's own line keep the lines that longest form wraps to until it is known, and the
        * page's own action row ("Walk me through it" and "+ New PRD", wrapping as they do); a shorter greeting (a
@@ -213,7 +213,7 @@ for (const width of [390, 601, 800, 1024, 1366, 1512]) {
         const sentence = page.getByTestId("home-sentence");
         if (role === "owner") {
           // The longest form: three kinds by importance, each in the singular, then "and more", then the Inbox.
-          await expect(page.getByTestId("home-greeting").getByText("Good afternoon, Christabelle.")).toBeVisible();
+          await expect(page.getByTestId("home-greeting").getByText("Good afternoon, Mohammadreza.")).toBeVisible();
           await expect(sentence).toHaveText("A decision, a proposal, a broken link and more wait on you. More waits in your Inbox.");
           await expect(page.getByRole("button", { name: "Walk me through it" })).toBeVisible();
           await expect(page.getByRole("button", { name: "New PRD" })).toBeVisible();
