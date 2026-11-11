@@ -2228,7 +2228,7 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
   const buckets: Bucket[] = all.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0)).map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
   const percent = sharePercents(buckets.map((b) => b.weeks));
   const weeksOf = (r: Row) => (r.effort == null ? "" : weeksWords(r.effort));
-  const acts = useGoalActs({ gb, plan: null, featuresOf: goalFeatures(gb, data, null), writes, rights });
+  const acts = useGoalActs({ gb, plan: null, featuresOf: goalFeatures(gb, data, null, kr.top), writes, rights });
   // Round 6: no work this quarter is said in words, not as "0 weeks" over an empty chart.
   const planned = data.weeks_total > 0;
   return (
@@ -2549,7 +2549,7 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
   const acts = useGoalActs({
     gb,
     plan,
-    featuresOf: goalFeatures(gb, data, plan),
+    featuresOf: goalFeatures(gb, data, plan, kr.top),
     writes,
     rights,
     // gb2-a-result: the archived bucket is gone, so on a wider screen the page scrolls back to the
@@ -2766,10 +2766,16 @@ function undoOf(note: Note, writes: ReturnType<typeof useBucketWrites>, tasks?: 
  * goal links), the plan's, and the roadmap items and drafts that name it, whatever their dates (a
  * bucket holds only this quarter's work), so none loses its goal unasked (goal-delete-dated).
  */
-function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan: Schemas["SimplePlanOut"] | null): GoalFeatures {
+function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan: Schemas["SimplePlanOut"] | null, top?: PriorityKeyResults["top"]): GoalFeatures {
   return (title) => {
     const g = gb?.goals.find((x) => sameGoal(x.title, title));
     if (!g) return [];
+    // A key result an item serves counts as its goal (otherGoal compares top-level goals): Archive keeps the item on it.
+    const lift = (ids?: string[]) =>
+      ids?.map((id) => {
+        const p = top?.(id);
+        return (p && gb?.goals.find((x) => x.id === p.id || sameGoal(x.title, p.title))?.id) || id;
+      });
     const rowOf = new Map(data.rows.map((r) => [r.code, r]));
     const out = new Map<string, ReturnType<GoalFeatures>[number]>();
     // One entry per item or feature, by its id or code (two items of the same name are two).
@@ -2790,8 +2796,8 @@ function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan
     for (const f of gb?.features ?? []) if (f.goal_ids?.includes(g.id)) add(f.key, rowOf.get(f.key)?.title ?? f.title, [f.id]);
     // The items and drafts by every goal they serve, not only their first (an item's own goals).
     const serves = (r: { goal?: { title: string } | null; goal_ids?: string[] }) => (r.goal_ids?.length ? r.goal_ids.includes(g.id) : !!r.goal && sameGoal(r.goal.title, title));
-    for (const r of data.rows) if (serves(r)) add(r.code, r.title, [r.item_id, r.feature_id], r.goal_ids);
-    for (const r of [...data.unranked, ...data.drafts]) if (serves(r)) add(r.code, r.title, [r.item_id], r.goal_ids);
+    for (const r of data.rows) if (serves(r)) add(r.code, r.title, [r.item_id, r.feature_id], lift(r.goal_ids));
+    for (const r of [...data.unranked, ...data.drafts]) if (serves(r)) add(r.code, r.title, [r.item_id], lift(r.goal_ids));
     return [...out.values()];
   };
 }

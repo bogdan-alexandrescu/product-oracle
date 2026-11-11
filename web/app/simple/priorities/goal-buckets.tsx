@@ -441,7 +441,7 @@ export function FeatureRows({
  */
 export type GoalFeatures = (goal: string) => { code: string; name: string; slices: Plan["slices"]; tag?: string | null; goal_ids?: string[] }[];
 
-/** The live goal other than `goal` the feature or item keeps as its own (an item's own goals first, else the feature's links), if any. */
+/** The live goal other than `goal` the feature or item keeps as its own (an item's own goals first, a key result as its goal, else the feature's links), if any. */
 export function otherGoal(gb: Buckets, f: ReturnType<GoalFeatures>[number], goal: string): string | undefined {
   const ids = f.goal_ids?.length ? f.goal_ids : (featureOf(gb, f.code, f.name)?.goal_ids ?? []);
   return ids.find((g) => g !== goal && gb.goals.some((x) => x.id === g));

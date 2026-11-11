@@ -201,7 +201,7 @@ const itemGoals = (s: ItemGoals) => [...new Set([...(s.goal ? [s.goal] : []), ..
 /** goal_buckets.move_items_off (Archive, and a delete to Trash with `to`): the items that name the
  * goal lose it, those in Trash too; one that serves another live goal too keeps that one as its own
  * (now first); the rest serve `to` instead (first, unless they serve it already), or no goal. Their
- * goals as they were, for Undo and Restore. */
+ * goals as they were, for Undo and Restore, and as they are now (`after`). */
 function moveItemsOff(items: ItemGoals[], g: Goal, to: Goal | null, goals: Goal[]): NonNullable<TrashEntryRow["item_goals"]> {
   const from = itemGoalKey(g) ?? g.key;
   const toKey = to ? (itemGoalKey(to) ?? to.key) : "";
@@ -215,6 +215,7 @@ function moveItemsOff(items: ItemGoals[], g: Goal, to: Goal | null, goals: Goal[
     const next = rest.some(live) ? [...rest.filter(live), ...rest.filter((k) => !live(k))] : !toKey || rest.includes(toKey) ? rest : [toKey, ...rest];
     s.goal = next[0];
     s.goals = next.slice(1);
+    was[was.length - 1].after = next;
   }
   return was;
 }
