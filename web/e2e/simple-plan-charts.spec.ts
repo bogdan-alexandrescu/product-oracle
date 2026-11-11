@@ -3,6 +3,7 @@ import { THEME_KEY } from "../lib/theme";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 import { countRowOf } from "./vxe-counts";
+import { dateIntoThisQuarter } from "./this-quarter";
 
 /*
  * The plan-charts lane (the owner's picks of 2026-10-28): Priorities' Goal buckets header is
@@ -24,8 +25,8 @@ import { countRowOf } from "./vxe-counts";
  * cards as B (the name, "n features in the plan", a row per feature: code, name, a chip per
  * milestone, its weeks or PM-owned) with "+ Suggest a feature" and "✦ Ask Oracle to suggest"
  * under each list, and the page's quarter label the plan's span; no label is cut and every
- * label on a milestone colour reads at 4.5:1; roadmap items outside the plan still listed
- * under their goal; fails_when = a number differs from the plan, the old "Share of ..."
+ * label on a milestone colour reads at 4.5:1; roadmap items outside the plan, once dated this
+ * quarter in their feature panel, listed under their goal; fails_when = a number differs from the plan, the old "Share of ..."
  * caption shows, the bars are pale tints, a bar or chip is missing, a label overflows or reads
  * under 4.5:1, or items outside the plan vanish; no_claim = how the API reads the plan (api
  * tests/test_simple_plan_api.py), what the suggest buttons open (the next test).
@@ -222,7 +223,14 @@ for (const v of VIEWS) {
       await expect(page.getByTestId("goal-suggest-feature")).toHaveCount(4);
       await expect(page.getByTestId("goal-ask-oracle")).toHaveText(Array(4).fill("✦ Ask Oracle to suggest"));
 
-      // Roadmap items outside the plan (the alerts roadmap's) still show, under their goal.
+      // Roadmap items outside the plan (the alerts roadmap's) show, under their goal, once dated
+      // this quarter (board-quarters: they are dated past it), each in its one feature panel.
+      await dateIntoThisQuarter(page, [
+        { title: "Alert rules engine", start: "2026-11-02", end: "2026-11-27" },
+        { title: "Weekly alert digest", start: "2026-11-30", end: "2026-12-18" },
+        { title: "Mobile alert push", start: "2026-11-30", end: "2026-12-18" },
+      ]);
+      await page.getByRole("tab", { name: "Goal buckets" }).click();
       const outside = page.getByTestId("plan-outside");
       await expect(outside.getByRole("heading", { name: "Also this quarter, outside the plan" })).toBeVisible();
       const retention = outside.locator('[data-testid="plan-outside-goal"][data-key="grow-retention"]');

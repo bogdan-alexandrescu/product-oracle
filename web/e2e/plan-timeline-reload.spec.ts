@@ -4,8 +4,9 @@ import { expect, test, type Page } from "./test";
 
 /**
  * PR 1289 review (B-26 follow-ups): protects = with the Plan's Timeline shown, approving a plan
- * change redraws the Timeline from the new version (an added item is on the chart, a moved item's
- * bar moves to its new horizon's dates) without a reload; the Plan's own track milestones are on
+ * change redraws the Timeline from the new version (an added item is on the chart, a moved item
+ * keeps its bar: an undated one is drawn in Later's window whatever its horizon, board-quarters)
+ * without a reload; the Plan's own track milestones are on
  * the chart as "M1 First release"; a draft's row is drawn at the draft's own delivery date when it
  * has one, and otherwise its bar is marked as showing the approved dates, with the reason behind
  * an (i). fails_when = the Timeline keeps the old version's dates or lists the added item under
@@ -48,14 +49,14 @@ test("approving a plan change redraws the Timeline from the new version", async 
   await changes(page).getByTestId("plan-proposal").getByRole("button", { name: "Approve version 2" }).click();
   await expect(page.getByTestId("plan-live")).toHaveText("Version 2 is the live plan.");
 
-  // The Timeline reads the new version: the added item is on the chart, the moved one has new dates.
+  // The Timeline reads the new version: the added item is on the chart; the moved one, undated,
+  // stays drawn in Later's window (its column is its dates' quarter).
   await expect(page.getByTestId("plan-timeline")).toBeVisible();
   await expect(timeline.getByTestId("label-title").filter({ hasText: "Spend alerts by email" })).toHaveCount(1);
   await expect(timeline.getByTestId("plan-timeline-undated-item").filter({ hasText: "Spend alerts by email" })).toHaveCount(0);
   await expect(bar("spend-alerts-by-email")).toHaveAttribute("data-start", /^\d{4}-\d{2}-\d{2}$/);
-  await expect(bar("spend-forecast")).not.toHaveAttribute("data-start", before!);
-  const after = await bar("spend-forecast").getAttribute("data-start");
-  expect(after! > before!).toBe(true);
+  await expect(bar("spend-forecast")).toHaveCount(1);
+  await expect(bar("spend-forecast")).toHaveAttribute("data-start", before!);
 });
 
 test("the Timeline draws the Plan's track milestones and a draft's own dates, or says it shows the approved ones", async ({ page }) => {

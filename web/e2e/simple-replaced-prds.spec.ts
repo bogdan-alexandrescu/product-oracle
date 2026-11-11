@@ -293,16 +293,16 @@ test("a feature added after a replace stays on the Roadmap and the Ranked tab", 
 
 /**
  * Re-review round 6: a phone's Roadmap counts a quarter's items in plain words (the default mock
- * data: the pricing roadmap has one item starting in Q1 2027). protects = "1 item", never
+ * data: the pricing roadmap has one item, undated, so in Later's first quarter, Q2 2027: board-quarters). protects = "1 item", never
  * "1 items"; fails_when = the count reads "1 items"; no_claim = which quarters show.
  */
 test("a phone's Roadmap quarter with one item says 1 item", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
-  // P-1: the Goal map's features now start in the onboarding roadmap's Q1 2027; the pricing roadmap's one item still does alone.
+  // P-1: the Goal map's features start in the onboarding roadmap; the pricing roadmap's one item sits in Q2 2027 alone.
   await page.goto("/simple/roadmap?roadmap=pricing-roadmap");
   const quarters = page.getByTestId("timeline-list").getByTestId("timeline-quarter");
-  await expect(quarters.filter({ hasText: "Q1 2027" }).locator("h3")).toHaveText(/· 1 item$/);
+  await expect(quarters.filter({ hasText: "Q2 2027" }).locator("h3")).toHaveText(/· 1 item$/);
   // This line's data has more than one item in the onboarding roadmap's Q3 2027 (AN's had 2): a count above one says "items".
   await page.goto("/simple/roadmap?roadmap=onboarding-roadmap");
   await expect(quarters.filter({ hasText: "Q3 2027" }).locator("h3")).toHaveText(/· ([2-9]|\d{2,}) items$/);

@@ -68,7 +68,10 @@ test.describe("fix2-simple-plan review: moves on a dated plan stay in rank order
     await setUp(page, { scenario: "simple-plan" });
     await open(page);
     const list = await listed(page);
-    const split = list.findIndex((r) => !r.above);
+    // The first row below the line whose rank just above it makes the line (rank 1, the alerts
+    // roadmap's work dated past this quarter, now heads the rows below it: board-quarters).
+    const split = list.findIndex((r) => !r.above && list.some((x) => x.above && x.rank === r.rank - 1));
+    expect(split).toBeGreaterThan(0);
     const first = list[split];
     await rows(page).nth(split).getByRole("button", { name: /^Drag / }).focus();
     await page.keyboard.press("ArrowUp");

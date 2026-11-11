@@ -127,9 +127,10 @@ test("once a goal is in Trash, the panel leaves it out and changes the feature's
   await page.goto("/simple/priorities?tab=buckets");
   await tap(bucket(page).getByRole("button", { name: "More for Grow retention" }));
   await tap(page.getByRole("menuitem", { name: "Delete goal" }));
+  // This quarter is the calendar quarter of the dates: this scenario's alerts work is dated past it,
+  // so the bucket holds none of it and the dialog asks for no goal to move it to.
   const dialog = page.getByRole("dialog", { name: "Delete Grow retention" });
-  const to = dialog.getByLabel("Goal", { exact: true });
-  await to.selectOption({ label: (await to.locator("option").allTextContents()).find((o) => o.endsWith("Faster activation"))! });
+  await expect(dialog.getByLabel("Goal", { exact: true })).toHaveCount(0);
   await tap(dialog.getByRole("button", { name: "Delete goal" }));
   await expect(bucket(page)).toHaveCount(0);
 

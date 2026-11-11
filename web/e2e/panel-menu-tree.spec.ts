@@ -121,8 +121,15 @@ async function treeOnEveryView(page: Page, phone: boolean) {
   for (const k of ["alert-rules", "alert-sso", "alert-export"]) await expect(boardCard(page, k)).toHaveCount(1);
   const sso = page.locator("li").filter({ has: boardCard(page, "alert-sso") }).last();
   const exp = page.locator("li").filter({ has: boardCard(page, "alert-export") }).last();
+  const rules = page.locator("li").filter({ has: boardCard(page, "alert-rules") }).last();
   const d = async (l: Locator) => Number((await l.getAttribute("data-depth")) ?? 0);
-  expect(await d(exp)).toBe((await d(sso)) + 1);
+  // Columns are calendar quarters from the dates: a part in its parent's column sits one level
+  // deeper; a part whose dates put it in another column is a card of its own at the top there.
+  const column = (l: Locator) => l.evaluate((el) => el.closest('[data-testid="board-column"]')?.getAttribute("aria-label") ?? "");
+  for (const [part, parent] of [[sso, rules], [exp, sso]] as const)
+    expect(await d(part)).toBe((await column(part)) === (await column(parent)) ? (await d(parent)) + 1 : 0);
+  // The Alerts seed puts the routing feature with its parent: at least one level is drawn nested.
+  expect(await d(sso)).toBe(1);
 }
 
 /** The part's panel reads the whole path; the top's panel nests its parts. */

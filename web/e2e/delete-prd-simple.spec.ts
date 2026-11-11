@@ -85,6 +85,8 @@ for (const look of LOOKS) {
       await roadmap.goto("/simple/roadmap");
       await expect(roadmap.getByText("Setup checklist", { exact: true }).first()).toBeVisible();
       await expect(roadmap.getByText("Alert rules engine", { exact: true })).toHaveCount(0);
+      // The mock's store is each tab's localStorage: a tab left open may write a stale read over Undo.
+      await roadmap.close();
 
       const note = page.getByTestId("one-pagers-note");
       await expect(note).toContainText(`Deleted ${USAGE}. It is in Settings > Trash for 30 days.`);
@@ -93,9 +95,10 @@ for (const look of LOOKS) {
       await expect(note).toContainText(`Restored ${USAGE}.`);
       await expect(rows(page).filter({ hasText: USAGE })).toHaveCount(1);
       // Undo brought back what went.
-      await roadmap.reload();
-      await expect(roadmap.getByText("Alert rules engine", { exact: true }).first()).toBeVisible();
-      await roadmap.close();
+      const again = await page.context().newPage();
+      await again.goto("/simple/roadmap");
+      await expect(again.getByText("Alert rules engine", { exact: true }).first()).toBeVisible();
+      await again.close();
     });
 
     test("what Delete PRD says stays is still on Roadmap after the delete", async ({ page }) => {

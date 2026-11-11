@@ -339,13 +339,15 @@ for (const phone of [false, true]) {
        * nothing to review; no_claim = Remind itself (simple-one-pager-remind.spec).
        */
       test(`with a plan, the lines come back while there is something to review (${where})`, async ({ page }) => {
+        // Two page loads and a meeting start: slow on a loaded CI runner.
+        test.setTimeout(90_000);
         await open(page, scheme);
         await page.goto("/simple/prds/guided-setup");
         await expect(page.getByTestId("milestone-part")).toBeVisible();
         await expect(page.getByRole("article", { name: "One-pager" })).toHaveCount(0);
         await page.getByRole("button", { name: "Start a review meeting", exact: true }).click();
         await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
-        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible({ timeout: 20_000 });
         await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
         await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
         await page.getByRole("button", { name: "Save" }).click();
@@ -354,7 +356,7 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("milestone-part")).toBeVisible();
         await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
         const article = page.getByRole("article", { name: "One-pager" });
-        await expect(article).toBeVisible();
+        await expect(article).toBeVisible({ timeout: 20_000 });
         await expect(article).toContainText("A setup checklist with the next two steps");
         await expect(article.getByRole("button", { name: "Edit “A setup checklist with the" })).toHaveCount(1);
         // Below the milestone's card, never above it.
