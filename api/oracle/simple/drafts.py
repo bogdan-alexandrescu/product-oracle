@@ -999,12 +999,19 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
 
 
 async def outs(
-    db: AsyncSession, principal: Any, ds: list[SimpleDraft], blocked: list[str] | None = None
+    db: AsyncSession,
+    principal: Any,
+    ds: list[SimpleDraft],
+    blocked: list[str] | None = None,
+    w: Who | None = None,
 ) -> list[SimpleDraftOut]:
-    w = await who(db, {d.document_id for d in ds})
+    """``w``: who of (at least) the drafts' documents, when the caller read it."""
+    if w is None:
+        w = await who(db, {d.document_id for d in ds})
     docs, numbers = await _refs(db, ds)
-    n = await counts(db, ds)
     logs = await _logs(db, ds)
+    # Each draft's count is its log's length (counts() reads the same changes, not undone).
+    n = {d.id: len(logs.get(d.id, [])) for d in ds}
     from oracle.simple import prd_roadmap
 
     sources = {d.id: await prd_roadmap.sources_out(db, d) for d in ds}
@@ -1115,7 +1122,7 @@ async def listing(
             raise DraftError(404, "No such roadmap")
         ds = [d for d in ds if d.document_id == doc.id]
     w = await who(db, {d.document_id for d in ds})
-    return await outs(db, principal, [d for d in ds if sees(principal, d, w)])
+    return await outs(db, principal, [d for d in ds if sees(principal, d, w)], w=w)
 
 
 async def _get(db: AsyncSession, principal: Any, draft_id: uuid.UUID) -> tuple[SimpleDraft, Who]:
