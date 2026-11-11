@@ -78,26 +78,49 @@ async def seed_company(ctx: Ctx, *, prds: int = 25, per: int = 16, cut_per: int 
         await s.flush()
 
         co.goals = [
-            Entity(type="goal", key=f"goal-{g}", title=f"Grow example metric {g}",
-                   status="confirmed", origin="user", attrs={})  # fmt: skip
+            Entity(
+                type="goal",
+                key=f"goal-{g}",
+                title=f"Grow example metric {g}",
+                status="confirmed",
+                origin="user",
+                attrs={},
+            )  # fmt: skip
             for g in range(4)
         ]
         s.add_all(co.goals)
         features = [
-            Entity(type="feature", key=f"feature-{f}", title=title(f),
-                   status="confirmed", origin="user", attrs={})  # fmt: skip
+            Entity(
+                type="feature",
+                key=f"feature-{f}",
+                title=title(f),
+                status="confirmed",
+                origin="user",
+                attrs={},
+            )  # fmt: skip
             for f in range(entities * 3 // 4)
         ]
         others = [
-            Entity(type=("requirement", "constraint", "decision")[f % 3], key=f"other-{f}",
-                   title=f"Example entity {f}", status="confirmed", origin="user", attrs={})  # fmt: skip
+            Entity(
+                type=("requirement", "constraint", "decision")[f % 3],
+                key=f"other-{f}",
+                title=f"Example entity {f}",
+                status="confirmed",
+                origin="user",
+                attrs={},
+            )
             for f in range(entities - len(features) - len(co.goals))
         ]
         s.add_all(features + others)
         await s.flush()
         s.add_all(
-            Edge(src_id=f.id, dst_id=co.goals[i % 4].id, type="supports", status="confirmed",
-                 origin="user")  # fmt: skip
+            Edge(
+                src_id=f.id,
+                dst_id=co.goals[i % 4].id,
+                type="supports",
+                status="confirmed",
+                origin="user",
+            )  # fmt: skip
             for i, f in enumerate(features)
         )
 

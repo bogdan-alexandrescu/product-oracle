@@ -18,6 +18,17 @@ Test cards (protects / fails_when / no_claim):
 - test_a_change_makes_few_statements: protects=POST /v1/simple/changes builds the roadmap
   once for its check and once for its answer, within a statement ceiling;
   fails_when=it builds it a third time; no_claim=meeting sessions' extra work.
+- test_a_change_answers_as_the_history_tells_it: protects=the change POST's answer (an
+  applied edit, a proposal, an undo) tells the change exactly as GET /v1/simple/changes
+  does on a fresh read (the answer reuses the read it built for its flags);
+  fails_when=the answer is told on a stale read; no_claim=the flags (their own tests).
+- test_quick_title_match_scores_as_the_full_one: protects=the matcher's shortcut (Looks
+  like) scores every pair as the full ratio does, and skips only pairs under LOOKS_LIKE;
+  fails_when=a pair at or over it is dropped or scored differently; no_claim=which titles
+  should match.
+- test_prd_whos_read_as_prd_who: protects=the start sheet's batched read of each PRD's
+  decider, required reviewers and track owners equals the one-PRD read for every PRD;
+  fails_when=a PRD's people differ; no_claim=who may start (may_start's own tests).
 """
 
 import json
@@ -29,9 +40,14 @@ import pytest
 from sqlalchemy import event
 
 from oracle import company_time
+from oracle.auth.models import User
 from oracle.db import get_engine
+from oracle.docs.models import Document
+from oracle.review.models import DocumentReviewPolicy
+from oracle.simple import additions, meetings
+from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
-from tests.simple_perf_helpers import seed_company
+from tests.simple_perf_helpers import NOUNS, VERBS, seed_company, title
 from tests.test_simple_roadmap_api import NOW
 
 READS = {
@@ -80,8 +96,12 @@ async def _company():
 
 def _title_edit(co, n: int) -> dict:
     item = [i for i in co.items if not i.cut][n]
-    return {"op": "edit_title", "target": {"item_id": str(item.id)},
-            "before": {"title": item.title}, "after": {"title": f"Example renamed {n}"}}  # fmt: skip
+    return {
+        "op": "edit_title",
+        "target": {"item_id": str(item.id)},
+        "before": {"title": item.title},
+        "after": {"title": f"Example renamed {n}"},
+    }
 
 
 async def _timed(client, method: str, url: str, headers, **kw):
@@ -173,3 +193,72 @@ async def test_a_change_makes_few_statements(client):
     _dump("post-change", r.json())
     print(f"POST changes: {len(st.seen)} statements")
     assert len(st.seen) <= CHANGE_CEILING, len(st.seen)
+
+
+SMALL = {"prds": 4, "per": 6, "cut_per": 2, "entities": 200, "changes": 40, "proposed": 8,
+         "drafts": 8, "meetings": 4, "members": 8, "suggestions_per_goal": 4}  # fmt: skip
+
+
+async def test_a_change_answers_as_the_history_tells_it(client):
+    ctx = await make_ctx()
+    co = await seed_company(ctx, **SMALL)
+    url = "/v1/simple/changes"
+
+    async def as_history(who: str, answer: dict) -> None:
+        r = await client.get(url, headers=ctx.as_(who))
+        assert r.status_code == 200, r.text
+        told = {c["id"]: c for c in r.json()}
+        assert told[answer["id"]] == answer
+
+    applied = await client.post(url, json=_title_edit(co, 0), headers=ctx.as_("owner"))
+    assert applied.status_code == 201, applied.text
+    assert applied.json()["change"]["status"] == "applied"
+    await as_history("owner", applied.json()["change"])
+    # A commenter's edit is a proposal for the roadmap's decider or owner.
+    proposed = await client.post(url, json=_title_edit(co, 1), headers=ctx.as_("commenter"))
+    assert proposed.status_code == 201, proposed.text
+    assert proposed.json()["change"]["status"] == "proposed"
+    await as_history("commenter", proposed.json()["change"])
+    undo = await client.post(f"{url}/{applied.json()['change']['id']}/undo",
+                             headers=ctx.as_("owner"))  # fmt: skip
+    assert undo.status_code in (200, 201), undo.text
+    await as_history("owner", undo.json()["change"])
+
+
+def test_quick_title_match_scores_as_the_full_one():
+    titles = [title(n) for n in range(0, 900, 7)]
+    titles += [f"{t} v2" for t in titles[:40]] + ["", "Export", "export!", "Bulk-export 2"]
+    titles += [f"{v} {n}" for v in VERBS[:6] for n in NOUNS[:6]]
+    matched = 0
+    for a in titles:
+        for b in titles:
+            full = additions._like(a, b)
+            want = full if full >= additions.LOOKS_LIKE else None
+            assert additions._looks_like(a, b) == want, (a, b)
+            matched += want is not None
+    assert matched > len(titles)  # some pairs match beyond each title with itself
+
+
+async def test_prd_whos_read_as_prd_who():
+    ctx = await make_ctx()
+    co = await seed_company(ctx, **SMALL)
+    async with tenant_session(ctx.tenant_id) as s:
+        gone = User(email="gone@example.com", password_hash="x", role="approver",
+                    disabled_at=NOW)  # fmt: skip
+        s.add(gone)
+        await s.flush()
+        s.add(DocumentReviewPolicy(document_id=co.prds[1].id, decider_id=gone.id,
+                                   mandatory_reviewer_ids=[ctx.users["viewer"].id]))  # fmt: skip
+        await s.commit()
+        docs = [await s.get(Document, d.id) for d in co.prds]
+        batched = await meetings.prd_whos(s, docs)
+        for d in docs:
+            one = await meetings.prd_who(s, d)
+            many = batched[d.id]
+            assert (many.decider, many.reviewers, sorted(many.owners)) == (
+                one.decider,
+                one.reviewers,
+                sorted(one.owners),
+            ), d.slug
+        assert batched[co.prds[1].id].reviewers == [ctx.users["viewer"].id]
+        assert all(batched[d.id].owners for d in docs)

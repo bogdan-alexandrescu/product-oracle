@@ -41,7 +41,9 @@ and baseline features whose titles look like its own (``looks_like``: Merge with
 suggestions carry ``flow`` and request a visual when made.
 """
 
+import collections
 import difflib
+import functools
 import logging
 import re
 import uuid
@@ -109,8 +111,14 @@ TEXT_MAX = 1000
 # --------------------------------------------------------------------------- helpers
 
 
+@functools.lru_cache(maxsize=8192)
 def _norm(title: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", (title or "").casefold()))
+
+
+@functools.lru_cache(maxsize=8192)
+def _words(norm: str) -> frozenset[str]:
+    return frozenset(norm.split())
 
 
 def _like(a: str, b: str) -> float:
@@ -118,8 +126,45 @@ def _like(a: str, b: str) -> float:
     na, nb = _norm(a), _norm(b)
     if not na or not nb:
         return 0.0
-    wa, wb = set(na.split()), set(nb.split())
+    wa, wb = _words(na), _words(nb)
     return max(difflib.SequenceMatcher(None, na, nb).ratio(), len(wa & wb) / len(wa | wb))
+
+
+@functools.lru_cache(maxsize=8192)
+def _chars(norm: str) -> collections.Counter[str]:
+    return collections.Counter(norm)
+
+
+@functools.lru_cache(maxsize=8192)
+def _matcher(norm: str) -> difflib.SequenceMatcher:
+    """A matcher holding ``norm`` as its second sequence: its index is built once per title,
+    not once per pair (callers set the first sequence and read the ratio at once)."""
+    m = difflib.SequenceMatcher(None)
+    m.set_seq2(norm)
+    return m
+
+
+def _looks_like(a: str, b: str) -> float | None:
+    """:func:`_like` when it reaches LOOKS_LIKE, else None; the same score, but a pair whose
+    character ratio cannot reach it (its upper bounds: the lengths', then the shared
+    characters', SequenceMatcher's real_quick_ratio and quick_ratio) is never matched in
+    full. The matcher runs per suggestion over every item and feature."""
+    na, nb = _norm(a), _norm(b)
+    if not na or not nb:
+        return None
+    wa, wb = _words(na), _words(nb)
+    words = len(wa & wb) / len(wa | wb)
+    if words < LOOKS_LIKE:
+        size = len(na) + len(nb)
+        if 2.0 * min(len(na), len(nb)) / size < LOOKS_LIKE:
+            return None
+        cb = _chars(nb)
+        if 2.0 * sum(min(k, cb[c]) for c, k in _chars(na).items()) / size < LOOKS_LIKE:
+            return None
+    m = _matcher(nb)
+    m.set_seq1(na)
+    score = max(m.ratio(), words)
+    return score if score >= LOOKS_LIKE else None
 
 
 def quarter_span(value: str) -> tuple[date, date]:
@@ -649,8 +694,8 @@ def reconcile(
             continue
         if roadmap is not None and e.roadmap.id != roadmap:
             continue
-        score = _like(title, e.row.title)
-        if score >= LOOKS_LIKE:
+        score = _looks_like(title, e.row.title)
+        if score is not None:
             # Its display code (F-06) or none, never its key: the name says the rest.
             code = e.code or ""
             items.append((score, SimpleMatch(kind="item", id=str(e.row.id), code=code,
@@ -659,8 +704,8 @@ def reconcile(
     for f in features:
         if f.id in with_item:
             continue
-        score = _like(title, f.title)
-        if score >= LOOKS_LIKE:
+        score = _looks_like(title, f.title)
+        if score is not None:
             code = prd_code(f.key) or ""
             feats.append((score, SimpleMatch(kind="feature", id=str(f.id), code=code,
                                              title=f.title)))  # fmt: skip
@@ -999,14 +1044,19 @@ async def run_goal_suggestions(s: AsyncSession, job: LlmJob, ask) -> dict[str, A
 # --------------------------------------------------------------------------- suggestions
 
 
+_ACTIVE = object()
+
+
 async def _job_document(
-    db: AsyncSession, goal: Entity, read_: service.Read | None = None
+    db: AsyncSession, goal: Entity, read_: service.Read | None = None, active: Any = _ACTIVE
 ) -> Document | None:
     """The roadmap a goal's suggestions job is filed under (and whose decider decides its
     suggestions): the company roadmap while there is one, else one holding its items, else
-    the company's first roadmap."""
-    if (found := await company.active(db)) is not None:
-        return found
+    the company's first roadmap. ``active``: company.active, when the caller read it."""
+    if active is _ACTIVE:
+        active = await company.active(db)
+    if active is not None:
+        return active
     read_ = read_ or await service.load(db)
     for e in read_.entries:
         if e.goal is not None and e.goal.id == goal.id:
@@ -1122,6 +1172,7 @@ async def listing(
         )
     )
     features = await _features(db) if any(r.status == "open" for r in rows) else []
+    flows = await visuals.flows_for(db, "suggestion", [r.id for r in rows]) if visuals else {}
     names = await changes._names(db, {r.decided_by for r in rows if r.decided_by})
     rule = await deciding(db, principal, goals, read_)
     people = await _display_names(
@@ -1148,7 +1199,7 @@ async def listing(
                 looks_like=reconcile(r.title, read_.entries, features)
                 if r.status == "open"
                 else [],
-                flow=await _flow(db, "suggestion", r.id),
+                flow=flows.get(r.id),
                 can_accept=rule[r.goal_id][0] and r.status == "open",
                 can_reject=rule[r.goal_id][0] and r.status == "open",
                 proposed_by_name=people.get(r.proposed_by) if r.proposed_by else None,
@@ -1255,7 +1306,8 @@ async def deciding(
     roadmap: an owner, its decider, with none its owners who are approvers) and who decides
     them (the first of _route: the decider, else its approving owners, else the company's
     owners)."""
-    docs = {g.id: await _job_document(db, g, read_) for g in goals}
+    active = await company.active(db) if goals else None
+    docs = {g.id: await _job_document(db, g, read_, active) for g in goals}
     w = await drafts.who(db, {d.id for d in docs.values() if d is not None})
     routes: dict[uuid.UUID, uuid.UUID | None] = {}
     out: dict[uuid.UUID, tuple[bool, uuid.UUID | None]] = {}

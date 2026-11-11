@@ -61,7 +61,7 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError as ImportRejected
 from oracle.docs.prd_order import sort_prds
 from oracle.models import AuditEvent
-from oracle.roadmap.models import ProductTrack, RoadmapItem
+from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackPrd
 from oracle.roadmap.tracks import on_prd as tracks_on_prd
 from oracle.simple import change_words, drafts, minutes
 from oracle.simple.models import (
@@ -306,6 +306,43 @@ async def prd_who(db: AsyncSession, document: Document) -> PrdWho:
     return PrdWho(w.decider, list(w.reviewers), list(w.track_owners))
 
 
+async def prd_whos(db: AsyncSession, documents: list[Document]) -> dict[uuid.UUID, PrdWho]:
+    """:func:`prd_who` of many PRDs in two reads (the start sheet lists every PRD)."""
+    from oracle.review.models import DocumentReviewPolicy
+
+    ids = [d.id for d in documents]
+    if not ids:
+        return {}
+    policies = {
+        p.document_id: p
+        for p in await db.scalars(
+            select(DocumentReviewPolicy).where(DocumentReviewPolicy.document_id.in_(ids))
+        )
+    }
+    owners: dict[uuid.UUID, dict[uuid.UUID, str]] = {i: {} for i in ids}
+    rows = await db.execute(
+        select(User.id, User.role, TrackPrd.prd_document_id)
+        .join(ProductTrack, ProductTrack.owner_id == User.id)
+        .join(TrackPrd, TrackPrd.track_id == ProductTrack.id)
+        .where(
+            TrackPrd.prd_document_id.in_(ids),
+            TrackPrd.state == "linked",
+            User.disabled_at.is_(None),
+        )
+    )
+    for uid, role, prd_id in rows:
+        owners[prd_id].setdefault(uid, role)
+    out = {}
+    for i in ids:
+        p = policies.get(i)
+        out[i] = PrdWho(
+            p.decider_id if p else None,
+            list(p.mandatory_reviewer_ids or []) if p else [],
+            list(owners[i]),
+        )
+    return out
+
+
 def may_start(principal: Any, w: PrdWho) -> bool:
     """Only owners and the document's decider start a meeting (the owner's pick)."""
     me = _me(principal)
@@ -409,8 +446,9 @@ async def options(
     members = await _members(db)
     names = {u.id: u.name or u.email for u in members}
     prds = []
+    whos = await prd_whos(db, docs)
     for d in docs:
-        w = await prd_who(db, d)
+        w = whos[d.id]
         starters = list(dict.fromkeys([*([w.decider] if w.decider else []), *owners]))
         prds.append(
             SimpleStartPrd(

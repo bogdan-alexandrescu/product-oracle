@@ -1507,6 +1507,17 @@ async def _flags(
     overlays: dict[uuid.UUID, dict[str, Any]],
     principal: Any = None,
 ) -> list[SimpleItemFlags]:
+    return (await _flags_and_read(db, c, overlays, principal))[0]
+
+
+async def _flags_and_read(
+    db: AsyncSession,
+    c: SimpleChange,
+    overlays: dict[uuid.UUID, dict[str, Any]],
+    principal: Any = None,
+) -> tuple[list[SimpleItemFlags], service.Read]:
+    """:func:`_flags` and the read they came from: after a write, the read the answer's
+    change is told on (one roadmap build, not two)."""
     read_ = await service.load(db, overlays)
 
     def may(d: service.Entry) -> bool:
@@ -1527,7 +1538,7 @@ async def _flags(
             flags=service.flags_out(by_id[i], may),
         )
         for i in ids
-    ]
+    ], read_
 
 
 # --------------------------------------------------------------------------- the routes
@@ -1654,10 +1665,14 @@ async def create(
     )
     if applies:
         await _apply(db, c, after, principal, session)  # type: ignore[arg-type]
-        flags = await _flags(db, c, await drafts.overlays_for(db, principal), principal)
+        # The answer tells the change on the read after it (the drafts the reader sees).
+        flags, read_ = await _flags_and_read(
+            db, c, await drafts.overlays_for(db, principal), principal
+        )
         session.last_change_at = now  # type: ignore[union-attr]
     else:
-        # As if applied, on what the proposer reads; nothing is written.
+        # As if applied, on what the proposer reads; nothing is written, so the answer
+        # tells the proposal on the read it was planned on.
         rows = {str(e.row.id): e.row for e in read_.entries}
         copies = await drafts.copies_of(db, list(rows.values()), seen)
         overlay = drafts.simulate(c, after, rows, seen, KEYED, write, copies)
@@ -1669,7 +1684,7 @@ async def create(
                              "document_id": str(entry.roadmap.id)})  # fmt: skip
     if commit:
         await db.commit()
-    return SimpleChangeResult(change=await one_out(db, principal, c), flags=flags)
+    return SimpleChangeResult(change=await one_out(db, principal, c, read_), flags=flags)
 
 
 async def _get(db: AsyncSession, change_id: uuid.UUID) -> SimpleChange:
@@ -1776,11 +1791,13 @@ async def decide(
     c.status = "accepted" if action == "accept" else "declined"
     c.decided_by, c.decided_at, c.decision_reason = me, now, reason
     await db.flush()
-    flags = await _flags(db, c, await drafts.overlays_for(db, principal), principal)
+    flags, after_read = await _flags_and_read(
+        db, c, await drafts.overlays_for(db, principal), principal
+    )
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
                        data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
     await db.commit()
-    return SimpleChangeResult(change=await one_out(db, principal, c), flags=flags)
+    return SimpleChangeResult(change=await one_out(db, principal, c, after_read), flags=flags)
 
 
 async def off_agenda_bar(db: AsyncSession, c: SimpleChange, session_id: uuid.UUID | None) -> None:
@@ -1916,11 +1933,13 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
     db.add(u)
     session.last_change_at = now
     await db.flush()
-    flags = await _flags(db, c, await drafts.overlays_for(db, principal), principal)
+    flags, after_read = await _flags_and_read(
+        db, c, await drafts.overlays_for(db, principal), principal
+    )
     await audit.record(db, principal, "simple_change.undone", "simple_change", u.id,
                        data={"op": c.op, "target": c.target, "undoes_id": str(c.id)})  # fmt: skip
     await db.commit()
-    return SimpleChangeResult(change=await one_out(db, principal, u), flags=flags)
+    return SimpleChangeResult(change=await one_out(db, principal, u, after_read), flags=flags)
 
 
 # --------------------------------------------------------------------------- reading
@@ -2112,9 +2131,16 @@ def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str], target: dict)
                                  status=c.status, undone=c.id in v.undone)  # fmt: skip
 
 
-async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -> _View:
-    # S7: with the drafts the reader sees, so items added in Simple are known.
-    read_ = await service.load(db, await drafts.overlays_for(db, principal))
+async def _view(
+    db: AsyncSession,
+    principal: Any,
+    changes: list[SimpleChange],
+    read_: service.Read | None = None,
+) -> _View:
+    # S7: with the drafts the reader sees, so items added in Simple are known. ``read_``:
+    # that read, when the caller has just built it (a change's answer).
+    if read_ is None:
+        read_ = await service.load(db, await drafts.overlays_for(db, principal))
     sids = {c.session_id for c in changes if c.session_id}
     sessions = (
         {s.id: s for s in await db.scalars(select(SimpleSession).where(SimpleSession.id.in_(sids)))}
@@ -2190,8 +2216,12 @@ async def _questions(db: AsyncSession, changes: list[SimpleChange]) -> dict[str,
     return {str(d.id): d for d in await db.scalars(select(Decision).where(Decision.id.in_(ids)))}
 
 
-async def one_out(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChangeOut:
-    v = await _view(db, principal, [c])
+async def one_out(
+    db: AsyncSession, principal: Any, c: SimpleChange, read_: service.Read | None = None
+) -> SimpleChangeOut:
+    """The change as the reader reads it; ``read_``: the roadmap read with the drafts the
+    reader sees, as it is now, when the caller has it (else it is built)."""
+    v = await _view(db, principal, [c], read_)
     return _out(c, v, await _names(db, {c.by}))
 
 
