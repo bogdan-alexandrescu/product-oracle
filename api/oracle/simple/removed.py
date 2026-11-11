@@ -186,7 +186,8 @@ async def list_simple_tracks(principal: Reader, db: TenantDB) -> SimpleTracks:
         if prd_ids
         else {}
     )
-    read = await service.load(db)
+    # Tracks sheet counts (owner, Nov 10): what the reader's roadmap shows, its working draft.
+    read = await service.load(db, await drafts.overlays_for(db, principal))
     features = Counter(
         e.track.id for e in read.entries if e.track and e.status not in ("cut", "merged")
     )

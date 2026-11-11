@@ -10,7 +10,7 @@ import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { lazyGoalBuckets, seedGoalBuckets } from "./goal-buckets";
 import { stableUuid } from "./ids";
-import { canDecideItem, canEditRoadmap, closed, deciderIds, GOALS, ROADMAPS, TRACKS, trackGoal, trackKeys, trackPlace, type SimpleDb } from "./simple-roadmap";
+import { canDecideItem, canEditRoadmap, closed, deciderIds, GOALS, readerDb, ROADMAPS, TRACKS, trackGoal, trackKeys, trackPlace, type SimpleDb } from "./simple-roadmap";
 import type { MockMilestone } from "./simple-milestones";
 import type { TrashEntryRow } from "./trash";
 
@@ -225,13 +225,16 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     // replaced-prd-history (company.history_track_ids): a replaced PRD's own track and its
     // roadmap's track are history.
     const gone = historyKeys(db, states);
+    // Roadmap Nov 10 (removed.list_simple_tracks): a track's counts are what the reader's
+    // Roadmap shows, the working draft for one who reads it, else the published items.
+    const shown = readerDb(db, ctx).items;
     // track-order: in the company's track order (order, 1 = first).
     const tracks = trackKeys(db).filter((k) => !gone.has(k)).map((k) => {
       const title = TRACKS[k];
       const own = db.track_owners?.[k];
       const decides = owner || (own === ctx.id && RANK[ctx.role] >= RANK.approver);
       const st = states[k];
-      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: st.prd ? prdId(st.prd) : null, prd_title: st.prd || null, prds: prdsOf(st).map((t) => ({ id: prdId(t), title: t })), ...trackGoal(db, k), can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: db.items.filter((s) => s.track === k && !closed(s)).length, moves_count: db.items.filter((s) => s.track === k).length, order: trackPlace(db, k) };
+      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: st.prd ? prdId(st.prd) : null, prd_title: st.prd || null, prds: prdsOf(st).map((t) => ({ id: prdId(t), title: t })), ...trackGoal(db, k), can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: shown.filter((s) => s.track === k && !closed(s)).length, moves_count: shown.filter((s) => s.track === k).length, order: trackPlace(db, k) };
     });
     // As takeable_prds: every accepted PRD not on a track in Trash, with the track it is on now.
     const prds = allPrds()

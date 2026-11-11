@@ -231,6 +231,8 @@ export function PanelFields({
   noHorizon?: boolean;
 }) {
   const [why, setWhy] = useState(false);
+  // The track just picked, shown while its change is made.
+  const [picking, setPicking] = useState<{ title: string | null } | null>(null);
   const prdOrderOf = usePrdOrder();
   const shownMilestone = milestoneShown(item, milestones);
   const goal = item.goal;
@@ -572,7 +574,7 @@ export function PanelFields({
         testId="card-track"
         canChange={canChange}
         value={
-          item.track?.title ?? <span className="text-text2">No track</span>
+          (picking ? picking.title : item.track?.title) ?? <span className="text-text2">No track</span>
         }
         editor={(done) => (
           <Pick
@@ -583,14 +585,21 @@ export function PanelFields({
               { value: "", label: "No track" },
               ...tracks.map((t) => ({ value: t.id, label: t.title })),
             ]}
-            save={(v) =>
-              change(
-                "Track changed",
-                "set_track",
-                { track_id: item.track?.id ?? null },
-                { track_id: v || null },
-              )
-            }
+            save={async (v) => {
+              // Roadmap Nov 10: one who decides sees the picked track at once; the read after
+              // the change shows what holds (the old track again when it failed).
+              if (item.can_decide) setPicking({ title: tracks.find((t) => t.id === v)?.title ?? null });
+              try {
+                await change(
+                  "Track changed",
+                  "set_track",
+                  { track_id: item.track?.id ?? null },
+                  { track_id: v || null },
+                );
+              } finally {
+                setPicking(null);
+              }
+            }}
           />
         )}
       />
