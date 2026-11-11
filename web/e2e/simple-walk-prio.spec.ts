@@ -249,6 +249,51 @@ for (const width of [375, 390, 601, 610, 685, 800, 1024, 1366, 1512]) {
   });
 }
 
+for (const width of [390, 601, 800, 970, 1024, 1366]) {
+  const phone = width < 600;
+  test.describe(`${width} px, from the first frame`, () => {
+    test.use(phone ? { viewport: { width, height: 844 }, hasTouch: true, isMobile: true } : { viewport: { width, height: 820 } });
+
+    /**
+     * Card walk-prio-home-first-frame: protects = Simple's Home's goal band is drawn, from the
+     * page's very first frame (before the rail or the phone's top bar are drawn beside or above
+     * it), where the filled page puts it: the skeleton keeps the rail's and the top bar's place
+     * until they come, so the band never moves down from the first frame to the filled page, for
+     * an owner with the longest greeting, at 390, 601, 800, 970, 1024 and 1366 px;
+     * fails_when = the band is drawn higher (phone) or under a wider header (beside the rail)
+     * before the rail or the top bar come, then drops; no_claim = the band moving up once the
+     * greeting is known (walk-prio-home-first-paint).
+     */
+    test("Home's goal band never moves down from its first frame", async ({ page, context }) => {
+      await context.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "every-wait-one"] as const);
+      await page.clock.setSystemTime(new Date("2026-10-22T21:30:00Z"));
+      await login(page);
+      await page.goto("/home");
+      // Every frame from the first, the band's top on the page (none before it is drawn).
+      await context.addInitScript(() => {
+        const w = window as unknown as { bandTops: number[] };
+        w.bandTops = [];
+        const frame = () => {
+          const band = document.querySelector('[data-testid="home-goals"]');
+          if (band) w.bandTops.push(band.getBoundingClientRect().top + window.scrollY);
+          requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      });
+      await page.evaluate(([slow, ms]) => (localStorage.setItem(slow, "/v1/me/capabilities"), localStorage.setItem(ms, "1500")), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
+      await page.goto("/simple");
+      await expect(page.getByTestId("home-sentence")).toHaveText(/^A decision, a proposal, a broken link and more/, { timeout: 8000 });
+      await expect(page.getByTestId("home-goal").first()).toBeVisible();
+      await page.waitForTimeout(300);
+      const tops = await page.evaluate(() => (window as unknown as { bandTops: number[] }).bandTops);
+      expect(tops.length).toBeGreaterThan(1);
+      const drops = tops.flatMap((top, i) => (i > 0 && top > tops[i - 1] + 1 ? [`${tops[i - 1]} to ${top}`] : []));
+      expect(drops, `the band moved down between its first frame (${tops[0]}) and the filled page (${tops.at(-1)})`).toEqual([]);
+      await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
+    });
+  });
+}
+
 /**
  * Card walk-prio-home-off: protects = with Simple off, opening Simple's Home starts none of its
  * queries before Detailed's Home opens instead (#725: nothing of Simple while it is off);
