@@ -20,6 +20,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card goal-archive-key-result-title (goal-delete-r4): protects = after Archive with "Leave them with no goal", Alert
  * tone picker's panel reads the key result it is left on by name, as the API's goal title; fails_when = its goal has
  * no title ("Serves the goal undefined").
+ * Card goal-archive-own-key-result (goal-delete-r4): protects = Archive Grow retention with Growth picked, and Alert
+ * history export (on Grow retention and its own key result) reads Growth, as the dialog says (the API's
+ * move_items_off counts no key result of the archived goal as live); fails_when = it stays on the key result.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -106,4 +109,19 @@ test("An item left on a key result reads that key result as its goal", async ({ 
   const panel = page.getByRole("dialog").filter({ hasText: "Serves the goal" });
   await expect(panel).toContainText(`Serves the goal ${KR}`);
   await expect(panel).not.toContainText("undefined");
+});
+
+test("An item on the archived goal and its own key result moves to the goal picked", async ({ page }) => {
+  await openPage(page);
+  const dialog = await goalDialog(page, "Archive");
+  await expect(dialog).not.toContainText("Alert history export →");
+  const pick = dialog.getByLabel("Goal", { exact: true });
+  const label = (await pick.locator("option").allTextContents()).find((o) => o.endsWith("Growth"))!;
+  await pick.selectOption({ label });
+  await tap(dialog.getByRole("button", { name: "Archive goal" }));
+  await expect(goal(page, "Grow retention")).toHaveCount(0);
+
+  await ranked(page);
+  await expect(draft(page, "Alert history export")).toContainText("Growth");
+  await expect(draft(page, "Alert history export")).not.toContainText("Teams come back in week two");
 });

@@ -1616,7 +1616,8 @@ function seedGoalBucketsDatedScenario(): Db {
  * "goal-buckets-three-goals" (goal-delete-r3): "goal-buckets-dated" with two more drafts that name
  * the archived goal Cut support tickets in half: Team alert digest serves it first, then Grow
  * retention and Faster activation; Snooze for a day serves Grow retention, then it; Alert tone picker
- * serves Grow retention, then a key result of Faster activation. Invented data.
+ * serves Grow retention, then a key result of Faster activation; Alert history export serves Grow retention, then
+ * its own key result (goal-delete-r4). Invented data.
  */
 export const GOAL_BUCKETS_THREE_GOALS_SCENARIO = "goal-buckets-three-goals";
 
@@ -1630,7 +1631,11 @@ function seedGoalBucketsThreeGoalsScenario(): Db {
   const parent = db.baseline.entities.find((e) => e.type === "goal" && e.key === "faster-activation") ?? db.baseline.entities.find((e) => e.type === "goal")!;
   db.baseline.entities.push({ ...parent, id: stableUuid("simple-goal/kr-quick-alert"), key: "kr-quick-alert", title: "KR 1 Teams get a first alert in a day", parent_id: parent.id, status: "confirmed", attrs: { metric: "teams", weight: 1 } });
   rm.items.push({ key: "alert-tone", title: "Alert tone picker", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-quick-alert"], draft: true });
-  for (const k of ["alert-team-digest", "alert-snooze-day", "alert-tone"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
+  // goal-delete-r4: an item on Grow retention and its own key result: Archive moves it to the goal picked.
+  const grow = db.baseline.entities.find((e) => e.type === "goal" && e.key === "grow-retention") ?? parent;
+  db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-week-two"), key: "kr-week-two", title: "KR 1 Teams come back in week two", parent_id: grow.id, status: "confirmed", attrs: { metric: "teams", weight: 1 } });
+  rm.items.push({ key: "alert-history", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-week-two"], draft: true });
+  for (const k of ["alert-team-digest", "alert-snooze-day", "alert-tone", "alert-history"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
   return db;
 }
 
