@@ -18,6 +18,10 @@ _memo: ContextVar[dict[Hashable, Any] | None] = ContextVar("runs_batch", default
 
 @contextmanager
 def batched() -> Iterator[None]:
+    """Shared reads until the block ends; a block inside an open one shares the open one's."""
+    if _memo.get() is not None:
+        yield
+        return
     token = _memo.set({})
     try:
         yield

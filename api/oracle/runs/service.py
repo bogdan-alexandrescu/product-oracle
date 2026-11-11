@@ -11797,7 +11797,13 @@ async def waiting_stops(db: AsyncSession, principal: Principal) -> list[WaitingS
 
 
 async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False) -> InboxOut:
-    """``mark_seen``: record this visit as my last one (after reading what was new)."""
+    """``mark_seen``: record this visit as my last one (after reading what was new). The
+    company-wide reads its rows share (the time zone, ...) are read once (oracle.runs.batch)."""
+    with batched():
+        return await _inbox(db, principal, mark_seen)
+
+
+async def _inbox(db: AsyncSession, principal: Principal, mark_seen: bool) -> InboxOut:
     pending = list(
         await db.scalars(
             select(Checkpoint)

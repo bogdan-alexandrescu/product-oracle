@@ -21,7 +21,7 @@ Test cards (protects / fails_when / no_claim):
   inbox-perf), for the owner and an approver; fails_when=a shared read returns another
   stop's rows or a stale count.
 - test_answers_as_before_inbox_perf: protects=the Inbox answers exactly as the code before
-  inbox-perf (its four changed modules read from git at BEFORE and run in this process) on
+  inbox-perf (its changed modules read from git at BEFORE and run in this process) on
   the same company, for the owner and an approver; fails_when=any row, count or field
   differs; no_claim=a checkout without that commit (skipped).
 - test_inbox_answers_in_time (timing): protects=the owner's Inbox answers under BUDGET_MS
@@ -37,6 +37,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import event
 
+from oracle import company_time
 from oracle.baseline import from_run
 from oracle.db import get_engine
 from oracle.runs import actions, batch
@@ -48,7 +49,7 @@ from tests.inbox_seed import seed_company, stops
 INBOX = "/v1/inbox"
 # The owner's Inbox on the seeded company, the sign-in's statements included (measured
 # before inbox-perf: 502, and eighteen more for every stop waiting at Confirm the baseline;
-# after: 140, whatever the number of stops).
+# after: 136, whatever the number of stops).
 MAX_STATEMENTS = 150
 # Best of three warm reads (measured on the runner before inbox-perf: 930 to 1,150 ms;
 # after: 445 to 560 ms, of which the Simple proposals' rows take about 300).
@@ -108,7 +109,7 @@ async def test_batched_reads_answer_as_each_alone(client, monkeypatch):
 
 # The train before inbox-perf, and the modules it changed.
 BEFORE = "5c6d57bed"
-CHANGED = (from_run, actions, runs_service, agenda)
+CHANGED = (from_run, actions, runs_service, agenda, company_time)
 
 
 def before(module: types.ModuleType) -> dict:
