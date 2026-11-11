@@ -105,7 +105,8 @@ for (const phone of [false, true]) {
       await priorities(page);
       const theirs = await context.newPage();
       await theirs.setViewportSize(page.viewportSize()!);
-      await login(theirs, "commenter@example.com");
+      // It opens signed in as the owner: sign out there, then in as the commenter.
+      await as(theirs, "commenter@example.com");
       await priorities(theirs);
       await proposeOn(theirs);
       await twinOf(page).getByRole("button", { name: "Merge into…" }).click();
