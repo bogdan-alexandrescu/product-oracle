@@ -21,11 +21,28 @@ type Goal = { id: string; key: string; title: string; order: number; measure: st
 /** assumed_goal_ids: the links whose contribution is assumed (an approved order's, api ASSUMED_LINK). */
 type Feature = { id: string; key: string; title: string; goal_ids: string[]; assumed_goal_ids?: string[] };
 /** lazy: the default goals, seeded by the first route that read them rather than by the scenario; lazy_links: the
- * feature-goal links seeded with them (linkOf) that no person has written since (a move drops its link). */
-export type GoalBucketsDb = { goals: Goal[]; features: Feature[]; lazy?: string[]; lazy_links?: string[] };
-/** A person wrote this feature's link to this goal: it is the API's link from now on, no longer a seeded one. */
-export function touchLink(db: GoalBucketsDb, featureId: string, goalId: string): void {
-  if (db.lazy_links) db.lazy_links = db.lazy_links.filter((x) => x !== linkOf(featureId, goalId));
+ * feature-goal links seeded with them (linkOf) whose feature no person has written since (a write drops all of its
+ * links); lazy_undo: by an Undo's sig, its features' seeded links as they were before, which the Undo puts back. */
+export type GoalBucketsDb = { goals: Goal[]; features: Feature[]; lazy?: string[]; lazy_links?: string[]; lazy_undo?: Record<string, string[]> };
+const ofFeature = (featureId: string) => (link: string) => link.startsWith(linkOf(featureId, ""));
+/** A person wrote this feature's goal links: the API rewrites its whole list (_set_links), so every link it keeps is
+ * the API's from now on, not only the one it was moved to. */
+export function touchFeature(db: GoalBucketsDb, featureId: string): void {
+  if (db.lazy_links) db.lazy_links = db.lazy_links.filter((x) => !ofFeature(featureId)(x));
+}
+/** These features' seeded links as they are now, for an Undo or a Restore to put back (none when nothing was seeded). */
+export function lazyOf(db: GoalBucketsDb, featureIds: string[]): string[] | undefined {
+  return db.lazy_links?.filter((x) => featureIds.some((id) => ofFeature(id)(x)));
+}
+/** Puts these features' seeded links back as `was` had them: the links an Undo or a Restore writes are as no person wrote them. */
+export function lazyBack(db: GoalBucketsDb, featureIds: string[], was: string[] | undefined): void {
+  if (!was || !db.lazy_links) return;
+  db.lazy_links = [...db.lazy_links.filter((x) => !featureIds.some((id) => ofFeature(id)(x))), ...was];
+}
+/** The Undo puts back the seeded links its features had before the write. */
+function keepLazy(db: GoalBucketsDb, undo: Undo, was: string[] | undefined): Undo {
+  if (was && undo.sig) (db.lazy_undo ??= {})[undo.sig] = was;
+  return undo;
 }
 type Undo = Schemas["GoalBucketsUndo"];
 
@@ -195,7 +212,8 @@ function moveOff(db: GoalBucketsDb, g: Goal, to: string | null): Feature[] {
     const rest = f.goal_ids.filter((x) => x !== g.id);
     const first = f.goal_ids[0] === g.id;
     f.goal_ids = first && !rest.length && to ? [to] : rest;
-    if (first && !rest.length && to) touchLink(db, f.id, to);
+    // The API rewrites each of them (move_off: _set_links), the links it keeps with the one it gets.
+    touchFeature(db, f.id);
     // The link that becomes first gets its contribution set (the API's TOP): no longer assumed.
     if (first) f.assumed_goal_ids = f.assumed_goal_ids?.filter((x) => x !== f.goal_ids[0]);
   }
@@ -263,12 +281,15 @@ export type GoalBucketsTrash = {
   refuseRestore?: (entry: TrashEntryRow) => string | null;
 };
 
+const heldBy = (db: GoalBucketsDb, g: Goal) => db.features.filter((f) => f.goal_ids.includes(g.id)).map((f) => f.id);
+
 /** Archive (goal_buckets.archive), also an accepted Ask to archive: the Undo, or an error. */
 export function archiveGoal(db: GoalBucketsDb, id: string, to: string | null, now: string): Undo | Response {
   const g = db.goals.find((x) => x.id === id && !x.archived && !x.trashed);
   if (!g) return json(404, { detail: "No such goal" });
   if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
-  const undo = signed({ goals: [goalSnap(g)], features: moveOff(db, g, to).map(featureSnap), added_goal_id: null });
+  const was = lazyOf(db, heldBy(db, g));
+  const undo = keepLazy(db, signed({ goals: [goalSnap(g)], features: moveOff(db, g, to).map(featureSnap), added_goal_id: null }), was);
   g.archived = true;
   g.archived_at = now;
   return undo;
@@ -295,6 +316,7 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, 
   if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
   // G-4: the features that served it, which Trash says come back with it.
   const features = db.features.filter((f) => f.goal_ids.includes(g.id)).length;
+  const was = lazyOf(db, heldBy(db, g));
   const before = to ? moveOff(db, g, to) : [];
   g.trashed = true;
   const at = bin.now();
@@ -311,7 +333,7 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, 
       published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
     },
     documents: [], versions: [], runs: [], intakes: [],
-    goal_links: before.map((f) => ({ id: f.id, goal_ids: f.goal_ids, left: [...(db.features.find((x) => x.id === f.id)?.goal_ids ?? [])] })),
+    goal_links: before.map((f) => ({ id: f.id, goal_ids: f.goal_ids, left: [...(db.features.find((x) => x.id === f.id)?.goal_ids ?? [])], lazy: was?.filter(ofFeature(f.id)) })),
   };
   bin.trash.entries.push(row);
   return row;
@@ -446,9 +468,9 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     const to = body.to_goal_id as string;
     if (!f) return json(404, { detail: "No such feature" });
     if (!db.goals.some((x) => x.id === to)) return json(404, { detail: "No such goal" });
-    const undo = signed({ goals: [], features: [featureSnap(f)], added_goal_id: null });
+    const undo = keepLazy(db, signed({ goals: [], features: [featureSnap(f)], added_goal_id: null }), lazyOf(db, [f.id]));
     f.goal_ids = [to, ...f.goal_ids.filter((x) => x !== to && x !== body.from_goal_id)];
-    touchLink(db, f.id, to);
+    touchFeature(db, f.id);
     // The goal it is dropped on gets its contribution set (the API's TOP): no longer assumed.
     f.assumed_goal_ids = f.assumed_goal_ids?.filter((x) => x !== to && x !== body.from_goal_id);
     return json(200, { goal: null, undo });
@@ -473,6 +495,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
         f.assumed_goal_ids = s.links.filter((l) => (l.attrs as Record<string, unknown> | null)?.contribution_assumed === true).map((l) => l.goal_id);
       }
     }
+    lazyBack(db, (u.features ?? []).map((s) => s.feature_id), db.lazy_undo?.[u.sig]);
     if (u.added_goal_id) {
       const g = db.goals.find((x) => x.id === u.added_goal_id);
       if (g) g.archived = true;
