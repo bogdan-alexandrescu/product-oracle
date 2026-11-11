@@ -7,7 +7,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
-import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
+import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashedSimple, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
 import { GOALS, goalId, goalPositionOf, goalRank, goalInTrash, roadmapGoal, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
 
@@ -400,7 +400,8 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     }
     const refused = bin.refuseRestore?.(entry) ?? null;
     if (refused) return json(409, { detail: refused });
-    return json(200, restoreFromTrash(bin.trash, entry, bin.now(), { items: [], goal_buckets: db }));
+    // As Trash's Restore (trash_items.after_restore): the roadmap's items get the goals the delete moved back.
+    return json(200, restoreFromTrash(bin.trash, entry, bin.now(), { ...(simple as TrashedSimple), items: (simple as Partial<TrashedSimple>).items ?? [], goal_buckets: db }, bin.id));
   }
   // trash-features-goals: DELETE .../goals/{id}?to_goal_id=: approvers and owners delete it (and
   // restore it); a commenter proposes it to the owners; viewers are refused.
