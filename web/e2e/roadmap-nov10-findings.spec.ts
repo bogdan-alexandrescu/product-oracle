@@ -15,6 +15,12 @@ import { expect, test, type Page } from "./test";
  *   while a viewer, who reads the published Roadmap, keeps the published counts;
  *   fails_when = the count reads another version than the Roadmap beside it;
  *   no_claim = the API (api/tests/test_simple_tracks_draft_count.py).
+ * - tracks-trash-draft: protects = Move to Trash asks about what it moves for the reader: a
+ *   track the draft moved every feature off still asks, naming the features on it in the
+ *   published Roadmap, and a track holding features only in the draft moves them to No track
+ *   there, Undo putting them back; fails_when = it trashes at once with no question, or the
+ *   draft keeps its features on the track in Trash; no_claim = the API
+ *   (api/tests/test_simple_tracks_draft_count.py).
  * - gantt-pm-lane-measure: protects = on the Gantt grouped by Goal the PM-owned lane has no
  *   goal measure line, while a goal's lane keeps its own; fails_when = it shows a goal's
  *   measure; no_claim = the Timeline's track bands.
@@ -108,6 +114,50 @@ test.describe("Roadmap findings, Nov 10", () => {
     await page.getByTestId("tracks-open").click();
     await expect(row(page, "Usage alerts track")).toContainText("5 features");
     await expect(row(page, "Partner care track")).toContainText("0 features");
+  });
+
+  test("Move to Trash asks about what it moves, the draft's features and the published ones", async ({ page }) => {
+    test.setTimeout(120_000);
+    await roadmap(page);
+    await page.getByTestId("tracks-open").click();
+    await sheet(page).getByTestId("track-add").click();
+    await sheet(page).getByLabel("New track name").fill("Partner care track");
+    await sheet(page).getByLabel("New track PRD").selectOption({ label: "No PRD" });
+    await sheet(page).getByRole("button", { name: "Add", exact: true }).click();
+    await expect(toasts(page)).toContainText("Added Partner care track");
+    await page.getByRole("button", { name: "Close Tracks" }).click();
+    const keys = ["alert-rules", "alert-digest", "alert-mobile", "alert-export", "alert-sso"];
+    for (const key of keys) {
+      await openRoadmapItem(page, key);
+      await panel(page).getByRole("button", { name: "Change the track" }).click();
+      await panel(page).getByTestId("card-track-edit").getByLabel("Track").selectOption({ label: "Partner care track" });
+      await panel(page).getByTestId("card-track-edit").getByRole("button", { name: "Save" }).click();
+      await expect(panel(page).getByTestId("card-track")).toHaveText("Partner care track");
+      await page.keyboard.press("Escape");
+      await expect(panel(page)).toHaveCount(0);
+    }
+    // The draft moved every feature off Usage alerts track, but the published Roadmap still has
+    // five on it: Move to Trash asks first and says so.
+    await page.getByTestId("tracks-open").click();
+    await expect(row(page, "Usage alerts track")).toContainText("0 features");
+    await row(page, "Usage alerts track").getByRole("button", { name: "Change Usage alerts track" }).click();
+    await row(page, "Usage alerts track").getByRole("button", { name: "Move to Trash" }).click();
+    await expect(sheet(page).getByTestId("track-trash-confirm")).toHaveText(/5 features still on it in the published Roadmap move to No track\./);
+    await sheet(page).getByTestId("track-trash-confirm").getByRole("button", { name: "Cancel" }).click();
+    await expect(row(page, "Usage alerts track")).toBeVisible();
+
+    // Partner care track holds five only in the draft: they move to No track there.
+    await row(page, "Partner care track").getByRole("button", { name: "Change Partner care track" }).click();
+    await row(page, "Partner care track").getByRole("button", { name: "Move to Trash" }).click();
+    await expect(sheet(page).getByTestId("track-trash-confirm")).toHaveText(/Its 5 features move to No track\./);
+    await sheet(page).getByTestId("track-trash-confirm").getByRole("button", { name: "Move to Trash" }).click();
+    await expect(toasts(page)).toContainText("Moved Partner care track to Trash · 5 features now have no track");
+    await expect(row(page, "Partner care track")).toHaveCount(0);
+    await toasts(page).getByRole("button", { name: "Undo" }).first().click();
+    await expect(row(page, "Partner care track")).toContainText("5 features");
+    await page.getByRole("button", { name: "Close Tracks" }).click();
+    await openRoadmapItem(page, "alert-rules");
+    await expect(panel(page).getByTestId("card-track")).toHaveText("Partner care track");
   });
 
   test("the Gantt grouped by Goal draws no goal measure under the PM-owned lane", async ({ page }) => {
