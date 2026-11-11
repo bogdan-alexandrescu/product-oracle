@@ -18,6 +18,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card every-dated-coded: protects = every milestone on the map and its week strip carries its
  * roadmap code; a PRD milestone its plan dropped is not drawn (the roadmap read leaves it out, so it
  * has no code); fails_when = "40 replies per agent per day" shows with no M code.
+ * Card same-goal-only: protects = a goal's milestone joins a PRD's only within the same goal (the owner,
+ * Nov 11): Goal 4's own "Imports finish" leads the twin's name but keeps a code of its own; fails_when =
+ * it and Goal 2's "Imports finish without help" show one code on two cards.
  */
 
 async function open(page: Page) {
@@ -42,6 +45,17 @@ test.describe("Goal map milestone twins", () => {
     await expect(twin).toHaveCount(1);
     await expect(twin.locator(".simple-code")).toHaveText(/^M\d+$/);
     await expect(twin).toContainText("Dec 18");
+  });
+
+  test("two goals' milestones of matching names show two codes", async ({ page }) => {
+    await open(page);
+    const twin = krCard(page, LADDER_TWINS.twin);
+    const other = page.getByTestId("ld-milestone").filter({ has: page.getByRole("button", { name: new RegExp(`^Rename M\\d+ ${LADDER_TWINS.other}$`) }) });
+    await expect(twin).toHaveCount(1);
+    await expect(other).toHaveCount(1);
+    const code = (await twin.locator(".simple-code").textContent())!.trim();
+    await expect(other.locator(".simple-code")).toHaveText(/^M\d+$/);
+    await expect(other.locator(".simple-code")).not.toHaveText(code);
   });
 
   test("a PRD's milestone leads to its PRD instead of offering Move to Trash", async ({ page }) => {

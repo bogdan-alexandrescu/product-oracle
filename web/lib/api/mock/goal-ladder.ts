@@ -67,6 +67,8 @@ export const LADDER_TWINS = {
   prd: { id: "prd-bulk-imports", slug: "bulk-imports", title: "Bulk imports" },
   lone: "Seat changes from the admin page",
   stale: "40 replies per agent per day",
+  /** Goal 4's own milestone whose name leads the twin's: another goal's, so never joined to it. */
+  other: "Imports finish",
 } as const;
 const CODE_KRS: [GmGoal & { position: number }, string, string, "confirmed" | "proposed"][] = [
   [goal("lk22", "Teams finish setup on the first day", "Teams done with setup on the day they sign up.", 35, 60, "%", "at_risk", 0), "lg2", "2026-09-02T09:00:00Z", "confirmed"],
@@ -132,6 +134,7 @@ const TWIN_MILESTONES = [
   { ...ms("lm13", "lg2", LADDER_TWINS.twin, null, null, null, "no_gate", "Platform"), prd: LADDER_TWINS.prd, prd_code: "M1" },
   { ...ms("lm14", "lg3", LADDER_TWINS.lone, null, null, null, "no_gate", "Billing"), prd: LADDER_TWINS.prd, prd_code: "M2" },
   { ...ms("lm15", "lg4", LADDER_TWINS.stale, 40, null, "2027-01-29", "not_measured", "Support"), prd: LADDER_TWINS.prd, prd_code: "M3", out_of_plan: true },
+  ms("lm16", "lg4", LADDER_TWINS.other, null, null, "2027-02-05", "no_gate", "Support"),
 ] as unknown as GmMilestone[];
 
 // [name, goal, milestone, area, status, start, end, waits on (row numbers)]

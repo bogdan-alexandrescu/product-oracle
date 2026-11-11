@@ -23,6 +23,18 @@ Test cards (protects / fails_when / no_claim):
   Nov 10): protects=a goal's own "M4 Agents onboarded" and a PRD's undated milestone of the
   same name (the PRD's own code, its goal set) are one milestone with one code; a PRD
   milestone with no goal joins too; fails_when=the twin keeps a code of its own.
+- test_a_goal_milestone_does_not_join_another_goals_prd_milestone ("Join only within the same
+  goal", the owner, Nov 11): protects=Goal 1's "Beta" (Nov 1) and Goal 2's PRD "Beta launch"
+  (Mar 2027) keep two codes, so Goal 2's "Pilot" (Dec 1) reads between them; fails_when=the
+  join dates "Beta" by the PRD's later date and "Pilot" reads M1.
+- test_a_joined_group_is_dated_by_the_goals_own_milestone: protects=a goal's "Beta" (Nov 1)
+  joined to its own PRD's "Beta launch" (Mar 2027) still reads before a Dec 1 milestone;
+  fails_when=the group goes by the PRD's date.
+- test_two_goals_own_milestones_do_not_share_one_prd_twin: protects=two goals' own "Beta"
+  and a PRD's "Beta" of no goal: at most one joins it, so two codes; fails_when=both read one.
+- test_of_two_matching_prd_milestones_the_closest_date_joins: protects=a goal's "Beta" joins
+  the matching PRD milestone closest in date, then the one of its exact name, not the first by
+  id; fails_when=the exact name wins over the closer date.
 - test_no_name_is_hidden_by_a_join: protects=a name that matches neither keeps its own code.
 - test_roadmap_read_codes_and_renumber_on_move: protects=``GET /v1/simple/roadmap`` gives each
   goal milestone its roadmap code across goals, and moving one earlier renumbers the later
@@ -140,7 +152,7 @@ def test_a_goal_milestone_joins_a_prd_milestone_whose_name_it_leads():
     assert own.roadmap_code == prd.roadmap_code == "M1"
 
 
-@pytest.mark.parametrize("prd_goal", [G1, G2, None])
+@pytest.mark.parametrize("prd_goal", [G1, None])
 def test_a_goal_milestone_joins_its_twin_prd_milestone_of_another_code(prd_goal):
     """Join whenever names match (the owner, Nov 9): the PRD's code (its plan's "M1") is not
     the goal's ("M4"), and the PRD's milestone carries a goal of its own; still one."""
@@ -150,6 +162,43 @@ def test_a_goal_milestone_joins_its_twin_prd_milestone_of_another_code(prd_goal)
     assign([twin, own, other], [], [], RANK)
     assert own.roadmap_code == twin.roadmap_code == "M2"
     assert other.roadmap_code == "M1"
+
+
+def test_a_goal_milestone_does_not_join_another_goals_prd_milestone():
+    """Join only within the same goal (the owner, Nov 11)."""
+    beta = gm("M1", "Beta", "2026-11-01")
+    launch = gm("M1", "Beta launch", "2027-03-01", goal=G2, prd=True)
+    pilot = gm("M2", "Pilot", "2026-12-01", goal=G2)
+    assign([beta, launch, pilot], [], [], RANK)
+    assert [m.roadmap_code for m in (beta, pilot, launch)] == ["M1", "M2", "M3"]
+
+
+def test_a_joined_group_is_dated_by_the_goals_own_milestone():
+    beta = gm("M1", "Beta", "2026-11-01")
+    launch = gm("M1", "Beta launch", "2027-03-01", prd=True)
+    pilot = gm("M2", "Pilot", "2026-12-01", goal=G2)
+    assign([launch, beta, pilot], [], [], RANK)
+    assert beta.roadmap_code == launch.roadmap_code == "M1"
+    assert pilot.roadmap_code == "M2"
+
+
+def test_two_goals_own_milestones_do_not_share_one_prd_twin():
+    """At most one goal's own milestone joins a given PRD milestone; the other keeps its code."""
+    a = gm("M1", "Beta", "2026-11-01")
+    b = gm("M1", "Beta", "2026-11-01", goal=G2)
+    twin = gm("M3", "Beta", None, goal=None, prd=True)
+    assign([twin, b, a], [], [], RANK)
+    assert a.roadmap_code != b.roadmap_code
+    assert twin.roadmap_code == a.roadmap_code  # Goal 1 comes first in goal order
+
+
+def test_of_two_matching_prd_milestones_the_closest_date_joins():
+    own = gm("M1", "Beta", "2026-11-01")
+    exact = gm("M2", "Beta", "2027-03-01", prd=True)
+    near = gm("M3", "Beta launch", "2026-11-05", prd=True)
+    assign([exact, near, own], [], [], RANK)
+    assert own.roadmap_code == near.roadmap_code == "M1"
+    assert exact.roadmap_code == "M2"
 
 
 def test_two_prd_milestones_of_one_name_are_not_joined_to_each_other():
