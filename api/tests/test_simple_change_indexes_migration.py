@@ -10,6 +10,10 @@ no_claim=<what green does not prove>.
   its downgrade, the transaction's lock_timeout is what it was before; fails_when=the
   migration's 5 s lock_timeout stays set for the rest of the transaction; no_claim=the
   indexes' use (EXPLAIN in the migration's docstring).
+- test_both_ways_wait_at_most_5s: protects=each of the four indexes is created by the
+  upgrade and dropped by the downgrade under the 5 s lock_timeout; fails_when=either way
+  takes its locks without it (waiting behind a long read for as long as it lasts);
+  no_claim=Postgres honouring the timeout.
 """
 
 import asyncio
@@ -86,3 +90,26 @@ def test_lock_timeout_does_not_outlive_the_migration(scratch_db):
     command.stamp(_cfg(), REVISION)
     was, now = _timeouts("downgrade")
     assert now == was, (was, now)
+
+
+def _timeouts_at_each_index(step: str, monkeypatch) -> list[str]:
+    """lock_timeout as the migration's ``step`` creates or drops each index."""
+    seen: list[str] = []
+    for name in ("create_index", "drop_index"):
+        real = getattr(Operations, name)
+
+        def watch(self, *args, _real=real, **kw):
+            seen.append(self.get_bind().execute(text("SHOW lock_timeout")).scalar())
+            return _real(self, *args, **kw)
+
+        monkeypatch.setattr(Operations, name, watch)
+    _timeouts(step)
+    monkeypatch.undo()
+    return seen
+
+
+def test_both_ways_wait_at_most_5s(scratch_db, monkeypatch):
+    command.upgrade(_cfg(), PREVIOUS)
+    assert _timeouts_at_each_index("upgrade", monkeypatch) == ["5s"] * 4
+    command.stamp(_cfg(), REVISION)
+    assert _timeouts_at_each_index("downgrade", monkeypatch) == ["5s"] * 4
