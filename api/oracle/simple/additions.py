@@ -1092,11 +1092,19 @@ async def _job_document(
 
 
 async def _enqueue_suggestions(
-    db: AsyncSession, goal: Entity, origin: str, principal: Any
+    db: AsyncSession,
+    goal: Entity,
+    origin: str,
+    principal: Any,
+    read_: service.Read | None = None,
+    active: Any = _ACTIVE,
+    first: dict[str, Document | None] | None = None,
 ) -> LlmJob:
+    """``read_``, ``active``, ``first``: as :func:`_job_document`, for a caller queueing
+    several goals."""
     from oracle.jobs import service as jobs
 
-    doc = await _job_document(db, goal)
+    doc = await _job_document(db, goal, read_, active, first)
     if doc is None:
         raise ChangeError(409, "There is no roadmap yet")
     try:
@@ -1141,12 +1149,14 @@ async def suggest_for_empty_goals(db: AsyncSession) -> int:
     ):
         live.update(ids or [])
     done = set(await db.scalars(select(SimpleGoalAuto.goal_id)))
+    goals = [g for g in await _goals(db) if g.id not in live and g.id not in done]
+    # The company roadmap and the first roadmap, read once for every goal.
+    active = await company.active(db) if goals else None
+    first: dict[str, Document | None] = {}
     n = 0
-    for g in await _goals(db):
-        if g.id in live or g.id in done:
-            continue
+    for g in goals:
         try:
-            job = await _enqueue_suggestions(db, g, "auto", None)
+            job = await _enqueue_suggestions(db, g, "auto", None, read_, active, first)
         except ChangeError as e:
             log.info("S7: no automatic suggestions for goal %s: %s", g.key, e.detail)
             continue
@@ -1334,16 +1344,25 @@ async def _display_names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUI
 
 
 async def deciding(
-    db: AsyncSession, principal: Any, goals: list[Entity], read_: service.Read, who: bool = True
+    db: AsyncSession,
+    principal: Any,
+    goals: list[Entity],
+    read_: service.Read,
+    who: bool = True,
+    docs: dict[uuid.UUID, Document | None] | None = None,
 ) -> dict[uuid.UUID, tuple[bool, uuid.UUID | None]]:
     """Per goal: whether the caller decides its suggestions (drafts.can_edit on the goal's
     roadmap: an owner, its decider, with none its owners who are approvers) and who decides
     them (the first of _route: the decider, else its approving owners, else the company's
-    owners; None without ``who``, for a caller that never names them: the waiting list)."""
+    owners; None without ``who``, for a caller that never names them: the waiting list).
+    ``docs``: filled with each goal's roadmap (:func:`_job_document`), for a caller that
+    needs them too."""
     active = await company.active(db) if goals else None
     first: dict[str, Document | None] = {}
-    docs = {g.id: await _job_document(db, g, read_, active, first) for g in goals}
-    w = await drafts.who(db, {d.id for d in docs.values() if d is not None})
+    docs = {} if docs is None else docs
+    for g in goals:
+        docs[g.id] = await _job_document(db, g, read_, active, first)
+    w = await drafts.who(db, {d.id for d in (docs[g.id] for g in goals) if d is not None})
     routes: dict[uuid.UUID, uuid.UUID | None] = {}
     out: dict[uuid.UUID, tuple[bool, uuid.UUID | None]] = {}
     for g in goals:
@@ -1384,10 +1403,8 @@ async def inbox_rows(
     goals = [g for g in await _goals(db) if g.id in {r.goal_id for r in rows}]
     by_id = {g.id: g for g in goals}
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
-    rule = await deciding(db, principal, goals, read_)
-    active = await company.active(db) if goals else None
-    first: dict[str, Document | None] = {}
-    docs = {g.id: await _job_document(db, g, read_, active, first) for g in goals if rule[g.id][0]}
+    docs: dict[uuid.UUID, Document | None] = {}
+    rule = await deciding(db, principal, goals, read_, docs=docs)
     people = await _display_names(db, {r.proposed_by for r in rows if r.proposed_by})
     return [
         InboxSimpleGoalSuggestion(
@@ -1416,9 +1433,10 @@ async def _decide(db: AsyncSession, principal: Any, s: SimpleGoalSuggestion) -> 
     if goal is None:
         raise ChangeError(404, "No such suggestion")
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
-    if not (await deciding(db, principal, [goal], read_))[goal.id][0]:
+    docs: dict[uuid.UUID, Document | None] = {}
+    if not (await deciding(db, principal, [goal], read_, docs=docs))[goal.id][0]:
         raise ChangeError(403, DECIDER_ONLY)
-    return await _job_document(db, goal, read_)
+    return docs[goal.id]
 
 
 async def file_suggestion(
