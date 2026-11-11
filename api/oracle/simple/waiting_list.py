@@ -65,36 +65,47 @@ def _stop_for(c: Any) -> str:
     return c.flow_title or "A run"
 
 
-async def _roadmap(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
+async def _roadmap(db: AsyncSession, principal: Any, read_: Any) -> list[SimpleWaitingItem]:
     """Broken links on the items this person decides (the others only propose fixes) and
-    the dates Oracle suggests for items they decide."""
+    the dates Oracle suggests for items they decide: each item as the roadmap's GET shows it
+    (service.build's item_out: its code-less name, flags and suggestion), read from the list's
+    one roadmap read rather than a whole build."""
+    from oracle.roadmap import codes
     from oracle.simple import service
 
-    rm = await service.build(db, principal)
     today = await company_time.company_today(db)
-    titles = {i.id: i.title for i in rm.items}
+    # service.item_codes's codes, without writing them onto the shared read's entries.
+    fids = {e.row.feature_id for e in read_.entries if e.row.feature_id}
+    by_feature = await codes.feature_codes(db) if fids else {}
+
+    def title_of(e: Any) -> str:
+        return service.coded_title(e.row.title, codes.code_of(e.row, by_feature))[1]
+
+    titles = {e.row.id: title_of(e) for e in read_.entries}
     out = []
-    for i in rm.items:
-        if not i.can_decide:
+    for e in read_.entries:
+        if not service.can_decide(principal, e, read_.deciders):
             continue
-        for f in i.flags:
+        iid, title = e.row.id, titles[e.row.id]
+        for f in e.flags:
             # qa-simple-home-3: a broken link is every red flag with a one-click fix (an end past
             # its milestone too), as Home's tile and the walk count them (chat.broken_links).
             if f.state != "red" or not f.fixes:
                 continue
             dep = titles.get(_uuid(f.subject)) if f.subject else None
             out.append(SimpleWaitingItem(
-                kind="broken_link", key=f"broken_link:{i.id}:{f.kind}:{f.subject or ''}",
-                ref_id=str(i.id), title=i.title,
+                kind="broken_link", key=f"broken_link:{iid}:{f.kind}:{f.subject or ''}",
+                ref_id=str(iid), title=title,
                 detail=f"{f.reason}" + (f" ({dep})" if dep and dep not in f.reason else ""),
-                action="Fix the link", href=f"/simple/roadmap?item={i.id}",
+                action="Fix the link", href=f"/simple/roadmap?item={iid}",
             ))  # fmt: skip
-        s = i.suggestion
-        if s is not None and s.status == "open" and s.can_decide:
+        s = e.suggestion
+        if s is not None and s.status == "open":
+            start, end = e.suggestion_span or (s.start_date, s.end_date)
             out.append(SimpleWaitingItem(
-                kind="date", key=f"date:{s.id}", ref_id=str(s.id), title=i.title,
-                detail=f"Oracle suggests {_day(s.start_date, today)} – {_day(s.end_date, today)}",
-                action="Confirm the dates", href=f"/simple/roadmap?item={i.id}",
+                kind="date", key=f"date:{s.id}", ref_id=str(s.id), title=title,
+                detail=f"Oracle suggests {_day(start, today)} – {_day(end, today)}",
+                action="Confirm the dates", href=f"/simple/roadmap?item={iid}",
                 at=s.created_at,
             ))  # fmt: skip
     return out
@@ -120,42 +131,40 @@ async def _drafts(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
     return out
 
 
-async def _proposals(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
-    from oracle.simple import changes
+async def _proposals(db: AsyncSession, principal: Any, read_: Any) -> list[SimpleWaitingItem]:
+    from oracle.simple import waiting_reads
 
     out = []
-    for c in await changes.listing(db, principal, None, None, "proposed", False):
-        if not c.can_decide:
-            continue
+    for c, words, by_name in await waiting_reads.proposals(db, principal, read_):
         item = (c.target or {}).get("item_id")
         date = c.op == "accept_date_suggestion"
         out.append(SimpleWaitingItem(
             kind="date" if date else "proposal", key=f"proposal:{c.id}", ref_id=str(c.id),
-            title=c.words or ("New dates proposed" if date else "A proposed change"),
-            detail=f"Proposed by {c.by_name}", action="Accept",
+            title=words or ("New dates proposed" if date else "A proposed change"),
+            detail=f"Proposed by {by_name}", action="Accept",
             href=f"/simple/roadmap?item={item}" if item else "/simple/roadmap",
             at=c.at, op=c.op,
         ))  # fmt: skip
     return out
 
 
-async def _goal_suggestions(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
-    from oracle.simple import additions
+async def _goal_suggestions(
+    db: AsyncSession, principal: Any, read_: Any
+) -> list[SimpleWaitingItem]:
+    from oracle.simple import waiting_reads
 
-    got = await additions.listing(db, principal, None, "open")
     return [
         SimpleWaitingItem(
             kind="goal_suggestion",
             key=f"goal_suggestion:{s.id}",
             ref_id=str(s.id),
             title=s.title,
-            detail=f"Suggested for {s.goal.title}",
+            detail=f"Suggested for {goal}",
             action="Confirm",
             href="/simple/goals",
             at=s.created_at,
         )  # fmt: skip
-        for s in got.suggestions
-        if s.status == "open" and s.can_accept
+        for s, goal in await waiting_reads.goal_suggestions(db, principal, read_)
     ]
 
 
@@ -315,17 +324,23 @@ async def items(
 ) -> list[SimpleWaitingItem]:
     """The one list, run stops first, then the questions, decision-log calls, roadmap,
     drafts, proposals, goal suggestions and proposed goals, then the Inbox's other counted
-    rows (Add predictions, launches, rituals, metrics, requests). Each source is read as its own
-    page reads it, so what this person cannot see or decide is never here."""
+    rows (Add predictions, launches, rituals, metrics, requests). Each source keeps its own
+    page's rules, so what this person cannot see or decide is never here; the roadmap is read
+    once for all of them (tests/test_simple_waiting_speed.py)."""
     if getattr(principal, "user_id", None) is None:
         return []
+    from oracle.simple import drafts, service
+
     out = await _stops(db, principal)
     out += _questions(qs)
     out += await _calls(db, principal)
-    out += await _roadmap(db, principal)
+    # The roadmap as this person reads it (their drafts' changes in), read once for the
+    # roadmap's links and dates, the proposals and the goal suggestions.
+    read_ = await service.load(db, await drafts.overlays_for(db, principal))
+    out += await _roadmap(db, principal, read_)
     out += await _drafts(db, principal)
-    out += await _proposals(db, principal)
-    out += await _goal_suggestions(db, principal)
+    out += await _proposals(db, principal, read_)
+    out += await _goal_suggestions(db, principal, read_)
     out += await _goals(db, principal)
     out += await _inbox(db, principal)
     return out
