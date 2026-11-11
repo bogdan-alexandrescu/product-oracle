@@ -1,4 +1,4 @@
-import { goalFigure } from "@/lib/format";
+import { goalFigure } from "@/lib/goal-figure";
 import { goalTree, scoredConfidence } from "@/lib/goal-tree";
 import { goalName } from "@/lib/placeholders";
 import type { EntityOut, Schemas } from "@/lib/api/client";

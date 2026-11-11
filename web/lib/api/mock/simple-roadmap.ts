@@ -10,7 +10,7 @@
  */
 import { byPrdRank, prdRanker } from "./prd-rank";
 import type { Schemas } from "@/lib/api/client";
-import { goalFigure } from "@/lib/format";
+import { goalFigure } from "@/lib/goal-figure";
 import { goalPosition, sortGoals, type OrderedGoal } from "@/lib/goal-order";
 import { withRoadmapCodes } from "./roadmap-codes";
 import { plainFlow } from "./simple-visuals";

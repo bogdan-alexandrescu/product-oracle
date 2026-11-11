@@ -7,7 +7,7 @@
  * asks for it. Generic, made-up data only.
  */
 import type { Schemas } from "@/lib/api/client";
-import { goalFigure } from "@/lib/format";
+import { goalFigure } from "@/lib/goal-figure";
 
 import type { BaselineState } from "./baseline";
 import { type ChangeRow, type DiscussionRow, type DiscussionsDb } from "./discussions";

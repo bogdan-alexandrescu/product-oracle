@@ -19,7 +19,7 @@
  * routeLadderMilestone). Invented people, products and numbers only.
  */
 import type { Schemas } from "@/lib/api/client";
-import { CURRENCY_SIGNS, goalFigure } from "@/lib/format";
+import { CURRENCY_SIGNS, goalFigure } from "@/lib/goal-figure";
 import { goalName } from "@/lib/placeholders";
 
 import type { LadderMilestones } from "./simple-changes";

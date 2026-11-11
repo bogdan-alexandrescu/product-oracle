@@ -7,7 +7,7 @@
  * review and track outcomes and learnings. Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
-import { goalFigure } from "@/lib/format";
+import { goalFigure } from "@/lib/goal-figure";
 import { DEPOSITS_IDS } from "./blockers";
 import type { V2Db } from "./v2";
 

@@ -16,7 +16,7 @@
  * on its agenda.
  */
 import type { Schemas } from "@/lib/api/client";
-import { goalFigure } from "@/lib/format";
+import { goalFigure } from "@/lib/goal-figure";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
