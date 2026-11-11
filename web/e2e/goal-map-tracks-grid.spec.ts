@@ -142,5 +142,9 @@ test.describe("Goal map on a phone", () => {
     await expect.poll(async () => (await second.boundingBox())!.x).toBeLessThan(box.x - 300);
     expect(Math.abs((await name.boundingBox())!.x - before)).toBeLessThan(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    // With no hover, a chip's ⋯ is there to tap.
+    await page.getByTestId("gm-grid").evaluate((el) => (el.scrollLeft = 0));
+    await chip(page, "Lead list ranking").getByRole("button", { name: /More for .*Lead list ranking/ }).tap();
+    await expect(page.getByRole("menuitem", { name: "Move to…" })).toBeVisible();
   });
 });
