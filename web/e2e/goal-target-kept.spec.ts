@@ -64,6 +64,8 @@ test("a goal bucket's refusal names a money goal's unit as read, and takes comma
 
   const revenue = page.getByTestId("goal-bucket").filter({ has: page.getByRole("heading", { name: "Revenue", exact: true }) });
   await revenue.getByRole("button", { name: "Edit Revenue" }).click();
+  // goal-figure-words: the stored 20000 usd reads as people write it.
+  await expect(form.getByLabel("Target")).toHaveValue("$20,000");
   await form.getByLabel("Target").fill("70 teams");
   await form.getByRole("button", { name: "Save goal" }).click();
   await expect(page.getByText("This goal is measured in $: type its new number").first()).toBeVisible();
@@ -77,5 +79,5 @@ test("a goal bucket's refusal names a money goal's unit as read, and takes comma
   await expect(page.getByText("Type the target as a number, like 60").first()).toBeVisible();
   await form.getByLabel("Target").fill("1,200");
   await form.getByRole("button", { name: "Save goal" }).click();
-  await expect(page.getByTestId("bucket-note")).toContainText("Saved Faster activation: 1200 days");
+  await expect(page.getByTestId("bucket-note")).toContainText("Saved Faster activation: 1,200 days");
 });
