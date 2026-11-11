@@ -152,6 +152,11 @@ async function spareLines(page: Page): Promise<number> {
   });
 }
 
+// The widths whose header (456 to 467 px: 457 beside the rail at 800 px) is under the skeleton's 3-line
+// step (468 px, app/simple/_home/skeleton.tsx): the skeleton keeps a spare fourth line there, so even
+// the owner's longest greeting moves the band up exactly that line once it is known.
+const SPARE_LINE = new Set([800]);
+
 for (const width of [375, 390, 601, 610, 685, 800, 1024, 1366, 1512]) {
   const phone = width < 600;
   test.describe(`${width} px`, () => {
@@ -165,7 +170,8 @@ for (const width of [375, 390, 601, 610, 685, 800, 1024, 1366, 1512]) {
        * each kind of work waiting (the "every-wait-one" scenario), in the afternoon, for an owner
        * with a wide 12-letter first name (Mohammadreza), the owner's greeting is its longest form (three kinds in the
        * singular, then "and more", then the Inbox) and the goal band starts where its skeleton
-       * stood, within 1 px, at 375, 390, 601 and 610 (beside the rail), 685, 800, 1024, 1366 and 1512 px, and
+       * stood, within 1 px, at 375, 390, 601 and 610 (beside the rail), 685, 800 (one line higher: its header keeps the
+       * skeleton's spare line), 1024, 1366 and 1512 px, and
        * stands there too while Home checks what waits (the waiting read held): the skeleton and
        * the page's own line keep the lines that longest form wraps to until it is known, and the
        * page's own action row ("Walk me through it" and "+ New PRD", wrapping as they do); a shorter greeting (a
@@ -219,9 +225,11 @@ for (const width of [375, 390, 601, 610, 685, 800, 1024, 1366, 1512]) {
           await expect(page.getByRole("button", { name: "New PRD" })).toBeVisible();
         } else await expect(sentence).toHaveText("Here is where the plan stands.");
         const after = (await goals.boundingBox())!;
-        // The owner's longest greeting fills the lines the skeleton kept: the band stays. A
-        // viewer's short greeting and no action row: the band moves up once, never down.
-        if (role === "owner") expect(Math.abs(after.y - before.y), `band moved from ${before.y} to ${after.y}`).toBeLessThanOrEqual(1);
+        // The owner's longest greeting fills the lines the skeleton kept: the band stays (up exactly
+        // the spare line, at a SPARE_LINE width). A viewer's short greeting and no action row: the
+        // band moves up once, never down.
+        const spare = SPARE_LINE.has(width) ? await sentence.evaluate((e) => parseFloat(getComputedStyle(e.parentElement!).lineHeight)) : 0;
+        if (role === "owner") expect(Math.abs(after.y - (before.y - spare)), `band moved from ${before.y} to ${after.y}`).toBeLessThanOrEqual(1);
         else expect(after.y, `band moved from ${before.y} to ${after.y}`).toBeLessThanOrEqual(before.y + 1);
         expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(1);
         expect(await spareLines(page)).toBeLessThanOrEqual(0.5);
@@ -239,7 +247,7 @@ for (const width of [375, 390, 601, 610, 685, 800, 1024, 1366, 1512]) {
           await expect(sentence).toHaveText("Checking what waits on you…", { timeout: 3000 });
           const checking = (await goals.boundingBox())!;
           expect(Math.abs(checking.y - before.y), `band moved from ${before.y} to ${checking.y} while checking`).toBeLessThanOrEqual(1);
-          expect(Math.abs(checking.y - after.y), `band at ${checking.y} while checking, ${after.y} filled`).toBeLessThanOrEqual(1);
+          expect(Math.abs(checking.y - spare - after.y), `band at ${checking.y} while checking, ${after.y} filled`).toBeLessThanOrEqual(1);
           await expect(sentence).toHaveText(/^A decision, a proposal, a broken link and more/, { timeout: 8000 });
           expect(Math.abs((await goals.boundingBox())!.y - after.y)).toBeLessThanOrEqual(1);
         }
