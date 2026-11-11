@@ -1385,7 +1385,9 @@ async def inbox_rows(
     by_id = {g.id: g for g in goals}
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     rule = await deciding(db, principal, goals, read_)
-    docs = {g.id: await _job_document(db, g, read_) for g in goals if rule[g.id][0]}
+    active = await company.active(db) if goals else None
+    first: dict[str, Document | None] = {}
+    docs = {g.id: await _job_document(db, g, read_, active, first) for g in goals if rule[g.id][0]}
     people = await _display_names(db, {r.proposed_by for r in rows if r.proposed_by})
     return [
         InboxSimpleGoalSuggestion(
