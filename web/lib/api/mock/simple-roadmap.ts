@@ -493,6 +493,14 @@ const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
 const TARGETS: Record<string, [string, string]> = { "grow-retention": ["70% of teams", "2027-03-31"], "faster-activation": ["2 days", "2027-02-26"], "quiet-alerts": ["Under 10% of teams", "2027-03-31"] };
 /** build-feature-panel (AN PR 1204): each goal's latest reading and unit (invented), the panel's Reading row. */
 const READINGS: Record<string, { current: number; unit: string }> = { "grow-retention": { current: 61, unit: "%" }, "faster-activation": { current: 3, unit: "days" } };
+/** goal-target-kept (goal_buckets.typed_target): a goal measured as a number of its reading's
+ * unit ("2 days"): its unit, else null (a target in words). */
+export const TYPED_TARGET = /^(-?\d[\d,]*(?:\.\d+)?)\s*(.*)$/;
+export const measuredUnit = (key: string, target: string | null): string | null => {
+  const unit = READINGS[key]?.unit;
+  const m = unit && target ? TYPED_TARGET.exec(target) : null;
+  return m && m[2] === unit ? unit! : null;
+};
 export type RoadmapGoalFields = { title: string; metric: string | null; target: string | null; due: string | null };
 /** A goal's key from its id (the goal edit takes either kind of goal, as the API's one goal entity):
  * a roadmap goal's, or a goal bucket's of that key. */

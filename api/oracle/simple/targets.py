@@ -409,7 +409,7 @@ async def _plan(
         try:
             after["target"] = _target(typed_target(dict(g.attrs or {}), after["target"]))
         except TargetKept as e:
-            raise ChangeError(422, f"after.target: {e}") from e
+            raise ChangeError(422, str(e)) from e
         return target, current, after
 
     if kind == "override":
@@ -654,7 +654,7 @@ async def _apply(
                 # goal-target-kept: a measured goal never loses its number or unit here.
                 attrs = typed_target(attrs, values["target"])
             except TargetKept as e:
-                raise ChangeError(422, f"after.target: {e}") from e
+                raise ChangeError(422, str(e)) from e
             attrs["metric"] = values["measure"]
             attrs["due"] = values["due"]
             attrs = {k: v for k, v in attrs.items() if not (k in GOAL_ATTRS and v is None)}
