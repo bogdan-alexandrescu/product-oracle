@@ -589,7 +589,10 @@ export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
 export function featureGoalRef(db: SimpleDb, key: string): Schemas["SimpleGoalRef"] | null {
   const gb = db.goal_buckets;
   const f = gb?.features.find((x) => x.key === featureKeyOf(db, key));
-  const g = gb?.goals.filter((x) => f?.goal_ids.includes(x.id) && !x.archived && !x.trashed).sort((a, b) => a.order - b.order)[0];
+  // The default goals a route seeded on first read (lazyGoalBuckets) are not this roadmap's goals (as targetGoals),
+  // so an item reads the same goal before and after another page seeds them, in its panel and in a change's before.
+  const lazy = new Set(gb?.lazy ?? []);
+  const g = gb?.goals.filter((x) => f?.goal_ids.includes(x.id) && !x.archived && !x.trashed && !lazy.has(x.id)).sort((a, b) => a.order - b.order)[0];
   if (!g) return null;
   const k = Object.keys(GOALS).find((x) => x === g.key || GOALS[x].toLowerCase() === g.title.toLowerCase());
   return { id: k ? goalId(k) : g.id, key: k ?? g.key, title: g.title, metric: g.measure, target: g.target, due: g.due, position: goalPositionOf(k ?? g.key), ...(READINGS[k ?? g.key] ?? { current: null, unit: null }) };
