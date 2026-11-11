@@ -392,6 +392,30 @@ export function seedHomeMilestoneGoalGroups(): SimpleDb {
   return rm;
 }
 
+export const HOME_MILESTONE_GOAL_GROUPS_TRACK_SCENARIO = "home-milestones-goal-groups-track";
+
+/**
+ * home-milestones-goal-groups-track (re-review of 7f200f5cf, "Join only within the same goal"):
+ * on Onboarding, the Guided setup track's "M1 · Early access" (Health log), the Setup guide PRD's
+ * "M1 · Early access" of no goal (Dec 1, Setup checklist), Faster activation's own "M3 · Early
+ * access" (Nov 1, Sample data import) and Grow retention's own "M1 · Early access" (Nov 15,
+ * Welcome video). Grow retention's joins the track by code, so the PRD's milestone it holds is
+ * not Faster activation's to join: two rows, whichever goal comes first.
+ */
+export function seedHomeMilestoneGoalGroupsTrack(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  const early = (id: string, code: string, date: string, goal: string | null, gate: string, prd?: { slug: string; title: string }): MockMilestone => ({
+    id: stableUuid(`simple-gm/goal-groups-track-${id}`), roadmap: "onboarding-roadmap", code, name: "Early access", date, goal, gates: [gate], counts_when: "", progress: "not_started", ...(prd ? { prd } : {}),
+  });
+  rm.goal_milestones = [
+    early("plain", "M1", "2026-12-01", null, "setup-checklist", { slug: "setup-guide", title: "Setup guide" }),
+    early("faster", "M3", "2026-11-01", "faster-activation", "setup-import"),
+    early("retention", "M1", "2026-11-15", "grow-retention", "setup-video"),
+  ];
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Early access" } : s.key === "setup-video" ? { ...s, goal: "grow-retention" } : s));
+  return rm;
+}
+
 export const HOME_MILESTONE_TWO_ROADMAPS_SCENARIO = "home-milestones-two-roadmaps";
 export const HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO = "home-milestones-two-roadmaps-swapped";
 

@@ -38,6 +38,12 @@ Test cards (protects / fails_when / no_claim):
   is Goal 1's: Goal 2's own "Beta" (Dec 1) keeps a code of its own; fails_when=all four read M1.
 - test_a_goal_milestone_joins_a_group_of_its_own_goal: protects=the same three without Goal
   2's still read one code (same-goal joins still join); fails_when=Goal 1's own splits off.
+- test_a_twin_join_sees_every_join_by_code_in_either_goal_order (re-review of 7f200f5cf):
+  protects=a track "M1 Beta" (Dec 1) that a PRD's "M1 Beta" of no goal and Goal 2's own "M1
+  Beta" (Nov 15) joined by code is not Goal 1's: Goal 1's own "M3 Beta" (Nov 1) keeps M1 and
+  the rest read M2, whichever goal comes first; fails_when=with Goal 1 first all four read M1.
+- test_codes_do_not_depend_on_goal_or_list_order: protects=over a handful of fixed cases, every
+  goal order and every order of the list give the same codes; fails_when=any one differs.
 - test_of_two_matching_prd_milestones_the_closest_date_joins: protects=a goal's "Beta" joins
   the matching PRD milestone closest in date, then the one of its exact name, not the first by
   id; fails_when=the exact name wins over the closer date.
@@ -47,6 +53,7 @@ Test cards (protects / fails_when / no_claim):
   ones; fails_when=codes stay per goal or do not follow a move; no_claim=the web.
 """
 
+import itertools
 import uuid
 from datetime import date
 from types import SimpleNamespace
@@ -217,6 +224,62 @@ def test_a_goal_milestone_joins_a_group_of_its_own_goal():
     assign([plain, prd1, own1, pilot], [], [], RANK)
     assert plain.roadmap_code == prd1.roadmap_code == own1.roadmap_code == "M1"
     assert pilot.roadmap_code == "M2"
+
+
+@pytest.mark.parametrize("rank", [RANK, {G1: 1, G2: 0}], ids=["goal 1 first", "goal 2 first"])
+def test_a_twin_join_sees_every_join_by_code_in_either_goal_order(rank):
+    """Join only within the same goal (re-review of 7f200f5cf): the joins by code come first, so
+    a twin join sees Goal 2's milestone in the track's group whatever the goal order."""
+    track = tm("M1 Beta", "2026-12-01", [])
+    plain = gm("M1", "Beta", "2026-12-01", goal=None, prd=True)
+    own1 = gm("M3", "Beta", "2026-11-01")
+    own2 = gm("M1", "Beta", "2026-11-15", goal=G2)
+    assign([plain, own1, own2], [track], [item(track.id)], rank)
+    assert own1.roadmap_code == "M1"
+    assert track.roadmap_code == plain.roadmap_code == own2.roadmap_code == "M2"
+
+
+def _order_cases():
+    """Fixed cases of distinct dates (no tie for the goal order to break)."""
+    track = tm("M1 Beta", "2026-12-01", [])
+    yield (
+        [gm("M1", "Beta", "2026-12-01", goal=None, prd=True), gm("M3", "Beta", "2026-11-01"),
+         gm("M1", "Beta", "2026-11-15", goal=G2)],
+        [track], [item(track.id)],
+    )  # fmt: skip
+    yield (
+        [gm("M2", "Beta", "2026-12-01", goal=None), gm("M2", "Beta", "2026-11-20", prd=True),
+         gm("M2", "Beta", "2026-11-15", goal=G2), gm("M3", "Beta", "2026-11-01")],
+        [], [],
+    )  # fmt: skip
+    yield (
+        [gm("M2", "Beta", "2026-12-01", goal=None, prd=True),
+         gm("M2", "Beta", "2026-11-01", prd=True), gm("M1", "Beta", "2026-11-01"),
+         gm("M1", "Beta", "2026-12-01", goal=G2)],
+        [], [],
+    )  # fmt: skip
+    track = tm("M1 Measured and mapped", "2026-11-27", [])
+    yield (
+        [gm("M1", "Measured", "2026-11-25"), gm("M1", "measured and MAPPED", None, goal=G2),
+         gm("M1", "Mapped", "2026-11-20", goal=G2)],
+        [track], [item(track.id)],
+    )  # fmt: skip
+    yield (
+        [gm("M1", "Beta", "2026-11-01"), gm("M1", "Beta launch", "2027-03-01", goal=G2, prd=True),
+         gm("M2", "Pilot", "2026-12-01", goal=G2)],
+        [], [],
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize("case", list(_order_cases()))
+def test_codes_do_not_depend_on_goal_or_list_order(case):
+    goal_ms, track_ms, items = case
+    seen = set()
+    for rank in (RANK, {G1: 1, G2: 0}):
+        for listed in itertools.permutations(goal_ms):
+            assign(list(listed), track_ms, items, rank)
+            seen.add(tuple(m.roadmap_code for m in [*goal_ms, *track_ms]))
+    assert len(seen) == 1, seen
 
 
 def test_of_two_matching_prd_milestones_the_closest_date_joins():
