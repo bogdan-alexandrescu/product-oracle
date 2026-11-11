@@ -5,7 +5,8 @@ import { expect, test, type Locator, type Page } from "./test";
 /*
  * goal-delete-r3: on Priorities with "goal-buckets-three-goals" (invented: the draft Team alert digest
  * serves the archived Cut support tickets in half first, then Grow retention and Faster activation; the
- * draft Snooze for a day serves Grow retention, then the archived goal). Desktop 1440x900.
+ * draft Snooze for a day serves Grow retention, then the archived goal; the draft Alert tone picker serves
+ * Grow retention, then a key result of Faster activation). Desktop 1440x900.
  *
  * Card goal-restore-three-goals: protects = Delete Grow retention with a goal picked, then Restore it from
  * Settings › Trash, and the digest reads Grow retention again (its goals back in their order: the
