@@ -384,7 +384,7 @@ export function mapGoalRef(db: Pick<SimpleDb, "goal_buckets">, id: string): Sche
   if (!(id in MAP_GOALS) || db.goal_buckets?.goals.some((g) => g.id === id && g.trashed)) return null;
   // goal-map-tracks: one store, so its goal bucket (same id) gives its name, measure and target as edited.
   const b = db.goal_buckets?.goals.find((g) => g.id === id);
-  return { id, key: id, title: b?.title || MAP_GOALS[id], metric: b?.measure || null, position: b?.position ?? null, target: b?.target || null, due: b?.due ?? null, current: null, unit: null };
+  return { id, key: id, title: b?.title || MAP_GOALS[id], metric: b?.measure || null, position: null, target: b?.target || null, due: null, current: null, unit: null };
 }
 
 /**

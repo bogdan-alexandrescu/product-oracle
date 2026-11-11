@@ -19,7 +19,6 @@ import type { GmFeature, GmGoal, GmMilestone, GoalMap } from "@/lib/api/mock/goa
 import { formatCount } from "@/lib/format";
 import { joinTwins } from "@/lib/goal-map-twins";
 import { keyResults, type KeyResults } from "@/lib/key-results";
-import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { propose, resultWords, undo, type ChangeResult } from "../roadmap/_lib";
@@ -134,8 +133,6 @@ interface Ctx {
   onAttach: (milestone: string) => void;
   /** Each PRD milestone's PRD: its menu opens it (never Trash). */
   prdOf: Map<string, NonNullable<Schemas["SimpleGoalMilestone"]["prd"]>>;
-  /** Who may not change a milestone proposes its new name. */
-  may: boolean;
   go: (href: string) => void;
 }
 
@@ -201,13 +198,14 @@ function featureMenu(f: Chip, c: Ctx) {
 }
 
 function milestoneMenu(m: M, c: Ctx) {
+  if (!m.can_change) return null;
   const prd = c.prdOf.get(m.id);
   const items = [
-    ...(m.can_change || c.may ? [{ w: "Rename", on: () => c.setRenaming(m.id) }] : []),
-    ...(c.map.can_edit ? [{ w: "Add a feature", on: () => c.onAttach(m.id) }] : []),
-    ...(prd ? [{ w: `Open ${prd.title}`, on: () => c.go(`/simple/one-pagers/${prd.slug}`) }] : m.can_change ? [{ w: "Move to Trash", on: () => void c.act.trashMilestone(m), crit: true }] : []),
+    { w: "Rename", on: () => c.setRenaming(m.id) },
+    { w: "Add a feature", on: () => c.onAttach(m.id) },
+    prd ? { w: `Open ${prd.title}`, on: () => c.go(`/simple/one-pagers/${prd.slug}`) } : { w: "Move to Trash", on: () => void c.act.trashMilestone(m), crit: true },
   ];
-  return items.length ? <Menu k={`m-${m.id}`} label={mWords(m, c)} c={c} items={items} /> : null;
+  return <Menu k={`m-${m.id}`} label={mWords(m, c)} c={c} items={items} />;
 }
 
 function goalMenu(g: GmGoal, ms: M[], c: Ctx) {
@@ -315,7 +313,6 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
     },
     rename: async (id: string, name: string, was: string) => {
       const m = map.milestones.find((x) => x.id === id);
-      const g = map.goals.find((x) => x.id === id);
       // A goal's name through its goal bucket, its measure, target and date as they are.
       const goalTo = async (title: string, seen: string) => {
         const b = (await unwrap(api.GET("/v1/simple/goal-buckets"))).goals.find((x) => x.id === id);
@@ -324,11 +321,6 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
       };
       const msTo = (n: string) => unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: id } }, body: { name: n } }));
       try {
-        // milestone-rename: who may not change it proposes the name to the roadmap's decider.
-        if (m && !m.can_change) {
-          const r = await propose({ op: "edit_goal_milestone", target: { milestone_id: id }, before: { milestone: { name: was } }, after: { milestone: { name } } });
-          return await change(r, `Renamed ${was} to ${name}`, `Renamed ${name} back to ${was}`);
-        }
         if (m) await msTo(name);
         else await goalTo(name, was);
         await reload();
@@ -482,7 +474,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     <b className="text-accent-ink">{c.mcode.get(m.id)}</b>
                     {c.renaming === m.id ? <Rename id={m.id} was={m.name} c={c} className="text-[12px]" /> : <span className="truncate" title={m.name}>{m.name}</span>}
                     <span className="whitespace-nowrap text-text2">{day(m.due_on)}</span>
-                    <span className="hidden group-hover:inline-flex has-[[aria-expanded=true]]:inline-flex">{milestoneMenu(m, c)}</span>
+                    <span className="hidden group-hover:inline-flex has-[[aria-expanded=true]]:inline-flex max-[600px]:inline-flex">{milestoneMenu(m, c)}</span>
                   </span>
                 ))}
             </div>
@@ -619,7 +611,6 @@ export function GoalMapPage() {
   // Goal map twins: a PRD's milestone coded as a goal's own one is drawn once, as the goal's.
   const map = useMemo(() => (folded ? joinTwins(folded.map, roadmap.data?.goal_milestones).map : undefined), [folded, roadmap.data]);
   const prdOf = useMemo(() => new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.prd ? [[m.id, m.prd] as const] : []))), [roadmap.data]);
-  const { can } = useMe();
   const router = useRouter();
   const refresh = () => Promise.all([q.reload(), goalList.reload(), roadmap.reload()]);
   const codes = useMemo(() => new Map((roadmap.data?.items ?? []).flatMap((i) => (i.code ? [[i.id, i.code] as [string, string]] : []))), [roadmap.data]);
@@ -673,7 +664,7 @@ export function GoalMapPage() {
 
   if (!map || !roadmap.data) return <div className="simple-page" role="status">{q.error ? errorMessage(q.error) : roadmap.error ? errorMessage(roadmap.error) : "Loading the goal map…"}</div>;
 
-  const c: Ctx = { map, codes, mcode, tracks, onOpen: setPanel, menu, setMenu, setMover, renaming, setRenaming, moved, act, onAttach: setAttach, prdOf, may: can("create_simple_change"), go: (href) => router.push(href) };
+  const c: Ctx = { map, codes, mcode, tracks, onOpen: setPanel, menu, setMenu, setMover, renaming, setRenaming, moved, act, onAttach: setAttach, prdOf, go: (href) => router.push(href) };
   const add = async (feature: string, milestone: string, expected: string) => {
     const f = map.features.find((x) => x.id === feature);
     try {
