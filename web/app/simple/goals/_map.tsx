@@ -113,6 +113,9 @@ function placement(map: GoalMap, c: Chip, codes: Map<string, string>): Placement
 }
 
 /** After an edit, brings what changed into view. */
+/** The ring's key: one chip, a feature under one goal. */
+const ringOf = (feature: string, goal: string) => `${feature} ${goal}`;
+
 function reveal(sel: string, block: ScrollLogicalPosition = "center") {
   setTimeout(() => document.querySelector(sel)?.scrollIntoView({ block, inline: "nearest" }), 50);
 }
@@ -136,6 +139,7 @@ interface Ctx {
   setMover: (c: Chip | null) => void;
   renaming: string | null;
   setRenaming: (k: string | null) => void;
+  /** The chip just moved (its ringOf key), ringed. */
   moved: string | null;
   act: ReturnType<typeof useActs>;
   onAttach: (milestone: string) => void;
@@ -337,7 +341,7 @@ function Guardrail({ g }: { g: NonNullable<GoalMap["guardrail"]> }) {
 
 /* ---------- The actions (the API's own routes, each with Undo) ---------- */
 
-function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promise<unknown>, codes: Map<string, string>, mcode: Map<string, string>, tracks: Track[], setMoved: (id: string | null) => void) {
+function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promise<unknown>, codes: Map<string, string>, mcode: Map<string, string>, tracks: Track[], setMoved: (key: string | null) => void, top: (id: string | null) => string | null) {
   const named = (f: Chip) => `${codes.get(f.id) ?? ""} ${f.name}`.trim();
   const msWords = (id: string | null) => {
     const m = map.milestones.find((x) => x.id === id);
@@ -409,15 +413,17 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
         const { next, back } = await moveRaw(f, to);
         if (!next) return;
         setMap(next);
-        setMoved(f.id);
         const was = f.ms.length ? f.ms.map((m) => msWords(m.id)).join(" and ") : msWords(null);
-        const toGoal = map.milestones.find((m) => m.id === to)?.goal ?? f.goal;
+        // No milestone puts a feature with no other link under its own goal, which may not be this chip's.
+        const toGoal = to ? (map.milestones.find((m) => m.id === to)?.goal ?? f.goal) : (top(next.unplaced.find((u) => u.id === f.id)?.goal ?? null) ?? f.goal);
+        const lands = toGoal !== f.goal ? map.goals.find((g) => g.id === toGoal)?.name : undefined;
+        setMoved(ringOf(f.id, toGoal));
         reveal(`[data-testid="gm-chip"][data-feature="${f.id}"][data-goal="${toGoal}"]`);
         // No milestone on one goal's links while others stay: it says which stay.
         const stays = to ? [] : (f.f?.milestones ?? []).filter((id) => !f.ms.some((m) => m.id === id));
         const message = stays.length
           ? `Took ${named(f)} off ${was}; it stays on ${stays.map((id) => where(id, f.goal)).join(" and ")}`
-          : `Moved ${named(f)}${f.ms.length && to ? ` from ${was}` : ""} to ${to ? where(to, f.goal) : msWords(null)}`;
+          : `Moved ${named(f)}${f.ms.length && to ? ` from ${was}` : ""} to ${to ? where(to, f.goal) : `${msWords(null)}${lands ? ` (${lands})` : ""}`}`;
         told(message, back, `Moved ${named(f)} back to ${was}`);
       } catch (e) {
         failed(e);
@@ -431,8 +437,8 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
           ? await unwrap(api.POST("/v1/simple/goal-map/links/move", { body: { feature, from_milestone: from, to_milestone: milestone } }))
           : await attach(f, { milestone, expected, confidence: "Medium" });
         setMap(next);
-        setMoved(feature);
         const goal = map.milestones.find((m) => m.id === milestone)?.goal ?? "";
+        setMoved(ringOf(feature, goal));
         reveal(`[data-testid="gm-chip"][data-feature="${feature}"][data-goal="${goal}"]`);
         if (from)
           told(
@@ -451,7 +457,7 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
       const name = (id: string | null) => tracks.find((t) => t.id === id)?.name ?? "No track";
       try {
         const r = await propose({ op: "set_track", target: { item_id: f.id }, before: { track_id: f.track }, after: { track_id: to } });
-        setMoved(f.id);
+        setMoved(ringOf(f.id, f.goal));
         await change(r, `Moved ${named(f)} to ${name(to)}`, `Moved ${named(f)} back to ${name(f.track)}`);
       } catch (e) {
         failed(e);
@@ -642,8 +648,8 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     data-feature={f.id}
                     data-goal={g.id}
                     data-track={t.id ?? "none"}
-                    data-moved={c.moved === f.id ? "1" : undefined}
-                    className={`group flex items-center gap-1 rounded-lg border bg-surface px-2 py-0.5 text-[13px] leading-[17px] ${c.moved === f.id ? "border-accent bg-accent-soft ring-2 ring-accent" : "border-line"}`}
+                    data-moved={c.moved === ringOf(f.id, g.id) ? "1" : undefined}
+                    className={`group flex items-center gap-1 rounded-lg border bg-surface px-2 py-0.5 text-[13px] leading-[17px] ${c.moved === ringOf(f.id, g.id) ? "border-accent bg-accent-soft ring-2 ring-accent" : "border-line"}`}
                     style={{ borderLeft: `3px solid ${t.color}` }}
                   >
                     <button type="button" onClick={() => c.onOpen(f)} className="min-w-0 flex-1 text-left">
@@ -815,7 +821,7 @@ export function GoalMapPage() {
     if (chips.some((c) => c.track === null)) rows.push({ id: null, name: "No track", color: NO_TRACK });
     return rows;
   }, [roadmap.data, chips]);
-  const act = useActs(map ?? (q.data as GoalMap), (m) => q.setData(() => m), refresh, codes, mcode, tracks, setMoved);
+  const act = useActs(map ?? (q.data as GoalMap), (m) => q.setData(() => m), refresh, codes, mcode, tracks, setMoved, folded?.top ?? ((id) => id));
 
   if (!map || !roadmap.data) return <div className="simple-page" role="status">{q.error ? errorMessage(q.error) : roadmap.error ? errorMessage(roadmap.error) : "Loading the goal map…"}</div>;
 

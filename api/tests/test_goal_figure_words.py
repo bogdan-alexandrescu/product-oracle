@@ -7,7 +7,8 @@ Test cards (protects / fails_when / no_claim):
   ("usd" is "$", any case), other units after it ("1,200 shops", "60%", "3 days"), commas
   between thousands, decimals kept (a currency's to at most two, as the web's goalFigure) and a
   whole float without ".0"; fails_when=it prints the stored code ("50000 usd"), the number
-  without separators or a currency with three decimals ("$13,400.555"); no_claim=typed-target parsing.
+  without separators or a currency with three decimals ("$13,400.555"); no_claim=typed-target
+  parsing.
 - test_goal_buckets_read_money_and_count_goals: protects=Goal buckets read a usd goal as
   "$50,000" and a shops goal as "1,200 shops"; fails_when=they read "50000 usd" or "1200
   shops"; no_claim=the web.

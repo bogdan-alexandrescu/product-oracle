@@ -10,6 +10,7 @@ import math
 import re
 import uuid
 from datetime import UTC, date, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -380,12 +381,16 @@ CURRENCY_SIGNS = {"usd": "$", "eur": "€", "gbp": "£", "$": "$", "€": "€",
 def figure_words(value: float, unit: str | None) -> str:
     """goal-figure-words: a goal's number in its unit as people write it: a currency's sign
     before it ("$50,000", "€1,200", "£3.5"), other units after it ("1,200 shops", "60%",
-    "3 days"); commas between thousands, decimals kept, a whole float without ".0"."""
+    "3 days"); commas between thousands, decimals kept (a currency's to at most two, half up as
+    the web's goalFigure: "$13,400.56"), a whole float without ".0"."""
+    u = (unit or "").strip()
+    sign = CURRENCY_SIGNS.get(u.lower())
+    if sign and isinstance(value, float):
+        value = float(Decimal(repr(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
     n = int(value) if isinstance(value, float) and value.is_integer() else value
     shown = f"{abs(n):,}"
     minus = "-" if n < 0 else ""
-    u = (unit or "").strip()
-    if sign := CURRENCY_SIGNS.get(u.lower()):
+    if sign:
         return f"{minus}{sign}{shown}"
     return f"{minus}{shown}%" if u == "%" else f"{minus}{shown} {u}".strip()
 

@@ -100,12 +100,12 @@ export const CURRENCY_SIGNS: Record<string, string> = { usd: "$", eur: "€", gb
 
 /** goal-figure-words (as the API's goals.figure_words): a goal's number in its unit as people write
  * it: a currency's sign before it ("$50,000", "€1,200", "£3.5"), other units after it ("1,200 shops",
- * "60%", "3 days"); commas between thousands, decimals kept. */
+ * "60%", "3 days"); commas between thousands, decimals kept (a currency's to at most two: "$13,400.56"). */
 export function goalFigure(value: number, unit?: string | null): string {
-  const shown = Math.abs(value).toLocaleString("en-US", { maximumFractionDigits: 20 });
-  const minus = value < 0 ? "-" : "";
   const u = (unit ?? "").trim();
   const sign = CURRENCY_SIGNS[u.toLowerCase()];
+  const shown = Math.abs(value).toLocaleString("en-US", { maximumFractionDigits: sign ? 2 : 20 });
+  const minus = value < 0 && shown !== "0" ? "-" : "";
   if (sign) return `${minus}${sign}${shown}`;
   return u === "%" ? `${minus}${shown}%` : `${minus}${shown} ${u}`.trim();
 }
