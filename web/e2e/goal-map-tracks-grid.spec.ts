@@ -56,6 +56,30 @@ test.describe("Goal map: goals by tracks grid", () => {
     await expect(page.getByTestId("ld-goal")).toHaveCount(0);
   });
 
+  test("the guardrail is one item at the end of the legend row, its details behind a tooltip", async ({ page }) => {
+    // protects: the owner's "Fold into legend row" (Nov 11): no banner above the grid; the track
+    // legend ends with the guardrail's status, its status word only when at risk, and its rule, days
+    // held and today's reading on hover. fails_when: the banner comes back, the item is missing, sits
+    // off the legend row, or the details are lost. no_claim: the guardrail's own math.
+    await open(page);
+    await expect(page.getByTestId("gm-guardrail")).toHaveCount(0);
+    const legend = page.getByTestId("gm-legend");
+    const rail = legend.getByTestId("gm-legend-guardrail");
+    await expect(rail).toHaveText("Guardrails: at risk");
+    // The last item of the one legend row, beside Account Management.
+    const last = legend.getByText("Account Management");
+    const [a, b] = [(await last.boundingBox())!, (await rail.boundingBox())!];
+    expect(Math.abs(a.y + a.height / 2 - (b.y + b.height / 2))).toBeLessThan(4);
+    expect(b.x).toBeGreaterThan(a.x + a.width - 1);
+    // Nothing between the legend row and the grid.
+    expect((await page.getByTestId("gm-grid").boundingBox())!.y - (b.y + b.height)).toBeLessThan(40);
+    await rail.hover();
+    const tip = page.getByRole("tooltip").filter({ hasText: "Failed payments" });
+    await expect(tip).toContainText("Failed payments under 2% every day");
+    await expect(tip).toContainText("Held 4 of 7 days");
+    await expect(tip).toContainText("3 today");
+  });
+
   test("a chip opens the one feature panel", async ({ page }) => {
     // protects: every feature opens the same panel. fails_when: the chip opens nothing or another view.
     await open(page);
@@ -150,6 +174,14 @@ test.describe("Goal map on a phone", () => {
     await expect.poll(async () => (await second.boundingBox())!.x).toBeLessThan(box.x - 300);
     expect(Math.abs((await name.boundingBox())!.x - before)).toBeLessThan(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    // The legend row wraps; the guardrail stays its last item, its details a tap away.
+    await page.getByTestId("gm-grid").evaluate((el) => (el.scrollLeft = 0));
+    const rail = page.getByTestId("gm-legend").getByTestId("gm-legend-guardrail");
+    await expect(rail).toBeInViewport();
+    await expect(page.getByTestId("gm-guardrail")).toHaveCount(0);
+    await rail.tap();
+    await expect(page.getByRole("tooltip").filter({ hasText: "Held 4 of 7 days" })).toBeVisible();
+    await rail.tap();
     // With no hover, a chip's ⋯ is there to tap.
     await page.getByTestId("gm-grid").evaluate((el) => (el.scrollLeft = 0));
     await chip(page, "Lead list ranking").getByRole("button", { name: /More for .*Lead list ranking/ }).tap();

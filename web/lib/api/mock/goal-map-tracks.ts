@@ -202,6 +202,9 @@ function featureRows(hard: boolean): { id: string; goal: string; row: Row }[] {
   return GOALS.flatMap((g) => (rows[g.id] ?? []).map((row) => ({ id: `f${++n}`, goal: g.id, row })));
 }
 
+/** The scenarios' guardrail, at risk: broken on three of the last 7 days (a day's value is its breaches). */
+export const GM_TRACKS_GUARDRAIL = { name: "Failed payments", rule: "under 2% every day", current: 3, days: [0, 1, 0, 0, 1, 1, 0], held: false };
+
 /** The goal map of the goal-map-tracks scenarios (short ids: goal-map.ts gives them the API's ids).
  * A feature on no milestone is no map feature: the map reads it from the roadmap (unplaced). */
 export function tracksMap(hard: boolean): GoalMap {
@@ -221,7 +224,7 @@ export function tracksMap(hard: boolean): GoalMap {
   return {
     goals: GOALS.map((g) => ({ ...g, history: [...g.history] })),
     areas: GM_TRACKS.map((t) => ({ id: t.area, name: t.title, lever: t.lever })),
-    guardrail: null,
+    guardrail: { ...GM_TRACKS_GUARDRAIL, days: [...GM_TRACKS_GUARDRAIL.days] },
     milestones: milestones as GmMilestone[],
     features,
     gaps: [],
