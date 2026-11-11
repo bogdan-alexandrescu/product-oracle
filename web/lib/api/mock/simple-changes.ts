@@ -28,7 +28,7 @@ import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changePhrase, changeSentence } from "./simple-change-words";
 import { milestoneValue, writeMilestone } from "./simple-milestones";
-import { addToCompany, featureItem, featureKeyOf, priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
+import { addToCompany, featureItem, featureKeyOf, itemsOfFeature, priorityAfter, priorityBefore, prioritiesOut, sameName, twinBlock } from "./simple-priorities";
 import { archiveGoal, goalBucketsDb, trashGoal, unarchiveGoal, type GoalBucketsTrash } from "./goal-buckets";
 import {
   canDecideItem,
@@ -379,6 +379,49 @@ function roadmapOfDoc(db: SimpleDb, docId: unknown): string | undefined {
 function decides(db: SimpleDb, ctx: SimpleChangesCtx, itemId: unknown): boolean {
   const key = itemId ? keyOf(db, itemId) : undefined;
   return key ? canDecideItem(db, seed(db, key), ctx) : ctx.role === "owner";
+}
+
+/**
+ * priorities.merge_twin (qa-prio-twins, review of #1503): a Same name record's Merge into… the row's feature (422
+ * unless it has one of its names). Each open item of the twin's feature, on every roadmap (the older ones too), is
+ * re-linked to the kept feature first (when the kept feature holds only a draft on that roadmap, the draft is merged
+ * into the confirmed item, merge_item); then the feature is gone (in the mock its items stand for the kept one).
+ * 403 unless an approver; 409, nothing written, when they do not decide one of those items' roadmaps, the kept feature
+ * has its own confirmed item there, or the twin's feature is locked or linked from a PRD (baseline.merge_entity).
+ * A step that fails undoes the ones before it.
+ */
+async function mergeTwin(db: SimpleDb, ctx: SimpleChangesCtx, fid: string, body: { into: string }): Promise<Response> {
+  if (ctx.role !== "owner" && ctx.role !== "approver") return json(403, { detail: "Only an approver merges Ground Truth features" });
+  const source = featureItem(db, fid);
+  const kept = featureItem(db, body.into);
+  if (!source || !kept || source === kept) return json(422, { detail: "into: another Ground Truth feature" });
+  const theirs = itemsOfFeature(db, source);
+  const ours = itemsOfFeature(db, kept);
+  const sourceTitle = db.items.find((x) => x.key === source)!.title;
+  const keptTitle = db.items.find((x) => x.key === kept)!.title;
+  const names = new Set([sourceTitle, ...theirs.map((x) => x.title)].map(sameName));
+  if (![keptTitle, ...ours.map((x) => x.title)].some((t) => names.has(sameName(t)))) return json(422, { detail: `into: a feature named ${sourceTitle}` });
+  const why = twinBlock(db, (x) => decides(db, ctx, db.ids[x.key]), source, kept, keptTitle);
+  if (why) return json(409, { detail: why });
+  const lock = db.items.find((x) => x.key === source)!.gt_lock;
+  if (lock) return json(409, { detail: lock === "locked" ? "Locked: a person edited it" : "Linked from a PRD section: edit or reject it instead" });
+  const undo = structuredClone({ items: db.items, changes: db.changes, ids: db.ids });
+  const relinked: string[] = [];
+  for (const x of theirs) {
+    const here = ours.filter((y) => y.roadmap === x.roadmap);
+    if (!x.draft && here.length && here.every((y) => y.draft)) {
+      const draft = [...here].sort((a, b) => a.key.localeCompare(b.key))[0];
+      const r = await create(db, ctx, { op: "merge_item", target: { item_id: db.ids[draft.key], into_id: db.ids[x.key] }, before: {}, after: {}, reason: `Merged into ${x.title}` });
+      if (r.status >= 300) {
+        Object.assign(db, undo);
+        return r;
+      }
+    }
+    relinked.push(x.key);
+  }
+  // The feature goes: every record of it stands for the kept one.
+  for (const x of db.items) if (x.key !== kept && (x.feature ?? x.trace_feature ?? x.key) === source) x.feature = kept;
+  return json(200, { feature_id: body.into, relinked });
 }
 
 /** S7: the roadmap (slug) an add_item change writes. */
@@ -1642,6 +1685,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     return routeGoalSuggestions(db, ctx, req, p, q, (body) => create(db, ctx, body));
   }
   if (p[2] === "priorities") {
+    if (p[3] === "twins" && p[4] && p[5] === "merge" && !p[6] && m === "POST") return mergeTwin(db, ctx, p[4], (await req.json()) as { into: string });
     if (m !== "GET" || p[3]) return null;
     return json(200, prioritiesOut(db, ctx, (c) => route(db, ctx, c), (itemId) => decides(db, ctx, itemId), q.get("line")));
   }

@@ -176,6 +176,10 @@ import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./curr
 import {
   featureKeyOf,
   PRIORITIES_GOAL_NO_VALUE_SCENARIO,
+  PRIORITIES_TWINS_SCENARIO,
+  PRIORITIES_TWINS_TRACE_SCENARIO,
+  PRIORITIES_TWINS_OLD_SCENARIO,
+  PRIORITIES_TWINS_LOCKED_SCENARIO,
   PRIORITIES_PLAN_GOAL_CODES_SCENARIO,
   PRIORITIES_PLAN_GOAL_NAMES_SCENARIO,
   PRIORITIES_PLAN_GOAL_TWINS_SCENARIO,
@@ -183,6 +187,10 @@ import {
   PRIORITIES_PLAN_ONE_WEEK_SCENARIO,
   prioritiesOut,
   seedGoalNoValue,
+  seedPrioritiesTwins,
+  seedPrioritiesTwinsTrace,
+  seedPrioritiesTwinsOld,
+  seedPrioritiesTwinsLocked,
   seedPlanGoalCodes,
   seedPlanGoalNames,
   seedPlanGoalTwins,
@@ -4444,6 +4452,30 @@ function load(): Db {
                 ? () => seedApprovedRoadmapScenario(false, true)
               : scenario === ONE_ROADMAP_SCENARIO
                 ? seedOneRoadmapScenario
+              : scenario === PRIORITIES_TWINS_SCENARIO
+                ? () => {
+                    const db = seedOneRoadmapScenario();
+                    seedPrioritiesTwins(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_TWINS_LOCKED_SCENARIO
+                ? () => {
+                    const db = seedOneRoadmapScenario();
+                    seedPrioritiesTwinsLocked(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_TWINS_OLD_SCENARIO
+                ? () => {
+                    const db = seedOneRoadmapScenario();
+                    seedPrioritiesTwinsOld(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_TWINS_TRACE_SCENARIO
+                ? () => {
+                    const db = seedOneRoadmapScenario();
+                    seedPrioritiesTwinsTrace(db.simple_roadmap!);
+                    return db;
+                  }
               : scenario === REPLACED_PRD_TRASH_SCENARIO
                 ? seedReplacedPrdTrashScenario
               : scenario === HOME_MILESTONES_SCENARIO
@@ -8031,7 +8063,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   // Running today: every Simple feature's mark and proof; the approver role (confirm_entity) moves and answers.
   if (p[1] === "feature-states") {
-    const rows = prioritiesOut(db.simple_roadmap, { id: me.id, role: me.role, owners: simpleOwners, names: {} }, () => [], () => false).rows;
+    // qa-prio-twins: a feature Oracle only proposed ranks, but has no mark (feature-states lists confirmed ones).
+    const proposed = new Set(db.simple_roadmap.proposed_features ?? []);
+    const rows = prioritiesOut(db.simple_roadmap, { id: me.id, role: me.role, owners: simpleOwners, names: {} }, () => [], () => false).rows.filter((r) => !proposed.has(r.code));
     db.current_state ??= seedCurrentState(rows, Date.now());
     const mayMove = me.role === "approver" || me.role === "owner";
     // Every confirmed feature, as the API lists them: the Detailed Plan's traced features too

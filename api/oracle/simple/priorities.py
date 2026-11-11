@@ -6,7 +6,14 @@ applied; each row keeps Oracle's rank as ``oracle_rank``) joined with the roadma
 reader sees (oracle.simple.service.load over the working drafts they see): a feature's row
 takes its item in the earliest horizon (now, next, later), then the lowest key, never a
 draft item (drafts are not ranked yet: they sit among the drafts); a feature with no visible
-non-draft item is still a row (no item, not reorderable, no weeks in a bucket). Besides the
+non-draft item is still a row (no item, not reorderable, no weeks in a bucket); one whose item
+is a draft is on the roadmap (``draft_item_id``: a move confirms it).
+
+**One feature, one row** (qa-prio-twins): records join by their link (an item's
+``feature_id``, else its trace's source feature), never by name; separate features with one
+name are one row (the best-ranked on a roadmap), the others its ``twins`` with how each merges
+into it, and a draft shows on its feature's row (else a row of its name's: ``row_feature_id``),
+not as a draft of its own. Nothing is merged or deleted here. Besides the
 rows: the open ``override_priority`` and ``estimate_feature`` proposals the caller may see
 (each with its item's feature, so one on a feature's other item shows under its row) and
 the ``confirm_item``, ``merge_item`` (S7's Merge; train T's was a ``cut`` with a note) and
@@ -33,7 +40,7 @@ import uuid
 from datetime import date
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,8 +70,11 @@ from oracle.simple.schemas import (
     SimplePriorityOverride,
     SimplePriorityProposal,
     SimplePriorityRow,
+    SimplePriorityTwin,
     SimplePriorityUnranked,
     SimpleQuarter,
+    SimpleTwinMergeIn,
+    SimpleTwinMergeOut,
 )
 from oracle.trash.filter import INCLUDE_TRASHED
 
@@ -157,6 +167,50 @@ def _items(read_: service.Read) -> dict[str, service.Entry]:
     return out
 
 
+def link(row: Any) -> str | None:
+    """qa-prio-twins: the baseline feature an item stands for, by its link: its ``feature_id``,
+    else the source feature its trace names; None for an item linked to none."""
+    if row.feature_id is not None:
+        return str(row.feature_id)
+    for t in row.trace or []:
+        if isinstance(t, dict) and t.get("target") == "feature" and t.get("id"):
+            return str(t["id"])
+    return None
+
+
+def _items_of(read_: service.Read) -> dict[str, list[service.Entry]]:
+    """qa-prio-twins: feature id -> its open items (by their link), on every roadmap."""
+    out: dict[str, list[service.Entry]] = {}
+    for e in read_.entries:
+        if e.status not in ("cut", "merged") and (fid := link(e.row)) is not None:
+            out.setdefault(fid, []).append(e)
+    return out
+
+
+def _live_drafts(read_: service.Read) -> list[service.Entry]:
+    return [e for e in read_.entries if e.row.draft and e.status not in ("cut", "merged")]
+
+
+def _held(read_: service.Read, roadmap_id: uuid.UUID | None) -> dict[str, service.Entry]:
+    """qa-prio-twins: feature id -> its draft item (by its link; the lowest key) for a feature
+    with no other item: on the roadmap, not yet confirmed (a move confirms it: targets.
+    add_to_company finds it the same way). Only the company roadmap's (``roadmap_id``) while
+    there is one."""
+    out: dict[str, service.Entry] = {}
+    for e in sorted(_live_drafts(read_), key=lambda e: e.row.item_key):
+        if roadmap_id is not None and e.roadmap.id != roadmap_id:
+            continue
+        fid = link(e.row)
+        if fid is not None:
+            out.setdefault(fid, e)
+    return out
+
+
+def same_name(title: str | None) -> str:
+    """What makes two records' names the same (qa-prio-twins): case and spacing aside."""
+    return " ".join((title or "").split()).casefold()
+
+
 def _goal(f: RankedFeature, e: service.Entry | None) -> SimplePriorityGoal | None:
     if e is not None and e.goal is not None:
         return SimplePriorityGoal(
@@ -194,8 +248,13 @@ def _after(rows: list[SimplePriorityRow], deps: dict[str, list[str]]) -> None:
 
 
 async def _proposals(
-    db: AsyncSession, principal: Any, by_id: dict[uuid.UUID, service.Entry]
+    db: AsyncSession,
+    principal: Any,
+    by_id: dict[uuid.UUID, service.Entry],
+    twin_items: set[uuid.UUID] | None = None,
 ) -> list[SimplePriorityProposal]:
+    """qa-prio-twins: also a ``merge_item`` of a row's twin's item (``twin_items``): it shows
+    on that row."""
     rows = list(
         await db.scalars(
             select(SimpleChange)
@@ -215,7 +274,8 @@ async def _proposals(
             e = by_id.get(uuid.UUID(str(c.target.get("item_id"))))
         except ValueError:
             e = None
-        if e is not None and (c.op in PROPOSED_OPS or e.row.draft) and v.sees(c):
+        twin = c.op == "merge_item" and e is not None and e.row.id in (twin_items or ())
+        if e is not None and (c.op in PROPOSED_OPS or e.row.draft or twin) and v.sees(c):
             shown.append((c, e))
     from oracle.simple import visuals
 
@@ -245,16 +305,32 @@ async def _proposals(
     ]
 
 
-def _drafts(read_: service.Read, principal: Any) -> list[SimplePriorityDraft]:
+def _drafts(
+    read_: service.Read,
+    principal: Any,
+    rows: list[SimplePriorityRow] | None = None,
+    named: dict[str, SimplePriorityRow] | None = None,
+) -> list[SimplePriorityDraft]:
+    """The visible drafts, each with the items it may merge into; qa-prio-twins: one that is a
+    ranked row's feature (by its link, else by name: ``named``) shows on that row, its item
+    first to merge into."""
     out = []
     live = [e for e in read_.entries if e.status not in ("cut", "merged")]
+    by_feature = {r.feature_id: r for r in rows or []}
     for e in live:
         if not e.row.draft:
             continue
+        fid = link(e.row)
+        row = by_feature.get(fid) if fid is not None else None
+        linked = row is not None
+        if row is None and fid is None:
+            row = (named or {}).get(same_name(e.row.title))
         goal = e.goal.id if e.goal is not None else None
+        into = row.item_id if row is not None else None
         cands = sorted(
             (o for o in live if o.roadmap.id == e.roadmap.id and not o.row.draft),
             key=lambda o: (
+                o.row.id != into,
                 not (goal is not None and o.goal is not None and o.goal.id == goal),
                 o.row.position,
                 o.row.item_key,
@@ -276,6 +352,8 @@ def _drafts(read_: service.Read, principal: Any) -> list[SimplePriorityDraft]:
                     SimplePriorityMerge(item_id=o.row.id, code=o.row.item_key, title=o.row.title)
                     for o in cands
                 ],
+                row_feature_id=row.feature_id if row is not None else None,
+                linked=linked,
             )  # fmt: skip
         )
     return out
@@ -665,11 +743,76 @@ def _milestone_name(e: service.Entry | None) -> str | None:
     return readable(e.milestone.name) or readable(e.milestone.record_name)
 
 
+def _fold_twins(
+    rows: list[SimplePriorityRow],
+    titles: dict[str, str],
+    by_id: dict[uuid.UUID, service.Entry],
+    principal: Any,
+    deciders: Any,
+    can_change: bool,
+) -> tuple[list[SimplePriorityRow], dict[str, SimplePriorityRow]]:
+    """qa-prio-twins: rows of separate features with one name (a row's title or its feature's
+    own, ``titles``: feature id -> title) are one feature not linked as one: one row, the
+    best-ranked of those on a roadmap (else the best-ranked), listing the others as its
+    ``twins`` with how each merges into it; nothing is merged. Also each name -> its row."""
+    group: dict[str, int] = {}
+    groups: list[list[SimplePriorityRow]] = []
+    for r in rows:
+        names = {n for n in (same_name(r.title), same_name(titles.get(r.feature_id))) if n}
+        found = sorted({group[n] for n in names if n in group})
+        if found:
+            g = found[0]
+            for other in found[1:]:
+                groups[g] += groups[other]
+                groups[other] = []
+                group |= {n: g for n, x in group.items() if x == other}
+            groups[g].append(r)
+        else:
+            g = len(groups)
+            groups.append([r])
+        group |= dict.fromkeys(names, g)
+    lead_of: dict[str, SimplePriorityRow] = {}
+    for members in groups:
+        if not members:
+            continue
+        members.sort(key=lambda r: r.rank)
+        lead = next((r for r in members if r.on_roadmap), members[0])
+        for r in members:
+            lead_of[r.feature_id] = lead
+            if r is lead:
+                continue
+            e = by_id.get(r.item_id) if r.item_id is not None else None
+            lead_e = by_id.get(lead.item_id) if lead.item_id is not None else None
+            merge: str | None = None
+            applies = False
+            if not can_change:
+                pass
+            elif e is not None and lead_e is not None and e.roadmap.id == lead_e.roadmap.id:
+                merge, applies = "item", service.can_decide(principal, e, deciders)
+            else:
+                # No item, an item on another roadmap, or a lead with only a draft: the
+                # baseline's Merge into… of its feature into the row's (merge_twin), which
+                # first re-links each of its items on every roadmap: whether it applies is
+                # worked out over them (build, _twin_block).
+                merge, applies = "entity", has_role(principal.role, "approver")
+            lead.twins.append(
+                SimplePriorityTwin(
+                    feature_id=r.feature_id, item_id=r.item_id, code=r.code, title=r.title,
+                    goal=r.goal, rank=r.rank, merge=merge,  # type: ignore[arg-type]
+                    into_id=lead.item_id if merge == "item" else None, applies=applies,
+                )
+            )  # fmt: skip
+    kept = [r for r in rows if lead_of[r.feature_id] is r]
+    named = {n: lead_of[gr[0].feature_id] for n, g in group.items() if (gr := groups[g])}
+    return kept, named
+
+
 async def build(
     db: AsyncSession, principal: Any, line_key: str | None = None
 ) -> SimplePrioritiesOut:
     ranking = await priorities.compute(db, METHOD, principal, overrides=True)
-    read_ = await service.load(db, await drafts.overlays_for(db, principal))
+    overlays = await drafts.overlays_for(db, principal)
+    read_ = await service.load(db, overlays)
     items = _items(read_)
     offered, same = await lines(db, principal, read_)
     line = pick_line(line_key, offered, same)
@@ -685,6 +828,7 @@ async def build(
     # their move adds there (targets.add_to_company). Anyone else moves what is on it.
     owner = has_role(principal.role, "owner")
     the_company = await company.active(db)
+    held = _held(read_, the_company.id if the_company is not None else None)
     code_of = {
         f.key: (items[f.entity_id].row.item_key if f.entity_id in items else f.key)
         for f in features
@@ -741,7 +885,11 @@ async def build(
                 estimate_pending=e is not None and e.row.estimate_pending,
                 no_goal=not f.serves_goal,
                 can_reorder=can_change and (e is not None or owner),
-                on_roadmap=e is not None,
+                # qa-prio-twins: a draft item of the feature is on the roadmap too.
+                on_roadmap=e is not None or f.entity_id in held,
+                draft_item_id=held[f.entity_id].row.id
+                if e is None and f.entity_id in held
+                else None,
                 applies=service.can_decide(principal, e, read_.deciders) if e else owner,
                 part_of=extras.get(e.row.id, {}).get("part_of") if e is not None else None,
                 parts=extras.get(e.row.id, {}).get("parts", []) if e is not None else [],
@@ -754,13 +902,27 @@ async def build(
         r.own_key = r.short_code if FEATURE_CODE.fullmatch(r.short_code) else None
     _after(rows, deps)
     this_quarter, inside = await plan_quarter(db, read_)
-    goal_rows = await db.scalars(select(Entity).where(Entity.type == "goal"))
-    order = {g.key: i for i, g in enumerate(sort_goals(goal_rows))}
-    buckets, total = _buckets(rows, inside, order)
     _, plan_out = await plan_in_play(db, read_)
     if plan_out is not None:
         for r, pid in zip(rows, prd_of, strict=True):
             r.in_plan = pid == str(plan_out.prd.id)
+    rows, named = _fold_twins(rows, {f.entity_id: f.title for f in features}, by_id, principal,
+                              read_.deciders, can_change)  # fmt: skip
+    entity = [(r, t) for r in rows for t in r.twins if t.merge == "entity" and t.applies]
+    if entity:
+        # A twin's items on every roadmap, the older ones too (merge_twin re-links them all).
+        every = read_
+        if the_company is not None:
+            with service.every_roadmap():
+                every = await service.load(db, overlays)
+        items_of = _items_of(every)
+        for r, t in entity:
+            t.blocked = _twin_block(principal, every, items_of, t.feature_id, r.feature_id, r.title)
+            t.applies = t.blocked is None
+    twin_items = {t.item_id for r in rows for t in r.twins if t.item_id is not None}
+    goal_rows = await db.scalars(select(Entity).where(Entity.type == "goal"))
+    order = {g.key: i for i, g in enumerate(sort_goals(goal_rows))}
+    buckets, total = _buckets(rows, inside, order)
     return SimplePrioritiesOut(
         today=read_.today,
         quarter=this_quarter,
@@ -768,8 +930,8 @@ async def build(
         method=METHOD,
         formula=ranking.formula,
         rows=rows,
-        proposals=await _proposals(db, principal, read_.by_id()),
-        drafts=_drafts(read_, principal),
+        proposals=await _proposals(db, principal, read_.by_id(), twin_items),
+        drafts=_drafts(read_, principal, rows, named),
         unranked=_unranked(read_, {f.entity_id for f in features}),
         buckets=buckets,
         weeks_total=total,
@@ -782,6 +944,131 @@ async def build(
         if the_company is not None
         else None,
     )
+
+
+async def merge_twin(
+    db: AsyncSession, principal: Any, feature_id: uuid.UUID, into_id: uuid.UUID
+) -> SimpleTwinMergeOut:
+    """qa-prio-twins (review of #1503): a twin's Merge into… the row's feature (422 unless it
+    has one of its names). Each open item of the twin's feature, on every roadmap, is first
+    re-linked to the kept feature (``set_feature``; when the kept feature holds only a draft
+    on that item's roadmap, that draft is merged into the item first, ``merge_item``, so the
+    confirmed item stays), then the feature is merged (baseline.merge_entity) and deleted: no
+    item is left with no feature. Refused, nothing written, unless the caller is an approver
+    (403) who decides every one of those items' roadmaps (409, naming it), and none would sit
+    beside a confirmed item of the kept feature on its roadmap (409: merge those items first,
+    merge_item). Not committed."""
+    from oracle.baseline import service as baseline
+
+    if not has_role(principal.role, "approver"):
+        raise changes.ChangeError(403, "Only an approver merges Ground Truth features")
+    try:
+        source = await baseline.get_entity(db, feature_id)
+        into = await baseline.get_entity(db, into_id)
+    except baseline.BaselineError as exc:
+        raise changes.ChangeError(exc.status_code, str(exc)) from exc
+    if source.type != "feature" or into.type != "feature" or source.id == into.id:
+        raise changes.ChangeError(422, "into: another Ground Truth feature")
+    # Every roadmap's items, the older ones beside the company roadmap too: none is left with
+    # no feature when the twin's goes (re-review of #1503).
+    with service.every_roadmap():
+        return await _merge_twin(db, principal, source, into)
+
+
+def _twin_block(
+    principal: Any,
+    read_: service.Read,
+    items_of: dict[str, list[service.Entry]],
+    source_id: str | None,
+    into_id: str,
+    into_title: str,
+) -> str | None:
+    """Why the caller may not merge the twin feature ``source_id`` into ``into_id`` (its items
+    re-linked first, merge_twin), else None: an item on a roadmap they do not decide, or a
+    confirmed item where the kept feature has a confirmed item of its own (merge those items
+    first). ``items_of``: _items_of over every roadmap."""
+    theirs = items_of.get(source_id or "", [])
+    for e in theirs:
+        if not service.can_decide(principal, e, read_.deciders):
+            return (
+                f"Only the decider of {e.roadmap.title} links {e.row.title} ({e.row.item_key}) "
+                "to another feature: ask them to merge it"
+            )
+    for e in theirs:
+        if e.row.draft:
+            continue
+        for d in items_of.get(into_id, []):
+            if d.roadmap.id == e.roadmap.id and not d.row.draft:
+                return (
+                    f"{into_title} already has {d.row.title} ({d.row.item_key}) on "
+                    f"{e.roadmap.title}: merge {e.row.title} ({e.row.item_key}) into it first"
+                )
+    return None
+
+
+async def _merge_twin(
+    db: AsyncSession, principal: Any, source: Entity, into: Entity
+) -> SimpleTwinMergeOut:
+    from oracle.baseline import service as baseline
+    from oracle.simple.schemas import SimpleChangeIn
+
+    read_ = await service.load(db, await drafts.overlays_for(db, principal))
+    items = _items_of(read_)
+    theirs = items.get(str(source.id), [])
+    ours = items.get(str(into.id), [])
+    # Only into the row it shows on: one of its names (its own, its items') is the kept one's.
+    names = {same_name(source.title), *(same_name(e.row.title) for e in theirs)}
+    if not names & {same_name(into.title), *(same_name(d.row.title) for d in ours)}:
+        raise changes.ChangeError(422, f"into: a feature named {source.title}")
+    if why := _twin_block(principal, read_, items, str(source.id), str(into.id), into.title):
+        raise changes.ChangeError(409, why)
+    relinked: list[str] = []
+    for e in theirs:
+        if not e.row.draft:
+            same = [d for d in ours if d.roadmap.id == e.roadmap.id]
+            if same and all(d.row.draft for d in same):
+                # The kept feature holds only a draft here: it goes into the confirmed item.
+                draft = min(same, key=lambda d: d.row.item_key)
+                body = SimpleChangeIn(
+                    op="merge_item",
+                    target={"item_id": str(draft.row.id), "into_id": str(e.row.id)},
+                    before={}, after={}, reason=f"Merged into {e.row.title}",
+                )  # fmt: skip
+                await changes.create(db, principal, body, commit=False)
+        now = e.row.feature_id
+        body = SimpleChangeIn(
+            op="set_feature", target={"item_id": str(e.row.id)},
+            before={"feature_id": str(now) if now else None},
+            after={"feature_id": str(into.id)}, reason=f"Merged into {into.title}",
+        )  # fmt: skip
+        await changes.create(db, principal, body, commit=False)
+        relinked.append(e.row.item_key)
+    try:
+        await baseline.merge_entity(db, principal, source, into, None, any_run=True)
+    except baseline.BaselineError as exc:
+        raise changes.ChangeError(exc.status_code, str(exc)) from exc
+    return SimpleTwinMergeOut(feature_id=str(into.id), relinked=relinked)
+
+
+@router.post(
+    "/priorities/twins/{feature_id}/merge",
+    response_model=SimpleTwinMergeOut,
+    name="merge_simple_priority_twin",
+)
+async def post_merge_twin(
+    feature_id: uuid.UUID, body: SimpleTwinMergeIn, principal: Reader, db: TenantDB
+) -> SimpleTwinMergeOut:
+    """A Same name record's Merge into… the row's feature (qa-prio-twins): its roadmap items
+    are linked to the kept feature first, on every roadmap, then its feature is merged into it.
+    403 unless the caller is an approver; 409, naming why, when they do not decide one of those
+    items' roadmaps or the kept feature has its own item there; nothing is written."""
+    try:
+        out = await merge_twin(db, principal, feature_id, body.into)
+    except (changes.ChangeError, drafts.DraftError) as e:
+        await db.rollback()
+        raise HTTPException(e.status, e.detail) from e
+    await db.commit()
+    return out
 
 
 @router.get("/priorities", response_model=SimplePrioritiesOut, name="get_simple_priorities")

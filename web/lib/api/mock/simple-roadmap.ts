@@ -97,6 +97,12 @@ interface SeedItem {
   /** prio-company: the key of the item whose feature this one is (an item a move on Priorities
    * added to the company roadmap for a feature it did not hold); else its own feature. */
   feature?: string;
+  /** qa-prio-twins: a draft linked only by its trace's source feature (priorities.link): the key of the item
+   * standing for that feature; no feature of its own until a move confirms it. */
+  trace_feature?: string;
+  /** qa-prio-twins: the Ground Truth feature this item stands for is locked (a person edited it) or a PRD section
+   * links it: baseline.merge_entity refuses to merge it away (409). */
+  gt_lock?: "locked" | "linked";
   /** feature-parts: the key of the feature it is a part of (RoadmapItem.parent_key). */
   parent?: string;
   /** S7: the Ground Truth feature (with no item) this draft was linked to by a merge. */
@@ -250,6 +256,8 @@ interface SimpleDb {
   /** item-milestone: tracks Simple knows besides TRACKS and the added roadmaps' own (key -> title),
    * known as knowExtraRoadmaps knows theirs. */
   extra_tracks?: Record<string, string>;
+  /** qa-prio-twins: item keys whose feature Oracle only proposed: ranked, but not in /v1/feature-states (confirmed only). */
+  proposed_features?: string[];
   /** one-roadmap-many-prds (api/oracle/roadmap/company.feeding_ids): the company roadmap's slug;
    * while set, its items alone feed Simple and older per-PRD roadmaps' items are history. */
   company_roadmap?: string;

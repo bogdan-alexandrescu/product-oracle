@@ -158,7 +158,9 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
   test("the score says how it is worked out and titles line up", async ({ page }) => {
     await setUp(page);
     await open(page);
-    await expect(page.getByTestId("prio-score-help")).toHaveText(/^Score = goal value × Oracle's confidence in it \(0 to 1\) ÷ effort in engineer-weeks\.$/);
+    // qa-prio-twins: behind an (i) by the list's heading (the owner's rule: explanations behind a tooltip).
+    await page.getByTestId("prio-score-help").first().click();
+    await expect(page.locator("#prio-score-text")).toHaveText(/^Score = goal value × Oracle's confidence in it \(0 to 1\) ÷ effort in engineer-weeks\.$/);
     const xs = await page.getByTestId("prio-row").evaluateAll((els) =>
       els.map((e) => Math.round(e.querySelector('[data-testid="prio-title"]')!.getBoundingClientRect().x)),
     );

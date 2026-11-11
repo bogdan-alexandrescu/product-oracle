@@ -1211,6 +1211,44 @@ class SimplePriorityOverride(BaseModel):
     at: dt.datetime | None = None
 
 
+class SimplePriorityTwin(BaseModel):
+    """qa-prio-twins: another ranked record of a row's feature, not linked to it (a baseline
+    feature of the same name), shown on that row, never as a row of its own: a person merges it
+    into the row's record (``merge``) or keeps both; Oracle never merges it."""
+
+    feature_id: str | None = None
+    item_id: uuid.UUID | None = None
+    code: str
+    title: str
+    goal: SimplePriorityGoal | None = None
+    # Its own rank, were it a row (the name folding is shown, not hidden).
+    rank: int | None = None
+    # How it merges into the row's record: ``item`` (merge_item of its item into the row's,
+    # ``into_id``: both on one roadmap), ``entity`` (the baseline's Merge into… of its feature
+    # into the row's: no item, an item on another roadmap, or a row with only a draft); None:
+    # the caller may change nothing.
+    merge: Literal["item", "entity"] | None = None
+    into_id: uuid.UUID | None = None
+    # The caller's merge applies (else it is proposed).
+    applies: bool = False
+    # Why an approver's ``entity`` merge does not apply (merge_twin's 409): one of its items is
+    # on a roadmap they do not decide, or beside the kept feature's own item; else None.
+    blocked: str | None = None
+
+
+class SimpleTwinMergeIn(BaseModel):
+    """qa-prio-twins: a Same name record's Merge into… ``into`` (the row's feature)."""
+
+    into: uuid.UUID
+
+
+class SimpleTwinMergeOut(BaseModel):
+    """The kept feature, and the item keys of the twin's items now linked to it."""
+
+    feature_id: str
+    relinked: list[str] = []
+
+
 class SimplePriorityRow(BaseModel):
     rank: int
     # Oracle's rank (the formula and dependencies, before people's overrides).
@@ -1268,6 +1306,11 @@ class SimplePriorityRow(BaseModel):
     parts: "list[SimplePartRef]" = Field(default_factory=list)
     # The feature's active override as override_priority's ``before.override`` wants it.
     before_override: dict[str, Any] | None = None
+    # qa-prio-twins: the feature's draft item on the roadmap when it has no other (it is on the
+    # roadmap, not yet confirmed: a move confirms it, never adds a second item).
+    draft_item_id: uuid.UUID | None = None
+    # qa-prio-twins: the same feature's other ranked records, not linked to it (same name).
+    twins: list[SimplePriorityTwin] = Field(default_factory=list)
 
 
 class SimpleFlowScreen(BaseModel):
@@ -1421,8 +1464,13 @@ class SimplePriorityDraft(BaseModel):
     goal: SimplePriorityGoal | None = None
     roadmap: SimpleDocRef
     applies: bool = False
-    # Non-draft items of the same roadmap, same goal first (at most 8).
+    # Non-draft items of the same roadmap, same goal first (at most 8); its row's item first.
     merge_into: list[SimplePriorityMerge] = []
+    # qa-prio-twins: the ranked row it shows on, not as a draft of its own: its feature's (by
+    # its link: feature_id, else its trace's source feature), else a row of its name's.
+    row_feature_id: str | None = None
+    # Linked to that row's feature (else only named as it: Merge into… its item).
+    linked: bool = False
 
 
 class SimplePriorityUnranked(BaseModel):

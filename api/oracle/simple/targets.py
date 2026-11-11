@@ -784,6 +784,7 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
     feature alone). The caller commits."""
     from oracle.simple import drafts
     from oracle.simple.additions import _shown_version
+    from oracle.simple.priorities import link
 
     fid = changes._uuid(feature_id, "feature_id")
     f = await _feature(db, fid)
@@ -793,15 +794,19 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
     if doc is None:
         return None
     read_ = await service.load(db)
-    there = [e for e in read_.entries
-             if e.roadmap.id == doc.id and e.row.feature_id == fid and e.status != "cut"
-             and not e.row.merged_into]  # fmt: skip
+    # qa-prio-twins: its draft by the link Priorities shows it by (priorities._held): its
+    # feature_id, else its trace's source feature; the lowest key first.
+    there = sorted((e for e in read_.entries
+                    if e.roadmap.id == doc.id and e.status != "cut" and not e.row.merged_into
+                    and (e.row.feature_id == fid or (e.row.draft and link(e.row) == str(fid)))),
+                   key=lambda e: e.row.item_key)  # fmt: skip
     for e in there:
         if not e.row.draft:
             return e
     if there:
         row = there[0].row
         row.draft = False
+        row.feature_id = fid
         await db.flush()
         data = {"feature_id": str(fid), "roadmap_id": str(doc.id), "from": "priorities"}
         await audit.record(db, principal, "roadmap.item_confirmed", "roadmap_item", row.id, data)
