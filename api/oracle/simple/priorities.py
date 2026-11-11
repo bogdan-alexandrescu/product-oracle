@@ -1004,13 +1004,21 @@ def _same_named(items: dict[str, list[service.Entry]], source: Entity, into: Ent
 
 async def check_twin_merge(
     db: AsyncSession, principal: Any, feature_id: uuid.UUID, into_id: uuid.UUID
-) -> tuple[Entity, Entity]:
-    """prio-twin-propose: merge_twin's 422 refusals for a proposal of it, nothing written."""
+) -> tuple[Entity, Entity, str, str]:
+    """prio-twin-propose: merge_twin's 422 refusals for a proposal of it, nothing written; the
+    twin and the kept feature with the codes Priorities shows them by (an item's key, else
+    the feature's)."""
     source, into = await twin_pair(db, feature_id, into_id)
     with service.every_roadmap():
         read_ = await service.load(db, await drafts.overlays_for(db, principal))
-    _same_named(_items_of(read_), source, into)
-    return source, into
+    items = _items_of(read_)
+    _same_named(items, source, into)
+
+    def code(f: Entity) -> str:
+        es = sorted(items.get(str(f.id), []), key=lambda e: e.row.draft)
+        return es[0].row.item_key if es else f.key
+
+    return source, into, code(source), code(into)
 
 
 def _twin_block(

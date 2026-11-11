@@ -194,9 +194,11 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
                 return f"renamed the milestone {_quoted(old)} to {new}"
             return f"changed the milestone {name}" if name else "changed a milestone"
         # prio-twin-propose: a same-name twin's feature merged into its row's (twin_merges).
+        # Each by its code and name ("merged F-09 Invoices into F-08 Invoices").
         case "merge_twin":
-            twin = _quoted(target.get("title")) or "a feature"
-            return f"merged {twin} into {_quoted(target.get('into_title')) or 'its same name'}"
+            twin = " ".join(str(target.get(k) or "") for k in ("code", "title")).strip()
+            into = " ".join(str(target.get(k) or "") for k in ("into_code", "into_title")).strip()
+            return f"merged {twin or item or 'a feature'} into {into or 'its same name'}"
         # trash-features-goals: a feature deleted to Trash (oracle.simple.trash_items).
         case "delete_item":
             return f"moved {x} to Trash"

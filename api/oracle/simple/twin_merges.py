@@ -76,12 +76,13 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
 
     if not has_role(principal.role, "commenter"):
         raise ChangeError(403, "Only a commenter or above proposes a merge")
-    source, into = await priorities.check_twin_merge(
+    source, into, code, into_code = await priorities.check_twin_merge(
         db, principal, _id(body.target.get("feature_id"), "feature_id"),
         _id(body.target.get("into_id"), "into_id"),
     )  # fmt: skip
+    # Each named by the code Priorities shows it with, for the change's words.
     target = {"feature_id": str(source.id), "into_id": str(into.id), "title": source.title,
-              "into_title": into.title}  # fmt: skip
+              "into_title": into.title, "code": code, "into_code": into_code}  # fmt: skip
     done = may_act(principal)
     if not done:
         open_ = await db.scalar(
