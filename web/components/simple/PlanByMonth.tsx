@@ -189,9 +189,11 @@ export function PlanByMonth({
           // Whose it is; with none known (a goal no loaded item names) or one a twin shares, its first item.
           const whose = r.of && !twins.some((o) => o.of === r.of) ? r.of : (rowNames[0] ?? r.of);
           const heard = twins.length && whose ? `${label}, ${whose}` : label;
+          // home-milestone-rename / one-pager-milestone-rename: the row's milestone renamed in place.
+          const go = rename && r.ms ? rename(r.ms) : null;
           const rowLabel = `${heard}${when ? ` · ${when}` : ""}: open the roadmap${prd ? ` filtered to ${prd.title}` : ""}`;
           const words = (
-            <span className={`flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2 ${named ? "" : "pointer-events-none relative"}`}>
+            <span className={`flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2 ${named ? "" : "pointer-events-none relative"} ${!named && go ? "pr-7" : ""}`}>
               {/* pre-demo QA S-11 (Home, named): the whole label, wrapped between words as the frame shows it, never
                   cut; vqa B-14 (the one-pager): one line, the whole label behind an (i) when cut. */}
               {named ? (
@@ -200,6 +202,12 @@ export function PlanByMonth({
                 </span>
               ) : (
                 <RowLabel name={rowName(r, named)} count={n} testId={testId} />
+              )}
+              {/* one-pager-milestone-rename: the row's rename sits above the row's link, as its (i) does. */}
+              {!named && go && (
+                <button type="button" aria-label={`Rename ${rowName(r, named)}`} data-testid={`${testId}-rename`} onClick={go} className="pointer-events-auto absolute top-0 right-0 grid size-6 place-items-center rounded text-text2 hover:bg-surface2 hover:text-text">
+                  <Icon name="pencil" size={16} />
+                </button>
               )}
               {when && <span className="simple-small tnum">{when}{r.past_edge ? `, after ${calendarDay(plan.end, { month: "short" })}` : ""}</span>}
               {/* qa4-simple-prd-15: a row with no milestone date that runs past the edge says when it ends;
@@ -252,16 +260,11 @@ export function PlanByMonth({
                   </Link>
                   {tipCol && rename && (
                     <span className="w-6 flex-none">
-                      {(() => {
-                        const go = r.ms ? rename(r.ms) : null;
-                        return (
-                          go && (
-                            <button type="button" aria-label={`Rename ${rowName(r, named)}`} data-testid={`${testId}-rename`} onClick={go} className="grid size-6 place-items-center rounded text-text2 hover:bg-surface2 hover:text-text">
-                              <Icon name="pencil" size={16} />
-                            </button>
-                          )
-                        );
-                      })()}
+                      {go && (
+                        <button type="button" aria-label={`Rename ${rowName(r, named)}`} data-testid={`${testId}-rename`} onClick={go} className="grid size-6 place-items-center rounded text-text2 hover:bg-surface2 hover:text-text">
+                          <Icon name="pencil" size={16} />
+                        </button>
+                      )}
                     </span>
                   )}
                   {tipCol && (

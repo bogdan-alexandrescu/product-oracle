@@ -159,6 +159,17 @@ def unknown_source_item(headings: Sequence[str]) -> str:
     return f"a citation{where} names {MISSING_SOURCE_ITEM}; the citation is kept without it"
 
 
+def citation_not_in_ground_truth(title: str | None, headings: Sequence[str]) -> str:
+    """The flag on a citation the previous version carried whose Ground Truth item is gone
+    (rejected or in Trash): kept, never refused (docs/ground-truth.md); ``title``: the
+    citation's, ``headings``: the sections citing it."""
+    where = (
+        f" in {listed([quoted(h, 'an untitled section') for h in headings])}" if headings else ""
+    )
+    cite = quoted(title, "of an item")
+    return f"Not in the Ground Truth: the citation {cite}{where} names an item no longer in it"
+
+
 def _left_open(n: int) -> str:
     return f"{n} feedback item{'s stay' if n != 1 else ' stays'} open"
 

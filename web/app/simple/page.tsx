@@ -25,7 +25,7 @@ import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { DecisionSheetHost, SheetHandle, showOutdated, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
 import { Named } from "./roadmap/_fields";
 import { FeaturePanel, useItemChanged } from "./roadmap/_panel";
-import { MsCard, MsProvider, MsToast, useMilestones } from "./roadmap/_milestones";
+import { MsCard, MsProvider, MsToast, renameOf, useMilestones } from "./roadmap/_milestones";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -386,10 +386,7 @@ export default function SimpleHome() {
     },
     openItem: (id) => setOpened(roadmap.data?.items.find((i) => i.id === id) ?? null),
   });
-  const renameMs = (id: string) => {
-    const m = ms?.list.find((x) => x.id === id);
-    return m && (m.can_change || m.can_propose) ? () => ms!.rename(m) : null;
-  };
+  const renameMs = renameOf(ms);
   const planNames = useMemo(() => new Map((roadmap.data?.items ?? []).map((i) => [i.id, i.title])), [roadmap.data]);
   // qa4-simple-home-12: every working draft of mine, each with its own count (one roadmap's draft never hides another's).
   // home-draft-in-review: a draft sent for review shows to whoever approves it (its can_approve) and

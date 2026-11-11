@@ -147,6 +147,24 @@ const Ctx = createContext<MsCtl | null>(null);
 export const MsProvider = ({ value, children }: { value: MsCtl; children: ReactNode }) => <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 export const useMsCtl = () => useContext(Ctx);
 
+/** home-milestone-rename: a milestone's rename in place (the card, its name alone), by its id; null where the
+ * reader may neither change nor propose it. Home's plan rows and the one-pager's Timeline strip rows. */
+export const renameOf = (ms: MsCtl | null) => (id: string) => {
+  const m = ms?.list.find((x) => x.id === id);
+  return ms && m && (m.can_change || m.can_propose) ? () => ms.rename(m) : null;
+};
+
+/** one-pager-milestone-rename: the roadmap milestone a PRD's Timeline strip row draws, by the row's roadmap code
+ * (one_pager.roadmap_codes_of): the one of that code holding the row's items, else the PRD's own of that code,
+ * else the only one of it. A row with no code is no roadmap milestone (the PRD's written one). Goal milestones
+ * only, as Home's rows. */
+export function stripMilestone(ms: MsCtl | null, row: { milestone: boolean; code?: string | null; item_ids?: string[] }, prdId: string): string | undefined {
+  if (!ms || !row.milestone || !row.code) return undefined;
+  const ids = new Set(row.item_ids ?? []);
+  const coded = ms.list.filter((m) => !m.goal_target && msCode(m) === row.code);
+  return (coded.find((m) => m.item_ids.some((i) => ids.has(i))) ?? coded.find((m) => m.prd?.id === prdId) ?? (coded.length === 1 ? coded[0] : undefined))?.id;
+}
+
 /** The milestones' state and their changes for one read of the roadmap (`reload` reads it again). */
 export function useMilestones({
   data,

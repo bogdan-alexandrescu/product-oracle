@@ -1080,6 +1080,47 @@ async def _citation_items(
     return {key: item for key, item in ids.items() if item in found}, warnings
 
 
+async def _carried_citations(
+    db: AsyncSession, document: Document | None, draft: ParsedDraft, refused: list[ImportProblem]
+) -> tuple[list[ImportProblem], list[VersionWarning]]:
+    """``refused`` (``_oracle_ref_problems``) less the citations the document's latest version
+    already carries as the draft writes them (key, source and ref), whose item was rejected or
+    trashed since: each a ``citation_not_in_ground_truth`` warning on the sections citing it.
+    Every re-import (a one-pager draft's submit, a person's next version) carries the front
+    matter no one in Simple edits, so refusing those refused every draft of the PRD; a
+    citation the draft adds or changes is still refused (docs/ground-truth.md: flagged)."""
+    if not refused or document is None:
+        return refused, []
+    latest = (
+        select(DocumentVersion.id)
+        .where(DocumentVersion.document_id == document.id)
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    before = {
+        (c.cite_key, c.source, c.ref)
+        for c in await db.scalars(select(Citation).where(Citation.version_id == latest))
+    }
+    cited = {c.id: c for c in draft.citations}
+    kept, gone = [], []
+    for p in refused:
+        c = cited.get(p.cite_key or "")
+        if c is None or (c.id, c.source, c.ref) not in before:
+            kept.append(p)
+            continue
+        citing = [s for s in draft.sections if c.id in s.citation_keys]
+        gone.append(
+            VersionWarning(
+                code="citation_not_in_ground_truth",
+                message=wording.citation_not_in_ground_truth(c.title, [s.heading for s in citing]),
+                section_keys=[s.section_key for s in citing],
+                refs={"cite_key": c.id, "ref": c.ref},
+            )
+        )
+    return kept, gone
+
+
 def unknown_feedback_item(fid: uuid.UUID) -> ImportProblem:
     """A resolution naming feedback the document does not have: the import's refusal to
     the agent that wrote it, which echoes the id it sent (and keeps it in ``refs``)."""
@@ -1299,7 +1340,12 @@ async def import_draft(
         if refused := await _oracle_ref_problems(db, exc.citations):
             raise DraftError([*exc.problems, *refused], citations=exc.citations) from exc
         raise
-    if refused := await _oracle_ref_problems(db, draft.citations):
+    # One PRD's one-pager drafts were always refused: a citation its latest version carries
+    # whose Ground Truth item was since rejected or trashed is kept and flagged, not refused.
+    refused, gone = await _carried_citations(
+        db, found, draft, await _oracle_ref_problems(db, draft.citations)
+    )
+    if refused:
         raise DraftError(refused)
     if exported and found is None and kind is None and await _draft_kind(db, draft) == "roadmap":
         # A new document that is a roadmap by its front matter (or template).
@@ -1577,7 +1623,7 @@ async def import_draft(
                 )
 
     items, item_warnings = await _citation_items(db, draft)
-    warnings += item_warnings
+    warnings += item_warnings + gone
 
     version = DocumentVersion(
         document_id=document.id,

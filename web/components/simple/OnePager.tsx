@@ -11,6 +11,7 @@ import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
 import { OnePagerSlides } from "@/components/simple/OnePagerSlides";
 import { FeaturePanel } from "@/app/simple/roadmap/_panel";
+import { MsCard, MsProvider, MsToast, renameOf, stripMilestone, useMilestones } from "@/app/simple/roadmap/_milestones";
 import { dmy, ew, looseItems, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
 import { PrdHeaderMenu } from "@/components/simple/PrdMenu";
 import { PrdStatus } from "@/components/simple/PrdStatus";
@@ -282,6 +283,20 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const [feature, setFeature] = useState<Parameters<OpenFeature>[0] | null>(null);
   const codesQ = useQuery("simple-roadmap-codes", () => unwrap(api.GET("/v1/simple/roadmap", {})).catch(() => null));
   const codes = new Map((codesQ.data?.items ?? []).map((i) => [i.id, i.code ?? null]));
+  // one-pager-milestone-rename (the owner, Nov 10): a Timeline strip row's milestone is renamed in place with the
+  // Roadmap's own card, as Home's rows are: its rights, the proposal to the roadmap's decider, Undo.
+  const ms = useMilestones({
+    data: codesQ.data ?? undefined,
+    phone,
+    canChange: false,
+    reload: async () => {
+      await Promise.all([codesQ.reload(), reloadPage()]);
+    },
+    openItem: (id) => {
+      const i = codesQ.data?.items.find((x) => x.id === id);
+      if (i) setFeature({ id: i.id, code: i.code ?? "", name: i.title });
+    },
+  });
   // PS1 a "Calm page": the whole PRD the page is built from, read under it; its codes for the lines.
   const prd = usePrdSections(q.data?.document.slug ?? null, q.data?.version ?? 0);
   // inbox-meeting-proposals fix: ?line= (the Inbox's Open on a proposed wording) shows the
@@ -740,7 +755,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
               {b.kind === "timeline" ? (
                 <div className="mt-2" aria-label="Timeline strip">
-                  {v.plan ? <WithFeatureMarks><PlanByMonth plan={v.plan} prd={v.document} legend items={v.timeline.map((t) => ({ ...t, code: codes.get(t.id) }))} /></WithFeatureMarks> : <p className="text-base text-text-faint">No roadmap items yet</p>}
+                  {v.plan ? <WithFeatureMarks><PlanByMonth plan={{ ...v.plan, rows: v.plan.rows.map((r) => ({ ...r, ms: stripMilestone(ms, r, v.document.id) })) }} prd={v.document} legend items={v.timeline.map((t) => ({ ...t, code: codes.get(t.id) }))} rename={renameOf(ms)} /></WithFeatureMarks> : <p className="text-base text-text-faint">No roadmap items yet</p>}
                 </div>
               ) : (
                 <ul className="mt-1 space-y-1">
@@ -978,6 +993,12 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       </div>
       )}
       </>)}
+      {ms && (
+        <MsProvider value={ms}>
+          <MsCard />
+          <MsToast />
+        </MsProvider>
+      )}
       {/* C-8: inside the page, so it opens over the slides too (the page's siblings are inert while presenting). */}
       {feature && (
         <FeaturePanel
