@@ -7,6 +7,7 @@
  * asks for it. Generic, made-up data only.
  */
 import type { Schemas } from "@/lib/api/client";
+import { goalFigure } from "@/lib/format";
 
 import type { BaselineState } from "./baseline";
 import { type ChangeRow, type DiscussionRow, type DiscussionsDb } from "./discussions";
@@ -41,7 +42,8 @@ const refuse = (status: number, detail: string) => json(status, { detail });
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WORDS: Record<string, string> = { at_least: "at least", above: "more than", at_most: "at most", below: "less than" };
 const day = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
-const fig = (n: unknown, unit: unknown) => (unit === "%" ? `${n}%` : `${n} ${unit ?? ""}`.trim());
+/** As the API's goals.figure_words (goal-figure-words): "$50,000", "1,200 shops", "8%". */
+const fig = (n: unknown, unit: unknown) => (typeof n === "number" ? goalFigure(n, typeof unit === "string" ? unit : "") : unit === "%" ? `${n}%` : `${n} ${unit ?? ""}`.trim());
 /** The fields a person reads as one: a target is its value, unit and comparison. */
 const GROUP: Record<string, string> = { metric: "metric", unit: "target", comparison: "target", target: "target", horizon: "horizon", owner: "owner" };
 

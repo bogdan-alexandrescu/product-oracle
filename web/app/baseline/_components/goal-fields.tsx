@@ -70,7 +70,8 @@ const compact = (n: number) => {
 /** A value in its unit: "45%", "$4M", "2 min", "400 teams". */
 export function figure(value: number, unit: string): string {
   if (unit === "%") return `${value}%`;
-  if (CURRENCY[unit]) return `${CURRENCY[unit]}${compact(value)}`;
+  const sign = CURRENCY[unit.trim().toUpperCase()];
+  if (sign) return `${sign}${compact(value)}`;
   return `${value} ${unit}`;
 }
 

@@ -16,6 +16,7 @@
  * on its agenda.
  */
 import type { Schemas } from "@/lib/api/client";
+import { goalFigure } from "@/lib/format";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
@@ -1351,8 +1352,8 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
     if (/\b(?:goal|measured?)\b/i.test(t) && i.goal) {
       const g = i.goal;
       // As the API's goal_measure: the target with its unit (goal_buckets._target), its due day month first.
-      const target = g.target ? (/^[\d.]+$/.test(g.target) && g.unit ? (g.unit === "%" ? `${g.target}%` : `${g.target} ${g.unit}`) : g.target) : null;
-      const now = [g.current != null ? `now ${g.current}${g.unit === "%" ? "%" : g.unit ? ` ${g.unit}` : ""}` : "", target ? `target ${target}${g.due ? ` by ${dayWords(g.due, true)}` : ""}` : ""].filter(Boolean).join(", ");
+      const target = g.target ? (/^[\d.]+$/.test(g.target) && g.unit ? goalFigure(Number(g.target), g.unit) : g.target) : null;
+      const now = [g.current != null ? `now ${goalFigure(g.current, g.unit)}` : "", target ? `target ${target}${g.due ? ` by ${dayWords(g.due, true)}` : ""}` : ""].filter(Boolean).join(", ");
       const measure = g.metric ? `, measured by ${g.metric}${now ? ` (${now})` : ""}` : "";
       return { kind: "answer", body: `${i.title} serves the goal ${g.title}${measure}.`, cards: [], source: roadmap };
     }

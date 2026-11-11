@@ -18,7 +18,7 @@ import { InfoTip } from "@/components/ds/InfoTip";
 import { NewPrdSheet, useCanStartPrd } from "@/components/simple/NewPrd";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { GmFeature, GmGoal, GmMilestone, GoalMap } from "@/lib/api/mock/goal-map";
-import { formatCount } from "@/lib/format";
+import { CURRENCY_SIGNS, goalFigure } from "@/lib/format";
 import { joinTwins } from "@/lib/goal-map-twins";
 import { keyResults, type KeyResults } from "@/lib/key-results";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -49,8 +49,8 @@ const STATUS: Record<string, [string, string]> = {
 
 function num(v: number | null, unit: string): string {
   if (v === null) return "—";
-  if (unit === "$") return v >= 1000 ? `$${formatCount(Math.round(v / 100) / 10)}k` : `$${formatCount(v)}`;
-  return formatCount(Math.round(v * 10) / 10);
+  // goal-figure-words: "$20,000", "1,200 shops"; a count to one decimal.
+  return goalFigure(CURRENCY_SIGNS[unit.trim().toLowerCase()] ? v : Math.round(v * 10) / 10, unit);
 }
 const progress = (g: GmGoal) => (g.current === null ? 0 : g.target === 0 ? (g.current <= 0 ? 1 : 1 / (1 + g.current)) : Math.min(1, g.current / g.target));
 const byDate = (a: M, b: M) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999");

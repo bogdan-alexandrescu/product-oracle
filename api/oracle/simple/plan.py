@@ -878,8 +878,9 @@ async def _questions(db: AsyncSession, document_id: uuid.UUID, view: View) -> No
 
 
 def _measure(value: float, unit: str | None) -> str:
-    v = f"{value:,.0f}" if value == int(value) else f"{value:,g}"
-    return f"{v}%" if unit == "%" else f"{v} {unit}".strip()
+    from oracle.baseline.goals import figure_words
+
+    return figure_words(value, unit)
 
 
 async def enrich(db: AsyncSession, document_id: uuid.UUID, view: View) -> View:

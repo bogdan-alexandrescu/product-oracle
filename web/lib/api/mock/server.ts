@@ -7,7 +7,7 @@ import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
 import { sortGoals } from "@/lib/goal-order";
-import { citationHref, formatDate, formatDay } from "@/lib/format";
+import { citationHref, formatDate, formatDay, goalFigure } from "@/lib/format";
 import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
 
@@ -4514,7 +4514,7 @@ function load(): Db {
                     const gb = (rm.goal_buckets = seedGoalBuckets());
                     for (const g of goals) {
                       const t = Number(g.attrs.target);
-                      gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: g.attrs.unit === "$" ? `$${t.toLocaleString("en-US")}` : String(t), due: null, archived: false });
+                      gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: goalFigure(t, String(g.attrs.unit ?? "")), due: null, archived: false });
                     }
                     rm.extra_tracks = Object.fromEntries(GM_TRACKS.map((t) => [t.key, t.title]));
                     rm.track_order = GM_TRACKS.map((t) => t.key);

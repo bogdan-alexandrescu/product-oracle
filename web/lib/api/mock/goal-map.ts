@@ -19,6 +19,7 @@
  * routeLadderMilestone). Invented people, products and numbers only.
  */
 import type { Schemas } from "@/lib/api/client";
+import { CURRENCY_SIGNS, goalFigure } from "@/lib/format";
 import { goalName } from "@/lib/placeholders";
 
 import type { LadderMilestones } from "./simple-changes";
@@ -554,9 +555,9 @@ function json(status: number, body: unknown): Response {
 
 const DAY_WORDS = "Nov 3, 2026";
 
+/** As the API's goal_map.amount (goal-figure-words): "$20,000", "1,200 shops"; a count to one decimal. */
 function amount(v: number, unit: string): string {
-  if (unit === "$") return v >= 1000 ? `$${Math.round(v / 100) / 10}k` : `$${v}`;
-  return `${Math.round(v * 10) / 10}`;
+  return goalFigure(CURRENCY_SIGNS[unit.trim().toLowerCase()] ? v : Math.round(v * 10) / 10, unit);
 }
 
 /**

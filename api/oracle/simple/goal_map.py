@@ -48,7 +48,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from oracle import company_time
 from oracle.auth.models import User
 from oracle.baseline.goal_order import sort_goals
-from oracle.baseline.goals import COMPARISONS, goal_name, meets
+from oracle.baseline.goals import COMPARISONS, CURRENCY_SIGNS, figure_words, goal_name, meets
 from oracle.baseline.models import Entity, GoalMeasurement
 from oracle.docs.models import Document
 from oracle.launches.models import Launch
@@ -310,10 +310,10 @@ def _f(v: Decimal | float | int | None) -> float | None:
 
 
 def amount(v: float, unit: str) -> str:
-    """A number as people read it: $20k, $900, 5.6, 12."""
-    if unit == "$":
-        return f"${round(v / 100) / 10:g}k" if v >= 1000 else f"${v:g}"
-    return f"{round(v * 10) / 10:g}"
+    """A number in its unit as people read it (goal-figure-words): $20,000, €900, 5.6,
+    1,200 shops; a count to one decimal."""
+    money = (unit or "").strip().lower() in CURRENCY_SIGNS
+    return figure_words(v if money else round(v * 10) / 10, unit)
 
 
 def _short(d: date | None) -> str | None:

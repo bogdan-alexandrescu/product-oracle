@@ -373,11 +373,25 @@ def missing_words(missing: list[str]) -> str:
 _WORDS = {"at_least": "at least", "above": "more than", "at_most": "at most", "below": "less than"}
 
 
+# A stored currency unit, any case, as its sign ("usd" is "$"); a sign stays itself.
+CURRENCY_SIGNS = {"usd": "$", "eur": "€", "gbp": "£", "$": "$", "€": "€", "£": "£"}
+
+
+def figure_words(value: float, unit: str | None) -> str:
+    """goal-figure-words: a goal's number in its unit as people write it: a currency's sign
+    before it ("$50,000", "€1,200", "£3.5"), other units after it ("1,200 shops", "60%",
+    "3 days"); commas between thousands, decimals kept, a whole float without ".0"."""
+    n = int(value) if isinstance(value, float) and value.is_integer() else value
+    shown = f"{abs(n):,}"
+    minus = "-" if n < 0 else ""
+    u = (unit or "").strip()
+    if sign := CURRENCY_SIGNS.get(u.lower()):
+        return f"{minus}{sign}{shown}"
+    return f"{minus}{shown}%" if u == "%" else f"{minus}{shown} {u}".strip()
+
+
 def _figure(value: float, unit: str) -> str:
-    n = f"{value:g}"
-    if unit == "%":
-        return f"{n}%"
-    return f"{n} {unit}"
+    return figure_words(value, unit)
 
 
 def comparison_words(comparison: str, target: float, unit: str) -> str:

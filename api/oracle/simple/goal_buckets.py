@@ -39,7 +39,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline import service as baseline
 from oracle.baseline.goal_order import goal_position, sort_goals
-from oracle.baseline.goals import unit_ok
+from oracle.baseline.goals import figure_words, unit_ok
 from oracle.baseline.models import Edge, Entity
 from oracle.config import get_settings
 from oracle.roadmap.models import RoadmapItem
@@ -174,7 +174,8 @@ def _target(attrs: dict[str, Any]) -> str | None:
         return None
     unit = attrs.get("unit") or ""
     n = attrs["target"]
-    n = int(n) if isinstance(n, float) and n.is_integer() else n
+    if isinstance(n, int | float) and not isinstance(n, bool):
+        return figure_words(n, unit)
     return f"{n}{unit}" if unit == "%" else f"{n} {unit}".strip()
 
 

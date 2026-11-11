@@ -1,3 +1,4 @@
+import { goalFigure } from "@/lib/format";
 import { goalTree, scoredConfidence } from "@/lib/goal-tree";
 import { goalName } from "@/lib/placeholders";
 import type { EntityOut, Schemas } from "@/lib/api/client";
@@ -169,7 +170,8 @@ export type GoalView = {
 const CURRENCY_SYMBOL: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
 function typedFigure(value: unknown, unit: unknown): Figure | null {
   if (typeof value !== "number" || !Number.isFinite(value) || typeof unit !== "string" || !unit) return null;
-  const currency = CURRENCY_SYMBOL[unit] ?? "";
+  // goal-figure-words: a currency stored in any case ("usd", as the goal form stores it).
+  const currency = CURRENCY_SYMBOL[unit.trim().toUpperCase()] ?? "";
   return { value, unit: currency ? "" : unit, currency, compact: !!currency && Math.abs(value) >= 1e3, range: null };
 }
 const COMPARISON_WAY: Record<string, Direction> = {
@@ -182,7 +184,7 @@ const COMPARISON_WAY: Record<string, Direction> = {
 /** A typed figure as written: "45%", "$4M", "2 min", "400 teams". */
 function typedText(f: Figure): string {
   if (f.currency) return `${f.currency}${amount(f.value, f.compact)}`;
-  return f.unit === "%" ? `${f.value}%` : `${f.value} ${f.unit}`;
+  return goalFigure(f.value, f.unit);
 }
 
 const text = (v: unknown) => (v == null || v === "" ? null : String(v));

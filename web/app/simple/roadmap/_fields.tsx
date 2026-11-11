@@ -9,6 +9,7 @@ import { Icon } from "@/components/ds/Icon";
 import { InfoTip } from "@/components/ds/InfoTip";
 
 import { api, unwrap } from "@/lib/api/client";
+import { goalFigure } from "@/lib/format";
 import { calendarDay } from "@/lib/dates";
 import { byPrdOrderOf, usePrdOrder } from "@/lib/prd-order";
 import { byTrackOrder } from "@/lib/track-order";
@@ -50,7 +51,7 @@ export function Named({ item }: { item: Pick<Item, "code" | "title"> }) {
 const dayWords = (day: string) => calendarDay(day, { month: "short", day: "numeric", year: "numeric" });
 
 /** "61%", "3 days": a goal's reading in its unit. */
-const readingWords = (n: number, unit?: string | null) => `${n.toLocaleString("en-US")}${unit ? (unit === "%" ? "%" : ` ${unit}`) : ""}`;
+const readingWords = (n: number, unit?: string | null) => goalFigure(n, unit);
 
 /** One field: its value, and (canChange) a Change button that opens its editor in place. */
 function Field({

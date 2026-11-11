@@ -7,6 +7,7 @@
  * review and track outcomes and learnings. Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
+import { goalFigure } from "@/lib/format";
 import { DEPOSITS_IDS } from "./blockers";
 import type { V2Db } from "./v2";
 
@@ -291,7 +292,7 @@ export function calibration(db: QualityDb | undefined, titles: Record<string, st
 }
 
 const VERDICT_WORDS: Record<string, string> = { held: "held", partially_held: "partly held", not_held: "not held", inconclusive: "inconclusive" };
-const shown = (v: number | null | undefined, unit?: string | null) => (v == null ? "no value" : `${v}${unit === "%" ? "%" : unit ? ` ${unit}` : ""}`);
+const shown = (v: number | null | undefined, unit?: string | null) => (v == null ? "no value" : goalFigure(v, unit));
 
 /** The outcome rows of my Inbox, as GET /v1/inbox returns them. */
 // The verdicts Oracle read but, below Recommend, does not propose (shown again once the level allows).

@@ -10,7 +10,7 @@ import { useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import type { GmArea, GmGoal, GmMilestone, GoalMap } from "@/lib/api/mock/goal-map";
-import { formatCount } from "@/lib/format";
+import { CURRENCY_SIGNS, goalFigure } from "@/lib/format";
 import { useMe } from "@/lib/me";
 
 export type Edit = { kind: "gate" | "prd"; milestone: string } | { kind: "metric" | "propose"; goal: string };
@@ -24,8 +24,8 @@ export type EditSave =
 
 function num(v: number | null, unit: string): string {
   if (v === null) return "—";
-  if (unit === "$") return v >= 1000 ? `$${formatCount(Math.round(v / 100) / 10)}k` : `$${formatCount(v)}`;
-  return formatCount(Math.round(v * 10) / 10);
+  // goal-figure-words: "$20,000", "1,200 shops"; a count to one decimal.
+  return goalFigure(CURRENCY_SIGNS[unit.trim().toLowerCase()] ? v : Math.round(v * 10) / 10, unit);
 }
 
 function Btn({ children, onClick, primary, testId, disabled }: { children: ReactNode; onClick?: () => void; primary?: boolean; testId?: string; disabled?: boolean }) {
