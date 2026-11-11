@@ -420,8 +420,13 @@ export function knowCompanyGoals(goals: (OrderedGoal & { key: string })[]): void
 let goalParents = new Map<string, string>();
 /** goal-delete-r4: each Ground Truth goal's title by its key, so a key result an item is left on reads its own title (the API's goal ref). */
 let goalTitles = new Map<string, string>();
+/** goal-delete-r4: each key result's own parent goal key, by its key (Entity.parent_id, one level up). */
+let goalParentKeys = new Map<string, string>();
+export const goalParentKey = (key: string): string | undefined => goalParentKeys.get(key);
 export function knowGoalParents(goals: { id: string; key: string; title?: string; type: string; status: string; parent_id?: string | null }[]): void {
   goalTitles = new Map(goals.flatMap((g) => (g.type === "goal" && g.title ? [[g.key, g.title] as const] : [])));
+  const keyOf = new Map(goals.map((g) => [g.id, g.key]));
+  goalParentKeys = new Map(goals.flatMap((g) => (g.type === "goal" && g.parent_id && keyOf.has(g.parent_id) ? [[g.key, keyOf.get(g.parent_id)!] as const] : [])));
   type G = (typeof goals)[number];
   const parents = new Map(goals.filter((g) => g.type === "goal" && g.status === "confirmed").map((g) => [g.id, g]));
   const top = (g: G): G => {
