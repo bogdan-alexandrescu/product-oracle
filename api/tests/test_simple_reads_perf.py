@@ -26,6 +26,9 @@ Test cards (protects / fails_when / no_claim):
   like) scores every pair as the full ratio does, and skips only pairs under LOOKS_LIKE;
   fails_when=a pair at or over it is dropped or scored differently; no_claim=which titles
   should match.
+- test_agendas_read_as_one_meeting_s: protects=the change history's batched read of each
+  meeting's agenda (agenda.of_many) equals agenda.of for every meeting, a pinned one too;
+  fails_when=a meeting's roadmaps differ; no_claim=what an agenda covers (its own tests).
 - test_prd_whos_read_as_prd_who: protects=the start sheet's batched read of each PRD's
   decider, required reviewers and track owners equals the one-PRD read for every PRD;
   fails_when=a PRD's people differ; no_claim=who may start (may_start's own tests).
@@ -37,14 +40,15 @@ import time
 from pathlib import Path
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, select
 
 from oracle import company_time
 from oracle.auth.models import User
 from oracle.db import get_engine
 from oracle.docs.models import Document
 from oracle.review.models import DocumentReviewPolicy
-from oracle.simple import additions, meetings
+from oracle.simple import additions, agenda, meetings
+from oracle.simple.models import SimpleMeeting
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.simple_perf_helpers import NOUNS, VERBS, seed_company, title
@@ -126,7 +130,7 @@ CHANGE_BUDGET = 0.6
 # suggestion; meetings/options 83, three reads per PRD).
 CEILINGS = {
     "goal-suggestions": 60,
-    "changes": 48,  # with changes made in 60 meetings: no read per meeting
+    "changes": 45,  # with changes made in 60 meetings: no read per meeting
     "drafts": 20,
     "removed": 39,
     "meetings-options": 15,
@@ -262,3 +266,17 @@ async def test_prd_whos_read_as_prd_who():
             ), d.slug
         assert batched[co.prds[1].id].reviewers == [ctx.users["viewer"].id]
         assert all(batched[d.id].owners for d in docs)
+
+
+async def test_agendas_read_as_one_meeting_s():
+    ctx = await make_ctx()
+    co = await seed_company(ctx, **SMALL)
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = list(await s.scalars(select(SimpleMeeting)))
+        rows[0].agenda = {"roadmap_id": str(co.roadmaps[3].id)}
+        await s.flush()
+        many = await agenda.of_many(s, rows)
+        for m in rows:
+            assert many[m.id] == await agenda.of(s, m), m.title
+        assert many[rows[0].id].roadmap_ids == {co.roadmaps[3].id}
+        assert all(many[m.id].roadmap_ids for m in rows)

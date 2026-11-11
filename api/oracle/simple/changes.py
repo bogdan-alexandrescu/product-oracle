@@ -2194,10 +2194,9 @@ async def _agendas(db: AsyncSession, session_ids: set) -> dict[uuid.UUID, Any]:
     """meeting-changes-only-its-agenda: the agenda of each meeting session, by session."""
     from oracle.simple import agenda
 
-    out = {}
-    for sid, m in (await agenda.meetings_of(db, session_ids)).items():
-        out[sid] = await agenda.of(db, m)
-    return out
+    meetings = await agenda.meetings_of(db, session_ids)
+    agendas = await agenda.of_many(db, list(meetings.values()))
+    return {sid: agendas[m.id] for sid, m in meetings.items()}
 
 
 async def _questions(db: AsyncSession, changes: list[SimpleChange]) -> dict[str, Any]:

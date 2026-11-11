@@ -64,6 +64,34 @@ async def of(db: AsyncSession, m: SimpleMeeting | None) -> Agenda | None:
     )
 
 
+async def of_many(db: AsyncSession, meetings: list[SimpleMeeting]) -> dict[uuid.UUID, Agenda]:
+    """:func:`of` for many meetings, by meeting id, in one read (the change history names the
+    agenda of every meeting its changes were made in)."""
+    prds = {m.prd_document_id for m in meetings if not (m.agenda or {}).get("roadmap_id")}
+    docs: dict[uuid.UUID, set[uuid.UUID]] = {p: set() for p in prds}
+    if prds:
+        for prd, doc in await db.execute(
+            select(RoadmapItem.prd_document_id, RoadmapItem.roadmap_document_id)
+            .where(
+                RoadmapItem.prd_document_id.in_(prds),
+                RoadmapItem.roadmap_document_id.is_not(None),
+            )
+            .distinct()
+        ):
+            docs[prd].add(doc)
+    out = {}
+    for m in meetings:
+        pinned = (m.agenda or {}).get("roadmap_id")
+        out[m.id] = Agenda(
+            meeting_id=m.id,
+            title=m.title,
+            prd_id=m.prd_document_id,
+            roadmap_ids={uuid.UUID(str(pinned))} if pinned else set(docs[m.prd_document_id]),
+            session_id=m.session_id,
+        )
+    return out
+
+
 async def for_session(db: AsyncSession, session_id: uuid.UUID | None) -> Agenda | None:
     """The agenda of the meeting whose session this is (None: no meeting's)."""
     if session_id is None:
