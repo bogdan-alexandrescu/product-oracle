@@ -71,7 +71,7 @@ export function withRoadmapCodes<T extends { goal_milestones?: Gm[]; milestones:
     // Goal map twins (Nov 10): a goal's own milestone is a PRD's on its roadmap of the same name, whatever the PRD's
     // code, of its goal or none ("Join only within the same goal", the owner, Nov 11).
     const twins = goals.filter((o) => !!o.prd && o !== g && o.roadmap_id === g.roadmap_id && (!o.goal_id || o.goal_id === g.goal_id));
-    let to = !g.goal_id && there.length === 1 ? there[0].id : (best(g, there, alone) ?? (g.goal_id ? (best(g, plain, false) ?? (g.prd ? null : best(g, twins, false, true))) : null));
+    let to: string | null = !g.goal_id && there.length === 1 ? there[0].id : (best(g, there, alone) ?? (g.goal_id ? (best(g, plain, false) ?? (g.prd ? null : best(g, twins, false, true))) : null));
     // One goal's own milestone per PRD milestone; another stays its own.
     if (to && g.goal_id && !g.prd && prds.has(to)) {
       if (taken.has(to)) to = null;
