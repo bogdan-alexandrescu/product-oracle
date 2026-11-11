@@ -368,13 +368,10 @@ async def trash_goal(
     extra: dict[str, Any] = {"to_goal_id": None, "links": [], "goal_ids": {}}
     if to_goal_id is not None:
         before = await goal_buckets.move_off(db, goal, to_goal_id)
-        goal_ids = {}
-        for row in await db.scalars(
-            select(RoadmapItem).where(RoadmapItem.goal_ids.contains([goal.id])).with_for_update()
-        ):
-            goal_ids[str(row.id)] = [str(i) for i in row.goal_ids]
-            ids = [i for i in row.goal_ids if i != goal.id]
-            row.goal_ids = ids if to_goal_id in ids else [to_goal_id, *ids]
+        goal_ids = {
+            str(snap.item_id): [str(i) for i in snap.goal_ids]
+            for snap in await goal_buckets.move_items_off(db, goal.id, to_goal_id)
+        }
         extra = {"to_goal_id": str(to_goal_id), "goal_ids": goal_ids,
                  "links": [snap.model_dump(mode="json") for snap in before]}  # fmt: skip
     return await _new_entry(db, principal, goal, [goal], {**extra, "features": served}, reason)
