@@ -26,6 +26,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card goal-archive-nested-key-result (goal-delete-r5): protects = Archive Grow retention with Growth picked, and Alert
  * quiet hours (on Grow retention and a key result of its key result) reads Growth, as the dialog says (move_items_off
  * walks a key result up to its top goal); fails_when = it stays on the nested key result.
+ * Card goal-archive-all-kept (goal-delete-r5): protects = with Team alert digest and Alert summary for leads moved to
+ * Trash, the only item Archive keeps on another goal is Alert tone picker, on a key result, and the dialog says it
+ * keeps another goal, not that it goes there; fails_when = it reads "serves another goal too and goes there".
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -143,4 +146,23 @@ test("An item on the archived goal and a key result of its key result moves to t
   await ranked(page);
   await expect(draft(page, "Alert quiet hours")).toContainText("Growth");
   await expect(draft(page, "Alert quiet hours")).not.toContainText("Teams set quiet hours in week two");
+});
+
+test("Archive says an item left on a key result keeps another goal", async ({ page }) => {
+  await openPage(page);
+  await ranked(page);
+  // The two drafts Archive moves to another goal of their own go to Trash first.
+  for (const name of ["Team alert digest", "Alert summary for leads"]) {
+    await tap(draft(page, name).getByText(name, { exact: true }));
+    const panel = page.getByTestId("floating-card");
+    await tap(panel.getByRole("button", { name: "More actions" }));
+    await tap(panel.getByRole("menuitem", { name: "Move to Trash…" }));
+    await tap(page.getByRole("alertdialog").getByRole("button", { name: "Move to Trash" }));
+    await expect(draft(page, name)).toHaveCount(0);
+  }
+
+  await page.goto("/simple/priorities?tab=buckets");
+  const dialog = await goalDialog(page, "Archive");
+  await expect(dialog).toContainText(`1 keeps another goal: Alert tone picker stays on ${KR}`);
+  await expect(dialog).not.toContainText("goes there");
 });
