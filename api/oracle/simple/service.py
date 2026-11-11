@@ -234,7 +234,8 @@ async def waiting(db: AsyncSession, principal: Any, roadmap: str | None = None) 
     it; 404 when the reader cannot read it."""
     from oracle.simple import drafts
 
-    read = await load(db, (await drafts.reader(db, principal)).overlays)
+    # roadmap-speed: the counts read neither the goals, the PRD headings nor the names.
+    read = await load(db, await drafts.overlays_for(db, principal), light=True)
     chosen: uuid.UUID | None = None
     if roadmap:
         rows = await db.scalars(select(Document).where(Document.kind == "roadmap"))
@@ -313,9 +314,13 @@ def _versions(
     return out
 
 
-async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | None = None) -> Read:
+async def load(
+    db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | None = None, light: bool = False
+) -> Read:
     """Everything the read needs, as the session's principal may see it; ``overlays``
-    (roadmap document id -> {item id -> fields}): the working drafts the reader sees."""
+    (roadmap document id -> {item id -> fields}): the working drafts the reader sees.
+    ``light`` (roadmap-speed): what the flags, dates and deciders need alone; the entries'
+    goals, PRD headings and owner names are left unread (:func:`waiting`)."""
     from oracle.simple import drafts
 
     today = await company_time.company_today(db)
@@ -398,18 +403,24 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             owner_roles[t.id] = role
             owner_names[t.id] = name or email
     # chat-actions: an item's own owner (set_owner) is named over its track's.
-    people = {
-        u: (role, name or email)
-        for u, role, name, email in (
-            await db.execute(
-                select(User.id, User.role, User.name, User.email).where(User.disabled_at.is_(None))
-            )
-        ).all()
-    }
+    people = (
+        {
+            u: (role, name or email)
+            for u, role, name, email in (
+                await db.execute(
+                    select(User.id, User.role, User.name, User.email).where(
+                        User.disabled_at.is_(None)
+                    )
+                )
+            ).all()
+        }
+        if not light
+        else {}
+    )
     track_of_prd = {p: t for t in tracks.values() for p in t.prd_ids}
     # tracks-goal: the company goal each track is tied to (a live one).
     # tb-mk: the goals are read once per read (oracle.simple.goal_reads).
-    every_goal = await goal_reads.goals_by_id(db)
+    every_goal = await goal_reads.goals_by_id(db) if not light else {}
     track_goals = {
         g.id: g
         for g in (every_goal.get(t.goal_id) for t in tracks.values() if t.goal_id)
@@ -443,8 +454,8 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             bases_by_key[(b.prd_document_id, b.item_key)].append(b)
         else:
             bases_by_ref[(b.prd_document_id, b.tracker_key)].append(b)
-    goals = await _goals(db, {r.feature_id for r in rows if r.feature_id})
-    ladder = await _ladder_goals(db, {r.id for r in rows})
+    goals = await _goals(db, {r.feature_id for r in rows if r.feature_id}) if not light else {}
+    ladder = await _ladder_goals(db, {r.id for r in rows}) if not light else {}
     effort = await efforts(db, rows)
     # S7: the goals items are linked to directly (dropped on, suggested for).
     linked = {
@@ -524,7 +535,8 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 else (track.owner_id if track is not None else None),
             )
         )
-    await _prd_headings(db, entries)
+    if not light:
+        await _prd_headings(db, entries)
     # Dependencies within each roadmap version, by item key, or by the key of the feature
     # an item delivers (the checks accept another PRD's feature key).
     entry_of = {e.row.id: e for e in entries}
@@ -1316,6 +1328,30 @@ async def decided_of_rows(
     return out
 
 
+async def _lead_prds(db: AsyncSession, tracks: list[ProductTrack]) -> dict[uuid.UUID, Any]:
+    """Each track's lead PRD (tracks.lead_prd: its current version's PRD when it holds that
+    PRD, else its first), its current versions read at once (roadmap-speed)."""
+    current = {t.current_version_id for t in tracks if t.current_version_id is not None}
+    following = (
+        dict(
+            (
+                await db.execute(
+                    select(DocumentVersion.id, DocumentVersion.document_id).where(
+                        DocumentVersion.id.in_(current)
+                    )
+                )
+            ).all()
+        )
+        if current
+        else {}
+    )
+    out = {}
+    for t in tracks:
+        lead = following.get(t.current_version_id)
+        out[t.id] = lead if lead in t.prd_ids else next(iter(t.prd_ids), None)
+    return out
+
+
 def _milestone_out(m: TrackMilestone, keyed: dict, ids: set, view: Any) -> SimpleMilestone:
     """A track milestone, with start, end, engineer-weeks, done when and targets from its
     PRD's plan (the plan's milestone of the same code) when the plan has it."""
@@ -1592,6 +1628,25 @@ async def build(
     end: date | None = None,
     roadmap: str | None = None,
 ) -> SimpleRoadmapOut:
+    from oracle.simple import drafts
+
+    # roadmap-speed: the read writes nothing, so each document's deciders, reviewers and
+    # owners are read once for all its parts.
+    with drafts.one_read():
+        return await _build(db, principal, group, prd, goal, track, start, end, roadmap)
+
+
+async def _build(
+    db: AsyncSession,
+    principal: Any,
+    group: str,
+    prd: str | None,
+    goal: str | None,
+    track: str | None,
+    start: date | None,
+    end: date | None,
+    roadmap: str | None,
+) -> SimpleRoadmapOut:
     from oracle.simple import drafts, key_dates
 
     # The Roadmap filter's choices: every roadmap the reader may read (the session's
@@ -1680,10 +1735,9 @@ async def build(
     from oracle.simple import plan as plans
 
     # tracks-goal: a track's milestones read the plan of the PRD it follows now.
-    track_prd = {
-        t.id: await tracks_mod.lead_prd(db, t)
-        for t in {e.track.id: e.track for e in read.entries if e.track}.values()
-    }
+    track_prd = await _lead_prds(
+        db, list({e.track.id: e.track for e in read.entries if e.track}.values())
+    )
     # roadmap-keydates: the key dates read with the PRDs' milestones, as priorities reads them.
     kd_prds = await key_dates.key_date_prds(db, principal, kd_docs, read.entries)
     # roadmap-milestone-codes: the codes are numbered over every readable roadmap, so a

@@ -49,6 +49,9 @@ decider resumes it in a new session (:func:`resume`).
 """
 
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -417,7 +420,49 @@ class Who:
     owners: dict[uuid.UUID, set[uuid.UUID]] = field(default_factory=dict)
 
 
+# roadmap-speed: within one read (:func:`one_read`) each document's deciders, reviewers and
+# owners are read once, however many parts of the read ask (doc id -> its slice of a Who).
+_who_memo: ContextVar[dict[uuid.UUID, tuple[bool, Any, list, set | None]] | None] = ContextVar(
+    "_who_memo", default=None
+)
+
+
+@contextmanager
+def one_read() -> Iterator[None]:
+    """Within this block (a read that writes nothing) :func:`who` reads each document once."""
+    token = _who_memo.set({})
+    try:
+        yield
+    finally:
+        _who_memo.reset(token)
+
+
 async def who(db: AsyncSession, doc_ids: set[uuid.UUID]) -> Who:
+    memo = _who_memo.get()
+    if memo is None or not doc_ids:
+        return await _who(db, doc_ids)
+    if missing := set(doc_ids) - set(memo):
+        found = await _who(db, missing)
+        for doc in missing:
+            owners = found.owners.get(doc)
+            memo[doc] = (
+                doc in found.deciders,
+                found.deciders.get(doc),
+                found.reviewers.get(doc, []),
+                set(owners) if owners is not None else None,
+            )
+    out = Who()
+    for doc in doc_ids:
+        has_policy, decider, reviewers, owners = memo[doc]
+        if has_policy:
+            out.deciders[doc] = decider
+            out.reviewers[doc] = list(reviewers)
+        if owners is not None:
+            out.owners[doc] = set(owners)
+    return out
+
+
+async def _who(db: AsyncSession, doc_ids: set[uuid.UUID]) -> Who:
     out = Who()
     if not doc_ids:
         return out
@@ -697,7 +742,14 @@ async def session_overlays(db: AsyncSession, session_id: uuid.UUID) -> dict[uuid
 
 
 async def overlays_for(db: AsyncSession, principal: Any) -> dict[uuid.UUID, dict[str, Any]]:
-    return (await reader(db, principal)).overlays
+    """:func:`reader`'s overlays alone (roadmap-speed): the drafts' own roadmaps' deciders,
+    reviewers and owners decide who sees each, not the proposals' or the counts."""
+    from oracle.roadmap import company
+
+    history = await company.history_ids(db)
+    ds = [d for d in await open_drafts(db) if d.document_id not in history]
+    w = await who(db, {d.document_id for d in ds})
+    return {d.document_id: dict(d.overlay or {}) for d in ds if sees(principal, d, w)}
 
 
 def _withdrawn():

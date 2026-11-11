@@ -2630,11 +2630,32 @@ async def decided_in(
 
     # Lapsed ones (reversed, withdrawn, replaced) are read too, so standing.split names them
     # in the left-out line; only decided ones are kept.
-    rows = await db.scalars(
-        select(Decision)
-        .where(Decision.status.in_(("decided", *standing.LAPSED)))
-        .where(or_(*[Decision.subjects.contains([{"kind": k, "id": i}]) for k, i, _ in wanted]))
-        .order_by(Decision.number.desc())
+    # roadmap-speed: the decisions naming one of the subjects' kinds, matched here by kind and
+    # id (what ``subjects @> [{kind, id}]`` matches), then read whole: one OR arm per subject
+    # (a roadmap names every item of every version) cost more than the read.
+    pairs = {(k, i) for k, i, _ in wanted}
+    naming = [
+        did
+        for did, subs in await db.execute(
+            select(Decision.id, Decision.subjects)
+            .where(Decision.status.in_(("decided", *standing.LAPSED)))
+            .where(or_(*[Decision.subjects.contains([{"kind": k}]) for k in {k for k, _ in pairs}]))
+        )
+        if isinstance(subs, list)
+        and any(
+            isinstance(s, dict)
+            and isinstance(s.get("kind"), str)
+            and isinstance(s.get("id"), str)
+            and (s["kind"], s["id"]) in pairs
+            for s in subs
+        )
+    ]
+    rows = (
+        await db.scalars(
+            select(Decision).where(Decision.id.in_(naming)).order_by(Decision.number.desc())
+        )
+        if naming
+        else []
     )
 
     # None about something in Trash (decisions-reversed-or-trashed).
