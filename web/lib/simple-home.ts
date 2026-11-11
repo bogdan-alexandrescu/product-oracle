@@ -154,8 +154,9 @@ export function brokenLinks(roadmap: Roadmap | undefined): BrokenLink[] {
 const DAY = 86_400_000;
 
 /** `of` (Home only): whose a row's milestone is, for its accessible name when two rows read alike;
- * `also` (Home only): the other names of the milestones folded into its row ("M1 Measured and mapped"). */
-export type PlanStrip = Omit<Schemas["SimplePlanStrip"], "rows"> & { rows: (Schemas["SimplePlanStrip"]["rows"][number] & { of?: string | null; also?: string[] })[] };
+ * `also` (Home only): the other names of the milestones folded into its row ("M1 Measured and mapped");
+ * `ms` (Home only, home-milestone-rename): the roadmap's own milestone the row renames, by id. */
+export type PlanStrip = Omit<Schemas["SimplePlanStrip"], "rows"> & { rows: (Schemas["SimplePlanStrip"]["rows"][number] & { of?: string | null; also?: string[]; ms?: string })[] };
 export type PlanInput = {
   start: string;
   end: string;
@@ -168,7 +169,7 @@ export type PlanInput = {
    * given, is the row's name as is (Home: the current milestone's code and name, whole); `of`,
    * whose it is (its PRD's or goal's name), tells two rows that read alike apart to a screen reader;
    * `also`, the other names folded into its row (Home). */
-  record?: { id: string; name: string | null; label?: string; of?: string | null; also?: string[] } | null;
+  record?: { id: string; name: string | null; label?: string; of?: string | null; also?: string[]; ms?: string } | null;
   /** The roadmap item it reads (the one-pager lists a row's items by it). */
   id?: string | null;
   /** roadmap-milestone-codes: its milestone's roadmap-wide code (the one-pager, `coded`). */
@@ -245,7 +246,7 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
     }
     keyed.set(key, [...(keyed.get(key) ?? []), { label, i }]);
   }
-  const groups = new Map<string, { name: string; date: string | null; begins: string | null; of: PlanInput[]; whose: string | null; also: string[]; code?: string | null }>();
+  const groups = new Map<string, { name: string; date: string | null; begins: string | null; of: PlanInput[]; whose: string | null; also: string[]; code?: string | null; ms?: string }>();
   for (const [key, of] of keyed) {
     const counts = new Map<string, number>();
     for (const x of of) counts.set(x.label, (counts.get(x.label) ?? 0) + 1);
@@ -260,7 +261,8 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
     const whose = of.find((x) => x.i.record?.of)?.i.record?.of ?? null;
     // Names its items' records read beside the row's own (a track's on two roadmaps), the row's own never.
     const also = [...new Set(of.flatMap((x) => x.i.record?.also ?? []))].filter((n) => !sameWords(n, name.replace(" · ", " ")));
-    groups.set(key.startsWith("record:") && !coded ? key : `${name}|${date ?? ""}`, { name, date, begins: starts.length ? minOf(starts) : null, of: of.map((x) => x.i), whose, also, code: coded ? (of[0].i.roadmapCode ?? null) : undefined });
+    const ms = of.find((x) => x.i.record?.ms)?.i.record?.ms;
+    groups.set(key.startsWith("record:") && !coded ? key : `${name}|${date ?? ""}`, { name, date, begins: starts.length ? minOf(starts) : null, of: of.map((x) => x.i), whose, also, code: coded ? (of[0].i.roadmapCode ?? null) : undefined, ms });
   }
   const dated = [...groups.values()].flatMap((g) => (g.date ? [g.date] : []));
   const committed = items.filter((i) => !i.estimated).map((i) => i.end);
@@ -278,7 +280,7 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
   }
   const months = Array.from({ length: n }, (_, k) => addMonths(start, k));
   const end = new Date(Date.parse(`${addMonths(months.at(-1)!, 1)}T00:00:00Z`) - DAY).toISOString().slice(0, 10);
-  const row = (name: string, date: string | null, of: PlanInput[], milestone: boolean, begins: string | null = null, whose: string | null = null, also: string[] = [], code?: string | null): PlanStrip["rows"][number] => ({
+  const row = (name: string, date: string | null, of: PlanInput[], milestone: boolean, begins: string | null = null, whose: string | null = null, also: string[] = [], code?: string | null, ms?: string): PlanStrip["rows"][number] => ({
     name,
     date,
     items: of.length,
@@ -291,10 +293,11 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
     ...(whose ? { of: whose } : {}),
     ...(also.length ? { also } : {}),
     ...(coded ? { code: code ?? null } : {}),
+    ...(ms ? { ms } : {}),
   });
   const rows = [...groups.values()]
     .sort((a, b) => (a.date === null) !== (b.date === null) ? (a.date === null ? 1 : -1) : byCodePoint(a.date ?? "", b.date ?? "") || byCodePoint(a.name, b.name))
-    .map((g) => row(g.name, g.date, g.of, true, g.begins, g.whose, g.also, g.code));
+    .map((g) => row(g.name, g.date, g.of, true, g.begins, g.whose, g.also, g.code, g.ms));
   if (loose.length) rows.push(row("No milestone", null, loose, false));
   return {
     start,
@@ -526,21 +529,23 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
     const name = rowName.get(tm) ?? wholeName(tm.roadmap_code ?? codeOf(tm.name), restOf(tm.name));
     // Its own date, else the earliest of those that join it.
     const dates = own.flatMap((g) => (g.date ? [g.date] : []));
-    return { key: `track:${tm.id}`, name, date: tm.date ?? (dates.length ? minOf(dates) : null), of: trackTitles.get(tm.track_id) ?? null, also: also.get(tm) };
+    return { key: `track:${tm.id}`, name, date: tm.date ?? (dates.length ? minOf(dates) : null), of: trackTitles.get(tm.track_id) ?? null, also: also.get(tm), ms: undefined as string | undefined };
   };
   const ofGoal = (gm: Gm) => {
     const tm = into.get(gm);
     if (tm) return ofTrack(tm);
     const joined = gm.roadmap_code ? codeRow.get(gm.roadmap_code) : undefined;
     const dates = (gm.roadmap_code ? (byCode.get(gm.roadmap_code) ?? []) : [gm]).flatMap((g) => (g.date ? [g.date] : []));
-    if (joined) return { key: goalKey(gm), name: joined.shown, date: dates.length ? minOf(dates) : null, of: gm.prd?.title ?? (gm.goal_id ? goalTitles.get(gm.goal_id) : undefined) ?? null, also: joined.others.length ? joined.others : undefined };
-    return { key: goalKey(gm), name: goalMilestoneName(gm), date: gm.date ?? null, of: gm.prd?.title ?? (gm.goal_id ? goalTitles.get(gm.goal_id) : undefined) ?? null, also: undefined };
+    // home-milestone-rename: the row renames the milestone whose name it shows.
+    const shows = joined && (byCode.get(gm.roadmap_code!) ?? []).find((g) => sameWords(wholeName(gm.roadmap_code!, restOf(g.name)), joined.shown));
+    if (joined) return { key: goalKey(gm), name: joined.shown, date: dates.length ? minOf(dates) : null, of: gm.prd?.title ?? (gm.goal_id ? goalTitles.get(gm.goal_id) : undefined) ?? null, also: joined.others.length ? joined.others : undefined, ms: (shows || gm).id };
+    return { key: goalKey(gm), name: goalMilestoneName(gm), date: gm.date ?? null, of: gm.prd?.title ?? (gm.goal_id ? goalTitles.get(gm.goal_id) : undefined) ?? null, also: undefined, ms: gm.id };
   };
   return kept.map((i) => {
     const base: PlanInput = { start: i.start.date, end: i.end.date, estimated: i.estimated, milestone: null, milestoneDate: null, id: i.id };
     const h = hits.get(i.id);
     const m = h ? ("gm" in h ? ofGoal(h.gm) : ofTrack(h.tm)) : null;
-    return m ? { ...base, milestone: m.name, milestoneDate: m.date, record: { id: m.key, name: m.name, label: m.name, of: m.of, ...(m.also ? { also: m.also } : {}) } } : base;
+    return m ? { ...base, milestone: m.name, milestoneDate: m.date, record: { id: m.key, name: m.name, label: m.name, of: m.of, ...(m.also ? { also: m.also } : {}), ...(m.ms ? { ms: m.ms } : {}) } } : base;
   });
 }
 

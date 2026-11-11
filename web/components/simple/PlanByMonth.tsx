@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { InfoTip } from "@/components/ds";
+import { Icon, InfoTip } from "@/components/ds";
 import { MarkFor } from "@/components/current-state/CurrentState";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
 import { calendarDay } from "@/lib/dates";
@@ -78,6 +78,7 @@ export function PlanByMonth({
   items,
   fold = false,
   names,
+  rename,
 }: {
   plan: PlanStrip;
   /** The PRD the strip draws; none: the company roadmap, every PRD's items (Home). */
@@ -94,6 +95,9 @@ export function PlanByMonth({
   fold?: boolean;
   /** Home (home-milestones-current): the roadmap's item names by id; a row's (i) lists its items (on hover, tap or focus). */
   names?: ReadonlyMap<string, string>;
+  /** Home (home-milestone-rename): a milestone row's rename (the Roadmap's milestone card, its name alone), by its
+   * milestone's id; null where the reader may neither change nor propose it. */
+  rename?: (ms: string) => (() => void) | null;
 }) {
   const open = useOpenFeature();
   const from = ms(plan.start);
@@ -165,6 +169,7 @@ export function PlanByMonth({
       {tipCol ? (
         <div className="flex items-end gap-1">
           {axis}
+          {rename && <span aria-hidden className="w-6 flex-none" />}
           <span aria-hidden className="w-6 flex-none" />
         </div>
       ) : (
@@ -245,6 +250,20 @@ export function PlanByMonth({
                     {words}
                     {bars}
                   </Link>
+                  {tipCol && rename && (
+                    <span className="w-6 flex-none">
+                      {(() => {
+                        const go = r.ms ? rename(r.ms) : null;
+                        return (
+                          go && (
+                            <button type="button" aria-label={`Rename ${rowName(r, named)}`} data-testid={`${testId}-rename`} onClick={go} className="grid size-6 place-items-center rounded text-text2 hover:bg-surface2 hover:text-text">
+                              <Icon name="pencil" size={16} />
+                            </button>
+                          )
+                        );
+                      })()}
+                    </span>
+                  )}
                   {tipCol && (
                     <span className="w-6 flex-none">
                       {rowNames.length > 0 && (
