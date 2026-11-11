@@ -204,12 +204,11 @@ function FeatureRow({ f, c, date, tag }: { f: F; c: Ctx; date?: string; tag?: bo
   );
 }
 
-function MilestoneHead({ m, c, n }: { m: M | null; c: Ctx; n: number }) {
+function MilestoneHead({ m, c }: { m: M | null; c: Ctx }) {
   if (!m)
     return (
       <div className="flex items-center gap-2 border-b border-line pt-2 pb-0.5 text-[12px] font-semibold tracking-wide text-text2 uppercase">
         <span className="flex-1">No milestone</span>
-        <span>{n}</span>
       </div>
     );
   return (
@@ -217,17 +216,19 @@ function MilestoneHead({ m, c, n }: { m: M | null; c: Ctx; n: number }) {
       <span className="font-semibold text-accent-ink">{c.mcode.get(m.id)}</span>
       {c.renaming === m.id ? <Rename id={m.id} was={m.name} c={c} className="flex-1 text-[13px]" /> : <span className="min-w-0 flex-1 font-semibold leading-tight">{m.name}</span>}
       <span className="whitespace-nowrap text-text2">{day(m.due_on)}</span>
-      {m.status === "met" ? <span className="text-pass" title="Met">✓</span> : m.status === "at_risk" ? <span className="text-warn" title="At risk">⚠</span> : null}
-      <span className="opacity-0 group-hover:opacity-100 has-[[aria-expanded=true]]:opacity-100">{milestoneMenu(m, c)}</span>
+      <span className="w-4 shrink-0 text-center">{m.status === "met" ? <span className="text-pass" title="Met">✓</span> : m.status === "at_risk" ? <span className="text-warn" title="At risk">⚠</span> : null}</span>
+      <span className={`opacity-0 has-[[aria-expanded=true]]:opacity-100 ${c.dragging ? "invisible" : "group-hover:opacity-100"}`}>{milestoneMenu(m, c)}</span>
     </div>
   );
 }
 
-function GoalTitle({ v, c, big }: { v: GoalView; c: Ctx; big?: boolean }) {
+function GoalTitle({ v, c, big, two }: { v: GoalView; c: Ctx; big?: boolean; two?: boolean }) {
   return c.renaming === v.g.id ? (
     <Rename id={v.g.id} was={v.g.name} c={c} className={big ? "text-[18px]" : "text-[16px]"} />
   ) : (
-    <span className={`font-semibold ${big ? "text-[18px]" : "text-[16px]"}`}>{v.g.name}</span>
+    <span className={`font-semibold ${big ? "text-[18px]" : "text-[16px]"} ${two ? "line-clamp-2 min-h-[2.5em] leading-[1.25]" : ""}`} title={v.g.name}>
+      {v.g.name}
+    </span>
   );
 }
 
@@ -351,7 +352,7 @@ function MovePicker({ f, views, c, onClose }: { f: F; views: GoalView[]; c: Ctx;
                     {m ? (
                       <>
                         <span className="font-semibold text-accent-ink">{c.mcode.get(m.id)}</span>
-                        <span className="flex-1 truncate">{m.name}</span>
+                        <span className="flex-1 truncate" title={m.name}>{m.name}</span>
                         <span className="text-[12px] text-text2">{day(m.due_on)}</span>
                       </>
                     ) : (
@@ -429,8 +430,8 @@ function FourColumns({ views, c: base }: { views: GoalView[]; c: Ctx }) {
               const key = m?.id ?? `none:${v.g.id}`;
               const over = drag?.over === key && key !== (drag.f.milestones[0] ?? `none:${drag.f.goal}`);
               return (
-                <div key={key} data-drop={key} className={`rounded-lg ${over ? "bg-accent-soft outline-2 outline-accent outline-dashed" : ""}`}>
-                  <MilestoneHead m={m} c={c} n={feats.length} />
+                <div key={key} data-drop={key} className={`rounded-lg ${over ? "bg-accent-soft outline-2 outline-offset-4 outline-accent outline-dashed" : ""}`}>
+                  <MilestoneHead m={m} c={c} />
                   <ul className="flex flex-col">
                     {shown.map((f) => (
                       <FeatureRow key={f.id} f={f} c={c} />
@@ -443,9 +444,12 @@ function FourColumns({ views, c: base }: { views: GoalView[]; c: Ctx }) {
         ))}
       </div>
       {drag && (
-        <div className="pointer-events-none fixed z-50 flex max-w-[360px] items-center gap-2 rounded-lg border border-accent bg-surface px-2 py-1 text-[13.5px] shadow-xl" style={{ left: drag.x + 12, top: drag.y + 8 }} data-testid="gm2-ghost">
+        <div className="pointer-events-none fixed z-50 flex max-w-[440px] items-center gap-2 rounded-lg border border-accent bg-surface px-2 py-1 text-[13.5px] shadow-xl" style={{ left: drag.x + 12, top: drag.y + 8 }} data-testid="gm2-ghost">
           <span className="size-2.5 shrink-0 rounded-full" style={{ background: c.color(drag.f.area) }} />
-          <span className="truncate">{drag.f.name}</span>
+          <span className="truncate">
+            {c.codes.get(drag.f.id) && <span className="mr-1 text-[12px] text-text-faint">{c.codes.get(drag.f.id)}</span>}
+            {drag.f.name}
+          </span>
           {dropTo && (
             <span className="shrink-0 rounded-full bg-accent px-1.5 text-[12px] font-semibold text-on-accent">
               → {c.mcode.get(dropTo.id)} {dropTo.name}
@@ -464,7 +468,7 @@ function TracksGrid({ views, c }: { views: GoalView[]; c: Ctx }) {
   const col = new Map(views.map((v, i) => [v.g.id, i]));
   return (
     <div className="flex flex-col gap-3 overflow-x-auto" data-testid="gm2-b">
-      <div className="grid min-w-[1000px] grid-cols-[150px_repeat(4,minmax(0,1fr))] gap-x-3 max-[600px]:grid-cols-[96px_repeat(4,240px)]">
+      <div className="grid min-w-[1000px] grid-cols-[150px_repeat(4,minmax(0,1fr))] gap-x-3 max-[600px]:grid-cols-[96px_repeat(4,220px)]">
         <span />
         {views.map((v) => (
           <div key={v.g.id} data-goal={v.g.id} className="group flex flex-col gap-1 rounded-2xl border border-line bg-surface p-3">
@@ -476,13 +480,13 @@ function TracksGrid({ views, c }: { views: GoalView[]; c: Ctx }) {
                 {goalMenu(v, c)}
               </span>
             </div>
-            <GoalTitle v={v} c={c} />
+            <GoalTitle v={v} c={c} two />
             <Bar g={v.g} thin />
           </div>
         ))}
-        <span className="pt-2 text-[12px] font-semibold text-text2 uppercase">Milestones</span>
+        <span className="pt-2 text-[12px] font-semibold text-text2 uppercase max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg">Milestones</span>
         {/* The milestone strip: by date across the goals, each under the goal it measures. */}
-        <div className="col-span-4 grid grid-cols-4 gap-x-3 pt-2 max-[600px]:grid-cols-[repeat(4,240px)]" data-testid="gm2-strip">
+        <div className="col-span-4 grid grid-cols-4 gap-x-3 pt-2 max-[600px]:grid-cols-[repeat(4,220px)]" data-testid="gm2-strip">
           {views.map((v) => (
             <div key={v.g.id} className="flex flex-wrap content-start items-start gap-1 border-t-4 pt-1.5" style={{ borderColor: "var(--accent-mid)" }}>
               {all
@@ -490,7 +494,7 @@ function TracksGrid({ views, c }: { views: GoalView[]; c: Ctx }) {
                 .map((m) => (
                   <span key={m.id} data-milestone={m.id} className="group flex max-w-full items-center gap-1 rounded-md bg-surface2 px-1.5 py-0.5 text-[12px]">
                     <b className="text-accent-ink">{c.mcode.get(m.id)}</b>
-                    {c.renaming === m.id ? <Rename id={m.id} was={m.name} c={c} className="text-[12px]" /> : <span className="truncate">{m.name}</span>}
+                    {c.renaming === m.id ? <Rename id={m.id} was={m.name} c={c} className="text-[12px]" /> : <span className="truncate" title={m.name}>{m.name}</span>}
                     <span className="whitespace-nowrap text-text2">{day(m.due_on)}</span>
                     <span className="hidden group-hover:inline-flex has-[[aria-expanded=true]]:inline-flex">{milestoneMenu(m, c)}</span>
                   </span>
@@ -500,7 +504,7 @@ function TracksGrid({ views, c }: { views: GoalView[]; c: Ctx }) {
         </div>
         {c.map.areas.map((a) => (
           <div key={a.id} className="contents">
-            <span className="flex items-start gap-1.5 border-t border-line pt-2 text-[14px] font-semibold" data-track={a.id}>
+            <span className="flex items-start gap-1.5 border-t border-line pt-2 text-[14px] font-semibold max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg" data-track={a.id}>
               <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ background: c.color(a.id) }} />
               {a.name}
             </span>
@@ -513,8 +517,11 @@ function TracksGrid({ views, c }: { views: GoalView[]; c: Ctx }) {
                     return (
                       <li key={f.id} data-feature={f.id} className={`group flex items-center gap-1 rounded-lg border bg-surface px-2 py-0.5 text-[13px] leading-[17px] ${c.moved === f.id ? "border-accent bg-accent-soft ring-2 ring-accent" : "border-line"}`} style={{ borderLeft: `3px solid ${c.color(a.id)}` }}>
                         <button type="button" onClick={() => c.onOpen(f)} className="min-w-0 flex-1 text-left">
-                          <span className="block truncate hover:underline">{f.name}</span>
-                          <span className="block truncate text-[11.5px] text-text2">{m ? `${c.mcode.get(m.id)} ${m.name}` : "No milestone"}</span>
+                          <span className="block truncate hover:underline" title={`${c.codes.get(f.id) ?? ""} ${f.name}`.trim()}>
+                            {c.codes.get(f.id) && <span className="mr-1 text-[11.5px] text-text-faint">{c.codes.get(f.id)}</span>}
+                            {f.name}
+                          </span>
+                          <span className="block truncate text-[11.5px] text-text2" title={m ? `${c.mcode.get(m.id)} ${m.name}` : undefined}>{m ? `${c.mcode.get(m.id)} ${m.name}` : "No milestone"}</span>
                         </button>
                         <Slot f={f} c={c} />
                       </li>
@@ -584,10 +591,10 @@ function Outline({ views, c, open, setOpen }: { views: GoalView[]; c: Ctx; open:
                   {v.groups.map(({ m, feats }) =>
                     !m && !feats.length ? null : (
                       <div key={m?.id ?? "none"}>
-                        <MilestoneHead m={m} c={c} n={feats.length} />
+                        <MilestoneHead m={m} c={c} />
                         <ul className="flex flex-col">
                           {feats.map((f) => (
-                            <FeatureRow key={f.id} f={f} c={c} tag date={m ? day(m.due_on) : ""} />
+                            <FeatureRow key={f.id} f={f} c={c} tag />
                           ))}
                         </ul>
                       </div>
@@ -684,8 +691,8 @@ function Cards({ views, c, sheet, setSheet }: { views: GoalView[]; c: Ctx; sheet
                   <span className={`absolute left-1 size-3 rounded-full border-2 ${m.status === "met" ? "border-pass bg-pass" : "border-accent bg-surface"}`} />
                   {i < v.ms.length - 1 && <span className="absolute top-1/2 left-[9px] h-full w-0.5 bg-line" />}
                   <b className="text-accent-ink">{c.mcode.get(m.id)}</b>
-                  {c.renaming === m.id ? <Rename id={m.id} was={m.name} c={c} className="flex-1 text-[14px]" /> : <span className="min-w-0 flex-1 truncate">{m.name}</span>}
-                  <span className="text-[13px] text-text2">{day(m.due_on)}</span>
+                  {c.renaming === m.id ? <Rename id={m.id} was={m.name} c={c} className="flex-1 text-[14px]" /> : <span className="min-w-0 flex-1 truncate" title={m.name}>{m.name}</span>}
+                  <span className="whitespace-nowrap text-[13px] text-text2">{day(m.due_on)}</span>
                   <Status s={m.status} small />
                   <span className="opacity-0 group-hover:opacity-100 has-[[aria-expanded=true]]:opacity-100">{milestoneMenu(m, c)}</span>
                 </li>
@@ -725,7 +732,7 @@ function FeatureRowM({ f, c, m }: { f: F; c: Ctx; m: M | null }) {
         {code && <span className="mr-1 text-[12px] text-text-faint">{code}</span>}
         {f.name}
       </button>
-      <span className="max-w-[170px] shrink-0 truncate text-[12px] text-text2">{m ? `${c.mcode.get(m.id)} ${m.name}` : "No milestone"}</span>
+      <span className="max-w-[170px] shrink-0 truncate text-[12px] text-text2" title={m ? `${c.mcode.get(m.id)} ${m.name}` : undefined}>{m ? `${c.mcode.get(m.id)} ${m.name}` : "No milestone"}</span>
       <Slot f={f} c={c} />
     </li>
   );
