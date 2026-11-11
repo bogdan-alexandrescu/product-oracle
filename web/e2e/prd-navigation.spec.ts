@@ -43,6 +43,10 @@ async function noSmallText(el: Locator) {
   expect(small).toEqual([]);
 }
 
+/** Each element's label and box height, read in one call rather than one round trip per element. */
+const heights = (els: Locator) =>
+  els.evaluateAll((all) => all.map((e) => ({ label: (e as HTMLElement).innerText, height: e.getBoundingClientRect().height })));
+
 /** The element's box lies inside the viewport. */
 async function insideViewport(page: Page, el: Locator) {
   const box = (await el.boundingBox())!;
@@ -260,8 +264,8 @@ test("phone: a Sections / Review bar opens sheets that close on Escape, the scri
   await expect(sheet).toBeVisible();
   const row = sheet.locator('a[data-outline-key="2-3-evidence-from-sales-calls"]');
   expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  for (const chip of await sheet.getByTestId("outline-chips").getByRole("button").all()) {
-    expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  for (const chip of await heights(sheet.getByTestId("outline-chips").getByRole("button"))) {
+    expect(chip.height, chip.label).toBeGreaterThanOrEqual(44);
   }
   // Focus stays inside while it is open: Tab from the last control wraps to the first.
   const inDialog = () => page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'));
@@ -295,10 +299,10 @@ test("phone: a Sections / Review bar opens sheets that close on Escape, the scri
   await reviewBtn.click();
   const review = page.getByRole("dialog", { name: "Review" });
   await expect(review.getByRole("tab")).toHaveText([/Feedback\s*12/, /Sources\s*0/, "History"]);
-  for (const tab of await review.getByRole("tab").all()) expect((await tab.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  for (const tab of await heights(review.getByRole("tab"))) expect(tab.height, tab.label).toBeGreaterThanOrEqual(44);
   // Every control in the sheet is a 44 px touch target, and no text is under 13 px.
-  for (const control of await review.locator("button, select, [data-testid=feedback-goto]").filter({ visible: true }).all()) {
-    expect((await control.boundingBox())!.height, await control.innerText()).toBeGreaterThanOrEqual(44);
+  for (const control of await heights(review.locator("button, select, [data-testid=feedback-goto]").filter({ visible: true }))) {
+    expect(control.height, control.label).toBeGreaterThanOrEqual(44);
   }
   await noSmallText(review);
   await page.keyboard.press("Escape");
