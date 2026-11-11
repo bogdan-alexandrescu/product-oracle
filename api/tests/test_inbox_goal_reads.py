@@ -10,6 +10,10 @@ Test cards (protects / fails_when / no_claim):
   than with one, and still lists every suggestion under the first roadmap;
   fails_when=inbox_rows looks up a goal's roadmap once per goal; no_claim=wall-clock time
   (test_inbox_read_budget's timing test).
+- test_job_lookup_costs_the_same_for_one_empty_goal_or_four: protects=with no company roadmap,
+  the tick's job lookup for goals with no items (whose suggestions the Inbox then lists) reads
+  the company roadmap and the first roadmap once, for one goal or four; fails_when=the lookup
+  runs per goal without the read's memo; no_claim=queueing the jobs themselves (one each).
 """
 
 import uuid
@@ -17,6 +21,7 @@ import uuid
 from sqlalchemy import event
 
 from oracle.db import get_engine
+from oracle.simple import additions
 from oracle.simple.models import SimpleGoalSuggestion
 from oracle.tenancy import tenant_session
 from tests.test_simple_additions_api import World
@@ -71,3 +76,49 @@ async def test_goal_rows_cost_the_same_for_one_goal_or_four(client):
     assert {r["document_id"] for r in rows} == {w.roadmap_id}
     print(f"statements: 1 goal {one}, 4 goals {four}")
     assert four == one, (one, four)
+
+
+async def _tick(w: World) -> list[str]:
+    statements: list[str] = []
+
+    def count(conn, cursor, statement, *args):
+        if "SAVEPOINT" not in statement:
+            statements.append(statement)
+
+    engine = get_engine().sync_engine
+    async with tenant_session(w.ctx.tenant_id) as s:
+        event.listen(engine, "before_cursor_execute", count)
+        try:
+            n = await additions.suggest_for_empty_goals(s)
+        finally:
+            event.remove(engine, "before_cursor_execute", count)
+        await s.commit()
+    assert n > 0
+    return statements
+
+
+def _lookups(statements: list[str]) -> list[str]:
+    """The job lookup's own reads: the company roadmap and the company's first roadmap."""
+    return [
+        x
+        for x in statements
+        if "FROM documents" in x
+        and ("WHERE documents.company_roadmap IS true" in x or "ORDER BY documents.created_at" in x)
+    ]
+
+
+async def test_job_lookup_costs_the_same_for_one_empty_goal_or_four(client):
+    one_w = await World().build()
+    one = await _tick(one_w)
+    four_w = await World().build()
+    async with tenant_session(four_w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        for i in range(3):
+            await seed.entity("goal", f"example-goal-{i}")
+        await s.commit()
+    four = await _tick(four_w)
+    print(f"statements: 1 goal {len(one)}, 4 goals {len(four)}; "
+          f"lookups {len(_lookups(one))}, {len(_lookups(four))}")  # fmt: skip
+    assert len(_lookups(four)) == len(_lookups(one)), (_lookups(one), _lookups(four))
+    # Each further goal costs only its own job: whether the kind is on, and its insert.
+    assert len(four) - len(one) <= 3 * 2, (len(one), len(four))
