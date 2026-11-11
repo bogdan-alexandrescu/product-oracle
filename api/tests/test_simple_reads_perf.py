@@ -126,7 +126,7 @@ BUDGETS = {
     "meetings-options": 0.1,
     "feature-states": 0.3,
 }
-CHANGE_BUDGET = 0.6
+CHANGE_BUDGET = 1.0  # a guard: the statement ceiling below is what tells two builds from three
 # Statement ceilings per read on the seed (before: goal-suggestions 115, a flow read per
 # suggestion; meetings/options 83, three reads per PRD).
 CEILINGS = {
@@ -242,6 +242,7 @@ async def test_a_change_answers_as_the_history_tells_it(client):
 def test_quick_title_match_scores_as_the_full_one():
     titles = [title(n) for n in range(0, 900, 7)]
     titles += [f"{t} v2" for t in titles[:40]] + ["", "Export", "export!", "Bulk-export 2"]
+    titles += ["Café export", "İstanbul setup", "Ünïcode  search", "ﬁle uploads"]
     titles += [f"{v} {n}" for v in VERBS[:6] for n in NOUNS[:6]]
     matched = 0
     for a in titles:

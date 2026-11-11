@@ -41,7 +41,6 @@ and baseline features whose titles look like its own (``looks_like``: Merge with
 suggestions carry ``flow`` and request a visual when made.
 """
 
-import collections
 import difflib
 import functools
 import logging
@@ -130,9 +129,15 @@ def _like(a: str, b: str) -> float:
     return max(difflib.SequenceMatcher(None, na, nb).ratio(), len(wa & wb) / len(wa | wb))
 
 
+_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789 "
+
+
 @functools.lru_cache(maxsize=8192)
-def _chars(norm: str) -> collections.Counter[str]:
-    return collections.Counter(norm)
+def _title_info(title: str) -> tuple[str, frozenset[str], tuple[int, ...]]:
+    """A title as the matcher compares it: normalized, its words, how many of each character
+    (_norm leaves only _ALPHABET's)."""
+    norm = _norm(title)
+    return norm, _words(norm), tuple(norm.count(c) for c in _ALPHABET)
 
 
 @functools.lru_cache(maxsize=8192)
@@ -149,17 +154,16 @@ def _looks_like(a: str, b: str) -> float | None:
     character ratio cannot reach it (its upper bounds: the lengths', then the shared
     characters', SequenceMatcher's real_quick_ratio and quick_ratio) is never matched in
     full. The matcher runs per suggestion over every item and feature."""
-    na, nb = _norm(a), _norm(b)
+    na, wa, ca = _title_info(a or "")
+    nb, wb, cb = _title_info(b or "")
     if not na or not nb:
         return None
-    wa, wb = _words(na), _words(nb)
     words = len(wa & wb) / len(wa | wb)
     if words < LOOKS_LIKE:
         size = len(na) + len(nb)
         if 2.0 * min(len(na), len(nb)) / size < LOOKS_LIKE:
             return None
-        cb = _chars(nb)
-        if 2.0 * sum(min(k, cb[c]) for c, k in _chars(na).items()) / size < LOOKS_LIKE:
+        if 2.0 * sum(map(min, ca, cb)) / size < LOOKS_LIKE:
             return None
     m = _matcher(nb)
     m.set_seq1(na)
