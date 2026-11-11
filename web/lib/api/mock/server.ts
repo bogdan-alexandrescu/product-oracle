@@ -1602,7 +1602,9 @@ export const GOAL_BUCKETS_DATED_SCENARIO = "goal-buckets-dated";
 
 function seedGoalBucketsDatedScenario(): Db {
   const db = seedSimplePlanScenario(true);
-  db.simple_roadmap!.items.push({ key: "alert-recap", title: "Monthly alert recap", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", draft: true });
+  const rm = db.simple_roadmap!;
+  rm.items.push({ key: "alert-recap", title: "Monthly alert recap", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", draft: true });
+  rm.ids["alert-recap"] = stableUuid("simple-item/alert-recap");
   return withRoadmapGoalBuckets(db);
 }
 
