@@ -3,6 +3,7 @@
 // Home's goals keep the short form ("$50k"). Mock-backed: "simple-home"'s Faster activation is a
 // typed goal of at least 50,000 USD, from 30,000.
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { goalFigure } from "../lib/format";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
@@ -30,4 +31,15 @@ test("Home's goals keep the short form", async ({ page }) => {
   await open(page, "/home");
   await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeAttached();
   await expect(goalIn(page, "home-goals").getByTestId("goal-figure")).toContainText("/ $50k");
+});
+
+test("a money figure shows at most two decimals, none when whole; other units keep theirs", () => {
+  // fails_when: "$13,400.555" (round 3, 3).
+  expect(goalFigure(13400.555, "usd")).toBe("$13,400.56");
+  expect(goalFigure(13400.001, "usd")).toBe("$13,400");
+  expect(goalFigure(50000, "USD")).toBe("$50,000");
+  expect(goalFigure(3.5, "gbp")).toBe("£3.5");
+  expect(goalFigure(-2.675, "eur")).toBe("-€2.68");
+  expect(goalFigure(12.345, "%")).toBe("12.345%");
+  expect(goalFigure(1200.125, "shops")).toBe("1,200.125 shops");
 });

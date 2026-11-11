@@ -5,8 +5,9 @@ Test cards (protects / fails_when / no_claim):
 
 - test_figure_words: protects=the shared formatter puts a currency's sign before the number
   ("usd" is "$", any case), other units after it ("1,200 shops", "60%", "3 days"), commas
-  between thousands, decimals kept and a whole float without ".0"; fails_when=it prints the
-  stored code ("50000 usd") or the number without separators; no_claim=typed-target parsing.
+  between thousands, decimals kept (a currency's to at most two, as the web's goalFigure) and a
+  whole float without ".0"; fails_when=it prints the stored code ("50000 usd"), the number
+  without separators or a currency with three decimals ("$13,400.555"); no_claim=typed-target parsing.
 - test_goal_buckets_read_money_and_count_goals: protects=Goal buckets read a usd goal as
   "$50,000" and a shops goal as "1,200 shops"; fails_when=they read "50000 usd" or "1200
   shops"; no_claim=the web.
@@ -34,6 +35,11 @@ def test_figure_words():
         (12000000, "", "12,000,000"),
         (7, None, "7"),
         (-2500, "usd", "-$2,500"),
+        (13400.555, "usd", "$13,400.56"),
+        (13400.001, "usd", "$13,400"),
+        (-2.675, "eur", "-€2.68"),
+        (12.345, "%", "12.345%"),
+        (1200.125, "shops", "1,200.125 shops"),
     ):
         assert figure_words(value, unit) == shown, (value, unit)
 

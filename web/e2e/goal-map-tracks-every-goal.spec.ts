@@ -86,6 +86,9 @@ test.describe("A feature that serves more than one goal", () => {
     await expect(await chipIn(page, REVENUE, name)).toHaveCount(0);
     await expect(await chipIn(page, DEMOS, name)).toContainText("No milestone");
     await expect(await chipIn(page, DEMOS, name)).not.toContainText("40 demos per rep");
+    // fails_when: the toast says only "to No milestone" while the chip lands under another goal (round 3, 1).
+    await expect(toast(page, new RegExp(`Moved .*${name} to No milestone \\(${DEMOS}\\)`))).toBeVisible();
+    await expect(await chipIn(page, DEMOS, name)).toHaveAttribute("data-moved", "1");
   });
 
   test("Add a feature from another goal makes a chip in this goal too, with a toast and Undo", async ({ page }) => {
@@ -96,6 +99,9 @@ test.describe("A feature that serves more than one goal", () => {
     await addFeature(page, "$15k revenue per day", name, "Add");
     await expect(await chipIn(page, REVENUE, name)).toContainText("$15k revenue per day");
     await expect(await chipIn(page, DEMOS, name)).toContainText("32 demos per rep");
+    // Only the chip it was added to rings, not its chip under the other goal (round 3, 2).
+    await expect(await chipIn(page, REVENUE, name)).toHaveAttribute("data-moved", "1");
+    await expect(await chipIn(page, DEMOS, name)).not.toHaveAttribute("data-moved", /./);
     await expect(await chipIn(page, DEMOS, name)).not.toContainText("$15k");
     await toast(page, /Added .*Lead list ranking to .*\$15k revenue per day/).getByRole("button", { name: "Undo" }).click();
     await expect(await chipIn(page, REVENUE, name)).toHaveCount(0);
@@ -152,5 +158,22 @@ test.describe("Badges as variant B draws them", () => {
     expect(await nm.evaluate((el) => getComputedStyle(el).textDecorationLine)).toBe("none");
     const ng = strip(page, "Self-serve setup").getByRole("button", { name: "No gate" });
     expect(await ng.evaluate((el) => getComputedStyle(el).fontSize)).toBe("12px");
+  });
+});
+
+test.describe("On a phone, a feature that serves more than one goal", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("No milestone that lands the chip under its own goal scrolls to it there", async ({ page }) => {
+    // protects: the chip is brought into sight where it lands. fails_when: it looks for the chip
+    // under the goal it left, finds nothing, and the grid stays scrolled away (round 3, 1).
+    await open(page);
+    const name = "No-show reminder texts";
+    await moveTo(page, DEMOS, name, /\$15k revenue per day/);
+    await expect(await chipIn(page, REVENUE, name)).toBeVisible();
+    await page.getByTestId("gm-grid").evaluate((el) => (el.scrollLeft = el.scrollWidth));
+    await expect(await chipIn(page, DEMOS, name)).not.toBeInViewport({ ratio: 1 });
+    await moveTo(page, REVENUE, name, "No milestone");
+    await expect(await chipIn(page, DEMOS, name)).toBeInViewport({ ratio: 1 });
   });
 });
