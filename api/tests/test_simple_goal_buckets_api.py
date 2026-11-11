@@ -14,6 +14,11 @@ Test cards (protects / fails_when / no_claim):
   buckets; a feature that serves another goal too keeps that goal (now its first); the
   rest move to the goal picked, or to no goal; Undo brings the goal and every link
   back; fails_when=a link is lost or Undo leaves a half archive; no_claim=milestones.
+- test_archive_moves_items_own_goal_and_undo: protects=archiving a goal with a goal
+  picked moves the roadmap items that name it as their own goal (a draft with no
+  feature) to that goal, as a delete to Trash does; Undo puts their goals back;
+  fails_when=such an item keeps the archived goal or Undo leaves it moved;
+  no_claim=the feature links (test_archive_moves_links_and_undo).
 - test_move_feature_and_undo: protects=moving a feature makes the new goal its first
   link and drops the old one; Undo restores both links; a viewer gets 403;
   fails_when=the old link stays or the new one is not first; no_claim=the web's drag.
@@ -26,6 +31,7 @@ import pytest
 from sqlalchemy import select
 
 from oracle.baseline.models import Edge, Entity
+from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import make_people
 from tests.test_simple_roadmap_api import Seed
@@ -144,6 +150,33 @@ async def test_archive_moves_links_and_undo(client):
     async with tenant_session(w.ctx.tenant_id) as s:
         grow = await s.scalar(select(Entity).where(Entity.key == "grow"))
         assert grow is not None and grow.status == "rejected"
+
+
+async def test_archive_moves_items_own_goal_and_undo(client):
+    w = await World().build()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, _, rv = await seed.roadmap("shops")
+        grow, quiet = uuid.UUID(w.goals["grow"]), uuid.UUID(w.goals["quiet"])
+        draft = await seed.item(rv, pv, "recap", draft=True, goal_ids=[grow])
+        two = await seed.item(rv, pv, "two-goals", goal_ids=[quiet, grow])
+        await s.commit()
+        ids = {"draft": draft.id, "two": two.id}
+
+    async def goals_of() -> dict[str, list[uuid.UUID]]:
+        async with tenant_session(w.ctx.tenant_id) as s:
+            return {k: list((await s.get(RoadmapItem, i)).goal_ids or []) for k, i in ids.items()}
+
+    third = (await client.post(f"{URL}/goals", headers=w.as_("owner"), json=GOAL)).json()["goal"]
+    r = await client.post(f"{URL}/goals/{w.goals['grow']}/archive", headers=w.as_("owner"),
+                          json={"to_goal_id": third["id"]})  # fmt: skip
+    assert r.status_code == 200, r.text
+    to = uuid.UUID(third["id"])
+    assert await goals_of() == {"draft": [to], "two": [to, quiet]}
+
+    r = await client.post(f"{URL}/undo", headers=w.as_("owner"), json=r.json()["undo"])
+    assert r.status_code == 200, r.text
+    assert await goals_of() == {"draft": [grow], "two": [quiet, grow]}
 
 
 @pytest.mark.asyncio
