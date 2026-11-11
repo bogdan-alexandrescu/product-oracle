@@ -2241,12 +2241,25 @@ async def listing(
         q = q.where(SimpleChange.status == status)
     if mine:
         q = q.where(SimpleChange.by == getattr(principal, "user_id", None))
-    rows = list(await db.scalars(q))
-    v = await _view(db, principal, rows)
+    v, seen, names = await visible(db, principal, list(await db.scalars(q)))
+    return [_out(c, v, names) for c in seen]
+
+
+async def visible(
+    db: AsyncSession, principal: Any, rows: list[SimpleChange], read_: service.Read | None = None
+) -> tuple[_View, list[SimpleChange], dict[uuid.UUID, str]]:
+    """The changes of ``rows`` the reader sees, as listing lists them (none waiting on an item
+    of a replaced PRD), with the view they are read in and their authors' names. ``read_``: the
+    reader's roadmap read with their drafts, when the caller has it (the waiting list)."""
+    v = await _view(db, principal, rows, read_)
     gone = await _on_replaced_prds(db, rows)
-    shown = [c for c in rows if v.sees(c) and c.id not in gone]
-    names = await _names(db, {c.by for c in shown})
-    return [_out(c, v, names) for c in shown]
+    seen = [c for c in rows if v.sees(c) and c.id not in gone]
+    return v, seen, await _names(db, {c.by for c in seen})
+
+
+def words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> str:
+    """The change in words, as listing says it (SimpleChangeOut.words)."""
+    return _words(c, v, names, _target(c, v))
 
 
 async def _on_replaced_prds(db: AsyncSession, changes: list[SimpleChange]) -> set[uuid.UUID]:

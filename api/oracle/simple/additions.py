@@ -1161,14 +1161,15 @@ def _brief(g: Entity) -> SimpleGoalBrief:
     return SimpleGoalBrief(id=str(g.id), key=g.key, title=g.title, position=goal_position(g.attrs))
 
 
-async def listing(
+async def readable(
     db: AsyncSession, principal: Any, goal_id: uuid.UUID | None, status: str | None
-) -> SimpleGoalSuggestionsOut:
+) -> tuple[list[Entity], list[SimpleGoalSuggestion]]:
+    """The confirmed goals (one, with ``goal_id``) and their suggestions the reader reads, oldest
+    first, as listing lists them (also the waiting list's, waiting_reads.goal_suggestions)."""
     goals = await _goals(db)
     if goal_id is not None:
         goals = [g for g in goals if g.id == goal_id]
-    by_id = {g.id: g for g in goals}
-    q = select(SimpleGoalSuggestion).where(SimpleGoalSuggestion.goal_id.in_(list(by_id)))
+    q = select(SimpleGoalSuggestion).where(SimpleGoalSuggestion.goal_id.in_([g.id for g in goals]))
     if status:
         q = q.where(SimpleGoalSuggestion.status == status)
     rows = list(
@@ -1176,7 +1177,15 @@ async def listing(
     )
     # oracle.simple.quality: a suggestion that failed its checks twice is the owners' to look at.
     owner = has_role(principal.role, "owner")
-    rows = [r for r in rows if owner or not r.checks]
+    return goals, [r for r in rows if owner or not r.checks]
+
+
+async def listing(
+    db: AsyncSession, principal: Any, goal_id: uuid.UUID | None, status: str | None
+) -> SimpleGoalSuggestionsOut:
+    goals, rows = await readable(db, principal, goal_id, status)
+    by_id = {g.id: g for g in goals}
+    owner = has_role(principal.role, "owner")
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     live = _live_goals(read_)
     pending = set(
@@ -1315,12 +1324,12 @@ async def _display_names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUI
 
 
 async def deciding(
-    db: AsyncSession, principal: Any, goals: list[Entity], read_: service.Read
+    db: AsyncSession, principal: Any, goals: list[Entity], read_: service.Read, who: bool = True
 ) -> dict[uuid.UUID, tuple[bool, uuid.UUID | None]]:
     """Per goal: whether the caller decides its suggestions (drafts.can_edit on the goal's
     roadmap: an owner, its decider, with none its owners who are approvers) and who decides
     them (the first of _route: the decider, else its approving owners, else the company's
-    owners)."""
+    owners; None without ``who``, for a caller that never names them: the waiting list)."""
     active = await company.active(db) if goals else None
     docs = {g.id: await _job_document(db, g, read_, active) for g in goals}
     w = await drafts.who(db, {d.id for d in docs.values() if d is not None})
@@ -1333,7 +1342,7 @@ async def deciding(
                          None)  # fmt: skip
             continue
         if d.id not in routes:
-            routes[d.id] = next(iter(await _route(db, d.id, w)), None)
+            routes[d.id] = next(iter(await _route(db, d.id, w)), None) if who else None
         out[g.id] = (drafts.can_edit(principal, d.id, w), routes[d.id])
     return out
 
