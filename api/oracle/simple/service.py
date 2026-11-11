@@ -841,7 +841,19 @@ async def efforts(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, 
     if not ids:
         return {}
     weeks: dict[uuid.UUID, float] = {}
-    for fid, attrs in await db.execute(select(Entity.id, Entity.attrs).where(Entity.id.in_(ids))):
+    # roadmap-speed: the two keys alone, not every feature's whole attrs ("effort" present
+    # but null still reads as none, as effort_weeks reads it).
+    for fid, has_effort, effort, weeks_of in await db.execute(
+        select(
+            Entity.id,
+            Entity.attrs.has_key("effort"),
+            Entity.attrs["effort"],
+            Entity.attrs["effort_weeks"],
+        ).where(Entity.id.in_(ids))
+    ):
+        attrs = {"effort": effort} if has_effort else {}
+        if weeks_of is not None:
+            attrs["effort_weeks"] = weeks_of
         v = effort_weeks(attrs)
         if v is not None and v > 0:
             weeks[fid] = v
