@@ -21,6 +21,7 @@ It reads in bulk, a fixed number of statements whatever the company's size, and 
 nothing. :func:`load` is also what the daily suggestions read, as Oracle (no principal).
 """
 
+import os
 import re
 import uuid
 from collections import defaultdict, deque
@@ -30,6 +31,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import any_, bindparam, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1252,18 +1254,26 @@ def _track_ref(track: ProductTrack, goal: Entity | None) -> SimpleTrackRef:
     )
 
 
-_PLANS: dict[type, list[tuple[str, Any, Any]]] = {}
+_PLANS: dict[type, tuple[list[tuple[str, Any, Any]], frozenset[str], frozenset[str]]] = {}
+# roadmap-built-guard: the test suite (tests/conftest.py) turns on _built's check of its
+# keywords; production reads the flag once and pays nothing per model.
+_CHECK_BUILT = os.environ.get("ORACLE_CHECK_BUILT") == "1"
 
 
-def _built(cls: Any, **values: Any) -> Any:
+def _built[M: BaseModel](cls: type[M], **values: Any) -> M:
     """roadmap-speed: a response model from the read's own typed values, unvalidated, as
     ``model_construct`` builds it (the fields in order, each list or dict default fresh) at
     a fraction of its cost: the read builds some 4,000 of them."""
-    plan = _PLANS.get(cls)
-    if plan is None:
-        plan = _PLANS[cls] = [
-            (name, f.default, f.default_factory) for name, f in cls.model_fields.items()
-        ]
+    cached = _PLANS.get(cls)
+    if cached is None:
+        cached = _PLANS[cls] = (
+            [(name, f.default, f.default_factory) for name, f in cls.model_fields.items()],
+            frozenset(cls.model_fields),
+            frozenset(name for name, f in cls.model_fields.items() if f.is_required()),
+        )
+    plan, names, required = cached
+    if _CHECK_BUILT:
+        _check_built(cls, values, names, required)
     fields: dict[str, Any] = {}
     for name, default, factory in plan:
         if name in values:
@@ -1274,10 +1284,22 @@ def _built(cls: Any, **values: Any) -> Any:
             fields[name] = default.copy() if isinstance(default, list | dict) else default
     m = cls.__new__(cls)
     object.__setattr__(m, "__dict__", fields)
-    object.__setattr__(m, "__pydantic_fields_set__", set(values))
+    object.__setattr__(m, "__pydantic_fields_set__", values.keys() & names)
     object.__setattr__(m, "__pydantic_extra__", None)
     object.__setattr__(m, "__pydantic_private__", None)
     return m
+
+
+def _check_built(cls: type, values: dict, names: frozenset[str], required: frozenset[str]):
+    """roadmap-built-guard: under tests, a keyword that is no field of ``cls`` (a misspelling
+    ``_built`` would drop) or a required field left out (built as PydanticUndefined, failing
+    only at serialization) is refused at the call."""
+    unknown = values.keys() - names
+    missing = required - values.keys()
+    if unknown or missing:
+        raise TypeError(
+            f"_built({cls.__name__}): unknown {sorted(unknown)}, missing {sorted(missing)}"
+        )
 
 
 def _shared(refs: dict | None, key: tuple, make: Any) -> Any:
