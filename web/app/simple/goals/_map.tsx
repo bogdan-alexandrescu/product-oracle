@@ -8,16 +8,18 @@
  * opens Simple's one feature panel; the menus rename, add, move and trash, each with Undo.
  */
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { toast as dsToast, type ToastAsk } from "@/components/ds";
 import { Icon } from "@/components/ds/Icon";
 import { InfoTip } from "@/components/ds/InfoTip";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { GmFeature, GmGoal, GmMilestone, GoalMap } from "@/lib/api/mock/goal-map";
 import { formatCount } from "@/lib/format";
+import { joinTwins } from "@/lib/goal-map-twins";
 import { keyResults, type KeyResults } from "@/lib/key-results";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { propose, resultWords, undo, type ChangeResult } from "../roadmap/_lib";
@@ -130,6 +132,11 @@ interface Ctx {
   moved: string | null;
   act: ReturnType<typeof useActs>;
   onAttach: (milestone: string) => void;
+  /** Each PRD milestone's PRD: its menu opens it (never Trash). */
+  prdOf: Map<string, NonNullable<Schemas["SimpleGoalMilestone"]["prd"]>>;
+  /** Who may not change a milestone proposes its new name. */
+  may: boolean;
+  go: (href: string) => void;
 }
 
 const mWords = (m: M, c: { mcode: Map<string, string> }) => `${c.mcode.get(m.id) ?? ""} ${m.name}`.trim();
@@ -194,8 +201,13 @@ function featureMenu(f: Chip, c: Ctx) {
 }
 
 function milestoneMenu(m: M, c: Ctx) {
-  if (!m.can_change) return null;
-  return <Menu k={`m-${m.id}`} label={mWords(m, c)} c={c} items={[{ w: "Rename", on: () => c.setRenaming(m.id) }, { w: "Add a feature", on: () => c.onAttach(m.id) }, { w: "Move to Trash", on: () => void c.act.trashMilestone(m), crit: true }]} />;
+  const prd = c.prdOf.get(m.id);
+  const items = [
+    ...(m.can_change || c.may ? [{ w: "Rename", on: () => c.setRenaming(m.id) }] : []),
+    ...(c.map.can_edit ? [{ w: "Add a feature", on: () => c.onAttach(m.id) }] : []),
+    ...(prd ? [{ w: `Open ${prd.title}`, on: () => c.go(`/simple/one-pagers/${prd.slug}`) }] : m.can_change ? [{ w: "Move to Trash", on: () => void c.act.trashMilestone(m), crit: true }] : []),
+  ];
+  return items.length ? <Menu k={`m-${m.id}`} label={mWords(m, c)} c={c} items={items} /> : null;
 }
 
 function goalMenu(g: GmGoal, ms: M[], c: Ctx) {
@@ -304,12 +316,19 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
     rename: async (id: string, name: string, was: string) => {
       const m = map.milestones.find((x) => x.id === id);
       const g = map.goals.find((x) => x.id === id);
-      const goalTo = (title: string, seen: string) => {
-        const t = num(g!.target, g!.unit);
-        return unwrap(api.PATCH("/v1/simple/goal-buckets/goals/{goal_id}", { params: { path: { goal_id: id } }, body: { title, measure: g!.measure, target: t, due: "", seen: { title: seen, measure: g!.measure, target: t, due: null } } }));
+      // A goal's name through its goal bucket, its measure, target and date as they are.
+      const goalTo = async (title: string, seen: string) => {
+        const b = (await unwrap(api.GET("/v1/simple/goal-buckets"))).goals.find((x) => x.id === id);
+        if (!b) throw new Error(`${seen} is not a goal you can rename here`);
+        return unwrap(api.PATCH("/v1/simple/goal-buckets/goals/{goal_id}", { params: { path: { goal_id: id } }, body: { title, measure: b.measure ?? "", target: b.target ?? "", due: b.due ?? "", seen: { title: seen, measure: b.measure ?? null, target: b.target ?? null, due: b.due ?? null } } }));
       };
       const msTo = (n: string) => unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: id } }, body: { name: n } }));
       try {
+        // milestone-rename: who may not change it proposes the name to the roadmap's decider.
+        if (m && !m.can_change) {
+          const r = await propose({ op: "edit_goal_milestone", target: { milestone_id: id }, before: { milestone: { name: was } }, after: { milestone: { name } } });
+          return await change(r, `Renamed ${was} to ${name}`, `Renamed ${name} back to ${was}`);
+        }
         if (m) await msTo(name);
         else await goalTo(name, was);
         await reload();
@@ -595,9 +614,13 @@ export function GoalMapPage() {
   const goalList = useQuery("simple-goal-map-goal-tree", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
   const krs = useMemo(() => keyResults(goalList.data ?? []), [goalList.data]);
   const folded = useMemo(() => (q.data && (goalList.data || goalList.error) ? withKeyResults(q.data, krs) : null), [q.data, goalList.data, goalList.error, krs]);
-  const map = folded?.map;
   // The roadmap read: each feature's code and track, the tracks in order, each milestone's code.
   const roadmap = useQuery("simple-roadmap:goal-map", () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })));
+  // Goal map twins: a PRD's milestone coded as a goal's own one is drawn once, as the goal's.
+  const map = useMemo(() => (folded ? joinTwins(folded.map, roadmap.data?.goal_milestones).map : undefined), [folded, roadmap.data]);
+  const prdOf = useMemo(() => new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.prd ? [[m.id, m.prd] as const] : []))), [roadmap.data]);
+  const { can } = useMe();
+  const router = useRouter();
   const refresh = () => Promise.all([q.reload(), goalList.reload(), roadmap.reload()]);
   const codes = useMemo(() => new Map((roadmap.data?.items ?? []).flatMap((i) => (i.code ? [[i.id, i.code] as [string, string]] : []))), [roadmap.data]);
   const mcode = useMemo(() => new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.roadmap_code ? [[m.id, m.roadmap_code] as [string, string]] : []))), [roadmap.data]);
@@ -650,7 +673,7 @@ export function GoalMapPage() {
 
   if (!map || !roadmap.data) return <div className="simple-page" role="status">{q.error ? errorMessage(q.error) : roadmap.error ? errorMessage(roadmap.error) : "Loading the goal map…"}</div>;
 
-  const c: Ctx = { map, codes, mcode, tracks, onOpen: setPanel, menu, setMenu, setMover, renaming, setRenaming, moved, act, onAttach: setAttach };
+  const c: Ctx = { map, codes, mcode, tracks, onOpen: setPanel, menu, setMenu, setMover, renaming, setRenaming, moved, act, onAttach: setAttach, prdOf, may: can("create_simple_change"), go: (href) => router.push(href) };
   const add = async (feature: string, milestone: string, expected: string) => {
     const f = map.features.find((x) => x.id === feature);
     try {
