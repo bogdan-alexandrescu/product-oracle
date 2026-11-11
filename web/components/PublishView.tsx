@@ -656,7 +656,7 @@ export function PublishView({ doc }: { doc: string }) {
     setRefusal(null);
     try {
       // C5: only the latest version is published; one that landed since this page loaded wins.
-      const fresh = await unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } }));
+      const fresh = await unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } }, cache: "no-store" }));
       if (fresh.latest_version !== n) {
         setRefusal({ detail: `v${fresh.latest_version} exists, reload`, blocking: [], stale: true });
         return;

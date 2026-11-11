@@ -8,6 +8,9 @@
  * - A read marked stale-ok (`STALE_OK`: the rail's counts) takes an answer up to RAIL_MS old
  *   as it is, so moving between pages does not read the rail's lists again; older than that
  *   (up to STALE_MS), it takes the last answer at once and reads it again behind it.
+ * - A read that must see what is there now (`cache: "no-store"` or "reload": Publish's check for a
+ *   newer version, opening Recent chats) never takes a shared answer, nor a read begun before it: it
+ *   fetches, and its answer is shared from then on.
  * - Any answer that differs from the one shared before it says so (`onReadChanged`), so what
  *   shows an older answer reads it again.
  * - Any write (a non-GET, or a GET that marks something seen) drops every shared answer, and
@@ -145,6 +148,7 @@ export function sharedReads(base: (req: Request) => Promise<Response>): (req: Re
     const key = readKey(req);
     const now = Date.now();
     dropOld(now);
+    if (req.cache === "no-store" || req.cache === "reload") return copy(fetchShared(base, req, key), req.signal);
     const hit = entries.get(key);
     const age = hit?.at == null ? null : now - hit.at;
     if (hit?.res && (hit.at === null || (age !== null && age < (staleOk ? RAIL_MS : FRESH_MS)))) return copy(hit.res, req.signal);
@@ -159,7 +163,7 @@ export function sharedReads(base: (req: Request) => Promise<Response>): (req: Re
 function fetchShared(base: (req: Request) => Promise<Response>, req: Request, key: string): Promise<Response> {
   const gen = generation;
   // One caller aborting (the rail leaving a page) never aborts the read the others share.
-  const res = base(new Request(req.url, { method: "GET", headers: req.headers, credentials: req.credentials }));
+  const res = base(new Request(req.url, { method: "GET", headers: req.headers, credentials: req.credentials, cache: req.cache }));
   // A dropped answer's mark: this read still tells a failed or changed answer.
   const mark = marks.get(key);
   marks.delete(key);
@@ -169,16 +173,19 @@ function fetchShared(base: (req: Request) => Promise<Response>, req: Request, ke
   entries.set(key, entry);
   // The URL as listeners know it (onReadChanged, onReadFailed): the key without its headers.
   const url = key.split("\n")[0]!;
+  // Only the last read of it begun gives its answer: one begun before it never replaces it.
+  const superseded = () => entry.next !== res;
   const drop = () => {
-    if (gen === generation && entries.get(key) === entry) entries.delete(key);
+    if (gen === generation && entries.get(key) === entry && !superseded()) entries.delete(key);
   };
   const failed = () => {
+    if (superseded()) return;
     drop();
     // An answer was shared before: whatever shows it reads it again and shows that it failed.
     if (entry.at !== null) window.dispatchEvent(new CustomEvent(FAILED, { detail: url }));
   };
   const done = (text: string) => {
-    if (gen !== generation || entries.get(key) !== entry) return;
+    if (gen !== generation || entries.get(key) !== entry || superseded()) return;
     const body = hash(text);
     const changed = entry.body !== null && entry.body !== body;
     entry.res = res;

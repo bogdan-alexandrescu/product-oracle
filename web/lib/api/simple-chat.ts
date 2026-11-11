@@ -170,7 +170,7 @@ export type ActionOp = (typeof ACTION_OPS)[number];
 /** Ops that add or change a flow or a feature: their cards show the flow (or "No flow yet"). */
 export const FLOW_OPS = new Set(["add_feature_ask", "add_item_task"]);
 
-type Init = { params?: { path?: Record<string, string>; query?: Record<string, unknown> }; body?: unknown };
+type Init = { params?: { path?: Record<string, string>; query?: Record<string, unknown> }; body?: unknown; cache?: RequestCache };
 type Call = (path: string, init?: Init) => Promise<{ data?: unknown; error?: unknown; response: Response }>;
 const loose = api as unknown as { GET: Call; POST: Call; PUT: Call };
 
@@ -223,7 +223,8 @@ export function askSay(text: string, page?: string, onlyUnderstood = false, to: 
 
 /** GET /v1/simple/chats (ask-fresh): Recent chats, the reader's last Ask chats from any page; never a meeting's. */
 export async function recentChats(): Promise<ChatSummary[]> {
-  return ((await unwrap(loose.GET("/v1/simple/chats"))) as { items: ChatSummary[] }).items;
+  // Opened, the menu reads them now: never an answer shared or begun before (lib/api/shared-reads).
+  return ((await unwrap(loose.GET("/v1/simple/chats", { cache: "no-store" }))) as { items: ChatSummary[] }).items;
 }
 
 /** PUT /v1/simple/chats/{chat_id}/ask: the Oracle's Ask chat the Ask chat handed a question to. */
