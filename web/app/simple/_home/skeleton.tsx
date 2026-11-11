@@ -5,15 +5,19 @@ import { Icon } from "@/components/ds/Icon";
 import { SimplePage } from "@/components/simple/SimplePage";
 
 /**
- * The greeting's sentence keeps, on the first paint, the lines its longest form wraps to, so the
- * goal band under it never jumps down as it fills (home-greeting-fit). The longest form names
- * three kinds, then "and more", then the Inbox ("Good morning, Avery. Decisions, a proposal,
- * broken links and more wait on you. More waits in your Inbox."): 2 lines from a 34rem header
- * up, 3 on a phone, 4 on a narrow phone, 5 beside a narrow window's rail. Kept on the skeleton
- * only: the page's own sentence takes the lines it needs, so a short greeting leaves no empty
- * lines (the band moves up once, never down). The header is the container.
+ * The greeting's sentence keeps the lines its longest form wraps to, so the goal band under it
+ * never jumps as it fills (home-greeting-fit). The longest form names three kinds in the
+ * singular, then "and more", then the Inbox, after the longest greeting word and a 12-letter
+ * first name ("Good afternoon, Christabelle. A decision, a proposal, a broken link and more wait
+ * on you. More waits in your Inbox."): measured every 5 px from 360 to 1600 (Inter Tight, Linux),
+ * it takes 5 lines in a header up to 322 px, 4 up to 442, 3 up to 607 and 2 from 612, so each
+ * step comes a few percent past where it is needed (a font drawn wider on another system still
+ * fits). Kept on the skeleton and on the page's own sentence while what waits is unknown
+ * ("Checking what waits on you..."); once known, the sentence takes the lines it needs, so a
+ * short greeting leaves no empty lines (the band moves up once, never down). The header is the
+ * container.
  */
-const LEAD = "simple-lead min-h-[5lh] @[19rem]:min-h-[4lh] @sm:min-h-[3lh] @[34rem]:min-h-[2lh]";
+export const LEAD = "simple-lead min-h-[5lh] @[21rem]:min-h-[4lh] @[28.5rem]:min-h-[3lh] @[39.5rem]:min-h-[2lh]";
 
 /**
  * Simple's Home before the person and their permissions are known (#723 production walk: the

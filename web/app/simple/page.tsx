@@ -7,6 +7,7 @@ import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
 import { Walk } from "@/app/simple/_home/walk";
 import { runStopsOf, StopCard } from "@/app/simple/_home/run-stops";
+import { LEAD } from "@/app/simple/_home/skeleton";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
 import { GtWaitingLine } from "@/app/simple/_home/gt-flags";
 import { MarkForItem, WithFeatureMarks } from "@/components/current-state/CurrentState";
@@ -728,7 +729,8 @@ export default function SimpleHome() {
           {/* F-28, the owner's pick (Nov 5): a hidden Set up comes back from Home's menu. */}
           {setupHidden && <HomeMenu onShowSetup={() => void hideSetup(false)} />}
         </div>
-        <p className="simple-lead">
+        {/* home-greeting-fit: while what waits is unknown, the skeleton's lines, so the band stays put. */}
+        <p className={known ? "simple-lead" : LEAD}>
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
