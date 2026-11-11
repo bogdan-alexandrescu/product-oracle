@@ -285,7 +285,7 @@ function Slot({ f, c }: { f: Chip; c: Ctx }) {
   );
 }
 
-function Legend({ tracks }: { tracks: Track[] }) {
+function Legend({ tracks, guardrail }: { tracks: Track[]; guardrail: GoalMap["guardrail"] }) {
   return (
     <span className="flex flex-wrap items-center gap-1.5" data-testid="gm-legend">
       {tracks.map((t) => (
@@ -294,7 +294,39 @@ function Legend({ tracks }: { tracks: Track[] }) {
           {t.name}
         </span>
       ))}
+      {guardrail && <Guardrail g={guardrail} />}
     </span>
+  );
+}
+
+/** The guardrail as the legend row's last item (the owner's "Fold into legend row"): its status, the rest on hover. */
+function Guardrail({ g }: { g: NonNullable<GoalMap["guardrail"]> }) {
+  return (
+    <InfoTip
+      label="the guardrail"
+      testId="gm-legend-guardrail"
+      side="bottom"
+      trigger={
+        <span className="flex items-center gap-1 px-1 text-[13px]">
+          <Icon name="lock" size={16} className={g.held ? "text-pass" : "text-crit"} />
+          {g.held ? (
+            "Guardrails: on track ✓"
+          ) : (
+            <>
+              Guardrails: <span className="font-semibold text-crit">at risk</span>
+            </>
+          )}
+        </span>
+      }
+    >
+      <span className="flex flex-col gap-1">
+        <b>
+          {g.name} {g.rule}
+        </b>
+        <span>Held {g.days.filter((v) => v === 0).length} of 7 days</span>
+        <span>Every milestone must hold it. {g.current === null ? "Not measured today" : `${num(g.current, "")} today`}</span>
+      </span>
+    </InfoTip>
   );
 }
 
@@ -711,20 +743,6 @@ function AttachDrawer({ map, milestone, codes, mcode, onClose, onSave }: { map: 
 
 /* ---------- The page ---------- */
 
-function Guardrail({ map }: { map: GoalMap }) {
-  const g = map.guardrail;
-  if (!g) return null;
-  return (
-    <div data-testid="gm-guardrail" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-pass/40 bg-pass-bg px-4 py-2.5">
-      <Icon name="lock" size={18} className="text-pass" />
-      <span className="font-semibold">Guardrail: {g.name} {g.rule}</span>
-      <span className={`ml-auto font-semibold ${g.held ? "text-pass" : "text-crit"}`} title={`Every milestone must hold it. ${g.current === null ? "Not measured today" : `${num(g.current, "")} today`}`}>
-        Held {g.days.filter((v) => v === 0).length} of 7 days
-      </span>
-    </div>
-  );
-}
-
 export function GoalMapPage() {
   const q = useQuery("simple-goal-map", () => unwrap(api.GET("/v1/simple/goal-map")));
   // kr-in-goal-map: the goals' parents, read before the map is drawn so no key result shows as a goal.
@@ -848,7 +866,7 @@ export function GoalMapPage() {
         <div className="flex flex-wrap items-end gap-3">
           <h1 className="simple-h1 max-[600px]:sr-only">Goal map</h1>
           <span className="ml-auto">
-            <Legend tracks={tracks} />
+            <Legend tracks={tracks} guardrail={map.guardrail} />
           </span>
         </div>
         {off && (
@@ -861,7 +879,6 @@ export function GoalMapPage() {
             </Link>
           </p>
         )}
-        <Guardrail map={map} />
         <TracksGrid chips={chips} lines={folded?.lines ?? new Map()} c={c} />
         {mover && <MovePicker f={mover} c={c} onClose={() => setMover(null)} />}
       </div>

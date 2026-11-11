@@ -44,8 +44,10 @@ test.describe("desktop", () => {
     await expect(goals.nth(1)).toContainText("At risk");
     await goals.nth(2).getByRole("button", { name: "About Revenue per day" }).click();
     await expect(page.getByRole("tooltip")).toContainText("Reps × conversions per rep × value");
-    await expect(page.getByTestId("gm-guardrail")).toContainText("Guardrail: Customer complaints = 0 every day");
-    await expect(page.getByTestId("gm-guardrail")).toContainText("Held 7 of 7 days");
+    const rail = page.getByTestId("gm-legend-guardrail");
+    await expect(rail).toHaveText("Guardrails: on track ✓");
+    await rail.hover();
+    await expect(page.getByRole("tooltip").filter({ hasText: "Customer complaints = 0 every day" })).toContainText("Held 7 of 7 days");
     await expect(chip(page, "Guided first week")).toHaveCount(1);
   });
 
@@ -135,9 +137,10 @@ for (const theme of ["light", "dark"] as const) {
       for (let i = 0; i < 3; i++) await expect(cards.nth(i)).not.toContainText("Builds on");
       await expect(page.getByLabel("builds on")).toHaveCount(0);
       for (let i = 0; i < 3; i++) await expect(cards.nth(i)).not.toContainText(GUARDRAIL_GOAL);
-      const rail = page.getByTestId("gm-guardrail");
-      await expect(rail).toContainText(`Guardrail: ${GUARDRAIL_GOAL} = 0 every day`);
-      await expect(rail).toContainText("Held 7 of 7 days");
+      const rail = page.getByTestId("gm-legend-guardrail");
+      await expect(rail).toHaveText("Guardrails: on track ✓");
+      await rail.hover();
+      await expect(page.getByRole("tooltip").filter({ hasText: `${GUARDRAIL_GOAL} = 0 every day` })).toContainText("Held 7 of 7 days");
       // Side by side on a desktop, one row, in priority order.
       const boxes = await Promise.all([0, 1, 2].map(async (i) => (await cards.nth(i).boundingBox())!));
       expect(boxes.map((b) => Math.round(b.y))).toEqual(Array(3).fill(Math.round(boxes[0].y)));

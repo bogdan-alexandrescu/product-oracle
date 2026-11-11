@@ -52,7 +52,7 @@ for (const scheme of ["light", "dark"] as const) {
         // and each feature's chip with its code and its milestone; fails_when=the goal order is
         // lost, a milestone is missing or a chip lacks its code; no_claim=pixel match.
         await open(page, scheme);
-        await expect(page.getByTestId("gm-guardrail")).toContainText("Pages load in under 2 seconds");
+        await expect(page.getByTestId("gm-legend-guardrail")).toHaveText("Guardrails: on track ✓");
         await expect(page.getByTestId("gm-goal")).toHaveText([/Teams stay past their first year/, /New teams set up in one day/, /Larger teams add paid seats/, /Half the support tickets per team/]);
         await expect(page.getByTestId("gm-strip-milestone")).toHaveCount(12);
         await expect(strip(page, "Weekly active teams first measured")).toContainText(/M\d+\s*Weekly active teams first measured\s*Nov 13/);
@@ -135,10 +135,13 @@ test.describe("visual QA fixes, 1440 light", () => {
   });
 
   test("L-4: the guardrail strip and goal cards carry only the frame's words", async ({ page }) => {
-    // protects="Guardrail: … Held N of 7 days" and goal cards without the reading's source line;
+    // protects=the legend's "Guardrails: on track ✓" (rule and days held behind it) and goal cards without the reading's source line;
     // fails_when=the extra prose comes back; no_claim=the reading itself.
     await open(page, "light", "viewer");
-    await expect(page.getByTestId("gm-guardrail")).toHaveText("Guardrail: Pages load in under 2 seconds for 95% of viewsHeld 7 of 7 days");
+    await expect(page.getByTestId("gm-legend-guardrail")).toHaveText("Guardrails: on track ✓");
+    await page.getByTestId("gm-legend-guardrail").hover();
+    await expect(page.getByRole("tooltip").filter({ hasText: "Pages load in under 2 seconds for 95% of views" })).toContainText("Held 7 of 7 days");
+    await page.mouse.move(0, 0);
     // The reading's source sits behind the goal's (i), not in a line of its own.
     const first = page.getByTestId("gm-goal").first();
     await expect(first.getByText(/^Read on /)).toBeHidden();
