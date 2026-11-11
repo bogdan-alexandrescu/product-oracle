@@ -5,7 +5,8 @@
  * goals across as columns, each with its milestone strip under it, and the roadmap's tracks as
  * rows; each cell lists the features where that track serves that goal, as chips with their
  * milestone. A phone scrolls the grid sideways with the track names held at the left. Every chip
- * opens Simple's one feature panel; the menus rename, add, move and trash, each with Undo.
+ * opens Simple's one feature panel; the menus rename, add, move and trash, each with Undo, and open
+ * the goal map's own editors (a gate, a proposed milestone, a goal's metric, a PRD from a milestone).
  */
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -14,6 +15,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { toast as dsToast, type ToastAsk } from "@/components/ds";
 import { Icon } from "@/components/ds/Icon";
 import { InfoTip } from "@/components/ds/InfoTip";
+import { NewPrdSheet, useCanStartPrd } from "@/components/simple/NewPrd";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { GmFeature, GmGoal, GmMilestone, GoalMap } from "@/lib/api/mock/goal-map";
 import { formatCount } from "@/lib/format";
@@ -22,6 +24,7 @@ import { keyResults, type KeyResults } from "@/lib/key-results";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { propose, resultWords, undo, type ChangeResult } from "../roadmap/_lib";
+import { Editor, type Edit, type EditSave } from "./_editors";
 import { FeaturePanel, type Placement } from "./_panel";
 
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
@@ -30,7 +33,9 @@ type M = GmMilestone;
 /** A key result of a goal on the map, shown behind its goal's (i). */
 type KrLine = { id: string; code: string | null; name: string };
 
-const TRACK_COLORS = ["#3b82f6", "#0d9488", "#8b5cf6", "#d97706", "#db2777", "#64748b"];
+// Each track its own colour, in turn past the last; No track is grey.
+const TRACK_COLORS = ["#3b82f6", "#0d9488", "#8b5cf6", "#d97706", "#db2777", "#0891b2", "#65a30d", "#dc2626", "#4f46e5", "#ca8a04", "#059669", "#c026d3"];
+const NO_TRACK = "#64748b";
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const day = (iso: string | null | undefined) => (iso ? `${MON[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}` : "");
 const STATUS: Record<string, [string, string]> = {
@@ -56,7 +61,10 @@ interface Chip {
   name: string;
   /** Its map feature (null: on no milestone). */
   f: GmFeature | null;
+  /** Its first milestone of this goal, by date (null: none). */
   m: M | null;
+  /** Every milestone of this goal it serves, by date. */
+  ms: M[];
   goal: string;
   /** Its roadmap track (null: none). */
   track: string | null;
@@ -95,13 +103,13 @@ function withKeyResults(raw: GoalMap, krs: KeyResults): { map: GoalMap; lines: M
   };
 }
 
-/** The goal and milestone (with its roadmap code) a feature sits under, for its panel. */
-function placement(map: GoalMap, feature: string, codes: Map<string, string>): Placement | null {
-  const m = map.milestones.find((x) => x.id === map.features.find((f) => f.id === feature)?.milestones[0]);
-  const gi = map.goals.findIndex((g) => g.id === m?.goal);
+/** The goal and milestones (with their roadmap codes and expected lifts) a chip sits under, for its panel. */
+function placement(map: GoalMap, c: Chip, codes: Map<string, string>): Placement | null {
+  const gi = map.goals.findIndex((g) => g.id === c.goal);
   const g = map.goals[gi];
-  if (!m || !g) return null;
-  return { goal: { id: g.id, title: g.name, metric: g.metric?.title ?? null, target: num(g.target, g.unit), position: gi + 1 }, milestone: `${codes.get(m.id) ?? ""} ${m.name}`.trim() };
+  if (!c.m || !g) return null;
+  const served = c.ms.map((m) => ({ milestone: mWords(m, { mcode: codes }), expected: c.f?.links.find((l) => l.milestone === m.id)?.expected ?? "" }));
+  return { goal: { id: g.id, title: g.name, metric: g.metric?.title ?? null, target: num(g.target, g.unit), position: gi + 1 }, milestone: served[0].milestone, served };
 }
 
 /** After an edit, brings what changed into view. */
@@ -134,13 +142,24 @@ interface Ctx {
   /** Each PRD milestone's PRD: its menu opens it (never Trash). */
   prdOf: Map<string, NonNullable<Schemas["SimpleGoalMilestone"]["prd"]>>;
   go: (href: string) => void;
+  /** Opens one of the goal map's own editors. */
+  onEdit: (e: Edit) => void;
+  /** Whether this person may start a PRD (New PRD from it). */
+  canPrd: boolean;
 }
 
 const mWords = (m: M, c: { mcode: Map<string, string> }) => `${c.mcode.get(m.id) ?? ""} ${m.name}`.trim();
 
-function Status({ s }: { s: string }) {
+/** A status badge; one that asks for something (No gate, Not measured) leads to the action that resolves it. */
+function Status({ s, on, small, hint }: { s: string; on?: () => void; small?: boolean; hint?: string }) {
   const [w, cls] = STATUS[s] ?? STATUS.not_measured;
-  return <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[13px] font-semibold ${cls}`}>{w}</span>;
+  const look = `whitespace-nowrap rounded-full font-semibold ${small ? "px-1.5 text-[11.5px]" : "px-2 py-0.5 text-[13px]"} ${cls}`;
+  if (!on) return <span className={look}>{w}</span>;
+  return (
+    <button type="button" title={hint} onClick={(e) => (e.stopPropagation(), on())} className={`${look} underline decoration-dotted underline-offset-2 hover:decoration-solid`}>
+      {w}
+    </button>
+  );
 }
 
 function Bar({ g }: { g: GmGoal }) {
@@ -203,6 +222,8 @@ function milestoneMenu(m: M, c: Ctx) {
   const items = [
     { w: "Rename", on: () => c.setRenaming(m.id) },
     { w: "Add a feature", on: () => c.onAttach(m.id) },
+    { w: "Set the gate", on: () => c.onEdit({ kind: "gate", milestone: m.id }) },
+    ...(c.canPrd && !prd ? [{ w: "New PRD from it", on: () => c.onEdit({ kind: "prd", milestone: m.id }) }] : []),
     prd ? { w: `Open ${prd.title}`, on: () => c.go(`/simple/one-pagers/${prd.slug}`) } : { w: "Move to Trash", on: () => void c.act.trashMilestone(m), crit: true },
   ];
   return <Menu k={`m-${m.id}`} label={mWords(m, c)} c={c} items={items} />;
@@ -211,7 +232,22 @@ function milestoneMenu(m: M, c: Ctx) {
 function goalMenu(g: GmGoal, ms: M[], c: Ctx) {
   if (!c.map.can_edit) return null;
   const next = ms.find((m) => m.status !== "met") ?? ms[0];
-  return <Menu k={`g-${g.id}`} label={g.name} c={c} items={[{ w: "Rename", on: () => c.setRenaming(g.id) }, ...(next ? [{ w: "Add a feature", on: () => c.onAttach(next.id) }] : [])]} />;
+  const items = [
+    { w: "Rename", on: () => c.setRenaming(g.id) },
+    ...(next ? [{ w: "Add a feature", on: () => c.onAttach(next.id) }] : []),
+    { w: "Propose a milestone", on: () => c.onEdit({ kind: "propose", goal: g.id }) },
+    { w: "Pick its metric", on: () => c.onEdit({ kind: "metric", goal: g.id }) },
+  ];
+  return <Menu k={`g-${g.id}`} label={g.name} c={c} items={items} />;
+}
+
+/** What resolves a goal's badge: Not measured, its metric; No gate, its first milestone's gate. */
+function goalFix(g: GmGoal, ms: M[], c: Ctx): { on: () => void; hint: string } | undefined {
+  if (!c.map.can_edit) return undefined;
+  if (g.status === "not_measured") return { on: () => c.onEdit({ kind: "metric", goal: g.id }), hint: "Pick its metric" };
+  const open = ms.find((m) => m.threshold === null && m.can_change);
+  if (g.status === "no_gate" && open) return { on: () => c.onEdit({ kind: "gate", milestone: open.id }), hint: "Set the gate" };
+  return undefined;
 }
 
 function Rename({ id, was, c, className }: { id: string; was: string; c: Ctx; className?: string }) {
@@ -271,12 +307,33 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
     return m ? mWords(m, { mcode }) : "No milestone";
   };
   const failed = (e: unknown) => toast({ message: errorMessage(e) });
-  // A feature on no milestone is attached (filed under its own area, else the map's first).
-  const moveRaw = async (f: Chip, from: string | null, to: string | null): Promise<GoalMap | null> => {
-    if (from && to) return unwrap(api.POST("/v1/simple/goal-map/links/move", { body: { feature: f.id, from_milestone: from, to_milestone: to } }));
-    if (!from && to) return unwrap(api.POST("/v1/simple/goal-map/links", { body: { feature: f.id, milestone: to, area: f.f?.area ?? map.areas[0]?.id ?? "", expected: "", confidence: "medium" } }));
-    if (from && !to) return unwrap(api.POST("/v1/simple/goal-map/links/detach", { body: { feature: f.id, milestone: from } }));
-    return null;
+  type Link = Pick<GmFeature["links"][number], "milestone" | "expected" | "confidence">;
+  // A link put (back) on a milestone, with its own expected lift and confidence, filed under the
+  // feature's own area, else the map's first.
+  const attach = (f: Chip, l: Link) =>
+    unwrap(api.POST("/v1/simple/goal-map/links", { body: { feature: f.id, milestone: l.milestone, area: f.f?.area ?? map.areas[0]?.id ?? "", expected: l.expected, confidence: l.confidence.toLowerCase() as "high" | "medium" | "low" } }));
+  const detach = (f: Chip, milestone: string) => unwrap(api.POST("/v1/simple/goal-map/links/detach", { body: { feature: f.id, milestone } }));
+  const linkOf = (f: Chip, milestone: string): Link => f.f?.links.find((l) => l.milestone === milestone) ?? { milestone, expected: "", confidence: "Medium" };
+  /** Each in turn; the map as the last one left it. */
+  const each = async <T,>(xs: T[], one: (x: T) => Promise<GoalMap>): Promise<GoalMap | null> => {
+    let next: GoalMap | null = null;
+    for (const x of xs) next = await one(x);
+    return next;
+  };
+  /** Moves a chip; its Undo. No milestone takes it off every milestone of its goal; Undo puts each link back as it was. */
+  const moveRaw = async (f: Chip, to: string | null): Promise<{ next: GoalMap | null; back: () => Promise<GoalMap | null> }> => {
+    const from = f.m?.id ?? null;
+    if (from && to) {
+      const next = await unwrap(api.POST("/v1/simple/goal-map/links/move", { body: { feature: f.id, from_milestone: from, to_milestone: to } }));
+      return { next, back: () => unwrap(api.POST("/v1/simple/goal-map/links/move", { body: { feature: f.id, from_milestone: to, to_milestone: from } })) };
+    }
+    if (!from && to) return { next: await attach(f, { milestone: to, expected: "", confidence: "Medium" }), back: () => detach(f, to) };
+    if (from && !to) {
+      const links = f.ms.map((m) => linkOf(f, m.id));
+      const next = await each(links, (l) => detach(f, l.milestone));
+      return { next, back: () => each(links, (l) => attach(f, l)) };
+    }
+    return { next: null, back: async () => null };
   };
   /** A change through the change engine: applied (with Undo), else what it waits for. */
   const change = async (r: ChangeResult, words: string, back: string) => {
@@ -286,17 +343,24 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
   };
   return {
     move: async (f: Chip, to: string | null) => {
-      const from = f.m?.id ?? null;
       try {
-        const next = await moveRaw(f, from, to);
+        const { next, back } = await moveRaw(f, to);
         if (!next) return;
         setMap(next);
         setMoved(f.id);
         reveal(`[data-testid="gm-chip"][data-feature="${f.id}"]`);
         const toGoal = map.goals.find((g) => g.id === map.milestones.find((m) => m.id === to)?.goal);
+        const was = f.ms.length ? f.ms.map((m) => msWords(m.id)).join(" and ") : msWords(null);
         toast({
           message: `Moved ${named(f)} to ${msWords(to)}${toGoal && toGoal.id !== f.goal ? ` (${toGoal.name})` : ""}`,
-          action: { label: "Undo", onClick: () => void moveRaw({ ...f, m: map.milestones.find((m) => m.id === to) ?? null }, to, from).then((m) => m && setMap(m), failed) },
+          action: {
+            label: "Undo",
+            onClick: () =>
+              void back().then((m) => {
+                if (m) setMap(m);
+                toast({ message: `Moved ${named(f)} back to ${was}` });
+              }, failed),
+          },
         });
       } catch (e) {
         failed(e);
@@ -352,7 +416,6 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
 
 /** Move to…: every goal's milestones by date, its own goal's No milestone, and the tracks. */
 function MovePicker({ f, c, onClose }: { f: Chip; c: Ctx; onClose: () => void }) {
-  const at = f.m?.id ?? null;
   const pick = (to: string | null) => {
     onClose();
     void c.act.move(f, to);
@@ -378,7 +441,7 @@ function MovePicker({ f, c, onClose }: { f: Chip; c: Ctx; onClose: () => void })
               <div key={g.id} className="flex flex-col">
                 <span className={head}>{g.name}</span>
                 {[...c.map.milestones.filter((m) => m.goal === g.id).sort(byDate), ...(own ? [null] : [])].map((m) => {
-                  const here = own && (m?.id ?? null) === at;
+                  const here = own && (m ? f.ms.some((x) => x.id === m.id) : !f.m);
                   return (
                     <button key={m?.id ?? "none"} type="button" disabled={here} data-to={m?.id ?? "none"} onClick={() => pick(m?.id ?? null)} className={row}>
                       {m ? (
@@ -444,7 +507,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
             <div className="flex items-center gap-2">
               <span className="text-[24px] leading-none font-bold">{num(g.target, g.unit)}</span>
               <span className="ml-auto flex items-center gap-1">
-                <Status s={g.status} />
+                <Status s={g.status} {...goalFix(g, all.filter((m) => m.goal === g.id), c)} />
                 <GoalInfo g={g} krs={lines.get(g.id) ?? []} />
                 {goalMenu(
                   g,
@@ -475,6 +538,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     <b className="text-accent-ink">{c.mcode.get(m.id)}</b>
                     {c.renaming === m.id ? <Rename id={m.id} was={m.name} c={c} className="text-[12px]" /> : <span className="truncate" title={m.name}>{m.name}</span>}
                     <span className="whitespace-nowrap text-text2">{day(m.due_on)}</span>
+                    {m.threshold === null && <Status s="no_gate" small on={m.can_change ? () => c.onEdit({ kind: "gate", milestone: m.id }) : undefined} hint="Set the gate" />}
                     <span className="hidden group-hover:inline-flex has-[[aria-expanded=true]]:inline-flex max-[600px]:inline-flex">{milestoneMenu(m, c)}</span>
                   </span>
                 ))}
@@ -504,8 +568,8 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                         {c.codes.get(f.id) && <span className="mr-1 text-[11.5px] text-text-faint">{c.codes.get(f.id)}</span>}
                         {f.name}
                       </span>
-                      <span className="block truncate text-[11.5px] text-text2" title={f.m ? mWords(f.m, c) : undefined}>
-                        {f.m ? mWords(f.m, c) : "No milestone"}
+                      <span className="block truncate text-[11.5px] text-text2" title={f.ms.length ? f.ms.map((m) => mWords(m, c)).join(" · ") : undefined}>
+                        {f.ms.length ? f.ms.map((m) => mWords(m, c)).join(" · ") : "No milestone"}
                       </span>
                     </button>
                     <Slot f={f} c={c} />
@@ -522,7 +586,11 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
 
 /* ---------- Add a feature ---------- */
 
-function AttachDrawer({ map, milestone, codes, mcode, onClose, onSave }: { map: GoalMap; milestone: string; codes: Map<string, string>; mcode: Map<string, string>; onClose: () => void; onSave: (feature: string, milestone: string, expected: string) => void }) {
+/**
+ * A feature already on another milestone of the same goal is offered as a move from there (never a
+ * second link the grid would not show); one already on this milestone is left out.
+ */
+function AttachDrawer({ map, milestone, codes, mcode, onClose, onSave }: { map: GoalMap; milestone: string; codes: Map<string, string>; mcode: Map<string, string>; onClose: () => void; onSave: (feature: string, milestone: string, expected: string, from: string | null) => void }) {
   const roadmap = useQuery("simple-roadmap:goal-map", () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })));
   const [m, setM] = useState(milestone);
   const [search, setSearch] = useState("");
@@ -532,8 +600,11 @@ function AttachDrawer({ map, milestone, codes, mcode, onClose, onSave }: { map: 
   const field = "w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[17px]";
   const on = new Map(map.features.map((f) => [f.id, f]));
   const term = search.toLowerCase();
-  const named = (roadmap.data?.items ?? []).map((i) => ({ id: i.id, code: codes.get(i.id) ?? i.code ?? "", name: on.get(i.id)?.name ?? i.title }));
+  const goal = map.milestones.find((x) => x.id === m)?.goal;
+  const sameGoal = (id: string) => [...map.milestones].sort(byDate).find((x) => x.id !== m && x.goal === goal && on.get(id)?.milestones.includes(x.id)) ?? null;
+  const named = (roadmap.data?.items ?? []).map((i) => ({ id: i.id, code: codes.get(i.id) ?? i.code ?? "", name: on.get(i.id)?.name ?? i.title, from: sameGoal(i.id) }));
   const list = named.filter((i) => !on.get(i.id)?.milestones.includes(m) && (!term || `${i.code} ${i.name}`.toLowerCase().includes(term)));
+  const from = list.find((i) => i.id === feature)?.from ?? null;
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/20 max-[600px]:items-end">
       <div role="dialog" aria-label="Add a feature" data-testid="gm-editor" className="simple-card m-3 w-[460px] max-w-[calc(100vw-24px)] overflow-y-auto max-[600px]:m-0 max-[600px]:max-h-[85vh] max-[600px]:w-full max-[600px]:max-w-full max-[600px]:rounded-b-none">
@@ -564,20 +635,23 @@ function AttachDrawer({ map, milestone, codes, mcode, onClose, onSave }: { map: 
               <button type="button" onClick={() => setFeature(i.id)} className={`w-full rounded-xl border px-3 py-2 text-left font-semibold ${feature === i.id ? "border-accent bg-accent-soft" : "border-line"}`}>
                 {i.code && <span className="simple-code mr-1">{i.code}</span>}
                 {i.name}
+                {i.from && <span className="simple-small block font-normal">Move from {mWords(i.from, { mcode })}</span>}
               </button>
             </li>
           ))}
         </ul>
-        <label className={label}>
-          Expected lift here
-          <input className={field} value={expected} placeholder="For example +5 a day" onChange={(e) => setExpected(e.target.value)} />
-        </label>
+        {!from && (
+          <label className={label}>
+            Expected lift here
+            <input className={field} value={expected} placeholder="For example +5 a day" onChange={(e) => setExpected(e.target.value)} />
+          </label>
+        )}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-full border border-line bg-surface px-4 py-1.5 text-[15px] font-semibold hover:bg-surface2">
             Cancel
           </button>
-          <button type="button" data-testid="gm-save" disabled={!feature || !m} onClick={() => onSave(feature, m, expected)} className="rounded-full border border-accent bg-accent px-4 py-1.5 text-[15px] font-semibold text-on-accent disabled:opacity-40">
-            Add
+          <button type="button" data-testid="gm-save" disabled={!feature || !m} onClick={() => onSave(feature, m, expected, from?.id ?? null)} className="rounded-full border border-accent bg-accent px-4 py-1.5 text-[15px] font-semibold text-on-accent disabled:opacity-40">
+            {from ? "Move here" : "Add"}
           </button>
         </div>
       </div>
@@ -624,6 +698,9 @@ export function GoalMapPage() {
   const [moved, setMoved] = useState<string | null>(null);
   const [panel, setPanel] = useState<Chip | null>(null);
   const [attach, setAttach] = useState<string | null>(null);
+  const [edit, setEdit] = useState<Edit | null>(null);
+  const [prd, setPrd] = useState<{ name: string; problem: string } | null>(null);
+  const canPrd = useCanStartPrd();
   // goal-map-scoreboard: a Home goal card opens the map on its goal (by id; else by its name).
   const params = useSearchParams();
   const asked = folded?.top(params.get("goal")) ?? params.get("goal");
@@ -641,39 +718,87 @@ export function GoalMapPage() {
     if (!map) return [];
     const ms = new Map(map.milestones.map((m) => [m.id, m]));
     const goals = new Set(map.goals.map((g) => g.id));
+    // One chip for each goal a feature serves, naming every milestone of that goal it is on.
     const placed = map.features.flatMap((f): Chip[] => {
-      const m = ms.get(f.milestones[0] ?? "") ?? null;
-      return m && goals.has(m.goal) ? [{ id: f.id, name: f.name, f, m, goal: m.goal, track: trackOf.get(f.id) ?? null, done: f.released, lift: f.lift }] : [];
+      const on = f.milestones.flatMap((id) => ms.get(id) ?? []).filter((m) => goals.has(m.goal)).sort(byDate);
+      return [...new Set(on.map((m) => m.goal))].map((goal) => {
+        const mine = on.filter((m) => m.goal === goal);
+        return { id: f.id, name: f.name, f, m: mine[0], ms: mine, goal, track: trackOf.get(f.id) ?? null, done: f.released, lift: f.lift };
+      });
     });
     const on = new Set(placed.map((c) => c.id));
-    const loose = map.unplaced.flatMap((u): Chip[] => (u.goal && goals.has(u.goal) && !on.has(u.id) ? [{ id: u.id, name: u.name, f: null, m: null, goal: u.goal, track: trackOf.get(u.id) ?? null, done: doneOf.has(u.id), lift: "not_measured" }] : []));
+    const loose = map.unplaced.flatMap((u): Chip[] => (u.goal && goals.has(u.goal) && !on.has(u.id) ? [{ id: u.id, name: u.name, f: null, m: null, ms: [], goal: u.goal, track: trackOf.get(u.id) ?? null, done: doneOf.has(u.id), lift: "not_measured" }] : []));
     return [...placed, ...loose];
   }, [map, trackOf, doneOf]);
   const tracks = useMemo((): Track[] => {
-    const rows: Track[] = [...(roadmap.data?.tracks ?? [])].map((t, i) => ({ id: t.id, name: t.title, color: TRACK_COLORS[Math.min(i, TRACK_COLORS.length - 2)] }));
+    const rows: Track[] = [...(roadmap.data?.tracks ?? [])].map((t, i) => ({ id: t.id, name: t.title, color: TRACK_COLORS[i % TRACK_COLORS.length] }));
     const known = new Set(rows.map((t) => t.id));
     // A track a feature names that the list lacks still gets its row; features with none get No track.
     for (const i of roadmap.data?.items ?? []) {
       if (!i.track || known.has(i.track.id) || !chips.some((c) => c.track === i.track!.id)) continue;
       known.add(i.track.id);
-      rows.push({ id: i.track.id, name: i.track.title, color: TRACK_COLORS[Math.min(rows.length, TRACK_COLORS.length - 2)] });
+      rows.push({ id: i.track.id, name: i.track.title, color: TRACK_COLORS[rows.length % TRACK_COLORS.length] });
     }
-    if (chips.some((c) => c.track === null)) rows.push({ id: null, name: "No track", color: TRACK_COLORS[TRACK_COLORS.length - 1] });
+    if (chips.some((c) => c.track === null)) rows.push({ id: null, name: "No track", color: NO_TRACK });
     return rows;
   }, [roadmap.data, chips]);
   const act = useActs(map ?? (q.data as GoalMap), (m) => q.setData(() => m), refresh, codes, mcode, tracks, setMoved);
 
   if (!map || !roadmap.data) return <div className="simple-page" role="status">{q.error ? errorMessage(q.error) : roadmap.error ? errorMessage(roadmap.error) : "Loading the goal map…"}</div>;
 
-  const c: Ctx = { map, codes, mcode, tracks, onOpen: setPanel, menu, setMenu, setMover, renaming, setRenaming, moved, act, onAttach: setAttach, prdOf, go: (href) => router.push(href) };
-  const add = async (feature: string, milestone: string, expected: string) => {
+  const c: Ctx = { map, codes, mcode, tracks, onOpen: setPanel, menu, setMenu, setMover, renaming, setRenaming, moved, act, onAttach: setAttach, prdOf, go: (href) => router.push(href), onEdit: setEdit, canPrd };
+  const add = async (feature: string, milestone: string, expected: string, from: string | null) => {
     const f = map.features.find((x) => x.id === feature);
     try {
-      const next = await unwrap(api.POST("/v1/simple/goal-map/links", { body: { feature, milestone, area: f?.area ?? map.areas[0]?.id ?? "", expected, confidence: "medium" } }));
+      const next = await unwrap(
+        from
+          ? api.POST("/v1/simple/goal-map/links/move", { body: { feature, from_milestone: from, to_milestone: milestone } })
+          : api.POST("/v1/simple/goal-map/links", { body: { feature, milestone, area: f?.area ?? map.areas[0]?.id ?? "", expected, confidence: "medium" } }),
+      );
       q.setData(() => next);
       setAttach(null);
       setMoved(feature);
       reveal(`[data-testid="gm-chip"][data-feature="${feature}"]`);
+    } catch (e) {
+      toast({ message: errorMessage(e) });
+    }
+  };
+
+  /** The goal map's own editors: each sends one edit, and the map reads as it now is. */
+  const save = async (x: EditSave) => {
+    if (x.kind === "prd") {
+      const goal = map.goals.find((g) => g.id === x.milestone.goal);
+      const areas = map.areas.filter((a) => x.areas.includes(a.id)).map((a) => a.name);
+      const m = x.milestone;
+      const g = map.guardrail;
+      setEdit(null);
+      setPrd({
+        name: m.name,
+        problem: `Reach ${m.name} (${goal?.name.toLowerCase() ?? m.measure}, ${m.threshold === null ? "no gate yet" : `at least ${num(m.threshold, m.unit)}, held 7 days in a row`}; now ${num(m.current, m.unit)}). Areas: ${areas.join(", ")}.${g ? ` Guardrail: ${g.name.toLowerCase()} ${g.rule}.` : ""}`,
+      });
+      return;
+    }
+    try {
+      if (x.kind === "gate") {
+        const m = x.milestone;
+        const next = await unwrap(api.PATCH("/v1/simple/goal-map/milestones/{milestone_id}", { params: { path: { milestone_id: m.id } }, body: { threshold: x.threshold, after: x.after || null, confirm: x.confirm } }));
+        q.setData(() => next);
+        toast({ message: `${x.confirm ? "Gate confirmed" : "Gate saved"}: ${mWords(m, { mcode })}, at least ${num(x.threshold, m.unit)} for 7 days` });
+      }
+      if (x.kind === "propose") {
+        const next = await unwrap(api.POST("/v1/simple/goal-map/milestones", { body: { name: x.name, goal: x.goal, threshold: x.threshold, areas: x.areas, after: x.after || null } }));
+        q.setData(() => next);
+        toast({ message: `Proposed: ${x.name}${map.approver ? `. Sent to ${map.approver} to approve` : ""}` });
+      }
+      if (x.kind === "metric") {
+        const next = await unwrap(api.POST("/v1/simple/goal-map/goals/{goal_id}/metric", { params: { path: { goal_id: x.goal.id } }, body: { metric: x.metric } }));
+        q.setData(() => next);
+        const title = x.goal.choices.find((ch) => ch.id === x.metric)?.title;
+        toast({ message: next.goals.find((g) => g.id === x.goal.id)?.missing ? `${x.goal.name} now reads ${title}; it has no value yet` : `${x.goal.name} now reads ${title}` });
+        reveal(`[data-testid="gm-goal"][data-goal="${x.goal.id}"]`, "start");
+      }
+      setEdit(null);
+      void refresh();
     } catch (e) {
       toast({ message: errorMessage(e) });
     }
@@ -702,13 +827,15 @@ export function GoalMapPage() {
         <TracksGrid chips={chips} lines={folded?.lines ?? new Map()} c={c} />
         {mover && <MovePicker f={mover} c={c} onClose={() => setMover(null)} />}
       </div>
-      {attach && <AttachDrawer map={map} milestone={attach} codes={codes} mcode={mcode} onClose={() => setAttach(null)} onSave={(f, m, e) => void add(f, m, e)} />}
+      {attach && <AttachDrawer map={map} milestone={attach} codes={codes} mcode={mcode} onClose={() => setAttach(null)} onSave={(f, m, e, from) => void add(f, m, e, from)} />}
+      {edit && <Editor map={map} edit={edit} onClose={() => setEdit(null)} onSave={(x) => void save(x)} />}
+      {prd && <NewPrdSheet prefill={prd} onClose={() => setPrd(null)} onStarted={() => toast({ message: `New PRD started: “${prd.name}”` })} />}
       {panel && (
         <FeaturePanel
           id={panel.id}
           code={codes.get(panel.id)}
           name={panel.name}
-          placed={placement(map, panel.id, mcode)}
+          placed={placement(map, panel, mcode)}
           onClose={() => {
             setPanel(null);
             void refresh();

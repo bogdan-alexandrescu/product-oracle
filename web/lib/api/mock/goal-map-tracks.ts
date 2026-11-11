@@ -209,7 +209,7 @@ export function tracksMap(hard: boolean): GoalMap {
   if (hard) HARD_MS.forEach(([name, iso, status, t], i) => milestones.push(ms(`gth${i}`, name, "gtdemos", iso, status, t)));
   const features: GmFeature[] = featureRows(hard).flatMap(({ id, row: [name, area, m, state] }) => {
     if (!m) return [];
-    const lift = state === "shipped" ? "helping" : state === "nothelping" ? "not_helping" : "not_measured";
+    const lift: GmFeature["lift"] = state === "shipped" ? "helping" : state === "nothelping" ? "not_helping" : "not_measured";
     const lever = GM_TRACKS.find((t) => t.area === area)?.lever ?? "";
     const on = name === GM_TRACKS_TWO.name ? [m, GM_TRACKS_TWO.also] : [m];
     const links = on.map((x) => {
