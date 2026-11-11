@@ -267,6 +267,9 @@ PER_ITEM: dict[str, Role | None] = {
     "make_new_interview_link": "approver",
     "mark_metric_variance_unknown": "approver",
     "mark_request_reply_sent": "approver",
+    # qa-prio-twins: an approver who decides every roadmap the twin's items are on (an owner
+    # decides them all; oracle.simple.priorities.merge_twin).
+    "merge_simple_priority_twin": "owner",
     "mirror_discussion_to_slack": "approver",
     "notify_request_reply": "approver",
     "open_oracle_action": "owner",
