@@ -2228,13 +2228,7 @@ function UndatedBuckets({ data, suggestions, reload, kr }: { data: Out; suggesti
   const buckets: Bucket[] = all.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0)).map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
   const percent = sharePercents(buckets.map((b) => b.weeks));
   const weeksOf = (r: Row) => (r.effort == null ? "" : weeksWords(r.effort));
-  // A goal's features as Archive and Delete count them: every live feature serving it, whatever its
-  // dates (a bucket holds only this quarter's work), so none loses its goal unasked.
-  const featuresOf: GoalFeatures = (title) => {
-    const g = gb?.goals.find((x) => sameGoal(x.title, title));
-    return g ? (gb?.features ?? []).filter((f) => f.goal_ids?.includes(g.id)).map((f) => ({ code: f.key, name: rowOf.get(f.key)?.title ?? f.title, slices: [] })) : [];
-  };
-  const acts = useGoalActs({ gb, plan: null, featuresOf, writes, rights });
+  const acts = useGoalActs({ gb, plan: null, featuresOf: goalFeatures(gb, data, null), writes, rights });
   // Round 6: no work this quarter is said in words, not as "0 weeks" over an empty chart.
   const planned = data.weeks_total > 0;
   return (
@@ -2555,7 +2549,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload, kr }: { data: Out;
   const acts = useGoalActs({
     gb,
     plan,
-    featuresOf: (t) => planFeatures(plan, t),
+    featuresOf: goalFeatures(gb, data, plan),
     writes,
     rights,
     // gb2-a-result: the archived bucket is gone, so on a wider screen the page scrolls back to the
@@ -2765,6 +2759,29 @@ function undoOf(note: Note, writes: ReturnType<typeof useBucketWrites>, tasks?: 
   // A task change: Undo takes its changes back, in the order they were made.
   if (note.changes?.length && tasks) return () => void tasks.undo(note.changes!);
   return undefined;
+}
+
+/**
+ * A goal's features as Archive and Delete count and list them: every live feature serving it (its
+ * goal links), the plan's, and the roadmap items and drafts that name it, whatever their dates (a
+ * bucket holds only this quarter's work), so none loses its goal unasked (goal-delete-dated).
+ */
+function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan: Schemas["SimplePlanOut"] | null): GoalFeatures {
+  return (title) => {
+    const g = gb?.goals.find((x) => sameGoal(x.title, title));
+    if (!g) return [];
+    const rowOf = new Map(data.rows.map((r) => [r.code, r]));
+    const out = new Map<string, ReturnType<GoalFeatures>[number]>();
+    const add = (code: string, name: string) => {
+      if (out.has(code.toLowerCase()) || [...out.values()].some((f) => f.name === name)) return;
+      const slices = plan?.slices.filter((s) => s.feature_code.toLowerCase() === code.toLowerCase()) ?? [];
+      out.set(code.toLowerCase(), { code, name, slices, tag: knownCode(code) ? code : null });
+    };
+    if (plan) for (const f of planFeatures(plan, title)) add(f.code, f.name);
+    for (const f of gb?.features ?? []) if (f.goal_ids?.includes(g.id)) add(f.key, rowOf.get(f.key)?.title ?? f.title);
+    for (const r of [...data.rows, ...data.unranked, ...data.drafts]) if (r.goal && sameGoal(r.goal.title, title)) add(r.code, r.title);
+    return [...out.values()];
+  };
 }
 
 /**

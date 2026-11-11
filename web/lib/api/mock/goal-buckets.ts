@@ -194,6 +194,28 @@ function moveOff(db: GoalBucketsDb, g: Goal, to: string | null): Feature[] {
   return before;
 }
 
+/** A roadmap item's own goals (the API's RoadmapItem.goal_ids): the one it moves most, then the others. */
+type ItemGoals = { key: string; roadmap?: string; goal?: string; goals?: string[] };
+const itemGoals = (s: ItemGoals) => [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])];
+
+/** trash_items.trash_goal: the items that name the goal as their own serve `to` instead (first,
+ * unless they serve it already); their goals as they were, for Restore. */
+function moveItemsOff(items: ItemGoals[], g: Goal, to: Goal): NonNullable<TrashEntryRow["item_goals"]> {
+  const from = itemGoalKey(g) ?? g.key;
+  const toKey = itemGoalKey(to) ?? to.key;
+  const was: NonNullable<TrashEntryRow["item_goals"]> = [];
+  for (const s of items) {
+    const ids = itemGoals(s);
+    if (!ids.includes(from)) continue;
+    was.push({ key: s.key, roadmap: s.roadmap, goals: ids, from, to: toKey });
+    const rest = ids.filter((k) => k !== from);
+    const next = rest.includes(toKey) ? rest : [toKey, ...rest];
+    s.goal = next[0];
+    s.goals = next.slice(1);
+  }
+  return was;
+}
+
 /** The item goal key of a bucket goal: the roadmap's goal of that name. */
 const itemGoalKey = (g: Goal | undefined) => (g ? Object.keys(GOALS).find((k) => GOALS[k].toLowerCase() === g.title.toLowerCase()) : undefined);
 /** goal-order: a bucket goal's key in the one goal order: the roadmap's goal of that name, else its name. */
@@ -281,13 +303,14 @@ export function unarchiveGoal(db: GoalBucketsDb, id: string): { g: Goal; undo: U
  * is rewritten (the reads leave the trashed goal out of every feature's links); with `to` its
  * features move there as Archive moves them, and their links as they were are kept on the entry
  * for Restore (its Undo). A proposal to delete it is closed, "Already in Trash". */
-export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, to: string | null, reason: string | null, simple?: { changes?: { op: string; status: string; target: Record<string, unknown> }[] }): TrashEntryRow | Response {
+export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, to: string | null, reason: string | null, simple?: { changes?: { op: string; status: string; target: Record<string, unknown> }[]; items?: ItemGoals[] }): TrashEntryRow | Response {
   const g = db.goals.find((x) => x.id === id && !x.trashed);
   if (!g) return json(404, { detail: "No such goal" });
   if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
   // G-4: the features that served it, which Trash says come back with it.
   const features = db.features.filter((f) => f.goal_ids.includes(g.id)).length;
   const before = to ? moveOff(db, g, to) : [];
+  const item_goals = to ? moveItemsOff(simple?.items ?? [], g, db.goals.find((x) => x.id === to)!) : [];
   g.trashed = true;
   const at = bin.now();
   for (const c of simple?.changes ?? []) {
@@ -304,6 +327,7 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, 
     },
     documents: [], versions: [], runs: [], intakes: [],
     goal_links: before.map((f) => ({ id: f.id, goal_ids: f.goal_ids, left: [...(db.features.find((x) => x.id === f.id)?.goal_ids ?? [])] })),
+    item_goals,
   };
   bin.trash.entries.push(row);
   return row;
