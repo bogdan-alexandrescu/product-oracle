@@ -105,6 +105,14 @@ test("vqa-b: Present's When slide lists the PRD's item with no plan milestone un
   const rows = group.getByTestId("timeline-no-milestone-item");
   await expect(rows).toHaveCount(1);
   await expect(rows.getByRole("button", { name: "Calendar invite sync" })).toBeVisible();
+  // Its name opens the feature's panel over the slides, as on the page.
+  await rows.getByRole("button", { name: "Calendar invite sync" }).click();
+  const panel = page.getByRole("complementary", { name: "Calendar invite sync" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("dialog", { name: "Calendar invite sync" })).toBeVisible();
+  await expect(panel).not.toContainText("not on a roadmap you can see");
+  await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
+  await expect(page.getByTestId("slides")).toBeVisible();
 });
 
 test.describe("vqa-b on a phone", () => {
@@ -123,7 +131,12 @@ test.describe("vqa-b on a phone", () => {
     const rows = group.getByTestId("timeline-no-milestone-item");
     await expect(rows).toHaveCount(1);
     await rows.getByRole("button", { name: "Calendar invite sync" }).click();
-    await expect(page.getByRole("complementary", { name: "Calendar invite sync" })).toBeVisible();
+    // On a phone the loaded panel is a bottom sheet (a dialog), not the side panel shown while it loads.
+    const sheet = page.getByTestId("item-panel").getByRole("dialog", { name: "Calendar invite sync" });
+    await expect(sheet).toBeVisible();
+    await expect(sheet).toHaveAttribute("data-sheet", "bottom");
+    await expect(sheet.getByRole("heading", { name: "Calendar invite sync" })).toBeInViewport();
+    await expect(page.getByTestId("item-panel")).not.toContainText("not on a roadmap you can see");
   });
 });
 
