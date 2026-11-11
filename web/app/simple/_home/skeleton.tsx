@@ -1,15 +1,19 @@
 "use client";
 
 import { Bar, GoalBandSkeleton, HomeCardSkeleton } from "@/app/simple/_home/cards";
+import { Icon } from "@/components/ds/Icon";
 import { SimplePage } from "@/components/simple/SimplePage";
 
 /**
- * The greeting's sentence keeps the lines it wraps to from the first paint, so the goal band under
- * it never jumps as it fills: the header's width says how many ("Decisions, broken links and a run
- * wait on you. More waits in your Inbox." takes 2 lines on a desktop, 3 on a phone, 4 beside a
- * narrow window's rail). The header is the container: Home and its skeleton both use this.
+ * The greeting's sentence keeps, on the first paint, the lines its longest form wraps to, so the
+ * goal band under it never jumps down as it fills (home-greeting-fit). The longest form names
+ * three kinds, then "and more", then the Inbox ("Good morning, Avery. Decisions, a proposal,
+ * broken links and more wait on you. More waits in your Inbox."): 2 lines from a 34rem header
+ * up, 3 on a phone, 4 on a narrow phone, 5 beside a narrow window's rail. Kept on the skeleton
+ * only: the page's own sentence takes the lines it needs, so a short greeting leaves no empty
+ * lines (the band moves up once, never down). The header is the container.
  */
-export const LEAD = "simple-lead min-h-[4lh] @xs:min-h-[3lh] @xl:min-h-[2lh]";
+const LEAD = "simple-lead min-h-[5lh] @[19rem]:min-h-[4lh] @sm:min-h-[3lh] @[34rem]:min-h-[2lh]";
 
 /**
  * Simple's Home before the person and their permissions are known (#723 production walk: the
@@ -27,9 +31,13 @@ export function HomeSkeleton() {
         <p className={LEAD}>
           <Bar className="w-80 max-w-full" />
         </p>
-        {/* Where "Walk me through it" lands (a reader's Home keeps the slot empty). */}
-        <div aria-hidden>
+        {/* Home's own action row, "Walk me through it" and "+ New PRD", wrapping as they do
+            (beside a narrow window's rail, to two rows). A reader's Home has none: its band moves up. */}
+        <div aria-hidden className="flex flex-wrap gap-2">
           <span className="simple-button animate-pulse text-transparent">Walk me through it</span>
+          <span className="simple-button animate-pulse text-transparent">
+            <Icon name="plus" size={18} /> New PRD
+          </span>
         </div>
       </header>
       <section aria-label="Goals" data-testid="home-goals">
