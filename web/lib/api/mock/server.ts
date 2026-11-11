@@ -5880,13 +5880,43 @@ function inProse(text: string, rewrite: (s: string) => string): string {
  * The full layer's markdown export, as the API's export/render.py render_markdown (X-17): no banner
  * comment, `[c:id]` citations as Markdown footnotes, and the days after the front matter month
  * first ("Oct 31, 2026"); the front matter and each heading's `{#id}` stay so it imports again.
+ * A roadmap's names the PRDs that feed it under its title (owner, Nov 10; prdsLine).
  */
-function exportMarkdown(doc: DocumentRow, v: VersionRow): string {
+function exportMarkdown(db: Db, doc: DocumentRow, v: VersionRow): string {
   const markdown = markdownFootnotes(versionMarkdown(doc, v), v.citations);
+  const prds = doc.kind === "roadmap" ? feedingPrds(db, doc, v) : [];
   const m = /^---[ \t]*\r?\n[\s\S]*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|$(?![\s\S]))/m.exec(markdown);
-  if (!markdown.startsWith("---") || !m || m.index !== 0) return inProse(markdown, daysInWords);
+  if (!markdown.startsWith("---") || !m || m.index !== 0) return prdsLine(inProse(markdown, daysInWords), prds);
   const head = markdown.slice(0, m[0].length);
-  return (head.endsWith("\n") ? head : `${head}\n`) + inProse(markdown.slice(m[0].length), daysInWords);
+  return (head.endsWith("\n") ? head : `${head}\n`) + prdsLine(inProse(markdown.slice(m[0].length), daysInWords), prds);
+}
+
+/**
+ * The titles of the PRDs that feed a roadmap version, in the company's PRD order (prdOrder), as the
+ * API's export/render.py feeding_prds: the PRD it was built from and those its items come from
+ * (its Simple items too, by the roadmap's slug), none in Trash.
+ */
+function feedingPrds(db: Db, doc: DocumentRow, v: VersionRow): string[] {
+  const ids = new Set<string>();
+  if (v.source?.document_id) ids.add(v.source.document_id);
+  for (const i of db.roadmap?.items[v.id] ?? []) if (i.prd.document?.id) ids.add(i.prd.document.id);
+  for (const s of db.simple_roadmap?.items ?? []) if (s.roadmap === doc.slug && s.prd_doc && !s.trashed && !s.draft && !s.draft_roadmap) ids.add(s.prd_doc.id);
+  const rank = prdOrder(db);
+  return db.documents
+    .filter((d) => ids.has(d.id) && (d.kind ?? "prd") === "prd")
+    .sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER))
+    .map((d) => d.title);
+}
+
+/** As the API's export/render.py prds_line: "From the PRDs: <titles>" in a paragraph of its own under the first
+ * level-1 heading (the title), or at the top when there is none; unchanged with no PRDs. */
+function prdsLine(body: string, prds: string[]): string {
+  if (!prds.length) return body;
+  const line = `From the PRDs: ${prds.map((t) => t.split(/\s+/).filter(Boolean).join(" ")).join(", ")}`;
+  const m = /^# [^\n]*\n?/m.exec(body);
+  if (!m) return `${line}\n\n${body.trimStart()}`;
+  const rest = body.slice(m.index + m[0].length).replace(/^\n+/, "");
+  return `${body.slice(0, m.index)}${m[0].replace(/\n$/, "")}\n\n${line}\n\n${rest}`;
 }
 
 function escapeHtml(s: string) {
@@ -9104,7 +9134,7 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
       return new Response(exportHtml(doc, brief, db.branding, badge), { headers: { "content-type": "text/html" } });
     }
     if (format === "md") {
-      return new Response(exportMarkdown(doc, v), {
+      return new Response(exportMarkdown(db, doc, v), {
         headers: { "content-type": "text/markdown" },
       });
     }

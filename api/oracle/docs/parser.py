@@ -92,6 +92,13 @@ DATE_MARK_COMMENT_RE = re.compile(
 # The banner line a markdown export writes after the front matter
 # (oracle.export.render.render_markdown), dropped on import with the markers above.
 EXPORT_BANNER_RE = re.compile(r"^<!-- Product Oracle export: [^\n]*? -->\n", re.M)
+# The line a roadmap's markdown export writes under its title, or at the top of its body
+# (oracle.export.render.prds_line): the PRDs that feed it, dropped on import too.
+EXPORT_PRDS_RE = re.compile(
+    r"(?:\A((?:---[ \t]*\n.*?\n(?:---|\.\.\.)[ \t]*\n)?)|^(# [^\n]*\n)\n)"
+    r"From the PRDs: [^\n]*\n\n?",
+    re.S | re.M,
+)
 
 # Every parse of a draft is of untrusted text: guarded (oracle.parse_budget), so a parse
 # stops at its CPU budget. The sections come from the block structure alone (headings and
@@ -700,8 +707,14 @@ def _check_citations(
 
 def prepared(markdown: str) -> str:
     """A draft's text as :func:`parse_draft` reads it: an export's banner and date marker
-    comments dropped, then :func:`normalize`."""
-    return normalize(EXPORT_BANNER_RE.sub("", DATE_MARK_COMMENT_RE.sub("", markdown)))
+    comments dropped, then :func:`normalize`, then a roadmap export's PRDs line dropped."""
+    text = normalize(EXPORT_BANNER_RE.sub("", DATE_MARK_COMMENT_RE.sub("", markdown)))
+    return EXPORT_PRDS_RE.sub(_without_prds, text, count=1)
+
+
+def _without_prds(m: re.Match[str]) -> str:
+    """An :data:`EXPORT_PRDS_RE` match without the line: the front matter or the title kept."""
+    return m.group(1) if m.group(2) is None else f"{m.group(2)}\n"
 
 
 def body_problems(text: str) -> list[ImportProblem]:
