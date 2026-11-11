@@ -5,7 +5,9 @@
  * same milestone as a track milestone (one of its code holding items on its roadmap: the one, for
  * one of no goal, else one whose name it leads or follows, whatever else of the code is there)
  * or as a PRD's (or the roadmap's own) milestone of its code with a name that matches shares its code;
- * a goal's own milestone whose name matches a PRD's milestone of any code or goal on its roadmap too.
+ * a goal's own milestone whose name matches a PRD's milestone of any code on its roadmap of its goal or
+ * none too (the closest in date, then the exact name; one goal's own per PRD milestone, by goal order).
+ * A joined group goes by its goal's own milestone's date (its track milestone's first, else its earliest).
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -45,24 +47,36 @@ export function withRoadmapCodes<T extends { goal_milestones?: Gm[]; milestones:
   // the roadmap's own) milestone of its code on its roadmap whose name it leads or follows.
   const into = new Map<string, string>();
   // One with no name matches only as its roadmap's only one of its code (a bare "M3" never takes every goal's M3).
-  const best = (g: Gm, of: (Gm | Tm)[], alone: boolean) => {
+  const days = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 864e5;
+  const best = (g: Gm, of: (Gm | Tm)[], alone: boolean, near = false) => {
     const name = split(g.name)[1];
     const ok = (m: Gm | Tm) => (words(name).length && words(split(m.name)[1]).length ? match(name, split(m.name)[1]) : alone);
     const same = (m: Gm | Tm) => words(split(m.name)[1]).join(" ") === words(name).join(" ");
-    const hits = of.filter(ok).sort((p, q) => Number(!same(p)) - Number(!same(q)) || (p.id < q.id ? -1 : 1));
+    const gap = (m: Gm | Tm) => (near && g.date && m.date ? Math.abs(days(m.date) - days(g.date)) : Infinity);
+    const by = (p: Gm | Tm, q: Gm | Tm) => (gap(p) === gap(q) ? 0 : gap(p) < gap(q) ? -1 : 1);
+    const hits = of.filter(ok).sort((p, q) => by(p, q) || Number(!same(p)) - Number(!same(q)) || (p.id < q.id ? -1 : 1));
     return hits[0]?.id ?? null;
   };
-  // No goal first, then a PRD's of a goal (a goal's own may join either), then a goal's own.
+  // No goal first, then a PRD's of a goal (a goal's own may join either), then a goal's own by goal order.
   const order = (g: Gm) => Number(!!g.goal_id) + Number(!!g.goal_id && !g.prd);
-  for (const g of [...goals].sort((p, q) => order(p) - order(q) || (p.id < q.id ? -1 : 1))) {
+  const rankOf = (g: Gm) => (g.goal_id && !g.prd ? goalRank(g.goal_id) : 0);
+  const prds = new Set(goals.filter((o) => !!o.prd).map((o) => o.id));
+  const taken = new Set<string>(); // PRD milestones a goal's own milestone has joined
+  for (const g of [...goals].sort((p, q) => order(p) - order(q) || rankOf(p) - rankOf(q) || (p.id < q.id ? -1 : 1))) {
     const code = gmCode(g);
     const there = tracks.filter((t) => !!code && split(t.name)[0] === code && !!held.get(t.id)?.has(g.roadmap_id));
     const plain = goals.filter((o) => !!code && !o.goal_id && o !== g && o.roadmap_id === g.roadmap_id && gmCode(o) === code);
     const alike = new Set(goals.filter((o) => o.roadmap_id === g.roadmap_id && gmCode(o) === code).map((o) => `${o.goal_id ?? ""}|${o.prd?.id ?? ""}`));
     const alone = alike.size === 1 && there.length === 1;
-    // Goal map twins (Nov 10): a goal's own milestone is a PRD's on its roadmap of the same name, whatever the PRD's code or goal.
-    const twins = goals.filter((o) => !!o.prd && o !== g && o.roadmap_id === g.roadmap_id);
-    let to = !g.goal_id && there.length === 1 ? there[0].id : (best(g, there, alone) ?? (g.goal_id ? (best(g, plain, false) ?? (g.prd ? null : best(g, twins, false))) : null));
+    // Goal map twins (Nov 10): a goal's own milestone is a PRD's on its roadmap of the same name, whatever the PRD's
+    // code, of its goal or none ("Join only within the same goal", the owner, Nov 11).
+    const twins = goals.filter((o) => !!o.prd && o !== g && o.roadmap_id === g.roadmap_id && (!o.goal_id || o.goal_id === g.goal_id));
+    let to = !g.goal_id && there.length === 1 ? there[0].id : (best(g, there, alone) ?? (g.goal_id ? (best(g, plain, false) ?? (g.prd ? null : best(g, twins, false, true))) : null));
+    // One goal's own milestone per PRD milestone; another stays its own.
+    if (to && g.goal_id && !g.prd && prds.has(to)) {
+      if (taken.has(to)) to = null;
+      else taken.add(to);
+    }
     if (!to) {
       groups.set(g.id, [g]);
       continue;
@@ -75,7 +89,8 @@ export function withRoadmapCodes<T extends { goal_milestones?: Gm[]; milestones:
   const key = (ms: (Gm | Tm)[]) => {
     const lead = ms[0];
     const dates = ms.flatMap((m) => (m.date ? [m.date] : [])).sort();
-    const when = lead.date ?? dates[0] ?? null;
+    const own = ms.flatMap((m) => ("goal_id" in m && m.goal_id && !m.prd && m.date ? [m.date] : []));
+    const when = "track_id" in lead ? (lead.date ?? dates[0] ?? null) : (own[0] ?? dates[0] ?? null);
     const rank = Math.min(far, ...ms.flatMap((m) => ("goal_id" in m && m.goal_id ? [goalRank(m.goal_id)] : [])));
     const name = "track_id" in lead ? split(lead.name)[1] : lead.name;
     return { when, rank, name: name.toLowerCase(), id: lead.id };

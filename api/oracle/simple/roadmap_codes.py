@@ -13,8 +13,12 @@ other's), whatever else of the code the roadmap holds; one with no name matches 
 roadmap's only one of that code (the owner's "Join
 whenever names match", Nov 9). A goal's milestone whose name matches a PRD's (or the roadmap's
 own) milestone of its code on its roadmap is that milestone too, and so is a goal's own
-milestone whose name matches a PRD's milestone of any code or goal on its roadmap (the Goal
-map's twins, Nov 10). No name is hidden: each
+milestone whose name matches a PRD's milestone of any code on its roadmap (the Goal map's
+twins, Nov 10), only when that PRD milestone serves the same goal or none ("Join only within
+the same goal", Nov 11). Of several such PRD milestones the closest in date joins, then the
+one of its exact name; at most one goal's own milestone joins a given PRD milestone (goal
+order first), the others keep their own codes. A joined group is dated by its goal's own
+milestone (else its track milestone's, else its earliest). No name is hidden: each
 surface shows the longer name and lists the other ("Also: ...").
 
 Codes go by date (undated last); on one date by goal order (``oracle.baseline.goal_order``,
@@ -89,7 +93,9 @@ def assign(
     # whose name it leads or follows, whatever else of the code the roadmap holds.
     into: dict[uuid.UUID, uuid.UUID] = {}
 
-    def best(gm: SimpleGoalMilestone, of: list, alone: bool) -> uuid.UUID | None:
+    def best(
+        gm: SimpleGoalMilestone, of: list, alone: bool, near: bool = False
+    ) -> uuid.UUID | None:
         # Two names match when one's words lead the other's; one with no name only as the
         # roadmap's only one of its code (a bare "M3" never takes every goal's M3).
         name = split(gm.name)[1]
@@ -98,15 +104,28 @@ def assign(
             other = split(m.name)[1]
             return _match(name, other) if _words(name) and _words(other) else alone
 
+        def gap(m: SimpleGoalMilestone | SimpleMilestone) -> float:
+            if not near or gm.date is None or m.date is None:
+                return float("inf")
+            return abs((m.date - gm.date).days)
+
         hits = sorted(
             (m for m in of if ok(m)),
-            key=lambda m: (_words(split(m.name)[1]) != _words(name), str(m.id)),
+            key=lambda m: (gap(m), _words(split(m.name)[1]) != _words(name), str(m.id)),
         )
         return hits[0].id if hits else None
 
-    # No goal first, then a PRD's of a goal (a goal's own may join either), then a goal's own.
+    far = len(goal_rank) + 1
+
+    # No goal first, then a PRD's of a goal (a goal's own may join either), then a goal's own
+    # by goal order (the first takes a PRD milestone its name matches).
     def order(g: SimpleGoalMilestone) -> tuple:
-        return (g.goal_id is not None) + (g.prd is None and g.goal_id is not None), str(g.id)
+        own = g.prd is None and g.goal_id is not None
+        rank = goal_rank.get(g.goal_id, far) if own and g.goal_id else 0
+        return (g.goal_id is not None) + own, rank, str(g.id)
+
+    prds = {g.id for g in goal_ms if g.prd is not None}
+    taken: set[uuid.UUID] = set()  # PRD milestones a goal's own milestone has joined
 
     for gm in sorted(goal_ms, key=order):
         code = _gm_code(gm)
@@ -131,27 +150,45 @@ def assign(
             }
             alone = len(alike) == 1 and len(there) == 1
             # Goal map twins (Nov 10): a goal's own milestone is a PRD's milestone on its
-            # roadmap of the same name, whatever the PRD's code (its plan's) or goal.
+            # roadmap of the same name, whatever the PRD's code (its plan's), of its goal or
+            # none ("Join only within the same goal", the owner, Nov 11).
             twins = [
                 g
                 for g in goal_ms
                 if g.prd is not None and g is not gm and g.roadmap_id == gm.roadmap_id
-            ]
+                and g.goal_id in (None, gm.goal_id)
+            ]  # fmt: skip
             to = best(gm, there, alone)
             if to is None and gm.goal_id is not None:
-                to = best(gm, plain, False) or (best(gm, twins, False) if gm.prd is None else None)
+                to = best(gm, plain, False) or (
+                    best(gm, twins, False, near=True) if gm.prd is None else None
+                )
+                # One goal's own milestone per PRD milestone; another stays its own.
+                if gm.prd is None and to in prds:
+                    if to in taken:
+                        to = None
+                    else:
+                        taken.add(to)
         if to is None:
             groups[gm.id] = [gm]
             continue
         to = into.get(to, to)
         into[gm.id] = to
         groups.setdefault(to, []).append(gm)
-    far = len(goal_rank) + 1
 
     def key(members: list[SimpleGoalMilestone | SimpleMilestone]) -> tuple:
         lead = members[0]
         dates = [m.date for m in members if m.date is not None]
-        when: date | None = lead.date or (min(dates) if dates else None)
+        # A joined group goes by its goal's own milestone's date (its track milestone's first).
+        own = [
+            m.date
+            for m in members
+            if isinstance(m, SimpleGoalMilestone) and m.goal_id and m.prd is None and m.date
+        ]
+        if isinstance(lead, SimpleMilestone):
+            when: date | None = lead.date or (min(dates) if dates else None)
+        else:
+            when = own[0] if own else (min(dates) if dates else None)
         ranks = [
             goal_rank.get(m.goal_id, far)
             for m in members

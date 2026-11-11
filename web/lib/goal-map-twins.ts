@@ -1,27 +1,28 @@
 /**
  * Goal map twins (the owner's "Join whenever names match", Nov 9): a PRD's milestone the roadmap
  * read codes as one with a goal's own milestone on the map (oracle.simple.roadmap_codes) is that
- * milestone, so the map draws it once: the goal's own card, holding the twin's features and gaps.
+ * milestone, so the map draws it once: the goal's own card, holding the twin's features and gaps. Only within
+ * the same goal ("Join only within the same goal", Nov 11): a PRD milestone of another goal stays its own card.
  * `also` gives each kept card the twin's name when it differs (its (i)).
  */
 import type { Schemas } from "@/lib/api/client";
 import type { GoalMap } from "@/lib/api/mock/goal-map";
 
-type Read = Pick<Schemas["SimpleGoalMilestone"], "id" | "roadmap_code" | "prd" | "name">;
+type Read = Pick<Schemas["SimpleGoalMilestone"], "id" | "roadmap_code" | "prd" | "name" | "goal_id">;
 
 export function joinTwins(map: GoalMap, read: Read[] | undefined): { map: GoalMap; also: Map<string, string> } {
   const also = new Map<string, string>();
   const of = new Map((read ?? []).map((m) => [m.id, m]));
-  // Each code's goal's own milestone on the map (no PRD), then each PRD milestone sharing its code.
-  const own = new Map<string, string>();
+  // Each code's goal's own milestones on the map (no PRD), then each PRD milestone sharing its code and goal (or of none).
+  const own = new Map<string, { id: string; goal: string | null }[]>();
   for (const m of map.milestones) {
     const r = of.get(m.id);
-    if (r?.roadmap_code && !r.prd && !own.has(r.roadmap_code)) own.set(r.roadmap_code, m.id);
+    if (r?.roadmap_code && !r.prd) own.set(r.roadmap_code, [...(own.get(r.roadmap_code) ?? []), { id: m.id, goal: r.goal_id ?? null }]);
   }
   const to = new Map<string, string>();
   for (const m of map.milestones) {
     const r = of.get(m.id);
-    const keep = r?.prd && r.roadmap_code ? own.get(r.roadmap_code) : undefined;
+    const keep = r?.prd && r.roadmap_code ? own.get(r.roadmap_code)?.find((o) => !r.goal_id || o.goal === r.goal_id)?.id : undefined;
     if (!keep || keep === m.id) continue;
     to.set(m.id, keep);
     const kept = map.milestones.find((x) => x.id === keep)!;
