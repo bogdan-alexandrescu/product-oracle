@@ -4,7 +4,7 @@
  * Simple Goal map, drawn as "Goals by tracks grid" (the owner's pick of Nov 11, proposal B): the
  * goals across as columns, each with its milestone strip under it, and the roadmap's tracks as
  * rows; each cell lists the features where that track serves that goal, as chips with their
- * milestone. A phone scrolls the grid sideways with the track names held at the left. Every chip
+ * milestones of that goal (a feature serving two goals has a chip under each). A phone scrolls the grid sideways with the track names held at the left. Every chip
  * opens Simple's one feature panel; the menus rename, add, move and trash, each with Undo, and open
  * the goal map's own editors (a gate, a proposed milestone, a goal's metric, a PRD from a milestone).
  */
@@ -153,10 +153,10 @@ const mWords = (m: M, c: { mcode: Map<string, string> }) => `${c.mcode.get(m.id)
 /** A status badge; one that asks for something (No gate, Not measured) leads to the action that resolves it. */
 function Status({ s, on, small, hint }: { s: string; on?: () => void; small?: boolean; hint?: string }) {
   const [w, cls] = STATUS[s] ?? STATUS.not_measured;
-  const look = `whitespace-nowrap rounded-full font-semibold ${small ? "px-1.5 text-[11.5px]" : "px-2 py-0.5 text-[13px]"} ${cls}`;
+  const look = `whitespace-nowrap rounded-full font-semibold ${small ? "px-1.5 text-[12px]" : "px-2 py-0.5 text-[13px]"} ${cls}`;
   if (!on) return <span className={look}>{w}</span>;
   return (
-    <button type="button" title={hint} onClick={(e) => (e.stopPropagation(), on())} className={`${look} underline decoration-dotted underline-offset-2 hover:decoration-solid`}>
+    <button type="button" title={hint} onClick={(e) => (e.stopPropagation(), on())} className={`${look} hover:brightness-95`}>
       {w}
     </button>
   );
@@ -320,20 +320,45 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
     for (const x of xs) next = await one(x);
     return next;
   };
-  /** Moves a chip; its Undo. No milestone takes it off every milestone of its goal; Undo puts each link back as it was. */
+  /**
+   * Moves the links of a chip's own goal; its Undo puts each back as it was. To a milestone: the
+   * first moves there and the rest of that goal let go; No milestone: every one of them lets go.
+   */
   const moveRaw = async (f: Chip, to: string | null): Promise<{ next: GoalMap | null; back: () => Promise<GoalMap | null> }> => {
-    const from = f.m?.id ?? null;
-    if (from && to) {
-      const next = await unwrap(api.POST("/v1/simple/goal-map/links/move", { body: { feature: f.id, from_milestone: from, to_milestone: to } }));
-      return { next, back: () => unwrap(api.POST("/v1/simple/goal-map/links/move", { body: { feature: f.id, from_milestone: to, to_milestone: from } })) };
+    const [first, ...rest] = f.ms.map((m) => linkOf(f, m.id));
+    if (!to) {
+      if (!first) return { next: null, back: async () => null };
+      const links = [first, ...rest];
+      return { next: await each(links, (l) => detach(f, l.milestone)), back: () => each(links, (l) => attach(f, l)) };
     }
-    if (!from && to) return { next: await attach(f, { milestone: to, expected: "", confidence: "Medium" }), back: () => detach(f, to) };
-    if (from && !to) {
-      const links = f.ms.map((m) => linkOf(f, m.id));
-      const next = await each(links, (l) => detach(f, l.milestone));
-      return { next, back: () => each(links, (l) => attach(f, l)) };
-    }
-    return { next: null, back: async () => null };
+    if (!first) return { next: await attach(f, { milestone: to, expected: "", confidence: "Medium" }), back: () => detach(f, to) };
+    const moved = await unwrap(api.POST("/v1/simple/goal-map/links/move", { body: { feature: f.id, from_milestone: first.milestone, to_milestone: to } }));
+    const next = (await each(rest, (l) => detach(f, l.milestone))) ?? moved;
+    return {
+      next,
+      back: async () => {
+        const was = await unwrap(api.POST("/v1/simple/goal-map/links/move", { body: { feature: f.id, from_milestone: to, to_milestone: first.milestone } }));
+        return (await each(rest, (l) => attach(f, l))) ?? was;
+      },
+    };
+  };
+  /** A move's toast, with its Undo and what that Undo says once done. */
+  const told = (message: string, back: () => Promise<GoalMap | null>, backWords: string) =>
+    toast({
+      message,
+      action: {
+        label: "Undo",
+        onClick: () =>
+          void back().then((m) => {
+            if (m) setMap(m);
+            toast({ message: backWords });
+          }, failed),
+      },
+    });
+  /** A milestone's name, with its goal's when that is not the goal named. */
+  const where = (id: string, goal: string | null) => {
+    const g = map.goals.find((x) => x.id === map.milestones.find((m) => m.id === id)?.goal);
+    return `${msWords(id)}${g && g.id !== goal ? ` (${g.name})` : ""}`;
   };
   /** A change through the change engine: applied (with Undo), else what it waits for. */
   const change = async (r: ChangeResult, words: string, back: string) => {
@@ -348,22 +373,41 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
         if (!next) return;
         setMap(next);
         setMoved(f.id);
-        reveal(`[data-testid="gm-chip"][data-feature="${f.id}"]`);
-        const toGoal = map.goals.find((g) => g.id === map.milestones.find((m) => m.id === to)?.goal);
         const was = f.ms.length ? f.ms.map((m) => msWords(m.id)).join(" and ") : msWords(null);
-        toast({
-          message: `Moved ${named(f)} to ${msWords(to)}${toGoal && toGoal.id !== f.goal ? ` (${toGoal.name})` : ""}`,
-          action: {
-            label: "Undo",
-            onClick: () =>
-              void back().then((m) => {
-                if (m) setMap(m);
-                toast({ message: `Moved ${named(f)} back to ${was}` });
-              }, failed),
-          },
-        });
+        const toGoal = map.milestones.find((m) => m.id === to)?.goal ?? f.goal;
+        reveal(`[data-testid="gm-chip"][data-feature="${f.id}"][data-goal="${toGoal}"]`);
+        // No milestone on one goal's links while others stay: it says which stay.
+        const stays = to ? [] : (f.f?.milestones ?? []).filter((id) => !f.ms.some((m) => m.id === id));
+        const message = stays.length
+          ? `Took ${named(f)} off ${was}; it stays on ${stays.map((id) => where(id, f.goal)).join(" and ")}`
+          : `Moved ${named(f)}${f.ms.length && to ? ` from ${was}` : ""} to ${to ? where(to, f.goal) : msWords(null)}`;
+        told(message, back, `Moved ${named(f)} back to ${was}`);
       } catch (e) {
         failed(e);
+      }
+    },
+    /** Add a feature: a new link on a milestone, or (Move here) its link moved from another milestone of that goal. */
+    add: async (feature: string, name: string, milestone: string, expected: string, from: string | null): Promise<boolean> => {
+      const f: Chip = { id: feature, name, f: map.features.find((x) => x.id === feature) ?? null, m: null, ms: [], goal: "", track: null, done: false, lift: "not_measured" };
+      try {
+        const next = from
+          ? await unwrap(api.POST("/v1/simple/goal-map/links/move", { body: { feature, from_milestone: from, to_milestone: milestone } }))
+          : await attach(f, { milestone, expected, confidence: "Medium" });
+        setMap(next);
+        setMoved(feature);
+        const goal = map.milestones.find((m) => m.id === milestone)?.goal ?? "";
+        reveal(`[data-testid="gm-chip"][data-feature="${feature}"][data-goal="${goal}"]`);
+        if (from)
+          told(
+            `Moved ${named(f)} from ${msWords(from)} to ${msWords(milestone)}`,
+            () => unwrap(api.POST("/v1/simple/goal-map/links/move", { body: { feature, from_milestone: milestone, to_milestone: from } })),
+            `Moved ${named(f)} back to ${msWords(from)}`,
+          );
+        else told(`Added ${named(f)} to ${msWords(milestone)}`, () => detach(f, milestone), `Took ${named(f)} off ${msWords(milestone)}`);
+        return true;
+      } catch (e) {
+        failed(e);
+        return false;
       }
     },
     track: async (f: Chip, to: string | null) => {
@@ -414,7 +458,7 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
   };
 }
 
-/** Move to…: every goal's milestones by date, its own goal's No milestone, and the tracks. */
+/** Move to…: every goal's milestones by date, its own goal's No milestone, and the tracks; it moves the links of the chip's own goal. */
 function MovePicker({ f, c, onClose }: { f: Chip; c: Ctx; onClose: () => void }) {
   const pick = (to: string | null) => {
     onClose();
@@ -441,7 +485,8 @@ function MovePicker({ f, c, onClose }: { f: Chip; c: Ctx; onClose: () => void })
               <div key={g.id} className="flex flex-col">
                 <span className={head}>{g.name}</span>
                 {[...c.map.milestones.filter((m) => m.goal === g.id).sort(byDate), ...(own ? [null] : [])].map((m) => {
-                  const here = own && (m ? f.ms.some((x) => x.id === m.id) : !f.m);
+                  // Here now: a milestone it is on, of any goal (its chip there is that goal's).
+                  const here = m ? (f.f?.milestones.includes(m.id) ?? false) : own && !f.m;
                   return (
                     <button key={m?.id ?? "none"} type="button" disabled={here} data-to={m?.id ?? "none"} onClick={() => pick(m?.id ?? null)} className={row}>
                       {m ? (
@@ -558,6 +603,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     key={f.id}
                     data-testid="gm-chip"
                     data-feature={f.id}
+                    data-goal={g.id}
                     data-track={t.id ?? "none"}
                     data-moved={c.moved === f.id ? "1" : undefined}
                     className={`group flex items-center gap-1 rounded-lg border bg-surface px-2 py-0.5 text-[13px] leading-[17px] ${c.moved === f.id ? "border-accent bg-accent-soft ring-2 ring-accent" : "border-line"}`}
@@ -722,12 +768,13 @@ export function GoalMapPage() {
     if (!map) return [];
     const ms = new Map(map.milestones.map((m) => [m.id, m]));
     const goals = new Set(map.goals.map((g) => g.id));
-    // A chip under the goal of its first milestone, naming every milestone of that goal it is on.
+    // A chip under each goal the feature serves, naming every milestone of that goal it is on.
     const placed = map.features.flatMap((f): Chip[] => {
-      const first = ms.get(f.milestones[0] ?? "");
-      if (!first || !goals.has(first.goal)) return [];
-      const mine = f.milestones.flatMap((id) => ms.get(id) ?? []).filter((m) => m.goal === first.goal).sort(byDate);
-      return [{ id: f.id, name: f.name, f, m: mine[0], ms: mine, goal: first.goal, track: trackOf.get(f.id) ?? null, done: f.released, lift: f.lift }];
+      const mine = f.milestones.flatMap((id) => ms.get(id) ?? []).filter((m) => goals.has(m.goal)).sort(byDate);
+      return [...new Set(mine.map((m) => m.goal))].map((goal) => {
+        const here = mine.filter((m) => m.goal === goal);
+        return { id: f.id, name: f.name, f, m: here[0], ms: here, goal, track: trackOf.get(f.id) ?? null, done: f.released, lift: f.lift };
+      });
     });
     const on = new Set(placed.map((c) => c.id));
     const loose = map.unplaced.flatMap((u): Chip[] => (u.goal && goals.has(u.goal) && !on.has(u.id) ? [{ id: u.id, name: u.name, f: null, m: null, ms: [], goal: u.goal, track: trackOf.get(u.id) ?? null, done: doneOf.has(u.id), lift: "not_measured" }] : []));
@@ -751,20 +798,8 @@ export function GoalMapPage() {
 
   const c: Ctx = { map, codes, mcode, tracks, onOpen: setPanel, menu, setMenu, setMover, renaming, setRenaming, moved, act, onAttach: setAttach, prdOf, go: (href) => router.push(href), onEdit: setEdit, canPrd };
   const add = async (feature: string, milestone: string, expected: string, from: string | null) => {
-    const f = map.features.find((x) => x.id === feature);
-    try {
-      const next = await unwrap(
-        from
-          ? api.POST("/v1/simple/goal-map/links/move", { body: { feature, from_milestone: from, to_milestone: milestone } })
-          : api.POST("/v1/simple/goal-map/links", { body: { feature, milestone, area: f?.area ?? map.areas[0]?.id ?? "", expected, confidence: "medium" } }),
-      );
-      q.setData(() => next);
-      setAttach(null);
-      setMoved(feature);
-      reveal(`[data-testid="gm-chip"][data-feature="${feature}"]`);
-    } catch (e) {
-      toast({ message: errorMessage(e) });
-    }
+    const name = map.features.find((x) => x.id === feature)?.name ?? roadmap.data?.items.find((i) => i.id === feature)?.title ?? "";
+    if (await act.add(feature, name, milestone, expected, from)) setAttach(null);
   };
 
   /** The goal map's own editors: each sends one edit, and the map reads as it now is. */
