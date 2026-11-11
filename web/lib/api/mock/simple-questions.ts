@@ -119,7 +119,7 @@ export function seedQuestions(ctx: QuestionsCtx): QuestionsDb {
     changes: [],
   };
   // home-greeting-fit "every-wait-one" (server.ts): one decision waits on the owner, the others on the approver.
-  if (typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === "every-wait-one")
+  if (typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === "every-wait-one")
     db.questions.filter((x) => x.decider === owner && open(x)).slice(1).forEach((x) => (x.decider = approver));
   return db;
 }
