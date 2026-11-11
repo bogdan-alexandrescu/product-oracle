@@ -1,14 +1,16 @@
 """A company the size of a real one, for the Inbox read's budget (test_inbox_read_budget):
 4 goals, 5 tracks, 25 PRDs, 400 roadmap items, 2,000 Ground Truth entities, 1,500 changes
-(300 proposed), 200 decisions, 150 drafts, 60 meetings, 30 members and 500 feedback items.
-Invented example data only; rows go in by bulk insert, so seeding stays quick."""
+(300 proposed), 200 decisions, 150 drafts, 60 meetings, 30 members and 500 feedback items,
+20 runs waiting at Confirm the baseline and three more that touch each other's items
+(:func:`cross_runs`), in a company time zone not the default. Invented example data only;
+rows go in by bulk insert, so seeding stays quick."""
 
 import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
 from oracle.auth.models import User
-from oracle.baseline.models import Edge, Entity
+from oracle.baseline.models import Conflict, Edge, Entity, EntityRevision, Proposal
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document, DocumentVersion
 from oracle.review.models import FeedbackItem
@@ -16,9 +18,14 @@ from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.simple.models import SimpleChange, SimpleDraft, SimpleMeeting, SimpleSession
 from oracle.tenancy import tenant_session
+from oracle.tenant_settings import TenantSetting
 from tests.baseline_helpers import Ctx
 
 NOW = datetime(2026, 11, 1, 12, tzinfo=UTC)
+# Not the default (America/Los_Angeles): rows that tell a day tell it here.
+ZONE = "Pacific/Auckland"
+# The Confirm the baseline stops cross_runs adds.
+CROSS_STOPS = 3
 PROPOSED = {"status": "proposed"}
 DECIDED = {
     "status": "decided",
@@ -246,8 +253,10 @@ async def seed_company(ctx: Ctx, scale: int = 1) -> None:
                     section_key="scope",
                 )
             )
+        s.add(TenantSetting(key="company_timezone", value=ZONE))
         await s.commit()
     await stops(ctx, n(20))
+    await cross_runs(ctx)
 
 
 async def stops(ctx: Ctx, count: int) -> None:
@@ -294,4 +303,123 @@ async def stops(ctx: Ctx, count: int) -> None:
                     ),
                 ]
             )
+        await s.commit()
+
+
+def _run(ctx: Ctx) -> Run:
+    return Run(
+        id=uuid.uuid4(),
+        flow="baseline_to_prd",
+        status="awaiting_checkpoint",
+        created_by=ctx.users["owner"].id,
+    )
+
+
+def _stop(run: Run, role: str = "approver") -> list:
+    return [
+        RunSegment(run_id=run.id, seq=1, name="baseline", status="succeeded"),
+        Checkpoint(
+            run_id=run.id,
+            kind="baseline_confirm",
+            status="pending",
+            approver_role=role,
+            payload={"segment_seq": 1},
+        ),
+    ]
+
+
+async def cross_runs(ctx: Ctx) -> None:
+    """Three runs waiting at Confirm the baseline whose items cross: run A proposes a goal,
+    a feature and the edge between them; run B revises A's goal and edge and finds a
+    feature of its own, on which sources disagree (an open material conflict); run C, a
+    stop only an owner may approve, proposes changes to A's feature and B's (open) and
+    withdrew one to A's goal."""
+    async with tenant_session(ctx.tenant_id) as s:
+        a, b, c = _run(ctx), _run(ctx), _run(ctx)
+        s.add_all([a, b, c])
+        await s.flush()
+
+        def ent(run: Run, type_: str, name: str) -> Entity:
+            return Entity(
+                id=uuid.uuid4(),
+                type=type_,
+                key=f"cross-{name}-{run.id.hex[:8]}",
+                title=f"Cross-run {name}",
+                status="proposed",
+                origin="agent",
+                run_id=run.id,
+                attrs={},
+            )
+
+        goal_a, feature_a, feature_b = (
+            ent(a, "goal", "goal"),
+            ent(a, "feature", "feature A"),
+            ent(b, "feature", "feature B"),
+        )
+        s.add_all([goal_a, feature_a, feature_b])
+        await s.flush()
+        edge_a = Edge(
+            id=uuid.uuid4(),
+            src_id=feature_a.id,
+            dst_id=goal_a.id,
+            type="supports",
+            status="proposed",
+            origin="agent",
+            run_id=a.id,
+        )
+        s.add(edge_a)
+        await s.flush()
+        actor_b, actor_c = f"run:{b.id}", f"run:{c.id}"
+        s.add_all(
+            [
+                *_stop(a),
+                *_stop(b),
+                *_stop(c, "owner"),
+                EntityRevision(
+                    entity_id=goal_a.id,
+                    before={"title": "Cross-run goal"},
+                    after={"title": "Cross-run goal, revised"},
+                    actor=actor_b,
+                    run_id=b.id,
+                ),
+                EntityRevision(
+                    edge_id=edge_a.id,
+                    before={"status": "proposed"},
+                    after={"status": "proposed", "attrs": {"weight": 2}},
+                    actor=actor_b,
+                    run_id=b.id,
+                ),
+                Conflict(
+                    entity_id=feature_b.id,
+                    field="title",
+                    claims=[
+                        {"value": "Cross-run feature B", "evidence_ids": []},
+                        {"value": "Another title", "evidence_ids": []},
+                    ],
+                    material=True,
+                    status="open",
+                ),
+                Proposal(
+                    entity_id=feature_a.id,
+                    payload={"title": "Feature A, as C reads it"},
+                    run_id=c.id,
+                    actor=actor_c,
+                    status="open",
+                ),
+                Proposal(
+                    entity_id=feature_b.id,
+                    payload={"title": "Feature B, as C reads it"},
+                    run_id=c.id,
+                    actor=actor_c,
+                    status="open",
+                ),
+                Proposal(
+                    entity_id=goal_a.id,
+                    payload={"title": "Goal, as C first read it"},
+                    run_id=c.id,
+                    actor=actor_c,
+                    status="withdrawn",
+                ),
+            ]
+        )
         await s.commit()
