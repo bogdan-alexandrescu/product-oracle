@@ -239,11 +239,12 @@ function Rename({ id, was, c, className }: { id: string; was: string; c: Ctx; cl
 function Slot({ f, c }: { f: Chip; c: Ctx }) {
   const s = fstate(f);
   return (
-    <span className="flex w-6 shrink-0 justify-center">
-      <span className={`flex text-[12px] group-hover:hidden group-focus-within:hidden group-has-[[aria-expanded=true]]:hidden ${s.cls}`} title={s.w}>
+    <span className="flex w-6 shrink-0 justify-center max-[600px]:w-auto max-[600px]:gap-1">
+      <span className={`flex text-[12px] group-hover:hidden group-focus-within:hidden group-has-[[aria-expanded=true]]:hidden max-[600px]:flex! ${s.cls}`} title={s.w}>
         {s.mark || <span className="m-1 size-2 rounded-full border border-text-faint" />}
       </span>
-      <span className="hidden group-hover:inline-flex group-focus-within:inline-flex group-has-[[aria-expanded=true]]:inline-flex">{featureMenu(f, c)}</span>
+      {/* A phone has no hover: its ⋯ stays beside the mark. */}
+      <span className="hidden group-hover:inline-flex group-focus-within:inline-flex group-has-[[aria-expanded=true]]:inline-flex max-[600px]:inline-flex">{featureMenu(f, c)}</span>
     </span>
   );
 }
