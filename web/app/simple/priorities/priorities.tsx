@@ -2228,8 +2228,12 @@ function UndatedBuckets({ data, suggestions, reload, kr }: { data: Out; suggesti
   const buckets: Bucket[] = all.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0)).map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
   const percent = sharePercents(buckets.map((b) => b.weeks));
   const weeksOf = (r: Row) => (r.effort == null ? "" : weeksWords(r.effort));
-  // A goal's features as Archive counts them: its bucket's.
-  const featuresOf: GoalFeatures = (title) => (buckets.find((b) => !b.no_goal && sameGoal(b.title, title))?.codes ?? []).map((c) => ({ code: c, name: rowOf.get(c)?.title ?? c, slices: [] }));
+  // A goal's features as Archive and Delete count them: every live feature serving it, whatever its
+  // dates (a bucket holds only this quarter's work), so none loses its goal unasked.
+  const featuresOf: GoalFeatures = (title) => {
+    const g = gb?.goals.find((x) => sameGoal(x.title, title));
+    return g ? (gb?.features ?? []).filter((f) => f.goal_ids?.includes(g.id)).map((f) => ({ code: f.key, name: rowOf.get(f.key)?.title ?? f.title, slices: [] })) : [];
+  };
   const acts = useGoalActs({ gb, plan: null, featuresOf, writes, rights });
   // Round 6: no work this quarter is said in words, not as "0 weeks" over an empty chart.
   const planned = data.weeks_total > 0;
