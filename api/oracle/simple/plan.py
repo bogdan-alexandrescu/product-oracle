@@ -1024,7 +1024,9 @@ async def views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, Vi
         )
     }
     # roadmap-speed: each PRD's latest approved version alone, not every one's markdown; in
-    # the order of each PRD's first approved version, as reading them all gave.
+    # the order of each PRD's first approved version number, PRDs that share one in
+    # document_id order (the query's, kept by the stable sort), so plan.current() picks
+    # the same first of equal spans every read.
     approved = DocumentVersion.approved_at.is_not(None)
     first = func.min(DocumentVersion.number).over(partition_by=DocumentVersion.document_id)
     latest: dict[uuid.UUID, DocumentVersion] = {
