@@ -14,7 +14,7 @@ import { resetMockData } from "@/lib/api/mock/server";
 import { leave } from "@/lib/leave-guard";
 import { useMe } from "@/lib/me";
 import { useSettingsTabs } from "@/lib/settings-tabs";
-import { onReadChanged } from "@/lib/api/shared-reads";
+import { onReadChanged, onReadFailed } from "@/lib/api/shared-reads";
 import { onWaitingChanged, RAIL_URLS, railInbox, railQuestions, waitingCount } from "@/lib/waiting";
 import { ScreenSubjectProvider } from "@/lib/screen-subject";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
@@ -180,15 +180,29 @@ function useInboxCount(enabled: boolean): number | null {
       }),
     [enabled],
   );
+  // A read again of either list that failed: read it now, not stale-ok; a failed count shows no number.
+  useEffect(
+    () =>
+      onReadFailed((url) => {
+        if (!enabled || !RAIL_URLS.includes(url)) return;
+        const { inbox, questions } = last.current;
+        if (url === "/v1/inbox" && questions)
+          void railInbox(undefined, false).then((i) => setN(waitingCount((last.current.inbox = i), questions)), () => setN(null));
+        if (url === "/v1/inbox/questions" && inbox)
+          void railQuestions(undefined, false).then((q) => setN(waitingCount(inbox, (last.current.questions = q))), () => setN(null));
+      }),
+    [enabled],
+  );
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    Promise.all([railInbox(), railQuestions().catch(() => [])])
+    // counts-failed-part: either list failing shows no number, never the last one nor a part of it.
+    Promise.all([railInbox(), railQuestions()])
       .then(([inbox, questions]) => {
         last.current = { inbox, questions };
         if (alive) setN(waitingCount(inbox, questions));
       })
-      .catch(() => undefined);
+      .catch(() => alive && setN(null));
     return () => {
       alive = false;
     };

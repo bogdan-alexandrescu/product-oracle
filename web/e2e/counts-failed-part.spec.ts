@@ -187,9 +187,10 @@ test("the rail: a re-read of the meetings that fails shows no number, not the la
  * past the page's own 2 s the page reads `path` again; when that read fails, the rail's count
  * built on it drops its number at once, as the page does, and never keeps the last one.
  */
-async function failedReRead(page: Page, path: string, open: string, count: string) {
+async function failedReRead(page: Page, path: string, open: string, count: string, whole = true) {
   const rail = page.getByTestId(`${count}-count`);
   await expect(rail).toHaveText(/^\d+$/, { timeout: 15_000 });
+  const last = await rail.getAttribute("title");
   await page.waitForTimeout(2_500);
   await page.evaluate(([key, p]) => localStorage.setItem(key, p), [MOCK_FAIL_KEY, path] as const);
   const before = await calls(page, path);
@@ -197,24 +198,30 @@ async function failedReRead(page: Page, path: string, open: string, count: strin
   // The page reads it again, and that read fails.
   await expect.poll(() => calls(page, path), { timeout: 15_000 }).toBeGreaterThan(before);
   // At once, not after the rail's back-off (15 s) reads it again.
+  if (!whole) {
+    // A count the failed list is a part of shows the rest, and says a part could not load.
+    await expect(rail).toHaveAttribute("title", /; a part could not load$/, { timeout: 3_000 });
+    expect(await rail.getAttribute("title")).not.toContain(last);
+    return;
+  }
   await expect(rail).toHaveAttribute("title", "Could not load", { timeout: 3_000 });
   await expect(rail).toHaveAttribute("aria-label", "Could not load");
   await expect(rail).not.toHaveText(/\d/);
 }
 
-for (const [name, path, open, count] of [
-  ["Decisions", "/v1/simple/decisions/waiting", "simple-nav-decisions", "simple-nav-decisions"],
-  ["Inbox (its rows)", "/v1/inbox", "simple-nav-inbox", "simple-nav-inbox"],
-  ["Inbox (my questions)", "/v1/inbox/questions", "simple-nav-inbox", "simple-nav-inbox"],
+for (const [name, path, open, count, whole] of [
+  ["Decisions", "/v1/simple/decisions/waiting", "simple-nav-decisions", "simple-nav-decisions", true],
+  ["Inbox (its rows)", "/v1/inbox", "simple-nav-inbox", "simple-nav-inbox", true],
+  ["Inbox (my questions)", "/v1/inbox/questions", "simple-nav-inbox", "simple-nav-inbox", false],
   // The goal suggestions the Roadmap count adds up, read again by Priorities (the Goal map reads none).
-  ["Priorities (goal suggestions)", "/v1/simple/goal-suggestions?status=open", "simple-nav-priorities", "simple-nav-roadmap"],
+  ["Priorities (goal suggestions)", "/v1/simple/goal-suggestions?status=open", "simple-nav-priorities", "simple-nav-roadmap", false],
 ] as const) {
   test(`the rail: ${name}'s read again that fails on its page shows no number, not the last one`, async ({ page }) => {
     test.setTimeout(60_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await login(page);
     await page.goto("/simple/one-pagers");
-    await failedReRead(page, path, open, count);
+    await failedReRead(page, path, open, count, whole);
   });
 }
 

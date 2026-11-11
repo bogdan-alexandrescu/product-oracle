@@ -12,7 +12,11 @@
  *   shows an older answer reads it again.
  * - Any write (a non-GET, or a GET that marks something seen) drops every shared answer, and
  *   an answer to a read begun before it is never shared, so after an action every read fetches.
- * - A failed answer is never shared: the next read tries again.
+ * - A failed answer is never shared: the next read tries again. A read again of an answer shared
+ *   before that fails says so (`onReadFailed`), so what shows the older answer reads it again
+ *   itself and shows that it failed, never the last answer.
+ * - Answers older than STALE_MS are dropped, at most MAX_ENTRIES are kept (the oldest go first),
+ *   and only text and JSON answers are kept (never a file such as a PDF).
  */
 
 export const STALE_OK = "x-po-stale-ok";
@@ -20,7 +24,11 @@ export const STALE_OK = "x-po-stale-ok";
 const FRESH_MS = 2000;
 const RAIL_MS = 10_000;
 const STALE_MS = 5 * 60_000;
+const MAX_ENTRIES = 200;
 const CHANGED = "po:read-changed";
+const FAILED = "po:read-failed";
+// The request headers that change an answer, besides the URL (any x- header too, but the stale-ok mark).
+const KEY_HEADERS = ["accept", "accept-language", "authorization"];
 
 type Entry = {
   /** When the shared answer landed; null while the first read is on its way. */
@@ -54,6 +62,28 @@ export function onReadChanged(fn: (url: string) => void): () => void {
   return () => window.removeEventListener(CHANGED, on);
 }
 
+/** Calls `fn` with the URL's path and query whenever a read again of an answer shared before it fails. */
+export function onReadFailed(fn: (url: string) => void): () => void {
+  const on = (e: Event) => fn((e as CustomEvent<string>).detail);
+  window.addEventListener(FAILED, on);
+  return () => window.removeEventListener(FAILED, on);
+}
+
+/** The URL's path and query, and the request headers that change its answer. */
+export function readKey(req: Request): string {
+  const url = new URL(req.url);
+  const headers = [...req.headers]
+    .filter(([name]) => name !== STALE_OK && (KEY_HEADERS.includes(name) || name.startsWith("x-")))
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([name, value]) => `\n${name}: ${value}`);
+  return `${url.pathname}${url.search}${headers.join("")}`;
+}
+
+/** Drops the answers older than STALE_MS (no read takes them), keeping any read again on its way. */
+function dropOld(now: number) {
+  for (const [key, e] of entries) if (e.at !== null && now - e.at >= STALE_MS && !e.next) entries.delete(key);
+}
+
 function isWrite(req: Request): boolean {
   return req.method !== "GET" || new URL(req.url).searchParams.has("mark_seen");
 }
@@ -80,9 +110,9 @@ export function sharedReads(base: (req: Request) => Promise<Response>): (req: Re
       // An answer to a read begun while the write was on its way is not shared either.
       return base(req).finally(forgetReads);
     }
-    const url = new URL(req.url);
-    const key = `${url.pathname}${url.search}`;
+    const key = readKey(req);
     const now = Date.now();
+    dropOld(now);
     const hit = entries.get(key);
     const age = hit?.at == null ? null : now - hit.at;
     if (hit?.res && (hit.at === null || (age !== null && age < (staleOk ? RAIL_MS : FRESH_MS)))) return copy(hit.res, req.signal);
@@ -102,27 +132,41 @@ function fetchShared(base: (req: Request) => Promise<Response>, req: Request, ke
   if (!entry.res) entry.res = res;
   entry.next = res;
   entries.set(key, entry);
-  const done = (keep: boolean, body: string | null) => {
+  // The URL as listeners know it (onReadChanged, onReadFailed): the key without its headers.
+  const url = key.split("\n")[0]!;
+  const drop = () => {
+    if (gen === generation && entries.get(key) === entry) entries.delete(key);
+  };
+  const failed = () => {
+    drop();
+    // An answer was shared before: whatever shows it reads it again and shows that it failed.
+    if (entry.at !== null) window.dispatchEvent(new CustomEvent(FAILED, { detail: url }));
+  };
+  const done = (body: string) => {
     if (gen !== generation || entries.get(key) !== entry) return;
-    if (!keep) {
-      entries.delete(key);
-      return;
-    }
     const changed = entry.body !== null && entry.body !== body;
     entry.res = res;
     entry.at = Date.now();
     entry.body = body;
     entry.next = null;
-    if (changed) window.dispatchEvent(new CustomEvent(CHANGED, { detail: key }));
+    // The newest answer goes last, so the oldest go first past MAX_ENTRIES.
+    entries.delete(key);
+    entries.set(key, entry);
+    for (const old of entries.keys()) {
+      if (entries.size <= MAX_ENTRIES) break;
+      entries.delete(old);
+    }
+    if (changed) window.dispatchEvent(new CustomEvent(CHANGED, { detail: url }));
   };
   res.then(
     (r) => {
-      if (!r.ok) return done(false, null);
-      r.clone()
-        .text()
-        .then((body) => done(true, body), () => done(false, null));
+      if (!r.ok) return failed();
+      // A file (a PDF, an image, a download) is never kept: only text and JSON answers are.
+      const type = r.headers.get("content-type") ?? "";
+      if ((type && !/json|^text\//i.test(type)) || /attachment/i.test(r.headers.get("content-disposition") ?? "")) return drop();
+      r.clone().text().then(done, failed);
     },
-    () => done(false, null),
+    failed,
   );
   return res;
 }

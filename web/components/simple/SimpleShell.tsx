@@ -15,7 +15,7 @@ import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { LINK_KINDS } from "@/lib/roadmap-links";
 import { api, unwrap } from "@/lib/api/client";
-import { onReadChanged, STALE_OK } from "@/lib/api/shared-reads";
+import { onReadChanged, onReadFailed, STALE_OK } from "@/lib/api/shared-reads";
 import { onWaitingChanged, railInbox, railQuestions, waitingCount } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
@@ -82,8 +82,8 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   }, []);
   // fresh: a page change or a change to what waits (not a re-read of a failed part): it drops the
   // re-read waiting to run, so no part is read twice at once; the back-off goes on.
-  // own: the parts this page shows itself, read with the page (sharing its call), not stale-ok.
-  const read = useCallback((parts: Part[], fresh: boolean, own: Part[] = []) => {
+  // staleOk: false for a part whose read again failed elsewhere, so it is read now and never shown from before.
+  const read = useCallback((parts: Part[], fresh: boolean, staleOk = true) => {
     if (fresh) {
       pending.current?.();
       pending.current = null;
@@ -91,7 +91,7 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
     const { signal } = aborts.current;
     const mine = parts.map((p) => (seq.current[p] = (seq.current[p] ?? 0) + 1));
     inflight.current += 1;
-    void Promise.allSettled(parts.map((p) => PART_READS[p](signal, !own.includes(p)))).then((results) => {
+    void Promise.allSettled(parts.map((p) => PART_READS[p](signal, staleOk))).then((results) => {
       inflight.current -= 1;
       if (signal.aborted) return;
       const next: Got = {};
@@ -118,10 +118,12 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   // simple-call-budget: a part read since (by the page, or behind the counts shown) answered
   // something new: that part reads it again (shared, so no call), the rest keep their waits.
   useEffect(() => onReadChanged((url) => PART_BY_URL.has(url) && read([PART_BY_URL.get(url)!], false)), [read]);
+  // counts-failed-part: a read again of a part's list failed (the page's, or one behind the count shown):
+  // that part reads it now, not stale-ok, so it shows no number rather than the last one.
+  useEffect(() => onReadFailed((url) => PART_BY_URL.has(url) && read([PART_BY_URL.get(url)!], false, false)), [read]);
   const meetingsPath = pathname.startsWith("/simple/meetings") ? pathname : "";
   useEffect(() => {
-    // On Meetings, its count reads with the page's own read, so one that fails there shows.
-    if (enabled) read(["meetings"], true, meetingsPath ? ["meetings"] : []);
+    if (enabled) read(["meetings"], true);
   }, [enabled, changes, meetingsPath, read]);
   // counts-failed-part: while a part failed, read that part again once the reads have finished, after
   // a wait that doubles with each of its failed reads in a row, whatever started them (15 s, 30 s,
