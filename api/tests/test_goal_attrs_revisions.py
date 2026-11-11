@@ -22,6 +22,18 @@ Test cards (protects / fails_when / no_claim):
   from Simple each write a revision; fails_when=either leaves none; no_claim=its features.
 - test_goal_map_target_edit_writes_a_revision: protects=the Goal map's target edit writes a
   revision with the old and new target; fails_when=none is written; no_claim=its history.
+- test_goal_form_typed_target_keeps_number_and_unit: protects=the goal form takes a number
+  typed with its unit in any case ("70 Shops" is 70 shops), and refuses, changing nothing,
+  a number in another unit ("70 partners", "$1,200", "70 shops/week"), words only and a
+  cleared target, so the shown target never reads apart from the number the Goal map and
+  progress use; fails_when=the typed text is stored beside the old number, or a target is
+  cleared; no_claim=text-only goals (test_simple_goal_buckets_api).
+- test_goal_map_target_edit_drops_target_text: protects=the Goal map's target edit drops a
+  stale typed target text, so the target shown is the new number; fails_when=the old text
+  still reads as the target; no_claim=its history.
+- test_goal_ask_archive_and_restore_write_revisions: protects=an asked archive and restore,
+  accepted by an owner, each write a revision; fails_when=the Ask path leaves none;
+  no_claim=the ask's routing (test_simple_goal_owner_asks_api).
 - test_goal_form_add_writes_a_revision: protects=a goal added from the goal form has its
   created revision; fails_when=none is written; no_claim=its features.
 - test_goal_milestone_rename_writes_a_revision: protects=renaming a goal's own roadmap
@@ -193,3 +205,74 @@ async def test_goal_milestone_rename_writes_a_revision(client):
     assert attrs["milestone_name"] == "Ten teams live"
     assert len(revs) == len(before) + 1
     assert revs[-1].after["attrs"]["milestone_name"] == "Ten teams live"
+
+
+async def test_goal_form_typed_target_keeps_number_and_unit(client):
+    w = await World().build()
+    tid, gid = w.ctx.tenant_id, w.goals["grow"]
+    await _set_attrs(tid, gid, {"position": 1, "metric": "Shops live", "target": 40,
+                                "unit": "shops", "due": "2027-03-31"})  # fmt: skip
+    body = {"title": "Grow", "measure": "Shops live", "due": "2027-03-31"}
+
+    async def patch(target: str):
+        return await client.patch(f"{BUCKETS}/goals/{gid}", headers=w.as_("owner"),
+                                  json={**body, "target": target})  # fmt: skip
+
+    # Its unit typed with a capital: the number, in the goal's own unit.
+    r = await patch("70 Shops")
+    assert r.status_code == 200, r.text
+    assert r.json()["goal"]["target"] == "70 shops"
+    attrs, revs = await _goal(tid, gid)
+    assert (attrs.get("target"), attrs.get("unit")) == (70, "shops"), attrs
+    assert "target_text" not in attrs
+    n = len(revs)
+
+    # Another unit, or words only, or nothing: refused in plain words, nothing changes.
+    for typed in ("70 partners", "$1,200", "70 shops/week"):
+        r = await patch(typed)
+        assert r.status_code == 422, (typed, r.text)
+        assert r.json()["detail"] == "This goal is measured in shops: type its new number"
+    r = await patch("about seventy")
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "A measured goal keeps its target: type its new number"
+    r = await patch("   ")
+    assert r.status_code == 422, r.text
+    attrs, revs = await _goal(tid, gid)
+    assert (attrs.get("target"), attrs.get("unit")) == (70, "shops"), attrs
+    assert "target_text" not in attrs
+    assert len(revs) == n
+
+
+async def test_goal_map_target_edit_drops_target_text(client):
+    ctx, ids = await goal_map_world()
+    attrs, _ = await _goal(ctx.tenant_id, ids["conv"])
+    await _set_attrs(ctx.tenant_id, ids["conv"], {**attrs, "target_text": "about ten"})
+    r = await client.patch(
+        f"{GOAL_MAP}/goals/{ids['conv']}", json={"target": 12}, headers=ctx.as_("owner")
+    )
+    assert r.status_code == 200, r.text
+    attrs, revs = await _goal(ctx.tenant_id, ids["conv"])
+    assert attrs["target"] == 12 and "target_text" not in attrs, attrs
+    assert revs[-1].before["attrs"]["target_text"] == "about ten"
+
+
+async def test_goal_ask_archive_and_restore_write_revisions(client):
+    w = await World().build()
+    tid, gid = w.ctx.tenant_id, w.goals["quiet"]
+
+    async def asked(op: str) -> None:
+        ask = {"op": op, "target": {"goal_id": str(gid)}, "before": {}, "after": {}}
+        r = await client.post(CHANGES, headers=w.as_("commenter"), json=ask)
+        assert r.status_code == 201, r.text
+        assert r.json()["change"]["status"] == "proposed"
+        cid = r.json()["change"]["id"]
+        r = await client.post(f"{CHANGES}/{cid}/accept", headers=w.as_("owner"), json={})
+        assert r.status_code == 200, r.text
+
+    await asked("archive_goal")
+    _, revs = await _goal(tid, gid)
+    assert len(revs) == 1 and revs[0].after["status"] == "rejected"
+    assert revs[0].actor.startswith("user:")
+    await asked("unarchive_goal")
+    _, revs = await _goal(tid, gid)
+    assert len(revs) == 2 and revs[1].after["status"] == "confirmed"
