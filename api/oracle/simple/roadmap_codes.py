@@ -14,12 +14,16 @@ roadmap's only one of that code (the owner's "Join
 whenever names match", Nov 9). A goal's milestone whose name matches a PRD's (or the roadmap's
 own) milestone of its code on its roadmap is that milestone too, and so is a goal's own
 milestone whose name matches a PRD's milestone of any code on its roadmap (the Goal map's
-twins, Nov 10), only when that PRD milestone serves the same goal or none and what it joined
-holds no other goal's milestone ("Join only within the same goal", Nov 11). Of several such PRD
-milestones the closest in date joins, then the one of its exact name; at most one goal's own
-milestone joins a given joined group (goal order first), the others keep their own codes. A
-joined group is dated by its goal's own milestone (else its track milestone's, else its
-earliest). No name is hidden: each surface shows the longer name and lists the other ("Also: ...").
+twins, Nov 10), only when that PRD milestone serves the same goal or none and its group holds
+no other goal's milestone ("Join only within the same goal", Nov 11). The joins by code (to a
+track milestone, to the roadmap's own, and a PRD's to either) are made first, unchecked, so a
+group a track or the roadmap's own milestone holds may join several goals; then a goal's own
+joins a PRD milestone, seeing every goal that group already holds, whatever the goal order. Of
+several such PRD milestones the closest in date joins, then the one of its exact name; at most
+one goal's own milestone joins a given group by a PRD milestone (goal order first), the others
+keep their own codes. A joined group is dated by its goal's own milestone (else its track
+milestone's, else its earliest). No name is hidden: each surface shows the longer name and
+lists the other ("Also: ...").
 
 Codes go by date (undated last); on one date by goal order (``oracle.baseline.goal_order``,
 no goal last), then by name. No suffixes, no repeats: a milestone added or moved earlier
@@ -129,62 +133,71 @@ def assign(
 
     def mine(gm: SimpleGoalMilestone, m: SimpleGoalMilestone) -> bool:
         """A PRD milestone a goal's own may join: its group holds no milestone of another goal."""
-        if gm.prd is not None or m.id not in prds:
-            return True
         return all(
             not isinstance(x, SimpleGoalMilestone) or x.goal_id in (None, gm.goal_id)
             for x in groups.get(into.get(m.id, m.id), ())
         )
 
+    def join(gm: SimpleGoalMilestone, to: uuid.UUID | None) -> None:
+        if to is None:
+            groups[gm.id] = [gm]
+            return
+        to = into.get(to, to)
+        into[gm.id] = to
+        groups.setdefault(to, []).append(gm)
+
+    # First every join by code; a goal's own that makes none waits for the PRD joins below.
+    later: list[tuple[SimpleGoalMilestone, list[SimpleGoalMilestone]]] = []
     for gm in sorted(goal_ms, key=order):
         code = _gm_code(gm)
+        own = gm.prd is None and gm.goal_id is not None
         there = [
             tm
             for tm in tracks
             if code and split(tm.name)[0] == code and gm.roadmap_id in held.get(tm.id, ())
         ]
         if gm.goal_id is None and len(there) == 1:
-            to: uuid.UUID | None = there[0].id
-        else:
-            plain = [
-                g
-                for g in goal_ms
-                if code and g.goal_id is None and g is not gm
-                and g.roadmap_id == gm.roadmap_id and _gm_code(g) == code and mine(gm, g)
-            ]  # fmt: skip
-            alike = {
-                (g.goal_id, g.prd.id if g.prd else None)
-                for g in goal_ms
-                if g.roadmap_id == gm.roadmap_id and _gm_code(g) == code
-            }
-            alone = len(alike) == 1 and len(there) == 1
-            # Goal map twins (Nov 10): a goal's own milestone is a PRD's milestone on its
-            # roadmap of the same name, whatever the PRD's code (its plan's), of its goal or
-            # none ("Join only within the same goal", the owner, Nov 11), and not one whose group
-            # another goal's milestone already joined.
-            twins = [
-                g
-                for g in goal_ms
-                if g.prd is not None and g is not gm and g.roadmap_id == gm.roadmap_id
-                and g.goal_id in (None, gm.goal_id) and mine(gm, g)
-            ]  # fmt: skip
-            to = best(gm, there, alone)
-            if to is None and gm.goal_id is not None:
-                to = best(gm, plain, False) or (
-                    best(gm, twins, False, near=True) if gm.prd is None else None
-                )
-                # One goal's own milestone per joined group; another stays its own.
-                if gm.prd is None and to in prds:
-                    if into.get(to, to) in taken:
-                        to = None
-                    else:
-                        taken.add(into.get(to, to))
-        if to is None:
-            groups[gm.id] = [gm]
+            join(gm, there[0].id)
             continue
-        to = into.get(to, to)
-        into[gm.id] = to
-        groups.setdefault(to, []).append(gm)
+        plain = [
+            g
+            for g in goal_ms
+            if code and g.goal_id is None and g is not gm
+            and g.roadmap_id == gm.roadmap_id and _gm_code(g) == code
+        ]  # fmt: skip
+        alike = {
+            (g.goal_id, g.prd.id if g.prd else None)
+            for g in goal_ms
+            if g.roadmap_id == gm.roadmap_id and _gm_code(g) == code
+        }
+        alone = len(alike) == 1 and len(there) == 1
+        to = best(gm, there, alone)
+        if to is None and gm.goal_id is not None:
+            to = best(gm, [g for g in plain if not own or g.id not in prds], False)
+        if to is None and own:
+            later.append((gm, [g for g in plain if g.id in prds]))
+            continue
+        join(gm, to)
+
+    # Then a goal's own joins a PRD milestone, by goal order: of its code, else its twin (the
+    # Goal map's, Nov 10: of the same name, whatever the PRD's code, its plan's), of its goal or
+    # none and only if the group holds no other goal's milestone ("Join only within the same
+    # goal", the owner, Nov 11), every join by code already in it.
+    for gm, plain in later:
+        twins = [
+            g
+            for g in goal_ms
+            if g.prd is not None and g is not gm and g.roadmap_id == gm.roadmap_id
+            and g.goal_id in (None, gm.goal_id) and mine(gm, g)
+        ]  # fmt: skip
+        to = best(gm, [g for g in plain if mine(gm, g)], False) or best(gm, twins, False, near=True)
+        # One goal's own milestone per joined group; another stays its own.
+        if to is not None:
+            if into.get(to, to) in taken:
+                to = None
+            else:
+                taken.add(into.get(to, to))
+        join(gm, to)
 
     def key(members: list[SimpleGoalMilestone | SimpleMilestone]) -> tuple:
         lead = members[0]

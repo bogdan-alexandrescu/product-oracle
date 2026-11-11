@@ -6,8 +6,10 @@
  * one of no goal, else one whose name it leads or follows, whatever else of the code is there)
  * or as a PRD's (or the roadmap's own) milestone of its code with a name that matches shares its code;
  * a goal's own milestone whose name matches a PRD's milestone of any code on its roadmap of its goal or
- * none too, unless another goal's milestone joined it (the closest in date, then the exact name; one goal's
- * own per joined group, by goal order).
+ * none too; a goal's own joins a PRD milestone only if its group holds no other goal's milestone, checked
+ * after every join by code (to a track, to the roadmap's own, a PRD's to either: unchecked, so such a group
+ * may join several goals) is made, whatever the goal order (the closest in date, then the exact name; one
+ * goal's own per group joined by a PRD milestone, by goal order).
  * A joined group goes by its goal's own milestone's date (its track milestone's first, else its earliest).
  */
 import type { Schemas } from "@/lib/api/client";
@@ -64,31 +66,46 @@ export function withRoadmapCodes<T extends { goal_milestones?: Gm[]; milestones:
   const prds = new Set(goals.filter((o) => !!o.prd).map((o) => o.id));
   const taken = new Set<string>(); // groups a goal's own milestone has joined by a PRD milestone
   // A PRD milestone a goal's own may join: its group holds no milestone of another goal.
-  const mine = (g: Gm, o: Gm) => !!g.prd || !prds.has(o.id) || (groups.get(into.get(o.id) ?? o.id) ?? []).every((x) => !("goal_id" in x) || !x.goal_id || x.goal_id === g.goal_id);
+  const mine = (g: Gm, o: Gm) => (groups.get(into.get(o.id) ?? o.id) ?? []).every((x) => !("goal_id" in x) || !x.goal_id || x.goal_id === g.goal_id);
+  const join = (g: Gm, to: string | null) => {
+    if (!to) {
+      groups.set(g.id, [g]);
+      return;
+    }
+    const at = into.get(to) ?? to;
+    into.set(g.id, at);
+    groups.set(at, [...(groups.get(at) ?? []), g]);
+  };
+  // First every join by code; a goal's own that makes none waits for the PRD joins below.
+  const later: [Gm, Gm[]][] = [];
   for (const g of [...goals].sort((p, q) => order(p) - order(q) || rankOf(p) - rankOf(q) || (p.id < q.id ? -1 : 1))) {
     const code = gmCode(g);
+    const own = !!g.goal_id && !g.prd;
     const there = tracks.filter((t) => !!code && split(t.name)[0] === code && !!held.get(t.id)?.has(g.roadmap_id));
-    const plain = goals.filter((o) => !!code && !o.goal_id && o !== g && o.roadmap_id === g.roadmap_id && gmCode(o) === code && mine(g, o));
+    if (!g.goal_id && there.length === 1) {
+      join(g, there[0].id);
+      continue;
+    }
+    const plain = goals.filter((o) => !!code && !o.goal_id && o !== g && o.roadmap_id === g.roadmap_id && gmCode(o) === code);
     const alike = new Set(goals.filter((o) => o.roadmap_id === g.roadmap_id && gmCode(o) === code).map((o) => `${o.goal_id ?? ""}|${o.prd?.id ?? ""}`));
     const alone = alike.size === 1 && there.length === 1;
-    // Goal map twins (Nov 10): a goal's own milestone is a PRD's on its roadmap of the same name, whatever the PRD's
-    // code, of its goal or none ("Join only within the same goal", the owner, Nov 11), and not one whose group another
-    // goal's milestone already joined.
+    const to = best(g, there, alone) ?? (g.goal_id ? best(g, plain.filter((o) => !own || !prds.has(o.id)), false) : null);
+    if (!to && own) later.push([g, plain.filter((o) => prds.has(o.id))]);
+    else join(g, to);
+  }
+  // Then a goal's own joins a PRD milestone, by goal order: of its code, else its twin (the Goal map's, Nov 10: of
+  // the same name, whatever the PRD's code), of its goal or none and only if the group holds no other goal's
+  // milestone ("Join only within the same goal", the owner, Nov 11), every join by code already in it.
+  for (const [g, plain] of later) {
     const twins = goals.filter((o) => !!o.prd && o !== g && o.roadmap_id === g.roadmap_id && (!o.goal_id || o.goal_id === g.goal_id) && mine(g, o));
-    let to: string | null = !g.goal_id && there.length === 1 ? there[0].id : (best(g, there, alone) ?? (g.goal_id ? (best(g, plain, false) ?? (g.prd ? null : best(g, twins, false, true))) : null));
+    let to: string | null = best(g, plain.filter((o) => mine(g, o)), false) ?? best(g, twins, false, true);
     // One goal's own milestone per joined group; another stays its own.
-    if (to && g.goal_id && !g.prd && prds.has(to)) {
+    if (to) {
       const at = into.get(to) ?? to;
       if (taken.has(at)) to = null;
       else taken.add(at);
     }
-    if (!to) {
-      groups.set(g.id, [g]);
-      continue;
-    }
-    to = into.get(to) ?? to;
-    into.set(g.id, to);
-    groups.set(to, [...(groups.get(to) ?? []), g]);
+    join(g, to);
   }
   const far = 1e9;
   const key = (ms: (Gm | Tm)[]) => {
