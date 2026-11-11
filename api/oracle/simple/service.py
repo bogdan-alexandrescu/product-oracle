@@ -641,16 +641,18 @@ async def load(
     flags = constraints.check(nodes)
     for e in entries:
         e.flags = flags.get(str(e.row.id), [])
-    # qa-simple-home-1: what each order flag's "Move the dependents" moves, the item first.
+    # qa-simple-home-1: what each order flag's "Move the dependents" moves, the item first
+    # (roadmap-speed: the counts show neither).
     by_id = {e.row.id: e for e in entries}
-    for e in entries:
+    for e in entries if not light else ():
+        me = e.row.id
         for f in e.flags:
             if f.kind != "dependency_order" or not f.subject or "shift_dependents" not in f.fixes:
                 continue
             dep = by_id.get(uuid.UUID(f.subject))
             if dep is not None:
                 moved = list(shift_plan(e, dep, by_id))
-                e.shift_moves[f.subject] = sorted(moved, key=lambda i: i != e.row.id)
+                e.shift_moves[f.subject] = sorted(moved, key=lambda i: i != me)
         if any(f.kind == "cut_with_dependents" for f in e.flags):
             e.cut_dependents = [
                 by_id[d]
