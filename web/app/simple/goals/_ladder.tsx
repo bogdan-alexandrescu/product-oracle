@@ -26,6 +26,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type PointerEvent as RPointerEvent, type RefObject, type WheelEvent as RWheelEvent } from "react";
 
 import Link from "next/link";
+import { Button } from "@/components/ds/Button";
 import { Icon } from "@/components/ds/Icon";
 import { confirmInPage } from "@/components/ds/ConfirmDialog";
 import { InfoTip } from "@/components/ds/InfoTip";
@@ -37,7 +38,7 @@ import { formatCount } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
-import { ChangeFailed, propose, statusWord, undo, type Item } from "../roadmap/_lib";
+import { ChangeFailed, deciderWords, propose, statusWord, undo, type Item } from "../roadmap/_lib";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const day = (iso: string | null | undefined) => (iso ? `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}` : "");
@@ -106,6 +107,8 @@ interface V {
   /** Whether this milestone is changed directly (its own can_change), not map.can_edit. */
   krCan: (milestone: string) => boolean;
   may: boolean;
+  /** milestone-rename: each milestone's open proposal (the roadmap's read): "Proposed · waits for <name>". */
+  asked: Map<string, { name?: string | null; asked_of?: string | null }>;
   phone: boolean;
   places: Map<string, { x: number; y: number }>;
   live: { id: string; dx: number; dy: number } | null;
@@ -150,6 +153,8 @@ interface Acts {
   orderGoal: (goal: string, to: number) => Promise<void>;
   trashGoal: (goal: string) => Promise<void>;
   trashKr: (milestone: string) => Promise<void>;
+  /** milestone-rename: its name, by who changes it directly, else proposed to the roadmap's decider. */
+  renameKr: (milestone: string, name: string) => Promise<void>;
   /** A move the reader may not make: why, and the card snaps back. */
   refuse: (why: string) => void;
 }
@@ -217,6 +222,7 @@ export function GoalLadder(props: LadderProps) {
   const canChange = map.can_edit;
   // A milestone changes (Trash, move, drag) for the roadmap's owner or decider, not every approver.
   const krCan = (milestone: string) => !!map.milestones.find((x) => x.id === milestone)?.can_change;
+  const asked = useMemo(() => new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.pending ? [[m.id, m.pending] as const] : []))), [roadmap.data]);
   const may = canChange || can("create_simple_change");
   const [edit, setEdit] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
@@ -234,10 +240,15 @@ export function GoalLadder(props: LadderProps) {
 
   const goals = map.goals;
   const ms = useMemo(() => goals.flatMap((g) => map.milestones.filter((m) => m.goal === g.id)), [goals, map.milestones]);
-  const msCode = useMemo(() => new Map(ms.map((m, i) => [m.id, `M${i + 1}`])), [ms]);
+  // roadmap-milestone-codes: a milestone's one code across the roadmap; none while the roadmap gives it none
+  // (a ladder place could repeat a code another milestone holds).
+  const msCode = useMemo(
+    () => new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.roadmap_code ? [[m.id, m.roadmap_code] as const] : []))),
+    [roadmap.data],
+  );
   const feats = useMemo(() => {
     // goal-map-editing: the features on no milestone are cards too, under the goal their item serves.
-    const loose: GmFeature[] = map.unplaced.map((u) => ({ id: u.id, name: u.name, area: null, milestones: [], lever: "", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [] }));
+    const loose: GmFeature[] = map.unplaced.map((u) => ({ id: u.id, name: u.name, code: u.code, area: null, milestones: [], lever: "", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [] }));
     const on = new Set([...map.features, ...loose].map((f) => f.id));
     const goalOf = new Map(map.milestones.map((m) => [m.id, m.goal]));
     const mapGoals = new Set(map.goals.map((g) => g.id));
@@ -245,7 +256,8 @@ export function GoalLadder(props: LadderProps) {
     const base: LdFeature[] = [...map.features, ...loose].map((f) => {
       const item = items.get(f.id);
       const free = !f.milestones.length;
-      return { f, item, code: item?.code ?? "", goal: free ? (freeGoal.get(f.id) ?? null) : (goalOf.get(f.milestones[0]) ?? null), waits: (item?.depends_on ?? []).filter((d) => on.has(d)), wanted: [] as string[], suggested: [] as string[], free };
+      // A feature the reader's roadmap read leaves out keeps the map's own code.
+      return { f, item, code: item?.code || f.code || "", goal: free ? (freeGoal.get(f.id) ?? null) : (goalOf.get(f.milestones[0]) ?? null), waits: (item?.depends_on ?? []).filter((d) => on.has(d)), wanted: [] as string[], suggested: [] as string[], free };
     });
     const by = new Map(base.map((x) => [x.f.id, x]));
     for (const x of base) for (const d of x.waits) by.get(d)?.wanted.push(x.f.id);
@@ -272,6 +284,11 @@ export function GoalLadder(props: LadderProps) {
     const x = byId.get(id);
     return x ? `${x.code} ${x.f.name}`.trim() : "";
   }, [byId]);
+  /** goal-map-editing: who a suggestion waits for: its feature's deciders, else the map's approver. */
+  const waitsFor = (feature?: string) => {
+    const d = (feature ? items.get(feature)?.deciders : undefined) ?? roadmap.data?.items.find((i) => i.deciders?.length)?.deciders;
+    return deciderWords(d?.length ? d : map.approver ? [map.approver] : undefined);
+  };
   const failed = (e: unknown) => toast({ message: e instanceof ChangeFailed || e instanceof Error ? e.message : "Oracle could not make this change" });
 
   /** One change through the engine: applied (with Undo) or, for a commenter, a suggestion. */
@@ -280,7 +297,7 @@ export function GoalLadder(props: LadderProps) {
     const c = r.change;
     await reload();
     toast({
-      message: c.status === "applied" ? done : `Suggested: ${suggested}.${map.approver ? ` Sent to ${map.approver}.` : ""}`,
+      message: c.status === "applied" ? done : `Suggested: ${suggested}; it waits for ${waitsFor(String(body.target.item_id ?? body.target.feature ?? ""))}`,
       action:
         c.status === "applied" && c.can_undo
           ? { label: "Undo", onClick: () => void (onUndo ? onUndo() : undo(c.id).then(() => undefined)).then(reload, failed) }
@@ -344,7 +361,7 @@ export function GoalLadder(props: LadderProps) {
         setFresh(feature);
         const m = map.milestones.find((x) => x.id === to);
         toast({
-          message: `Moved ${named(feature)} to ${msCode.get(to)} ${m?.name ?? ""}`,
+          message: `Moved ${named(feature)} to ${`${msCode.get(to) ?? ""} ${m?.name ?? ""}`.trim()}`,
           action: { label: "Undo", onClick: () => void unwrap(api.POST("/v1/simple/goal-map/links/move", { body: { feature, from_milestone: to, to_milestone: from } })).then(props.setMap, failed) },
         });
       } catch (e) {
@@ -372,7 +389,7 @@ export function GoalLadder(props: LadderProps) {
           setRefused([on, waiter]);
           toast({ message: `Not added, it would make a loop: ${named(on)} already waits on ${named(waiter)}` });
         } else if (said.startsWith("after.depends_on: item or feature keys")) {
-          toast({ message: `Not added: ${byId.get(on)?.f.name ?? "this feature"} has no roadmap item yet to link to` });
+          toast({ message: `Not added: ${named(on) || "this feature"} has no roadmap item yet to link to` });
         } else if (said.startsWith("after.depends_on: no item or feature has the key")) {
           toast({ message: "Not added: no feature has that key" });
         } else if (said) {
@@ -438,7 +455,7 @@ export function GoalLadder(props: LadderProps) {
         }
         await reload();
         setAdding(null);
-        toast({ message: r.change.status === "applied" ? `Added ${title.trim()} under ${msCode.get(milestone)}` : `Suggested: add ${title.trim()}.${map.approver ? ` Sent to ${map.approver}.` : ""}` });
+        toast({ message: r.change.status === "applied" ? `Added ${title.trim()} under ${msCode.get(milestone) ?? map.milestones.find((m) => m.id === milestone)?.name ?? ""}` : `Suggested: add ${title.trim()}.${map.approver ? ` Sent to ${map.approver}.` : ""}` });
       } catch (e) {
         failed(e);
       }
@@ -493,9 +510,15 @@ export function GoalLadder(props: LadderProps) {
           } else await act.move(feature, x.f.milestones[0], ref);
           return;
         }
-        // A commenter: the goal the milestone serves, as a suggestion; within its own goal, none.
-        if (m.goal !== x.goal) await act.dropFeature(feature, `free:${m.goal}`);
-        else refuse("Only owners and approvers put a feature on a milestone");
+        // A commenter: the goal the milestone serves, as a suggestion; within its own goal, the link
+        // (or its move) as a suggestion to the decider.
+        if (m.goal !== x.goal) return act.dropFeature(feature, `free:${m.goal}`);
+        try {
+          const from = x.free ? null : (x.f.milestones[0] ?? null);
+          await change({ op: "link_goal_map", target: { feature, milestone: ref, from_milestone: from }, before: {}, after: {} }, `Moved ${named(feature)} to ${krName(ref)}`, `move ${named(feature)} to ${krName(ref)}`);
+        } catch (e) {
+          failed(e);
+        }
         return;
       }
       const goal = ref === "none" ? null : ref;
@@ -513,8 +536,13 @@ export function GoalLadder(props: LadderProps) {
         return;
       }
       const links = x.f.links;
+      // Never half done: a step that fails puts back the links already let go.
+      const off: typeof links = [];
       try {
-        for (const l of links) props.setMap(await detachLink(feature, l.milestone));
+        for (const l of links) {
+          props.setMap(await detachLink(feature, l.milestone));
+          off.push(l);
+        }
         // Off its milestones it serves its item's own goal: set it when that is not the one dropped on.
         const read = await unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } }));
         const now = read.items.find((i) => i.id === feature)?.goal?.id ?? null;
@@ -546,6 +574,7 @@ export function GoalLadder(props: LadderProps) {
         });
       } catch (e) {
         failed(e);
+        for (const l of off) await attachLink(feature, l.milestone, x.f.area, l.expected, l.confidence.toLowerCase() as "high" | "medium" | "low").catch(() => undefined);
         await reload();
       }
     },
@@ -655,10 +684,42 @@ export function GoalLadder(props: LadderProps) {
         failed(e);
       }
     },
+    renameKr: async (milestone, name) => {
+      const m = map.milestones.find((x) => x.id === milestone);
+      const to = name.trim();
+      if (!m || !to || to === m.name) return;
+      const coded = (n: string) => `${msCode.get(m.id) ?? ""} ${n}`.trim();
+      try {
+        if (krCan(milestone)) {
+          const set = (n: string) => unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } }, body: { name: n } }));
+          await set(to);
+          await reload();
+          toast({ message: `${coded(to)} saved`, action: { label: "Undo", onClick: () => void set(m.name).then(reload, failed) } });
+        } else {
+          await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: milestone }, before: { milestone: { name: m.name } }, after: { milestone: { name: to } } } }));
+          await reload();
+          toast({ message: `Proposed: ${coded(to)}; it waits in Needs a decision` });
+        }
+      } catch (e) {
+        failed(e);
+      }
+    },
     trashKr: async (milestone) => {
       setMenu(null);
       const name = krName(milestone);
+      const m = map.milestones.find((x) => x.id === milestone);
       try {
+        // goal-map-editing: who may not change it suggests it, to the roadmap's decider.
+        if (!krCan(milestone)) {
+          if (!m) return;
+          const r = await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: milestone }, before: { milestone: { name: m.name } }, after: { milestone: null } } }));
+          await reload();
+          toast({
+            message: `Suggested: move ${name} to Trash; it waits for ${waitsFor()}`,
+            action: { label: "Undo", onClick: () => void unwrap(api.POST("/v1/simple/changes/{change_id}/withdraw", { params: { path: { change_id: r.change.id } } })).then(reload, failed) },
+          });
+          return;
+        }
         await unwrap(api.DELETE("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } } }));
         await reload();
         toast({
@@ -719,7 +780,7 @@ export function GoalLadder(props: LadderProps) {
   }, [menu, arrow, sel, sheet, edit, may]);
 
   const firstLoose = goals.find((g) => feats.some((x) => x.free && x.goal === g.id));
-  const v: V = { map, goals, ms, msCode, feats, byId, sel, setSel: (id) => { setSel(id); setRefused(null); }, edit, canChange, krCan, may, phone, places, live, menu, setMenu, arrow, setArrow: (key) => setArrowAt(key ? { key, sel } : null), adding, setAdding, drop, refused, fresh, flash, flashGoal: firstLoose?.id ?? null, onOpen: props.onOpen, act };
+  const v: V = { map, goals, ms, msCode, feats, byId, sel, setSel: (id) => { setSel(id); setRefused(null); }, edit, canChange, krCan, may, asked, phone, places, live, menu, setMenu, arrow, setArrow: (key) => setArrowAt(key ? { key, sel } : null), adding, setAdding, drop, refused, fresh, flash, flashGoal: firstLoose?.id ?? null, onOpen: props.onOpen, act };
   const drag = { setLive, setDrop };
 
   return (
@@ -781,7 +842,7 @@ function periods(map: GoalMap, ms: GmMilestone[], code: Map<string, string>): { 
     for (let w = from, n = 1; w < to; w = addDays(w, 7), n++) {
       const end = addDays(w, 7);
       const due = ms.filter((m) => m.due_on && m.due_on >= w && m.due_on < end);
-      out.push({ n, from: w, today: today >= w && today < end, mark: due.map((m) => `${code.get(m.id)} ${short(m.name)}`).join("\n"), full: due.map((m) => `${code.get(m.id)} ${m.name}`).join("\n") });
+      out.push({ n, from: w, today: today >= w && today < end, mark: due.map((m) => `${code.get(m.id) ?? ""} ${short(m.name)}`.trim()).join("\n"), full: due.map((m) => `${code.get(m.id) ?? ""} ${m.name}`.trim()).join("\n") });
     }
     return out;
   };
@@ -1051,13 +1112,23 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
   const live = v.live?.id === m.id ? v.live : null;
   const krs = v.ms.filter((x) => x.goal === m.goal);
   const at = krs.findIndex((x) => x.id === m.id);
+  // milestone-rename: its name in place, the code fixed before it (who may only propose proposes it).
+  const [naming, setNaming] = useState<string | null>(null);
+  const renames = v.krCan(m.id) || v.may;
+  const asked = v.asked.get(m.id);
+  const code = v.msCode.get(m.id);
+  const keep = () => {
+    const to = naming;
+    setNaming(null);
+    if (to !== null) void v.act.renameKr(m.id, to);
+  };
   return (
     <div
       data-ld-ms={m.id}
       data-testid="ld-milestone"
-      tabIndex={v.edit && v.krCan(m.id) ? 0 : undefined}
+      tabIndex={v.edit && v.may ? 0 : undefined}
       onKeyDown={(e) => {
-        if ((e.key === "Delete" || e.key === "Backspace") && v.edit && v.krCan(m.id) && e.target === e.currentTarget) {
+        if ((e.key === "Delete" || e.key === "Backspace") && v.edit && v.may && e.target === e.currentTarget) {
           e.preventDefault();
           e.stopPropagation();
           void v.act.trashKr(m.id);
@@ -1068,11 +1139,41 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
     >
       <span className="flex items-start gap-2">
         {v.edit && v.krCan(m.id) && !v.phone && <span className="mt-0.5 cursor-grab text-text-faint" aria-hidden><Icon name="grip" size={16} /></span>}
-        <span className="text-[14px] leading-[18px] font-semibold">
-          <span className="simple-code mr-1">{v.msCode.get(m.id)}</span>
-          {m.name}
-        </span>
-        {v.edit && v.canChange && <span className="ml-auto"><More label={`More for ${m.name}`} open={v.menu === key} onClick={() => v.setMenu(v.menu === key ? null : key)} /></span>}
+        {naming !== null ? (
+          <span className="flex min-w-0 flex-1 items-center gap-1 text-[14px] leading-[18px] font-semibold" data-testid="ld-ms-naming">
+            {code && <span className="simple-code">{code}</span>}
+            <input
+              aria-label="Name"
+              autoFocus
+              value={naming}
+              onChange={(e) => setNaming(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") keep();
+                if (e.key === "Escape") setNaming(null);
+              }}
+              className="min-w-0 flex-1 rounded border border-line-strong bg-surface px-1 font-normal"
+            />
+            <Button variant="solid" className="!h-6 !px-2 !text-xs" onClick={keep}>
+              {v.krCan(m.id) ? "Save" : "Propose"}
+            </Button>
+            <Button className="!h-6 !px-2 !text-xs" onClick={() => setNaming(null)}>
+              Cancel
+            </Button>
+          </span>
+        ) : renames ? (
+          // A span, not a button: a drag that starts on the name still moves the card (the canvas skips buttons).
+          <span role="button" tabIndex={0} data-testid="ld-ms-name" aria-label={`Rename ${code ? `${code} ` : ""}${m.name}`} onClick={(e) => { e.stopPropagation(); setNaming(m.name); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setNaming(m.name); } }} className="cursor-text text-left text-[14px] leading-[18px] font-semibold hover:underline">
+            {code && <span className="simple-code mr-1">{code}</span>}
+            {m.name}
+          </span>
+        ) : (
+          <span className="text-[14px] leading-[18px] font-semibold">
+            {code && <span className="simple-code mr-1">{code}</span>}
+            {m.name}
+          </span>
+        )}
+        {v.edit && v.may && <span className="ml-auto"><More label={`More for ${m.name}`} open={v.menu === key} onClick={() => v.setMenu(v.menu === key ? null : key)} /></span>}
       </span>
       <span className="text-[12px] leading-4 text-text2" title={m.measure}>
         {m.threshold === null ? <>Reads <b className="text-text">{num(m.current, mUnit(m.unit))}</b> · no gate yet</> : <><b className="text-text">{num(m.current, mUnit(m.unit))}</b> of {num(m.threshold, mUnit(m.unit))}</>}
@@ -1080,13 +1181,23 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
         {area ? ` · ${area}` : ""}
       </span>
       <b data-testid="ld-ms-status" className={`text-[12px] leading-4 ${m.proposed ? "text-accent-ink" : KR[m.status]}`}>{m.proposed ? "Proposed" : KR_WORD[m.status]}</b>
+      {asked && (
+        <span data-testid="ms-proposed-state" className="text-[12px] leading-4 font-semibold text-warn">
+          Proposed{asked.name ? `: ${asked.name}` : ""} · waits for {asked.asked_of ?? "the owner"}
+        </span>
+      )}
       {v.menu === key && (
         <MenuList
           testId="ld-ms-menu"
           items={[
-            { w: m.proposed ? "Set and confirm the gate" : "Edit the gate", on: () => { v.setMenu(null); p.onGate(m.id); } },
-            { w: "Attach a feature…", on: () => { v.setMenu(null); p.onAttach(m.id, m.areas[0] ?? ""); } },
-            ...(p.onPrd ? [{ w: "New PRD from it", on: () => { v.setMenu(null); p.onPrd!(m.id); } }] : []),
+            // A commenter's menu holds only what they may suggest.
+            ...(v.canChange
+              ? [
+                  { w: m.proposed ? "Set and confirm the gate" : "Edit the gate", on: () => { v.setMenu(null); p.onGate(m.id); } },
+                  { w: "Attach a feature…", on: () => { v.setMenu(null); p.onAttach(m.id, m.areas[0] ?? ""); } },
+                  ...(p.onPrd ? [{ w: "New PRD from it", on: () => { v.setMenu(null); p.onPrd!(m.id); } }] : []),
+                ]
+              : []),
             ...(v.krCan(m.id)
               ? [
                   ...(at > 0 ? [{ w: "Move up", on: () => void v.act.stepKr(m.id, -1) }] : []),
@@ -1094,8 +1205,14 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
                   { w: "Move to…", on: () => v.act.krTo(m.id) },
                   { w: "Move to Trash", on: () => void v.act.trashKr(m.id), crit: true },
                 ]
-              : // every-field-editable: anyone else who may propose asks to move it to another goal.
-                v.may ? [{ w: "Move to another goal…", on: () => v.act.krTo(m.id) }] : []),
+              : // every-field-editable: anyone else who may propose asks to move it to another goal, or
+                // (goal-map-editing) to Trash.
+                v.may
+                ? [
+                    { w: "Move to another goal…", on: () => v.act.krTo(m.id) },
+                    { w: "Move to Trash", on: () => void v.act.trashKr(m.id), crit: true },
+                  ]
+                : []),
           ]}
         />
       )}
@@ -1181,7 +1298,7 @@ function FeatureCard({ x, v, ms, compact }: { x: LdFeature; v: V; ms?: string; c
           Placed by hand · serves {v.msCode.get(f.milestones[0])} {v.map.milestones.find((m) => m.id === f.milestones[0])?.name}
         </span>
       )}
-      {ms && f.milestones.length > 1 && <span className="text-[12px] leading-4 text-text2">Also serves {f.milestones.filter((m) => m !== ms).map((m) => v.msCode.get(m)).join(", ")}</span>}
+      {ms && f.milestones.length > 1 && <span className="text-[12px] leading-4 text-text2">Also serves {f.milestones.filter((m) => m !== ms).map((m) => v.msCode.get(m) ?? v.map.milestones.find((x) => x.id === m)?.name).join(", ")}</span>}
       {/* the edge dot a dependency is drawn from (while editing, on the picked card) */}
       {handles && isSel && !v.phone && (
         <span data-ld-dot={f.id} data-testid="ld-dot" title="Drag onto the card that waits on this one" className="absolute top-1/2 -right-[9px] z-30 h-4 w-4 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-surface bg-accent" />
@@ -1216,7 +1333,7 @@ function AddFeature({ m, v }: { m: GmMilestone; v: V }) {
           void v.act.add(m.id, name);
         }}
       >
-        <input autoFocus aria-label={`New feature under ${v.msCode.get(m.id)}`} value={name} onChange={(e) => setName(e.target.value)} className="rounded-lg border border-line bg-surface px-2 py-1 text-[14px]" />
+        <input autoFocus aria-label={`New feature under ${v.msCode.get(m.id) ?? m.name}`} value={name} onChange={(e) => setName(e.target.value)} className="rounded-lg border border-line bg-surface px-2 py-1 text-[14px]" />
         <span className="flex gap-1.5">
           <button type="submit" className="rounded-full border border-accent bg-accent px-2.5 py-0.5 text-[14px] font-semibold text-on-accent">Add</button>
           <Btn small onClick={() => v.setAdding(null)}>Cancel</Btn>
@@ -1306,7 +1423,7 @@ function Group({ m, v }: { m: GmMilestone; v: V }) {
   return (
     <div data-ld-group={m.id} data-testid="ld-group" className={`flex flex-col gap-1.5 ${drop ? "rounded-xl outline-2 outline-offset-2 outline-accent" : ""} ${v.edit && v.may ? "rounded-xl border border-dashed border-line p-1" : ""}`}>
       <span className="relative w-fit rounded bg-surface2 text-[12px] leading-4 font-semibold text-text2">
-        <span className="simple-code">{v.msCode.get(m.id)}</span> {m.name}
+        {v.msCode.has(m.id) && <span className="simple-code">{v.msCode.get(m.id)}</span>} {m.name}
       </span>
       {fs.map((x) =>
         x.f.milestones[0] === m.id ? (
@@ -1627,8 +1744,8 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
         void v.act.dropFeature(id, t);
         return;
       }
-      // A card on no milestone has no place on the canvas: it snaps back.
-      if (!x || x.free) return;
+      // Free canvas: any card, one on no milestone too, stays where it is put.
+      if (!x) return;
       const at = v.places.get(id);
       void v.act.place(id, Math.round((at?.x ?? 0) + dx), Math.round((at?.y ?? 0) + dy));
     }
@@ -1863,7 +1980,7 @@ function Sheet({ v, sheet, onClose }: { v: V; sheet: { kind: "move" | "waits" | 
       {value === from ? " (now)" : ""}
     </label>
   );
-  const title = kr ? `Move ${v.msCode.get(kr.id) ?? ""}` : sheet.kind === "move" ? `Move ${x!.code}` : `${x!.code} waits on`;
+  const title = kr ? `Move ${v.msCode.get(kr.id) ?? kr.name}` : sheet.kind === "move" ? `Move ${x!.code}` : `${x!.code} waits on`;
   return (
     <div className={`fixed inset-0 z-50 bg-black/30 ${v.phone ? "flex flex-col justify-end" : "grid place-items-center"}`} onClick={onClose}>
       <div
@@ -1876,7 +1993,7 @@ function Sheet({ v, sheet, onClose }: { v: V; sheet: { kind: "move" | "waits" | 
         <b className="text-[16px]">
           {kr ? (
             <>
-              Move <span className="simple-code">{v.msCode.get(kr.id)}</span> {kr.name}
+              Move {v.msCode.has(kr.id) && <span className="simple-code">{v.msCode.get(kr.id)}</span>} {kr.name}
             </>
           ) : (
             <>
@@ -1895,7 +2012,7 @@ function Sheet({ v, sheet, onClose }: { v: V; sheet: { kind: "move" | "waits" | 
             {v.goals.map((g, i) => (
               <div key={g.id} className="flex flex-col gap-0.5">
                 <span className="text-[12px] font-bold tracking-wide text-text2 uppercase">Goal {i + 1} · {g.name}</span>
-                {v.ms.filter((m) => m.goal === g.id).map((m) => radio(`ms:${m.id}`, <><span className="simple-code">{v.msCode.get(m.id)}</span> {m.name}</>, m.id))}
+                {v.ms.filter((m) => m.goal === g.id).map((m) => radio(`ms:${m.id}`, <>{v.msCode.has(m.id) && <span className="simple-code">{v.msCode.get(m.id)}</span>} {m.name}</>, m.id))}
                 {radio(`free:${g.id}`, "Not on a key result", `free:${g.id}`)}
               </div>
             ))}

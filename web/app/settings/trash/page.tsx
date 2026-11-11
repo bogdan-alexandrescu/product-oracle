@@ -42,9 +42,11 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
     setBusy(true);
     setError(null);
     try {
-      await unwrap(api.POST("/v1/trash/{entry_id}/restore", { params: { path: { entry_id: e.id } } }));
+      const out = await unwrap(api.POST("/v1/trash/{entry_id}/restore", { params: { path: { entry_id: e.id } } }));
       artifactsChanged();
-      toast({ message: `Restored ${entrySummary(e.root, e.items)}` });
+      // A task whose feature is still in Trash: "Restored Task Spec; it shows when F-3 Ledger is restored".
+      const held = out.not_restored.map((n) => `; ${n.reason}`).join("");
+      toast({ message: `Restored ${entrySummary(e.root, e.items)}${held}` });
       onGone();
     } catch (err) {
       setError(errorMessage(err));

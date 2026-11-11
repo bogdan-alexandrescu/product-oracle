@@ -23,3 +23,4 @@
   roadmap shows on its pages live; no needed change requires the API, CLD or a hidden page.
 - The Ground Truth is defined in docs/ground-truth.md: every roadmap item and PRD feature is a Ground Truth feature
   (or a slice of one), by code. Anything that breaks it is allowed but flagged ("Not in the Ground Truth"), never refused.
+- Every feature has a code, given when it joins the Ground Truth, and shows its code with its name.

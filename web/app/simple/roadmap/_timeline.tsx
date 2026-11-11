@@ -1,11 +1,16 @@
 "use client";
 
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
+import { InfoTip } from "@/components/ds";
+import { MkLegend } from "./_mk";
+import { TrackHead } from "./_trackbands";
 import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { FeatureMarks, pillWord, type FeatureState } from "@/components/current-state/CurrentState";
 import { calendarDay } from "@/lib/dates";
+import { useMsBand } from "./_milestones";
 import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
+import { joinedNames, joinedWords } from "@/lib/milestone-code";
 
 import {
   addDays,
@@ -391,6 +396,8 @@ export interface ChartProps {
   /** The label column's heading when the rows are grouped by something Simple has no lane for
    * (the Detailed Plan's Horizon grouping: "Horizon"); else the lane's own word. */
   laneWord?: string;
+  /** tb-mk: Simple's track bands (a track's name, goal and health; a quick add dropped on one lands on that track); the Plan keeps its own lanes and counts. */
+  trackBands?: boolean;
   /** The plan's no-work weeks (holidays), drawn grey. */
   noWork?: { start: string; end: string; label?: string | null }[];
   /** roadmap-milestones D3: on a phone, the milestone whose end is off screen to the right ("M3"), as the chart scrolls (null: none). */
@@ -443,7 +450,7 @@ declare global {
   }
 }
 
-export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, lane = data.group, laneWord, noWork = [], onOffscreen, pulled }: ChartProps) {
+export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, lane = data.group, laneWord, trackBands = false, noWork = [], onOffscreen, pulled }: ChartProps) {
   const box = useRef<HTMLDivElement>(null);
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
@@ -482,14 +489,18 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
       const code = `${codeOf(m.name)}${prd ? ` ${prd.title}` : ""}`;
       list.push({ key: `end-${m.id}`, kind: "end", x: sc.x(m.end_date!) + sc.px, words: compact ? `${code} ends` : `${code} ends ${shortDay(m.end_date!)}`, side: "before" });
     }
-    for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date))) list.push({ key: `track-${m.id}`, kind: "track", x: sc.x(m.date!), words: m.name, side: "after" });
+    const joined = joinedNames(data.goal_milestones ?? [], data.milestones);
+    for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date))) list.push({ key: `track-${m.id}`, kind: "track", x: sc.x(m.date!), words: joinedWords(m, joined), side: "after" });
     for (const k of drawnKeyDates(data)) list.push({ key: `key-${k.id}`, kind: "key", x: sc.x(k.date) + sc.px / 2, words: k.name, side: "after" });
     // finding 18: pack rows in date order left to right, so a later mark never takes a lower
     // row an earlier one needed (the list above is built milestone-ends, then tracks, then key
     // dates, not by date).
     return placeMarks([...list].sort((a, b) => a.x - b.x), chartW, flags);
   }, [data, sc, chartW, compact, flags]);
-  const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1)));
+  // roadmap-milestone-codes: the Gantt's milestone band under the date axis.
+  const band = useMsBand(compact);
+  const msBandH = format === "gantt" ? band : 0;
+  const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1))) + msBandH;
   // qa4-simple-roadmap-16: a phone's waterfall wraps its goals' names and gives each warning a band under its bar.
   const wrapRows = compact && format === "waterfall";
   // The names wrap beside the Current-state pill after them: the pill's width, by item.
@@ -729,20 +740,40 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     <div className="isolate flex border border-line bg-surface" data-testid="simple-chart" data-format={format} data-unit={format === "gantt" ? unit : undefined} data-weeks={weeks ? "true" : undefined}>
       <div className="min-w-0 flex-none border-r border-line" style={{ width: l.labelW }} data-testid="chart-labels">
         {/* fix4 qa-simple-roadmap-34: the grouping as the Group by names it ("PRD", "Goal"), not in capitals. */}
-        <div style={{ height: l.top }} className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2">
+        <div style={{ height: l.top - msBandH }} className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2">
           {laneWord ?? LANE_WORDS[lane]}
         </div>
+        {msBandH > 0 && (
+          <div style={{ height: msBandH }} className="flex items-center border-t border-line px-3 text-xs font-semibold text-text2">
+            Milestones
+                <span className="ml-1.5 font-normal">
+                  <InfoTip label="the milestone marks" align="start" side="bottom" testId="ms-legend-tip">
+                    <MkLegend />
+                  </InfoTip>
+                </span>
+          </div>
+        )}
         {l.rows.map((r, n) =>
           r.kind === "group" ? (
             <div
               key={`g-${r.key}-${n}`}
               data-testid={r.below ? "below-the-line" : "chart-group"}
-              data-add-where={dropTargets && lane === "goal" && !r.below && goalLane(r.key) ? whereAttr("goal", r.key) : undefined}
+              data-add-where={
+                !dropTargets || r.below
+                  ? undefined
+                  : lane === "goal" && goalLane(r.key)
+                    ? whereAttr("goal", r.key)
+                    : trackBands && lane === "track" && (data.tracks ?? []).some((t) => t.id === r.key)
+                      ? whereAttr("track", r.key)
+                      : undefined
+              }
               data-add-label={r.title}
               style={{ height: l.hs[n] }}
               className={`flex min-w-0 flex-col justify-center bg-surface2 px-3 ${r.below ? "text-text2" : ""}`}
             >
-              {gantt ? (
+              {trackBands && lane === "track" && !r.below ? (
+                <TrackHead data={data} laneKey={r.key} title={r.title} stack />
+              ) : gantt ? (
                 // D: the goal's name and, under it, its metric. The row's height must fit both
                 // lines (finding 6): a phone's tighter leading keeps the subtitle from being
                 // painted over by the next row.

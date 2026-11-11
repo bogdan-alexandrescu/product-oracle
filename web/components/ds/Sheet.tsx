@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type PointerEvent, type ReactNode } from "react";
 
+import { useScrollInside } from "@/lib/fit-viewport";
 import { Icon } from "./Icon";
 
 /*
@@ -123,6 +124,8 @@ export function Sheet({
       if (opener?.isConnected) opener.focus();
     };
   }, [open]);
+  // BGD (Nov 10): PageDown on the sheet and the wheel over its title scroll its body.
+  useScrollInside(panel, open);
 
   if (!open) return null;
 
@@ -215,6 +218,7 @@ export function Sheet({
           </>
         )}
         <div
+          data-fit-body={scroll ? "" : undefined}
           className={`relative min-h-0 flex-1 pb-[env(safe-area-inset-bottom)] ${scroll ? "overflow-y-auto overscroll-contain" : "flex flex-col"}`}
         >
           {children}

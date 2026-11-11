@@ -27,7 +27,9 @@ import type { TrashDb, TrashEntryRow } from "./trash";
 import { FIT_COMPANY_SCENARIO } from "./fit-date";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderMap } from "./goal-ladder";
 import { stableUuid } from "./ids";
+import { codedTitle, shownCode, shownTitle } from "./item-code";
 import { COMPANY_SLUG } from "./one-roadmap";
+import { canEditRoadmap, type SimpleDb } from "./simple-roadmap";
 
 export type GoalMap = Schemas["GoalMapOut"];
 export type GmGoal = Schemas["GmGoal"];
@@ -231,7 +233,7 @@ function ft(
   measured: string | null,
   released = lift !== "not_measured" || measured !== null,
 ): GmFeature {
-  return { id, name, area, milestones, lever, expected, confidence, released, measured, lift, links: milestones.map((m) => link(m, expected, confidence, measured, lift)) };
+  return { id, name, code: "", area, milestones, lever, expected, confidence, released, measured, lift, links: milestones.map((m) => link(m, expected, confidence, measured, lift)) };
 }
 
 /** A link as seeded: a feature that helped or not shipped on Oct 20; its readings are set by finish(). */
@@ -471,7 +473,7 @@ function inGoalOrder(goals: GmGoal[], baseline: BaselineGoal[]): GmGoal[] {
 }
 
 /** As the API reads them (goal_map.build): each goal's missing, each link's lift from its readings, the gaps, the unplaced features and the goals left off the map. */
-function finish(map: GoalMap, items: { id: string; title: string; status: string; goal?: { id: string } | null }[], baseline: BaselineGoal[]): GoalMap {
+function finish(map: GoalMap, items: { id: string; title: string; code?: string | null; status: string; goal?: { id: string } | null }[], baseline: BaselineGoal[]): GoalMap {
   const goalOf = (m: string) => map.goals.find((g) => g.id === map.milestones.find((x) => x.id === m)?.goal);
   for (const g of map.goals) {
     g.missing = g.current !== null ? null : g.metric ? "values" : "metric";
@@ -499,7 +501,7 @@ function finish(map: GoalMap, items: { id: string; title: string; status: string
   }
   const placed = new Set(map.features.map((f) => f.id));
   // goal-map-editing: each with the goal its item serves (goal_map._unplaced).
-  const unplaced = items.filter((i) => !["draft", "cut", "merged"].includes(i.status) && !placed.has(i.id)).map((i) => ({ id: i.id, name: i.title, goal: i.goal?.id ?? null }));
+  const unplaced = items.filter((i) => !["draft", "cut", "merged"].includes(i.status) && !placed.has(i.id)).map((i) => ({ id: i.id, name: i.title, goal: i.goal?.id ?? null, code: i.code ?? "" }));
   const onMap = new Set(map.goals.map((g) => g.id));
   // Confirmed goals with no number to aim at, never a guardrail (goal_map.build's off_map).
   const off_map = baseline
@@ -567,17 +569,27 @@ export function mayChangeMilestone(me: { id?: string; role: string }, decider: s
   return trackOwner && me.role === "approver";
 }
 
+/** milestone-rename: the map's milestones are its roadmap's own (TrackMilestone rows in the API): while
+ * the Simple roadmap reads them (map_milestones), who changes that roadmap changes them (drafts.can_edit),
+ * as its other milestones; else as mayChangeMilestone. */
+type MapRightsDb = { goal_map_decider?: string | null; simple_roadmap?: SimpleDb };
+export function mapCanChange(db: MapRightsDb, me: { id?: string; role: string }): boolean {
+  const on = db.simple_roadmap?.map_milestones?.roadmap;
+  if (db.goal_map_decider || !on || !me.id) return mayChangeMilestone(me, db.goal_map_decider);
+  return me.role !== "viewer" && me.role !== "commenter" && canEditRoadmap(db.simple_roadmap!, on, { id: me.id, role: me.role as Schemas["Me"]["role"] });
+}
+
 /** /v1/simple/goal-map and its edits; null for any other path. Edits need approver and up. */
 export async function routeGoalMap(
-  db: { goal_map?: GoalMap; goal_map_decider?: string | null; goal_map_places?: Record<string, Record<string, [number, number]>> },
+  db: { goal_map?: GoalMap; goal_map_decider?: string | null; goal_map_places?: Record<string, Record<string, [number, number]>>; simple_roadmap?: SimpleDb },
   scenario: string | null,
   me: { role: string; name: string; id?: string },
   req: Request,
   p: string[],
   /** A Simple roadmap item by id (any item can be attached, not only those on the map). */
-  item: (id: string) => { title: string; trashed?: boolean; merged_into?: string } | null = () => null,
+  item: (id: string) => { title: string; section?: string | null; feature_id?: string | null; trashed?: boolean; merged_into?: string } | null = () => null,
   /** The Simple roadmap's items as the reader sees them (the unplaced features). */
-  items: () => Promise<{ id: string; title: string; status: string }[]> = async () => [],
+  items: () => Promise<{ id: string; title: string; code?: string | null; status: string }[]> = async () => [],
   /** The Baseline goals (the goals left off the map; the map's own goal names). */
   baseline: () => BaselineGoal[] = () => [],
   /** goal-map-editing: whether a goal is in Trash (its milestones and their links leave the map). */
@@ -586,7 +598,8 @@ export async function routeGoalMap(
   if (p[1] !== "simple" || p[2] !== "goal-map") return null;
   const map = (db.goal_map ??= seedGoalMap(scenario));
   const canEdit = me.role === "owner" || me.role === "approver";
-  // goal-ladder place_card: each person's own places of cards, only for features on the map.
+  // goal-ladder place_card: each person's own places of cards, for features on the map and (Free
+  // canvas) the unplaced ones.
   const mine = ((db.goal_map_places ??= {})[me.id ?? me.name] ??= {});
   // trash-features-goals: a feature in Trash is off the map (and so is its place); goal-map-editing:
   // so is a goal in Trash, a milestone in Trash or of such a goal, and a link to one of them.
@@ -595,24 +608,36 @@ export async function routeGoalMap(
     const milestones = map.milestones.filter((m) => !(m as Held).trashed && goals.some((g) => g.id === m.goal)).map((m) => {
         const { trashed, ...rest } = m as Held;
         void trashed;
-        return { ...rest, can_change: mayChangeMilestone(me, db.goal_map_decider) };
+        return { ...rest, can_change: mapCanChange(db, me) };
       });
     const on = new Set(milestones.map((m) => m.id));
     // panel-menu (goal_map.build): a feature merged into another is no longer one of the map's.
     const features = map.features.filter((f) => !item(f.id)?.trashed && !item(f.id)?.merged_into).flatMap((f) => {
       const links = f.links.filter((l) => on.has(l.milestone));
-      return links.length ? [{ ...f, milestones: f.milestones.filter((m) => on.has(m)), links }] : [];
+      // QA goal map codes: its item's name as the roadmap reads it, without a leading code of its own.
+      const it = item(f.id);
+      const fc = (k: string) => db.simple_roadmap?.feature_codes?.[k];
+      const name = it ? shownTitle(it, fc) : codedTitle(f.name, null)[1];
+      // Its code as the roadmap reads it (GmFeature.code; "" for none).
+      const code = (it ? shownCode(it, fc) : codedTitle(f.name, null)[0]) ?? "";
+      return links.length ? [{ ...f, name, code, milestones: f.milestones.filter((m) => on.has(m)), links }] : [];
     });
     return { goals, milestones, features };
   };
-  const shown = () => live().features;
-  const places = () => Object.entries(mine).flatMap(([feature, [x, y]]) => (shown().some((f) => f.id === feature) ? [{ feature, x, y }] : []));
-  const out = async () => json(200, { ...finish({ ...map, ...live(), can_edit: canEdit }, await items(), baseline()), places: places() });
+  const read = async () => finish({ ...map, ...live(), can_edit: canEdit }, await items(), baseline());
+  // goal_map.build's places: of a feature on the map or (Free canvas) an unplaced one.
+  const carded = (m: GoalMap) => new Set([...m.features, ...m.unplaced].map((f) => f.id));
+  const out = async () => {
+    const m = await read();
+    const on = carded(m);
+    return json(200, { ...m, places: Object.entries(mine).flatMap(([feature, [x, y]]) => (on.has(feature) ? [{ feature, x, y }] : [])) });
+  };
   if (req.method === "GET" && !p[3]) return out();
   const body = JSON.parse((await req.text()) || "null");
   if (req.method === "POST" && p[3] === "place-card") {
     // Viewers too: a place is the person's own view and never changes data.
-    if (!shown().some((f) => f.id === body?.feature)) return json(404, { detail: "No such feature on the map" });
+    // Free canvas (goal_map.place_card): an unplaced feature is placed too; an unknown id or one in Trash is not.
+    if (!carded(await read()).has(body?.feature)) return json(404, { detail: "No such feature on the map" });
     if (body.x == null || body.y == null) delete mine[body.feature];
     else mine[body.feature] = [Number(body.x), Number(body.y)];
     return out();
@@ -622,22 +647,7 @@ export async function routeGoalMap(
     return out();
   }
   if (!canEdit) return json(403, { detail: "Only owners and approvers can change the goal map" });
-  if (req.method === "POST" && p[3] === "links" && p[4] === "move") {
-    // goal-ladder: a feature's link moved to another milestone (onto one it serves: the old link goes).
-    const f = map.features.find((x) => x.id === body?.feature);
-    const to = map.milestones.find((x) => x.id === body?.to_milestone);
-    if (!f || !to || !f.milestones.includes(body?.from_milestone)) return json(404, { detail: "No such feature or milestone" });
-    if (body.from_milestone !== to.id) {
-      if (f.milestones.includes(to.id)) {
-        f.milestones = f.milestones.filter((m) => m !== body.from_milestone);
-        f.links = f.links.filter((l) => l.milestone !== body.from_milestone);
-      } else {
-        f.milestones = f.milestones.map((m) => (m === body.from_milestone ? to.id : m));
-        f.links = f.links.map((l) => (l.milestone === body.from_milestone ? { ...l, milestone: to.id } : l));
-      }
-    }
-    return out();
-  }
+  if (req.method === "POST" && p[3] === "links" && p[4] === "move") return moveMapLink(map, body ?? {}) ?? out();
   if (req.method === "POST" && p[3] === "links" && p[4] === "detach") {
     // goal-map-editing: the feature no longer serves the milestone (goal_map.detach).
     const f = map.features.find((x) => x.id === body?.feature);
@@ -736,33 +746,82 @@ export async function routeGoalMap(
     map.milestones = ordered(map.milestones);
     return out();
   }
-  if (req.method === "POST" && p[3] === "links") {
-    const m = map.milestones.find((x) => x.id === body?.milestone);
-    const known = map.features.find((x) => x.id === body?.feature);
-    const it = known ? null : item(String(body?.feature));
-    if (!m || (!known && !it)) return json(404, { detail: "No such feature or milestone" });
-    const area = map.areas.find((a) => a.id === body?.area);
-    if (!area) return json(422, { detail: "Pick an area of this map" });
-    const expected = String(body?.expected ?? "").trim();
-    const confidence = ({ high: "High", medium: "Medium", low: "Low" } as const)[body?.confidence as "high" | "medium" | "low"] ?? "Medium";
-    const link: GmLink = { milestone: m.id, expected, confidence, measured: null, lift: "not_measured", shipped_on: null, before: null, after: null };
-    if (known) {
-      if (!known.milestones.includes(m.id)) {
-        known.milestones.push(m.id);
-        known.links.push(link);
-      }
-      // A feature sits in one area: attached from another area's cell, it moves there.
-      Object.assign(known, { area: area.id, lever: area.lever });
-    } else {
-      map.features.push({ id: String(body.feature), name: it!.title, area: area.id, milestones: [m.id], lever: area.lever, expected, confidence, released: false, measured: null, lift: "not_measured", links: [link] });
-    }
-    return out();
-  }
+  if (req.method === "POST" && p[3] === "links") return attachMapLink(map, body ?? {}, item) ?? out();
   return json(404, { detail: "Not found" });
+}
+
+/** goal_map.attach (POST /links): a feature put on a milestone in an area's cell; null when done. */
+export function attachMapLink(
+  map: GoalMap,
+  body: { feature?: unknown; milestone?: unknown; area?: unknown; expected?: unknown; confidence?: unknown },
+  item: (id: string) => { title: string } | null,
+): Response | null {
+  const m = map.milestones.find((x) => x.id === body.milestone);
+  const known = map.features.find((x) => x.id === body.feature);
+  const it = known ? null : item(String(body.feature));
+  if (!m || (!known && !it)) return json(404, { detail: "No such feature or milestone" });
+  const area = map.areas.find((a) => a.id === body.area);
+  if (!area) return json(422, { detail: "Pick an area of this map" });
+  const expected = String(body.expected ?? "").trim();
+  const confidence = ({ high: "High", medium: "Medium", low: "Low" } as const)[body.confidence as "high" | "medium" | "low"] ?? "Medium";
+  const link: GmLink = { milestone: m.id, expected, confidence, measured: null, lift: "not_measured", shipped_on: null, before: null, after: null };
+  if (known) {
+    if (!known.milestones.includes(m.id)) {
+      known.milestones.push(m.id);
+      known.links.push(link);
+    }
+    // A feature sits in one area: attached from another area's cell, it moves there.
+    Object.assign(known, { area: area.id, lever: area.lever });
+  } else {
+    map.features.push({ id: String(body.feature), name: it!.title, code: "", area: area.id, milestones: [m.id], lever: area.lever, expected, confidence, released: false, measured: null, lift: "not_measured", links: [link] });
+  }
+  return null;
+}
+
+/** goal_map.move_link (POST /links/move): a feature's link moved to another milestone (onto one it
+ * serves: the old link goes); null when done. */
+export function moveMapLink(map: GoalMap, body: { feature?: unknown; from_milestone?: unknown; to_milestone?: unknown }): Response | null {
+  const f = map.features.find((x) => x.id === body.feature);
+  const to = map.milestones.find((x) => x.id === body.to_milestone);
+  const from = String(body.from_milestone ?? "");
+  if (!f || !to || !f.milestones.includes(from)) return json(404, { detail: "No such feature or milestone" });
+  if (from !== to.id) {
+    if (f.milestones.includes(to.id)) {
+      f.milestones = f.milestones.filter((m) => m !== from);
+      f.links = f.links.filter((l) => l.milestone !== from);
+    } else {
+      f.milestones = f.milestones.map((m) => (m === from ? to.id : m));
+      f.links = f.links.map((l) => (l.milestone === from ? { ...l, milestone: to.id } : l));
+    }
+  }
+  return null;
 }
 
 /** A map milestone as the db keeps it: `trashed` while it is in Settings › Trash. */
 type Held = GmMilestone & { trashed?: boolean };
+
+/** goal_milestones.put_back (trash.goal_in_trash): a milestone whose goal is in Trash is not restored,
+ * by its own restore or Trash's (409); the words say which goal to restore first. Null: it may come back. */
+export function milestoneGoalInTrash(db: { goal_map?: GoalMap } & MapRightsDb, milestoneId: string): string | null {
+  const m = db.goal_map?.milestones.find((x) => x.id === milestoneId);
+  const g = m && db.simple_roadmap?.goal_buckets?.goals.find((x) => x.id === m.goal && x.trashed);
+  return g ? `Its goal ${goalName(g.title, g.key)} is in Trash: restore the goal first` : null;
+}
+
+/** goal-map-editing (trash.service.delete_milestone): a map milestone goes to Settings › Trash. */
+function trashMapMilestone(m: Held, me: { id: string; name: string }, trash: TrashDb, at: string): void {
+  m.trashed = true;
+  const row: TrashEntryRow = {
+    out: {
+      id: crypto.randomUUID(),
+      root: { type: "milestone", id: m.id, slug: null, title: m.name, kind: "Milestone", code: null, features: null, meeting: null },
+      items: [], deleted_by: me.id, deleted_by_name: me.name, deleted_at: at, reason: null,
+      published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
+    },
+    documents: [], versions: [], runs: [], intakes: [],
+  };
+  trash.entries.push(row);
+}
 
 /**
  * goal-map-editing: the map's milestones are Simple Roadmap's own goal milestones (one record in
@@ -771,7 +830,7 @@ type Held = GmMilestone & { trashed?: boolean };
  * change the roadmap (an owner here) does it; others get the API's 403. Null for any other id.
  */
 export async function routeLadderMilestone(
-  db: { goal_map?: GoalMap; goal_map_decider?: string | null },
+  db: { goal_map?: GoalMap } & MapRightsDb,
   me: { id: string; role: string; name: string },
   req: Request,
   p: string[],
@@ -783,28 +842,19 @@ export async function routeLadderMilestone(
   const m = map.milestones.find((x) => x.id === p[4]) as Held | undefined;
   if (!m) return null;
   const out = (status = 200) =>
-    json(status, { id: m.id, roadmap_id: id("roadmap"), code: "", name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "", progress: "not_started", prd: null, prd_owner: null, pending: null, can_change: mayChangeMilestone(me, db.goal_map_decider), can_propose: false, carried_from: null });
-  if (!mayChangeMilestone(me, db.goal_map_decider)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) changes its milestones" });
+    json(status, { id: m.id, roadmap_id: id("roadmap"), code: "", name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "", progress: "not_started", prd: null, prd_owner: null, pending: null, can_change: mapCanChange(db, me), can_propose: !mapCanChange(db, me) && me.role !== "viewer", carried_from: null });
+  if (!mapCanChange(db, me)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) changes its milestones" });
   if (req.method === "POST" && p[5] === "restore") {
     if (!m.trashed) return json(404, { detail: "No such deleted milestone" });
+    const refused = milestoneGoalInTrash(db, m.id);
+    if (refused) return json(409, { detail: refused });
     m.trashed = false;
     trash.entries = trash.entries.filter((e) => !(e.out.root.type === "milestone" && e.out.root.id === m.id));
     return out();
   }
   if (m.trashed || p[5]) return json(404, { detail: "No such milestone" });
   if (req.method === "DELETE") {
-    m.trashed = true;
-    const at = now();
-    const row: TrashEntryRow = {
-      out: {
-        id: crypto.randomUUID(),
-        root: { type: "milestone", id: m.id, slug: null, title: m.name, kind: "Milestone", code: null, features: null, meeting: null },
-        items: [], deleted_by: me.id, deleted_by_name: me.name, deleted_at: at, reason: null,
-        published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
-      },
-      documents: [], versions: [], runs: [], intakes: [],
-    };
-    trash.entries.push(row);
+    trashMapMilestone(m, me, trash, now());
     return new Response(null, { status: 204 });
   }
   if (req.method === "PATCH") {
@@ -825,19 +875,64 @@ export async function routeLadderMilestone(
  * every-field-editable: the map's key results as Simple's change engine reads them (an
  * edit_goal_milestone proposal names one, as goal_milestones._value; the decider accepts it).
  */
-export function ladderMilestones(db: { goal_map?: GoalMap; goal_map_decider?: string | null }, me: { id: string; role: string }): LadderMilestones {
+/** roadmap-milestone-codes: the map's live milestones as its roadmap's goal milestones (the API's are one record), each with its goal's place in the map's order. */
+export function goalMapMilestones(map: GoalMap): { id: string; name: string; date: string | null; goal_id: string; rank: number }[] {
+  const rank = new Map(map.goals.map((g, n) => [g.id, n]));
+  return (map.milestones as Held[]).filter((m) => !m.trashed).map((m) => ({ id: m.id, name: m.name, date: m.due_on ?? null, goal_id: m.goal, rank: rank.get(m.goal) ?? map.goals.length }));
+}
+
+export function ladderMilestones(db: { goal_map?: GoalMap } & MapRightsDb, me: { id: string; role: string; name?: string }, trash?: TrashDb, at?: () => string): LadderMilestones {
   const live = (id: string) => (db.goal_map?.milestones as Held[] | undefined)?.find((x) => x.id === id && !x.trashed);
+  // milestone-rename: a proposal on one is its roadmap's, sent to that roadmap's decider.
+  const on = db.simple_roadmap?.map_milestones?.roadmap ?? null;
   return {
     find: (id) => {
       const m = live(id);
       if (!m) return null;
-      return { value: { name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "" }, can_change: mayChangeMilestone(me, db.goal_map_decider), name: m.name, decider: db.goal_map_decider ?? null };
+      const decider = db.goal_map_decider ?? (on ? db.simple_roadmap?.deciders?.[on] : null) ?? null;
+      return { value: { name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "" }, can_change: mapCanChange(db, me), name: m.name, decider, roadmap: on };
     },
-    write: (id, goal_id) => {
+    // milestone-rename: an accepted proposal's name, date and goal.
+    write: (id, after) => {
       const m = live(id);
-      const g = db.goal_map?.goals.find((x) => x.id === goal_id);
-      if (m && g) Object.assign(m, { goal: g.id, measure: g.measure, unit: g.unit });
+      if (!m) return;
+      // An accepted removal sends it to Trash, as the decider's own Move to Trash does.
+      if (after === null) {
+        if (trash) trashMapMilestone(m, { id: me.id, name: me.name ?? "" }, trash, at ? at() : new Date().toISOString());
+        else m.trashed = true;
+        return;
+      }
+      if (typeof after.name === "string" && after.name.trim()) m.name = after.name.trim();
+      if ("date" in after) m.due_on = (after.date as string | null) ?? null;
+      const g = db.goal_map?.goals.find((x) => x.id === after.goal_id);
+      if (g) Object.assign(m, { goal: g.id, measure: g.measure, unit: g.unit });
     },
+    links: db.goal_map ? mapLinks(db, db.goal_map, live) : undefined,
+  };
+}
+
+/** goal-map-link-asks (oracle.simple.goal_map_asks): the map's links as a link_goal_map change
+ * reads them, and the Goal map's own attach and move (POST /links, /links/move) to apply one. */
+function mapLinks(db: MapRightsDb, map: GoalMap, live: (id: string) => Held | undefined): NonNullable<LadderMilestones["links"]> {
+  const item = (id: string) => {
+    const rm = db.simple_roadmap;
+    const key = rm && Object.keys(rm.ids).find((k) => rm.ids[k] === id);
+    return rm?.items.find((i) => i.key === key) ?? null;
+  };
+  return {
+    feature: (id) => {
+      const f = map.features.find((x) => x.id === id);
+      if (f) return { title: f.name, milestones: [...f.milestones], area: f.area };
+      const it = item(id);
+      return it && !it.trashed ? { title: it.title, milestones: [], area: null } : null;
+    },
+    milestone: (id) => {
+      const m = live(id);
+      return m ? { name: m.name, areas: m.areas.filter((a) => map.areas.some((x) => x.id === a)) } : null;
+    },
+    firstArea: () => map.areas[0]?.id ?? null,
+    attach: (feature, milestone, area) => attachMapLink(map, { feature, milestone, area }, item),
+    move: (feature, from, to) => moveMapLink(map, { feature, from_milestone: from, to_milestone: to }),
   };
 }
 

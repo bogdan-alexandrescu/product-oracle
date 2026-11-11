@@ -75,7 +75,8 @@ from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError as ImportRejected
 from oracle.review.models import DocumentReviewPolicy
-from oracle.roadmap.models import ProductTrack, RoadmapItem
+from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackPrd
+from oracle.roadmap.tracks import on_prd
 from oracle.simple.models import (
     RoadmapDateSuggestion,
     SimpleChange,
@@ -267,22 +268,39 @@ async def copies_of(
     return {str(k): v for k, v in twins(rows, added).items()}
 
 
-async def _copy_in(db: AsyncSession, d: SimpleDraft, row: RoadmapItem) -> RoadmapItem | None:
-    """The item added to ``d`` that copies the shown ``row`` (:func:`twins`), if any."""
-    if row.prd_document_id is None or row.roadmap_version_id is None:
-        return None
-    return await db.scalar(
+async def _copies_in(
+    db: AsyncSession, pairs: list[tuple[SimpleDraft, RoadmapItem]]
+) -> dict[tuple[uuid.UUID, uuid.UUID], RoadmapItem]:
+    """(draft id, shown row id) -> the item added to the draft that copies the shown row
+    (:func:`twins`), the lowest id first, for every pair at once (one read)."""
+    want = [
+        (d, r)
+        for d, r in pairs
+        if r.prd_document_id is not None and r.roadmap_version_id is not None
+    ]
+    if not want:
+        return {}
+    found = await db.scalars(
         select(RoadmapItem)
         .where(
-            RoadmapItem.simple_draft_id == d.id,
+            RoadmapItem.simple_draft_id.in_({d.id for d, _ in want}),
             RoadmapItem.roadmap_version_id.is_(None),
-            RoadmapItem.roadmap_document_id == row.roadmap_document_id,
-            RoadmapItem.prd_document_id == row.prd_document_id,
-            RoadmapItem.item_key == row.item_key,
+            RoadmapItem.roadmap_document_id.in_({r.roadmap_document_id for _, r in want}),
+            RoadmapItem.prd_document_id.in_({r.prd_document_id for _, r in want}),
+            RoadmapItem.item_key.in_({r.item_key for _, r in want}),
         )
         .order_by(RoadmapItem.id)
-        .limit(1)
     )
+    by: dict[tuple, RoadmapItem] = {}
+    for a in found:
+        key = (a.simple_draft_id, a.roadmap_document_id, a.prd_document_id, a.item_key)
+        by.setdefault(key, a)
+    out: dict[tuple[uuid.UUID, uuid.UUID], RoadmapItem] = {}
+    for d, r in want:
+        a = by.get((d.id, r.roadmap_document_id, r.prd_document_id, r.item_key))
+        if a is not None:
+            out[(d.id, r.id)] = a
+    return out
 
 
 def _write_on(
@@ -414,12 +432,12 @@ async def who(db: AsyncSession, doc_ids: set[uuid.UUID]) -> Who:
         select(ProductTrack).where(
             or_(
                 ProductTrack.roadmap_document_id.in_(doc_ids),
-                ProductTrack.prd_document_id.in_(doc_ids),
+                on_prd(doc_ids),
             ),
             ProductTrack.owner_id.is_not(None),
         )
     ):
-        for doc in {t.roadmap_document_id, t.prd_document_id} & doc_ids:
+        for doc in {t.roadmap_document_id, *t.prd_ids} & doc_ids:
             out.owners.setdefault(doc, set()).add(t.owner_id)
     return out
 
@@ -502,6 +520,15 @@ async def _added_reviewers(
             422, f"{_people(viewers)} can only view, so cannot approve: pick someone else"
         )
     return [{"id": str(i), "approved_at": None} for i in ids]
+
+
+def can_approve(principal: Any, d: SimpleDraft, w: Who) -> bool:
+    """Submitted, and waiting on the caller: a required reviewer it waits on, or its
+    approver whose approval is not in yet (a decider who approved waits on the reviewers)."""
+    return d.status == "submitted" and (
+        (_approver_of(principal, d, w) and d.decider_approval is None)
+        or _me(principal) in (d.waiting_on or [])
+    )
 
 
 def _approver_of(principal: Any, d: SimpleDraft, w: Who) -> bool:
@@ -821,9 +848,13 @@ async def write_items(
             select(RoadmapItem).where(RoadmapItem.id.in_([uuid.UUID(k) for k in keyed]))
         )
     }
-    out: list[uuid.UUID] = []
-    for k, v in keyed.items():
+    # One draft per roadmap: resolved once per roadmap (in the order first met), not once
+    # per item, so the reads do not grow with the items a change moves.
+    by_doc: dict[uuid.UUID, SimpleDraft] = {}
+    for k in keyed:
         row = rows[k]
+        if row.roadmap_document_id in by_doc:
+            continue
         if undo:
             d = await db.scalar(
                 select(SimpleDraft)
@@ -840,11 +871,17 @@ async def write_items(
             await link(db, session, d)
         else:
             d = await ensure(db, session, row, session.started_by)
+        by_doc[row.roadmap_document_id] = d
+    # hotfix PR 1273: a change to a folded item (fold) lands on its draft copy too, so
+    # the read shows it even when it puts back the shown item's own stored value.
+    copies = await _copies_in(db, [(by_doc[rows[k].roadmap_document_id], rows[k]) for k in keyed])
+    out: list[uuid.UUID] = []
+    for k, v in keyed.items():
+        row = rows[k]
+        d = by_doc[row.roadmap_document_id]
         ov = dict(d.overlay or {})
         _write_on(ov, row, v, c.target, write)
-        # hotfix PR 1273: a change to a folded item (fold) lands on its draft copy too, so
-        # the read shows it even when it puts back the shown item's own stored value.
-        if (copy := await _copy_in(db, d, row)) is not None:
+        if (copy := copies.get((d.id, row.id))) is not None:
             _write_on(ov, copy, v, c.target, write)
         d.overlay = ov
         if d.id not in out:
@@ -1039,11 +1076,7 @@ async def outs(
                 and me is not None
                 and me in (d.created_by, w.deciders.get(d.document_id)),
                 # Review: a decider who approved already waits on the reviewers, not on themself.
-                can_approve=d.status == "submitted"
-                and (
-                    (_approver_of(principal, d, w) and d.decider_approval is None)
-                    or me in (d.waiting_on or [])
-                ),
+                can_approve=can_approve(principal, d, w),
                 can_publish=can_publish(principal, d, w),
                 required_reviewers=[r for r in w.reviewers.get(d.document_id, []) if r != me]
                 if d.status == "working"
@@ -1859,16 +1892,18 @@ class Waiting:
     drafts: list[SimpleDraft] = field(default_factory=list)
     dates: list[RoadmapDateSuggestion] = field(default_factory=list)
     goals: list[SimpleGoalSuggestion] = field(default_factory=list)
+    tracks: list[TrackPrd] = field(default_factory=list)
 
 
 async def waiting(db: AsyncSession) -> Waiting:
     """In one read: the submitted drafts (oldest first), Oracle's open date suggestions
-    (newest first) and the goals' open suggestions (oldest first). Each kind is outer-joined
-    on its own row of a three-row list, so none multiplies another and an empty kind leaves
-    one row of nulls; the tenant's and the trash's criteria land in each join's ON."""
-    kind = values(column("kind", Integer), name="kind").data([(1,), (2,), (3,)])
+    (newest first), the goals' open suggestions (oldest first) and the PRDs waiting on
+    Oracle's suggested track (tracks-goal, oldest first). Each kind is outer-joined on its
+    own row of a four-row list, so none multiplies another and an empty kind leaves one row
+    of nulls; the tenant's and the trash's criteria land in each join's ON."""
+    kind = values(column("kind", Integer), name="kind").data([(1,), (2,), (3,), (4,)])
     rows = await db.execute(
-        select(SimpleDraft, RoadmapDateSuggestion, SimpleGoalSuggestion)
+        select(SimpleDraft, RoadmapDateSuggestion, SimpleGoalSuggestion, TrackPrd)
         .select_from(kind)
         .outerjoin(SimpleDraft, and_(kind.c.kind == 1, SimpleDraft.status == "submitted"))
         .outerjoin(
@@ -1879,18 +1914,22 @@ async def waiting(db: AsyncSession) -> Waiting:
             SimpleGoalSuggestion,
             and_(kind.c.kind == 3, SimpleGoalSuggestion.status == "open"),
         )
+        .outerjoin(TrackPrd, and_(kind.c.kind == 4, TrackPrd.state == "suggested"))
     )
     out = Waiting()
-    for d, s, g in rows:
+    for d, s, g, t in rows:
         if d is not None:
             out.drafts.append(d)
         if s is not None:
             out.dates.append(s)
         if g is not None:
             out.goals.append(g)
+        if t is not None:
+            out.tracks.append(t)
     out.drafts.sort(key=lambda d: (d.submitted_at is None, d.submitted_at or 0))
     out.dates.sort(key=lambda s: s.created_at, reverse=True)
     out.goals.sort(key=lambda g: (g.created_at, g.id))
+    out.tracks.sort(key=lambda t: (t.created_at, t.id))
     return out
 
 
@@ -1938,6 +1977,7 @@ async def inbox_rows(
                 slug=docs[d.document_id].slug,
                 title=docs[d.document_id].title,
             ),
+            document_kind="prd" if docs[d.document_id].kind == "prd" else "roadmap",
             version=numbers.get(d.version_id),
             submitted_by=d.submitted_by,
             submitted_by_name=names.get(d.submitted_by) if d.submitted_by else None,

@@ -40,6 +40,13 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
       if (!rest.length) return `cut ${x} and its dependents`;
       return `cut ${x} and its dependents ${rest.length === 1 ? rest[0] : `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}`}`;
     }
+    case "edit_track": {
+      // tracks-goal: one PRD put on or taken off a track (plan_changes.phrase).
+      const names = (target.prd_titles ?? {}) as Record<string, string>;
+      const one = (after.add_prd_id ?? after.remove_prd_id) as string | undefined;
+      if (one) return `${after.add_prd_id ? "put" : "took"} ${names[one] ?? "a PRD"} ${after.add_prd_id ? "on" : "off"} ${target.title ?? "a track"}`;
+      return `changed the track ${target.title ?? ""}`.trim();
+    }
     case "edit_title": return title ? `renamed ${x} to ${title}` : `renamed ${x}`;
     case "edit_outcome": return `changed the outcome of ${x}`;
     case "edit_note": return `changed the notes of ${x}`;
@@ -113,6 +120,11 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "edit_goal_milestone": {
       const name = quoted(target.name) ?? item;
       if ("milestone" in before && after.milestone === null) return name ? `removed the milestone ${name}` : "removed a milestone";
+      // milestone-rename: a new name (a roadmap's own: in milestone; a PRD's: as is), as change_words says it.
+      const was = (before.milestone ?? before) as Record<string, unknown> | null;
+      const to = (after.milestone ?? after) as Record<string, unknown> | null;
+      const fresh = quoted(to?.name);
+      if (fresh && was?.name && was.name !== to?.name) return `renamed the milestone ${quoted(was.name)} to ${fresh}`;
       return name ? `changed the milestone ${name}` : "changed a milestone";
     }
     case "name_decider": return `named who decides ${x}`;
@@ -133,6 +145,11 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "archive_goal": return `archived the goal ${quoted(target.title) ?? "a goal"}`;
     case "delete_goal": return `moved the goal ${quoted(target.title) ?? "a goal"} to Trash`;
     case "unarchive_goal": return `restored the goal ${quoted(target.title) ?? "a goal"}`;
+    // goal-map-link-asks (goal_map_asks, change_words.py): a feature put on a goal milestone, or moved there.
+    case "link_goal_map": {
+      const to = quoted(target.name) ?? "a milestone";
+      return target.from_milestone ? `moved ${x} from ${quoted(target.from_name) ?? "its milestone"} to ${to}` : `put ${x} on ${to}`;
+    }
     // roadmap-decide: a cut item's fix, the dependency dropped (change_words.py).
     case "remove_dependency": {
       const dep = quoted((target.titles as unknown[] | undefined)?.[1]);
@@ -156,7 +173,7 @@ export function changeSentence(
   const what = changePhrase(c.op, target, before, after, item);
   let words = `${who} ${what}`;
   // What was asked, not done: "proposed: move F-26 Alert rules engine to Trash" (change_words.describe).
-  const asked = c.op === "delete_item" || c.op === "delete_goal" ? `move${what.slice("moved".length)}` : c.op === "archive_goal" ? `archive${what.slice("archived".length)}` : c.op === "unarchive_goal" ? `restore${what.slice("restored".length)}` : what;
+  const asked = c.op === "delete_item" || c.op === "delete_goal" ? `move${what.slice("moved".length)}` : c.op === "archive_goal" ? `archive${what.slice("archived".length)}` : c.op === "unarchive_goal" ? `restore${what.slice("restored".length)}` : c.op === "link_goal_map" && what.startsWith("moved") ? `move${what.slice("moved".length)}` : what;
   if (c.status === "proposed") words = `${who} proposed: ${asked}`;
   else if (c.status === "declined") words = `${who} proposed: ${asked} · declined`;
   if (undone) words += " · undone";

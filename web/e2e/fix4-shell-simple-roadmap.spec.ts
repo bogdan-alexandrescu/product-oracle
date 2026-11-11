@@ -51,13 +51,24 @@ test.describe("desktop", () => {
   });
 
   // Moved: the desktop Timeline groups by goal; each goal's heading names it and its count.
+  // tb-mk: the Timeline's bands are now the tracks; the Waterfall keeps the goal lanes and their counts.
   test("qa-shell-25: each goal lane is named by its goal and its count", async ({ page }) => {
     await open(page);
-    const lanes = page.getByTestId("timeline-lane");
+    await page.getByTestId("format-waterfall").click();
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
+    // Track everywhere (owner Nov 10): the Waterfall starts in track bands; its goal lanes are a Group by Goal away.
+    await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("chart-group").first()).toContainText(/track/i);
+    await page.getByTestId("group-goal").click();
+    await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
+    const lanes = page.getByTestId("chart-group");
     await expect(lanes.first()).toBeVisible();
     const n = await lanes.count();
     expect(n).toBeGreaterThan(1);
-    for (let i = 0; i < n; i++) await expect(lanes.nth(i)).toHaveText(/^\S.* · \d+ items?$/);
+    for (let i = 0; i < n; i++) {
+      await expect(lanes.nth(i).locator("span").first()).toHaveText(/^\S/);
+      await expect(lanes.nth(i).getByTestId("lane-count")).toHaveText(/^\d+ items?$/);
+    }
   });
 
   test("qa-shell-21: the PRDs list says when each changed month first", async ({ page }) => {

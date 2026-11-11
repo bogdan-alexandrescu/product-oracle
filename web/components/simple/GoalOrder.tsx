@@ -15,10 +15,15 @@ import { errorMessage } from "@/lib/use-query";
 /** A goal's place in the order, as a small grey number before its name. */
 export function GoalNum({ n }: { n: number | null | undefined }): ReactNode {
   if (!n) return null;
+  // The visually hidden " · " keeps the number apart from the name in the page's text and to
+  // screen readers ("1 · Name", never "1Name").
   return (
-    <span aria-label={`Goal ${n}`} className="goal-num tnum" data-testid="order-num">
-      {n}
-    </span>
+    <>
+      <span aria-label={`Goal ${n}`} className="goal-num tnum" data-testid="order-num">
+        {n}
+      </span>
+      <span className="goal-num-sep"> · </span>
+    </>
   );
 }
 

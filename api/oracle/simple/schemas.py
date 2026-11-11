@@ -3,7 +3,7 @@ change engine's sessions and changes; S3b: working drafts."""
 
 import datetime as dt
 import uuid
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -112,6 +112,12 @@ class SimpleGoalRef(BaseModel):
 class SimpleTrackRef(BaseModel):
     id: uuid.UUID
     title: str
+    # tracks-goal: the company goal the track replaces as the Roadmap's band.
+    goal_id: uuid.UUID | None = None
+    goal_name: str | None = None
+    # track-order (owner Nov 9): the track's place number in the company's track order (lower
+    # first; none: after every numbered one), so a picker of tracks lists them in that order.
+    order: int | None = None
 
 
 class SimpleItemMilestone(BaseModel):
@@ -348,6 +354,9 @@ class SimpleRoadmapItem(BaseModel):
     # one-feature-panel: the item's own owner (set_owner's ``before``; null: its track's
     # owner is shown) and the keys it depends on as stored (set_depends' ``before``).
     own_owner_id: str | None = None
+    # one-feature-panel: the item's own decider (set_decider's ``before``; null: its
+    # roadmap's decider decides).
+    own_decider_id: str | None = None
     depends_keys: list[str] = []
     # roadmap-edit-fixes: the stored key (of depends_keys) that names each item of
     # depends_on, by item id (another PRD's feature key is neither its key nor its code);
@@ -437,6 +446,9 @@ class SimpleMilestone(BaseModel):
     effort_weeks: float | None = None
     done_when: list[str] = []
     targets: list["SimpleMilestoneTarget"] = []
+    # roadmap-milestone-codes: its one code across the read (M1, M2 ... by date;
+    # oracle.simple.roadmap_codes); null when dropped or a PRD plan's own.
+    roadmap_code: str | None = None
 
 
 class SimpleAppliedVersion(BaseModel):
@@ -456,6 +468,14 @@ class SimpleAppliedVersion(BaseModel):
     can_apply: bool = False
 
 
+# milestone-kinds (owner): every roadmap milestone is one of six kinds, with a status.
+MilestoneKind = Literal["sub_goal", "goal", "delivery", "decision", "outside", "handoff"]
+MilestoneStatus = Literal["on_track", "at_risk", "hit", "missed"]
+# A milestone's baseline, target or reading: fits its Numeric(20, 6) column (14 digits before
+# the point), never NaN or infinity.
+MilestoneNumber = Annotated[float, Field(gt=-1e14, lt=1e14, allow_inf_nan=False)]
+
+
 class SimpleKeyDate(BaseModel):
     """Roadmap-plus: one of a roadmap's key dates (a conference, a product launch, a board
     meeting), as the reader reads it (the working draft's when they see it)."""
@@ -471,6 +491,10 @@ class SimpleKeyDate(BaseModel):
     # PRD's plan (its latest approved version): read-only, changed in the PRD. None: the
     # roadmap's own key date.
     prd: "SimpleDocRef | None" = None
+    # milestone-kinds: its kind and status (a person's, else on track), and why.
+    kind: MilestoneKind = "delivery"
+    status: MilestoneStatus = "on_track"
+    status_reason: str | None = None
 
 
 class SimpleKeyDateRoadmap(BaseModel):
@@ -489,6 +513,8 @@ class SimpleMilestonePending(BaseModel):
 
     date: dt.date | None = None
     counts_when: str | None = None
+    # milestone-rename: the name asked for (None: the name stays).
+    name: str | None = None
     asked_of: str | None = None
     change_id: uuid.UUID | None = None
     # roadmap-decide: the viewer is the PRD's owner (or a company owner) and decides it.
@@ -521,6 +547,37 @@ class SimpleGoalMilestone(BaseModel):
     can_propose: bool = False
     # old-milestones: the older per-PRD roadmap it was brought over from, if it was.
     carried_from: "SimpleDocRef | None" = None
+    # roadmap-milestone-codes: its one code across the roadmap read (M1, M2 ... by date;
+    # oracle.simple.roadmap_codes), the code every page shows; null outside a roadmap read.
+    roadmap_code: str | None = None
+    # milestone-kinds (owner): its kind, its one "done when" line, and its status: a person's
+    # (``status_set``, by ``status_set_by_name``, why: ``status_reason``), else computed
+    # (oracle.simple.goal_milestones.status_of) with a short reason.
+    kind: MilestoneKind = "delivery"
+    done_when_line: str = ""
+    status: MilestoneStatus = "on_track"
+    status_reason: str | None = None
+    status_set: MilestoneStatus | None = None
+    status_set_by_name: str | None = None
+    # A measured (sub-)goal's numbers.
+    measure: str | None = None
+    baseline: float | None = None
+    target: float | None = None
+    current: float | None = None
+    # A sub-goal: the measured-goal milestone it builds toward; a goal: its sub-goals.
+    sub_goal_of_id: uuid.UUID | None = None
+    sub_goal_ids: list[uuid.UUID] = []
+    # tb-mk: the track it sits on (the panel's Track).
+    home_track_id: uuid.UUID | None = None
+    home_track_name: str | None = None
+    # A hand-off: from one track to another.
+    from_track_id: uuid.UUID | None = None
+    to_track_id: uuid.UUID | None = None
+    from_track_name: str | None = None
+    to_track_name: str | None = None
+    # A company goal's own target date (id: the goal's), shown while the goal is on the
+    # roadmap (``on_roadmap``); changed on the goal, not here.
+    goal_target: bool = False
 
 
 class SimpleGoalMilestoneIn(BaseModel):
@@ -530,6 +587,18 @@ class SimpleGoalMilestoneIn(BaseModel):
     goal_id: uuid.UUID | None = None
     item_ids: list[uuid.UUID] = []
     counts_when: str = ""
+    kind: MilestoneKind = "delivery"
+    done_when_line: str = Field(default="", max_length=300)
+    status_set: MilestoneStatus | None = None
+    status_reason: str | None = Field(default=None, max_length=300)
+    measure: str | None = Field(default=None, max_length=120)
+    baseline: MilestoneNumber | None = None
+    target: MilestoneNumber | None = None
+    current: MilestoneNumber | None = None
+    sub_goal_of_id: uuid.UUID | None = None
+    home_track_id: uuid.UUID | None = None
+    from_track_id: uuid.UUID | None = None
+    to_track_id: uuid.UUID | None = None
 
 
 class SimpleGoalMilestonePatch(BaseModel):
@@ -538,6 +607,42 @@ class SimpleGoalMilestonePatch(BaseModel):
     goal_id: uuid.UUID | None = None
     item_ids: list[uuid.UUID] | None = None
     counts_when: str | None = None
+    # milestone-kinds: only the fields sent change; ``status_set`` null clears the override.
+    kind: MilestoneKind | None = None
+    done_when_line: str | None = Field(default=None, max_length=300)
+    status_set: MilestoneStatus | None = None
+    status_reason: str | None = Field(default=None, max_length=300)
+    measure: str | None = Field(default=None, max_length=120)
+    baseline: MilestoneNumber | None = None
+    target: MilestoneNumber | None = None
+    current: MilestoneNumber | None = None
+    sub_goal_of_id: uuid.UUID | None = None
+    home_track_id: uuid.UUID | None = None
+    from_track_id: uuid.UUID | None = None
+    to_track_id: uuid.UUID | None = None
+
+
+class SimplePrdRef(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleRoadmapTrack(BaseModel):
+    """milestone-kinds: a track band on the roadmap read, in the Tracks order, with its
+    health: ``at_risk`` (a feature ends after a milestone it serves), ``stale`` (not checked
+    in 14 days) or ``on_track``, and a short reason."""
+
+    id: uuid.UUID
+    title: str
+    goal_id: uuid.UUID | None = None
+    goal_name: str | None = None
+    owner_name: str | None = None
+    prds: list[SimplePrdRef] = []
+    health: Literal["on_track", "at_risk", "stale"] = "on_track"
+    health_reason: str = ""
+    # track-order (owner Nov 9): its place number in the company's track order (lower first;
+    # none: after every numbered one, oldest first). The list comes in that order.
+    order: int | None = None
 
 
 class SimpleOldMilestone(BaseModel):
@@ -605,6 +710,8 @@ class SimpleRoadmapOut(BaseModel):
     left_out: "SimpleLeftOut | None" = None
     # approved-roadmap-to-simple: one line per shown roadmap applied from an approved version.
     applied_versions: list[SimpleAppliedVersion] = []
+    # milestone-kinds: every live track, in the Tracks order, with its health.
+    tracks: list[SimpleRoadmapTrack] = []
 
 
 class DateSuggestionEdit(BaseModel):
@@ -709,6 +816,10 @@ ChangeOp = Literal[
     # owners by who may not (oracle.simple.goal_asks).
     "archive_goal",
     "unarchive_goal",
+    # goal-map-link-asks: a feature put on a goal milestone (or its link moved from another),
+    # suggested by who may propose but not edit the Goal map, routed to the feature's
+    # roadmap's decider (oracle.simple.goal_map_asks).
+    "link_goal_map",
     # roadmap-decide: a dependent no longer depends on a cut item (its fix).
     "remove_dependency",
     # removed-tracks: a removed goal milestone put back; a track added, edited (title, owner,
@@ -716,6 +827,8 @@ ChangeOp = Literal[
     "restore_goal_milestone",
     "add_track",
     "edit_track",
+    # track-order: a track moved one step up or down in the company's track order.
+    "move_track",
     "delete_track",
     # edit-decisions (oracle.simple.decision_sheet): an open decision's or a PRD question's
     # fields, its withdrawal (the "not now"), and a question added to a PRD.
@@ -1055,6 +1168,8 @@ class InboxSimpleApproval(BaseModel):
 
     draft_id: uuid.UUID
     document: SimpleDocRef
+    # inbox-prd-approval-open: a PRD's draft opens on its one-pager, a roadmap's on the roadmap.
+    document_kind: Literal["roadmap", "prd"] = "roadmap"
     version: int | None
     submitted_by: uuid.UUID | None
     # inbox-meeting-proposals fix: who submitted it, by name (or e-mail).
@@ -1094,6 +1209,44 @@ class SimplePriorityOverride(BaseModel):
     by_name: str
     reason: str
     at: dt.datetime | None = None
+
+
+class SimplePriorityTwin(BaseModel):
+    """qa-prio-twins: another ranked record of a row's feature, not linked to it (a baseline
+    feature of the same name), shown on that row, never as a row of its own: a person merges it
+    into the row's record (``merge``) or keeps both; Oracle never merges it."""
+
+    feature_id: str | None = None
+    item_id: uuid.UUID | None = None
+    code: str
+    title: str
+    goal: SimplePriorityGoal | None = None
+    # Its own rank, were it a row (the name folding is shown, not hidden).
+    rank: int | None = None
+    # How it merges into the row's record: ``item`` (merge_item of its item into the row's,
+    # ``into_id``: both on one roadmap), ``entity`` (the baseline's Merge into… of its feature
+    # into the row's: no item, an item on another roadmap, or a row with only a draft); None:
+    # the caller may change nothing.
+    merge: Literal["item", "entity"] | None = None
+    into_id: uuid.UUID | None = None
+    # The caller's merge applies (else it is proposed).
+    applies: bool = False
+    # Why an approver's ``entity`` merge does not apply (merge_twin's 409): one of its items is
+    # on a roadmap they do not decide, or beside the kept feature's own item; else None.
+    blocked: str | None = None
+
+
+class SimpleTwinMergeIn(BaseModel):
+    """qa-prio-twins: a Same name record's Merge into… ``into`` (the row's feature)."""
+
+    into: uuid.UUID
+
+
+class SimpleTwinMergeOut(BaseModel):
+    """The kept feature, and the item keys of the twin's items now linked to it."""
+
+    feature_id: str
+    relinked: list[str] = []
 
 
 class SimplePriorityRow(BaseModel):
@@ -1153,6 +1306,11 @@ class SimplePriorityRow(BaseModel):
     parts: "list[SimplePartRef]" = Field(default_factory=list)
     # The feature's active override as override_priority's ``before.override`` wants it.
     before_override: dict[str, Any] | None = None
+    # qa-prio-twins: the feature's draft item on the roadmap when it has no other (it is on the
+    # roadmap, not yet confirmed: a move confirms it, never adds a second item).
+    draft_item_id: uuid.UUID | None = None
+    # qa-prio-twins: the same feature's other ranked records, not linked to it (same name).
+    twins: list[SimplePriorityTwin] = Field(default_factory=list)
 
 
 class SimpleFlowScreen(BaseModel):
@@ -1306,8 +1464,13 @@ class SimplePriorityDraft(BaseModel):
     goal: SimplePriorityGoal | None = None
     roadmap: SimpleDocRef
     applies: bool = False
-    # Non-draft items of the same roadmap, same goal first (at most 8).
+    # Non-draft items of the same roadmap, same goal first (at most 8); its row's item first.
     merge_into: list[SimplePriorityMerge] = []
+    # qa-prio-twins: the ranked row it shows on, not as a draft of its own: its feature's (by
+    # its link: feature_id, else its trace's source feature), else a row of its name's.
+    row_feature_id: str | None = None
+    # Linked to that row's feature (else only named as it: Merge into… its item).
+    linked: bool = False
 
 
 class SimplePriorityUnranked(BaseModel):
@@ -1548,6 +1711,8 @@ class OnePagerDraft(BaseModel):
     # may add more when sending (build-review: Send for approval…).
     reviewers: list[SimplePersonRef] = []
     can_submit: bool
+    # inbox-prd-approval-open: submitted, and the caller's approval is one it waits for.
+    can_approve: bool = False
     # Remind (owner, 2026-10-26): the last nudge to a waiting reviewer, and whether the
     # caller (the PRD's owners, its decider) may nudge one now (each at most once a day).
     reminded_at: dt.datetime | None = None
@@ -1594,6 +1759,10 @@ class SimplePlanRow(BaseModel):
     past_edge: bool = False
     # The one-pager: its roadmap items' ids (OnePagerOut.timeline), each once, in plan order.
     item_ids: list[uuid.UUID] = []
+    # The one-pager: the milestone's roadmap-wide code, the one the Roadmap read gives it
+    # (``roadmap_code``, roadmap-milestone-codes), which ``name`` leads with ("M2 · Beta");
+    # null when it is no roadmap milestone (``name`` is then its name alone) or not a milestone.
+    code: str | None = None
 
 
 class SimplePlanStrip(BaseModel):
@@ -2415,6 +2584,8 @@ class SimpleDecisionRow(BaseModel):
     flow: SimpleDecidedFlow | None = None
     # prd-questions: a PRD's question keeps its code ("Q10"); a decided one, its answer.
     code: str | None = None
+    # QA (unique codes): a PRD's question names its PRD (one the reader reads).
+    prd_title: str | None = None
     chosen: str | None = None
     # edit-decisions (ec1 b): every field the sheet shows and changes, what the reader may
     # do there, and the last change made from it.
@@ -2627,6 +2798,9 @@ class SimpleWaitingItem(BaseModel):
         "proposal",
         "goal_suggestion",
         "goal",
+        # The Inbox's other counted "Needs you" rows (Add predictions, launches, rituals,
+        # metrics, requests), opened where the Inbox opens them.
+        "inbox",
     ]
     # Unique in the list (kind and id); ``ref_id`` is the id its own endpoint acts on (the
     # checkpoint, question, decision's number, item, date suggestion, draft, change, goal
@@ -2712,8 +2886,13 @@ class SimpleTrackRow(BaseModel):
     status: Literal["active", "paused", "closed"]
     owner_id: uuid.UUID | None = None
     owner_name: str | None = None
-    prd_id: uuid.UUID
+    # tracks-goal: a track holds many PRDs (``prds``, in the order they joined; ``prd_id``
+    # and ``prd_title`` are the first), or none, and may be tied to one company goal.
+    prd_id: uuid.UUID | None = None
     prd_title: str | None = None
+    prds: list["SimplePrdRef"] = []
+    goal_id: uuid.UUID | None = None
+    goal_name: str | None = None
     # The reader edits or deletes it directly; else it is proposed to ``decider_name``.
     can_decide: bool = False
     decider_name: str | None = None
@@ -2722,6 +2901,10 @@ class SimpleTrackRow(BaseModel):
     feature_count: int = 0
     # Every feature on it, cut and merged ones too: what Move to Trash sends to no track.
     moves_count: int = 0
+    # track-order (owner Nov 9): its place number in the company's track order (lower first;
+    # none: after every numbered one, oldest first), which Move up and Move down change (op
+    # ``move_track``). The list comes in that order.
+    order: int | None = None
 
 
 class SimplePerson(BaseModel):
@@ -2729,19 +2912,31 @@ class SimplePerson(BaseModel):
     name: str
 
 
-class SimplePrdRef(BaseModel):
-    id: uuid.UUID
-    title: str
-
-
 class SimpleTracks(BaseModel):
     tracks: list[SimpleTrackRow]
     # The reader adds a track directly; else it is proposed to ``add_decider_name``.
     can_add: bool = False
     add_decider_name: str | None = None
-    # Who can own a track (enabled members), and the PRDs a new track can take.
+    # Who can own a track (enabled members), and the PRDs a track can take (tracks-goal: one
+    # on another track names it, and moves from it).
     people: list[SimplePerson]
-    prds: list[SimplePrdRef]
+    prds: list["SimpleTrackPrdChoice"]
+    # tracks-goal: the company's goals a track may be tied to, by name.
+    goals: list["SimpleTrackGoal"] = []
+
+
+class SimpleTrackGoal(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class SimpleTrackPrdChoice(BaseModel):
+    """tracks-goal: an accepted PRD a track can take, with the track it is on now."""
+
+    id: uuid.UUID
+    title: str
+    track_id: uuid.UUID | None = None
+    track_title: str | None = None
 
 
 class InboxSimpleDateSuggestion(BaseModel):
@@ -2759,6 +2954,38 @@ class InboxSimpleDateSuggestion(BaseModel):
     basis: str
     at: dt.datetime
     state: Literal["new", "open"]
+
+
+class InboxSimpleTrackSuggestion(BaseModel):
+    """tracks-goal (owner Nov 9): a newly accepted PRD of mine on no track. Oracle suggests
+    the existing track that fits it best (``track``; none fits: null); Confirm puts the PRD
+    on it, Pick a track on one of ``tracks``, New track starts one (each through the change
+    engine: ``edit_track`` with ``add_prd_id``, ``add_track``)."""
+
+    id: uuid.UUID
+    prd: "SimplePrdRef"
+    track: "SimpleTrackChoice | None" = None
+    tracks: list["SimpleTrackChoice"] = []
+    at: dt.datetime
+    state: Literal["new", "open"]
+    # A track someone else decides was asked for: it waits for them (no actions, not
+    # counted) until they accept (the item leaves) or decline (the suggestion is back).
+    proposed: "SimpleTrackProposed | None" = None
+
+
+class SimpleTrackChoice(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleTrackProposed(BaseModel):
+    """The open proposal a track suggestion waits for: which track (``title`` of a new
+    one), and whom it waits for."""
+
+    change_id: uuid.UUID
+    track: SimpleTrackChoice | None = None
+    title: str
+    to_name: str | None = None
 
 
 class InboxSimpleGoalSuggestion(BaseModel):

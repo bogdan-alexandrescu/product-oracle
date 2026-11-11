@@ -22,7 +22,11 @@ async def world() -> World:
         # pay-1 (now) ends Nov 30; pay-2 (next) ends Jan 15; pay-3 (now) is estimated (Dec 31).
         for key, end in (("pay-1", date(2026, 11, 30)), ("pay-2", date(2027, 1, 15))):
             row = await s.get(RoadmapItem, uuid.UUID(w.ids[key]))
-            row.start_date, row.end_date, row.date_source = date(2026, 10, 1), end, "typed"
+            start = date(2026, 10, 1) if key == "pay-1" else date(2027, 1, 1)
+            row.start_date, row.end_date, row.date_source = start, end, "typed"
+        # board-quarters: pay-3's typed start keeps it in Now; its end is estimated.
+        row = await s.get(RoadmapItem, uuid.UUID(w.ids["pay-3"]))
+        row.start_date, row.end_date = date(2026, 10, 1), None
         doc = (await s.get(RoadmapItem, uuid.UUID(w.ids["pay-1"]))).roadmap_document_id
         owner = w.ctx.users["owner"].id
         kd = RoadmapKeyDate(roadmap_document_id=doc, name="Board meeting",

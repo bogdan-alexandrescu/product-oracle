@@ -69,10 +69,11 @@ function Meetings() {
   return (
     <SimplePage
       title="Meetings"
+      // QA (the owner's rule): what the page is for sits behind the (i) beside the heading, not under it.
+      info={`Start a review of a PRD, join the one that is on, and read past minutes. Times are in ${zoneName(zone)}.`}
       lead={
-        // qa-simple-decide-38: a one-line lead, as on Decisions; qa-simple-decide-34: one verb, "Start review".
+        // qa-simple-decide-34: one verb, "Start review".
         <span className="flex flex-wrap items-center gap-3">
-          <span>Start a review of a PRD, join the one that is on, and read past minutes. Times are in {zoneName(zone)}.</span>
           {mayStart ? (
             <Button variant="primary" onClick={() => setSheet({})}>Start review</Button>
           ) : (

@@ -73,6 +73,9 @@ export const LADDER_KR_CODES = {
   serving: "F-01",
 } as const;
 
+/** QA goal map codes: the feature whose stored title leads with its own code, for the spec. */
+export const LADDER_CODED = { code: "F-16", name: "Setup checklist that shows each team what is left to do" } as const;
+
 /** The key results' names by parent goal, and the milestone a key result holds, for the spec. */
 export const LADDER_KRS = {
   goals: GOALS.map((g) => g.name),
@@ -128,7 +131,8 @@ const ROWS: Row[] = [
   ["Shared sign-in for web and mobile with one session", "g2", "m4", "Platform", "done", "2026-09-07", "2026-10-16", []],
   ["Guided first project that fills itself from a template", "g2", "m4", "Onboarding", "in_progress", "2026-10-12", "2026-11-13", [13]],
   ["Invite the whole team from a pasted list of emails", "g2", "m4", "Onboarding", "in_progress", "2026-10-19", "2026-11-13", [13]],
-  ["Setup checklist that shows each team what is left to do", "g2", "m4", "Onboarding", "done", "2026-09-28", "2026-10-30", []],
+  // QA goal map codes: a title stored with its own code in front, as some are (the map and roadmap read it without).
+  ["F-16 Setup checklist that shows each team what is left to do", "g2", "m4", "Onboarding", "done", "2026-09-28", "2026-10-30", []],
   ["Welcome call booking for teams stuck after two days", "g2", "m4", "Support", "planned", "2026-11-16", "2026-12-04", [16]],
   ["Import projects from spreadsheets with column matching", "g2", "m5", "Platform", "in_progress", "2026-10-26", "2026-12-04", [13]],
   ["Import from other task tools with people and comments kept", "g2", "m5", "Platform", "planned", "2026-11-23", "2026-12-18", [18]],
@@ -195,11 +199,11 @@ export function ladderMap(keyResults = false, codes = false): GoalMap {
     if (!g || !m) return [];
     const milestones = (codes && i + 1 === 21 ? ["m6", m] : [m, ...(ALSO[i + 1] ? [ALSO[i + 1]] : [])]).map((x) => `l${x}`);
     const link = (milestone: string) => ({ milestone, expected: "", confidence: "Medium" as const, measured: null, lift: "not_measured" as const, shipped_on: null, before: null, after: null });
-    return [{ id: `f${i + 1}`, name, area: area(a), milestones, lever: a, expected: "", confidence: "Medium" as const, released: false, measured: null, lift: "not_measured" as const, links: milestones.map(link) }];
+    return [{ id: `f${i + 1}`, name, code: "", area: area(a), milestones, lever: a, expected: "", confidence: "Medium" as const, released: false, measured: null, lift: "not_measured" as const, links: milestones.map(link) }];
   });
   // One feature with no roadmap item (no code, no key): a link onto it is refused, for a reason that is not a loop.
   const link = { milestone: "lm12", expected: "", confidence: "Medium" as const, measured: null, lift: "not_measured" as const, shipped_on: null, before: null, after: null };
-  features.push({ id: "bare-feature", name: BARE, area: area("Mobile"), milestones: ["lm12"], lever: "Mobile", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [link] });
+  features.push({ id: "bare-feature", name: BARE, code: "", area: area("Mobile"), milestones: ["lm12"], lever: "Mobile", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [link] });
   return {
     goals: [...GOALS, ...(keyResults ? KRS.map(([k]) => k) : []), ...(codes ? CODE_KRS.filter(([, , , s]) => s === "confirmed").map(([k]) => k) : [])].map(({ position, ...g }) => (void position, { ...g })),
     areas: AREAS.map((a) => ({ id: area(a), name: a, lever: a })),

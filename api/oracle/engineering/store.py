@@ -76,12 +76,10 @@ async def _checkpoint_of(db: AsyncSession, run_id: uuid.UUID, seq: int) -> Check
 
 
 async def _feature(db: AsyncSession, key: str) -> Entity | None:
-    return await db.scalar(
-        select(Entity)
-        .where(Entity.type == "feature", Entity.key == key)
-        .order_by(Entity.created_at)
-        .limit(1)
-    )
+    # By its key, or the key it had before it was given a code (oracle.baseline.fixes).
+    from oracle.baseline import fixes
+
+    return (await fixes.features_by_keys(db, [key])).get(key)
 
 
 async def _requirements(db: AsyncSession, feature_id: uuid.UUID) -> list[uuid.UUID]:

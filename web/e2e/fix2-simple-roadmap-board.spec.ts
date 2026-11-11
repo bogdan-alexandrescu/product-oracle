@@ -31,6 +31,8 @@ async function openBoard(page: Page, email?: string) {
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await page.getByTestId("format-board").click();
   await expect(page.getByTestId("format-board")).toHaveAttribute("aria-pressed", "true");
+  // Track everywhere (owner Nov 10): the board starts in track bands.
+  await expect(page.getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
 }
 
 /** Opens Oracle's date suggestion for an item (the Gantt, which shows bars on a phone too)
@@ -70,30 +72,28 @@ for (const [where, use] of [
     test.use(use);
 
     /**
-     * qa-simple-roadmap-3: an item with its own (accepted) dates keeps them when its
-     * horizon moves to another column (the arrow keys, which work the same on a drag);
-     * fails_when = the "Now" column's header still claims "Oct 1 – Dec 31" once it holds a
-     * card dated months later, a false range the card's own dates contradict.
+     * qa-simple-roadmap-3, board-quarters (owner, Nov 10): a card's column is the quarter of
+     * its dates, so a move (the arrow keys, which work the same as a drag) moves its accepted
+     * dates into the new column's quarter; the column keeps its range and no card says its
+     * dates sit outside it; fails_when = the card moves but its dates stay months away.
      */
-    test("a column keeps its range and a card dated outside it says so", async ({ page }) => {
+    test("a moved card takes its column's quarter, never dates outside it", async ({ page }) => {
       // A phone's Timeline (goal lanes) has no suggestion marker to accept from; the desktop run covers it.
       test.skip(where === "phone", "the phone Timeline has no suggestion marker");
       await openBoard(page);
       await acceptSuggestion(page, "alert-sso");
       await page.getByTestId("format-board").click();
-      await expect(column(page, "next").locator('[data-item="alert-sso"]')).toBeVisible();
-      await expect(column(page, "now").locator("header")).toContainText("Oct 1 – Dec 31");
+      await expect(page.getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
+      await expect(column(page, "later").locator('[data-item="alert-sso"]')).toBeVisible();
+      await expect(card(page, "alert-sso").getByTestId("board-dates")).toContainText("Apr");
       await card(page, "alert-sso").scrollIntoViewIfNeeded();
       await card(page, "alert-sso").focus();
       await page.keyboard.press("ArrowLeft");
-      await expect(page.getByText("Moved 'Alert routing by team' to Now in your working draft")).toBeVisible();
-      await expect(column(page, "now").locator('[data-item="alert-sso"]')).toBeVisible();
-      // The card moved to Now, but its own (accepted) dates are still months later: the
-      // column keeps its range (fix2 review: hiding it lost the label) and the card says
-      // its dates sit outside the column.
-      await expect(column(page, "now").locator("header")).toContainText("Oct 1 – Dec 31");
-      await expect(card(page, "alert-sso").getByTestId("board-dates")).toContainText("2027");
-      await expect(card(page, "alert-sso").getByTestId("outside-column")).toHaveText("Dates outside Now");
+      await expect(page.getByText("Moved 'Alert routing by team' to Next in your working draft")).toBeVisible();
+      await expect(column(page, "next").locator('[data-item="alert-sso"]')).toBeVisible();
+      await expect(column(page, "next").locator("header")).toContainText("Jan 1 – Mar 31");
+      await expect(card(page, "alert-sso").getByTestId("board-dates")).toContainText("Jan");
+      await expect(page.getByTestId("outside-column")).toHaveCount(0);
     });
 
     /**
@@ -104,7 +104,8 @@ for (const [where, use] of [
     test("an estimated card's dates sit on a plain background", async ({ page }) => {
       await openBoard(page);
       const dates = card(page, "alert-sso").getByTestId("board-dates");
-      await expect(dates).toContainText("estimated");
+      // board-quarters: an undated card sits in Later and says so.
+      await expect(dates).toContainText("No dates");
       await expect(dates).toHaveCSS("background-image", "none");
     });
 
@@ -115,6 +116,9 @@ for (const [where, use] of [
      */
     test("a goal with no suggestions shows no chip", async ({ page }) => {
       await openBoard(page);
+      // The goal chips sit on goal bands: Group by Goal.
+      await page.getByTestId("group-goal").click();
+      await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
       await expect(group(page, "now", "Grow retention").getByTestId("goal-suggestions-open")).toContainText("✦ 1 suggested feature");
       await expect(group(page, "now", "Faster activation").getByTestId("goal-suggestions-open")).toHaveCount(0);
     });
@@ -138,8 +142,11 @@ test.describe("desktop, format", () => {
     const pop = page.getByTestId("suggestion-popover");
     await pop.getByRole("button", { name: "Accept" }).click();
     await expect(page.getByText("Dates accepted in your working draft")).toBeVisible();
-    const outline = page.locator('[data-testid="suggestion-open"]').first();
-    const key = await outline.getAttribute("data-item");
+    // The toast comes before the reload: wait till the accepted item's outline is gone, then
+    // edit the item read (`.first()` again could be another one once the reload lands).
+    await expect(page.locator('[data-testid="suggestion-open"][data-item="alert-sso"]')).toHaveCount(0);
+    const key = await page.locator('[data-testid="suggestion-open"]').first().getAttribute("data-item");
+    const outline = page.locator(`[data-testid="suggestion-open"][data-item="${key}"]`);
     await outline.click();
     await pop.getByRole("button", { name: "Edit dates" }).click();
     await pop.getByLabel("Start").fill("2026-12-01");
@@ -147,6 +154,7 @@ test.describe("desktop, format", () => {
     await pop.getByRole("button", { name: "Save dates" }).click();
     await expect(page.getByText("Dates accepted in your working draft")).toBeVisible();
     await page.getByTestId("format-board").click();
+    await expect(page.getByTestId("board-group").first().locator("h3")).toHaveText(/track$/i);
     const dates = card(page, key!).getByTestId("board-dates");
     await expect(dates).toContainText("Dec 1 – Jan 15, 2027");
     await expect(dates).not.toContainText("2026");

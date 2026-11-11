@@ -186,6 +186,12 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             name = _quoted(target.get("name")) or item
             if "milestone" in before and after.get("milestone") is None:
                 return f"removed the milestone {name}" if name else "removed a milestone"
+            # milestone-rename: a new name (a roadmap's own: in ``milestone``; a PRD's: as is).
+            was, to = (before.get("milestone") or before), (after.get("milestone") or after)
+            new = _quoted(to.get("name")) if isinstance(to, dict) else None
+            old = was.get("name") if isinstance(was, dict) else None
+            if new and old and old != to.get("name"):
+                return f"renamed the milestone {_quoted(old)} to {new}"
             return f"changed the milestone {name}" if name else "changed a milestone"
         # trash-features-goals: a feature deleted to Trash (oracle.simple.trash_items).
         case "delete_item":
@@ -197,6 +203,14 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             goal = _quoted(target.get("title")) or item
             tail = " to Trash" if op == "delete_goal" else ""
             return f"{verb} the goal {goal}{tail}" if goal else f"{verb} a goal{tail}"
+        # goal-map-link-asks: a feature put on a goal milestone, or moved there from another
+        # (oracle.simple.goal_map_asks), the milestones by name.
+        case "link_goal_map":
+            to = _quoted(target.get("name")) or "a milestone"
+            was = _quoted(target.get("from_name"))
+            if target.get("from_milestone"):
+                return f"moved {x} from {was or 'its milestone'} to {to}"
+            return f"put {x} on {to}"
         # roadmap-decide: a cut item's fix, the dependency dropped.
         case "remove_dependency":
             titles = target.get("titles") or []
@@ -232,6 +246,8 @@ def sentence(
         asked = "archive" + what[len("archived") :]
     elif op == "unarchive_goal":
         asked = "restore" + what[len("restored") :]
+    elif op == "link_goal_map" and what.startswith("moved"):
+        asked = "move" + what[len("moved") :]
     if status == "proposed":
         words = f"{who} proposed: {asked}"
     elif status == "declined":

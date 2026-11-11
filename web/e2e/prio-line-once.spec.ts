@@ -13,7 +13,8 @@ import { expect, test, type Page } from "./test";
  * draws the same line and shows as the "From the PRD" option. Desktop and phone, light and dark.
  * prio-line-once review: on "roadmap-keydates-uncoded" the onboarding track's milestone "Prove it"
  * (M1's name without its code, on its day), which Simple › Roadmap draws once, is listed once
- * too, as the PRD's M1. Invented data.
+ * too, as the PRD's M1. A goal's list split at the line shows the caption's and the Makes heading's score (i), each
+ * opening with its own id. Invented data.
  */
 
 const M1 = "M1 · Prove it · Nov 27, 2026";
@@ -64,6 +65,27 @@ for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
         await expect(heads.nth(0)).toHaveAttribute("aria-label", `Makes ${M1}`);
         await expect(heads.nth(1)).toHaveAttribute("aria-label", `Misses ${M1}`);
         await expectShownInFull(page, `From the PRD: ${M1}`);
+      });
+
+      // qa-prio-twins (review of #1503): a goal's list split at the line keeps the caption's score (i) and the
+      // Makes heading's too: both open, one id each.
+      test("both score (i)s of a goal's list split at the line open, each with its own id", async ({ page }) => {
+        await setUp(page, scheme);
+        await page.goto("/simple");
+        // Grow retention's features are on both sides of M1's line.
+        await page.getByTestId("home-goal-link").filter({ hasText: "Grow retention" }).click();
+        await expect(page.getByTestId("prio-goal-filter")).toBeVisible();
+        await expect(page.getByText("Loading priorities…")).toHaveCount(0);
+        await page.getByTestId("line-picker").getByLabel("Line", { exact: true }).selectOption({ label: `From the PRD: ${M1}` });
+        const makes = page.getByTestId("prio-part-head").filter({ hasText: /^Makes/ });
+        await expect(makes).toHaveCount(1);
+        const words = "Score = goal value × Oracle's confidence in it (0 to 1) ÷ effort in engineer-weeks.";
+        await page.getByTestId("line-caption").getByTestId("prio-score-help").click();
+        await expect(page.locator("#prio-score-text")).toHaveText(words);
+        await makes.getByTestId("prio-score-help").click();
+        await expect(page.locator("#prio-score-text-makes")).toHaveText(words);
+        const ids = await page.locator("[id^='prio-score-text']").evaluateAll((els) => els.map((e) => e.id));
+        expect(new Set(ids).size, ids.join(", ")).toBe(ids.length);
       });
 
       test("a milestone named without its code on M1's day is listed once, as the PRD's M1", async ({ page }) => {

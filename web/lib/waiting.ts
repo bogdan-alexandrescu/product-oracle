@@ -37,6 +37,35 @@ export function waitingCount(inbox: Inbox, questions: readonly unknown[]): numbe
   return inbox.total + questions.length;
 }
 
+/** What Home draws itself, by the Inbox kind each row is counted under there. */
+export type DrawnOnHome = Record<"stops" | "questions" | "decisions" | "drafts" | "proposals" | "dates" | "goalSuggestions" | "inboxRows", number>;
+
+/**
+ * Of what the rail counts (`waitingCount`), the Inbox rows Home draws itself: per kind (run stops,
+ * the questions asked of me, decision-log calls to decide, drafts for my approval, proposals, dates,
+ * goal suggestions, and the Plan › Outcomes, launch, ritual, metric and request rows) no more than
+ * the Inbox counts and no more than Home draws. Home shows the rest (feedback, cost approvals,
+ * discussions, reports, ...) as one row, "N more in your Inbox", so its count is the rail's.
+ */
+export function drawnOnHome(inbox: Inbox, questions: readonly unknown[], here: DrawnOnHome): number {
+  const counted: DrawnOnHome = {
+    stops: inbox.checkpoints.length,
+    questions: questions.length,
+    decisions: (inbox.decisions ?? []).filter((d) => d.counts && d.reason === "needs_decision").length,
+    drafts: inbox.simple_approvals.length,
+    proposals: inbox.simple_proposals.length,
+    dates: inbox.simple_date_suggestions.length,
+    goalSuggestions: inbox.simple_goal_suggestions.length,
+    inboxRows:
+      (inbox.outcomes ?? []).filter((o) => o.counts).length +
+      (inbox.launches ?? []).filter((r) => r.counted).length +
+      (inbox.rituals ?? []).filter((r) => r.counts && (r.state === "new" || r.state === "open")).length +
+      (inbox.metrics ?? []).filter((m) => m.counts).length +
+      (inbox.requests ?? []).filter((r) => r.counts).length,
+  };
+  return (Object.keys(counted) as (keyof DrawnOnHome)[]).reduce((n, k) => n + Math.min(counted[k], here[k]), 0);
+}
+
 /**
  * Records this Inbox visit as my last one (C1e: what "new" is measured from next time). A
  * shared read from before the mark is dropped, so coming back within FRESH_MS (Home and back,

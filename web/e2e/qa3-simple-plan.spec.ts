@@ -1,4 +1,4 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { ADMIN, login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
@@ -87,10 +87,14 @@ test.describe("QA pass 3: simple-plan, the line", () => {
     const days = dated.map((o) => Date.parse(o.split(" · ").at(-1)!));
     expect([...days].sort((a, b) => a - b)).toEqual(days);
     for (const label of dated) {
+      const value = (await page.locator("#prio-line option").filter({ hasText: label }).getAttribute("value"))!;
       await page.getByLabel("Line", { exact: true }).selectOption({ label });
-      await expect(page.locator("#prio-line")).toHaveValue(/key_date|milestone/);
+      // The last line's list stays on screen until the picked line's is read; the picker then names it.
+      await expect(page.locator("#prio-line")).toHaveValue(value);
       await expect(page.getByText("Loading priorities…")).toHaveCount(0);
-      const above = await page.getByTestId("prio-row").evaluateAll((els) => els.map((e) => e.getAttribute("data-above")));
+      // One read of the page as it is: evaluateAll finds the rows, then reads them, and a list
+      // drawn between the two would mix the old rows' order with the new rows' marks.
+      const above = await page.evaluate(() => [...document.querySelectorAll('[data-testid="prio-row"]')].map((e) => e.getAttribute("data-above")));
       const first = above.indexOf("false");
       if (first >= 0) {
         expect(above.slice(first).every((a) => a === "false")).toBe(true);
@@ -106,6 +110,47 @@ test.describe("QA pass 3: simple-plan, the line", () => {
       }
     }
   });
+
+  /* While a picked line's list is read, the last line's list stays as it was: no moment shows one line's marks on another's rows. */
+  test("a line change never shows one line's marks on another line's list", async ({ page }) => {
+    await setUp(page);
+    await open(page);
+    await page.evaluate((slow) => {
+      localStorage.setItem(slow, "/v1/simple/priorities");
+      const w = window as unknown as { seen: { line: string; above: string; heads: string[] }[] };
+      w.seen = [];
+      const look = () => {
+        const rows = [...document.querySelectorAll('[data-testid="prio-row"]')];
+        w.seen.push({
+          line: document.querySelector<HTMLSelectElement>("#prio-line")?.selectedOptions[0]?.textContent ?? "",
+          above: rows.map((e) => (e.getAttribute("data-above") === "true" ? "T" : "F")).join(""),
+          heads: [...document.querySelectorAll('[data-testid="prio-part-head"]')].map((e) => e.getAttribute("aria-label") ?? ""),
+        });
+      };
+      new MutationObserver(look).observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+    }, MOCK_SLOW_KEY);
+    const options = await page.locator("#prio-line option").allTextContents();
+    const dated = options.filter((o) => / · /.test(o));
+    for (const label of [...dated, ...[...dated].reverse()]) {
+      const before = await page.locator("#prio-line").inputValue();
+      const value = (await page.locator("#prio-line option").filter({ hasText: label }).getAttribute("value"))!;
+      await page.getByLabel("Line", { exact: true }).selectOption({ label });
+      if (value !== before) {
+        // Read late: the last line and its list are still on screen meanwhile.
+        await expect(page.locator("#prio-line")).toHaveValue(before);
+        await expect(page.getByTestId("prio-row").first()).toBeVisible();
+      }
+      await expect(page.locator("#prio-line")).toHaveValue(value);
+    }
+    const seen = await page.evaluate(() => (window as unknown as { seen: { line: string; above: string; heads: string[] }[] }).seen);
+    expect(seen.length).toBeGreaterThan(0);
+    for (const s of seen.filter((x) => / · /.test(x.line))) {
+      // Every moment: a dated line's list is what makes it, then what misses it, under that line's own headings.
+      expect(s.above, `${s.line}: ${s.above}`).toMatch(/^T*F*$/);
+      const day = s.line.slice(s.line.indexOf(": ") + 2);
+      for (const h of s.heads) expect(h, `${s.line}: ${h}`).toMatch(new RegExp(`^(Makes|Misses) ${day.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+    }
+  });
 });
 
 test.describe("QA pass 3: simple-plan, the Ranked list", () => {
@@ -113,7 +158,9 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
   test("the score says how it is worked out and titles line up", async ({ page }) => {
     await setUp(page);
     await open(page);
-    await expect(page.getByTestId("prio-score-help")).toHaveText(/^Score = goal value × Oracle's confidence in it \(0 to 1\) ÷ effort in engineer-weeks\.$/);
+    // qa-prio-twins: behind an (i) by the list's heading (the owner's rule: explanations behind a tooltip).
+    await page.getByTestId("prio-score-help").first().click();
+    await expect(page.locator("#prio-score-text")).toHaveText(/^Score = goal value × Oracle's confidence in it \(0 to 1\) ÷ effort in engineer-weeks\.$/);
     const xs = await page.getByTestId("prio-row").evaluateAll((els) =>
       els.map((e) => Math.round(e.querySelector('[data-testid="prio-title"]')!.getBoundingClientRect().x)),
     );

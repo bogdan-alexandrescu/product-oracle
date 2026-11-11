@@ -134,6 +134,9 @@ function wholeAxis(chart: SVGSVGElement) {
   });
 }
 
+/** A goal's number and the hidden " · " that keeps it apart from its name (GoalNum): one space in the picture. */
+const goalNumbered = (s: string) => s.replace(/^(\d+) · /, "$1 ");
+
 /** E-5: a label row's words, every line of it: its name first, then its notes ("In-app tour ·
  * 1st to return"); a Current-state pill is not part of them. */
 function rowWords(el: HTMLElement): string {
@@ -143,7 +146,7 @@ function rowWords(el: HTMLElement): string {
     .split("\n")
     .map((s) => s.trim())
     .filter((s) => s && !pills.includes(s) && s !== title);
-  return [...(title ? [title] : []), ...lines].join(" · ");
+  return goalNumbered([...(title ? [title] : []), ...lines].join(" · "));
 }
 
 /** The labels (as text) and a copy of the chart's SVG beside them, with a key to the
@@ -322,7 +325,9 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
     breaks.push(y);
     if (el.dataset.testid === "timeline-lane") {
       const h = el.offsetHeight || 32;
-      const words = (el.firstElementChild?.textContent ?? el.textContent ?? "").replace(/\s+/g, " ").trim();
+      // A track band's header gives its words (name, goal, health) apart; its text runs them together.
+      const text = (el.querySelector<HTMLElement>('[data-testid="track-head"]')?.dataset.words ?? el.firstElementChild?.textContent ?? el.textContent ?? "").replace(/\s+/g, " ").trim();
+      const words = goalNumbered(text);
       rows.push(`<rect x="0" y="${y}" width="${width}" height="${h}" fill="var(--surface2)"/><line x1="0" x2="${width}" y1="${y + h}" y2="${y + h}" stroke="var(--line)"/>`);
       rows.push(`<text data-testid="export-lane" x="12" y="${y + h - 10}" font-size="13" font-weight="600" fill="var(--text)">${esc(fit(words, width - 24, 13, 600))}</text>`);
       y += h;

@@ -1,16 +1,30 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { InfoTip } from "@/components/ds";
+
 /**
  * A Simple page (#723 S1): its title and parts, drawn from the Simple tokens (globals.css,
  * html[data-mode="simple"]) so the owner's mockup picks restyle it there. The H1 hides on a
  * phone, as Detailed's does: the phone header shows it.
+ *
+ * `info`: what the page is for, behind an (i) beside the heading (the owner's rule: no
+ * explanation lines under a heading).
  */
-export function SimplePage({ title, lead, children }: { title: string; lead?: ReactNode; children: ReactNode }) {
+export function SimplePage({ title, lead, info, children }: { title: string; lead?: ReactNode; info?: ReactNode; children: ReactNode }) {
   return (
     <div className="simple-page" data-testid="simple-page">
       <header className="flex flex-col gap-2">
-        <h1 className="simple-h1 max-[600px]:sr-only">{title}</h1>
+        {info ? (
+          <div className="flex items-center gap-2">
+            <h1 className="simple-h1 max-[600px]:sr-only">{title}</h1>
+            <InfoTip label={title} testId="page-info" align="start" side="bottom">
+              {info}
+            </InfoTip>
+          </div>
+        ) : (
+          <h1 className="simple-h1 max-[600px]:sr-only">{title}</h1>
+        )}
         {lead && <p className="simple-small">{lead}</p>}
       </header>
       {children}

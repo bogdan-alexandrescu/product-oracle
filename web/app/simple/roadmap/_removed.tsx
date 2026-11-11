@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Button, toast } from "@/components/ds";
+import { useFitViewport } from "@/lib/fit-viewport";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
@@ -51,6 +52,9 @@ export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: 
   const removed = useQuery(removedKey(`${n}:${cut}`), readRemoved, { keepPrevious: true });
   const rows = removed.data?.items ?? [];
   const box = useRef<HTMLDivElement>(null);
+  // BGD (Nov 10): the list's height is capped to the viewport, its rows scrolling under the heading.
+  const list = useRef<HTMLDivElement>(null);
+  const fit = useFitViewport(list, { on: open });
   useEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
@@ -102,9 +106,9 @@ export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: 
         {removed.data ? `Removed · ${rows.length}` : "Removed"}
       </Button>
       {open && (
-        <div id="removed-list" role="dialog" aria-label="Removed from your plans" className="absolute top-10 left-0 z-30 w-[min(560px,calc(100vw-32px))] rounded-xl border border-line bg-surface shadow-xl">
-          <p className="border-b border-line px-3 py-2 text-[13px] font-semibold text-text2">Removed from your plans</p>
-          <ul className="max-h-[70vh] divide-y divide-line overflow-y-auto">
+        <div ref={list} id="removed-list" role="dialog" aria-label="Removed from your plans" style={{ maxHeight: fit.maxHeight }} className="absolute top-10 left-0 z-30 flex w-[min(560px,calc(100vw-32px))] flex-col rounded-xl border border-line bg-surface shadow-xl">
+          <p className="flex-none border-b border-line px-3 py-2 text-[13px] font-semibold text-text2">Removed from your plans</p>
+          <ul data-fit-body="" className="max-h-[70vh] min-h-0 divide-y divide-line overflow-y-auto overscroll-contain">
             {rows.map((r) => (
               <li key={`${r.kind}:${r.id}`} data-testid="removed-row" className="flex items-center gap-3 px-3 py-2">
                 <span className="min-w-0 flex-1">
@@ -138,14 +142,22 @@ export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: 
  * removed-tracks: who cut a cut feature and when (the removed list's own row), in its panel's
  * head. Nothing when the API does not know (a feature cut before who and when were kept).
  */
-export function CutBy({ id }: { id: string }) {
+export function CutBy({ id, onRestore, restoreLabel = "Restore" }: { id: string; onRestore?: () => void; restoreLabel?: string }) {
   const removed = useQuery(removedKey(`cut:${id}`), readRemoved);
   const r = removed.data?.items.find((x) => x.kind === "feature" && x.id === id);
   if (!r?.at) return null;
+  // pm1 '⋯ menu by the close': a grey strip under the title, Restore one click away, never hidden.
   return (
-    <p className="mt-1 text-sm text-text2" data-testid="item-cut">
-      Cut on {formatDay(r.at)}
-      {r.by_name ? ` by ${r.by_name}` : ""}
-    </p>
+    <div className="mt-1.5 flex items-center gap-2 rounded-lg bg-surface2 px-3 py-1.5 text-sm text-text2">
+      <p className="min-w-0 flex-1" data-testid="item-cut">
+        Cut on {formatDay(r.at)}
+        {r.by_name ? ` by ${r.by_name}` : ""}
+      </p>
+      {onRestore && (
+        <button type="button" className="flex-none rounded-md border border-line bg-surface px-2.5 py-1 font-semibold text-text hover:bg-surface2" onClick={onRestore}>
+          {restoreLabel}
+        </button>
+      )}
+    </div>
   );
 }

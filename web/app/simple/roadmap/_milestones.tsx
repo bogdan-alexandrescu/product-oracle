@@ -7,33 +7,103 @@
  * goal's rows; a drag on the diamond moves it, a click opens it to edit or remove; every change has
  * Undo. A PRD's own milestones are hollow and dashed: a change to one asks the PRD's owner. */
 
-import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
-import { Button } from "@/components/ds";
+import { Button, InfoTip } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { addDays, calendarDay } from "@/lib/dates";
+import { joinedNames } from "@/lib/milestone-code";
 
 import { decide as decideChange, shortDay, type Item, type Roadmap } from "./_lib";
+import { doneLine, isMeasured, kindName, MK_KINDS, MK_STATUS, MkIcon, MkStatusMark, type MkKind, type MkStatus } from "./_mk";
 import { msEdge, msFill, msInk } from "./_timeline";
 
 export type GoalMilestone = Schemas["SimpleGoalMilestone"];
+
+/** roadmap-milestone-codes (the owner, Nov 9): a milestone's one code across the roadmap (M1, M2 ... by
+ * date; the API's roadmap_code), the code every page shows; its own per-goal code outside a roadmap read. */
+export const msCode = (m: { code: string; roadmap_code?: string | null }) => m.roadmap_code ?? m.code;
+/** The milestone band's height under the date axis (two rows of labels; one on a phone). */
+export const msBand = (phone = false): number => (phone ? 30 : 54);
+/** The band's height on this chart: none while no milestone is dated. */
+export function useMsBand(phone = false): number {
+  const ms = useMsCtl();
+  return ms && ms.band.length ? msBand(phone) : 0;
+}
+const BAND_ROW = 24;
 export type MsRow = { id: string; title: string; lane: string; y: number; h: number; start: string; end: string };
 export type MsLane = { key: string; title: string; y0: number; y1: number };
 
 const day = (d: string) => shortDay(d);
 const fullDay = (d: string) => calendarDay(d, { month: "short", day: "numeric", year: "numeric" });
-const words = (m: { code: string; name: string }) => `${m.code} ${m.name}`;
+const words = (m: { code: string; roadmap_code?: string | null; name: string }) => `${msCode(m)} ${m.name}`;
 
 /** The rules a milestone counts by, offered on the card (its own one kept when it differs). */
 const RULES = ["Holds 7 days in a row", "Holds 14 days in a row", "Holds 4 weeks in a row", "Holds 7 days in a row on one live team", "Holds 14 days in a row on all teams"];
 /** How far (px) past its corner a same-day count may move to keep clear: farther, it reads as another day's. */
 const BADGE_NEAR = 24;
 
-type Draft = { id: string | null; code: string; name: string; date: string; goal_id: string | null; item_ids: string[]; counts_when: string; second: boolean; prd: boolean };
+/** tb-mk: a milestone's kind and the fields that kind reads (the card's Kind, Status and their fields). */
+type KindFields = {
+  kind: MkKind;
+  status_set: MkStatus | null;
+  status_reason: string | null;
+  done_when_line: string;
+  measure: string | null;
+  baseline: number | null;
+  target: number | null;
+  current: number | null;
+  sub_goal_of_id: string | null;
+  home_track_id: string | null;
+  from_track_id: string | null;
+  to_track_id: string | null;
+};
+const kindFields = (m: GoalMilestone): KindFields => ({
+  kind: m.kind ?? "delivery",
+  status_set: m.status_set ?? null,
+  // A person's reason for At risk or Missed; never the words Oracle reads out ("Set by ...") for another status.
+  status_reason: m.status_reason && (m.status_set === "at_risk" || m.status_set === "missed") && m.status_reason !== `Set by ${m.status_set_by_name || "a person"}` ? m.status_reason : null,
+  done_when_line: m.done_when_line ?? "",
+  measure: m.measure ?? null,
+  baseline: m.baseline ?? null,
+  target: m.target ?? null,
+  current: m.current ?? null,
+  sub_goal_of_id: m.sub_goal_of_id ?? null,
+  home_track_id: m.home_track_id ?? null,
+  from_track_id: m.from_track_id ?? null,
+  to_track_id: m.to_track_id ?? null,
+});
+const NO_KIND: Omit<KindFields, "kind"> = { status_set: null, status_reason: null, done_when_line: "", measure: null, baseline: null, target: null, current: null, sub_goal_of_id: null, home_track_id: null, from_track_id: null, to_track_id: null };
+
+/** What a save sends of the kind fields: those the kind shows; a field only another kind shows is
+ * cleared, and a reason only goes with a person's At risk or Missed. */
+const forKind = (k: KindFields): KindFields => {
+  const measured = isMeasured(k.kind);
+  const why = k.status_set === "at_risk" || k.status_set === "missed";
+  return {
+    ...k,
+    status_reason: why ? k.status_reason : null,
+    done_when_line: measured ? "" : k.done_when_line,
+    measure: measured ? k.measure : null,
+    baseline: measured ? k.baseline : null,
+    target: measured ? k.target : null,
+    current: measured ? k.current : null,
+    sub_goal_of_id: k.kind === "sub_goal" ? k.sub_goal_of_id : null,
+    home_track_id: k.kind === "handoff" ? null : k.home_track_id,
+    from_track_id: k.kind === "handoff" ? k.from_track_id : null,
+    to_track_id: k.kind === "handoff" ? k.to_track_id : null,
+  };
+};
+
+type Draft = { id: string | null; code: string; name: string; date: string; goal_id: string | null; item_ids: string[]; counts_when: string; second: boolean; prd: boolean; k: KindFields | null };
 type Toast = { words: string; undo: (() => Promise<unknown>) | null };
 
 export interface MsCtl {
   list: GoalMilestone[];
+  /** roadmap-milestone-codes: every dated goal milestone of the roadmap once, by code. */
+  band: GoalMilestone[];
+  /** Join whenever names match (the owner, Nov 9): each code's longer name and the other names. */
+  joined: Map<string, { name: string; also: string[] }>;
   draft: Draft | null;
   hover: string | null;
   moving: { id: string; date: string } | null;
@@ -41,6 +111,8 @@ export interface MsCtl {
   phone: boolean;
   canAdd: boolean;
   goals: { id: string; title: string }[];
+  /** tb-mk: the roadmap's tracks, a hand-off's From and To. */
+  tracks: { id: string; title: string }[];
   items: Map<string, Item>;
   today: string;
   setHover: (d: string | null) => void;
@@ -73,7 +145,22 @@ export const MsProvider = ({ value, children }: { value: MsCtl; children: ReactN
 export const useMsCtl = () => useContext(Ctx);
 
 /** The milestones' state and their changes for one read of the roadmap (`reload` reads it again). */
-export function useMilestones({ data, phone, canChange, reload, openItem }: { data: Roadmap | undefined; phone: boolean; canChange: boolean; reload: () => Promise<unknown>; openItem: (itemId: string) => void }): MsCtl | null {
+export function useMilestones({
+  data,
+  names,
+  phone,
+  canChange,
+  reload,
+  openItem,
+}: {
+  data: Roadmap | undefined;
+  /** The roadmap read without its PRD, goal and track filters: a filter never changes a milestone's joined name or its "Also:". */
+  names?: Pick<Roadmap, "goal_milestones" | "milestones"> | null;
+  phone: boolean;
+  canChange: boolean;
+  reload: () => Promise<unknown>;
+  openItem: (itemId: string) => void;
+}): MsCtl | null {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [moving, setMoving] = useState<{ id: string; date: string } | null>(null);
@@ -82,16 +169,20 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
   const lastLane = useRef<string | null>(null);
   if (!data) return null;
   const list = data.goal_milestones ?? [];
+  const num = (m: GoalMilestone) => Number(msCode(m).slice(1)) || 0;
+  const band = [...new Map(list.filter((m) => m.date).map((m) => [msCode(m), m] as const)).values()].sort((a, b) => num(a) - num(b));
   const items = new Map(data.items.map((i) => [i.id, i]));
   const goals = [...new Map(data.items.flatMap((i) => (i.goal ? [[i.goal.id, { id: i.goal.id, title: i.goal.title }] as const] : []))).values()];
   const goalTitle = (id: string | null) => goals.find((g) => g.id === id)?.title ?? "No goal";
-  const nextCode = (goal: string | null) => `M${list.filter((m) => m.goal_id === goal && !m.prd).reduce((a, m) => Math.max(a, Number(m.code.slice(1)) || 0), 0) + 1}`;
+  // roadmap-milestone-codes: a new one takes the code after those dated on or before its day (the tracks' too).
+  const coded = [...list.map((m) => ({ date: m.date, code: msCode(m) })), ...data.milestones.flatMap((m) => (m.roadmap_code ? [{ date: m.date, code: m.roadmap_code }] : []))];
+  const nextCode = (date: string, extra = 0) => `M${new Set(coded.filter((m) => m.date && m.date <= date).map((m) => m.code)).size + 1 + extra}`;
   const roadmapOf = (goal: string | null) => data.roadmap?.id ?? data.items.find((i) => i.goal?.id === goal)?.roadmap.id ?? data.items[0]?.roadmap.id;
   // A milestone is added only where the reader's change applies (POST answers 403 elsewhere).
   const applies = new Set((data.key_date_roadmaps ?? []).filter((r) => r.applies).map((r) => r.roadmap.id));
   const canAddTo = (goal: string | null) => applies.has(roadmapOf(goal) ?? "");
   const lateOf = (ids: string[], date: string) => ids.filter((id) => (items.get(id)?.end.date ?? "") > date).length;
-  const fresh = (date: string, goal: string | null, second = false): Draft => ({ id: null, code: nextCode(goal), name: "", date, goal_id: goal, item_ids: [], counts_when: RULES[0], second, prd: false });
+  const fresh = (date: string, goal: string | null, second = false): Draft => ({ id: null, code: nextCode(date, second ? 1 : 0), name: "", date, goal_id: goal, item_ids: [], counts_when: RULES[0], second, prd: false, k: null });
   const done = async (t: Toast) => {
     await reload();
     setToast(t);
@@ -113,6 +204,8 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
       await done({ words: how === "accept" ? `Approved: ${words(m)} moves to ${day(m.pending!.date ?? m.date!)} in the PRD` : `Declined: ${words(m)} stays on ${day(m.date!)}`, undo: null });
     },
     list,
+    band,
+    joined: joinedNames(names?.goal_milestones ?? list, names?.milestones ?? data.milestones),
     draft,
     hover,
     moving,
@@ -120,6 +213,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
     phone,
     canAdd: canChange && [null, ...goals.map((g) => g.id)].some(canAddTo),
     goals,
+    tracks: (data.tracks ?? []).map((t) => ({ id: t.id, title: t.title })),
     items,
     today: data.today,
     setHover,
@@ -130,7 +224,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
     },
     begin: (date, goal) => {
       setToast(null);
-      setDraft((d) => (d && !d.id ? { ...d, date } : fresh(date, goal ?? lastLane.current ?? goals[0]?.id ?? null)));
+      setDraft((d) => (d && !d.id ? { ...d, date, code: nextCode(date) } : fresh(date, goal ?? lastLane.current ?? goals[0]?.id ?? null)));
     },
     openItem: (itemId) => {
       setDraft(null);
@@ -138,7 +232,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
     },
     edit: (m) => {
       setToast(null);
-      setDraft({ id: m.id, code: m.code, name: m.name, date: m.pending?.date ?? m.date ?? data.today, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, second: false, prd: !!m.prd });
+      setDraft({ id: m.id, code: msCode(m), name: m.name, date: m.pending?.date ?? m.date ?? data.today, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, second: false, prd: !!m.prd, k: kindFields(m) });
     },
     pick: (itemId) => {
       if (!draft || draft.prd) return false;
@@ -152,23 +246,35 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
       const d = draft;
       if (d.prd) {
         const m = list.find((x) => x.id === d.id)!;
-        await patch(d.id!, { date: d.date, counts_when: d.counts_when === m.counts_when ? null : d.counts_when });
+        // milestone-rename: a new name alone goes straight in for the PRD's owner, else it asks them.
+        const name = d.name.trim() && d.name.trim() !== m.name ? d.name.trim() : null;
+        const moved = d.date !== (m.pending?.date ?? m.date) || d.counts_when !== m.counts_when;
+        const got = await patch(d.id!, name && !moved ? { name } : { ...(name ? { name } : {}), date: d.date, counts_when: d.counts_when === m.counts_when ? null : d.counts_when });
         setDraft(null);
-        await done({ words: `Asked ${m.prd_owner ?? "the PRD's owner"} to move ${words(m)} to ${day(d.date)} in the PRD`, undo: () => patch(m.id, { date: m.date }) });
+        if (name && !got.pending) await done({ words: `${words({ ...m, name })} saved`, undo: () => patch(m.id, { name: m.name }) });
+        else await done({ words: name && !moved ? `Asked ${m.prd_owner ?? "the PRD's owner"} to rename ${words(m)}` : `Asked ${m.prd_owner ?? "the PRD's owner"} to move ${words(m)} to ${day(d.date)} in the PRD`, undo: name && !moved ? null : () => patch(m.id, { date: m.date }) });
         return;
       }
       if (d.id) {
         const was = list.find((x) => x.id === d.id)!;
-        await patch(d.id, { name: d.name, date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when });
+        // milestone-rename: a goal's own milestone takes a name alone (the goal keeps its title).
+        if (was.goal_target) {
+          await patch(d.id, { name: d.name.trim() || was.name });
+          setDraft(null);
+          await done({ words: `${words({ code: d.code, name: d.name.trim() || was.name })} saved`, undo: () => patch(was.id, { name: was.name }) });
+          return;
+        }
+        await patch(d.id, { name: d.name, date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when, ...(d.k ? forKind(d.k) : {}) });
         setDraft(null);
-        await done({ words: `${words({ code: d.code, name: d.name })} saved`, undo: () => patch(was.id, { name: was.name, date: was.date, goal_id: was.goal_id, item_ids: was.item_ids, counts_when: was.counts_when }) });
+        await done({ words: `${words({ code: d.code, name: d.name })} saved`, undo: () => patch(was.id, { name: was.name, date: was.date, goal_id: was.goal_id, item_ids: was.item_ids, counts_when: was.counts_when, ...kindFields(was) }) });
         return;
       }
-      const made = await unwrap(api.POST("/v1/simple/roadmap/milestones", { body: { roadmap_id: roadmapOf(d.goal_id)!, name: d.name.trim() || "New milestone", date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when } }));
+      const made = await unwrap(api.POST("/v1/simple/roadmap/milestones", { body: { roadmap_id: roadmapOf(d.goal_id)!, name: d.name.trim() || "New milestone", date: d.date, goal_id: d.goal_id, item_ids: d.item_ids, counts_when: d.counts_when, ...(d.k ? forKind(d.k) : { kind: "delivery" as const, ...NO_KIND }) } }));
       const late = lateOf(d.item_ids, d.date);
-      setDraft(again ? { ...fresh(addDays(d.date, 28), d.goal_id, true), code: `M${(Number(made.code.slice(1)) || 0) + 1}` } : null);
+      setDraft(again ? { ...fresh(addDays(d.date, 28), d.goal_id, true), k: d.k ? { ...d.k, ...NO_KIND, home_track_id: d.k.home_track_id } : null } : null);
       await done({
-        words: late ? `${words(made)} added · ${late} ${late === 1 ? "item it waits on ends" : "items it waits on end"} after it` : `${words(made)} added to ${goalTitle(made.goal_id ?? null)}`,
+        // roadmap-milestone-codes: the code its saved day gives it (the card's day may have changed since it opened).
+        words: late ? `${words({ ...made, roadmap_code: nextCode(d.date) })} added · ${late} ${late === 1 ? "item it waits on ends" : "items it waits on end"} after it` : `${words({ ...made, roadmap_code: nextCode(d.date) })} added to ${goalTitle(made.goal_id ?? null)}`,
         undo: () => unwrap(api.DELETE("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: made.id } } })),
       });
     },
@@ -182,8 +288,14 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
     propose: async (remove) => {
       const m = draft?.id ? list.find((x) => x.id === draft.id) : null;
       if (!draft || !m) return;
-      const before = { name: m.name, date: m.date ?? null, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when };
-      const after = remove ? null : { name: draft.name.trim() || m.name, date: draft.date, goal_id: draft.goal_id, item_ids: draft.item_ids, counts_when: draft.counts_when };
+      if (m.goal_target) {
+        await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: m.id }, before: { milestone: { name: m.name } }, after: { milestone: { name: draft.name.trim() || m.name } } } }));
+        setDraft(null);
+        await done({ words: `Proposed a change to ${words(m)} · it waits in Needs a decision`, undo: null });
+        return;
+      }
+      const before = { name: m.name, date: m.date ?? null, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, ...kindFields(m) };
+      const after = remove ? null : { name: draft.name.trim() || m.name, date: draft.date, goal_id: draft.goal_id, item_ids: draft.item_ids, counts_when: draft.counts_when, ...(draft.k ? forKind(draft.k) : {}) };
       await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: m.id }, before: { milestone: before }, after: { milestone: after } } }));
       setDraft(null);
       await done({ words: `${remove ? `Proposed removing ${words(m)}` : `Proposed a change to ${words(m)}`} · it waits in Needs a decision`, undo: null });
@@ -212,12 +324,14 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
 }
 
 /** One milestone's mark: a diamond on the time axis. */
-function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title, testid = "ms-diamond", color, onPointerDown, onClick }: { x: number; y: number; code: string; size?: number; hollow?: boolean; dashed?: boolean; title: string; testid?: string; color?: string; onPointerDown?: (e: ReactPointerEvent) => void; onClick?: () => void }) {
+function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title, testid = "ms-diamond", color, kind, day: on, onPointerDown, onClick }: { x: number; y: number; code: string; size?: number; hollow?: boolean; dashed?: boolean; title: string; testid?: string; color?: string; kind?: MkKind | null; day?: string; onPointerDown?: (e: ReactPointerEvent) => void; onClick?: () => void }) {
   const edge = color ?? msEdge(code);
   const hit = onClick || onPointerDown;
   return (
     <span
       data-testid={testid}
+      data-kind={kind ?? undefined}
+      data-day={on}
       title={title}
       aria-label={hit ? title : undefined}
       role={hit ? "button" : undefined}
@@ -268,6 +382,8 @@ export interface MsLayerProps {
   keepOff?: [number, number][];
   /** The axis' part in sight (layer pixels): the Timeline's track between the names column and the chart's right edge. */
   span?: [number, number];
+  /** The milestone band's top (layer pixels), under the date axis. */
+  bandTop?: number;
 }
 
 /** The day under a point of the track: x is monotonic, so a halving search over days finds it. */
@@ -288,6 +404,36 @@ function dayAt(x: (d: string) => number, px: number, from: string): string {
 export function MsLayer(props: MsLayerProps) {
   const ms = useMsCtl();
   const ref = useRef<HTMLDivElement>(null);
+  const [bandTip, setBandTip] = useState<{ id: string; left: number; top: number } | null>(null);
+  const [bandMore, setBandMore] = useState<string | null>(null);
+  const [dayList, setDayList] = useState<string | null>(null);
+  // Escape shuts a "+N" list its hover or focus would still show, until the pointer or focus leaves it.
+  const [shut, setShut] = useState(false);
+  // The same-day and "+N" lists close on Escape (focus back on their button) and on a click outside them.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const at = document.activeElement as HTMLElement | null;
+      const pop = at?.closest<HTMLElement>("[data-ms-pop]");
+      const hovered = !!ref.current?.querySelector("[data-ms-more]:hover");
+      if (!dayList && !bandMore && !pop && !hovered) return;
+      setDayList(null);
+      setBandMore(null);
+      setShut(true);
+      (pop?.querySelector<HTMLElement>("[data-ms-pop-button]") ?? (pop ? ref.current?.querySelector<HTMLElement>('[data-ms-pop-button][aria-expanded="true"]') : null))?.focus();
+    };
+    const onDown = (e: PointerEvent) => {
+      if ((e.target as Element | null)?.closest?.("[data-ms-pop]")) return;
+      setDayList(null);
+      setBandMore(null);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [dayList, bandMore]);
   // A label keeps all its words inside the chart's visible part: it sits right of its diamond when it
   // fits there, else left of it, else after the label it meets, on one line (cut short when the row runs
   // out). The names column (the Timeline's sticky one) counts as an edge, and a label whose
@@ -314,6 +460,14 @@ export function MsLayer(props: MsLayerProps) {
         el.style.visibility = gone ? "hidden" : "";
         return !gone;
       });
+      // Each label's own width, read once for all (one layout for the 500-row chart, not one a label).
+      for (const el of shown) {
+        el.style.whiteSpace = "nowrap";
+        el.style.width = "";
+        el.style.maxWidth = "";
+        el.style.top = `${Number(el.dataset.t0) || 0}px`;
+      }
+      const widths = shown.map((el) => el.scrollWidth + 2);
       let end = -Infinity;
       shown.forEach((el, n) => {
         const t0 = Number(el.dataset.t0) || 0;
@@ -321,11 +475,7 @@ export function MsLayer(props: MsLayerProps) {
         if (!prev || (Number(prev.dataset.t0) || 0) !== t0) end = -Infinity;
         const next = shown[n + 1];
         const nextT = next && (Number(next.dataset.t0) || 0) === t0 ? lx + Number(next.dataset.mx) + 6 : Infinity;
-        el.style.whiteSpace = "nowrap";
-        el.style.width = "";
-        el.style.maxWidth = "";
-        el.style.top = `${t0}px`;
-        const w = el.scrollWidth + 2;
+        const w = widths[n];
         const mx = lx + Number(el.dataset.mx);
         // A change asked of a PRD keeps all its words; the labels after it make room.
         const lead = el.dataset.testid === "ms-asked";
@@ -384,10 +534,15 @@ export function MsLayer(props: MsLayerProps) {
       const names = chart.querySelector("[data-testid=timeline-names-head]");
       const floor = names ? boxOf(names).r : -Infinity;
       const taken: Box[] = [];
-      for (const el of badges.sort((a, b) => Number(a.dataset.mx) - Number(b.dataset.mx))) {
+      // Every count back on its corner, then all their boxes read at once (one layout, not one a count).
+      const sorted = badges.sort((a, b) => Number(a.dataset.mx) - Number(b.dataset.mx));
+      for (const el of sorted) {
         el.style.left = `${Number(el.dataset.mx) + 3}px`;
         el.style.visibility = "";
-        const at = boxOf(el);
+      }
+      const boxes = sorted.map(boxOf);
+      for (const [n, el] of sorted.entries()) {
+        const at = boxes[n];
         const w = at.r - at.l;
         const mx = lx + Number(el.dataset.mx);
         if (mx + 3 < floor) {
@@ -424,7 +579,8 @@ export function MsLayer(props: MsLayerProps) {
   if (!ms) return null;
   const { x, axisY, height, rows, lanes, phone, left = 0 } = props;
   const X = (d: string) => left + x(d);
-  const laneOf = (g: string | null | undefined) => lanes.find((l) => l.key === (g ?? "none"));
+  // tb-mk: the bands are tracks now; a milestone whose goal has no band of its own sits on the first one.
+  const laneOf = (g: string | null | undefined) => lanes.find((l) => l.key === (g ?? "none")) ?? lanes.find((l) => l.key !== "below") ?? lanes[0];
   const rowOf = (id: string) => rows.find((r) => r.id === id);
   const out: ReactNode[] = [];
   const own = ms.list.filter((m) => !m.prd && m.date);
@@ -466,11 +622,27 @@ export function MsLayer(props: MsLayerProps) {
   const at = new Map<string, { left: number; top: number; maxWidth: number }>();
   for (const { key, date, m, text } of labels.sort((a, b) => a.date.localeCompare(b.date))) {
     const lane = laneOf(m.goal_id);
-    if (lane) at.set(key, labelAt(lane.key, X(date), lane.y0, text));
+    at.set(key, labelAt(lane?.key ?? "", X(date), lane?.y0 ?? axisY + 6, text));
   }
   // A drag on a diamond moves it; a click (no move) opens it.
   const grab = (m: GoalMilestone) => (e: ReactPointerEvent) => {
-    if (!m.can_change) return;
+    // One that is not the reader's to move (a goal's own target date) still opens on a click, to read.
+    if (!m.can_change || m.goal_target) {
+      e.stopPropagation();
+      const up = () => {
+        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", cancel);
+        ms.edit(m);
+      };
+      // A cancelled press (a scroll took it) opens nothing and leaves no listener behind.
+      const cancel = () => {
+        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", cancel);
+      };
+      window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", cancel);
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     const layer = e.currentTarget.closest<HTMLElement>("[data-testid=ms-layer]")!;
@@ -485,6 +657,7 @@ export function MsLayer(props: MsLayerProps) {
     const onUp = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
       if (!drag.moved) {
         ms.setMoving(null);
         ms.edit(m);
@@ -494,13 +667,21 @@ export function MsLayer(props: MsLayerProps) {
       const to = dayAt(x, px, from);
       void ms.move(m, to).finally(() => ms.setMoving(null));
     };
+    const onCancel = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      ms.setMoving(null);
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
   };
+  // The joined milestone's longer name, as the band and its "+N" list give it.
+  const joinedWordsOf = (m: GoalMilestone) => (ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m));
   for (const m of shown) {
     const date = m.date!;
     const mx = X(date);
-    const lane = laneOf(m.goal_id);
     const n = seenDay.get(date) ?? 0;
     seenDay.set(date, n + 1);
     const many = byDay.get(date) ?? 1;
@@ -509,30 +690,52 @@ export function MsLayer(props: MsLayerProps) {
       // diamonds' own boxes, so it never covers the next one at any zoom (its names in its tooltip).
       if (many > 1)
         out.push(
-          <span
+          <button
+            type="button"
             key={`c-${m.id}`}
             data-testid="ms-same-day"
             data-ms-badge
             data-mx={mx}
-            title={`${many} milestones on ${day(date)}: ${shown.filter((o) => o.date === date).map(words).join(", ")}`}
-            className="absolute z-[25] h-3 min-w-3 rounded-full bg-text px-1 text-center text-[10px] leading-3 font-bold text-surface"
+            aria-expanded={dayList === date}
+            data-ms-pop
+            data-ms-pop-button
+            title={`${many} milestones on ${day(date)}: ${shown.filter((o) => o.date === date).map(joinedWordsOf).join(", ")}`}
+            onClick={() => setDayList((d) => (d === date ? null : date))}
+            // A 12 px count, its tap area 24 px on a phone (an invisible pad round it).
+            className="absolute z-[25] h-3 min-w-3 cursor-pointer before:absolute before:inset-0 before:content-[''] max-[600px]:before:-inset-1.5 rounded-full bg-text px-1 text-center text-[10px] leading-3 font-bold text-surface focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
             style={{ left: mx + 3, top: axisY - 22 }}
           >
             {many}
             <span className="sr-only"> on {day(date)}</span>
-          </span>,
+          </button>,
         );
-      out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={m.code} title={`${words(m)}, ${fullDay(date)}`} onPointerDown={grab(m)} />);
+      // A click on the count lists the day's milestones, each opening its card.
+      if (many > 1 && dayList === date)
+        out.push(
+          <ul key={`cl-${m.id}`} data-testid="ms-same-day-list" data-ms-pop aria-label={`Milestones on ${day(date)}`} className="absolute z-40 min-w-48 rounded-lg border border-line bg-surface py-1 shadow-lg" style={{ left: mx + 3, top: axisY - 8 }}>
+            {shown
+              .filter((o) => o.date === date)
+              .map((o) => (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    data-testid="ms-same-day-entry"
+                    onClick={() => {
+                      setDayList(null);
+                      ms.edit(o);
+                    }}
+                    className="block w-full px-3 py-1 text-left text-xs whitespace-nowrap text-text hover:bg-surface2 focus-visible:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+                  >
+                    {joinedWordsOf(o)}
+                  </button>
+                </li>
+              ))}
+          </ul>,
+        );
+      out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={msCode(m)} title={`${words(m)}, ${fullDay(date)}`} kind={m.kind ?? "delivery"} day={date} onPointerDown={grab(m)} />);
     }
-    if (!lane) continue;
-    // A line across the goal's own rows, its words in the goal's header row.
-    out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px solid ${msEdge(m.code)}` }} />);
-    out.push(<div key={`s-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: lane.y0 - axisY - 6, borderLeft: `1px dotted ${msEdge(m.code)}`, opacity: 0.6 }} />);
-    out.push(
-      <Chip key={`f-${m.id}`} testid="ms-label" mx={mx} title={`${words(m)} · ${day(date)}`} onClick={() => ms.edit(m)} style={{ ...at.get(m.id), background: msFill(m.code), color: msInk(m.code), border: `1px solid ${msEdge(m.code)}` }}>
-        {words(m)} · {day(date)}
-      </Chip>,
-    );
+    // A line through every group, its words in the band under the date axis.
+    out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(msCode(m))}` }} />);
     // Each item it waits on tied to it by a dotted line; one that ends after it is late (red).
     for (const id of m.item_ids) {
       const r = rowOf(id);
@@ -540,8 +743,8 @@ export function MsLayer(props: MsLayerProps) {
       const ex = X(r.end);
       const cy = r.y + r.h / 2;
       const late = r.end > date;
-      if (!late && ex < mx) out.push(<div key={`g-${m.id}-${id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: ex + 2, top: cy - 1, width: mx - ex - 2, borderTop: `2px dotted ${msEdge(m.code)}` }} />);
-      out.push(<i key={`gd-${m.id}-${id}`} aria-hidden className="pointer-events-none absolute z-[13] h-2 w-2 rounded-full" style={{ left: (late ? mx : ex) - 4, top: cy - 4, background: late ? "var(--crit)" : msEdge(m.code) }} />);
+      if (!late && ex < mx) out.push(<div key={`g-${m.id}-${id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: ex + 2, top: cy - 1, width: mx - ex - 2, borderTop: `2px dotted ${msEdge(msCode(m))}` }} />);
+      out.push(<i key={`gd-${m.id}-${id}`} aria-hidden className="pointer-events-none absolute z-[13] h-2 w-2 rounded-full" style={{ left: (late ? mx : ex) - 4, top: cy - 4, background: late ? "var(--crit)" : msEdge(msCode(m)) }} />);
       if (late) {
         const t = `Ends after ${words(m)}`;
         const w = Math.min(textW(t), phone ? 220 : 360);
@@ -554,7 +757,7 @@ export function MsLayer(props: MsLayerProps) {
     }
   }
 
-  // A PRD's own milestones: hollow, dashed, tagged "PRD"; a change asks its owner (dashed amber till then).
+  // A PRD's own milestones, drawn like the others (its tip names its PRD); a change asks its owner (dashed amber till then).
   for (const m of prd) {
     const date = m.date!;
     const mx = X(date);
@@ -562,28 +765,23 @@ export function MsLayer(props: MsLayerProps) {
     const live = ms.moving?.id === m.id ? ms.moving.date : null;
     const asked = live ?? m.pending?.date ?? null;
     const to = asked && asked !== date ? X(asked) : null;
-    out.push(<Diamond key={`p-${m.id}`} x={mx} y={axisY} code={m.code} hollow title={`${words(m)} (from the PRD ${m.prd!.title})`} testid="ms-prd-diamond" onPointerDown={grab(m)} />);
-    if (!lane) continue;
-    out.push(<div key={`pv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px dashed ${msEdge(m.code)}`, opacity: to != null ? 0.4 : 1 }} />);
-    out.push(
-      <Chip key={`pc-${m.id}`} testid="ms-prd-label" mx={mx} title={`PRD · ${words(m)}`} onClick={() => ms.edit(m)} className="border" style={{ background: "var(--surface)", ...at.get(m.id), borderStyle: "dashed", color: msInk(m.code), borderColor: msEdge(m.code), opacity: to != null ? 0.5 : 1 }}>
-        <span className="font-normal text-text2">PRD · </span>
-        {words(m)}
-      </Chip>,
-    );
+    out.push(<div key={`pv-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(msCode(m))}`, opacity: to != null ? 0.4 : 1 }} />);
+    out.push(<Diamond key={`p-${m.id}`} x={mx} y={axisY} code={msCode(m)} title={`${words(m)} (from the PRD ${m.prd!.title})`} testid="ms-prd-diamond" kind={m.kind ?? "delivery"} day={date} onPointerDown={grab(m)} />);
+    // The asked day's chip sits in the first band; its dashed line runs through every band.
+    const y0 = lane?.y0 ?? axisY + 6;
     if (to != null) {
-      out.push(<Diamond key={`pp-${m.id}`} x={to} y={axisY} code={m.code} hollow dashed color="var(--warn)" title={`Asked: ${fullDay(asked!)}`} testid="ms-proposed" />);
-      out.push(<div key={`ppv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: to - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: "1.5px dashed var(--warn)" }} />);
+      out.push(<Diamond key={`pp-${m.id}`} x={to} y={axisY} code={msCode(m)} hollow dashed color="var(--warn)" title={`Asked: ${fullDay(asked!)}`} testid="ms-proposed" />);
+      out.push(<div key={`ppv-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" data-testid="ms-asked-line" style={{ left: to - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: "1.5px dashed var(--warn)" }} />);
       // roadmap-decide: the PRD's owner gets the ask as an action: the chip opens Approve / Decline in place.
       const mine = !live && !!m.pending?.can_decide;
       out.push(
-        <Chip key={`ppc-${m.id}`} testid="ms-asked" mx={to} title={askWords(m, asked!, !!live)} className="border border-warn bg-warn-bg text-warn" onClick={mine ? () => ms.setAsking(ms.asking === m.id ? null : m.id) : undefined} style={{ left: to + 6, top: lane.y0 + 5, ...at.get(`ask-${m.id}`) }}>
+        <Chip key={`ppc-${m.id}`} testid="ms-asked" mx={to} title={askWords(m, asked!, !!live)} className="border border-warn bg-warn-bg text-warn" onClick={mine ? () => ms.setAsking(ms.asking === m.id ? null : m.id) : undefined} style={{ left: to + 6, top: y0 + 5, ...at.get(`ask-${m.id}`) }}>
           {askWords(m, asked!, !!live)}
         </Chip>,
       );
       if (mine && ms.asking === m.id)
         out.push(
-          <span key={`ppd-${m.id}`} role="group" aria-label={`Decide the change to ${words(m)}`} data-testid="ms-asked-decide" className="absolute z-[17] flex gap-1.5 rounded-lg border border-line bg-surface p-1.5 shadow-tip" style={{ left: at.get(`ask-${m.id}`)?.left ?? to + 6, top: lane.y0 + 30 }}>
+          <span key={`ppd-${m.id}`} role="group" aria-label={`Decide the change to ${words(m)}`} data-testid="ms-asked-decide" className="absolute z-[17] flex gap-1.5 rounded-lg border border-line bg-surface p-1.5 shadow-tip" style={{ left: at.get(`ask-${m.id}`)?.left ?? to + 6, top: y0 + 30 }}>
             <Button variant="solid" className="!h-7 !px-2 !text-xs" onClick={() => void ms.decide(m, "accept")}>
               Approve
             </Button>
@@ -667,12 +865,136 @@ export function MsLayer(props: MsLayerProps) {
   // The day chosen (a dashed diamond and line in its goal); the bars it waits on are outlined.
   if (d && !d.prd) {
     const nx = X(d.date);
-    const lane = laneOf(d.goal_id);
     if (!d.id) out.push(<Diamond key="new" x={nx} y={axisY} code={d.code} hollow dashed title="New milestone" testid="ms-new" />);
-    if (lane && !d.id) out.push(<div key="new-l" aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: nx - 0.5, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: "1.5px dashed var(--accent-ink)" }} />);
+    // Its dashed line runs through every band, as a saved one's does.
+    if (!d.id) out.push(<div key="new-l" data-testid="ms-new-line" aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: nx - 0.5, top: axisY + 6, height: height - axisY - 6, borderLeft: "1.5px dashed var(--accent-ink)" }} />);
     for (const id of d.item_ids) {
       const r = rowOf(id);
       if (r) out.push(<div key={`pk-${id}`} data-testid="ms-picked" aria-hidden className="pointer-events-none absolute z-[11]" style={{ left: X(r.start) - 3, top: r.y + 3, width: Math.max(30, X(r.end) - X(r.start) + 6), height: r.h - 6, outline: "2px solid var(--accent)", borderRadius: 8 }} />);
+    }
+  }
+
+  // Every label in one band under the date axis; close ones stack (two rows), then fold into a count.
+  const band = ms.band.length ? msBand(phone) : 0;
+  if (band && props.bandTop != null) {
+    const rows = phone ? 1 : 2;
+    const goalOf = (m: GoalMilestone) => lanes.find((l) => l.key === (m.goal_id ?? "none"));
+    // Each milestone once, by its code (two records of one milestone share it).
+    const list = ms.band;
+    type Placed = { m: GoalMilestone; left: number; w: number; row: number; more: GoalMilestone[] };
+    const placed: Placed[] = [];
+    const last: (Placed | null)[] = Array(rows).fill(null);
+    const MIN = 62;
+    for (const m of list) {
+      const mx = X(m.date!);
+      // tb-mk: room for the kind's icon before the words and the status mark after them.
+      const w = Math.min(textW(ms.joined.get(msCode(m)) ? `${msCode(m)} ${ms.joined.get(msCode(m))!.name}` : words(m)) + 30, phone ? 150 : 230);
+      let l = mx + 6;
+      if (l + MIN > props.width - 4) l = mx - 6 - Math.min(w, MIN + 40);
+      // tb-mk: an empty row first, else the row whose last label began farthest left: it keeps the
+      // most of its words (at 6 months close labels cut each other to "M…" when all took row one).
+      const fits = (p: Placed | null) => !p || p.left + MIN + (p.more.length ? 30 : 0) <= l - 4;
+      const row = last.reduce((b, p, n) => (!fits(p) ? b : b < 0 || (last[b] && (!p || p.left < last[b]!.left)) ? n : b), -1);
+      if (row < 0) {
+        const host = last.reduce((a, b) => (b && (!a || b.left > a.left) ? b : a), null as Placed | null)!;
+        host.more.push(m);
+        continue;
+      }
+      const prev = last[row];
+      if (prev) prev.w = Math.min(prev.w, l - 4 - prev.left - (prev.more.length ? 30 : 0));
+      const p = { m, left: l, w, row, more: [] };
+      placed.push(p);
+      last[row] = p;
+    }
+    for (const p of placed) p.w = Math.min(p.w, props.width - 4 - p.left - (p.more.length ? 30 : 0));
+    out.push(<div key="band" data-testid="ms-band" aria-hidden className="pointer-events-none absolute z-[11] border-b border-line bg-surface2/60" style={{ left, top: props.bandTop, width: props.width - left, height: band }} />);
+    // The joined milestone's longer name (the owner's "Join whenever names match").
+    const bandWords = joinedWordsOf;
+    const tipFor = (m: GoalMilestone) => {
+      // A goal's own target date builds toward that goal, features on the page or not.
+      const g = ms.goals.find((o) => o.id === m.goal_id)?.title ?? goalOf(m)?.title ?? (m.goal_target ? m.name : null) ?? "No goal";
+      return {
+        head: `${bandWords(m)} · ${fullDay(m.date!)}`,
+        also: ms.joined.get(msCode(m))?.also ?? [],
+        goal: `Builds toward ${g}`,
+        prd: m.prd ? `From the PRD ${m.prd.title}` : null,
+      };
+    };
+    for (const p of placed) {
+      const m = p.m;
+      const top = props.bandTop + (phone ? 5 : 4 + p.row * BAND_ROW);
+      const show = () => setBandTip({ id: m.id, left: p.left, top: top + 24 });
+      // A PRD's milestone asked to move (or being dragged) fades where it is, as its diamond does.
+      const asked = m.prd ? ((ms.moving?.id === m.id ? ms.moving.date : null) ?? m.pending?.date ?? null) : null;
+      out.push(
+        <span key={`rb-${m.id}`} data-testid={m.prd ? "ms-prd-label" : "ms-label"} data-day={m.date} data-prd={m.prd ? "" : undefined} role="button" tabIndex={0} aria-label={`${tipFor(m).head}. ${tipFor(m).goal}`} onPointerEnter={show} onFocus={show} onPointerLeave={() => setBandTip(null)} onBlur={() => setBandTip(null)} onClick={() => ms.edit(m)} className="absolute z-[14] flex cursor-pointer items-center gap-1 overflow-hidden rounded-full px-1.5 text-xs leading-5 font-semibold whitespace-nowrap" style={{ left: p.left, top, maxWidth: Math.max(p.w, 40), background: msFill(msCode(m)), color: msInk(msCode(m)), border: `1px solid ${msEdge(msCode(m))}`, opacity: asked && asked !== m.date ? 0.5 : 1 }}>
+          <MkIcon kind={m.kind} size={11} color={msEdge(msCode(m))} />
+          <span className="min-w-0 overflow-hidden text-ellipsis">{bandWords(m)}</span>
+          <span data-testid="ms-status" data-status={m.status} className="flex-none">
+            <MkStatusMark status={m.status ?? "on_track"} size={11} />
+          </span>
+        </span>,
+      );
+      // The milestones folded into "+N": its list on hover, focus or a click, each opening its card.
+      if (p.more.length)
+        out.push(
+          <div key={`rbm-${m.id}`} data-ms-pop data-ms-more onPointerLeave={() => setShut(false)} onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setShut(false)} className="group absolute z-[15]" style={{ left: p.left + Math.max(p.w, 40) + 3, top }}>
+            <button
+              type="button"
+              data-testid="ms-band-more"
+              data-ms-pop-button
+              data-days={p.more.map((o) => o.date).join(",")}
+              aria-label={`${p.more.length} more ${p.more.length === 1 ? "milestone" : "milestones"}: ${p.more.map((o) => `${bandWords(o)} · ${fullDay(o.date!)}`).join(", ")}`}
+              aria-expanded={bandMore === m.id}
+              onClick={() => {
+                setShut(false);
+                setBandMore((o) => (o === m.id ? null : m.id));
+              }}
+              className="block h-5 cursor-pointer rounded-full border border-line-strong bg-surface px-1.5 text-xs leading-[18px] font-semibold text-text hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+            >
+              +{p.more.length}
+            </button>
+            <div className={`absolute top-full left-0 z-40 pt-1 ${bandMore === m.id ? "block" : shut ? "hidden" : "hidden group-focus-within:block group-hover:block"}`}>
+              <ul data-testid="ms-band-list" aria-label="More milestones here" className="min-w-48 rounded-lg border border-line bg-surface py-1 shadow-lg">
+                {p.more.map((o) => (
+                  <li key={o.id}>
+                    <button
+                      type="button"
+                      data-testid="ms-band-entry"
+                      data-prd={o.prd ? "" : undefined}
+                      onClick={() => {
+                        setBandMore(null);
+                        ms.edit(o);
+                      }}
+                      className="block w-full px-3 py-1 text-left text-xs whitespace-nowrap text-text hover:bg-surface2 focus-visible:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+                    >
+                      {bandWords(o)} · {day(o.date!)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>,
+        );
+    }
+    const tm = bandTip && list.find((m) => m.id === bandTip.id);
+    if (bandTip && tm) {
+      const t = tipFor(tm);
+      out.push(
+        <span key="band-tip" data-testid="ms-band-tip" role="tooltip" className="pointer-events-none absolute z-40 flex max-w-80 flex-col rounded bg-tip px-2 py-1 text-xs text-tip-text" style={{ left: Math.min(bandTip.left, props.width - 300), top: bandTip.top }}>
+          <b>{t.head}</b>
+          {t.also.length > 0 && <span data-testid="ms-band-also">Also: {t.also.join(", ")}</span>}
+          <span data-testid="ms-tip-kind">
+            {kindName(tm.kind)}
+            {tm.kind === "handoff" && tm.from_track_name && tm.to_track_name ? ` · ${tm.from_track_name} → ${tm.to_track_name}` : ""} · {MK_STATUS[tm.status ?? "on_track"]}
+          </span>
+          {tm.status_reason && <span data-testid="ms-tip-reason">{tm.status_reason}</span>}
+          {doneLine(tm) && <span data-testid="ms-tip-done">{doneLine(tm)}</span>}
+          {t.prd && <span>{t.prd}</span>}
+          <span>{t.goal}</span>
+          <span>Served by {tm.item_ids.length} {tm.item_ids.length === 1 ? "item" : "items"}</span>
+        </span>,
+      );
     }
   }
 
@@ -680,7 +1002,7 @@ export function MsLayer(props: MsLayerProps) {
     <div
       ref={ref}
       data-testid="ms-layer"
-      className="pointer-events-none absolute inset-0 [&>*]:pointer-events-auto"
+      className="pointer-events-none absolute inset-0 [&>*:not(.pointer-events-none)]:pointer-events-auto"
       onPointerMoveCapture={(e) => {
         const y = e.clientY - (ref.current?.getBoundingClientRect().top ?? 0);
         const lane = lanes.find((l) => y >= l.y0 && y < l.y1);
@@ -727,6 +1049,35 @@ function RuleField({ value, onChange }: { value: string; onChange: (v: string) =
 }
 
 /** milestone-rights: the reasons, as tooltips (the card adds no sentences). */
+/** milestone-rename: a milestone's name with its roadmap-wide code fixed before it (read only for a viewer). */
+function NameField({ code, value, reads, onChange, tip }: { code: string; value: string; reads: boolean; onChange: (v: string) => void; tip?: string }) {
+  return (
+    <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
+      <Field label="Name">
+        <span className="font-semibold" style={{ color: msInk(code) }}>
+          {code}
+        </span>
+        <input aria-label="Name" value={value} onChange={(e) => onChange(e.target.value)} placeholder="What is true by then" className={bare} />
+        {tip && (
+          <InfoTip label="Name" align="end" testId="ms-name-tip">
+            {tip}
+          </InfoTip>
+        )}
+      </Field>
+    </fieldset>
+  );
+}
+
+/** milestone-rename: an open proposal on it: "Proposed · waits for <name>". */
+function Asked({ m }: { m: GoalMilestone }) {
+  if (!m.pending) return null;
+  return (
+    <span data-testid="ms-proposed-state" className="-mt-1 text-xs font-semibold text-warn">
+      Proposed{m.pending.name ? `: ${m.pending.name}` : ""} · waits for {m.pending.asked_of ?? "the owner"}
+    </span>
+  );
+}
+
 const WHO_CHANGES = "Only an owner or the roadmap's decider (with none, its owner) changes its milestones";
 const PROPOSE_WHY = "Goes to the roadmap's decider, who accepts or declines it in Needs a decision";
 
@@ -736,12 +1087,77 @@ const Btn = ({ children, onClick, primary = false, className = "", testid, title
   </button>
 );
 
+/** The kinds to pick from: a listbox, one tab stop; the arrow keys, Home and End move along it
+ * (two columns: Left and Right step, Up and Down skip a row), Enter or Space picks. */
+function KindList({ onPick }: { onPick: (kind: MkKind) => void }) {
+  const [at, setAt] = useState(0);
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const go = (n: number) => {
+    const i = Math.max(0, Math.min(MK_KINDS.length - 1, n));
+    setAt(i);
+    refs.current[i]?.focus();
+  };
+  return (
+    <div
+      role="listbox"
+      aria-label="Kind"
+      className="grid grid-cols-2 gap-1.5"
+      onKeyDown={(e) => {
+        const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 2, ArrowUp: -2 }[e.key];
+        if (step != null) go(at + step);
+        else if (e.key === "Home") go(0);
+        else if (e.key === "End") go(MK_KINDS.length - 1);
+        else return;
+        e.preventDefault();
+      }}
+    >
+      {MK_KINDS.map((k, i) => (
+        <button
+          key={k.kind}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
+          type="button"
+          role="option"
+          aria-selected={i === at}
+          tabIndex={i === at ? 0 : -1}
+          title={k.tip}
+          data-testid="ms-kind-option"
+          data-kind={k.kind}
+          onFocus={() => setAt(i)}
+          onClick={() => onPick(k.kind)}
+          className="flex items-center gap-2 rounded-lg border border-line-strong px-2.5 text-left text-sm leading-9 font-semibold hover:border-accent hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+        >
+          <MkIcon kind={k.kind} size={14} color="var(--accent-ink)" /> {k.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** The milestone's card: in the chart's top corner (a sheet on a phone). */
 export function MsCard() {
   const ms = useMsCtl();
   const [busy, setBusy] = useState(false);
   // milestone-rights: the API's refusal, on the card it came from (the person's input stays).
   const [failed, setFailed] = useState<{ on: string; words: string } | null>(null);
+  // roadmap-milestone-panel-close: Escape closes the card, as it does the Roadmap's other panels;
+  // an Escape a dialog over it, or a "+N" / same-day list, already took is theirs alone.
+  const open = !!ms?.draft;
+  const close = ms?.setDraft;
+  useEffect(() => {
+    if (!open || !close) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const at = e.target as Element | null;
+      const over = at?.closest?.('[role="dialog"], [role="alertdialog"]');
+      if (over && !["ms-card", "ms-prd-card", "ms-kind-picker"].includes(over.getAttribute("data-testid") ?? "")) return;
+      if (at?.closest?.("[data-ms-pop]")) return;
+      close(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, close]);
   if (!ms?.draft) return null;
   const d = ms.draft;
   const on = d.id ?? "new";
@@ -765,6 +1181,14 @@ export function MsCard() {
   const phone = ms.phone;
   const cls = phone ? "fixed right-0 bottom-0 left-0 z-[60] max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-line" : "fixed top-4 right-6 z-[60] w-[360px] rounded-xl border border-line";
   const goalTitle = ms.goals.find((g) => g.id === d.goal_id)?.title ?? "No goal";
+  // Join whenever names match (the owner, Nov 9): the joined milestone's other names, each once.
+  const joined = d.id ? ms.joined.get(d.code) : undefined;
+  const others = joined ? [`${d.code} ${joined.name}`, ...joined.also].filter((n) => n.toLowerCase() !== `${d.code} ${d.name.trim()}`.toLowerCase()) : [];
+  const also = others.length > 0 && (
+    <span data-testid="ms-card-also" className="-mt-1.5 text-xs text-text2">
+      Also: {others.join(", ")}
+    </span>
+  );
   if (d.prd) {
     const m = ms.list.find((x) => x.id === d.id)!;
     return (
@@ -772,10 +1196,11 @@ export function MsCard() {
         {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
         <div className="flex items-center justify-between">
           <h2 className="text-[15px] font-semibold">
-            <span style={{ color: msInk(m.code) }}>{m.code}</span> {m.name}
+            <span style={{ color: msInk(msCode(m)) }}>{msCode(m)}</span> {m.name}
           </h2>
           <span className="rounded-full bg-na-bg px-2 text-xs leading-5 text-na">From the PRD</span>
         </div>
+        {also}
         <p className="text-sm text-text2">
           From the PRD{" "}
           <a href={`/simple/one-pagers/${m.prd!.slug}`} className="font-semibold text-accent-ink underline">
@@ -783,6 +1208,8 @@ export function MsCard() {
           </a>
           {m.prd_owner && <> · owned by {m.prd_owner}</>}
         </p>
+        <NameField code={msCode(m)} value={d.name} reads={!m.can_change} onChange={(name) => set({ name })} />
+        <Asked m={m} />
         <DateField value={d.date} onChange={(date) => set({ date })} />
         <RuleField value={d.counts_when} onChange={(counts_when) => set({ counts_when })} />
         <p className="text-xs text-text2">A change here goes to {m.prd_owner ?? "the PRD's owner"} as a change to the PRD. It shows dashed until they say yes.</p>
@@ -804,6 +1231,89 @@ export function MsCard() {
   const reads = rights === "read";
   const head = !d.id ? (d.second ? "Next milestone" : "New milestone") : reads ? `${d.code} ${d.name}` : `Edit ${d.code}`;
   const late = (id: string) => (ms.items.get(id)?.end.date ?? "") > d.date;
+  // milestone-rename: a goal's own milestone: its name, in place (its date and measure are the goal's).
+  if (own?.goal_target)
+    return (
+      <div data-testid="ms-card" data-rights={rights} role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
+        {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
+        <div className="flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold">{head}</h2>
+          <span className="text-xs text-text2">{`${goalTitle} · ${day(d.date)}`}</span>
+        </div>
+        <NameField code={d.code} value={d.name} reads={reads} onChange={(name) => set({ name })} tip="The goal keeps its own name; its date and measure change on the goal." />
+        <Asked m={own} />
+        {error}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {rights === "change" && (
+            <Btn primary testid="ms-save" onClick={() => run(() => ms.save(false))}>
+              Save
+            </Btn>
+          )}
+          {rights === "propose" && (
+            <Btn primary testid="ms-propose" title={PROPOSE_WHY} onClick={() => run(() => ms.propose(false))}>
+              Propose
+            </Btn>
+          )}
+          <button type="button" className="px-1 text-sm leading-8 text-text2" onClick={() => ms.setDraft(null)}>
+            {reads ? "Close" : "Cancel"}
+          </button>
+        </div>
+      </div>
+    );
+  // tb-mk: "+ Milestone" asks for the kind first.
+  if (!d.id && !d.k)
+    return (
+      <div data-testid="ms-kind-picker" role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
+        {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
+        <div className="flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold">{head}</h2>
+          <span className="text-xs text-text2">{fullDay(d.date)}</span>
+        </div>
+        <span className="flex items-center gap-1 text-xs font-semibold text-text2">
+          Kind
+          {/* Each kind's meaning, on a tap as well as a hover. */}
+          <InfoTip label="Kind" align="start" side="bottom" testId="ms-kind-tip">
+            <span className="flex flex-col gap-1" data-testid="ms-kind-tips">
+              {MK_KINDS.map((k) => (
+                <span key={k.kind}>
+                  <b>{k.name}</b>: {k.tip}
+                </span>
+              ))}
+            </span>
+          </InfoTip>
+        </span>
+        <KindList onPick={(kind) => set({ k: { kind, ...NO_KIND, from_track_id: kind === "handoff" ? (ms.tracks[0]?.id ?? null) : null, to_track_id: kind === "handoff" ? (ms.tracks[1]?.id ?? null) : null } })} />
+        <div className="flex gap-2 pt-1">
+          <button type="button" className="px-1 text-sm leading-8 text-text2" onClick={() => ms.setDraft(null)}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  const k = d.k;
+  const setK = (p: Partial<KindFields>) => set({ k: { ...(k ?? { kind: "delivery", ...NO_KIND }), ...p } });
+  const num = (v: string) => (v.trim() === "" || Number.isNaN(Number(v)) ? null : Number(v));
+  const text = (label: string, value: string | number | null | undefined, on: (v: string) => void, ph = "") => (
+    <Field label={label}>
+      <input aria-label={label} value={value ?? ""} placeholder={ph} onChange={(e) => on(e.target.value)} className={bare} />
+    </Field>
+  );
+  const trackSel = (label: string, value: string | null, on: (t: string | null) => void) => (
+    <Field label={label}>
+      <select aria-label={label} value={value ?? ""} onChange={(e) => on(e.target.value || null)} className={bare}>
+        <option value="">No track</option>
+        {ms.tracks.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.title}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+  // A measured goal's milestones a sub-goal may sit under (a goal's own target is not one).
+  const parents = ms.list.filter((m) => m.kind === "goal" && !m.goal_target && m.id !== d.id);
+  const subs = own ? ms.list.filter((m) => m.sub_goal_of_id === own.id) : [];
+  const status = k?.status_set ?? own?.status ?? "on_track";
   return (
     <div data-testid="ms-card" data-rights={rights} role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
       {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
@@ -811,6 +1321,7 @@ export function MsCard() {
         <h2 className="text-[15px] font-semibold">{head}</h2>
         <span className="text-xs text-text2">{`${goalTitle} · ${day(d.date)}`}</span>
       </div>
+      {also}
       <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
         <Field label="Name">
           <span className="font-semibold" style={{ color: msInk(d.code) }}>
@@ -818,10 +1329,62 @@ export function MsCard() {
           </span>
           <input aria-label="Name" autoFocus={!phone && !reads} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="What is true by then" className={bare} />
         </Field>
-        <div className="grid grid-cols-2 gap-2">
+        {own && <Asked m={own} />}
+        {k && (
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Kind" testid="ms-kind">
+              <MkIcon kind={k.kind} size={13} color="var(--accent-ink)" />
+              <select aria-label="Kind" value={k.kind} onChange={(e) => setK({ kind: e.target.value as MkKind })} className={bare}>
+                {MK_KINDS.map((o) => (
+                  <option key={o.kind} value={o.kind}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Status" testid="ms-status-field">
+              <MkStatusMark status={status} size={12} />
+              <select aria-label="Status" value={k.status_set ?? ""} onChange={(e) => setK({ status_set: (e.target.value || null) as MkStatus | null })} className={bare}>
+                <option value="">Oracle decides</option>
+                {(Object.keys(MK_STATUS) as MkStatus[]).map((o) => (
+                  <option key={o} value={o}>
+                    {MK_STATUS[o]}
+                  </option>
+                ))}
+              </select>
+              {/* Oracle's reason for the status it decided, on a tap or focus as well as a hover. */}
+              {!k.status_set && own?.status_reason && (
+                <InfoTip label="Oracle's reason" align="end" side="bottom" testId="ms-status-why">
+                  {own.status_reason}
+                </InfoTip>
+              )}
+            </Field>
+          </div>
+        )}
+        {k?.status_set && (k.status_set === "at_risk" || k.status_set === "missed") && text("Why", k.status_reason, (v) => setK({ status_reason: v || null }))}
+        {k?.kind === "handoff" && (
+          <div className="grid grid-cols-2 gap-2">
+            {trackSel("From track", k.from_track_id, (from_track_id) => setK({ from_track_id }))}
+            {trackSel("To track", k.to_track_id, (to_track_id) => setK({ to_track_id }))}
+          </div>
+        )}
+        {/* tb-mk (the pick): Date and Track on one row (a hand-off's tracks are its From and To above). */}
+        <div className="grid grid-cols-2 gap-2" data-testid="ms-date-row">
           <DateField value={d.date} onChange={(date) => set({ date })} />
-          <Field label="Goal">
-            <select aria-label="Goal" value={d.goal_id ?? ""} onChange={(e) => set({ goal_id: e.target.value || null })} className={bare}>
+          {k?.kind !== "handoff" && trackSel("Track", k?.home_track_id ?? null, (home_track_id) => setK({ home_track_id }))}
+        </div>
+        {k && isMeasured(k.kind) && (
+          <div className="grid grid-cols-[1fr_72px_72px] gap-2" data-testid="ms-measure">
+            {text("Measure", k.measure, (v) => setK({ measure: v || null }), "What is counted")}
+            {text("Start", k.baseline, (v) => setK({ baseline: num(v) }))}
+            {text("Target", k.target, (v) => setK({ target: num(v) }))}
+          </div>
+        )}
+        {k && !isMeasured(k.kind) && text("Done when", k.done_when_line, (v) => setK({ done_when_line: v }), "What is true then")}
+        {/* tb-mk (the pick): Builds toward and, for a sub-goal, Sub-goal of beside it. */}
+        <div className={k?.kind === "sub_goal" ? "grid grid-cols-2 gap-2" : ""} data-testid="ms-toward-row">
+          <Field label="Builds toward">
+            <select aria-label="Builds toward" value={d.goal_id ?? ""} onChange={(e) => set({ goal_id: e.target.value || null })} className={bare}>
               {ms.goals.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.title}
@@ -829,11 +1392,42 @@ export function MsCard() {
               ))}
             </select>
           </Field>
+          {k?.kind === "sub_goal" && (
+            <Field label="Sub-goal of">
+              <select aria-label="Sub-goal of" value={k.sub_goal_of_id ?? ""} onChange={(e) => setK({ sub_goal_of_id: e.target.value || null })} className={bare}>
+                <option value="">None</option>
+                {parents.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {words(g)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
         </div>
+        {k?.kind === "goal" && subs.length > 0 && (
+          <div className="flex flex-col gap-1" data-testid="ms-subs">
+            <span className="text-xs font-semibold text-text2">Sub-goals</span>
+            <div className="flex flex-wrap gap-1.5">
+              {subs.map((sm) => (
+                <span key={sm.id} title={sm.date ? fullDay(sm.date) : undefined} className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-surface2 px-2 text-xs leading-6">
+                  <MkIcon kind="sub_goal" size={10} color={msEdge(msCode(sm))} /> {words(sm)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </fieldset>
       <div className="flex flex-col gap-1" data-testid="ms-waits-on">
-        <span className="text-xs font-semibold text-text2">
-          Items it waits on {!reads && <span className="font-normal">· tap bars on the chart to add</span>}
+        <span className="flex items-center gap-1 text-xs font-semibold text-text2">
+          Work that serves it
+          {/* tb-mk (owner Nov 10): the hint is visible text, the owner's picked copy (data-owner-copy). */}
+          {!reads && " "}
+          {!reads && (
+            <span className="font-normal" data-owner-copy data-testid="ms-waits-hint">
+              · tap bars on the chart to add
+            </span>
+          )}
         </span>
         <div className="flex flex-wrap gap-1.5">
           {d.item_ids.map((id) => {
@@ -859,9 +1453,11 @@ export function MsCard() {
           {d.item_ids.length === 0 && <span className="text-xs text-text2">None yet</span>}
         </div>
       </div>
-      <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
-        <RuleField value={d.counts_when} onChange={(counts_when) => set({ counts_when })} />
-      </fieldset>
+      {(!k || isMeasured(k.kind)) && (
+        <fieldset disabled={reads} title={reads ? WHO_CHANGES : undefined} className="contents">
+          <RuleField value={d.counts_when} onChange={(counts_when) => set({ counts_when })} />
+        </fieldset>
+      )}
       {error}
       <div className="flex flex-wrap items-center gap-2 pt-1">
         {rights === "change" && (
@@ -947,9 +1543,9 @@ export function MsBoardRow({ horizon, windows }: { horizon: string; windows: Roa
           data-testid="ms-board-chip"
           onClick={() => ms.edit(m)}
           className="inline-flex items-center gap-1.5 rounded-full border px-2 text-xs leading-6 font-semibold"
-          style={{ background: m.prd ? "var(--surface)" : msFill(m.code), color: msInk(m.code), borderColor: msEdge(m.code), borderStyle: m.prd ? "dashed" : "solid" }}
+          style={{ background: m.prd ? "var(--surface)" : msFill(msCode(m)), color: msInk(msCode(m)), borderColor: msEdge(msCode(m)), borderStyle: m.prd ? "dashed" : "solid" }}
         >
-          <i aria-hidden className="inline-block h-2 w-2 rotate-45" style={{ background: m.prd ? "var(--surface)" : msEdge(m.code), border: m.prd ? `1px dashed ${msEdge(m.code)}` : undefined }} />
+          <i aria-hidden className="inline-block h-2 w-2 rotate-45" style={{ background: m.prd ? "var(--surface)" : msEdge(msCode(m)), border: m.prd ? `1px dashed ${msEdge(msCode(m))}` : undefined }} />
           {m.prd ? "PRD · " : ""}
           {words(m)} · {day(m.date!)}
         </button>

@@ -49,8 +49,9 @@ for (const width of [1024, 1440]) {
         await page.setViewportSize({ width, height: 900 });
         await open(page, scheme, role);
         await expect(page.getByTestId("ld-periods")).toBeVisible();
-        await expect(page.getByTestId("ld-week-mark").filter({ hasText: "M2 50 sign-ups per rep" })).toBeVisible();
-        await expect(page.getByTestId("ld-week-mark").filter({ hasText: "M5 10 paid conversions" })).toBeVisible();
+        // roadmap-milestone-codes: a ladder milestone the roadmap gives no code reads by its name alone.
+        await expect(page.getByTestId("ld-week-mark").filter({ hasText: /^50 sign-ups per rep/ })).toBeVisible();
+        await expect(page.getByTestId("ld-week-mark").filter({ hasText: /^10 paid conversions/ })).toBeVisible();
         const { n, out } = await clashes(page);
         expect(n).toBeGreaterThan(2);
         expect(out).toEqual([]);
@@ -80,7 +81,7 @@ for (const width of [1024, 1440]) {
 test("1024 light commenter: the week strip's labels never overlap", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
   await open(page, "light", "commenter");
-  await expect(page.getByTestId("ld-week-mark").filter({ hasText: "M5 10 paid conversions" })).toBeVisible();
+  await expect(page.getByTestId("ld-week-mark").filter({ hasText: /^10 paid conversions/ })).toBeVisible();
   expect((await clashes(page)).out).toEqual([]);
 });
 

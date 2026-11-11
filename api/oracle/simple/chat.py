@@ -49,6 +49,7 @@ from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionP
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
 from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem
+from oracle.roadmap.tracks import on_prd as tracks_on_prd
 from oracle.simple import (
     agenda,
     card_order,
@@ -295,10 +296,10 @@ def _draft_entry(
 ) -> service.Entry:
     """A draft-roadmap item as an entry: it has no roadmap, so its PRD stands in (its
     decider decides it); ``effort``: its feature's, in weeks (service.efforts)."""
-    window = read.windows.get(row.horizon, read.windows["now"])
+    resolved, h = dates.resolve_by_dates(service._candidates(row, [], {}, {}), read.windows, effort)
     return service.Entry(
-        row=row, roadmap=prd, prd=prd, track=None, goal=None, window=window,
-        resolved=dates.resolve(service._candidates(row, [], {}, {}), window, effort),
+        row=row, roadmap=prd, prd=prd, track=None, goal=None, window=read.windows[h],
+        resolved=resolved, horizon=h,
         status=service._status(row, [], set()), milestone=service._milestone(row, None, {}),
     )  # fmt: skip
 
@@ -423,6 +424,8 @@ class Ctx:
         self.plan_span: tuple[date, date] | None = None
         # roadmap-talk: the item whose talk this is ("it"), the company's goals.
         self.item: service.Entry | None = None
+        # item-talk-reads: the item's Ground Truth feature (None: it has none).
+        self.item_feature: Any = None
         self.talk_goals: list[Any] = []
         # meet-chat-right-prd: a meeting's chat reads only the meeting's PRD.
         self.prd: MeetingPrd | None = None
@@ -439,7 +442,7 @@ class Ctx:
         if self.prd is not None:
             # The plan's milestones of the meeting's PRD only (never another PRD's M1).
             tracks = set(await self.db.scalars(
-                select(ProductTrack.id).where(ProductTrack.prd_document_id == self.prd.document.id)
+                select(ProductTrack.id).where(tracks_on_prd(self.prd.document.id))
             ))  # fmt: skip
             self.read.milestones = [m for m in self.read.milestones if m.track_id in tracks]
         from oracle.simple import plan
@@ -636,7 +639,7 @@ def _b_horizon(c: Ctx, a: dict[str, Any]) -> Built:
     if h not in ("now", "next", "later"):
         raise ValueError("horizon: now, next or later")
     return _kw(f"Move {e.row.title} to {h.capitalize()}", "change_horizon", e,
-               {"item_id": str(e.row.id)}, {"horizon": e.row.horizon}, {"horizon": h},
+               {"item_id": str(e.row.id)}, {"horizon": e.horizon}, {"horizon": h},
                {"kind": "horizon", "item_id": str(e.row.id), "horizon": h})  # fmt: skip
 
 
@@ -916,7 +919,7 @@ def parse(c: Ctx, text: str) -> Reply:
         e = asked(m[1])
         if isinstance(e, Reply):
             return e
-        return Reply("answer", f"{e.row.title} is {e.status.replace('_', ' ')} ({e.row.horizon}).")
+        return Reply("answer", f"{e.row.title} is {e.status.replace('_', ' ')} ({e.horizon}).")
 
     asks = _phrase(c, t) or _actions().phrase(t) or _talk().phrase(c, t)
     if asks is None:
@@ -1585,7 +1588,7 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
             "estimated": r_.undated, "milestone": (e.milestone.name if e.milestone else None),
             "owner": e.owner_name, "decider": _or([names[i] for i in deciders if i in names])
             if deciders else None, "track": e.track.title if e.track else None,
-            "horizon": e.row.horizon, "cut": e.row.cut,
+            "horizon": e.horizon, "cut": e.row.cut,
         })  # fmt: skip
     return {
         "line": read.line,

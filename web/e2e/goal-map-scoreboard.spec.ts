@@ -89,13 +89,12 @@ for (const scheme of ["light", "dark"] as const) {
       const unplaced = page.getByTestId("gm-flag-unplaced");
       const before = Number((await unplaced.textContent())?.split(" ")[0]);
       expect(before).toBeGreaterThan(0);
-      // goal-map-editing: the badge leads to the features on no milestone, highlighted on the ladder.
+      // goal-map-editing: the badge opens the list of features on no milestone, each code then name.
       await unplaced.click();
-      const group = page.locator("[data-ld-free][data-flash]").first();
-      await expect(group).toBeVisible();
-      const first = group.getByTestId("ld-feature").first();
+      const first = page.getByTestId("gm-flag-list").getByTestId("gm-unplaced").first().getByRole("button").first();
       const code = (await first.locator(".simple-code").count()) ? ((await first.locator(".simple-code").first().textContent()) ?? "") : "";
-      const name = (await first.getAttribute("aria-label"))!.slice(code ? code.length + 1 : 0);
+      const name = ((await first.textContent()) ?? "").slice(code.length).trim();
+      await page.getByTestId("gm-flag-list").getByRole("button", { name: "Close" }).click();
       // Placed from the gap's own drawer, found by its name.
       await page.getByTestId("gm-flag-gaps").click();
       await page.getByTestId("gm-flag-list").getByTestId("gm-place").first().click();

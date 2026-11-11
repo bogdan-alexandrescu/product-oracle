@@ -63,12 +63,12 @@ for (const [where, size] of [
 
     test(`qa4-1 / 10: Now / Next / Later groups by the same goal lanes as the Timeline; a card per goal (${where})`, async ({ page }) => {
       await open(page, { scenario: "simple-plan-lanes", url: "/simple/roadmap?roadmap=onboarding-roadmap" });
-      // A desktop's Timeline draws a lane per goal; a phone's Timeline is a list by quarter, so
-      // a phone reads the goal lanes on the Gantt.
-      if (isPhone(page)) await page.getByTestId("format-gantt").click();
-      const laneTitles = isPhone(page)
-        ? await page.getByTestId("chart-group").evaluateAll((gs) => gs.map((g) => g.querySelector("span[title]")?.getAttribute("title") ?? ""))
-        : await page.getByTestId("timeline-lane").evaluateAll((ls) => ls.map((l) => (l.textContent ?? "").replace(/\s*· \d+ items?$/, "").trim()));
+      // tb-mk: the Timeline's bands are tracks, so the goal lanes are read on the Gantt's Group by Goal.
+      await page.getByTestId("format-gantt").click();
+      await page.getByTestId("group-goal").click();
+      await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByTestId("chart-group").first()).toBeVisible();
+      const laneTitles = await page.getByTestId("chart-group").evaluateAll((gs) => gs.map((g) => g.querySelector("span[title]")?.getAttribute("title") ?? ""));
       // PM-owned work has its own lane but is no goal.
       const goals = laneTitles.filter((t) => !["No goal", "Below the line", "PM-owned"].includes(t));
       expect(goals.length).toBeGreaterThan(1);
@@ -101,9 +101,11 @@ for (const [where, size] of [
     test(`qa4-20 / 21 / 22 / 32: the board's words: years, counts, suggested features, names only (${where})`, async ({ page }) => {
       await open(page);
       await page.getByTestId("format-board").click();
-      await expect(column(page, "now").getByTestId("column-window")).toHaveText("Oct 1 – Dec 31, 2026");
-      // roadmap-edit-fixes round 1: F-03 Health log is a live, planned Later item on its PRD's roadmap.
-    await expect(column(page, "later").getByTestId("column-count")).toHaveText("2 items, 1 cut");
+      // board-quarters (owner, Nov 10): Now is this quarter, read month first.
+      await expect(column(page, "now").getByTestId("column-window")).toHaveText("· Oct 1 – Dec 31");
+      // roadmap-edit-fixes round 1: F-03 Health log is a live, planned Later item on its PRD's roadmap;
+      // board-quarters: every undated item sits in Later too.
+      await expect(column(page, "later").getByTestId("column-count")).toHaveText("17 items, 1 cut");
       const sugg = page.getByTestId("goal-suggestions-open").first();
       if (await sugg.count()) await expect(sugg).toHaveText(/^✦ \d+ suggested features?$/);
       for (const t of await page.getByTestId("board-looks-like").allTextContents()) expect(t).not.toMatch(/\b[FD]-\d/);
@@ -192,8 +194,9 @@ test.describe("desktop only", () => {
     await open(page);
     const welcome = page.locator('[data-testid="timeline-row"][data-item="setup-video"] [data-testid="timeline-bar"]').first();
     // walkb-roadmap (e4cdf478): an estimated item starts after its dependency (Welcome tour),
-    // keeping its length, so Welcome video now runs Sep 15, 2027 to Jan 6, 2029.
-    await expect(welcome).toHaveAttribute("aria-label", /^Welcome video, Sep 15, 2027 – Jan 6, 2029(\. Arrows .*)?$/);
+    // keeping its length (board-quarters: Later's window, from Apr 1, 2027), so Welcome video
+    // now runs Sep 15, 2027 to Apr 7, 2029.
+    await expect(welcome).toHaveAttribute("aria-label", /^Welcome video, Sep 15, 2027 – Apr 7, 2029(\. Arrows .*)?$/);
     await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("return-place").first()).toHaveText("1st to return");
   });

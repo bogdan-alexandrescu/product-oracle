@@ -3,8 +3,11 @@
 // state has its own look with the key on top (QR2 A), broken links sit in a panel above the
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
-import { MsLayer, type MsLane, type MsRow } from "./_milestones";
+import { MsLayer, msCode, useMsBand, useMsCtl, type MsLane, type MsRow } from "./_milestones";
+import { kindName, MK_STATUS, MkIcon, MkLegend, MkStatusMark } from "./_mk";
+import { TrackHead } from "./_trackbands";
 import {
+  Fragment,
   memo,
   useContext,
   useEffect,
@@ -36,7 +39,6 @@ import {
   mergedName,
   ms,
   partsTree,
-  planGoal,
   quarterValue,
   quarters,
   shortDay,
@@ -46,7 +48,8 @@ import {
   type Roadmap,
   whereAttr,
 } from "./_lib";
-import { DRAG_PX, grabAt, LONG_PRESS_MS, planned } from "./_timeline";
+import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from "./_timeline";
+import { joinedNames, joinedWords } from "@/lib/milestone-code";
 
 type Zoom = "3m" | "6m" | "1y" | "all";
 /** Days in sight at each zoom (All fits the whole plan). */
@@ -437,7 +440,10 @@ export function ConflictPanel({
 
 /** A desktop's chart: one row per item, days to scale, zoomed to three months from just before today. */
 function DayChart(props: TimelineProps) {
+  const msCtl = useMsCtl();
   const { data, phone, openKey, onOpen } = props;
+  // Join whenever names match (the owner, Nov 9): a track milestone reads the joined milestone's longer name.
+  const joined = joinedNames(data.goal_milestones ?? [], data.milestones ?? []);
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
   const rows = useMemo(() => rowsOf(data), [data]);
@@ -537,14 +543,25 @@ function DayChart(props: TimelineProps) {
   // left edge, till all of it would be gone; then the label goes too. Re-review (Nov 5): no name
   // is ever lost. A label that would meet the one before folds into that one's "+N" chip, right
   // after its label; a label ends short of the next (its words cut with "…", whole in its tip).
+  // tb-mk: the Milestones band's diamonds (and a same-day count on a corner) sit on this row too:
+  // a label never lies under one; it steps past any it would cover, and ends short of the next.
+  const gems = (msCtl?.list ?? [])
+    .flatMap((m) => (m.date && m.date >= t0 && m.date <= t1 ? [x(m.date)] : []))
+    .sort((a, b) => a - b);
+  const clear = (left: number) => {
+    let l = left;
+    for (const g of gems) if (g + 15 > l + 4 && g - 12 < l + 4 + 56) l = g + 12;
+    return l;
+  };
   const marks = (data.milestones ?? [])
     .filter((m) => m.date && m.status !== "dropped" && m.date >= t0 && m.date <= t1)
     .sort((a, b) => (a.date as string).localeCompare(b.date as string))
     .map((m) => {
       const at = x(m.date as string);
-      const words = `◆ ${m.name} · ${shortDay(m.date as string)}`;
-      const left = fit ? at : Math.max(at, sl);
-      return { m, at, words, left, gone: !fit && at + 26 + words.length * 7 < sl };
+      const words = `◆ ${joinedWords(m, joined)} · ${shortDay(m.date as string)}`;
+      const left = clear(fit ? at : Math.max(at, sl));
+      const next = gems.find((g) => g - 12 >= left + 4);
+      return { m, at, words, left, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
     });
   const msGroups: { head: (typeof marks)[number]; more: (typeof marks)[number][]; room: number }[] = [];
   for (const k of marks) {
@@ -553,8 +570,8 @@ function DayChart(props: TimelineProps) {
     const room = g ? k.left - 6 - g.head.left - (g.more.length ? MS_CHIP_W + 2 : 0) : Infinity;
     if (g && room < 56) g.more.push(k);
     else {
-      if (g) g.room = room;
-      msGroups.push({ head: k, more: [], room: Infinity });
+      if (g) g.room = Math.min(room, g.head.gems);
+      msGroups.push({ head: k, more: [], room: k.gems });
     }
   }
   const msById = new Map(marks.map((k) => [k.m.id, k]));
@@ -604,8 +621,15 @@ function DayChart(props: TimelineProps) {
     setMsTip(null);
   };
   useEffect(() => () => cancelAnimationFrame(tipFrame.current), []);
+  // roadmap-milestone-codes: the milestone band's row under the date axis.
+  const msBandH = useMsBand(phone);
+  // The other names of the joined milestone, each once ("Also: M1 Measured").
+  const alsoOf = (m: { roadmap_code?: string | null }) => {
+    const a = m.roadmap_code ? joined.get(m.roadmap_code)?.also : undefined;
+    return a?.length ? `Also: ${a.join(", ")}` : null;
+  };
   const msWords = (m: (typeof marks)[number]["m"]) =>
-    `${m.name}, ${fullDay(m.date as string)}${m.done_when.length ? ` · counts when ${m.done_when.join("; ")}` : ""}`;
+    `${joinedWords(m, joined)}, ${fullDay(m.date as string)}${m.done_when.length ? ` · counts when ${m.done_when.join("; ")}` : ""}`;
   // A tip or a card stays inside the chart's view, right of the names column.
   const inView = (l: number, width: number) => Math.max(labelW + sl + 6, Math.min(l, sl + w - width - 6));
   const openMs = (id: string, from: HTMLElement | null) => {
@@ -829,6 +853,8 @@ function DayChart(props: TimelineProps) {
         ref={box}
         data-testid="timeline-scroll"
         onScroll={(e) => setSl(e.currentTarget.scrollLeft)}
+        // A bar brought into sight (Tab to it, a scroll to it) clears the sticky names column, never under it.
+        style={{ scrollPaddingLeft: labelW }}
         className="relative overflow-x-auto"
       >
         <div className="relative" style={{ width: labelW + trackW }}>
@@ -872,6 +898,18 @@ function DayChart(props: TimelineProps) {
               ))}
             </div>
           </div>
+          {msBandH > 0 && (
+            <div className="flex" style={{ height: msBandH }}>
+              <div className="sticky left-0 z-20 flex flex-none items-center border-r border-b border-line bg-surface px-3 text-xs font-semibold text-text2" style={{ width: labelW }}>
+                Milestones
+                <span className="ml-1.5 font-normal">
+                  <InfoTip label="the milestone marks" align="start" side="bottom" testId="ms-legend-tip">
+                    <MkLegend />
+                  </InfoTip>
+                </span>
+              </div>
+            </div>
+          )}
           <div
             className="pointer-events-none absolute top-11 bottom-0 z-10"
             style={{ left: labelW + xt, width: 2, background: TODAY }}
@@ -942,7 +980,7 @@ function DayChart(props: TimelineProps) {
                   <button
                     type="button"
                     data-testid="timeline-milestone-more"
-                    aria-label={`${more.length} more ${more.length === 1 ? "milestone" : "milestones"}: ${more.map((k) => k.m.name).join(", ")}`}
+                    aria-label={`${more.length} more ${more.length === 1 ? "milestone" : "milestones"}: ${more.map((k) => joinedWords(k.m, joined)).join(", ")}`}
                     aria-expanded={msList === m.id}
                     onClick={() => setMsList((l) => (l === m.id ? null : m.id))}
                     className="block cursor-pointer rounded-full border border-line bg-surface px-1.5 text-xs leading-4 font-semibold text-text2 hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
@@ -985,6 +1023,7 @@ function DayChart(props: TimelineProps) {
               style={{ left: inView(msTip.left, 240), top: msTip.top }}
             >
               {msWords(msById.get(msTip.id)!.m)}
+              {alsoOf(msById.get(msTip.id)!.m) && <span className="block">{alsoOf(msById.get(msTip.id)!.m)}</span>}
             </span>
           )}
           {msCard &&
@@ -998,12 +1037,12 @@ function DayChart(props: TimelineProps) {
                   tabIndex={-1}
                   data-testid="timeline-milestone-card"
                   role="dialog"
-                  aria-label={`${m.name}, ${fullDay(m.date as string)}`}
+                  aria-label={`${joinedWords(m, joined)}, ${fullDay(m.date as string)}`}
                   className="absolute top-12 z-40 flex w-72 flex-col gap-2 rounded-xl border border-line bg-surface p-3 text-sm shadow-xl outline-none"
                   style={{ left: inView(labelW + at + 4, 288) }}
                 >
                   <div className="flex items-start gap-2">
-                    <span className="min-w-0 flex-1 font-semibold text-text">◆ {m.name}</span>
+                    <span className="min-w-0 flex-1 font-semibold text-text">◆ {joinedWords(m, joined)}</span>
                     <button
                       type="button"
                       aria-label="Close"
@@ -1014,6 +1053,7 @@ function DayChart(props: TimelineProps) {
                     </button>
                   </div>
                   <span className="text-text2">{fullDay(m.date as string)}</span>
+                  {alsoOf(m) && <span data-testid="timeline-milestone-also" className="text-text2">{alsoOf(m)}</span>}
                   {m.done_when.length > 0 && <span className="text-text">Counts when {m.done_when.join("; ")}</span>}
                   {gates.length > 0 && (
                     <div className="flex flex-col gap-1">
@@ -1082,15 +1122,29 @@ function DayChart(props: TimelineProps) {
                 <div
                   key={`l-${r.key}`}
                   data-testid="timeline-lane"
-                  className="pointer-events-none relative z-[11] flex h-8 items-end border-b border-line bg-surface2/70"
+                  className="pointer-events-none relative z-[25] flex h-8 items-end border-b border-line bg-surface2/70 focus-within:z-[30] hover:z-[30]"
                 >
+                  {data.group === "track" && r.key !== "below" && r.key !== "none" ? (
+                    // tb-mk: a quick add dropped on a track band's header lands on that track.
+                    <div
+                      data-add-where={props.canChange && (data.tracks ?? []).some((t) => t.id === r.key) ? whereAttr("track", r.key) : undefined}
+                      data-add-label={r.title}
+                      className="pointer-events-auto sticky left-0 px-3 pb-1 text-sm whitespace-nowrap"
+                    >
+                      <TrackHead data={data} laneKey={r.key} title={r.title} />
+                    </div>
+                  ) : (
                   <div className="sticky left-0 px-3 pb-1 text-sm font-semibold whitespace-nowrap">
                     {data.group === "goal" && r.key !== "none" && r.key !== "below" && <GoalNum n={numbers.get(r.key) ?? numbers.get(r.title)} />}
                     {r.title}{" "}
-                    <span className="font-normal text-text2">
-                      · {r.count} {r.count === 1 ? "item" : "items"}
-                    </span>
+                    {/* tb-mk: "No track" reads with no count, as the track bands' headers. */}
+                    {!(data.group === "track" && r.key === "none") && (
+                      <span className="font-normal text-text2">
+                        · {r.count} {r.count === 1 ? "item" : "items"}
+                      </span>
+                    )}
                   </div>
+                  )}
                 </div>
               );
             const i = r.item;
@@ -1140,7 +1194,7 @@ function DayChart(props: TimelineProps) {
 
 /** build-milestones-on-roadmap: each row's place, for the milestone layer over the Timeline. */
 function TimelineMilestones({ rows, moved, x, labelW, trackW, phone, span, keepOff }: { rows: Row[]; moved: Record<string, [string, string]>; x: (d: string) => number; labelW: number; trackW: number; phone: boolean; span: [number, number]; keepOff: [number, number][] }) {
-  let y = 44;
+  let y = 44 + useMsBand(phone);
   const out: MsRow[] = [];
   const lanes: MsLane[] = [];
   for (const r of rows) {
@@ -1154,7 +1208,7 @@ function TimelineMilestones({ rows, moved, x, labelW, trackW, phone, span, keepO
     y += ROW_H;
     if (lanes.length) lanes[lanes.length - 1].y1 = y;
   }
-  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} span={span} keepOff={keepOff} />;
+  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} span={span} keepOff={keepOff} bandTop={44} />;
 }
 
 const NO_WARN: string[] = [];
@@ -1391,10 +1445,53 @@ const TimelineRow = memo(function TimelineRow({
   );
 });
 
+/** roadmap-milestone-codes: on a phone, the quarter's milestones across the roadmap, one line each, by date. */
+function QuarterMilestones({ from, to }: { from: string; to: string }) {
+  const ms = useMsCtl();
+  const list = (ms?.band ?? []).filter((m) => from <= m.date! && m.date! <= to);
+  if (!list.length) return null;
+  return (
+    <ul data-testid="ms-quarter" className="border-b border-line/60 bg-surface2/60 px-3 py-1.5 text-xs">
+      {list.map((m) => (
+        // tb-mk: its kind's icon first and its status mark after its name, as the band's label; the reason in its tap text.
+        <li key={m.id} data-testid="ms-quarter-row" title={`${kindName(m.kind)} · ${MK_STATUS[m.status ?? "on_track"]}${m.status_reason ? `: ${m.status_reason}` : ""}`} className="flex items-center gap-1.5 py-0.5">
+          <MkIcon kind={m.kind} size={11} color={msEdge(msCode(m))} />
+          <span className="min-w-0 truncate font-semibold" style={{ color: msInk(msCode(m)) }}>
+            {msCode(m)} {ms?.joined.get(msCode(m))?.name ?? m.name}
+          </span>
+          <span data-testid="ms-status" data-status={m.status ?? "on_track"} className="flex-none">
+            <MkStatusMark status={m.status ?? "on_track"} size={11} />
+          </span>
+          <span className="ml-auto flex-none text-text2">{shortDay(m.date!)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** A phone's Timeline: a list by quarter; an item sits in the quarter it starts in (or in
  * this one, when it started before and runs on). */
+/** tb-mk: each item's band on the phone's list (its track's place, No track, then Below the line),
+ * by id, read once for the list rather than once an item a sort compares. */
+function bandsOf(data: Roadmap): { rank: (i: Item) => number; of: (i: Item) => { key: string; title: string } | null } {
+  const at = new Map<string, number>();
+  data.groups.forEach((g, n) => {
+    for (const id of g.item_ids) if (!at.has(id)) at.set(id, n);
+  });
+  return {
+    rank: (i) => (closedItem(i) ? 1e6 : (at.get(i.id) ?? 1e5)),
+    of: (i) => {
+      if (closedItem(i)) return { key: "below", title: "Below the line" };
+      const g = data.groups[at.get(i.id) ?? -1];
+      return g ? { key: g.key, title: g.title } : null;
+    },
+  };
+}
+
 function QuarterList(props: TimelineProps) {
   const { data, openKey, onOpen } = props;
+  // Join whenever names match (the owner, Nov 9): a track milestone reads the joined milestone's longer name.
+  const joined = joinedNames(data.goal_milestones ?? [], data.milestones ?? []);
   const days = data.items
     .flatMap((i) => [i.start.date, i.end.date])
     .concat(data.today)
@@ -1402,6 +1499,7 @@ function QuarterList(props: TimelineProps) {
   const qs = quarters(days[0], days[days.length - 1]);
   const tq = qs.find((q) => q.start <= data.today && data.today <= q.end);
   const byId = new Map(data.items.map((i) => [i.id, i]));
+  const bands = bandsOf(data);
   return (
     <div data-testid="timeline-list" className="space-y-3">
       {qs.map((q) => {
@@ -1411,7 +1509,9 @@ function QuarterList(props: TimelineProps) {
               (q.start <= i.start.date && i.start.date <= q.end) ||
               (q === tq && i.start.date < q.start && i.end.date >= q.start),
           )
-          .sort((a, b) => (a.start.date < b.start.date ? -1 : 1));
+          .sort((a, b) => (a.start.date < b.start.date ? -1 : 1))
+          // tb-mk: by band (the tracks' order, No track, then Below the line), by start in each.
+          .sort((a, b) => bands.rank(a) - bands.rank(b));
         if (!inQ.length) return null;
         // feature-parts: the quarter's parts under their parents, as a tree.
         const tree = partsTree([inQ.map((i) => i.id)], byId)[0];
@@ -1446,17 +1546,23 @@ function QuarterList(props: TimelineProps) {
                   data-testid="timeline-milestone"
                   className="border-b border-line/60 px-3 py-1 text-xs text-text2"
                 >
-                  ◆ {m.name} · {shortDay(m.date as string)}
+                  ◆ {joinedWords(m, joined)} · {shortDay(m.date as string)}
                   {m.done_when.length > 0 && ` · counts when ${m.done_when.join("; ")}`}
                 </p>
               ))}
+            <QuarterMilestones from={q.start} to={q.end} />
             <ul className="divide-y divide-line/60">
-              {items.map((i) => {
+              {items.map((i, n) => {
                 const lk = lookOf(i);
                 const sel = openKey === i.key;
-                // ah2-roadmap-specs review: the goal its Gantt lane names (its PRD's, else its own).
-                const goal = planGoal(i) ?? i.goal?.title;
+                const band = n === 0 || bands.rank(items[n - 1]) !== bands.rank(i) ? bands.of(i) : null;
                 return (
+                  <Fragment key={i.id}>
+                  {band && (
+                    <li data-testid="timeline-band" className="bg-surface2/70 px-3 py-1 text-sm">
+                      {band.key === "below" || band.key === "none" ? <b className={band.key === "below" ? "text-text2" : ""}>{band.title}</b> : <TrackHead data={data} laneKey={band.key} title={band.title} />}
+                    </li>
+                  )}
                   <li
                     key={i.id}
                     data-testid="timeline-row"
@@ -1497,9 +1603,9 @@ function QuarterList(props: TimelineProps) {
                             </span>
                           ) : null}
                         </span>
-                        <span className="block text-xs text-text2">
+                        <span data-testid="timeline-row-dates" className="block text-xs text-text2">
+                          {/* tb-mk: the dates only; the band's header names the track's goal. */}
                           {spanWords(i.start.date, i.end.date, data.today)}
-                          {goal ? ` · ${goal}` : ""}
                         </span>
                         {brokenFlag(i) && (
                           <span className="block text-xs text-crit">
@@ -1509,6 +1615,7 @@ function QuarterList(props: TimelineProps) {
                       </span>
                     </button>
                   </li>
+                  </Fragment>
                 );
               })}
             </ul>

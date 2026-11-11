@@ -166,12 +166,15 @@ async def as_user(tenant_id: uuid.UUID, role: str) -> dict[str, str]:
 
 
 async def approved_prd(client, auth, approve: bool = True) -> None:
-    """The PRD, with the ENG-412 estimate recorded for it, approved unless not."""
+    """The PRD, with the ENG-412 estimate recorded for it, approved unless not; an approved
+    one's track started by a person (tracks-goal: Oracle starts none on its own)."""
     assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
     await verified_estimate(client, auth)
     if approve:
         resp = await client.post(f"/v1/documents/{PRD}/versions/1/approve", headers=auth)
         assert resp.status_code == 200, resp.text
+        resp = await client.post("/v1/tracks", json={"prd": PRD}, headers=auth)
+        assert resp.status_code in (200, 201), resp.text
 
 
 async def seed_baseline(tenant_id: uuid.UUID) -> None:

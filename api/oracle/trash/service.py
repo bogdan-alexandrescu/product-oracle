@@ -6,9 +6,9 @@ to Trash in one :class:`~oracle.trash.models.TrashEntry`:
 
 - a document: the documents built from any of its versions and its spec requests' tech
   briefs (a PRD's roadmaps and tech briefs, and theirs in turn), and the runs that write
-  any of them. What hangs off those (versions, feedback, discussions, review campaigns,
-  change sets, publications, draft roadmaps, spec requests) is left out of every read
-  with them (oracle.trash.filter);
+  any of them; never the company roadmap or a roadmap another live PRD feeds. What hangs
+  off those (versions, feedback, discussions, review campaigns, change sets, publications,
+  draft roadmaps, spec requests) is left out of every read with them (oracle.trash.filter);
 - an intake: the document it became, with that document's dependents;
 - a run: itself (its checkpoints and segments leave the Inbox with it).
 
@@ -155,11 +155,38 @@ async def _derived(db: AsyncSession, document_ids: set[uuid.UUID]) -> list[Docum
             )
             .order_by(Document.id)
         )
-        rows = list(await db.scalars(stmt))
+        rows = await _not_shared(db, list(await db.scalars(stmt)), seen)
         frontier = {d.id for d in rows}
         seen |= frontier
         found += rows
     return sorted(found, key=lambda d: (d.kind, d.slug))
+
+
+async def _not_shared(
+    db: AsyncSession, rows: list[Document], seen: set[uuid.UUID]
+) -> list[Document]:
+    """delete-prd-simple: of the documents built from a delete, those it takes. One roadmap,
+    many PRDs: the company roadmap never goes with a PRD, nor does a roadmap another live PRD
+    feeds (a version built from it, or an item of it); the delete's own items on it stay,
+    without it (:func:`feeds`)."""
+    from oracle.roadmap.models import RoadmapItem
+
+    ids = {d.id for d in rows}
+    if not ids:
+        return []
+    inside = seen | ids
+    other_versions = select(DocumentVersion.id).where(DocumentVersion.document_id.not_in(inside))
+    fed_by_version = select(DocumentVersion.document_id).where(
+        DocumentVersion.document_id.in_(ids),
+        DocumentVersion.source_version_id.in_(other_versions),
+    )
+    fed_by_item = select(RoadmapItem.roadmap_document_id).where(
+        RoadmapItem.roadmap_document_id.in_(ids),
+        RoadmapItem.prd_document_id.is_not(None),
+        RoadmapItem.prd_document_id.not_in(inside),
+    )
+    shared = set(await db.scalars(fed_by_version)) | set(await db.scalars(fed_by_item))
+    return [d for d in rows if not d.company_roadmap and d.id not in shared]
 
 
 def _spec_document() -> Any:
@@ -281,6 +308,63 @@ def preview(resolved: Resolved) -> dict[str, Any]:
         "published": resolved.published,
         "working_runs": [str(r.id) for r in resolved.runs if r.status in WORKING],
     }
+
+
+async def feeds(
+    db: AsyncSession, resolved: Resolved
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """delete-prd-simple: the roadmap items and tracks the PRDs of a delete feed, each once
+    (an item on several roadmaps by its key), as (what stays, what goes with it). An item on
+    a roadmap (or draft roadmap) that goes to Trash with the PRD leaves every read with it
+    (oracle.trash.filter), as does a track holding no PRD outside the delete; the rest stay,
+    without it. The delete dialog names both."""
+    from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem, TrackPrd
+
+    ids = {d.id for d in resolved.documents if d.kind == "prd"}
+    if not ids:
+        return [], []
+    gone = {d.id for d in resolved.documents}
+    drafts = select(DraftRoadmap.id).where(DraftRoadmap.prd_document_id.in_(gone))
+    items = await db.scalars(
+        select(RoadmapItem)
+        .where(RoadmapItem.prd_document_id.in_(ids))
+        .order_by(RoadmapItem.title, RoadmapItem.id)
+    )
+    going_items = set(
+        await db.scalars(
+            select(RoadmapItem.id).where(
+                RoadmapItem.prd_document_id.in_(ids),
+                or_(
+                    RoadmapItem.roadmap_document_id.in_(gone),
+                    RoadmapItem.draft_roadmap_id.in_(drafts),
+                ),
+            )
+        )
+    )
+    tracks = await db.scalars(
+        select(ProductTrack)
+        .join(TrackPrd, TrackPrd.track_id == ProductTrack.id)
+        .where(TrackPrd.prd_document_id.in_(ids), TrackPrd.state == "linked")
+        .order_by(ProductTrack.title, ProductTrack.id)
+    )
+    # As filter._some_prd_live: a track stays while it holds a PRD not in Trash (the
+    # session's filter leaves out links to one) and not in this delete.
+    kept_tracks = set(
+        await db.scalars(
+            select(TrackPrd.track_id).where(
+                TrackPrd.track_id.is_not(None), TrackPrd.prd_document_id.not_in(gone)
+            )
+        )
+    )
+    stays: dict[tuple[str, str], dict[str, Any]] = {}
+    goes: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in [*items, *tracks]:
+        said = describe(row)
+        key = (said["type"], said["slug"] or said["id"])
+        going = row.id in going_items if isinstance(row, RoadmapItem) else row.id not in kept_tracks
+        (goes if going else stays).setdefault(key, said)
+    # An item on several roadmaps stays while one of them does.
+    return list(stays.values()), [v for k, v in goes.items() if k not in stays]
 
 
 async def _actor_name(db: AsyncSession, principal: Principal) -> str | None:
@@ -506,6 +590,35 @@ async def milestone_restored(db: AsyncSession, milestone_id: uuid.UUID) -> None:
     )
 
 
+async def goal_in_trash(db: AsyncSession, goal_id: uuid.UUID | None) -> str | None:
+    """The name of the goal ``goal_id`` while it is in Trash (None: live, or no goal)."""
+    if goal_id is None:
+        return None
+    from oracle.baseline.goals import goal_name
+    from oracle.baseline.models import Entity
+
+    goal = await db.get(Entity, goal_id, execution_options=ALL)
+    if goal is None or goal.deleted_at is None:
+        return None
+    return goal_name(goal.title, goal.key)
+
+
+def goal_first(name: str) -> str:
+    return f"Its goal {name} is in Trash: restore the goal first"
+
+
+async def _milestone_goal_live(db: AsyncSession, entry: TrashEntry) -> None:
+    """A milestone never comes back under a goal in Trash (409, before anything changes)."""
+    if entry.root_type != "milestone":
+        return
+    from oracle.roadmap.models import TrackMilestone
+
+    row = await db.get(TrackMilestone, entry.root_id)
+    name = await goal_in_trash(db, row.goal_id) if row is not None else None
+    if name is not None:
+        raise Conflict(goal_first(name))
+
+
 async def _milestone_back(db: AsyncSession, entry: TrashEntry) -> None:
     """A restored milestone entry puts the milestone back on its roadmap."""
     if entry.root_type != "milestone":
@@ -516,6 +629,93 @@ async def _milestone_back(db: AsyncSession, entry: TrashEntry) -> None:
     row = await db.get(TrackMilestone, entry.root_id)
     if row is not None and row.deleted_at is not None:
         await goal_milestones.put_back(db, row)
+
+
+async def drop_task(db: AsyncSession, principal: Any, row: Any, status_before: str) -> TrashEntry:
+    """feature-panel (owner's pick, Nov 10): an item task dropped in Simple leaves the item's
+    list and goes to Trash on its own, the status it had kept for its restore. The task row
+    stays (status "dropped"); every read of an item's tasks leaves dropped ones out."""
+    await task_back_on_list(db, row.id)
+    at = now()
+    entry = TrashEntry(
+        root_type="task",
+        root_id=row.id,
+        root={
+            "type": "task",
+            "id": str(row.id),
+            "slug": None,
+            "title": row.title,
+            "kind": "Task",
+            "status_before": status_before,
+        },
+        items=[],
+        deleted_by=getattr(principal, "id", None),
+        deleted_by_name=await _actor_name(db, principal),
+        reason=None,
+        published=False,
+        purge_after=at + timedelta(days=RETENTION_DAYS),
+    )
+    entry.created_at = at
+    db.add(entry)
+    await db.flush()
+    await audit.record(db, principal, "trash.delete", "task", row.id,
+                       {"entry_id": str(entry.id), "root": entry.root, "items": []})  # fmt: skip
+    await db.flush()
+    return entry
+
+
+async def task_back_on_list(db: AsyncSession, task_id: uuid.UUID) -> None:
+    """A dropped task set to another status (the drop's Undo, or a later change) leaves
+    Trash too."""
+    await db.execute(
+        delete(TrashEntry).where(TrashEntry.root_type == "task", TrashEntry.root_id == task_id)
+    )
+
+
+async def _task_back(db: AsyncSession, entry: TrashEntry) -> None:
+    """A restored task entry puts the task back on its item with the status it had."""
+    if entry.root_type != "task":
+        return
+    from oracle.simple.models import TASK_STATUSES, RoadmapItemTask
+
+    # Read as Trash does: a task whose feature is in Trash is hidden from other reads.
+    stmt = select(RoadmapItemTask).where(RoadmapItemTask.id == entry.root_id)
+    row = await db.scalar(stmt.execution_options(**ALL))
+    if row is not None and row.status == "dropped":
+        before = entry.root.get("status_before")
+        row.status = before if before in TASK_STATUSES and before != "dropped" else "todo"
+        await db.flush()
+
+
+async def _task_feature_in_trash(db: AsyncSession, entry: TrashEntry) -> list[dict[str, Any]]:
+    """A restored task whose feature is still in Trash is back on it, shown when the feature
+    is restored: the answer says so, naming the feature ("it shows when F-3 Ledger is
+    restored")."""
+    if entry.root_type != "task":
+        return []
+    from oracle.roadmap.models import RoadmapItem
+    from oracle.simple.models import RoadmapItemTask
+
+    task = await db.scalar(
+        select(RoadmapItemTask).where(RoadmapItemTask.id == entry.root_id).execution_options(**ALL)
+    )
+    if task is None:
+        return []
+    # Its feature by roadmap and key, as the item's tasks are read: in Trash on every row.
+    stmt = select(RoadmapItem).where(
+        RoadmapItem.roadmap_document_id == task.roadmap_document_id,
+        RoadmapItem.item_key == task.item_key,
+    )
+    rows = list(await db.scalars(stmt.execution_options(**ALL)))
+    if not rows or any(r.deleted_at is None for r in rows):
+        return []
+    item = next((r for r in rows if r.id == task.item_id), rows[0])
+    held = await db.get(TrashEntry, item.trash_entry_id) if item.trash_entry_id else None
+    code = (held.root.get("code") if held else None) or None
+    name = f"{code} {item.title}" if code else item.title
+    feature = {"type": "feature", "id": str(item.id), "slug": item.item_key,
+               "title": item.title, "kind": "feature", "code": code}  # fmt: skip
+    return [{"item": feature, "reason": f"it shows when {name} is restored"}]
 
 
 async def _track_items_back(db: AsyncSession, entry: TrashEntry) -> None:
@@ -605,7 +805,10 @@ async def _not_restored(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
 # it too (edit-decisions: and a decision or a PRD question); everything else in Trash is the
 # owners' alone. port-an-decisions: and a meeting's agenda item (a request is an owner's
 # delete).
-OWN_RESTORE = frozenset({"feature", "goal", "decision", "question", "agenda_item", "milestone"})
+# feature-panel: and a dropped item task.
+OWN_RESTORE = frozenset(
+    {"feature", "goal", "decision", "question", "agenda_item", "milestone", "task"}
+)
 
 
 def may_restore(principal: Any, entry: TrashEntry) -> bool:
@@ -624,6 +827,7 @@ async def restore_entry(
     entry = await get_entry(db, entry_id)
     if not may_restore(principal, entry):
         raise Forbidden("Only an owner, or whoever deleted it, restores this")
+    await _milestone_goal_live(db, entry)
     from oracle.simple import trash_items
 
     await trash_items.before_restore(db, entry, principal)
@@ -643,6 +847,7 @@ async def restore_entry(
 
     await _track_items_back(db, entry)
     await _milestone_back(db, entry)
+    await _task_back(db, entry)
 
     dropped = await trash_items.after_restore(db, entry, principal)
     await alerts.reopen_after_trash(db, entry.root.get("closed_alerts") or [])
@@ -651,7 +856,11 @@ async def restore_entry(
     await requests_service.relink_documents(
         db, principal, entry.root.get("released_requests") or []
     )
-    not_restored = [*dropped, *await _not_restored(db, entry)]
+    not_restored = [
+        *dropped,
+        *await _not_restored(db, entry),
+        *await _task_feature_in_trash(db, entry),
+    ]
     await audit.record(
         db,
         principal,

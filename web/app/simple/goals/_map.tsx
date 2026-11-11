@@ -80,14 +80,14 @@ function Guardrail({ map }: { map: GoalMap }) {
 
 
 
-/** The goal and milestone (with its ladder code, M1...) the ladder puts a feature's card under. */
-function placement(map: GoalMap, feature: string): Placement | null {
+/** The goal and milestone (with its roadmap code, M1...) the ladder puts a feature's card under. */
+function placement(map: GoalMap, feature: string, codes?: Map<string, string>): Placement | null {
   const m = map.milestones.find((x) => x.id === map.features.find((f) => f.id === feature)?.milestones[0]);
   const gi = map.goals.findIndex((g) => g.id === m?.goal);
   const g = map.goals[gi];
   if (!m || !g) return null;
-  const n = map.goals.flatMap((x) => map.milestones.filter((y) => y.goal === x.id)).findIndex((y) => y.id === m.id) + 1;
-  return { goal: { id: g.id, title: g.name, metric: g.metric?.title ?? null, target: num(g.target, g.unit), position: gi + 1 }, milestone: `M${n} ${m.name}` };
+  // roadmap-milestone-codes: its one code across the roadmap, else its name alone (a ladder place could repeat a code).
+  return { goal: { id: g.id, title: g.name, metric: g.metric?.title ?? null, target: num(g.target, g.unit), position: gi + 1 }, milestone: `${codes?.get(m.id) ?? ""} ${m.name}`.trim() };
 }
 
 const msName = (map: GoalMap, id: string) => map.milestones.find((m) => m.id === id)?.name ?? "";
@@ -234,6 +234,7 @@ export function GoalMapPage() {
   // Read after the map: its features are roadmap items once the map is read.
   const roadmap = useQuery(`simple-roadmap:goal-map-codes:${map ? 1 : 0}`, () => (map ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })) : Promise.resolve(null)));
   const codes = useMemo(() => new Map((roadmap.data?.items ?? []).flatMap((i) => (i.code ? [[i.id, i.code] as [string, string]] : []))), [roadmap.data]);
+  const msCodes = useMemo(() => new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.roadmap_code ? [[m.id, m.roadmap_code] as [string, string]] : []))), [roadmap.data]);
   const units = useMemo(() => new Map((map?.milestones ?? []).map((m) => [m.id, m.unit])), [map]);
   // goal-map-scoreboard: a Home goal card opens the map on its goal (by id; else by its name).
   const params = useSearchParams();
@@ -307,7 +308,7 @@ export function GoalMapPage() {
       const m = map.milestones.find((x) => x.id === draft.milestone);
       const ok = await send(
         api.POST("/v1/simple/goal-map/links", { body: { feature: draft.feature, milestone: draft.milestone, area: draft.area, expected: draft.expected, confidence: "medium" } }),
-        (next) => `Attached: ${next.features.find((x) => x.id === draft.feature)?.name} now also serves ${m?.name}.`,
+        (next) => `Attached: ${`${codes.get(draft.feature) ?? ""} ${next.features.find((x) => x.id === draft.feature)?.name}`.trim()} now also serves ${m?.name}.`,
       );
       if (!ok) return;
       reveal(`[data-feature="${draft.feature}"]`);
@@ -412,7 +413,7 @@ export function GoalMapPage() {
       {edit && draft && (
         <Editor map={map} edit={edit} draft={draft} setDraft={setDraft} goal={map.goals.find((g) => g.id === goalId) ?? map.goals[0]} onClose={close} onSave={() => void save()} open={open} onOpen={(f) => setPanel(f)} />
       )}
-      {panel && <FeaturePanel id={panel.id} code={codes.get(panel.id)} name={panel.name} placed={placement(map, panel.id)} onClose={() => setPanel(null)} />}
+      {panel && <FeaturePanel id={panel.id} code={codes.get(panel.id)} name={panel.name} placed={placement(map, panel.id, msCodes)} onClose={() => setPanel(null)} />}
       {prd && (
         <NewPrdSheet
           prefill={prd}
@@ -445,8 +446,9 @@ function AttachDrawer({ map, draft, set, onClose, onSave }: { map: GoalMap; draf
   const label = "flex flex-col gap-1.5 font-semibold";
   const on = new Map(map.features.map((f) => [f.id, f]));
   const term = draft.search.toLowerCase();
-  const named = (roadmap.data?.items ?? []).map((i) => ({ id: i.id, name: on.get(i.id)?.name ?? i.title }));
-  const list = named.filter((i) => !on.get(i.id)?.milestones.includes(draft.milestone) && (!term || i.name.toLowerCase().includes(term)));
+  // QA goal map codes: each with its code, then its name.
+  const named = (roadmap.data?.items ?? []).map((i) => ({ id: i.id, code: i.code ?? "", name: on.get(i.id)?.name ?? i.title }));
+  const list = named.filter((i) => !on.get(i.id)?.milestones.includes(draft.milestone) && (!term || `${i.code} ${i.name}`.toLowerCase().includes(term)));
   // A feature sits in one area: attached from another area's cell, it moves there.
   const picked = on.get(draft.feature);
   const areaName = (id: string | null) => map.areas.find((a) => a.id === id)?.name;
@@ -490,7 +492,10 @@ function AttachDrawer({ map, draft, set, onClose, onSave }: { map: GoalMap; draf
           return (
             <li key={i.id}>
               <button type="button" onClick={() => set({ feature: i.id })} className={`w-full rounded-xl border px-3 py-2 text-left ${draft.feature === i.id ? "border-accent bg-accent-soft" : "border-line"}`}>
-                <span className="font-semibold">{i.name}</span>
+                <span className="font-semibold">
+                  {i.code && <span className="simple-code mr-1">{i.code}</span>}
+                  {i.name}
+                </span>
                 <span className="simple-small block text-[14px]! leading-5">
                   {f ? `${map.areas.find((a) => a.id === f.area)?.name ?? "No area"} · serves ${f.milestones.map((x) => msName(map, x)).join(", ")}` : "Not on the map yet"}
                 </span>
@@ -689,8 +694,8 @@ function Flags({ map, open }: { map: GoalMap; open: Ctx["open"] }) {
         </button>
       )}
       {unplaced > 0 && (
-        // goal-map-editing: leads to the features on no milestone on the ladder, highlighted.
-        <button type="button" data-testid="gm-flag-unplaced" className={chip} onClick={() => window.dispatchEvent(new Event("ld-show-loose"))}>
+        // goal-map-editing: opens the list of features on no milestone, each with its fix.
+        <button type="button" data-testid="gm-flag-unplaced" className={chip} onClick={() => open("unplaced")}>
           {unplaced} {unplaced === 1 ? "feature serves" : "features serve"} no gate
         </button>
       )}
@@ -745,6 +750,7 @@ function FlagDrawer({ map, kind, onClose, open, onOpen }: { map: GoalMap; kind: 
         {map.unplaced.map((f) => (
           <li key={f.id} data-testid="gm-unplaced" className={row}>
             <button type="button" className="text-left font-semibold hover:underline" onClick={() => onOpen({ id: f.id, name: f.name } as GmFeature)}>
+              {f.code && <span className="simple-code mr-1">{f.code}</span>}
               {f.name}
             </button>
             {map.can_edit && (

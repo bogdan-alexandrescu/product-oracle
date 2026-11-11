@@ -68,17 +68,19 @@ export function OccurrenceDetail({ id }: { id: string }) {
     listsVariances ? unwrap(api.GET("/v1/metric-variances")) : Promise.resolve([] as Schemas["VarianceOut"][]),
   );
   const live = new Map((varianceQ.data ?? []).map((v) => [v.id, v]));
-  const unread = occ ? !occ.read_by_me : false;
+  const loaded = !!occ;
 
+  // Each open is recorded (inbox-ritual-seen): the pre-read is done, and a Record notes row
+  // opened after the meeting is seen; a visit to the Inbox never marks either.
   useEffect(() => {
-    if (!unread) return;
+    if (!loaded) return;
     void unwrap(api.POST("/v1/ritual-occurrences/{occurrence_id}/read", { params: { path: { occurrence_id: id } } }))
       .then(() => {
         invalidateWaiting();
         waitingChanged();
       })
       .catch(() => undefined);
-  }, [unread, id]);
+  }, [loaded, id]);
 
   // While Oracle writes the summary, look again every second.
   const running = occ?.summary_state === "running";

@@ -299,7 +299,7 @@ def test_every_milestone_row_has_its_name():
                  milestone=milestone)  # fmt: skip
 
     def ms(name, day, record_id=None, record_name=None):
-        return N(name=name, date=date(2026, 12, day), record_id=record_id,
+        return N(id=None, name=name, date=date(2026, 12, day), record_id=record_id,
                  record_name=record_name, start_date=None)  # fmt: skip
 
     sliced = N(milestone="M1", milestone_name="Measured and mapped", start_date=None,
@@ -318,6 +318,23 @@ def test_every_milestone_row_has_its_name():
         "M2 · Ship to beta",
         "M3 · Open to all",
         "M4 · Rollout",
+    ]
+
+    # Read by roadmap code (the one-pager's Timeline): the roadmap code decides the row, the
+    # name the PRD gives a milestone said only by its code decides its label.
+    def code_of(text, *ids):
+        return {"c3a1": "M7"}.get(str(ids[-1] if ids else None)) or {"M2": "M5", "M4": "M8"}.get(
+            plan_strip.milestone_of(text)[0]
+        )
+
+    rows = plan_strip.strip(
+        one_pager.plan_items(items, names, code_of), date(2026, 11, 2), coded=True
+    ).rows
+    assert [(r.name, r.code) for r in rows] == [
+        ("Measured and mapped", None),
+        ("M5 · Ship to beta", "M5"),
+        ("M7 · Open to all", "M7"),
+        ("M8 · Rollout", "M8"),
     ]
     # A record named only by its code reads the name its own items give it, never the name of
     # another record (or code row) of the same code and date: those stay their own rows.

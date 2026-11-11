@@ -15,7 +15,7 @@ import { invalidateWaiting, loadInbox, loadMyQuestions, NEED_KINDS, needKind, wa
 import { useAccessRequestRows } from "../inbox/_access";
 import { useActed } from "../inbox/_actions";
 import { allNeeds, NeedTable, usePerms, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
-import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows } from "../inbox/_proposals";
+import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows, trackSuggestionRows } from "../inbox/_proposals";
 import { useQuestionRows } from "../inbox/_questions";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
@@ -202,6 +202,7 @@ export default function HomePage() {
         ...approvalRows(inbox.simple_approvals ?? [], seen),
         ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seen),
         ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seen),
+        ...trackSuggestionRows(inbox.simple_track_suggestions ?? [], busy, act, seen),
       ]
     : [];
   const needs = waitingNeeds(all);

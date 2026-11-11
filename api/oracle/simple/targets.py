@@ -76,6 +76,7 @@ from oracle.priorities.scoring import effort_weeks, goal_value_estimate
 from oracle.requests.models import CHANNELS as REQUEST_CHANNELS
 from oracle.requests.models import REQUESTER_KINDS, ProductRequest
 from oracle.roadmap import company
+from oracle.roadmap import tracks as tracks_mod
 from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.simple import changes, service
 from oracle.simple.changes import ChangeError
@@ -682,13 +683,27 @@ async def _apply(
             row = await _row(db, kind, t)
             if row is None:
                 raise ChangeError(409, "The task or action item is gone")
+            was = getattr(row, "status", None)
             if c.op.startswith("add_"):
                 await db.delete(row)
             else:
                 _set(row, values)
+            if kind == "task":
+                await _task_trash(db, principal, row, was, c.op.startswith("add_"))
     except launches.LaunchError as e:
         raise _fail(e) from e
     await db.flush()
+
+
+async def _task_trash(db: AsyncSession, principal: Any, row: Any, was: Any, gone: bool) -> None:
+    """feature-panel (owner's pick, Nov 10): a task dropped goes to Settings > Trash; one set
+    away from dropped (the drop's Undo, or a later change) or deleted leaves it."""
+    from oracle.trash import service as trash
+
+    if gone or (was == "dropped" and row.status != "dropped"):
+        await trash.task_back_on_list(db, row.id)
+    elif row.status == "dropped" and was != "dropped":
+        await trash.drop_task(db, principal, row, was or "todo")
 
 
 async def _create(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
@@ -769,6 +784,7 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
     feature alone). The caller commits."""
     from oracle.simple import drafts
     from oracle.simple.additions import _shown_version
+    from oracle.simple.priorities import link
 
     fid = changes._uuid(feature_id, "feature_id")
     f = await _feature(db, fid)
@@ -778,15 +794,19 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
     if doc is None:
         return None
     read_ = await service.load(db)
-    there = [e for e in read_.entries
-             if e.roadmap.id == doc.id and e.row.feature_id == fid and e.status != "cut"
-             and not e.row.merged_into]  # fmt: skip
+    # qa-prio-twins: its draft by the link Priorities shows it by (priorities._held): its
+    # feature_id, else its trace's source feature; the lowest key first.
+    there = sorted((e for e in read_.entries
+                    if e.roadmap.id == doc.id and e.status != "cut" and not e.row.merged_into
+                    and (e.row.feature_id == fid or (e.row.draft and link(e.row) == str(fid)))),
+                   key=lambda e: e.row.item_key)  # fmt: skip
     for e in there:
         if not e.row.draft:
             return e
     if there:
         row = there[0].row
         row.draft = False
+        row.feature_id = fid
         await db.flush()
         data = {"feature_id": str(fid), "roadmap_id": str(doc.id), "from": "priorities"}
         await audit.record(db, principal, "roadmap.item_confirmed", "roadmap_item", row.id, data)
@@ -831,7 +851,7 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
         horizon="later",
         feature_id=fid,
         track_id=track.id if track is not None else None,
-        prd_document_id=track.prd_document_id if track is not None else None,
+        prd_document_id=await tracks_mod.lead_prd(db, track) if track is not None else None,
         prd_version_id=track.current_version_id if track is not None else None,
         note="added from Priorities",
     )

@@ -19,7 +19,7 @@ tests.test_simple_changes_api; the reason check never reaches a model (``no_llm`
 Each test's card is its docstring (protects / fails_when / no_claim).
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
@@ -75,7 +75,13 @@ class World:
                 "pay-6": dict(horizon="later"),
                 "pay-7": dict(feature_id=f["ledger"].id, horizon="later"),
             }
+            # board-quarters: an item's column is the quarter of its dates.
+            spans = {"now": (date(2026, 10, 5), date(2026, 11, 20)),
+                     "next": (date(2027, 1, 10), date(2027, 2, 20)),
+                     "later": (date(2027, 4, 10), date(2027, 5, 20))}  # fmt: skip
             for i, (key, kw) in enumerate(items.items()):
+                start, end = spans[kw.get("horizon", "now")]
+                kw = {"start_date": start, "end_date": end, "date_source": "typed", **kw}
                 row = await seed.item(rv, pv, key, position=i, track_id=track.id, **kw)
                 self.ids[key] = str(row.id)
             s.add(DocumentReviewPolicy(document_id=rm.id, decider_id=self.ctx.users["decider"].id))

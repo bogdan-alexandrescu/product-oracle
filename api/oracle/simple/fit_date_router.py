@@ -34,6 +34,7 @@ from sqlalchemy import select
 from oracle import audit, company_time
 from oracle.auth.deps import Principal, TenantDB
 from oracle.docs.models import Document, DocumentVersion
+from oracle.roadmap.tracks import on_prd as tracks_on_prd
 from oracle.simple import fit_date as fd
 from oracle.simple import one_pager, plan
 from oracle.simple.changes import ChangeError
@@ -432,7 +433,7 @@ async def _roadmap_id(db, document: Document):
     if (one := await company.active(db)) is not None:
         return one.id
     return await db.scalar(
-        select(ProductTrack.roadmap_document_id).where(ProductTrack.prd_document_id == document.id)
+        select(ProductTrack.roadmap_document_id).where(tracks_on_prd(document.id))
     )
 
 

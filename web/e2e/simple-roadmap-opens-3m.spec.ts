@@ -124,6 +124,10 @@ test.describe("desktop", () => {
     const a = (await axis.boundingBox())!;
     await page.mouse.move(v.left + (v.right - v.left) * 0.4, a.y + a.height / 2);
     await page.mouse.click(v.left + (v.right - v.left) * 0.4, a.y + a.height / 2);
+    // tb-mk: + Milestone asks for the kind first (Delivery, what a new one was before kinds), then opens the card.
+    const picker = page.getByTestId("ms-kind-picker");
+    await expect(picker.getByRole("heading", { name: "New milestone" })).toBeVisible();
+    await picker.getByRole("option", { name: "Delivery" }).click();
     const card = page.getByTestId("ms-card");
     await expect(card.getByRole("heading", { name: "New milestone" })).toBeVisible();
     await card.getByLabel("Name").fill("Trail map launch");
@@ -132,7 +136,8 @@ test.describe("desktop", () => {
     await expect(card).toBeHidden();
 
     await slideToEnd(page);
-    await expect(page.getByTestId("ms-label").filter({ hasText: "Trail map launch · Mar 15" })).toBeInViewport();
+    // roadmap-milestone-codes: the band's label shows its code and name; its day is in its tip and accessible name.
+    await expect(page.locator('[data-testid="ms-label"][aria-label*=" Trail map launch · Mar 15, 2027"]')).toBeInViewport();
     const line = page.locator('[data-testid="ms-line"][data-day="2027-03-15"]');
     await expect(line).toBeInViewport();
     const l = (await line.boundingBox())!;

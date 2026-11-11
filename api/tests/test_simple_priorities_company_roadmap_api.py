@@ -165,7 +165,9 @@ async def test_a_bracketed_milestone_name_shows(client):
 
 async def test_a_move_reuses_the_features_draft_item(client):
     w = await company_world()
-    assert by_feature(await w.read(client), w)["widgets"]["on_roadmap"] is False
+    # qa-prio-twins: its draft there is on the roadmap (no "not on it yet").
+    before = by_feature(await w.read(client), w)["widgets"]
+    assert before["on_roadmap"] is True and before["draft_item_id"] == w.ids["pay-5"]
     body = {"op": "override_priority", "target": {"feature_id": w.ids["widgets"]},
             "before": {"override": None},
             "after": {"position": 1, "reason": REASON, "confirm": True}}  # fmt: skip

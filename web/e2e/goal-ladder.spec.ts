@@ -156,7 +156,7 @@ for (const scheme of ["light", "dark"] as const) {
         const before = (await c.boundingBox())!;
         const from = await centre(page, c);
         await dragBy(page, from, { x: from.x + 520, y: from.y - 260 });
-        await expect(c.getByTestId("ld-placed")).toContainText("Placed by hand · serves M4 Setup time under two days");
+        await expect(c.getByTestId("ld-placed")).toContainText("Placed by hand · serves M2 Setup time under two days");
         await expect(page.getByRole("status").filter({ hasText: "by hand" })).toContainText("Moved F-15");
         await shot(page, `ld1-d-placed-${width}-${scheme}`);
         await page.reload();
@@ -207,17 +207,17 @@ for (const scheme of ["light", "dark"] as const) {
 
       test("Edit ladder: drag a feature to another milestone; menu Delete to Trash and Restore; + Add a feature", async ({ page }) => {
         // protects=ld3-b-drag, ld3-b-moved, ld3-b-menu, ld3-b-deleted, ld3-b-add, ld3-b-added:
-        // dropped on M6's work, F-21 (last under M5) serves M6 (links/move) with Undo; Move to Trash takes it
+        // dropped on M7's work, F-21 (last under M5) serves M7 (links/move) with Undo; Move to Trash takes it
         // off the ladder and Settings › Trash restores it; + Add feature names one under M5;
         // fails_when=the drop only places the card, Delete removes it for good, or the new
         // feature is not under M5; no_claim=reorder within a list.
         await open(page, scheme);
         await page.getByTestId("ld-edit").click();
-        const m6 = page.locator('[data-ld-group]').filter({ hasText: "M6 Setup time one day for new teams" }).first();
-        await showBoth(page, card(page, "F-21"), m6.locator("span").first());
-        await dragBy(page, await mid(card(page, "F-21")), await mid(m6.locator("span").first()));
-        await expect(page.getByRole("status").filter({ hasText: "Moved F-21" })).toContainText("to M6 Setup time one day for new teams");
-        await expect(m6.getByTestId("ld-feature").filter({ hasText: "F-21" })).toHaveCount(1);
+        const m7 = page.locator('[data-ld-group]').filter({ hasText: "M7 Setup time one day for new teams" }).first();
+        await showBoth(page, card(page, "F-21"), m7.locator("span").first());
+        await dragBy(page, await mid(card(page, "F-21")), await mid(m7.locator("span").first()));
+        await expect(page.getByRole("status").filter({ hasText: "Moved F-21" })).toContainText("to M7 Setup time one day for new teams");
+        await expect(m7.getByTestId("ld-feature").filter({ hasText: "F-21" })).toHaveCount(1);
         await shot(page, `ld3-b-moved-${width}-${scheme}`);
         await card(page, "F-21").getByTestId("ld-more").click();
         await expect(page.getByTestId("ld-feature-menu").getByRole("menuitem")).toHaveText(["Open", "Move to…", "Move up", "Move down", "Waits on…", "Move to Trash"]);
@@ -284,7 +284,7 @@ for (const scheme of ["light", "dark"] as const) {
     test("one goal at a time; Edit ladder's Move to… opens a sheet", async ({ page }) => {
       // protects=ld1-a-phone, ld3-b-phone: no canvas on a phone, the goal picked from Goal 1 to
       // Goal 4 with its milestones and their features; while editing, no grips, and Move to…
-      // moves F-15 to M6 from a sheet; fails_when=the canvas shows on a phone or Move to… does
+      // moves F-15 to M7 from a sheet; fails_when=the canvas shows on a phone or Move to… does
       // nothing; no_claim=drag on a phone.
       await open(page, scheme);
       await expect(page.getByTestId("ld-phone")).toBeVisible();
@@ -292,7 +292,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByTestId("ld-phone")).toContainText("We are here: week of Nov 2");
       await page.getByRole("tab", { name: "Goal 2" }).click();
       await expect(page.getByTestId("ld-goal")).toContainText("New teams set up in one day");
-      await expect(page.getByTestId("ld-phone")).toContainText("next: M4 Setup time under two days, Nov 13");
+      await expect(page.getByTestId("ld-phone")).toContainText("next: M2 Setup time under two days, Nov 13");
       await shot(page, `ld1-a-phone-${scheme}`);
       await page.getByTestId("ld-edit").click();
       await card(page, "F-15").getByTestId("ld-more").click();
@@ -301,7 +301,7 @@ for (const scheme of ["light", "dark"] as const) {
       await sheet.getByText("Setup time one day for new teams").click();
       await shot(page, `ld3-b-phone-${scheme}`);
       await sheet.getByTestId("ld-move-go").click();
-      await expect(page.getByRole("status").filter({ hasText: "Moved F-15" })).toContainText("to M6");
+      await expect(page.getByRole("status").filter({ hasText: "Moved F-15" })).toContainText("to M7");
       const m6 = page.locator("[data-ld-group]").filter({ hasText: "Setup time one day for new teams" });
       await expect(m6.getByTestId("ld-feature").filter({ hasText: "F-15" })).toHaveCount(1);
     });
@@ -486,9 +486,10 @@ test.describe("Goal ladder findings: numbers, first view, week captions, 1440", 
     // $20000" or "$10000"; no_claim=the guardrail's tooltip reading.
     await open(page, "light");
     await expect(page.getByTestId("ld-goal").filter({ hasText: "Larger teams add paid seats" })).toContainText("$11,200 of $20,000");
-    const m7 = page.getByTestId("ld-milestone").filter({ hasText: "M7" });
-    await expect(m7).toContainText("$10,000 of $10,000");
-    await expect(page.getByTestId("ld-milestone").filter({ hasText: "M9" })).toContainText("— of $20,000");
+    // Milestones by name: their codes are numbered roadmap-wide.
+    const first = page.getByTestId("ld-milestone").filter({ hasText: "Seat revenue first measured for large teams" });
+    await expect(first).toContainText("$10,000 of $10,000");
+    await expect(page.getByTestId("ld-milestone").filter({ hasText: "Seat revenue of $20,000 per month" })).toContainText("— of $20,000");
     await expect(page.getByTestId("ld-goal").first()).toContainText("81% of 88%");
   });
 
@@ -537,15 +538,16 @@ test.describe("Goal ladder findings: numbers, first view, week captions, 1440", 
   });
 
   test("V-6: the week strip's captions name the whole milestone and never end on a small word", async ({ page }) => {
-    // protects=ld1-d-rest's strip: "M9 Seat revenue of $20,000" with the full name as its title;
-    // fails_when=a caption is cut ("M9 Seat revenue of $20,000 per") with no way to read the rest;
+    // protects=ld1-d-rest's strip: "M15 Seat revenue of $20,000" with the full name as its title;
+    // fails_when=a caption is cut ("M10 Seat revenue of $20,000 per") with no way to read the rest;
     // no_claim=where the captions sit.
     await open(page, "light");
-    const m2 = page.getByTestId("ld-week-mark").filter({ hasText: "M2 Renewal" });
-    await expect(m2).toHaveAttribute("title", /M2 Renewal rate at 85% for spring renewals/);
-    const m9 = page.getByTestId("ld-week-mark").filter({ hasText: "M9 Seat" });
-    await expect(m9).toHaveText("M9 Seat revenue of $20,000");
-    await expect(m9).toHaveAttribute("title", /M9 Seat revenue of \$20,000 per month/);
+    // Marks by name: milestone codes are numbered roadmap-wide.
+    const renewal = page.getByTestId("ld-week-mark").filter({ hasText: /^M\d+ Renewal/ });
+    await expect(renewal).toHaveAttribute("title", /M\d+ Renewal rate at 85% for spring renewals/);
+    const seats = page.getByTestId("ld-week-mark").filter({ hasText: /^M\d+ Seat revenue of/ });
+    await expect(seats).toHaveText(/^M\d+ Seat revenue of \$20,000$/);
+    await expect(seats).toHaveAttribute("title", /M\d+ Seat revenue of \$20,000 per month/);
     // Wrapped, not clipped: no caption is wider than its box.
     for (const mark of await page.getByTestId("ld-week-mark").all()) {
       expect(await mark.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);

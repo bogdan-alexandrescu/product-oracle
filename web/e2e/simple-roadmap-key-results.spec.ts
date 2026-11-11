@@ -16,8 +16,11 @@ import { login } from "./helpers";
  * keeps its key result's item; fails_when = a key result is a filter entry or its item is lost.
  * Card kr-suggest: protects = a feature suggested for a key result is reached from its goal's
  * "suggested feature" button; fails_when = it is unreachable or counted on a card of its own.
- * Card kr-lane: protects = on the Timeline, the key result's item is drawn in its parent goal's
- * lane and no key result has a lane; fails_when = the item sits in a lane of its own.
+ * Card kr-lane: protects = grouped by goal, the key result's item is drawn in its parent goal's
+ * lane and no key result has a lane; fails_when = the item sits in a lane of its own. tb-mk: the
+ * Timeline's bands are now the tracks and the Gantt's Group by starts at Track, so the goal
+ * lanes are read on the Gantt's Group by Goal, picked as a person would; the Timeline's track
+ * bands still give no key result a band of its own.
  * Card kr-fold: protects = a proposed key result (Teams share a first report) and KR 1's own
  * subgoal (Setup takes ten minutes), each with an item, fold into Faster activation: no card,
  * lane or Goal filter entry of their own, and the subgoal is listed with the key results;
@@ -58,21 +61,31 @@ test.describe("Simple roadmap: key results sit inside their goal's card", () => 
     for (const name of [KR1, KR2, PROPOSED, SUB]) await expect(strip.locator("> li").filter({ hasText: name }).filter({ hasNotText: "Faster activation" })).toHaveCount(0);
   });
 
-  test("on the Timeline, every key result's item is drawn in its goal's lane", async ({ page }) => {
+  test("grouped by goal, every key result's item is drawn in its goal's lane", async ({ page }) => {
     await open(page);
+    // The Timeline's bands are the tracks: none is a key result's.
     await page.getByTestId("format-timeline").click();
-    const lanes = page.getByTestId("timeline-lane");
+    const bands = page.getByTestId("timeline-lane");
+    await expect(bands.first()).toBeVisible();
+    for (const name of [KR1, KR2, PROPOSED, SUB]) await expect(bands.filter({ hasText: name })).toHaveCount(0);
+
+    // The Gantt, grouped by goal: one Faster activation lane holds the key results' items.
+    await page.getByTestId("format-gantt").click();
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
+    await page.getByTestId("group-goal").click();
+    await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
+    const lanes = page.getByTestId("chart-group");
     await expect(lanes.filter({ hasText: "Faster activation" })).toHaveCount(1);
     // Each item's lane: the nearest lane header above its row.
     const laneOf = (title: string) =>
-      page.evaluate((t) => {
-        let lane = "";
-        for (const el of document.querySelectorAll('[data-testid="timeline-lane"], [data-testid="timeline-row"]')) {
-          if (el.getAttribute("data-testid") === "timeline-lane") lane = (el.textContent ?? "").trim();
-          else if ((el.textContent ?? "").includes(t)) return lane;
-        }
-        return null;
-      }, title);
+      page
+        .getByTestId("chart-label")
+        .filter({ has: page.getByTestId("label-title").getByText(title, { exact: true }) })
+        .evaluate((el) => {
+          let e = el.parentElement!.previousElementSibling;
+          while (e && e.getAttribute("data-testid") !== "chart-group") e = e.previousElementSibling;
+          return (e?.textContent ?? "").trim();
+        });
     for (const item of ["Guided setup checklist", "Starter report template", "Setup progress bar"]) await expect.poll(() => laneOf(item)).toMatch(/Faster activation/);
     for (const name of [KR1, KR2, PROPOSED, SUB]) await expect(lanes.filter({ hasText: name })).toHaveCount(0);
   });

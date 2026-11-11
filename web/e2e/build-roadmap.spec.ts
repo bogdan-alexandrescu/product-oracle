@@ -210,9 +210,21 @@ test.describe("phone", () => {
     const now = page.getByTestId("timeline-quarter").filter({ hasText: "Today Oct 22" });
     await expect(now).toHaveCount(1);
     await expect(now.getByRole("heading")).toContainText("Q4 2026");
-    // Each item with its name, dates and goal.
+    // Each item with its name and dates under its track band's header (tb-mk: the rows read
+    // dates only; the band header names the track, and its company goal when it has one).
     await expect(row(page, "alert-rules")).toContainText("Alert rules engine");
-    await expect(row(page, "alert-rules")).toContainText("Grow retention");
+    await expect(row(page, "alert-rules")).toContainText("Oct 1 – Nov 10");
+    const band = row(page, "alert-rules").locator('xpath=preceding-sibling::li[@data-testid="timeline-band"][1]');
+    await expect(band).toHaveCount(1);
+    await expect(band.getByTestId("track-head")).toContainText("Usage alerts track");
+    await expect(row(page, "alert-rules")).not.toContainText("Grow retention");
+    // Its own goal (a roadmap goal, not a track's company goal) reads in its sheet.
+    await row(page, "alert-rules").getByTestId("timeline-bar").click();
+    const sheet = page.getByTestId("floating-card");
+    await expect(sheet).toContainText("Alert rules engine");
+    await expect(sheet).toContainText("Grow retention");
+    await page.keyboard.press("Escape");
+    await expect(sheet).toHaveCount(0);
     // A cut item is struck through in its quarter.
     const cut = row(page, "setup-tour");
     await cut.scrollIntoViewIfNeeded();

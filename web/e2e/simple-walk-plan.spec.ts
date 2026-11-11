@@ -11,14 +11,19 @@ import { expect, test, type Page } from "./test";
  * Card walk-home-strip: protects = Home's "The plan this quarter" draws one row per current
  * milestone of the roadmap, whatever notes its items' milestone texts carry ("M1 · Measure it,
  * make it safe (baseline needs the export); ..."); home-milestones-current (PR 1424): this
- * scenario's roadmap has no M1 or M2 (its milestones are the track's "Beta" and "Beta launch"),
- * so the five items typed "M1 · Measure it, make it safe (...)" or "M2 · Ship to beta (...)" are
- * under "Not in a milestone", never in a row of their own; no note in any label;
- * fails_when = a row per distinct milestone text, a row named by a text no milestone has, or a
- * note in a label; no_claim = which PRD Home picks (simple-plan-strip.spec.ts).
+ * scenario's roadmap milestones are the alerts track's "Beta" (dated) and the onboarding track's
+ * "Beta launch" (undated), so roadmap-milestone-codes numbers them M1 and M2 by date ("M1 · Beta",
+ * "M2 · Beta launch"); the five items typed "M1 · Measure it, make it safe (...)" or "M2 · Ship to
+ * beta (...)" name no roadmap milestone (their M1 and M2 are the PRD's words, not roadmap codes),
+ * so they are under "Not in a milestone", never in a row of their own nor in M1's or M2's; no note
+ * in any label; fails_when = a row per distinct milestone text, a row named by a text no milestone
+ * has, a typed code joining the roadmap milestone of that code, or a note in a label;
+ * no_claim = which PRD Home picks (simple-plan-strip.spec.ts).
  *
  * Card walk-one-pager-timeline: protects = the one-pager's Timeline strip groups the same way
- * (M1 · 3, M2 · 2, No milestone · 1) and a row still opens the roadmap filtered to the PRD;
+ * (M1 · 3, M2 · 2, No milestone · 1) and a row still opens the roadmap filtered to the PRD; its
+ * M1 and M2 are the PRD's own milestones: roadmap codes are a roadmap read's (the API's
+ * roadmap_code is null outside one), so a PRD's strip keeps its own codes;
  * fails_when = five noted milestone texts draw five rows; no_claim = the PDF's drawing (the
  * API's plan_strip cases, api/tests/test_simple_one_pager_review.py).
  *
@@ -35,7 +40,7 @@ import { expect, test, type Page } from "./test";
  * no_claim = the job's answer (the API's pytest).
  *
  * Card walk-milestone-record (walk-plan review): protects = items a track milestone record
- * links share its row ("Beta launch · 3 items") on Home and on the one-pager, whatever their
+ * links share its row ("M2 · Beta launch · 3 items") on Home and on the one-pager, whatever their
  * own milestone texts say ("Beta launch, two teams first", "Beta launch - after legal") and
  * with none; fails_when = the texts split into rows or the linked item with no text of its
  * own counts under "No milestone"; no_claim = which record wins when two link an item.
@@ -75,15 +80,18 @@ for (const phone of [false, true]) {
           const texts = await labels.allTextContents();
           // home-waiting-one-list (PR 1235): Home's plan is the company roadmap's, every PRD's
           // items, so a row names its milestone alone (fix4's document name went with one PRD's plan).
-          // home-milestones-current (PR 1424): the roadmap has no M1 or M2, so the noted texts
-          // name no current milestone: their items are not in one, and no row is named by them.
-          for (const t of texts) expect(t).not.toMatch(/^M[12]\b|Measure it|Ship to beta/);
+          // home-milestones-current (PR 1424), roadmap-milestone-codes: the roadmap's milestones are
+          // the track's "Beta" (dated) and "Beta launch" (undated), M1 and M2 by date; the noted
+          // texts' M1 and M2 are the PRD's words and name no roadmap milestone: their items are not
+          // in one, and no row is named by them. Each row is one milestone, by its code and name.
+          for (const t of texts) expect(t).not.toMatch(/Measure it|Ship to beta/);
+          // The goals' target dates (milestone-kinds) take M2 to M4, so the undated Beta launch is M5.
+          expect(texts.slice(0, -1)).toEqual(["M1 · Beta · 1 item", "M5 · Beta launch · 3 items"]);
           const loose = plan.getByTestId("home-strip-row").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^Not in a milestone · \d+ items?$/ }) });
           await loose.hover();
           expect(((await loose.getAttribute("title")) ?? "").split("\n").slice(1)).toEqual(
             expect.arrayContaining(["Usage export", "Dry run", "Setup audit", "Beta invites", "Beta feedback form"]),
           );
-          expect(texts).toContain("Beta launch · 3 items");
           for (const t of texts) expect(t).not.toMatch(/two teams first|after legal/);
           expect(texts.at(-1)).toMatch(/^Not in a milestone · \d+ items?$/);
           expect(new Set(texts).size).toBe(texts.length);
@@ -96,7 +104,10 @@ for (const phone of [false, true]) {
           await setUp(page, scheme, EMAILS[role]);
           await page.goto("/simple/prds/guided-setup");
           const strip = page.getByLabel("Timeline strip");
-          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["M1 · Measure it, make it safe · 3 roadmap items", "M2 · Ship to beta · 2 roadmap items", "Beta launch · 3 roadmap items", "No milestone · 1 roadmap item"]);
+          // roadmap-milestone-codes (owner Nov 10): the PRD's written M1 and M2 name no roadmap
+          // milestone, so those rows read their names alone, never the PRD's own code.
+          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["Measure it, make it safe · 3 roadmap items", "Ship to beta · 2 roadmap items", "Beta launch · 3 roadmap items", "No milestone · 1 roadmap item"]);
+          await expect(strip).not.toContainText("M1 · Measure it");
           await expect(strip).not.toContainText("dry run");
 
           const problem = page.getByRole("region", { name: "Problem and who has it" });
@@ -117,7 +128,7 @@ for (const phone of [false, true]) {
           if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);
           else expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
-          await strip.getByTestId("plan-strip-row").filter({ hasText: "M1 · Measure it, make it safe · 3 roadmap items" }).click();
+          await strip.getByTestId("plan-strip-row").filter({ hasText: "Measure it, make it safe · 3 roadmap items" }).click();
           await expect(page).toHaveURL(/\/simple\/roadmap\?prd=guided-setup$/);
         });
 

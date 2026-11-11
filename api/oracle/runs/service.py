@@ -137,7 +137,7 @@ from oracle import audit, autonomy, company_time, confidence, safe_yaml, webhook
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
-from oracle.baseline import yaml_io
+from oracle.baseline import fixes, yaml_io
 from oracle.baseline.goals import target_words
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.claude_accounts.pool import readable_refusal
@@ -2413,6 +2413,14 @@ async def _target_features(
         )
     ).all()
     found = {e.key: e for e in rows} | {str(e.id): e for e in rows}
+    if any(r not in found for r in refs):
+        # A key a feature had before it joined (its code is its key now) still names it.
+        aliases = {k: v for k, v in (await fixes.former_keys(db, live=True)).items()
+                   if k in refs and k not in found}  # fmt: skip
+        for key, fid in aliases.items():
+            feature = await db.get(Entity, fid)
+            if feature is not None and feature.type == "feature" and feature.status != "rejected":
+                found[key] = feature
     missing = [r for r in refs if r not in found]
     if missing:
         raise Invalid(f"not a Ground Truth feature: {', '.join(missing)}")
@@ -11722,6 +11730,72 @@ async def _hidden_runs(db: AsyncSession, principal: Principal, runs: Any) -> set
     return {r.id for r in runs if r.document_id in hidden_docs or r.flow in only_hidden}
 
 
+@dataclass
+class WaitingStop:
+    """A pending run stop the reader may decide, as the one waiting list names it."""
+
+    id: uuid.UUID
+    run_id: uuid.UUID
+    kind: str
+    created_at: datetime
+    flow_title: str
+    document_title: str | None
+    document_slug: str | None
+
+
+async def waiting_stops(db: AsyncSession, principal: Principal) -> list[WaitingStop]:
+    """The pending stops :func:`inbox` lists as the reader's ``checkpoints`` (the same
+    deciders, the same hidden runs), oldest first, without the Inbox's review summaries and
+    other rows: the Simple one list (oracle.simple.waiting_list) reads only these, in a
+    fixed number of statements however many runs wait."""
+    pending = list(
+        await db.scalars(
+            select(Checkpoint)
+            .where(Checkpoint.status == "pending")
+            .order_by(Checkpoint.created_at, Checkpoint.id)
+        )
+    )
+    if not pending:
+        return []
+    runs = {
+        r.id: r
+        for r in await db.scalars(select(Run).where(Run.id.in_({c.run_id for c in pending})))
+    }
+    leads = await engineering_leads(db)
+    hidden = await _hidden_runs(db, principal, runs.values())
+    mine = [
+        c
+        for c in pending
+        if c.run_id not in hidden and may_decide(principal, c, runs[c.run_id].flow, leads)
+    ]
+    if not mine:
+        return []
+    ids = {runs[c.run_id].document_id for c in mine} - {None}
+    docs: dict[uuid.UUID, tuple[str, str]] = {}
+    if ids:
+        rows = await db.execute(
+            select(Document.id, Document.slug, Document.title).where(Document.id.in_(ids))
+        )
+        docs = {i: (slug, title) for i, slug, title in rows.all()}
+    pending_titles = await _pending_titles(db, [runs[c.run_id] for c in mine])
+    out = []
+    for c in mine:
+        run = runs[c.run_id]
+        slug, title = docs.get(run.document_id, (None, None)) if run.document_id else (None, None)
+        out.append(
+            WaitingStop(
+                id=c.id,
+                run_id=c.run_id,
+                kind=c.kind,
+                created_at=c.created_at,
+                flow_title=_flow(run).title,
+                document_title=title if run.document_id else pending_titles.get(run.id),
+                document_slug=slug,
+            )
+        )
+    return out
+
+
 async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False) -> InboxOut:
     """``mark_seen``: record this visit as my last one (after reading what was new)."""
     pending = list(
@@ -11997,8 +12071,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     simple_proposals, simple_decisions = await simple_rows(db, principal, seen)
     counted += len(simple_proposals)
     # Simple S3b: versions from Simple drafts waiting for my approval as a required reviewer;
-    # inbox-meeting-proposals fix: open date and goal suggestions I may decide. The three
-    # are read together, in one read.
+    # inbox-meeting-proposals fix: open date and goal suggestions I may decide; tracks-goal:
+    # the PRDs waiting on Oracle's suggested track. The four are read together, in one read.
     from oracle.simple.additions import inbox_rows as goal_suggestion_rows
     from oracle.simple.drafts import inbox_rows as simple_approval_rows
     from oracle.simple.drafts import waiting as simple_waiting
@@ -12010,6 +12084,12 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     simple_date_suggestions = await date_suggestion_rows(db, principal, seen, simple_open.dates)
     simple_goal_suggestions = await goal_suggestion_rows(db, principal, seen, simple_open.goals)
     counted += len(simple_date_suggestions) + len(simple_goal_suggestions)
+    # tracks-goal: Oracle's suggested track for a newly accepted PRD of mine with none.
+    from oracle.simple.track_suggestions import inbox_rows as track_suggestion_rows
+
+    simple_track_suggestions = await track_suggestion_rows(db, principal, seen, simple_open.tracks)
+    # One waiting for its track's decider asks nothing of me: not counted.
+    counted += sum(1 for s in simple_track_suggestions if s.proposed is None)
     # Simple S8: meeting minutes sent to me as an attendee (nothing to decide: not counted).
     from oracle.simple.meetings import inbox_rows as simple_minutes_rows
 
@@ -12085,6 +12165,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         simple_approvals=simple_approvals,
         simple_date_suggestions=simple_date_suggestions,
         simple_goal_suggestions=simple_goal_suggestions,
+        simple_track_suggestions=simple_track_suggestions,
         simple_minutes=simple_minutes,
     )
 

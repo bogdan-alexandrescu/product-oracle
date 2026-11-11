@@ -97,6 +97,8 @@ export interface OnePagerDb {
     /** A heading's count fixed (owner, Nov 5, 'Fix the heading too'): the API's overlay["headings"]. */
     headings?: Record<string, string>;
     status?: "working" | "submitted"; waiting_on?: string[]; reminders?: Record<string, string>;
+    /** Who sent it for approval, and when (the API's simple_drafts.submitted_by, submitted_at). */
+    submitted_by?: string; submitted_at?: string;
     /** The version number it was submitted as (the API's simple_drafts.version_id): only that version's approval settles it. */
     submitted_as?: number;
   };
@@ -123,7 +125,7 @@ export interface OnePagerDb {
    */
   held?: { blocks: OnePagerDb["blocks"]; checks: string[] } | null;
   /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
-  approval?: { approved_in: string; waiting_on: { id: string; name: string }[]; blocked_by?: string[] } | null;
+  approval?: { approved_in: string | null; waiting_on: { id: string; name: string }[]; blocked_by?: string[] } | null;
   /** The one_pager job is still writing the page: `blocks` are Oracle's quick read (built_by "extract"). */
   writing?: boolean;
   /** The page is Oracle's quick read with no one_pager job writing it (it failed or was never queued). */
@@ -198,6 +200,8 @@ type SliceItem = {
   milestone: [string, string | null] | null;
   /** The track milestone record naming the item, when any (the strip's row). */
   record?: { id: string; name: string };
+  /** roadmap-milestone-codes: its milestone's roadmap-wide code (one_pager.roadmap_codes_of), when any. */
+  code?: string | null;
   /** The day its milestone starts when the PRD's plan dates it (the strip's row spans it). */
   milestoneStart?: string;
   /** The mock roadmap's item it is (simple-roadmap.ts SEED key), so it carries that feature's mark. */
@@ -684,6 +688,30 @@ function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem
     if (code) codes.add(code);
   }
   const out = roadmapOut(rm, role, new URLSearchParams());
+  // one_pager.roadmap_codes_of: a milestone's roadmap code by its id, else this PRD's milestone of
+  // that written code (or name) on the roadmap; none when it is no roadmap milestone.
+  const byId = new Map<string, string | null | undefined>([...(out?.goal_milestones ?? []), ...((out?.milestones ?? []) as { id: string; roadmap_code?: string | null }[])].map((m) => [m.id, m.roadmap_code]));
+  const own = new Map<string, string>();
+  for (const m of out?.goal_milestones ?? []) {
+    if (!m.prd || m.prd.id !== db.doc.id || !m.roadmap_code) continue;
+    for (const k of [m.code.trim().toUpperCase(), m.name.split(/\s+/).filter(Boolean).join(" ").toLowerCase()]) {
+      if (k && (!own.has(k) || Number(m.roadmap_code.slice(1)) < Number(own.get(k)!.slice(1)))) own.set(k, m.roadmap_code);
+    }
+  }
+  const byName = new Map<string, string>();
+  // A roadmap milestone (a track's, or a roadmap's own; a goal's target date holds no item).
+  for (const m of [...((out?.milestones ?? []) as { name?: string | null; roadmap_code?: string | null }[]), ...(out?.goal_milestones ?? []).filter((g) => !g.goal_target)]) {
+    const k = (m.name ?? "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+    if (k && m.roadmap_code && (!byName.has(k) || Number(m.roadmap_code.slice(1)) < Number(byName.get(k)!.slice(1)))) byName.set(k, m.roadmap_code);
+  }
+  const codeOf = (text: string | null, ...ids: (string | null | undefined)[]): string | null => {
+    for (const i of ids) if (i && byId.get(i)) return byId.get(i)!;
+    if (!text) return null;
+    const [key, label] = milestoneOf(text);
+    const name = label.includes(" · ") ? label.split(" · ").slice(1).join(" · ") : "";
+    // A track milestone the text names ("Beta launch"), as Home and the Roadmap read it.
+    return own.get(key) ?? own.get(name.split(/\s+/).filter(Boolean).join(" ").toLowerCase()) ?? byName.get((name || label).split(/\s+/).filter(Boolean).join(" ").toLowerCase()) ?? null;
+  };
   const items = (out?.items ?? [])
     .filter((i) => i.prd?.slug === db.doc.slug || i.prd?.id === db.doc.id || (!!featureCode(i.code) && codes.has(featureCode(i.code)!)))
     .filter((i) => i.status !== "cut")
@@ -696,6 +724,7 @@ function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem
           ...base, start: x.start_date ?? base.start, end: x.end_date ?? base.end, estimated: !(x.milestone_start && x.milestone_end),
           milestone: [`${x.milestone} · ${x.milestone_name}`, x.milestone_end ?? null] as [string, string | null],
           ...(x.milestone_start ? { milestoneStart: x.milestone_start } : {}),
+          code: codeOf(`${x.milestone} · ${x.milestone_name}`),
         }));
       }
       if (!own) return [{ ...base, milestone: null }];
@@ -704,6 +733,8 @@ function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem
         milestone: i.milestone?.date ? [i.milestone.name ?? "Milestone", i.milestone.date] as [string, string] : null,
         ...(i.milestone?.record_id ? { record: { id: i.milestone.record_id, name: i.milestone.record_name ?? "Milestone" } } : {}),
         ...(i.milestone?.start_date ? { milestoneStart: i.milestone.start_date } : {}),
+        // The track milestone naming it is its record (the API's milestone.record_id), its items' list or its own.
+        code: i.milestone ? codeOf(i.milestone.record_name ?? i.milestone.name ?? null, i.milestone.id, i.milestone.record_id, ((out?.milestones ?? []) as { id: string; item_ids?: string[] }[]).find((m) => m.item_ids?.includes(i.id))?.id) : null,
       }];
     });
   // A dated plan's span is the one its timeline draws.
@@ -801,10 +832,21 @@ function json(status: number, body: unknown): Response {
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 
 /** As one_pager.decides: an owner; the decider; with none, a track owner while an approver. */
-function decides(ctx: OnePagerCtx): boolean {
+function decides(ctx: Pick<OnePagerCtx, "id" | "role" | "decider" | "trackOwners">): boolean {
   if (ctx.role === "owner") return true;
   if (ctx.decider) return ctx.id === ctx.decider;
   return (ctx.trackOwners ?? []).includes(ctx.id) && RANK[ctx.role] >= RANK.approver;
+}
+
+/** As drafts._approver_of (-> can_edit): the draft's final approval is the decider's; with none,
+ * an owner's or the PRD's track owner's while an approver. */
+function approverOf(ctx: Pick<OnePagerCtx, "id" | "role" | "decider" | "trackOwners">): boolean {
+  return ctx.decider ? ctx.id === ctx.decider : ctx.role === "owner" || decides(ctx);
+}
+
+/** As drafts.can_approve: submitted, and waiting on me (a reviewer, or its approver whose approval is not in yet). */
+function canApprove(db: OnePagerDb, ctx: Pick<OnePagerCtx, "id" | "role" | "decider" | "trackOwners">): boolean {
+  return db.draft?.status === "submitted" && (((db.draft.waiting_on ?? []).includes(ctx.id)) || (!db.approval && approverOf(ctx)));
 }
 
 /** As one_pager.may_decide: a proposal's decider is an owner (has_role on the role ladder), or
@@ -1134,9 +1176,12 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     blocks,
     timeline: slice.map((x, i) => ({ id: sliceItemId(x, i), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
     plan: planByMonth(
-      placed.map((x, i) => ({ id: sliceItemId(x, i), start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
+      placed.map((x, i) => ({ id: sliceItemId(x, i), start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null, roadmapCode: x.code ?? null })),
       // qa4-simple-prd-10: the company's day, as the API's slice (and the notes' times) read it.
       companyDayIso(new Date(mockNowMs())),
+      null,
+      // roadmap-milestone-codes: rows read the roadmap's codes, never the PRD's written ones.
+      true,
     ),
     // As the API: the sections the page's lines rest on.
     sections: db.sections.filter((s) => db.blocks.some((b) => b.lines.some((l) => l.keys.includes(s.key)))).map((s) => ({ key: s.key, heading: headingNow(db, s.key, sees), body: sectionNow(db, s.key, sees) })),
@@ -1150,6 +1195,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
           // build-review: who approves once sent (the PRD's required reviewers), on a working draft.
           reviewers: (db.draft.status ?? "working") === "working" ? ctx.reviewers.map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })) : [],
           can_submit: (db.draft.status ?? "working") === "working" && decides(ctx) && liveChanges(db).length > 0,
+          can_approve: canApprove(db, ctx),
           reminded_at: remindedAt(db), can_remind: mayRemind(ctx) && dueReminders(db).length > 0, decision_notes: draftDecisionNotes(),
         }
       : null,
@@ -1228,12 +1274,31 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     const problems = unbackedDates(db);
     if (problems.length) return json(422, { detail: `draft rejected: ${[...new Set(problems.map((x) => x.message))].slice(0, NAMED_PROBLEMS).join("; ")}${problems.length > NAMED_PROBLEMS ? ` (and ${problems.length - NAMED_PROBLEMS} more)` : ""}`, errors: problems });
     db.draft.status = "submitted";
+    db.draft.submitted_by = ctx.id;
+    db.draft.submitted_at = new Date(mockNowMs()).toISOString();
     db.draft.waiting_on = [...new Set([...ctx.reviewers, ...added])];
     db.draft.reminders = {};
     db.changes.forEach((c) => (c.session_open = false));
     const as = ctx.imported?.(db.sections.map((x) => ({ key: x.key, heading: headingNow(db, x.key), body: sectionNow(db, x.key) })), db.version + 1) ?? db.version + 1;
     db.draft.submitted_as = as;
     return json(200, { id: db.draft.id, status: "submitted", version: as, waiting_on: db.draft.waiting_on });
+  }
+  // inbox-prd-approval-open (drafts.approve): a reviewer's approval leaves the draft waiting on the
+  // rest; the decider's, with nobody left, publishes it.
+  if (p[2] === "drafts" && p[4] === "approve" && m === "POST" && db.draft && p[3] === db.draft.id) {
+    const d = db.draft;
+    // As drafts.approve: a replaced PRD is read-only history (refuse_history's 409), first.
+    if (ctx.replacedBy?.length) return json(409, { detail: `${db.doc.title} is replaced and read-only` });
+    if (d.status !== "submitted") return json(409, { detail: `This draft is ${d.status ?? "working"}: only a submitted draft is approved` });
+    const approver = approverOf(ctx);
+    if (!approver && !(d.waiting_on ?? []).includes(ctx.id) && !ctx.reviewers.includes(ctx.id)) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
+    d.waiting_on = (d.waiting_on ?? []).filter((i) => i !== ctx.id);
+    const waiting = d.waiting_on.map((i) => ({ id: i, name: ctx.names[i] ?? "someone" }));
+    if (approver) db.approval = { approved_in: null, waiting_on: waiting, blocked_by: [] };
+    else if (db.approval) db.approval.waiting_on = waiting;
+    const done = !!db.approval && !waiting.length;
+    if (done) publishOnePager(db);
+    return json(200, { id: d.id, status: done ? "approved" : "submitted", waiting_on: d.waiting_on, decider_approved: !!db.approval || done, can_approve: !done && canApprove(db, ctx) });
   }
   if (p[2] === "one-pagers" && p[4] === "remind" && m === "POST") {
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
@@ -1425,7 +1490,8 @@ export function onePagerInboxRows(
   dbs: OnePagerDb[],
   me: { id: string; role: Role },
   seen: string | null,
-): { proposals: Schemas["InboxSimpleChange"][]; decisions: Schemas["InboxSimpleChange"][] } {
+  who: { deciderOf?: (d: OnePagerDb) => string | null; trackOwnersOf?: (d: OnePagerDb) => string[]; names?: Record<string, string> } = {},
+): { proposals: Schemas["InboxSimpleChange"][]; decisions: Schemas["InboxSimpleChange"][]; approvals: Schemas["InboxSimpleApproval"][] } {
   // What the row is on and what was asked, as changes.inbox_rows (_subject, asked_of) for each kind:
   // a line's wording quotes the line; a number fix names its PRD and the section it changes.
   const words = (d: OnePagerDb, c: Change): Pick<Schemas["InboxSimpleChange"], "asked" | "subject" | "line_id" | "section"> => {
@@ -1466,5 +1532,14 @@ export function onePagerInboxRows(
     decisions: all
       .filter(([, c]) => c.by === me.id && (c.status === "accepted" || c.status === "declined") && c.decision_reason !== "Withdrawn by its author")
       .map(([d, c]) => row(d, c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
+    // inbox-prd-approval-open (drafts.inbox_rows): a PRD's submitted draft waiting on me, as a roadmap's.
+    approvals: dbs
+      .filter((d) => canApprove(d, { ...me, decider: who.deciderOf?.(d) ?? null, trackOwners: who.trackOwnersOf?.(d) ?? [] }))
+      .map((d) => ({
+        draft_id: d.draft!.id, document: { id: d.doc.id, slug: d.doc.slug, title: d.doc.title }, document_kind: "prd" as const,
+        version: d.draft!.submitted_as ?? d.version + 1, submitted_by: d.draft!.submitted_by ?? null,
+        submitted_by_name: d.draft!.submitted_by ? (who.names?.[d.draft!.submitted_by] ?? null) : null, submitted_at: d.draft!.submitted_at ?? null,
+        decider_approved: !!d.approval, state: !seen || (d.draft!.submitted_at ?? "") > seen ? ("new" as const) : ("open" as const),
+      })),
   };
 }

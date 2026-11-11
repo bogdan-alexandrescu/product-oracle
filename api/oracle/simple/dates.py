@@ -10,9 +10,9 @@ suggestion. Pure functions: the caller (oracle.simple.service) gathers the candi
    basis scoped to the item (its key, or a tracker issue matched to it). An end date only;
 3. tracker dates: the ``target_date`` of a tracker record matched to the item. An end
    date only;
-4. else estimated: the item's horizon window from the company's planning horizons on the
-   company's day (now = short, next = medium, later = from the day after Next ends
-   to the end of long).
+4. else estimated: its column's window on the company's day (board-quarters: Now this
+   calendar quarter, Next the next, Later from the quarter after; an item's column comes
+   from its dates, :func:`horizon_of`, an undated one Later's).
 
 An item's own dates stored with ``date_source`` ``engineering`` or ``tracker`` rank with that
 source. Ties within a source: the most recently updated candidate wins. A start that no
@@ -36,6 +36,7 @@ lies inside the window; the basis says why in one sentence.
 """
 
 import statistics
+from calendar import monthrange
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -116,13 +117,77 @@ class Suggestion:
 
 
 def windows(horizons: dict[str, int], today: date) -> dict[str, tuple[date, date]]:
-    """Each roadmap horizon's window on the company's day ``today``. Later starts the day
-    after Next ends (no gap between them, no "today plus a year" start) and ends where the
-    long horizon ends (``today`` plus ``long_to_months``, always after Next ends)."""
-    spans = horizon_windows(horizons, today)
-    out = {h: spans[w] for h, w in HORIZON_WINDOW.items()}
-    out["later"] = (out["next"][1] + DAY, out["later"][1])
-    return out
+    """Each roadmap horizon's window on the company's day ``today`` (board-quarters, the
+    owner's Nov 10 pick): Now is this calendar quarter, Next the next one, Later from the
+    quarter after that on. Later's end (only an undated bar's estimate) is where the long
+    horizon ends, at least that quarter's end."""
+    q0 = date(today.year, 3 * ((today.month - 1) // 3) + 1, 1)
+    q1, q2 = add_months(q0, 3), add_months(q0, 6)
+    long_end = horizon_windows(horizons, today)["long"][1]
+    return {
+        "now": (q0, q1 - DAY),
+        "next": (q1, q2 - DAY),
+        "later": (q2, max(add_months(q2, 3) - DAY, long_end)),
+    }
+
+
+def add_months(day: date, months: int) -> date:
+    """``day`` moved ``months`` calendar months, clamped to the month's last day."""
+    year, month = divmod(day.month - 1 + months, 12)
+    year += day.year
+    return date(year, month + 1, min(day.day, monthrange(year, month + 1)[1]))
+
+
+def horizon_of(r: Resolved, wins: dict[str, tuple[date, date]]) -> str:
+    """The column an item's dates put it in: Now when they touch this quarter (work
+    started earlier and still running, or overdue), Next when it starts next quarter,
+    Later when it starts after that; an undated item (both dates Oracle's estimate) Later."""
+    if r.undated:
+        return "later"
+    if r.start.date <= wins["now"][1]:
+        return "now"
+    return "next" if r.start.date <= wins["next"][1] else "later"
+
+
+def _quarter(day: date, wins: dict[str, tuple[date, date]]) -> int:
+    """The quarter ``day`` is in, counted from this one (0; last quarter -1)."""
+    q0 = wins["now"][0]
+    return ((day.year - q0.year) * 12 + day.month - q0.month) // 3
+
+
+def shift_to(
+    start: date | None, end: date | None, horizon: str, wins: dict[str, tuple[date, date]]
+) -> tuple[date, date]:
+    """board-quarters: the dates a move to ``horizon``'s column gives, shifted by whole
+    quarters (length kept) so the start lands in it (Now: this quarter, unless they touch it
+    already; Later: the first quarter of Later, unless they start later still). Undated:
+    the quarter itself (Later: its first quarter)."""
+    if start is None or end is None:
+        q = wins[horizon][0]
+        return q, add_months(q, 3) - DAY
+    at = _quarter(start, wins)
+    to = {"now": 0, "next": 1, "later": 2}[horizon]
+    if horizon == "now" and start <= wins["now"][1]:
+        to = at
+    if horizon == "later" and at >= 2:
+        to = at
+    moved = add_months(start, 3 * (to - at))
+    return moved, moved + (end - start)
+
+
+def resolve_by_dates(
+    candidates: list[Candidate],
+    wins: dict[str, tuple[date, date]],
+    effort_weeks: float | None = None,
+) -> tuple[Resolved, str]:
+    """board-quarters: an item's dates and the column they put it in; a bar no source dates
+    is Later's estimate, a part no source gives is estimated in its own column's window."""
+    r = resolve(candidates, wins["later"], effort_weeks)
+    if r.undated:
+        return r, "later"
+    h = horizon_of(r, wins)
+    r = resolve(candidates, wins[h], effort_weeks)
+    return r, horizon_of(r, wins)
 
 
 def _stamp(c: Candidate) -> float:

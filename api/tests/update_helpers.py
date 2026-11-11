@@ -170,12 +170,15 @@ async def started(client, ctx: Ctx, template: str = "investor-update", **extra: 
 
 
 async def prd_with_active_track(client, ctx: Ctx) -> str:
-    """The checkout-redesign PRD, approved by the owner: its product track is active."""
+    """The checkout-redesign PRD, approved by the owner and put on a track a person started:
+    its product track is active (tracks-goal, owner Nov 9: approving starts no track)."""
     owner = ctx.as_("owner")
     resp = await import_md(client, owner, PRD, draft("prd_v1.md"))
     assert resp.status_code == 201, resp.text
     resp = await client.post(f"/v1/documents/{PRD}/versions/1/approve", headers=owner)
     assert resp.status_code == 200, resp.text
+    resp = await client.post("/v1/tracks", json={"prd": PRD}, headers=owner)
+    assert resp.status_code == 201, resp.text
     return PRD
 
 

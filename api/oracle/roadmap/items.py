@@ -169,7 +169,15 @@ async def _by_type_and_key(
             Entity.status != "rejected",
         )
     )
-    return {(e.type, e.key): e for e in rows if (e.type, e.key) in wanted}
+    out = {(e.type, e.key): e for e in rows if (e.type, e.key) in wanted}
+    # A feature named by the key it had before its code (oracle.baseline.fixes).
+    left = {k for t, k in wanted if t == "feature" and (t, k) not in out}
+    if left:
+        from oracle.baseline import fixes
+
+        for k, e in (await fixes.features_by_keys(db, left, live=True)).items():
+            out[("feature", k)] = e
+    return out
 
 
 async def _linked_by_section(

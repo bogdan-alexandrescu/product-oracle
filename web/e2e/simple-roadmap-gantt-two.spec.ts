@@ -75,37 +75,34 @@ for (const phone of [false, true]) {
        * dashboard, Referral link, Public signup; the PM-owned Launch email sits in the PM-owned
        * lane, timeline-overlap B); its suggested features open from the goal's card above the
        * chart (no button on the lane); fails_when = two lanes are titled Growth; no_claim =
-       * the lanes' order, other goals' lanes. build-roadmap (8ba0ac46): a desktop's Timeline
-       * draws the goal lanes as rows under a "Growth · 4 items" header; a phone's Timeline is a
-       * list by quarter, so a phone reads the lanes on the Gantt.
+       * the lanes' order, other goals' lanes. tb-mk: the Timeline's bands and the Gantt's
+       * default Group by are now tracks, so goal lanes live on the Gantt's Group by Goal, which
+       * a person picks; there the Growth lane is one, with its 4 items and no button. A
+       * desktop's Timeline (track bands) still draws each of those 4 items as one row, under
+       * the track bands only (no band titled Growth); a phone's Timeline is a list by quarter.
        */
       test(`one lane per goal, whether the goal is the item's or its slices' (${where})`, async ({ page }) => {
         await open(page, scheme);
+        let timelineRows: string[] = [];
         if (!phone) {
-          const growth = page.getByTestId("timeline-lane").filter({ hasText: /^Growth · \d+ items?$/ });
-          await expect(growth).toHaveCount(1);
-          await expect(growth).toHaveText("Growth · 4 items");
-          await expect(growth.getByRole("button")).toHaveCount(0);
-          // The Growth lane's rows: those after its header, up to the next lane's.
-          const rows = await page.locator('[data-testid="timeline-lane"], [data-testid="timeline-row"]').evaluateAll((els) => {
-            const at = els.findIndex((e) => e.getAttribute("data-testid") === "timeline-lane" && /^Growth ·/.test(e.textContent ?? ""));
-            const out: string[] = [];
-            for (const e of els.slice(at + 1)) {
-              if (e.getAttribute("data-testid") === "timeline-lane") break;
-              out.push(e.getAttribute("data-item") ?? "");
-            }
-            return out;
-          });
-          expect(rows).toHaveLength(4);
-          expect(rows).toContain("plan-f-13");
-          expect(rows).toContain("plan-f-05");
+          await expect(page.getByTestId("timeline-lane").filter({ hasText: /^Growth\b/ })).toHaveCount(0);
+          await expect(page.getByTestId("timeline-lane").filter({ hasText: "Guided setup track" })).toHaveCount(1);
+          timelineRows = await page.locator('[data-testid="timeline-row"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-item") ?? ""));
         }
         await gantt(page);
-        await expect(lane(page, "Growth")).toHaveCount(1);
+        await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
+        await page.getByTestId("group-goal").click();
+        await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
+        const growth = page.getByTestId("chart-group").filter({ has: page.locator("span", { hasText: /^Growth$/ }) });
+        await expect(growth).toHaveCount(1);
+        await expect(growth.getByRole("button")).toHaveCount(0);
+        // A Gantt goal header names the goal and its measure, no count: its 4 items are its bars.
         const rows = await itemsIn(page, "Growth");
         expect(rows).toHaveLength(4);
         expect(rows).toContain("plan-f-13");
         expect(rows).toContain("plan-f-05");
+        // The Timeline drew each of the Growth lane's items once (one row, one band).
+        if (!phone) for (const id of rows) expect(timelineRows.filter((r) => r === id), `one Timeline row for ${id}`).toHaveLength(1);
       });
 
       /**

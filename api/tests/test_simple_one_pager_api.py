@@ -706,6 +706,47 @@ async def test_remind_at_most_once_a_day_per_reviewer(client, monkeypatch):
     assert len(await nudges(ctx)) == 4
 
 
+async def test_a_prd_draft_waiting_on_me_opens_on_its_one_pager_to_approve(client):
+    """protects=bug inbox-prd-approval-open (Nov 4): the Inbox's row for a PRD draft waiting
+    on its reviewer says it is a PRD's (``document_kind``), so Open goes to the one-pager,
+    whose draft says the reviewer may approve it there (``can_approve``) until they have;
+    fails_when=the row reads as a roadmap's (Open lands on "No such roadmap"), or the
+    one-pager offers no Approve to the reviewer; no_claim=the web (inbox-prd-approval-open)."""
+    ctx = await world(client)
+    d = (await in_review(client, ctx))["draft"]
+    inbox = (await client.get("/v1/inbox", headers=ctx.as_("approver"))).json()
+    [row] = [x for x in inbox["simple_approvals"] if x["draft_id"] == d["id"]]
+    assert row["document_kind"] == "prd" and row["document"]["slug"] == "guided-setup"
+    assert (await get(client, ctx, "approver"))["draft"]["can_approve"] is True
+    seen = (await get(client, ctx, "commenter"))["draft"]
+    assert seen is None or seen["can_approve"] is False
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=ctx.as_("approver"))
+    assert r.status_code == 200, r.text
+    after = (await get(client, ctx, "approver"))["draft"]
+    assert after is None or after["can_approve"] is False
+
+
+async def test_a_one_pager_read_reuses_its_who_for_can_approve(client):
+    """protects=review minor (inbox-prd-approval-open): a one-pager GET with a draft reads
+    the PRD's review policy within its budget: ``can_approve`` reuses the page's ``who``;
+    fails_when=each GET runs drafts.who as well; no_claim=can_approve's rule (above)."""
+    from tests.coverage_helpers import count_statements
+
+    ctx = await world(client)
+    view = await get(client, ctx, "decider")
+    r = await edit(client, ctx, "decider", view, "bets-2", "Invite suggestions from contacts")
+    assert r.status_code == 201, r.text
+    for who in ("decider", "owner"):
+        with count_statements() as seen:
+            draft = (await get(client, ctx, who))["draft"]
+        assert draft is not None and draft["status"] == "working"
+        assert draft["can_approve"] is False
+        # The read budget: the policy as one_pager.who and drafts.sees/counts read it;
+        # can_approve reuses the page's own who, never reads it again.
+        policy = [x for x in seen if "FROM document_review_policies" in x]
+        assert len(policy) <= 4, len(policy)
+
+
 async def test_remind_needs_a_submitted_draft(client):
     ctx = await world(client)
     view = await get(client, ctx, "decider")

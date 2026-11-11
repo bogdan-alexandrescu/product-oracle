@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 # port-an-decisions: a meeting's agenda item or a request.
 # removed-tracks: a product track.
 # goal-map-editing: a goal milestone.
+# feature-panel: a roadmap item's dropped task.
 TrashItemType = Literal[
     "document",
     "intake",
@@ -21,6 +22,7 @@ TrashItemType = Literal[
     "request",
     "track",
     "milestone",
+    "task",
 ]
 
 
@@ -32,7 +34,7 @@ class TrashItem(BaseModel):
     slug: str | None = None
     title: str
     # A document's kind (prd, roadmap, spec, update, ...), "intake", a run's flow,
-    # "feature", "goal", "Track" or "Milestone".
+    # "feature", "goal", "Track", "Milestone" or "Task".
     kind: str
     # A feature's code on its roadmap ("F-26"), shown before its name.
     code: str | None = None
@@ -48,12 +50,16 @@ class TrashItem(BaseModel):
 class DependentsOut(BaseModel):
     """What the delete dialog lists: the root and everything that goes to Trash with it.
     ``published``: ask once more, the external copy stays where it is. ``working_runs``:
-    runs to cancel before the delete is allowed."""
+    runs to cancel before the delete is allowed. ``feeds`` (delete-prd-simple): the roadmap
+    items and tracks a PRD feeds that stay, without it; ``feeds_going``: those that go to
+    Trash with it (on its own roadmap, or a track holding no other PRD)."""
 
     root: TrashItem
     items: list[TrashItem]
     published: bool
     working_runs: list[uuid.UUID] = []
+    feeds: list[TrashItem] = []
+    feeds_going: list[TrashItem] = []
 
 
 class NotRestored(BaseModel):

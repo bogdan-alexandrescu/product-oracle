@@ -134,9 +134,9 @@ def _traced(prd_document_id: uuid.UUID):
 async def _approved_plan(db: AsyncSession, prd: Document) -> Side | None:
     """A PRD's approved plan: the latest approved roadmap version whose items trace to it,
     preferring the roadmap of the PRD's product track."""
-    track_roadmap = select(ProductTrack.roadmap_document_id).where(
-        ProductTrack.prd_document_id == prd.id
-    )
+    from oracle.roadmap.tracks import on_prd
+
+    track_roadmap = select(ProductTrack.roadmap_document_id).where(on_prd(prd.id))
     version = await db.scalar(
         select(DocumentVersion)
         .where(DocumentVersion.approved_at.is_not(None), DocumentVersion.id.in_(_traced(prd.id)))

@@ -14597,6 +14597,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/priorities/twins/{feature_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Simple Priority Twin
+         * @description A Same name record's Merge into… the row's feature (qa-prio-twins): its roadmap items
+         *     are linked to the kept feature first, on every roadmap, then its feature is merged into it.
+         *     403 unless the caller is an approver; 409, naming why, when they do not decide one of those
+         *     items' roadmaps or the kept feature has its own item there; nothing is written.
+         */
+        post: operations["merge_simple_priority_twin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/priorities": {
         parameters: {
             query?: never;
@@ -19462,7 +19485,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -19580,7 +19603,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -22385,7 +22408,9 @@ export interface components {
          * DependentsOut
          * @description What the delete dialog lists: the root and everything that goes to Trash with it.
          *     ``published``: ask once more, the external copy stays where it is. ``working_runs``:
-         *     runs to cancel before the delete is allowed.
+         *     runs to cancel before the delete is allowed. ``feeds`` (delete-prd-simple): the roadmap
+         *     items and tracks a PRD feeds that stay, without it; ``feeds_going``: those that go to
+         *     Trash with it (on its own roadmap, or a track holding no other PRD).
          */
         DependentsOut: {
             root: components["schemas"]["TrashItem"];
@@ -22398,6 +22423,16 @@ export interface components {
              * @default []
              */
             working_runs: string[];
+            /**
+             * Feeds
+             * @default []
+             */
+            feeds: components["schemas"]["TrashItem"][];
+            /**
+             * Feeds Going
+             * @default []
+             */
+            feeds_going: components["schemas"]["TrashItem"][];
         };
         /** DeriveIn */
         DeriveIn: {
@@ -26331,6 +26366,11 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /**
+             * Code
+             * @default
+             */
+            code: string;
             /** Area */
             area: string | null;
             /** Milestones */
@@ -26575,6 +26615,11 @@ export interface components {
             name: string;
             /** Goal */
             goal?: string | null;
+            /**
+             * Code
+             * @default
+             */
+            code: string;
         };
         /** GoalBucketFeature */
         GoalBucketFeature: {
@@ -26618,6 +26663,11 @@ export interface components {
             owner_id?: string | null;
             /** Owner Name */
             owner_name?: string | null;
+            /**
+             * On Roadmap
+             * @default true
+             */
+            on_roadmap: boolean;
         };
         /** GoalBucketWrite */
         GoalBucketWrite: {
@@ -26708,6 +26758,8 @@ export interface components {
             /** Owner Id */
             owner_id?: string | null;
             seen?: components["schemas"]["GoalSeen"] | null;
+            /** On Roadmap */
+            on_roadmap?: boolean | null;
         };
         /** GoalInterviewOut */
         GoalInterviewOut: {
@@ -26866,6 +26918,11 @@ export interface components {
             attrs: {
                 [key: string]: unknown;
             };
+            /**
+             * On Roadmap
+             * @default true
+             */
+            on_roadmap: boolean;
         };
         /** GoalTargetIn */
         GoalTargetIn: {
@@ -28325,6 +28382,11 @@ export interface components {
              */
             simple_goal_suggestions: components["schemas"]["InboxSimpleGoalSuggestion"][];
             /**
+             * Simple Track Suggestions
+             * @default []
+             */
+            simple_track_suggestions: components["schemas"]["InboxSimpleTrackSuggestion"][];
+            /**
              * Simple Minutes
              * @default []
              */
@@ -28621,6 +28683,12 @@ export interface components {
              */
             draft_id: string;
             document: components["schemas"]["SimpleDocRef"];
+            /**
+             * Document Kind
+             * @default roadmap
+             * @enum {string}
+             */
+            document_kind: "roadmap" | "prd";
             /** Version */
             version: number | null;
             /** Submitted By */
@@ -28652,7 +28720,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /**
              * Status
              * @enum {string}
@@ -28814,6 +28882,38 @@ export interface components {
              * @enum {string}
              */
             state: "new" | "open";
+        };
+        /**
+         * InboxSimpleTrackSuggestion
+         * @description tracks-goal (owner Nov 9): a newly accepted PRD of mine on no track. Oracle suggests
+         *     the existing track that fits it best (``track``; none fits: null); Confirm puts the PRD
+         *     on it, Pick a track on one of ``tracks``, New track starts one (each through the change
+         *     engine: ``edit_track`` with ``add_prd_id``, ``add_track``).
+         */
+        InboxSimpleTrackSuggestion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            prd: components["schemas"]["SimplePrdRef"];
+            track?: components["schemas"]["SimpleTrackChoice"] | null;
+            /**
+             * Tracks
+             * @default []
+             */
+            tracks: components["schemas"]["SimpleTrackChoice"][];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open";
+            proposed?: components["schemas"]["SimpleTrackProposed"] | null;
         };
         /** InboxSource */
         InboxSource: {
@@ -33001,6 +33101,11 @@ export interface components {
             reviewers: components["schemas"]["SimplePersonRef"][];
             /** Can Submit */
             can_submit: boolean;
+            /**
+             * Can Approve
+             * @default false
+             */
+            can_approve: boolean;
             /** Reminded At */
             reminded_at?: string | null;
             /**
@@ -36881,6 +36986,11 @@ export interface components {
              */
             status: "active" | "paused";
             prd: components["schemas"]["ReportPrd"];
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["ReportPrd"][];
             /** Link */
             link: string;
             /** Health */
@@ -41279,7 +41389,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -41328,7 +41438,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -41524,6 +41634,8 @@ export interface components {
             flow?: components["schemas"]["SimpleDecidedFlow"] | null;
             /** Code */
             code?: string | null;
+            /** Prd Title */
+            prd_title?: string | null;
             /** Chosen */
             chosen?: string | null;
             /** Question */
@@ -42201,6 +42313,63 @@ export interface components {
              */
             can_propose: boolean;
             carried_from?: components["schemas"]["SimpleDocRef"] | null;
+            /** Roadmap Code */
+            roadmap_code?: string | null;
+            /**
+             * Kind
+             * @default delivery
+             * @enum {string}
+             */
+            kind: "sub_goal" | "goal" | "delivery" | "decision" | "outside" | "handoff";
+            /**
+             * Done When Line
+             * @default
+             */
+            done_when_line: string;
+            /**
+             * Status
+             * @default on_track
+             * @enum {string}
+             */
+            status: "on_track" | "at_risk" | "hit" | "missed";
+            /** Status Reason */
+            status_reason?: string | null;
+            /** Status Set */
+            status_set?: ("on_track" | "at_risk" | "hit" | "missed") | null;
+            /** Status Set By Name */
+            status_set_by_name?: string | null;
+            /** Measure */
+            measure?: string | null;
+            /** Baseline */
+            baseline?: number | null;
+            /** Target */
+            target?: number | null;
+            /** Current */
+            current?: number | null;
+            /** Sub Goal Of Id */
+            sub_goal_of_id?: string | null;
+            /**
+             * Sub Goal Ids
+             * @default []
+             */
+            sub_goal_ids: string[];
+            /** Home Track Id */
+            home_track_id?: string | null;
+            /** Home Track Name */
+            home_track_name?: string | null;
+            /** From Track Id */
+            from_track_id?: string | null;
+            /** To Track Id */
+            to_track_id?: string | null;
+            /** From Track Name */
+            from_track_name?: string | null;
+            /** To Track Name */
+            to_track_name?: string | null;
+            /**
+             * Goal Target
+             * @default false
+             */
+            goal_target: boolean;
         };
         /** SimpleGoalMilestoneIn */
         SimpleGoalMilestoneIn: {
@@ -42228,6 +42397,37 @@ export interface components {
              * @default
              */
             counts_when: string;
+            /**
+             * Kind
+             * @default delivery
+             * @enum {string}
+             */
+            kind: "sub_goal" | "goal" | "delivery" | "decision" | "outside" | "handoff";
+            /**
+             * Done When Line
+             * @default
+             */
+            done_when_line: string;
+            /** Status Set */
+            status_set?: ("on_track" | "at_risk" | "hit" | "missed") | null;
+            /** Status Reason */
+            status_reason?: string | null;
+            /** Measure */
+            measure?: string | null;
+            /** Baseline */
+            baseline?: number | null;
+            /** Target */
+            target?: number | null;
+            /** Current */
+            current?: number | null;
+            /** Sub Goal Of Id */
+            sub_goal_of_id?: string | null;
+            /** Home Track Id */
+            home_track_id?: string | null;
+            /** From Track Id */
+            from_track_id?: string | null;
+            /** To Track Id */
+            to_track_id?: string | null;
         };
         /** SimpleGoalMilestonePatch */
         SimpleGoalMilestonePatch: {
@@ -42241,6 +42441,30 @@ export interface components {
             item_ids?: string[] | null;
             /** Counts When */
             counts_when?: string | null;
+            /** Kind */
+            kind?: ("sub_goal" | "goal" | "delivery" | "decision" | "outside" | "handoff") | null;
+            /** Done When Line */
+            done_when_line?: string | null;
+            /** Status Set */
+            status_set?: ("on_track" | "at_risk" | "hit" | "missed") | null;
+            /** Status Reason */
+            status_reason?: string | null;
+            /** Measure */
+            measure?: string | null;
+            /** Baseline */
+            baseline?: number | null;
+            /** Target */
+            target?: number | null;
+            /** Current */
+            current?: number | null;
+            /** Sub Goal Of Id */
+            sub_goal_of_id?: string | null;
+            /** Home Track Id */
+            home_track_id?: string | null;
+            /** From Track Id */
+            from_track_id?: string | null;
+            /** To Track Id */
+            to_track_id?: string | null;
         };
         /** SimpleGoalRef */
         SimpleGoalRef: {
@@ -42467,6 +42691,20 @@ export interface components {
              */
             in_draft: boolean;
             prd?: components["schemas"]["SimpleDocRef"] | null;
+            /**
+             * Kind
+             * @default delivery
+             * @enum {string}
+             */
+            kind: "sub_goal" | "goal" | "delivery" | "decision" | "outside" | "handoff";
+            /**
+             * Status
+             * @default on_track
+             * @enum {string}
+             */
+            status: "on_track" | "at_risk" | "hit" | "missed";
+            /** Status Reason */
+            status_reason?: string | null;
         };
         /**
          * SimpleKeyDateRoadmap
@@ -42932,6 +43170,8 @@ export interface components {
              * @default []
              */
             targets: components["schemas"]["SimpleMilestoneTarget"][];
+            /** Roadmap Code */
+            roadmap_code?: string | null;
         };
         /**
          * SimpleMilestonePending
@@ -42944,6 +43184,8 @@ export interface components {
             date?: string | null;
             /** Counts When */
             counts_when?: string | null;
+            /** Name */
+            name?: string | null;
             /** Asked Of */
             asked_of?: string | null;
             /** Change Id */
@@ -43370,6 +43612,8 @@ export interface components {
              * @default []
              */
             item_ids: string[];
+            /** Code */
+            code?: string | null;
         };
         /**
          * SimplePlanSpan
@@ -43498,6 +43742,13 @@ export interface components {
              * @default []
              */
             merge_into: components["schemas"]["SimplePriorityMerge"][];
+            /** Row Feature Id */
+            row_feature_id?: string | null;
+            /**
+             * Linked
+             * @default false
+             */
+            linked: boolean;
         };
         /** SimplePriorityGoal */
         SimplePriorityGoal: {
@@ -43677,6 +43928,40 @@ export interface components {
             before_override?: {
                 [key: string]: unknown;
             } | null;
+            /** Draft Item Id */
+            draft_item_id?: string | null;
+            /** Twins */
+            twins?: components["schemas"]["SimplePriorityTwin"][];
+        };
+        /**
+         * SimplePriorityTwin
+         * @description qa-prio-twins: another ranked record of a row's feature, not linked to it (a baseline
+         *     feature of the same name), shown on that row, never as a row of its own: a person merges it
+         *     into the row's record (``merge``) or keeps both; Oracle never merges it.
+         */
+        SimplePriorityTwin: {
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Item Id */
+            item_id?: string | null;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            /** Rank */
+            rank?: number | null;
+            /** Merge */
+            merge?: ("item" | "entity") | null;
+            /** Into Id */
+            into_id?: string | null;
+            /**
+             * Applies
+             * @default false
+             */
+            applies: boolean;
+            /** Blocked */
+            blocked?: string | null;
         };
         /**
          * SimplePriorityUnranked
@@ -44043,6 +44328,8 @@ export interface components {
             owner?: components["schemas"]["SimpleOwnerRef"] | null;
             /** Own Owner Id */
             own_owner_id?: string | null;
+            /** Own Decider Id */
+            own_decider_id?: string | null;
             /**
              * Depends Keys
              * @default []
@@ -44206,6 +44493,50 @@ export interface components {
              * @default []
              */
             applied_versions: components["schemas"]["SimpleAppliedVersion"][];
+            /**
+             * Tracks
+             * @default []
+             */
+            tracks: components["schemas"]["SimpleRoadmapTrack"][];
+        };
+        /**
+         * SimpleRoadmapTrack
+         * @description milestone-kinds: a track band on the roadmap read, in the Tracks order, with its
+         *     health: ``at_risk`` (a feature ends after a milestone it serves), ``stale`` (not checked
+         *     in 14 days) or ``on_track``, and a short reason.
+         */
+        SimpleRoadmapTrack: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Goal Name */
+            goal_name?: string | null;
+            /** Owner Name */
+            owner_name?: string | null;
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["SimplePrdRef"][];
+            /**
+             * Health
+             * @default on_track
+             * @enum {string}
+             */
+            health: "on_track" | "at_risk" | "stale";
+            /**
+             * Health Reason
+             * @default
+             */
+            health_reason: string;
+            /** Order */
+            order?: number | null;
         };
         /**
          * SimpleRoadmapWaiting
@@ -44500,6 +44831,60 @@ export interface components {
              */
             late: boolean;
         };
+        /** SimpleTrackChoice */
+        SimpleTrackChoice: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /** SimpleTrackGoal */
+        SimpleTrackGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * SimpleTrackPrdChoice
+         * @description tracks-goal: an accepted PRD a track can take, with the track it is on now.
+         */
+        SimpleTrackPrdChoice: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Track Id */
+            track_id?: string | null;
+            /** Track Title */
+            track_title?: string | null;
+        };
+        /**
+         * SimpleTrackProposed
+         * @description The open proposal a track suggestion waits for: which track (``title`` of a new
+         *     one), and whom it waits for.
+         */
+        SimpleTrackProposed: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            track?: components["schemas"]["SimpleTrackChoice"] | null;
+            /** Title */
+            title: string;
+            /** To Name */
+            to_name?: string | null;
+        };
         /** SimpleTrackRef */
         SimpleTrackRef: {
             /**
@@ -44509,6 +44894,12 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Goal Name */
+            goal_name?: string | null;
+            /** Order */
+            order?: number | null;
         };
         /** SimpleTrackRow */
         SimpleTrackRow: {
@@ -44528,13 +44919,19 @@ export interface components {
             owner_id?: string | null;
             /** Owner Name */
             owner_name?: string | null;
-            /**
-             * Prd Id
-             * Format: uuid
-             */
-            prd_id: string;
+            /** Prd Id */
+            prd_id?: string | null;
             /** Prd Title */
             prd_title?: string | null;
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["SimplePrdRef"][];
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Goal Name */
+            goal_name?: string | null;
             /**
              * Can Decide
              * @default false
@@ -44552,6 +44949,8 @@ export interface components {
              * @default 0
              */
             moves_count: number;
+            /** Order */
+            order?: number | null;
         };
         /** SimpleTracks */
         SimpleTracks: {
@@ -44567,7 +44966,36 @@ export interface components {
             /** People */
             people: components["schemas"]["SimplePerson"][];
             /** Prds */
-            prds: components["schemas"]["SimplePrdRef"][];
+            prds: components["schemas"]["SimpleTrackPrdChoice"][];
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["SimpleTrackGoal"][];
+        };
+        /**
+         * SimpleTwinMergeIn
+         * @description qa-prio-twins: a Same name record's Merge into… ``into`` (the row's feature).
+         */
+        SimpleTwinMergeIn: {
+            /**
+             * Into
+             * Format: uuid
+             */
+            into: string;
+        };
+        /**
+         * SimpleTwinMergeOut
+         * @description The kept feature, and the item keys of the twin's items now linked to it.
+         */
+        SimpleTwinMergeOut: {
+            /** Feature Id */
+            feature_id: string;
+            /**
+             * Relinked
+             * @default []
+             */
+            relinked: string[];
         };
         /**
          * SimpleUpcomingMeeting
@@ -44743,7 +45171,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "run_stop" | "question" | "decision" | "broken_link" | "date" | "draft" | "proposal" | "goal_suggestion" | "goal";
+            kind: "run_stop" | "question" | "decision" | "broken_link" | "date" | "draft" | "proposal" | "goal_suggestion" | "goal" | "inbox";
             /** Key */
             key: string;
             /** Ref Id */
@@ -47903,7 +48331,12 @@ export interface components {
             status: "active" | "paused" | "closed";
             /** Owner Id */
             owner_id: string | null;
-            prd: components["schemas"]["DocumentRef"];
+            prd: components["schemas"]["DocumentRef"] | null;
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["DocumentRef"][];
             /** Started Version */
             started_version: number | null;
             /** Current Version */
@@ -47970,7 +48403,12 @@ export interface components {
             status: "active" | "paused" | "closed";
             /** Owner Id */
             owner_id: string | null;
-            prd: components["schemas"]["DocumentRef"];
+            prd: components["schemas"]["DocumentRef"] | null;
+            /**
+             * Prds
+             * @default []
+             */
+            prds: components["schemas"]["DocumentRef"][];
             /** Started Version */
             started_version: number | null;
             /** Current Version */
@@ -48348,7 +48786,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track" | "milestone";
+            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track" | "milestone" | "task";
             /**
              * Id
              * Format: uuid
@@ -77939,6 +78377,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimpleDecisionsWaitingOut"];
+                };
+            };
+        };
+    };
+    merge_simple_priority_twin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleTwinMergeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleTwinMergeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

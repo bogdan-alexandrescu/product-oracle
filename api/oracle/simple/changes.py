@@ -33,8 +33,10 @@ Ops and the fields they write (``before`` must name the key fields):
   dates now (``before`` names the undated item the suggestion was made for).
 - ``confirm_item`` (S6): draft becomes false (422 unless the item is a draft); merging a
   draft is a ``cut`` with the reason "Merged into <code>".
-- ``change_horizon``: horizon, and the item's own dates (if any) shifted by as many days as
-  the new window starts after the old one's. ``reorder``: position. ``cut`` / ``restore``: cut.
+- ``change_horizon`` (board-quarters): the dates the read shows shifted by whole quarters
+  into the new column's quarter (lengths kept; undated: the quarter), typed; the stored
+  horizon follows as history. ``before.horizon`` is the read's (from the dates).
+- ``reorder``: position. ``cut`` / ``restore``: cut.
 - ``edit_title``: title. ``edit_outcome``: outcome.
 - ``set_milestone`` (S9): the item's own milestone, ``{"milestone": {name, date,
   date_source: "typed"}}`` (date optional), or null to clear it.
@@ -112,7 +114,7 @@ from oracle.baseline.models import Entity
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company as roadmap_company
 from oracle.roadmap.models import HORIZONS, RoadmapItem, TrackMilestone
-from oracle.simple import drafts, service
+from oracle.simple import dates, drafts, service
 from oracle.simple.models import (
     RoadmapDateSuggestion,
     SimpleChange,
@@ -181,6 +183,8 @@ PANEL_DONE = "Marked done in its panel"
 DEPENDS_MAX = 50
 # The ops whose ``before`` is what the read shows, and the row fields each writes.
 SHOWN = {
+    # board-quarters: the column the read shows, from the item's dates.
+    "change_horizon": lambda e: {"horizon": e.horizon},
     "set_confidence": lambda e: {"confidence": e.row.confidence},
     "set_track": lambda e: {"track_id": str(e.track.id) if e.track else None},
     "set_prd": lambda e: {"prd_document_id": str(e.prd.id) if e.prd else None},
@@ -211,7 +215,7 @@ KEY_DATE_OPS = ("add_key_date", "edit_key_date", "remove_key_date")
 SHEET_OPS = ("edit_decision", "edit_question", "withdraw_decision", "add_question")
 QUESTION_OPS = ("decide_question", "name_decider", *SHEET_OPS)
 # removed-tracks: things put back and tracks changed (oracle.simple.plan_changes).
-PLAN_OPS = ("restore_goal_milestone", "add_track", "edit_track", "delete_track")
+PLAN_OPS = ("restore_goal_milestone", "add_track", "edit_track", "move_track", "delete_track")
 
 
 class ChangeError(Exception):
@@ -551,6 +555,7 @@ def current_route(
     if (
         c.status != "proposed"
         or c.op in ("edit_line", "set_section_number", "edit_goal_milestone", *QUESTION_OPS)
+        or c.op == "link_goal_map"
         or c.op in KEY_DATE_OPS
         or c.op in PLAN_OPS
     ):
@@ -932,13 +937,20 @@ async def _plan(
     elif op == "change_horizon":
         if a.get("horizon") not in HORIZONS:
             raise ChangeError(422, "after.horizon: now, next or later")
-        after = {"horizon": a["horizon"]}
-        if row.start_date or row.end_date:
-            # walkc-roadmap-tasks review: the item's own dates move with it, by as many days
-            # as the new horizon's window starts after the old one's (lengths kept).
-            by = read_.windows[a["horizon"]][0] - entry.window[0]
-            after |= {f: _iso(getattr(row, f) + by if getattr(row, f) else None) for f in DATES}
-            stored = ("horizon", *DATES)
+        # board-quarters: the column is the quarter of the dates, so the dates the read shows
+        # (its own, engineering's, the tracker's) move by whole quarters into the new one,
+        # lengths kept, as typed dates; an undated item takes the quarter. The stored
+        # horizon follows as history.
+        r = entry.resolved
+        start, end = dates.shift_to(
+            None if r.undated else r.start.date,
+            None if r.undated else r.end.date,
+            a["horizon"],
+            read_.windows,
+        )
+        after = {"horizon": a["horizon"], "start_date": _iso(start), "end_date": _iso(end),
+                 "date_source": "typed"}  # fmt: skip
+        stored = ("horizon", *DATES, "date_source")
     elif op == "reorder":
         pos = a.get("position")
         if not isinstance(pos, int) or isinstance(pos, bool) or pos < 0:
@@ -1232,12 +1244,13 @@ async def _track_of_prd(
     db: AsyncSession, prd: uuid.UUID | None, roadmap: uuid.UUID | None
 ) -> uuid.UUID | None:
     from oracle.roadmap.models import ProductTrack
+    from oracle.roadmap.tracks import on_prd
 
     if prd is None:
         return None
     return await db.scalar(
         select(ProductTrack.id)
-        .where(ProductTrack.prd_document_id == prd)
+        .where(on_prd(prd))
         .order_by((ProductTrack.roadmap_document_id == roadmap).desc(), ProductTrack.created_at)
         .limit(1)
     )
@@ -1289,7 +1302,12 @@ async def _unknown_keys(db: AsyncSession, keys: list[str], read_: service.Read) 
     low = [k.lower() for k in left]
     q = select(Entity.key).where(Entity.type == "feature", func.lower(Entity.key).in_(low))
     features = {k.lower() for k in await db.scalars(q) if k}
-    return [k for k in left if k.lower() not in features]
+    left = [k for k in left if k.lower() not in features]
+    # A feature's key before it was given a code still names it (oracle.baseline.fixes).
+    from oracle.baseline import fixes
+
+    former = await fixes.features_by_keys(db, left) if left else {}
+    return [k for k in left if k not in former]
 
 
 async def _exists(db: AsyncSession, op: str, ref: uuid.UUID) -> bool:
@@ -1530,6 +1548,7 @@ async def create(
         agenda,
         decision_sheet,
         goal_asks,
+        goal_map_asks,
         goal_milestones,
         key_dates,
         one_pager,
@@ -1554,6 +1573,8 @@ async def create(
         return await trash_items.create_change(db, principal, body)
     if body.op in goal_asks.OPS:
         return await goal_asks.create_change(db, principal, body)
+    if body.op in goal_map_asks.OPS:
+        return await goal_map_asks.create_change(db, principal, body)
     if body.op in goal_milestones.OPS:
         return await goal_milestones.create_change(db, principal, body)
     if body.op in plan_changes.OPS:
@@ -1670,6 +1691,7 @@ async def decide(
     from oracle.simple import (
         additions,
         goal_asks,
+        goal_map_asks,
         goal_milestones,
         key_dates,
         one_pager,
@@ -1700,6 +1722,8 @@ async def decide(
         return await trash_items.decide(db, principal, c, action, reason)
     if c.op in goal_asks.OPS:
         return await goal_asks.decide(db, principal, c, action, reason)
+    if c.op in goal_map_asks.OPS:
+        return await goal_map_asks.decide(db, principal, c, action, reason)
     from oracle.simple import decision_sheet
 
     if c.op in decision_sheet.OPS:
@@ -1865,6 +1889,15 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
         if entry is None:
             raise ChangeError(404, "The item is gone")
         await _parent(db, entry, back["parent_key"], dict(c.target), read_)
+    picked = back.get("milestone") if c.op == "set_milestone" else None
+    if isinstance(picked, dict) and picked.get("id"):
+        # item-milestone: the milestone put back is checked as a pick is: it may be in Trash
+        # since.
+        read_ = await service.load(db, await drafts.overlays_for(db, principal))
+        entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
+        if entry is None:
+            raise ChangeError(404, "The item is gone")
+        await _roadmap_milestone(db, entry, picked["id"])
     if c.op in ("set_code", "edit_title") and back.get("title"):
         # every-field: the code the old title carries may be another item's or a Ground Truth
         # feature's since: refused in propose's and accept's words, so no two items share it.
@@ -1961,6 +1994,7 @@ class _View:
             additions,
             decision_sheet,
             goal_asks,
+            goal_map_asks,
             goal_milestones,
             key_dates,
             one_pager,
@@ -1989,6 +2023,8 @@ class _View:
             return trash_items.may_decide_goal(self.principal)
         if c.op in goal_asks.OPS:
             return goal_asks.may_decide(self.principal)
+        if c.op in goal_map_asks.OPS:
+            return goal_map_asks.may_decide(self.principal, c, self)
         if c.op in PLAN_OPS:
             return plan_changes.may_decide(self.principal, c)
         if c.op == CUT_ALL:

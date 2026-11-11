@@ -759,8 +759,11 @@ async def test_approving_a_version_keeps_accepted_unapplied_suggestions_staged(
     assert staged_item["staged_for_version"] == 3
     [row] = inbox["staged"]
     assert (row["count"], row["next_version"]) == (2, 3)
-    # Still not open feedback.
-    assert inbox["total"] == 1
+    # Still not open feedback: the one open comment, and (tracks-goal, owner Nov 9) the one
+    # item suggesting a track for this brand-new PRD with none, counted on its own.
+    [suggestion] = inbox["simple_track_suggestions"]
+    assert suggestion["prd"]["title"] == "Onboarding revamp PRD"
+    assert inbox["total"] == 1 + 1
 
     # Discarding one ends its staging: its item was closed, so it is done.
     resp = await client.post(

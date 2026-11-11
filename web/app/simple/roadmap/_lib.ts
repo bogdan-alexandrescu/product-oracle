@@ -473,8 +473,8 @@ export function quarterValue(start: string): string {
   return `${d.getUTCFullYear()}-Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
 }
 
-/** S7: where a quick-added item goes: a quarter, a horizon or a goal (data-add-where="kind:value"). */
-export type Where = { kind: "quarter" | "horizon" | "goal"; value: string; label: string };
+/** S7: where a quick-added item goes: a quarter, a horizon, a goal or (tb-mk) a track band (data-add-where="kind:value"). */
+export type Where = { kind: "quarter" | "horizon" | "goal" | "track"; value: string; label: string };
 export const whereAttr = (kind: Where["kind"], value: string): string => `${kind}:${value}`;
 
 /** roadmap-gantt: what the rows sit under (Goal by default; Milestone is read from the items' slices). */
@@ -514,22 +514,23 @@ export type GoalMilestone = Roadmap["goal_milestones"][number];
 /**
  * item-milestone: the milestones a roadmap's feature can be placed in, in order: the roadmap's
  * own first, then each PRD's in the one PRD order (`prdOrder`), each by its code (M1, M2, M10).
+ * A goal's own target date (milestone-kinds, goal_target) is never one: its features are the goal's.
  */
 export function placeable(all: readonly GoalMilestone[], roadmapId: string, prdOrder?: (a: { slug?: string | null; id?: string | null; title: string }, b: { slug?: string | null; id?: string | null; title: string }) => number): GoalMilestone[] {
   return all
-    .filter((m) => m.roadmap_id === roadmapId)
+    .filter((m) => m.roadmap_id === roadmapId && !m.goal_target)
     .sort(
       (a, b) =>
         Number(!!a.prd) - Number(!!b.prd) ||
         (a.prd && b.prd && a.prd.id !== b.prd.id ? (prdOrder?.(a.prd, b.prd) ?? a.prd.title.localeCompare(b.prd.title)) : 0) ||
-        a.code.localeCompare(b.code, undefined, { numeric: true }),
+        (a.roadmap_code ?? a.code).localeCompare(b.roadmap_code ?? b.code, undefined, { numeric: true }),
     );
 }
 
 /** item-milestone: a goal milestone's words, its code and name, with its PRD when the roadmap's come from several ("M1 Load measured (Scale)"). */
 export function goalMilestoneWords(m: GoalMilestone, all: readonly GoalMilestone[]): string {
   const prds = new Set(all.filter((x) => x.roadmap_id === m.roadmap_id && x.prd).map((x) => x.prd!.id));
-  return `${milestoneWords(`${m.code} ${m.name}`)}${m.prd && prds.size > 1 ? ` (${m.prd.title})` : ""}`;
+  return `${milestoneWords(`${m.roadmap_code ?? m.code} ${m.name}`)}${m.prd && prds.size > 1 ? ` (${m.prd.title})` : ""}`;
 }
 
 /** A milestone's colour, by its code (M1, M2, M3, then round again). */

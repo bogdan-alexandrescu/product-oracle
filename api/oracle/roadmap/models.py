@@ -33,12 +33,14 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    event,
     false,
     func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, Session, declared_attr, mapped_column, relationship
+from sqlalchemy.orm.attributes import set_committed_value
 
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
@@ -53,6 +55,58 @@ MILESTONE_STATUSES = ("planned", "done", "dropped")
 # build-milestones-on-roadmap: a goal milestone's progress (the status column above keeps
 # its own planned/done/dropped semantics for track milestones).
 MILESTONE_PROGRESS = ("on_track", "at_risk", "not_started", "met")
+# milestone-kinds (owner): every roadmap milestone is one of six kinds, with a status a
+# person may set over the computed one (migration 0125_milestone_kinds).
+MILESTONE_KINDS = ("sub_goal", "goal", "delivery", "decision", "outside", "handoff")
+MILESTONE_KIND_STATUSES = ("on_track", "at_risk", "hit", "missed")
+
+
+class MilestoneKindFields:
+    """milestone-kinds: a goal milestone's and a key date's kind, its one "done when" line,
+    a person's status override (and why, and who), a measured (sub-)goal's numbers, the
+    measured-goal milestone a sub-goal builds toward, and a hand-off's tracks."""
+
+    kind: Mapped[str] = mapped_column(
+        Text, nullable=False, default="delivery", server_default="delivery"
+    )
+    done_when_line: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    status_set: Mapped[str | None] = mapped_column(Text)
+    status_set_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    status_reason: Mapped[str | None] = mapped_column(Text)
+    measure: Mapped[str | None] = mapped_column(Text)
+    baseline: Mapped[Decimal | None] = mapped_column(Numeric(20, 6))
+    target: Mapped[Decimal | None] = mapped_column(Numeric(20, 6))
+    current: Mapped[Decimal | None] = mapped_column(Numeric(20, 6))
+
+    @declared_attr
+    def sub_goal_of_id(cls) -> Mapped[uuid.UUID | None]:  # noqa: N805
+        return mapped_column(Uuid, ForeignKey("track_milestones.id", ondelete="SET NULL"))
+
+    @declared_attr
+    def home_track_id(cls) -> Mapped[uuid.UUID | None]:  # noqa: N805
+        """tb-mk: the track a roadmap milestone sits on (the panel's Track); ``track_id``
+        is a track's own milestone's."""
+        return mapped_column(Uuid, ForeignKey("product_tracks.id", ondelete="SET NULL"), index=True)
+
+    @declared_attr
+    def from_track_id(cls) -> Mapped[uuid.UUID | None]:  # noqa: N805
+        return mapped_column(Uuid, ForeignKey("product_tracks.id", ondelete="SET NULL"), index=True)
+
+    @declared_attr
+    def to_track_id(cls) -> Mapped[uuid.UUID | None]:  # noqa: N805
+        return mapped_column(Uuid, ForeignKey("product_tracks.id", ondelete="SET NULL"), index=True)
+
+
+def kind_checks() -> tuple[CheckConstraint, CheckConstraint]:
+    return (
+        CheckConstraint(_in("kind", MILESTONE_KINDS), name="kind"),
+        CheckConstraint(
+            "status_set IS NULL OR " + _in("status_set", MILESTONE_KIND_STATUSES),
+            name="status_set",
+        ),
+    )
+
+
 BASIS_KINDS = ("estimate", "capacity", "commitment")
 BASIS_STATUSES = ("verified", "withdrawn", "proposed", "rejected")
 TRACKERS = ("linear", "jira", "github", "other")
@@ -79,12 +133,20 @@ class ProductTrack(Trashable, TenantScoped, Base):
 
     __tablename__ = "product_tracks"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "prd_document_id"),
         CheckConstraint(_in("status", TRACK_STATUSES), name="status"),
         trashed_index("product_tracks"),
     )
 
-    prd_document_id: Mapped[uuid.UUID] = _fk("documents", nullable=False)
+    # tracks-goal: a track holds many PRDs, or none (``track_prds``; a PRD has one track),
+    # read in the order they joined; ``oracle.roadmap.tracks`` writes them.
+    prd_links: Mapped[list["TrackPrd"]] = relationship(
+        foreign_keys="TrackPrd.track_id",
+        lazy="selectin",
+        order_by="(TrackPrd.created_at, TrackPrd.id)",
+        viewonly=True,
+    )
+    # tracks-goal: the company goal the track replaces as the Roadmap's band (none: null).
+    goal_id: Mapped[uuid.UUID | None] = _fk("entities", "SET NULL")
     # The accepted PRD version that started the track, and the one it follows now.
     started_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
     current_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
@@ -95,6 +157,10 @@ class ProductTrack(Trashable, TenantScoped, Base):
     )
     owner_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # track-order (owner Nov 9): the track's place in the company's track order (1 = first;
+    # null: after every placed one, oldest first, so a new track goes last). Every read
+    # that lists tracks in order sorts by :data:`TRACK_ORDER`; Move up / Move down write it.
+    position: Mapped[int | None] = mapped_column(Integer)
     # The last monitoring snapshot (health, at-risk item keys, next milestone, when).
     monitor: Mapped[dict[str, Any]] = _json()
     monitored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -102,6 +168,68 @@ class ProductTrack(Trashable, TenantScoped, Base):
     # without making a person's loaded copy stale.
     lock_version: Mapped[int] = _lock_version()
     updated_at: Mapped[datetime] = _updated_at()
+
+    def __init__(self, *, prd_document_id: uuid.UUID | None = None, **kw: Any) -> None:
+        # tracks-goal: a new track with its first PRD; its ``track_prds`` row is added when
+        # the track is flushed (:func:`_first_prd`).
+        super().__init__(**kw)
+        self._first_prd = prd_document_id
+
+    @property
+    def prd_ids(self) -> list[uuid.UUID]:
+        """The track's PRDs, first joined first."""
+        return [link.prd_document_id for link in self.prd_links]
+
+
+# track-order: the company's track order, for ``select(ProductTrack).order_by(*TRACK_ORDER)``.
+TRACK_ORDER = (
+    ProductTrack.position.asc().nulls_last(),
+    ProductTrack.created_at,
+    ProductTrack.id,
+)
+
+TRACK_PRD_STATES = ("linked", "off", "suggested")
+
+
+class TrackPrd(TenantScoped, Base):
+    """tracks-goal (owner Nov 9): which track a PRD belongs to; a track holds many PRDs.
+
+    ``linked``: on ``track_id``. ``off``: a person took the PRD off a track, and Oracle never
+    starts or suggests one for it again. ``suggested``: a newly accepted PRD with no track,
+    for which Oracle suggests ``suggested_track_id`` (none fits: null) in its owner's Inbox
+    until a person confirms it, picks another track or starts a new one."""
+
+    __tablename__ = "track_prds"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "prd_document_id"),
+        CheckConstraint(_in("state", TRACK_PRD_STATES), name="state"),
+        CheckConstraint("(state = 'linked') = (track_id IS NOT NULL)", name="linked"),
+    )
+
+    prd_document_id: Mapped[uuid.UUID] = _fk("documents", nullable=False)
+    track_id: Mapped[uuid.UUID | None] = _fk("product_tracks")
+    suggested_track_id: Mapped[uuid.UUID | None] = _fk("product_tracks", "SET NULL")
+    state: Mapped[str] = mapped_column(
+        Text, nullable=False, default="linked", server_default="linked"
+    )
+
+
+@event.listens_for(Session, "before_flush")
+def _first_prd(session: Session, flush_context: Any, instances: Any) -> None:
+    """A new track made with ``prd_document_id`` holds that PRD (``track_prds``)."""
+    for obj in list(session.new):
+        if isinstance(obj, ProductTrack) and getattr(obj, "_first_prd", None) is not None:
+            obj.id = obj.id or uuid.uuid4()
+            link = TrackPrd(
+                prd_document_id=obj._first_prd, track_id=obj.id, state="linked",
+                tenant_id=obj.tenant_id,
+            )  # fmt: skip
+            session.add(link)
+            set_committed_value(obj, "prd_links", [link])
+            obj._first_prd = None
+        elif isinstance(obj, ProductTrack) and "prd_links" not in obj.__dict__:
+            # A new track holds no PRD: read so, never loaded lazily.
+            set_committed_value(obj, "prd_links", [])
 
 
 class ScheduleBasis(TenantScoped, Base):
@@ -158,7 +286,7 @@ class ScheduleBasis(TenantScoped, Base):
     rejected_reason: Mapped[str | None] = mapped_column(Text)
 
 
-class TrackMilestone(TenantScoped, Base):
+class TrackMilestone(MilestoneKindFields, TenantScoped, Base):
     """A milestone of a track, undated by default (Now/Next/Later, O4); a date needs at
     least one verified schedule basis supporting exactly that date.
 
@@ -178,6 +306,7 @@ class TrackMilestone(TenantScoped, Base):
         CheckConstraint(_in("horizon", HORIZONS), name="horizon"),
         CheckConstraint(_in("status", MILESTONE_STATUSES), name="status"),
         CheckConstraint(_in("progress", MILESTONE_PROGRESS), name="progress"),
+        *kind_checks(),
         CheckConstraint(
             "roadmap_id IS NOT NULL OR target_date IS NULL OR cardinality(basis_ids) > 0",
             name="dated_needs_basis",

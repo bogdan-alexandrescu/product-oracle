@@ -24,8 +24,12 @@ nothing. :func:`load` is also what the daily suggestions read, as Oracle (no pri
 import re
 import uuid
 from collections import defaultdict, deque
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -43,7 +47,9 @@ from oracle.members.names import display_name
 from oracle.priorities.scoring import effort_weeks
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company
+from oracle.roadmap import tracks as tracks_mod
 from oracle.roadmap.models import (
+    TRACK_ORDER,
     ProductTrack,
     RoadmapChangeSet,
     RoadmapItem,
@@ -51,7 +57,7 @@ from oracle.roadmap.models import (
     TrackerRecord,
     TrackMilestone,
 )
-from oracle.simple import approved_roadmap, constraints, dates, plan_strip
+from oracle.simple import approved_roadmap, constraints, dates, goal_reads, plan_strip
 from oracle.simple.models import MilestoneFeature, RoadmapDateSuggestion, SimpleVisual
 from oracle.simple.schemas import (
     DateSuggestionOut,
@@ -59,6 +65,7 @@ from oracle.simple.schemas import (
     SimpleDocRef,
     SimpleFlag,
     SimpleFlagDependent,
+    SimpleGoalMilestone,
     SimpleGoalRef,
     SimpleGroup,
     SimpleItemMilestone,
@@ -68,8 +75,10 @@ from oracle.simple.schemas import (
     SimpleOwnerRef,
     SimplePersonRef,
     SimplePhase,
+    SimplePrdRef,
     SimpleRoadmapItem,
     SimpleRoadmapOut,
+    SimpleRoadmapTrack,
     SimpleTrackRef,
     SimpleWindow,
     SimpleWindows,
@@ -94,6 +103,9 @@ class Entry:
     resolved: dates.Resolved
     status: str
     milestone: SimpleItemMilestone | None
+    # board-quarters: the column the item's dates put it in (dates.horizon_of); the stored
+    # horizon is history only.
+    horizon: str = "later"
     depends_on: list[uuid.UUID] = field(default_factory=list)
     needed_by: list[uuid.UUID] = field(default_factory=list)
     # roadmap-edit-fixes: the stored key that names each dependency (another PRD's feature
@@ -133,6 +145,8 @@ class Entry:
     # parent is in Trash (null: none, or on the roadmap).
     ancestors: list["Entry"] = field(default_factory=list)
     trashed_parent: RoadmapItem | None = None
+    # tracks-goal: the company goal the item's track is tied to.
+    track_goal: Entity | None = None
 
 
 @dataclass
@@ -302,9 +316,25 @@ def _versions(
     return out
 
 
+# qa-prio-twins (re-review of #1503): inside every_roadmap(), load reads every roadmap, the
+# older ones beside the company roadmap included, so a write that must reach a feature's items
+# wherever they are (a twin's Merge into…, priorities.merge_twin) finds and changes them.
+_EVERY_ROADMAP: ContextVar[bool] = ContextVar("simple_every_roadmap", default=False)
+
+
+@contextmanager
+def every_roadmap() -> Iterator[None]:
+    token = _EVERY_ROADMAP.set(True)
+    try:
+        yield
+    finally:
+        _EVERY_ROADMAP.reset(token)
+
+
 async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | None = None) -> Read:
     """Everything the read needs, as the session's principal may see it; ``overlays``
-    (roadmap document id -> {item id -> fields}): the working drafts the reader sees."""
+    (roadmap document id -> {item id -> fields}): the working drafts the reader sees. Inside
+    every_roadmap(), every roadmap's items, not only the company roadmap's."""
     from oracle.simple import drafts
 
     today = await company_time.company_today(db)
@@ -314,9 +344,9 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         for d in await db.scalars(select(Document).where(Document.kind.in_(("roadmap", "prd"))))
     }
     # one-roadmap-many-prds: the company roadmap alone while there is one.
-    roadmap_ids = await company.feeding_ids(
-        db, [d.id for d in docs.values() if d.kind == "roadmap"]
-    )
+    roadmap_ids = [d.id for d in docs.values() if d.kind == "roadmap"]
+    if not _EVERY_ROADMAP.get():
+        roadmap_ids = await company.feeding_ids(db, roadmap_ids)
     entries: list[Entry] = []
     if not roadmap_ids:
         return Read(today, windows, entries, [], {})
@@ -395,7 +425,15 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             )
         ).all()
     }
-    track_of_prd = {t.prd_document_id: t for t in tracks.values()}
+    track_of_prd = {p: t for t in tracks.values() for p in t.prd_ids}
+    # tracks-goal: the company goal each track is tied to (a live one).
+    # tb-mk: the goals are read once per read (oracle.simple.goal_reads).
+    every_goal = await goal_reads.goals_by_id(db)
+    track_goals = {
+        g.id: g
+        for g in (every_goal.get(t.goal_id) for t in tracks.values() if t.goal_id)
+        if g is not None and g.status != "rejected"
+    }
     milestones = list(
         await db.scalars(
             select(TrackMilestone).order_by(
@@ -430,12 +468,8 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     # S7: the goals items are linked to directly (dropped on, suggested for).
     linked = {
         g.id: g
-        for g in await db.scalars(
-            select(Entity).where(
-                Entity.id.in_({g for r in rows for g in r.goal_ids or []}),
-                Entity.type == "goal",
-            )
-        )
+        for g in (every_goal.get(i) for i in {g for r in rows for g in r.goal_ids or []})
+        if g is not None
     }
     blockers = await _blockers(db, {b for r in rows for b in r.blocker_ids or []})
     cut = await _cut(db, roadmap_ids)
@@ -476,8 +510,8 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         recs = (
             records.get((track.id, row.item_key), []) if track is not None else []
         ) or prd_records.get((row.prd_document_id, row.item_key), [])
-        window = windows.get(row.horizon, windows["now"])
         cands = _candidates(row, recs, bases_by_key, bases_by_ref)
+        resolved, horizon = dates.resolve_by_dates(cands, windows, effort.get(row.id))
         milestone = _milestone(row, track, track_ms)
         entries.append(
             Entry(
@@ -485,14 +519,16 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 roadmap=roadmap,
                 prd=prd,
                 track=track,
+                track_goal=track_goals.get(track.goal_id) if track and track.goal_id else None,
                 # one-feature-panel: a goal the item is linked to directly (set in its
                 # panel, dropped on, suggested for) wins over its feature's.
                 goal=next((linked[g] for g in row.goal_ids or [] if g in linked), None)
                 or ladder.get(row.id)
                 or (goals.get(row.feature_id) if row.feature_id else None),
                 goal_ids=[g for g in row.goal_ids or [] if g in linked],
-                window=window,
-                resolved=dates.resolve(cands, window, effort.get(row.id)),
+                window=windows[horizon],
+                resolved=resolved,
+                horizon=horizon,
                 status=_status(row, recs, cut.get(roadmap.id, set())),
                 milestone=milestone,
                 blockers=[blockers[b] for b in row.blocker_ids or [] if b in blockers],
@@ -545,6 +581,8 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     )
     for e in entries:
         e.resolved = moved[e.row.id]
+        e.horizon = dates.horizon_of(e.resolved, windows)
+        e.window = windows[e.horizon]
     # feature-parts: each part's ancestors; with no dates of its own, a part reads its
     # nearest dated ancestor's (a parent in Trash still lends its own typed dates).
     await _ancestors(db, entries)
@@ -706,10 +744,8 @@ async def delivery(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID,
     prds = {r.prd_document_id for r in rows if r.prd_document_id is not None}
     track_of_prd: dict[Any, ProductTrack] = {}
     if prds:
-        tracked = await db.scalars(
-            select(ProductTrack).where(ProductTrack.prd_document_id.in_(prds))
-        )
-        track_of_prd = {t.prd_document_id: t for t in tracked}
+        tracked = await db.scalars(select(ProductTrack).where(tracks_mod.on_prd(prds)))
+        track_of_prd = {p: t for t in tracked for p in t.prd_ids}
     records: dict[tuple[Any, str], list[TrackerRecord]] = defaultdict(list)
     prd_records: dict[tuple[Any, str], list[TrackerRecord]] = defaultdict(list)
     for rec in await db.scalars(select(TrackerRecord).where(TrackerRecord.item_key.in_(keys))):
@@ -792,19 +828,17 @@ async def _goals(db: AsyncSession, features: set[uuid.UUID]) -> dict[uuid.UUID, 
     out: dict[uuid.UUID, Entity] = {}
     if not features:
         return out
-    found = (
-        await db.execute(
-            select(Edge.src_id, Entity)
-            .join(Entity, Entity.id == Edge.dst_id)
-            .where(
-                Edge.type == "supports",
-                Edge.status != "rejected",
-                Edge.src_id.in_(features),
-                Entity.type == "goal",
-                Entity.status == "confirmed",
-            )
+    goals = await goal_reads.goals_by_id(db)
+    edges = await db.execute(
+        select(Edge.src_id, Edge.dst_id).where(
+            Edge.type == "supports", Edge.status != "rejected", Edge.src_id.in_(features)
         )
-    ).all()
+    )
+    found = [
+        (src, g)
+        for src, dst in edges.all()
+        if (g := goals.get(dst)) is not None and g.status == "confirmed"
+    ]
     for edge_src, goal in sorted(found, key=lambda row: goal_sort_key(row[1])):
         out.setdefault(edge_src, goal)
     return out
@@ -816,20 +850,21 @@ async def _ladder_goals(db: AsyncSession, items: set[uuid.UUID]) -> dict[uuid.UU
     out: dict[uuid.UUID, Entity] = {}
     if not items:
         return out
-    found = (
-        await db.execute(
-            select(MilestoneFeature.item_id, Entity)
-            .join(TrackMilestone, TrackMilestone.id == MilestoneFeature.milestone_id)
-            .join(Entity, Entity.id == TrackMilestone.goal_id)
-            .where(
-                MilestoneFeature.item_id.in_(items),
-                TrackMilestone.deleted_at.is_(None),
-                TrackMilestone.status != "dropped",
-                Entity.type == "goal",
-                Entity.status == "confirmed",
-            )
+    goals = await goal_reads.goals_by_id(db)
+    links = await db.execute(
+        select(MilestoneFeature.item_id, TrackMilestone.goal_id)
+        .join(TrackMilestone, TrackMilestone.id == MilestoneFeature.milestone_id)
+        .where(
+            MilestoneFeature.item_id.in_(items),
+            TrackMilestone.deleted_at.is_(None),
+            TrackMilestone.status != "dropped",
         )
-    ).all()
+    )
+    found = [
+        (item_id, g)
+        for item_id, goal_id in links.all()
+        if (g := goals.get(goal_id)) is not None and g.status == "confirmed"
+    ]
     for item_id, goal in sorted(found, key=lambda row: goal_sort_key(row[1])):
         out.setdefault(item_id, goal)
     return out
@@ -1150,7 +1185,7 @@ def item_out(
         title=title,
         outcome=row.outcome,
         note=row.note,
-        horizon=row.horizon,  # type: ignore[arg-type]
+        horizon=e.horizon,  # type: ignore[arg-type]
         roadmap=_ref(e.roadmap),  # type: ignore[arg-type]
         prd=_ref(e.prd),
         goal=SimpleGoalRef(
@@ -1166,7 +1201,15 @@ def item_out(
         )
         if e.goal
         else None,
-        track=SimpleTrackRef(id=e.track.id, title=e.track.title) if e.track else None,
+        track=SimpleTrackRef(
+            id=e.track.id,
+            title=e.track.title,
+            goal_id=e.track_goal.id if e.track_goal else None,
+            goal_name=e.track_goal.title if e.track_goal else None,
+            order=e.track.position,
+        )
+        if e.track
+        else None,
         confidence=row.confidence,
         status=e.status,  # type: ignore[arg-type]
         draft=row.draft,
@@ -1191,6 +1234,7 @@ def item_out(
         if e.owner_id is not None and e.owner_name
         else None,
         own_owner_id=str(row.owner_id) if row.owner_id else None,
+        own_decider_id=str(row.decider_id) if row.decider_id else None,
         depends_keys=list(row.depends_on or []),
         depends_key_of={str(d): k for d, k in e.depends_key_of.items()},
         depends_keys_of={str(d): ks for d, ks in e.depends_keys_of.items()},
@@ -1315,6 +1359,19 @@ def _milestone_out(m: TrackMilestone, keyed: dict, ids: set, view: Any) -> Simpl
     return out
 
 
+async def _roadmap_codes(
+    db: AsyncSession, goal_ms: list, track_ms: list[SimpleMilestone], items: list
+) -> None:
+    """roadmap-milestone-codes: each milestone's one code across the read, goals in the one
+    goal order (oracle.simple.roadmap_codes)."""
+    from oracle.simple import roadmap_codes
+
+    goal_ids = {m.goal_id for m in goal_ms if m.goal_id is not None}
+    goals = [g for g in await goal_reads.all_goals(db) if g.id in goal_ids]
+    rank = {g.id: n for n, g in enumerate(sorted(goals, key=goal_sort_key))}
+    roadmap_codes.assign(goal_ms, track_ms, items, rank)
+
+
 def _goal_target(goal: Entity) -> str | None:
     """one-feature-panel: the goal's target as the goal bucket edit reads it."""
     from oracle.simple.goal_buckets import _target  # goal_buckets imports the router
@@ -1382,9 +1439,10 @@ def _group_of(
     prd_ranks: dict[uuid.UUID, int],
     parents: dict[uuid.UUID, Entity] | None = None,
 ) -> tuple[str, str, tuple]:
-    """(key, title, sort key) of the item's group; goals in the one goal order, PRDs in the
-    company PRD order (``prd_ranks``, oracle.docs.prd_order), each "No ..." group last. A key
-    result's items sit in its parent goal's group (kr-in-goal-card)."""
+    """(key, title, sort key) of the item's group; goals in the one goal order, tracks in the
+    company's track order, PRDs in the company PRD order (``prd_ranks``,
+    oracle.docs.prd_order), each "No ..." group last. A key result's items sit in its parent
+    goal's group (kr-in-goal-card)."""
     if group == "goal":
         goal = _lane_goal(e, parents or {})
         if goal is not None:
@@ -1392,12 +1450,154 @@ def _group_of(
         return NONE, "No goal", (1,)
     if group == "track":
         if e.track is not None:
-            return str(e.track.id), e.track.title, (0, f"{e.track.title.casefold()}{e.track.id}")
+            # track-order: tracks in the company's track order (TRACK_ORDER).
+            t = e.track
+            place = (t.position is None, t.position or 0, t.created_at, str(t.id))
+            return str(t.id), t.title, (0, *place)
         return NONE, "No track", (1,)
     if e.prd is not None:
         rank = prd_ranks.get(e.prd.id, len(prd_ranks) + 1)
         return str(e.prd.id), e.prd.title, (0, rank, f"{e.prd.title.casefold()}{e.prd.id}")
     return NONE, "No PRD", (1,)
+
+
+def _measure_value(v: Any) -> float | None:
+    """A goal measure's number (``start``, ``target``); effort reads through
+    scoring.effort_weeks."""
+    return float(v) if isinstance(v, int | float) and not isinstance(v, bool) else None
+
+
+# A goal's comparison where lower is better (oracle.baseline.goals' COMPARISONS).
+_DOWN = frozenset({"at_most", "below"})
+
+
+async def _goal_targets(
+    db: AsyncSession,
+    readable: dict[uuid.UUID, Document],
+    entries: list[Entry],
+    ends: dict[uuid.UUID, tuple[str, date | None]],
+    today: date,
+    goals: list[Entity],
+    principal: Any = None,
+) -> list[SimpleGoalMilestone]:
+    """milestone-kinds: each company goal with a target date and ``on_roadmap`` as a goal
+    milestone (id: the goal's) on the company roadmap (else the roadmap its features are on,
+    else the first one), measured by the goal's metric from its ``start`` toward its target
+    in its comparison's direction (at most, below: downward); changed on the goal, not
+    here. ``goals``: the company's goals, read once per roadmap read. milestone-rename: its
+    name is its own (``milestone_name``, else the goal's title); who decides its roadmap
+    renames it, anyone else who may propose proposes it (``goal_milestones.rename_target``)."""
+    from oracle.simple import goal_milestones
+
+    if not readable:
+        return []
+    active = await company.active(db)
+    out: list[SimpleGoalMilestone] = []
+    for g in goals:
+        due = _goal_due(g)
+        if due is None or not g.on_roadmap:
+            continue
+        mine = [e for e in entries if e.goal is not None and e.goal.id == g.id]
+        on = next((e.roadmap.id for e in mine if e.roadmap.id in readable), None)
+        rid = active.id if active is not None and active.id in readable else on
+        rid = rid or next(iter(readable))
+        attrs = g.attrs or {}
+        baseline, target = _measure_value(attrs.get("start")), _measure_value(attrs.get("target"))
+        current = _goal_current(g)
+        item_ids = [e.row.id for e in mine]
+        comparison = attrs.get("comparison")
+        st, why = goal_milestones.status_of(
+            "goal", due, None, None, None, baseline, target, current,
+            [ends[i] for i in item_ids if i in ends], today,
+            down=comparison in _DOWN if comparison else None,
+        )  # fmt: skip
+        out.append(SimpleGoalMilestone(
+            id=g.id, roadmap_id=rid, code="", name=goal_milestones.target_name(g), date=due,
+            goal_id=g.id,
+            item_ids=item_ids, kind="goal", status=st, status_reason=why, measure=_metric(g),
+            baseline=baseline, target=target, current=current, goal_target=True,
+        ))  # fmt: skip
+    if out and principal is not None:
+        await goal_milestones.target_rights(db, principal, out)
+    return out
+
+
+async def _track_bands(
+    db: AsyncSession,
+    entries: list[Entry],
+    goal_ms: list[SimpleGoalMilestone],
+    today: date,
+    goals: list[Entity],
+) -> list[SimpleRoadmapTrack]:
+    """milestone-kinds: every live track, in the Tracks order (track-order: the stored one), with
+    its health: at risk when a feature of it ends after a milestone it serves, else stale
+    when not checked in 14 days, else on track. ``goals``: as ``_goal_targets`` read them."""
+    rows = list(await db.scalars(select(ProductTrack).order_by(*TRACK_ORDER)))
+    history = await company.history_track_ids(db)
+    rows = [t for t in rows if t.id not in history]
+    if not rows:
+        return []
+    goal_names = {g.id: g.title for g in goals}
+    prd_ids = {p for t in rows for p in t.prd_ids}
+    prds = (
+        {d.id: d.title for d in await db.scalars(select(Document).where(Document.id.in_(prd_ids)))}
+        if prd_ids
+        else {}
+    )
+    owner_ids = {t.owner_id for t in rows if t.owner_id}
+    owners = (
+        {
+            u.id: display_name(u.email, u.name)
+            for u in await db.scalars(select(User).where(User.id.in_(owner_ids)))
+        }
+        if owner_ids
+        else {}
+    )
+    serving: dict[uuid.UUID, list[SimpleGoalMilestone]] = defaultdict(list)
+    for m in goal_ms:
+        for i in m.item_ids:
+            serving[i].append(m)
+    by_id = {m.id: m for m in goal_ms}
+    now = company_time.now()
+    out: list[SimpleRoadmapTrack] = []
+    for t in rows:
+        late: list[tuple[int, str, date, SimpleGoalMilestone]] = []
+        for e in entries:
+            if e.track is None or e.track.id != t.id:
+                continue
+            end = getattr(e.resolved.end, "date", None)
+            ms = list(serving.get(e.row.id, []))
+            picked = by_id.get(e.milestone.id) if e.milestone is not None else None
+            if picked is not None and picked not in ms:
+                ms.append(picked)
+            for m in ms:
+                if end is not None and m.date is not None and end > m.date:
+                    late.append(((end - m.date).days, e.row.title, end, m))
+        if late:
+            _, title, end, m = sorted(late, key=lambda x: (-x[0], x[1]))[0]
+            code = m.roadmap_code or m.code
+            health, why = (
+                "at_risk",
+                (
+                    f"At risk: {title} ends {company_time.calendar_day(end, today)}, after "
+                    + " ".join(f"{code} {m.name}".split())
+                    + f" on {company_time.calendar_day(m.date, today)}"  # type: ignore[arg-type]
+                ),
+            )
+        elif t.monitored_at is not None and now - t.monitored_at > timedelta(days=14):
+            health = "stale"
+            why = f"Not checked since {company_time.day_in_words(t.monitored_at)}"
+        else:
+            health, why = "on_track", "On track: every feature ends before its milestone"
+        out.append(SimpleRoadmapTrack(
+            id=t.id, title=t.title,
+            goal_id=t.goal_id if t.goal_id in goal_names else None,
+            goal_name=goal_names.get(t.goal_id) if t.goal_id else None,
+            owner_name=owners.get(t.owner_id) if t.owner_id else None,
+            prds=[SimplePrdRef(id=p, title=prds.get(p) or "") for p in t.prd_ids],
+            health=health, health_reason=why, order=t.position,  # type: ignore[arg-type]
+        ))  # fmt: skip
+    return out
 
 
 async def build(
@@ -1498,22 +1698,35 @@ async def build(
     # milestones dated by the plan of their track's PRD.
     from oracle.simple import plan as plans
 
-    track_prd = {e.track.id: e.track.prd_document_id for e in read.entries if e.track}
+    # tracks-goal: a track's milestones read the plan of the PRD it follows now.
+    track_prd = {
+        t.id: await tracks_mod.lead_prd(db, t)
+        for t in {e.track.id: e.track for e in read.entries if e.track}.values()
+    }
     # roadmap-keydates: the key dates read with the PRDs' milestones, as priorities reads them.
     kd_prds = await key_dates.key_date_prds(db, principal, kd_docs, read.entries)
+    # roadmap-milestone-codes: the codes are numbered over every readable roadmap, so a
+    # filtered read shows the codes Home and the Goal map show.
+    all_prds = (
+        kd_prds
+        if chosen is None
+        else await key_dates.key_date_prds(db, principal, readable, read.entries)
+    )
     views = await plans.views(
         db,
         {e.prd.id for e in shown if e.prd}
         | set(track_prd.values())
-        | {p.id for of in kd_prds.values() for p in of},
+        | {p.id for of in all_prds.values() for p in of},
     )
     kds, kd_roadmaps = await key_dates.read_key_dates(
         db, principal, kd_docs, read.entries, views, kd_prds
     )
-    from oracle.simple import goal_milestones, old_milestones
+    from oracle.simple import goal_buckets, goal_milestones, old_milestones
 
+    # milestone-kinds: each item's title and end, for each milestone's status.
+    ends = {e.row.id: (e.row.title, getattr(e.resolved.end, "date", None)) for e in read.entries}
     shown_goal_milestones = await goal_milestones.list_for_roadmaps(
-        db, principal, kd_docs, read.entries, views, kd_prds
+        db, principal, kd_docs, read.entries, views, kd_prds, ends, read.today
     )
     all_roadmaps = kd_roadmaps
     if chosen is not None:
@@ -1531,12 +1744,49 @@ async def build(
             if pm is not None and pm.end_date is not None:
                 it.milestone.start_date = pm.start_date
                 it.milestone.date = it.milestone.date or pm.end_date
-    # item-milestone: a picked roadmap milestone reads its live code and name (a PRD may rename it).
+    track_outs = [
+        _milestone_out(m, keyed, ids, views.get(track_prd.get(m.track_id)))  # type: ignore[arg-type]
+        for m in read.milestones
+    ]
+    all_goal_milestones = (
+        shown_goal_milestones
+        if chosen is None
+        else await goal_milestones.list_for_roadmaps(
+            db, principal, readable, read.entries, views, all_prds, ends, read.today
+        )
+    )
+    # milestone-kinds: the goals' own target dates, coded with the other milestones.
+    # The company's goals, read once for the goal targets and the track bands.
+    goals = await goal_buckets._goals(db)
+    targets = await _goal_targets(db, readable, read.entries, ends, read.today, goals, principal)
+    if all_goal_milestones is shown_goal_milestones:
+        shown_goal_milestones = all_goal_milestones = [*shown_goal_milestones, *targets]
+    else:
+        all_goal_milestones = [*all_goal_milestones, *targets]
+        shown_goal_milestones = [
+            *shown_goal_milestones,
+            *(m for m in targets if m.roadmap_id in kd_docs),
+        ]
+    # Every entry's item, shown or not: which roadmap holds a track milestone decides a fold.
+    await _roadmap_codes(
+        db,
+        all_goal_milestones,
+        track_outs,
+        [
+            SimpleNamespace(id=e.row.id, roadmap=e.roadmap, milestone=e.milestone)
+            for e in read.entries
+        ],
+    )
+    coded = {m.id: m.roadmap_code for m in all_goal_milestones}
+    for m in shown_goal_milestones:
+        m.roadmap_code = coded.get(m.id)
+    # item-milestone: a picked roadmap milestone reads its live code (the roadmap's one,
+    # roadmap-milestone-codes) and name (a PRD may rename it).
     live = {m.id: m for m in shown_goal_milestones}
     for it in items:
         gm = live.get(it.milestone.id) if it.milestone is not None and it.milestone.id else None
         if gm is not None:
-            it.milestone.name = " ".join(f"{gm.code} {gm.name}".split())
+            it.milestone.name = " ".join(f"{gm.roadmap_code or gm.code} {gm.name}".split())
     shown_prds = {e.prd.id for e in shown if e.prd}
     span = plans.current_span([v for p, v in views.items() if p in shown_prds], read.today)
     return SimpleRoadmapOut(
@@ -1547,10 +1797,7 @@ async def build(
         ),
         groups=[SimpleGroup(key=k, title=t, item_ids=i) for k, (_, t, i) in ordered],
         items=items,
-        milestones=[
-            _milestone_out(m, keyed, ids, views.get(track_prd.get(m.track_id)))  # type: ignore[arg-type]
-            for m in read.milestones
-        ],
+        milestones=track_outs,
         goal_milestones=shown_goal_milestones,
         old_milestones=await old_milestones.preview(db, principal),
         span=span,
@@ -1560,6 +1807,7 @@ async def build(
         key_date_roadmaps=kd_roadmaps,
         roadmaps=all_roadmaps,
         roadmap=_ref(chosen),
+        tracks=await _track_bands(db, read.entries, all_goal_milestones, read.today, goals),
         left_out=meetings.left_out_entry(left_out),
         applied_versions=await approved_roadmap.lines(
             db,

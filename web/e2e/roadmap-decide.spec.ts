@@ -242,21 +242,21 @@ test("Home's Open draft to approve opens the Roadmap on that draft", async ({ pa
 
 test("a change asked of a PRD is its owner's to approve: on the chip and under Proposals", async ({ page }) => {
   await open(page, "simple-prd-milestones");
-  await page.getByTestId("ms-prd-label").filter({ hasText: "M2 Digest for all teams" }).click();
+  await page.getByTestId("ms-prd-label").filter({ hasText: "Digest for all teams" }).click();
   const prd = page.getByTestId("ms-prd-card");
   await prd.getByLabel("Date").fill("2027-01-05");
   await prd.getByRole("button", { name: "Ask to change it" }).click();
   const chip = page.getByTestId("ms-asked");
-  await expect(chip).toHaveText("Asked the PRD: move M2 Digest for all teams to Jan 5 · waits for Nora Vance");
+  await expect(chip).toHaveText("Asked the PRD: move M4 Digest for all teams to Jan 5 · waits for Nora Vance");
   // The company's owner decides it: listed under Needs a decision > Proposals.
   await page.getByTestId("needs-decision").click();
-  await expect(tray(page).getByTestId("tray-proposal").filter({ hasText: "PRD milestone ‘Digest for all teams’" })).toBeVisible();
+  await expect(tray(page).getByTestId("tray-proposal").filter({ hasText: /PRD milestone ‘M\d+ Digest for all teams’/ })).toBeVisible();
   await tray(page).getByRole("button", { name: "Close" }).click();
   await chip.click();
   const decide = page.getByTestId("ms-asked-decide");
   await expect(decide.getByRole("button", { name: "Decline" })).toBeVisible();
   await decide.getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByText("Approved: M2 Digest for all teams moves to Jan 5 in the PRD")).toBeVisible();
+  await expect(page.getByText("Approved: M4 Digest for all teams moves to Jan 5 in the PRD")).toBeVisible();
   await expect(chip).toHaveCount(0);
   await page.getByTestId("needs-decision").click();
   await expect(tray(page).getByTestId("tray-proposal").filter({ hasText: "PRD milestone" })).toHaveCount(0);
@@ -264,7 +264,7 @@ test("a change asked of a PRD is its owner's to approve: on the chip and under P
 
 test("milestone labels and the PRD ask keep to their header row: none covers another or a bar, at every zoom", async ({ page }) => {
   await open(page, "simple-prd-milestones");
-  await page.getByTestId("ms-prd-label").filter({ hasText: "M2 Digest for all teams" }).click();
+  await page.getByTestId("ms-prd-label").filter({ hasText: "Digest for all teams" }).click();
   const prd = page.getByTestId("ms-prd-card");
   await prd.getByLabel("Date").fill("2027-01-05");
   await prd.getByRole("button", { name: "Ask to change it" }).click();

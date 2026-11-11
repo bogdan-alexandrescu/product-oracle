@@ -17,6 +17,11 @@ so the key is the milestone record the item links (a track milestone naming it),
 milestone's code (M1, M2, ...), else the text before the first " (" or ";". A row reads
 "<code> · <milestone name>" (the record's name, else the name most of its items give,
 a named label before a bare code), dated by the latest of its items' milestone dates.
+
+``coded`` (the one-pager, roadmap-milestone-codes): each item carries its milestone's
+roadmap-wide code (``roadmap_code``, the Roadmap read's), so a row reads "<roadmap code> ·
+<name>", never the PRD's own written code, and items of one roadmap code are one row; a
+milestone that is no roadmap milestone reads its name alone.
 """
 
 import re
@@ -44,10 +49,13 @@ class PlanItem:
     milestone_start: date | None = None
     # The roadmap item it reads (the one-pager lists a row's items by it).
     id: str | None = None
+    # roadmap-milestone-codes: its milestone's roadmap-wide code (read with ``coded``).
+    roadmap_code: str | None = None
 
 
 # M1..M99: "M1.5 · X" and "M2026 roadmap" are texts, not codes.
 _CODE = re.compile(r"^(M\d{1,2})(?![\w.])\s*[·:\-–—]?\s*(.*)$", re.IGNORECASE)
+_BARE = re.compile(r"M\d{1,2}", re.IGNORECASE)
 
 
 def milestone_of(text: str | None) -> tuple[str, str]:
@@ -73,34 +81,53 @@ def _add_months(d: date, n: int) -> date:
     return date(d.year + m // 12, m % 12 + 1, 1)
 
 
-def strip(items: list[PlanItem], today: date) -> SimplePlanStrip | None:
-    """The strip of a PRD's (uncut) items; None with none."""
+def _named(label: str, code: str | None) -> str:
+    """A row's label read by its roadmap code: "M1 · Beta" in roadmap M2 -> "M2 · Beta";
+    with no roadmap code, "Beta" (a bare "M1", having no other name, stays "M1")."""
+    m = _CODE.match(label)
+    name = m.group(2).strip() if m else label
+    if code:
+        return f"{code} · {name}" if name else code
+    return name or label
+
+
+def strip(items: list[PlanItem], today: date, coded: bool = False) -> SimplePlanStrip | None:
+    """The strip of a PRD's (uncut) items; None with none. ``coded``: rows read each item's
+    ``roadmap_code`` (see the module)."""
     if not items:
         return None
     keyed: dict[str, list[tuple[str, PlanItem]]] = {}
     loose: list[PlanItem] = []
     for i in items:
+        if not (i.record_id or i.milestone or i.milestone_date):
+            loose.append(i)
+            continue
         if i.record_id:
             key, label = f"record:{i.record_id}", milestone_of(i.record_name)[1]
-            keyed.setdefault(key, []).append((label, i))
-        elif i.milestone or i.milestone_date:
-            key, label = milestone_of(i.milestone)
-            keyed.setdefault(key, []).append((label, i))
         else:
-            loose.append(i)
+            key, label = milestone_of(i.milestone)
+        if coded:
+            # The roadmap's code, not the PRD's written one; one row per roadmap milestone.
+            key = f"code:{i.roadmap_code}" if i.roadmap_code else f"name:{key}"
+            label = _named(label, i.roadmap_code)
+        keyed.setdefault(key, []).append((label, i))
     groups: dict[tuple[str, date | None], list[PlanItem]] = {}
     names: dict[tuple[str, date | None], str] = {}
     begins: dict[tuple[str, date | None], date] = {}
+    codes: dict[tuple[str, date | None], str | None] = {}
     for key, of in keyed.items():
         labels = Counter(label for label, _ in of)
         # A named label ("M4 · Rollout") before the bare code ("M4"), then the commonest.
-        name = min(labels, key=lambda x: (milestone_of(x)[0] == x, -labels[x], x))
+        name = min(labels, key=lambda x: (_BARE.fullmatch(x.strip()) is not None, -labels[x], x))
         # A record named only by its code ("M2") reads the name its own items give that code
-        # (vqa one-pager 3), never another record's.
+        # (vqa one-pager 3), never another record's; ``coded``, read by its roadmap code
+        # (the roadmap code decides the row, the items' name its label).
         said = Counter(
             label
             for _, i in of
-            if (label := milestone_of(i.milestone)[1]) != name and milestone_of(label)[0] == name
+            if (raw := milestone_of(i.milestone)[1])
+            and (label := _named(raw, i.roadmap_code) if coded else raw) != name
+            and name in (milestone_of(label)[0], milestone_of(raw)[0])
         )
         if said:
             name = min(said, key=lambda x: (-said[x], x))
@@ -108,6 +135,8 @@ def strip(items: list[PlanItem], today: date) -> SimplePlanStrip | None:
         # Each record (or code) is its own row: two records sharing a name and date stay two.
         groups[(key, when)] = [i for _, i in of]
         names[(key, when)] = name
+        if coded:
+            codes[(key, when)] = of[0][1].roadmap_code
         # A dated plan milestone (the PRD dates it): its row spans its start to its end.
         starts = [i.milestone_start for _, i in of if i.milestone_start]
         if starts:
@@ -132,7 +161,12 @@ def strip(items: list[PlanItem], today: date) -> SimplePlanStrip | None:
     end = _add_months(months[-1], 1) - timedelta(days=1)
 
     def row(
-        name: str, when: date | None, of: list[PlanItem], milestone: bool, begin: date | None = None
+        name: str,
+        when: date | None,
+        of: list[PlanItem],
+        milestone: bool,
+        begin: date | None = None,
+        code: str | None = None,
     ) -> SimplePlanRow:
         planned = begin is not None and when is not None
         return SimplePlanRow(
@@ -145,12 +179,13 @@ def strip(items: list[PlanItem], today: date) -> SimplePlanStrip | None:
             milestone=milestone,
             past_edge=when is not None and when > end,
             item_ids=list(dict.fromkeys(i.id for i in of if i.id)),
+            code=code,
         )
 
     ordered = sorted(
         groups.items(), key=lambda kv: (kv[0][1] is None, kv[0][1] or date.max, names[kv[0]])
     )
-    rows = [row(names[k], k[1], of, True, begins.get(k)) for k, of in ordered]
+    rows = [row(names[k], k[1], of, True, begins.get(k), codes.get(k)) for k, of in ordered]
     if loose:
         rows.append(row(NO_MILESTONE, None, loose, False))
     return SimplePlanStrip(

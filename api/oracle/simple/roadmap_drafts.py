@@ -85,7 +85,9 @@ async def _items(db: AsyncSession, draft_ids: list[uuid.UUID]) -> list[RoadmapIt
     )
 
 
-async def _placed(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, tuple[date, date]]:
+async def _placed(
+    db: AsyncSession, rows: list[RoadmapItem]
+) -> dict[uuid.UUID, tuple[date, date, str]]:
     """Each item approval would put on the roadmap, at the dates it would write
     (oracle.simple.prd_roadmap._dated): its typed dates, the lead's accepted date, its own,
     its engineering milestone's; a missing start is estimated as the roadmap does (its
@@ -108,8 +110,9 @@ async def _placed(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, 
             continue
         start, end, source = got
         c = dates.Candidate(start, end, source, r.updated_at)  # type: ignore[arg-type]
-        resolved = dates.resolve([c], windows.get(r.horizon, windows["now"]), effort.get(r.id))
-        out[r.id] = (resolved.start.date, resolved.end.date)
+        # board-quarters: the column the dates put it in.
+        resolved, h = dates.resolve_by_dates([c], windows, effort.get(r.id))
+        out[r.id] = (resolved.start.date, resolved.end.date, h)
     return out
 
 
@@ -133,7 +136,7 @@ async def draft_prds(db: AsyncSession, principal: Any) -> list[SimpleRoadmapDraf
                 id=r.id,
                 key=r.item_key,
                 title=r.title,
-                horizon=r.horizon,
+                horizon=spans[r.id][2],
                 start=spans[r.id][0],
                 end=spans[r.id][1],
                 owner_name=names.get(r.owner_id) if r.owner_id else None,

@@ -190,7 +190,9 @@ for (const who of ["commenter", "viewer"] as const) {
       for (const l of await lanes.all()) {
         const lb = (await l.boundingBox())!;
         expect(lb.height).toBeGreaterThanOrEqual(31.5);
-        await expect(l).toHaveText(/\S.* · \d+ items?$/);
+        // tb-mk: a track band reads its name, goal and health; No track reads bare; Below the line keeps its count.
+        if (await l.getByTestId("track-head").count()) await expect(l.getByTestId("track-head")).toHaveText(/\S.*(On track|Needs a look)$/);
+        else await expect(l).toHaveText(/^No track\s*$|\S.* · \d+ items?$/);
         const name = l.locator(":scope > div");
         const nb = (await name.boundingBox())!;
         expect(nb.y, "the name and count sit inside their lane").toBeGreaterThanOrEqual(lb.y - 0.5);
@@ -237,7 +239,7 @@ test.describe("phone", () => {
     // qa4-simple-roadmap-33: the count alone ("4 items"), no "up to 1 at once".
     for (const q of await quarters.all()) {
       const head = (await q.locator("h3").textContent())!;
-      const n = Number(/· (\d+) items/.exec(head)?.[1]);
+      const n = Number(/· (\d+) items?/.exec(head)?.[1]);
       expect(head).not.toMatch(/at once/);
       await expect(q.getByTestId("timeline-row")).toHaveCount(n);
     }

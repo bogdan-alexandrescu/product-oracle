@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboard
 import { LINK_KINDS } from "@/lib/roadmap-links";
 
 import { MsBoardRow } from "./_milestones";
-import { barKind, broken, brokenLinks, closedItem, mergedName, partsTree, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
+import { barKind, broken, brokenLinks, closedItem, mergedName, partsTree, shortDay, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
 
 export type Horizon = Item["horizon"];
 
@@ -18,11 +18,12 @@ export const HORIZONS: { key: Horizon; label: string }[] = [
 /** qa-simple-roadmap-27: each end of a span shows its year only when it isn't this year's. */
 const boardSpanWords = (start: string, end: string, today: string): string => spanWords(start, end, today, true);
 
-/** qa-simple-roadmap-3: whether an item's own dates fall outside its column's window (a
- * moved card's horizon changes while its own dates stay put); the column keeps its range
- * and the card says its dates sit outside it. */
-function outsideWindow(i: Item, window: { start: string; end: string }): boolean {
-  return i.start.date > window.end || i.end.date < window.start;
+/** board-quarters (owner, Nov 10): each column is a calendar quarter on the company's day,
+ * read month first: Now and Next their span ("Oct 1 – Dec 31"), Later where it starts
+ * ("Apr 1, 2027 on"). An item's column comes from its dates, so they never disagree. */
+function columnSpan(key: Horizon, window: { start: string; end: string }): string {
+  if (key === "later") return `${shortDay(window.start)}, ${window.start.slice(0, 4)} on`;
+  return `${shortDay(window.start)} – ${shortDay(window.end)}`;
 }
 
 /** fix4 qa-simple-roadmap-34: one legend style for every format, the Timeline's: a swatch
@@ -55,7 +56,7 @@ export const MARK_WORDS = {
 export function boardLegend(data: Roadmap, phone: boolean, canDrag: boolean): LegendEntry[] {
   const open = data.items.filter((i) => !closedItem(i));
   const out: LegendEntry[] = [];
-  if (canDrag) out.push({ key: "drag", swatch: null, words: `Drag a card to another column${phone ? " (press and hold first)" : ""} to change its horizon` });
+  if (canDrag) out.push({ key: "drag", swatch: null, words: `Drag a card to another column${phone ? " (press and hold first)" : ""} to move its dates there` });
   if (open.some((i) => barKind(i) === "estimated"))
     out.push({ key: "estimated", swatch: <i aria-hidden className="inline-block h-3 w-[18px] flex-none rounded border border-dashed border-accent-mid" />, words: MARK_WORDS.estimated });
   if (open.some((i) => barKind(i) === "draft")) out.push({ key: "draft", swatch: <i aria-hidden className={`${LEGEND_SWATCH} border-dashed border-line-strong`} />, words: "Draft" });
@@ -398,14 +399,10 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
               data-testid="board-dates"
               className={kind === "estimated" ? "rounded border border-dashed border-accent-mid px-1 text-accent-ink" : ""}
             >
-              {boardSpanWords(item.start.date, item.end.date, data.today)}
-              {kind === "estimated" && " · estimated"}
+              {/* board-quarters: an item no source dates sits in Later with no dates. */}
+              {item.start.estimated && item.end.estimated ? "No dates" : boardSpanWords(item.start.date, item.end.date, data.today)}
+              {kind === "estimated" && !(item.start.estimated && item.end.estimated) && " · estimated"}
             </span>
-            {!closedItem(item) && data.windows[item.horizon] && outsideWindow(item, data.windows[item.horizon]) && (
-              <span className="rounded-full bg-warn-bg px-1.5 text-xs text-warn" data-testid="outside-column">
-                Dates outside {HORIZONS.find((h) => h.key === item.horizon)?.label ?? item.horizon}
-              </span>
-            )}
             {kind === "draft" && (
               <span className="rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag">
                 Draft
@@ -471,8 +468,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           <header className="flex items-baseline gap-2 px-1 pb-2">
             <h2 className="text-lg font-semibold">{c.label}</h2>
             <span className="text-sm text-text2" data-testid="column-window">
-              {/* qa4-simple-roadmap-20: a column's window always carries its year, as Next and Later do. */}
-              {spanWords(c.window.start, c.window.end, "")}
+              · {columnSpan(c.key, c.window)}
             </span>
             {/* fix4 qa-simple-roadmap-32: the cut cards under the line are counted too. */}
             <span className="tnum ml-auto text-sm whitespace-nowrap text-text2" data-testid="column-count">

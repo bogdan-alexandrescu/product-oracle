@@ -564,3 +564,18 @@ async def test_versions_without_questions_are_kept_up_to_a_limit(client, monkeyp
         )
     assert len(questions._NOTHING) <= 3
     assert newest in questions._NOTHING
+
+
+async def test_decided_row_names_its_prd(client):
+    """protects=QA (unique codes): a PRD's decided question listed outside meetings names its
+    PRD (prd_title), so a code another PRD's run repeats reads "<PRD> Q1" in its tooltip as a
+    waiting question's does; fails_when=the row carries its code alone; no_claim=a PRD the
+    reader cannot read (its decisions are not listed)."""
+    ctx = await make_ctx()
+    await seed(ctx)
+    body = await page(client, ctx, "decider")
+    prd_rows = [d for d in body["other"] if d["origin"] == "prd"]
+    assert [d["code"] for d in prd_rows] == ["Q1"]
+    assert prd_rows[0]["prd_title"] == body["questions"][0]["prd"]["title"]
+    others = [d for d in body["other"] if d["origin"] != "prd"]
+    assert all(d["prd_title"] is None for d in others)

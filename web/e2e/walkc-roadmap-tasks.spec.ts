@@ -136,7 +136,10 @@ for (const where of ["desktop", "phone"] as const) {
     const card = page.getByTestId("floating-card");
     const task = card.getByTestId("card-task");
     await expect(task).toHaveCount(1);
-    await expect(task).toHaveText("Draft the digest email · Theo Brandt · due Nov 20 · To do");
+    // ec1 'Edit each row in place': the title, then its owner and due day, and its status pill.
+    await expect(task).toContainText("Draft the digest email");
+    await expect(task).toContainText("Theo Brandt · due Nov 20");
+    await expect(task.getByTestId("task-status")).toHaveText("To do ▾");
     // The account menu is the desktop rail's: sign out there, then come back as Theo.
     await card.getByRole("button", { name: "Close" }).click();
     await expect(card).toHaveCount(0);
@@ -197,8 +200,8 @@ for (const where of ["desktop", "phone"] as const) {
 
 /**
  * Card walkc-review-estimated-moved: protects = after a review meeting moves "Team invites"
- * (F-05, no dates of its own: estimated, as the API reads an undated item) to Later, its
- * Timeline bar and Gantt slice bars start where the Waterfall's bar does, in Later's window, not
+ * (F-05, no dates of its own: estimated, as the API reads an undated item, so Later's: board-quarters) to Next, its
+ * Timeline bar and Gantt slice bars start where the Waterfall's bar does, in Next's quarter, not
  * at the plan's dates; fails_when = an estimated item's slices stay at the plan's dates
  * after a move; no_claim = how long the slices are drawn.
  */
@@ -206,13 +209,15 @@ for (const where of ["desktop", "phone"] as const) {
   test(`an estimated item moved in a review is drawn in its new horizon (${where})`, async ({ page }) => {
     await startReview(page);
     await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));
-    await tap(page.getByRole("button", { name: "Move Team invites to Later" }));
-    await expect(page.getByTestId("roadmap-said")).toHaveText("Moved Team invites to Later.");
+    await tap(page.getByRole("button", { name: "Move Team invites to Next" }));
+    await expect(page.getByTestId("roadmap-said")).toHaveText("Moved Team invites to Next.");
     if (where === "phone") await page.setViewportSize(PHONE);
     await page.goto(`${URL}?roadmap=onboarding-roadmap`);
     await expect(page.getByTestId("simple-chart")).toBeVisible();
     await page.getByTestId("format-waterfall").click();
-    await expect(bar(page, "plan-f-05")).toHaveAttribute("data-kind", "estimated");
+    // board-quarters: the move gives it Next's quarter as its dates.
+    await expect(bar(page, "plan-f-05")).toHaveAttribute("data-kind", "dated");
+    await expect(bar(page, "plan-f-05")).toHaveAttribute("data-start", "2027-01-01");
     const now = (await bar(page, "plan-f-05").getAttribute("data-start"))!;
     if (where === "desktop") {
       // The picked Timeline draws the item itself, not its slices: its bar starts there too.
@@ -226,11 +231,12 @@ for (const where of ["desktop", "phone"] as const) {
 
 /**
  * Card walkc-review-card-no-tasks: protects = an item with no tasks keeps the picked card
- * design: no "Tasks" part and no "No tasks yet" line, and with the card open a click on the
- * rail still goes to that page; fails_when = every card shows an empty Tasks part;
+ * design: no task rows and no "No tasks yet" line, only '+ Add a task' (ec1 'Edit each row in
+ * place', Nov 5), and with the card open a click on the rail still goes to that page;
+ * fails_when = an empty card shows a "No tasks yet" line;
  * no_claim = a card with tasks (the test above).
  */
-test("an item with no tasks shows no Tasks part on its card", async ({ page }) => {
+test("an item with no tasks lists none on its card, only the owner's '+ Add a task'", async ({ page }) => {
   await login(page);
   await page.goto(URL);
   await expect(page.getByTestId("simple-chart")).toBeVisible();
@@ -239,6 +245,7 @@ test("an item with no tasks shows no Tasks part on its card", async ({ page }) =
   const card = page.getByTestId("item-panel").getByTestId("floating-card");
   await expect(card).toBeVisible();
   await expect(card.getByText("Proposals on it")).toBeVisible();
-  await expect(card.getByTestId("card-tasks")).toHaveCount(0);
+  await expect(card.getByTestId("card-task")).toHaveCount(0);
+  await expect(card.getByTestId("card-tasks").getByRole("button", { name: "+ Add a task" })).toBeVisible();
   await expect(card.getByText("No tasks yet")).toHaveCount(0);
 });

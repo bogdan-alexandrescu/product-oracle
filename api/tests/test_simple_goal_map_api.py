@@ -50,6 +50,15 @@ Test cards (protects / fails_when / no_claim):
 - test_a_merged_feature_leaves_the_map (panel-menu): protects=a published feature merged
   into another through the feature panel (merge_item) is no longer one of the map's
   features; fails_when=it is still listed as live; no_claim=the kept feature's links.
+- test_a_feature_name_that_leads_with_its_code_reads_without_it (QA goal map codes):
+  protects=a feature (on the map or unplaced) whose stored title leads with its own code
+  reads by its name alone, as the Simple roadmap reads it, so the card shows the code
+  once; a title that leads with another code than the item's own, and one with no code,
+  read whole; fails_when=the map's name repeats the code the card shows ("F-07 F-07 ...");
+  no_claim=the web's cards (Playwright's goal-map-code-once spec).
+- test_every_feature_and_unplaced_entry_carries_its_code: protects=each feature and each
+  unplaced entry reads its code as the Simple roadmap reads it (``code``, "" for none);
+  fails_when=a code is missing or differs from the roadmap's; no_claim=the web's cards.
 """
 
 import uuid
@@ -62,7 +71,7 @@ from sqlalchemy import event, func, select
 from oracle import company_time
 from oracle.baseline.models import Entity, GoalMeasurement
 from oracle.docs.models import Document
-from oracle.roadmap.models import TrackMilestone
+from oracle.roadmap.models import RoadmapItem, TrackMilestone
 from oracle.simple import goal_map
 from oracle.simple.models import FocusArea, MilestoneFeature
 from oracle.tenancy import tenant_session
@@ -615,6 +624,29 @@ async def test_a_merged_feature_leaves_the_map(client):
     assert [f["id"] for f in body["features"]] == [ids["f2"]]
 
 
+async def test_a_feature_name_that_leads_with_its_code_reads_without_it(client):
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        f1 = await s.get(RoadmapItem, uuid.UUID(ids["f1"]))
+        f1.title = "F-07 One-tap sign-up link"
+        f2 = await s.get(RoadmapItem, uuid.UUID(ids["f2"]))
+        f2.title, f2.prd_section_key = "F-08 Guided first week", "f-09"
+        f3 = await s.get(RoadmapItem, uuid.UUID(ids["f3"]))
+        f3.title = "F-37a Rep leaderboard"
+        await s.commit()
+    body = await read(client, ctx)
+    names = {f["id"]: f["name"] for f in body["features"] + body["unplaced"]}
+    assert names[ids["f1"]] == "One-tap sign-up link"
+    assert names[ids["f2"]] == "F-08 Guided first week"
+    assert names[ids["f3"]] == "Rep leaderboard"
+    r = await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    road = {i["id"]: (i["code"], i["title"]) for i in r.json()["items"]}
+    assert road[ids["f1"]] == ("F-07", names[ids["f1"]])
+    assert road[ids["f2"]] == ("F-09", names[ids["f2"]])
+    assert road[ids["f3"]] == ("F-37a", names[ids["f3"]])
+
+
 async def test_a_goal_name_stored_with_a_placeholder_reads_without_it(client):
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
@@ -624,3 +656,22 @@ async def test_a_goal_name_stored_with_a_placeholder_reads_without_it(client):
     body = await read(client, ctx)
     goal = next(g for g in body["goals"] if g["id"] == ids["signups"])
     assert goal["name"] == "KR 1.1 sign-ups per rep"
+
+
+async def test_every_feature_and_unplaced_entry_carries_its_code(client):
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        f1 = await s.get(RoadmapItem, uuid.UUID(ids["f1"]))
+        f1.title = "F-07 One-tap sign-up link"
+        f2 = await s.get(RoadmapItem, uuid.UUID(ids["f2"]))
+        f2.prd_section_key = "f-09"
+        f3 = await s.get(RoadmapItem, uuid.UUID(ids["f3"]))
+        f3.title = "F-37a Rep leaderboard"
+        await s.commit()
+    body = await read(client, ctx)
+    codes = {f["id"]: f["code"] for f in body["features"] + body["unplaced"]}
+    assert codes == {ids["f1"]: "F-07", ids["f2"]: "F-09", ids["f3"]: "F-37a"}
+    r = await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    road = {i["id"]: i["code"] or "" for i in r.json()["items"]}
+    assert all(road[k] == v for k, v in codes.items())

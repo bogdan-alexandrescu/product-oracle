@@ -62,6 +62,7 @@ from oracle.docs.parser import DraftError as ImportRejected
 from oracle.docs.prd_order import sort_prds
 from oracle.models import AuditEvent
 from oracle.roadmap.models import ProductTrack, RoadmapItem
+from oracle.roadmap.tracks import on_prd as tracks_on_prd
 from oracle.simple import change_words, drafts, minutes
 from oracle.simple.models import (
     SimpleChange,
@@ -528,7 +529,7 @@ async def _reviewed_roadmap(
         return next(iter(on), None)
     # On several: the roadmap of the PRD's own track (one per PRD), else all of them.
     home = await db.scalar(
-        select(ProductTrack.roadmap_document_id).where(ProductTrack.prd_document_id == document.id)
+        select(ProductTrack.roadmap_document_id).where(tracks_on_prd(document.id))
     )
     return home if home in on else None
 
@@ -2703,8 +2704,8 @@ async def decided_flows(db: AsyncSession, links: list) -> dict[uuid.UUID, Simple
 # --------------------------------------------------------------------------- the page
 
 
-def _row(d: Decision, names: dict, principal: Any = None, edited: dict | None = None
-         ) -> SimpleDecisionRow:  # fmt: skip
+def _row(d: Decision, names: dict, principal: Any = None, edited: dict | None = None,
+         prds: dict | None = None) -> SimpleDecisionRow:  # fmt: skip
     from oracle.simple import decision_sheet
 
     chosen = next(
@@ -2716,6 +2717,9 @@ def _row(d: Decision, names: dict, principal: Any = None, edited: dict | None = 
         approver=_ref(d.approver_id, names) if d.approver_id else None,
         decided_at=d.decided_at, created_at=d.created_at, subjects=list(d.subjects or []),
         code=(d.prd_question or {}).get("code") if d.origin == "prd" else None,
+        # QA (unique codes): its PRD's name, for a code another PRD's run repeats.
+        prd_title=(prds or {}).get(str((d.prd_question or {}).get("document_id")))
+        if d.origin == "prd" else None,
         chosen=chosen,
         # edit-decisions (ec1 b): the sheet's fields and rights.
         question=d.question, context=d.context,
@@ -2825,6 +2829,8 @@ async def decisions_page(
                          | {d.approver_id for d in others} | _note_authors(shown_ms)
                          | {by for _, by in edited.values()})  # fmt: skip
     flows = await decided_flows(db, [x for m in shown_ms for x in links[m.id]])
+    # The PRDs this reader reads, by id: a decided question's row names its PRD.
+    prds = {str(i): docs[i].title for i in readable}
     groups = []
     for b, m in zip(await briefs(db, shown_ms), shown_ms, strict=True):
         minutes = SimpleMinutes.model_validate(m.minutes) if m.minutes else None
@@ -2833,7 +2839,7 @@ async def decisions_page(
         groups.append(SimpleMeetingGroup(
             meeting=b,
             minutes=await _named(db, minutes) if minutes else None,
-            decisions=[_row(d, names, principal, edited).model_copy(
+            decisions=[_row(d, names, principal, edited, prds).model_copy(
                            update={"flow": flows.get(d.id)})
                        for _, d in links[m.id] if whole or keep(d)],
             notes=[n for n in await _notes_out(db, m, names) if n.kind in ("note", "comment")],
@@ -2865,7 +2871,7 @@ async def decisions_page(
     return SimpleDecisionsOut(
         **await questions.page_fields(db, principal, qdocs, only, replaced),
         meetings=groups,
-        other=[_row(d, names, principal, edited) for d in others],
+        other=[_row(d, names, principal, edited, prds) for d in others],
         # prd-order: the PRD filter lists the PRDs in the company PRD order.
         prds=[SimpleFilterOption(id=d.slug, title=d.title)
               for d in await sort_prds(db, docs.values())

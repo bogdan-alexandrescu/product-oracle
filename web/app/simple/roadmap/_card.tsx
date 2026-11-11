@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { Button, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
+import { Button, confirmInPage, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { useFeatureDelete } from "@/components/simple/FeatureDelete";
+import { useFitViewport } from "@/lib/fit-viewport";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
 import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
 import { Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
@@ -12,16 +13,17 @@ import { flagKey } from "@/components/simple/chat/ChatCard";
 import { ItemTalk } from "@/components/simple/chat/ItemTalk";
 import { askThread, itemTalkPage, sendCardChanged, type ChatCard } from "@/lib/api/simple-chat";
 import { DecidedWho } from "@/components/simple/DecidedWho";
-import { formatDay } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
 import { NameEdit, PanelFields } from "./_fields";
 import { CutBy } from "./_removed";
+import { TasksPart } from "./_tasks";
 import {
   closedItem,
   milestoneInk,
+  partsWords,
   shortDay,
   storedDates,
   type Change,
@@ -754,7 +756,30 @@ function FlowThumb({
 }
 
 /** One of the card's parts ("WHY", "FLOW"): the mock-up's small-capitals heading over its body. */
-const TASK_WORDS: Record<Item["tasks"][number]["status"], string> = { todo: "To do", doing: "Doing", done: "Done", dropped: "Dropped" };
+
+/** "F-12 Weekly alert digest": a feature's code, then its name. */
+const codeName = (i: Pick<Item, "code" | "title">) => (i.code ? `${i.code} ${i.title}` : i.title);
+
+/** "A, B and C". */
+const andWords = (xs: string[]) => (xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+
+/** pm2 'List what points at it': what the Delete confirm lists, one row each. */
+export function pointsAt(item: Item, items: Map<string, Item>): { label: string; value: string }[] {
+  const named = (ids: string[]) => ids.map((id) => items.get(id)).filter((i): i is Item => !!i).map(codeName);
+  const needed = named(item.needed_by);
+  const deps = named(item.depends_on);
+  const decisions = item.open_decisions.length + item.decided_in.length;
+  const tasks = item.tasks.length;
+  return [
+    { label: "Needed by", value: needed.length ? `${andWords(needed)} ${needed.length === 1 ? "loses" : "lose"} this link` : "Nothing" },
+    { label: "Depends on", value: deps.length ? andWords(deps) : "Nothing" },
+    { label: "Decisions", value: decisions ? `${decisions === 1 ? "1 decision names" : `${decisions} decisions name`} it; they stay` : "None" },
+    { label: "Milestone", value: item.milestone?.name ?? "None" },
+    { label: "Goal", value: item.goal?.title ?? "None" },
+    { label: "Key result", value: item.goal?.metric ?? "None" },
+    { label: "Tasks", value: tasks ? `${tasks === 1 ? "1 task goes" : `${tasks} tasks go`} with it` : "None" },
+  ];
+}
 
 function Part({ title, children, testId }: { title: string; children: React.ReactNode; testId?: string }) {
   return (
@@ -901,21 +926,29 @@ export function FloatingCard({
     setLeft(baseLeft > room ? Math.max(0, room) : null);
   }, [wide, phone, beside, baseLeft]);
 
+  // BGD (Nov 10): the floating card fits the viewport (below its bar, above it, or as high as it
+  // needs), its details scrolling under the header.
+  const float = !phone && !beside;
+  const barOf = useCallback(() => document.querySelector(`[data-bar-id="${CSS.escape(item.id)}"]`), [item.id]);
+  const fit = useFitViewport(ref, {
+    on: float,
+    top: style.position !== "relative" && typeof style.top === "number" ? style.top : undefined,
+    anchor: barOf,
+    follow: style.position === "relative",
+  });
   const place = phone
     ? wide
       ? "fixed inset-0 z-50 flex h-dvh flex-col"
       : `fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t h-[85dvh]`
     : beside
       ? "fixed z-40 flex w-[840px] flex-col rounded-xl border"
-      : `absolute z-40 rounded-xl border p-4 ${wide ? "w-[760px]" : "w-[380px]"}`;
+      : `absolute z-40 flex flex-col rounded-xl border ${wide ? "w-[760px]" : "w-[380px]"}`;
   const placeStyle: React.CSSProperties | undefined = phone
     ? // A part-height sheet (the Timeline's) keeps the marked row in sight above it.
       !wide && style.height ? { height: style.height } : undefined
     : beside
       ? { top: 16, bottom: 16, right: talkRight }
-      : left == null
-        ? style
-        : { ...style, left };
+      : { ...style, ...(left == null ? {} : { left }), ...(fit.top == null ? {} : { top: fit.top }), maxHeight: fit.maxHeight };
 
   const [renaming, setRenaming] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -923,6 +956,17 @@ export function FloatingCard({
   const [pick, setPick] = useState<"merge" | "parent" | null>(null);
   // panel-menu: Delete to Trash, as a row's Delete; in Trash, the panel closes.
   const remove = useFeatureDelete(async () => sendCardChanged(), cornerToast, () => onClose());
+  const neededBy = item.needed_by.map((id) => items.get(id)).filter((i): i is Item => !!i);
+  const cutIt = async () => {
+    const parts = partsWords(item.parts.length, "stay");
+    const rows = [{ label: "Needed by", value: neededBy.length ? `${andWords(neededBy.map(codeName))} ${neededBy.length === 1 ? "loses" : "lose"} it` : "Nothing" }];
+    // Who may not decide on it is asked to propose the cut, not to cut.
+    const ask = item.can_decide ? { action: "Cut", title: `Cut ${item.title}?` } : { action: "Propose", title: `Propose cutting ${item.title}?` };
+    if (!(await confirmInPage({ ...ask, message: parts, rows, cancel: "Cancel" }))) return;
+    await act({ applied: `Cut ${item.title} from the roadmap`, proposed: `cut ${item.title} from the roadmap` }, { op: "set_status", target: { item_id: item.id }, before: { status: item.status }, after: { status: "cut" } }, parts || undefined);
+  };
+  const restore = () =>
+    act({ applied: `Restored ${item.title} to the roadmap`, proposed: `restore ${item.title} to the roadmap` }, { op: "set_status", target: { item_id: item.id }, before: { status: item.status }, after: { status: "planned" } });
   const menuItem = (label: string, run: () => void, warn = false) => (
     <button
       type="button"
@@ -985,8 +1029,16 @@ export function FloatingCard({
               {/* A cut feature stays a part, and can still be taken out (or put under another). */}
               {item.status !== "merged" && menuItem("Part of…", () => setPick("parent"))}
               {!closedItem(item) && menuItem("Merge into…", () => setPick("merge"))}
+              {/* pm1 '⋯ menu by the close' (owner's pick, Nov 5): Cut and Restore live here, not in the Status select. */}
+              {item.status === "cut"
+                ? menuItem(item.can_decide ? "Restore to the roadmap" : "Propose: restore", () => void restore())
+                : item.status !== "merged" && menuItem(item.can_decide ? "Cut from the roadmap" : "Propose: cut", () => void cutIt())}
               {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
-              {menuItem(item.can_decide ? "Delete feature" : "Propose: delete", () => void remove({ id: item.id, title: item.title, parts: item.parts }), true)}
+              {menuItem(
+                item.can_decide ? "Move to Trash…" : "Propose: move to Trash…",
+                () => void remove({ id: item.id, title: item.title, parts: item.parts, rows: pointsAt(item, items), propose: !item.can_decide, deciders: item.deciders }),
+                true,
+              )}
             </div>
           )}
         </div>
@@ -1076,7 +1128,7 @@ export function FloatingCard({
         </p>
       )}
       {/* removed-tracks: a cut feature's head says who cut it and when (the Removed list's row). */}
-      {cut && <CutBy id={item.id} />}
+      {cut && <CutBy id={item.id} onRestore={canChange ? () => void restore() : undefined} restoreLabel={item.can_decide ? "Restore" : "Propose: restore"} />}
       {pick && <PickFeature key={pick} kind={pick} item={item} items={items} act={act} done={() => setPick(null)} />}
       {item.merged_into && (
         <p className="mt-1 text-sm text-text2" data-testid="item-merged">
@@ -1114,7 +1166,7 @@ export function FloatingCard({
               </button>
             </p>
           )}
-          <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} milestones={milestones} />
+          <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} milestones={milestones} noHorizon={!!onHorizon} />
           <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
           {item.slices.length > 0 && (
             <>
@@ -1258,21 +1310,15 @@ export function FloatingCard({
               </ul>
             </Part>
           )}
-          {item.tasks.length > 0 && (
-            <Part title="Tasks" testId="card-tasks">
-              <ul className="mt-1 space-y-1">
-                {item.tasks.map((t) => (
-                  <li key={t.id} data-testid="card-task" className="[overflow-wrap:anywhere]">
-                    {t.title}
-                    <span className="text-text2">
-                      {" "}
-                      · {t.owner ? t.owner.name : "No owner"}
-                      {t.due_date ? ` · due ${formatDay(t.due_date)}` : ""} · {TASK_WORDS[t.status]}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Part>
+          {(canChange || item.tasks.length > 0) && (
+            <section className="mt-3" data-testid="card-tasks">
+              <TasksPart
+                item={item}
+                act={act}
+                canChange={canChange}
+                title={(words) => <h3 className="text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase">{words}</h3>}
+              />
+            </section>
           )}
           {flowPart}
           <Part title="Proposals on it">
@@ -1434,7 +1480,7 @@ export function FloatingCard({
         data-flow-open={flowOpen ? "true" : "false"}
         style={placeStyle}
         data-backdrop={phone && wide ? "" : undefined}
-        className={`${place} ${phone ? "max-w-none overflow-hidden" : "max-w-[calc(100vw-16px)]"} border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${!phone && !beside ? "overflow-y-auto" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
+        className={`${place} ${phone ? "max-w-none overflow-hidden" : "max-w-[calc(100vw-16px)]"} border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${float ? "overflow-hidden" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
       >
       {phone ? (
         <>
@@ -1471,7 +1517,7 @@ export function FloatingCard({
             <div
               role="tabpanel"
               aria-label="Details"
-              className="min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4"
             >
               {details}
             </div>
@@ -1491,8 +1537,10 @@ export function FloatingCard({
         </>
       ) : (
         <>
-          {head}
-          {details}
+          <div className="flex-none px-4 pt-4">{head}</div>
+          <div data-fit-body="" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
+            {details}
+          </div>
         </>
       )}
     </div>

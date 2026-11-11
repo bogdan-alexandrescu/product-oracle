@@ -1211,11 +1211,11 @@ async def approve_version(
             session, principal, document, version, readiness_summary(gate)
         )
     if document.kind == "prd":
-        # V2b, T2: approving a PRD version publishes it; a published PRD starts (or
-        # advances) its product track.
+        # V2b, T2: approving a PRD version publishes it; a published PRD advances its
+        # product track (tracks-goal: a PRD with none has one suggested, none started).
         from oracle.roadmap import tracks
 
-        await tracks.ensure_track(session, document, version, actor=principal, cause="approved")
+        await tracks.auto_track(session, document, version)
         # plan-model: the approved version's plan is read now (its tables, else Oracle's
         # prd_plan job), not on the first read of it.
         from oracle.simple import plan as simple_plan

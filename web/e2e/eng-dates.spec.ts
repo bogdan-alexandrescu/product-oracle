@@ -137,6 +137,17 @@ test("next and later: only in the collapsed read-only group, with no date action
   await expect(others.getByRole("button")).toHaveCount(0);
 });
 
+test("send back: the lead sends the dates back with a note and the run page confirms it went to the architect", async ({ page }) => {
+  // protects=inbox-eng-send-back, Send back to architect says it was sent back and to whom on the run page; fails_when=it jumps to the run with no confirmation; no_claim=the architect's revision.
+  await openDatesAsLead(page);
+  const sendBack = bar(page).getByRole("button", { name: "Send back to architect" });
+  await sendBack.click();
+  await bar(page).getByRole("textbox", { name: "Note to the architect" }).fill("Date the alerts digest after the beta.");
+  await sendBack.click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${ENG_DATES_RUN}$`));
+  await expect(page.getByRole("status").filter({ hasText: "Sent back to the architect" })).toBeVisible();
+});
+
 test("approver, lead named: the screen never decides and says it waits for the engineering lead", async ({ page }) => {
   // protects=who does not decide never sees Approve or Send back, and the screen names the lead; fails_when=Approve or Send back shows or the waits-for line is missing; no_claim=the API's may_decide rule (api tests).
   await withScenario(page, "eng-dates");

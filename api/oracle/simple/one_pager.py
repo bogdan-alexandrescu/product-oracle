@@ -46,6 +46,7 @@ import hashlib
 import json
 import re
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from html import escape
@@ -62,6 +63,7 @@ from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack, RoadmapItem
+from oracle.roadmap.tracks import on_prd as tracks_on_prd
 from oracle.simple import drafts, one_pager_checks, plan_strip, quality
 from oracle.simple import plan as plan_model
 from oracle.simple.changes import IDLE, ChangeError, _session_for_change
@@ -400,11 +402,60 @@ def _id(item: Any) -> str | None:
     return str(item.id) if getattr(item, "id", None) else None
 
 
-def plan_items(items: list[Any], names: dict[str, str] | None = None) -> list[plan_strip.PlanItem]:
+def roadmap_codes_of(read: Any, prd_id: uuid.UUID) -> Callable[..., str | None]:
+    """roadmap-milestone-codes: an item's milestone's roadmap-wide code, as the Roadmap read
+    (``read``, service.build) gives it: a picked roadmap milestone's or a track milestone's by
+    its id, else this PRD's milestone of that written code (or name) on the roadmap; None when
+    it is no roadmap milestone. A PRD milestone on two roadmaps reads its first code."""
+    by_id = {m.id: m.roadmap_code for m in [*read.goal_milestones, *read.milestones]}
+    own: dict[str, str] = {}
+    for m in read.goal_milestones:
+        if m.prd is None or m.prd.id != prd_id or not m.roadmap_code:
+            continue
+        for k in (m.code.strip().upper(), " ".join(m.name.split()).casefold()):
+            if k and (k not in own or int(m.roadmap_code[1:]) < int(own[k][1:])):
+                own[k] = m.roadmap_code
+
+    by_name: dict[str, str] = {}
+    # A roadmap milestone (a track's, or a roadmap's own; a goal's target date holds no item).
+    named = [
+        *read.milestones,
+        *(m for m in read.goal_milestones if not getattr(m, "goal_target", False)),
+    ]
+    for m in named:
+        k = " ".join((m.name or "").split()).casefold()
+        code = m.roadmap_code
+        if k and code and (k not in by_name or int(code[1:]) < int(by_name[k][1:])):
+            by_name[k] = code
+
+    def of(text: str | None, *ids: uuid.UUID | None) -> str | None:
+        for i in ids:
+            if i is not None and by_id.get(i):
+                return by_id[i]
+        if not text:
+            return None
+        key, label = plan_strip.milestone_of(text)
+        name = label.split(" · ", 1)[1] if " · " in label else ""
+        return (
+            own.get(key)
+            or own.get(" ".join(name.split()).casefold())
+            # A track milestone the text names ("Beta launch"), as Home and the Roadmap read it.
+            or by_name.get(" ".join((name or label).split()).casefold())
+        )
+
+    return of
+
+
+def plan_items(
+    items: list[Any],
+    names: dict[str, str] | None = None,
+    code_of: Callable[..., str | None] | None = None,
+) -> list[plan_strip.PlanItem]:
     """The plan strip's reading of a PRD's roadmap items (neither cut nor merged), each with
     the milestone record that links it, when any. ``names``: the PRD plan's milestone names
     by code; a milestone said only by its code ("M2", an item of the PRD with no slice, or
-    its milestone record) reads with its name ("M2 · Ship to beta", vqa one-pager 3)."""
+    its milestone record) reads with its name ("M2 · Ship to beta", vqa one-pager 3).
+    ``code_of`` (roadmap_codes_of): each with its milestone's roadmap code."""
     names = names or {}
 
     def named(text: str | None) -> str | None:
@@ -427,6 +478,7 @@ def plan_items(items: list[Any], names: dict[str, str] | None = None) -> list[pl
                     sl.milestone_end,
                     milestone_start=sl.milestone_start,
                     id=_id(i),
+                    roadmap_code=code_of(sl.milestone) if code_of else None,
                 )
             )
         if getattr(i, "slices", None):
@@ -442,6 +494,13 @@ def plan_items(items: list[Any], names: dict[str, str] | None = None) -> list[pl
                 named(i.milestone.record_name) if i.milestone else None,
                 i.milestone.start_date if i.milestone else None,
                 _id(i),
+                code_of(
+                    i.milestone.record_name or i.milestone.name,
+                    i.milestone.id,
+                    i.milestone.record_id,
+                )
+                if code_of and i.milestone
+                else None,
             )
         )
     return out
@@ -1176,6 +1235,16 @@ class Who:
     company_owners: list[uuid.UUID]
 
 
+def drafts_who(w: Who, document_id: uuid.UUID) -> drafts.Who:
+    """The page's ``who`` as oracle.simple.drafts reads it (its decider, required reviewers and
+    track owners): a one-pager read never asks the database again (review read budget)."""
+    return drafts.Who(
+        deciders={document_id: w.decider},
+        reviewers={document_id: list(w.reviewers)},
+        owners={document_id: set(w.track_owners)},
+    )
+
+
 async def who(db: AsyncSession, document: Document) -> Who:
     policy = await db.scalar(
         select(DocumentReviewPolicy).where(DocumentReviewPolicy.document_id == document.id)
@@ -1185,7 +1254,7 @@ async def who(db: AsyncSession, document: Document) -> Who:
         for u in await db.scalars(
             select(User)
             .join(ProductTrack, ProductTrack.owner_id == User.id)
-            .where(ProductTrack.prd_document_id == document.id, User.disabled_at.is_(None))
+            .where(tracks_on_prd(document.id), User.disabled_at.is_(None))
         )
     }
     company = list(
@@ -1775,7 +1844,10 @@ async def read(
         if i.status not in ("cut", "merged")
     ]
     called = {m.code: m.name for m in view.milestones if m.name} if view is not None else {}
-    plan = plan_strip.strip(plan_items(mine, called), slice_.today)
+    # roadmap-milestone-codes: each row reads its milestone's roadmap code, as the Roadmap does.
+    plan = plan_strip.strip(
+        plan_items(mine, called, roadmap_codes_of(slice_, document.id)), slice_.today, coded=True
+    )
     # A dated plan's span is the one its timeline draws (its milestones, or the dates the
     # lead accepted); else the items' dated milestones.
     if view is not None and view.dated and view.span:
@@ -1803,6 +1875,7 @@ async def read(
             ],
             reviewers=[SimplePersonRef(id=i, name=names.get(i, "someone")) for i in required],
             can_submit=d.status == "working" and decides(principal, w),
+            can_approve=drafts.can_approve(principal, d, drafts_who(w, d.document_id)),
             reminded_at=reminded_at(d),
             can_remind=may_remind(principal, w) and bool(due_reminders(d, now)),
             approved_in=titles.get(uuid.UUID(approved_sid)) if approved_sid else None,

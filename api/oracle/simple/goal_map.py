@@ -54,9 +54,9 @@ from oracle.launches.models import Launch
 from oracle.metrics import pull
 from oracle.metrics.models import Metric, MetricValue
 from oracle.preferences.models import UserPreference
-from oracle.roadmap import company
+from oracle.roadmap import codes, company
 from oracle.roadmap.models import RoadmapItem, TrackMilestone
-from oracle.simple import drafts
+from oracle.simple import drafts, service
 from oracle.simple.goal_milestones import _next_code
 from oracle.simple.models import FocusArea, MilestoneFeature
 
@@ -159,6 +159,8 @@ class GmLink(BaseModel):
 class GmFeature(BaseModel):
     id: uuid.UUID
     name: str
+    # Its code as the roadmap reads it ("F-07"; "" for none).
+    code: str = ""
     area: uuid.UUID | None
     milestones: list[uuid.UUID]
     lever: str
@@ -194,6 +196,8 @@ class GmUnplaced(BaseModel):
     id: uuid.UUID
     name: str
     goal: uuid.UUID | None = None
+    # Its code as the roadmap reads it ("F-07"; "" for none).
+    code: str = ""
 
 
 class GmOffMap(BaseModel):
@@ -220,7 +224,8 @@ class GoalMapOut(BaseModel):
     # Who a proposed milestone is sent to for approval (the first owner by name).
     approver: str | None
     can_edit: bool
-    # goal-ladder: this person's own places of cards (only features on the map).
+    # goal-ladder: this person's own places of cards (features on the map and, Free
+    # canvas, the unplaced ones).
     places: list[GmPlace] = []
 
 
@@ -496,15 +501,16 @@ async def _around(
 
 async def _unplaced(db: AsyncSession, principal: Any, placed: set[uuid.UUID]) -> list[GmUnplaced]:
     """As the signed-in person reads the Simple roadmap: the working drafts they may see."""
-    from oracle.simple import drafts, service
-
     read = await service.load(db, await drafts.overlays_for(db, principal))
     out: dict[uuid.UUID, GmUnplaced] = {}
     for e in read.entries:
         if e.status in ("draft", "cut", "merged") or e.row.id in placed or e.row.id in out:
             continue
         goal = e.goal.id if e.goal is not None else None
-        out[e.row.id] = GmUnplaced(id=e.row.id, name=e.row.title, goal=goal)
+        # QA goal map codes: its name as the roadmap reads it (the card shows its code).
+        code = e.code or service._prd_code(e.row.prd_section_key)
+        code, name = service.coded_title(e.row.title, code)
+        out[e.row.id] = GmUnplaced(id=e.row.id, name=name, goal=goal, code=code or "")
     return list(out.values())
 
 
@@ -628,8 +634,11 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
     goal_of = {m.id: m.goal for m in ms_out}
     around: dict[tuple[uuid.UUID, date], tuple[float | None, float | None]] = {}
     feats: dict[uuid.UUID, GmFeature] = {}
+    by_feature = await codes.feature_codes(db) if any(i.feature_id for _, i in links) else {}
     for link, item in links:
-        title = item.title
+        # QA goal map codes: its name as the roadmap reads it, without a leading code of its
+        # own (the card shows the code before it: "F-07 Crawl", never "F-07 F-07 Crawl").
+        code, title = service.coded_title(item.title, codes.code_of(item, by_feature))
         # panel-menu: a feature merged into another (as the reader's draft has it, as the
         # roadmap reads it) is no longer one of the map's.
         mine_ = (overlays.get(item.roadmap_document_id) or {}).get(str(link.item_id)) or {}
@@ -664,6 +673,7 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
             feats[link.item_id] = GmFeature(
                 id=link.item_id,
                 name=title,
+                code=code or "",
                 area=area.id if area else None,
                 milestones=[link.milestone_id],
                 lever=area.lever if area else "",
@@ -690,6 +700,8 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
             ]
         elif not cells:
             gaps.append(GmGap(milestone=m.id, area=None))
+    unplaced = await _unplaced(db, principal, set(feats))
+    carded = set(feats) | {u.id for u in unplaced}
     return GoalMapOut(
         goals=goal_out,
         areas=[GmArea(id=a.id, name=a.name, lever=a.lever) for a in areas],
@@ -697,7 +709,7 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
         milestones=ms_out,
         features=list(feats.values()),
         gaps=gaps,
-        unplaced=await _unplaced(db, principal, set(feats)),
+        unplaced=unplaced,
         off_map=[
             GmOffMap(id=g.id, key=g.key, name=goal_name(g.title, g.key))
             for g in sort_goals(g for g in confirmed if not _measurable(g))
@@ -711,7 +723,7 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
         places=[
             GmPlace(feature=uuid.UUID(k), x=v[0], y=v[1])
             for k, v in (await _places(db, principal.id)).items()
-            if uuid.UUID(k) in feats
+            if uuid.UUID(k) in carded
         ],
     )
 
@@ -732,9 +744,12 @@ async def _places(db: AsyncSession, principal_id: uuid.UUID) -> dict[str, list[f
     return dict(row.value) if row is not None and isinstance(row.value, dict) else {}
 
 
-async def place_card(db: AsyncSession, principal_id: uuid.UUID, body: PlaceIn) -> None:
+async def place_card(db: AsyncSession, principal: Any, body: PlaceIn) -> None:
     """goal-ladder place_card: keep where this person put a card (a user preference, so a
-    place never changes data). A feature off the map (or in Trash) has no card."""
+    place never changes data). Free canvas (owner's pick): a feature on no milestone (one of
+    the map's ``unplaced``, as this person reads the roadmap) is placed too; an unknown id
+    or a feature in Trash has no card."""
+    principal_id = principal.id
     on_map = await db.scalar(
         select(MilestoneFeature.id)
         .join(RoadmapItem, RoadmapItem.id == MilestoneFeature.item_id)
@@ -742,7 +757,7 @@ async def place_card(db: AsyncSession, principal_id: uuid.UUID, body: PlaceIn) -
         .where(MilestoneFeature.item_id == body.feature, TrackMilestone.deleted_at.is_(None))
         .limit(1)
     )
-    if on_map is None:
+    if on_map is None and body.feature not in {u.id for u in await _unplaced(db, principal, set())}:
         raise GoalMapError(404, "No such feature on the map")
     row = await _places_row(db, principal_id)
     value = dict(row.value) if row is not None and isinstance(row.value, dict) else {}

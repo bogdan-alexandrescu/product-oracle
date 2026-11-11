@@ -22,12 +22,13 @@ import { keyResults, topGoalSuggestions, type KeyResults } from "@/lib/key-resul
 import { InfoTip } from "@/components/ds/InfoTip";
 import { useMe } from "@/lib/me";
 import { byPrdOrderOf, usePrdOrder } from "@/lib/prd-order";
+import { inTrackOrder } from "@/lib/track-order";
 import { useQuery } from "@/lib/use-query";
 
 import { QuickAdd } from "./_add";
 import { RemovedButton } from "./_removed";
 import { TracksButton } from "./_tracks";
-import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
+import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, useMsBand, type MsLane, type MsRow } from "./_milestones";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
 import { FeatureContextMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
@@ -37,6 +38,7 @@ import { DraftLayer, DraftPrdsRead, useShowDrafts, type DraftItem, type DraftPrd
 import { KeyDatesEditor } from "./_keydates";
 import { FeaturePanel } from "./_panel";
 import { Lanes, pmItem } from "./_lanes";
+import { trackLaned } from "./_trackbands";
 import {
   addDays,
   broken,
@@ -677,6 +679,7 @@ function TileWords({ n, label }: { n: number; label: string }) {
 function DecisionTray({
   items,
   byId,
+  milestones = [],
   proposals,
   act,
   canChange,
@@ -694,6 +697,8 @@ function DecisionTray({
 }: {
   items: Item[];
   byId: Map<string, Item>;
+  /** roadmap-milestone-codes: the roadmap's milestones, an ask names one by its roadmap code. */
+  milestones?: Roadmap["goal_milestones"];
   proposals: Change[];
   act: Act;
   canChange: boolean;
@@ -781,10 +786,14 @@ function DecisionTray({
   ];
   const kd = (c: Change) => (c.after.key_date ?? c.before.key_date) as { name?: string } | null | undefined;
   // roadmap-decide: a change the roadmap asked of a PRD names its milestone.
-  const asked = (c: Change) => (c.op === "edit_goal_milestone" && !("milestone" in c.before) ? `PRD milestone ‘${String(c.target.name ?? "")}’` : null);
+  const msName = (c: Change) => {
+    const code = milestones.find((m) => m.id === c.target.milestone_id)?.roadmap_code;
+    return `${code ? `${code} ` : ""}${String(c.target.name ?? "")}`;
+  };
+  const asked = (c: Change) => (c.op === "edit_goal_milestone" && !("milestone" in c.before) ? `PRD milestone ‘${msName(c)}’` : null);
   // milestone-rights: a goal milestone's proposal names the milestone and says change or remove.
   const ms = (c: Change) => c.op === "edit_goal_milestone" && typeof c.target.name === "string" && !asked(c);
-  const title = (c: Change) => asked(c) ?? (ms(c) ? `Milestone '${String(c.target.name)}'` : kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
+  const title = (c: Change) => asked(c) ?? (ms(c) ? `Milestone '${msName(c)}'` : kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
   const asks = (c: Change) => (ms(c) ? ("milestone" in c.before && c.after.milestone === null ? "remove it" : "change it") : opWords(c.op).toLowerCase());
   const row = (c: Change) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
@@ -987,6 +996,9 @@ export function SimpleRoadmap() {
   const params = useSearchParams();
   const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, prd: params.get("prd") ?? "", roadmap: params.get("roadmap") ?? "", goal: params.get("goal") ?? "" }));
   const [format, setFormat] = useState<Format>("timeline");
+  // tb-mk (owner Nov 10, "Track everywhere"): the Gantt, the Board and the Waterfall start grouped by track, like
+  // the Timeline's bands, till a person picks a Group by.
+  const groupPicked = useRef(false);
   const [unit, setUnit] = useState<GanttUnit>("week");
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);
   const [pop, setPop] = useState<{ id: string; left: number; top: number; above: number } | null>(null);
@@ -1033,8 +1045,10 @@ export function SimpleRoadmap() {
   const svg = useRef<SVGSVGElement | null>(null);
 
   const qs = useMemo(() => {
-    // Group by Milestone reads the goal grouping and regroups by the items' slices (lanes()).
-    const q: Record<string, string> = { group: f.group === "milestone" ? "goal" : f.group };
+    // Group by Milestone reads the goal grouping and regroups by the items' slices (lanes()); Group by
+    // Track reads it too and draws the Timeline's track bands (trackLaned), so picking a format, which
+    // starts it at Track, reads nothing again and draws its items once, never once more on a reply.
+    const q: Record<string, string> = { group: f.group === "milestone" || f.group === "track" ? "goal" : f.group };
     for (const k of ["roadmap", "prd", "goal", "track", "from", "to"] as const) if (f[k]) q[k] = f[k];
     return q;
   }, [f]);
@@ -1227,9 +1241,9 @@ export function SimpleRoadmap() {
   const data = useMemo(() => (all ? { ...all, items: all.items.filter((i) => i.status !== "done") } : undefined), [all]);
   const doneItems = useMemo(() => (all?.items ?? []).filter((i) => i.status === "done"), [all]);
   // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
-  const laned = useMemo(() => (data ? oneLane(lanes(data, f.group), f.group) : null), [data, f.group]);
-  // The Timeline always draws goal lanes, the same groups the goal cards count.
-  const goalLaned = useMemo(() => (data ? oneLane(lanes(data, "goal"), "goal") : null), [data]);
+  // tb-mk: the Timeline always draws track bands, in the tracks' order, then No track; Group by Track the same bands.
+  const goalLaned = useMemo(() => (data ? oneLane(trackLaned(data), "track") : null), [data]);
+  const laned = useMemo(() => (!data ? null : f.group === "track" ? goalLaned : oneLane(lanes(data, f.group), f.group)), [data, f.group, goalLaned]);
   const planPrds = useMemo(() => [...new Set((data?.items ?? []).flatMap((i) => (i.slices.length && i.prd ? [i.prd.slug] : [])))].sort(), [data]);
   // A plan the reader cannot open (404) leaves the other plans' no-work weeks.
   const plans = useQuery(`simple-plan-no-work:${planPrds.join(",")}`, async () =>
@@ -1296,7 +1310,17 @@ export function SimpleRoadmap() {
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
-  const ms = useMilestones({ data, phone, canChange, reload, openItem: (id) => setCard({ id, ...anchorOf(id) }) });
+  // A milestone's joined name and its "Also:" read every milestone, so a PRD, goal or track filter never changes them.
+  const picked = !!(f.prd || f.goal || f.track);
+  const unfiltered = useQuery(`simple-roadmap-names:${picked ? JSON.stringify(wideQs) : ""}`, () =>
+    picked ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: wideQs as never } })) : Promise.resolve(null),
+  );
+  // Read again with the roadmap, so a renamed or added milestone's joined name follows.
+  const reloadNames = unfiltered.reload;
+  useEffect(() => {
+    if (picked) void reloadNames();
+  }, [roadmap.data, picked, reloadNames]);
+  const ms = useMilestones({ data, names: picked ? unfiltered.data : data, phone, canChange, reload, openItem: (id) => setCard({ id, ...anchorOf(id) }) });
   // The items as last loaded, for a burst sent after the render that started it.
   const latest = useRef(byId);
   useEffect(() => {
@@ -1475,7 +1499,9 @@ export function SimpleRoadmap() {
   const filterWords = (): string => {
     const named = (list: [string, string][], v: string) => list.find(([k]) => k === v)?.[1] ?? v;
     const qName = (v: string) => (data ? quarters(data.windows.now.start, data.windows.later.end).find((q) => q.start === v || q.end === v)?.label : null) ?? shortDay(v);
-    const parts = [`Grouped by ${f.group === "prd" ? "PRD" : f.group}`];
+    // The Timeline always draws track bands.
+    const group = format === "timeline" ? "track" : f.group;
+    const parts = [`Grouped by ${group === "prd" ? "PRD" : group}`];
     if (f.prd) parts.push(`PRD: ${named(seen.prd, f.prd)}`);
     if (f.goal) parts.push(`Goal: ${named(goalOptions, f.goal)}`);
     if (f.track) parts.push(`Track: ${named(seen.track, f.track)}`);
@@ -1575,10 +1601,32 @@ export function SimpleRoadmap() {
     if (known) return known.applies ? "Add" : "Propose";
     return data.items.some((i) => i.roadmap.id === rm && i.can_decide) ? "Add" : "Propose";
   };
-  const onAdd = async (title: string, w: Where, rmId?: string): Promise<boolean> => {
+  const onAdd = async (title: string, at: Where, rmId?: string): Promise<boolean> => {
+    // tb-mk: a quick add dropped on a track band is added to Next on that track (after.track_id, kept by a
+    // proposal till it is accepted); an applied add the roadmap reads elsewhere is then put on it (set_track).
+    const band = at.kind === "track" ? (data.tracks ?? []).find((t) => t.id === at.value) : undefined;
+    if (at.kind === "track" && !band) return false;
+    const w: Where = band ? { kind: "horizon", value: "next", label: band.title } : at;
     try {
-      const r = await propose({ op: "add_item", target: { roadmap_id: rmId ?? target?.id ?? null, where: { kind: w.kind, value: w.value } }, before: {}, after: { title } });
+      const r = await propose({ op: "add_item", target: { roadmap_id: rmId ?? target?.id ?? null, where: { kind: w.kind, value: w.value } }, before: {}, after: band ? { title, track_id: band.id } : { title } });
       const c = r.change;
+      const id = c.target.item_id;
+      if (band && c.status === "applied" && typeof id === "string") {
+        // Its track as the roadmap now reads it (the roadmap's first track), then the band's.
+        const now = await unwrap(api.GET("/v1/simple/roadmap", { params: { query: wideQs as never } }));
+        const had = now.items.find((i) => i.id === id)?.track?.id ?? null;
+        if (had !== band.id) {
+          try {
+            await propose({ op: "set_track", target: { item_id: id }, before: { track_id: had }, after: { track_id: band.id } });
+          } catch (e) {
+            // The add stands: say so, and that the track did not change.
+            toast({ message: `Added ${title}, but Oracle could not put it on ${band.title}${e instanceof ChangeFailed ? `: ${e.message}` : ""}` });
+            await reloadAfter();
+            setCard({ id, ...anchorOf(id) });
+            return true;
+          }
+        }
+      }
       if (c.status === "applied")
         toast({
           message: `Added ${title} as a draft`,
@@ -1728,7 +1776,7 @@ export function SimpleRoadmap() {
         onChange={(prd) => pickFilter("prd", prd)}
       />
       <Select label="Goal" value={f.goal} options={goalOptions} onChange={(goal) => pickFilter("goal", goal)} />
-      <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
+      <Select label="Track" value={f.track} options={inTrackOrder(seen.track, data.tracks)} onChange={(track) => pickFilter("track", track)} />
       <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setRange(from, f.to)} testId="filter-from" />
       <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setRange(f.from, to)} testId="filter-to" />
     </>
@@ -1755,7 +1803,7 @@ export function SimpleRoadmap() {
         {!phone && <span aria-hidden className="h-6 border-l border-line" />}
         <TracksButton items={data.items} canChange={canChange} onChanged={reload} />
       </span>
-      {/* The Timeline always draws its rows under their goal (rowsOf), so it offers no Group by. */}
+      {/* The Timeline always draws track bands, so it offers no Group by; the Gantt's starts at Track. */}
       {format !== "timeline" && (
       <span className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2">
         Group by
@@ -1763,10 +1811,13 @@ export function SimpleRoadmap() {
           label="Group by"
           size="sm"
           value={f.group}
-          onChange={(group) => setF({ ...f, group })}
+          onChange={(group) => {
+            groupPicked.current = true;
+            setF({ ...f, group });
+          }}
           items={[
-            { value: "goal", label: "Goal", testId: "group-goal" },
             { value: "track", label: "Track", testId: "group-track" },
+            { value: "goal", label: "Goal", testId: "group-goal" },
             { value: "prd", label: "PRD", testId: "group-prd" },
             { value: "milestone", label: "Milestone", testId: "group-milestone" },
           ]}
@@ -1873,7 +1924,10 @@ export function SimpleRoadmap() {
             onChange={(v) => {
               setCard(null);
               setPop(null);
+              // roadmap-milestone-panel-close: the milestone's card closes with the view it was opened on.
+              ms?.setDraft(null);
               setFormat(v);
+              if (!groupPicked.current) setF((p) => ({ ...p, group: v === "timeline" ? "goal" : "track" }));
             }}
             items={[
               { value: "timeline", label: "Timeline", testId: "format-timeline" },
@@ -2085,6 +2139,7 @@ export function SimpleRoadmap() {
           <Chart
             data={laned ?? data}
             lane={f.group}
+            trackBands={f.group === "track"}
             noWork={noWork}
             format={format}
             unit={unit}
@@ -2122,8 +2177,8 @@ export function SimpleRoadmap() {
           <div aria-hidden inert className="pointer-events-none fixed top-0 left-[-20000px] w-[1400px]">
             <Lanes
               quarterAxis
-              data={laned ?? data}
-              lane={f.group}
+              data={goalLaned ?? data}
+              lane="track"
               noWork={noWork}
               compact={false}
               canDrag={false}
@@ -2232,6 +2287,7 @@ export function SimpleRoadmap() {
         <DecisionTray
           items={data.items}
           byId={byId}
+          milestones={data.goal_milestones}
           proposals={allProposals}
           act={act}
           canChange={canChange}
@@ -2274,5 +2330,6 @@ function GanttMilestones({ l, sc, data, phone, keepOff }: { l: Layout; sc: Chart
     }
   }
   // pre-demo QA S-12: "+ Milestone" steps past the key dates' and milestones' names over the axis.
-  return <MsLayer view="gantt" x={(d) => sc.x(d) + sc.px / 2} top={l.top} axisY={l.top - 2} height={l.height} width={sc.width} rows={rows} lanes={lanes} phone={phone} keepOff={keepOff} />;
+  const band = useMsBand(phone);
+  return <MsLayer view="gantt" x={(d) => sc.x(d) + sc.px / 2} top={l.top} axisY={l.top - 2 - band} height={l.height} width={sc.width} rows={rows} lanes={lanes} phone={phone} keepOff={keepOff} bandTop={l.top - band} />;
 }

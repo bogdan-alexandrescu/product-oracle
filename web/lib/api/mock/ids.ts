@@ -21,12 +21,20 @@ function fnv(text: string, basis: number): number {
   return h >>> 0;
 }
 
+// simple-roadmap-500-paint: a read derives the same ids many times over (a PRD's per item); each is hashed once.
+const known = new Map<string, string>();
+
 /** A v4-shaped uuid derived from `key`: the same key always gives the same id. */
 export function stableUuid(key: string): string {
+  const got = known.get(key);
+  if (got) return got;
+  if (known.size > 50_000) known.clear();
   const hex = [0x811c9dc5, 0x01000193, 0x2a5f7c3d, 0x6b8e1f47]
     .map((basis) => fnv(key, basis).toString(16).padStart(8, "0"))
     .join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  const id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  known.set(key, id);
+  return id;
 }
 
 let counter = 0;

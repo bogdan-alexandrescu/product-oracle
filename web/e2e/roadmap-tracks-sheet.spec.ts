@@ -61,12 +61,13 @@ test.describe("Tracks sheet", () => {
 
     await sheet(page).getByTestId("track-add").click();
     await sheet(page).getByLabel("New track name").fill("Partner setup track");
-    // A PRD has one track: only the PRD with none is offered.
-    await expect(sheet(page).getByLabel("PRD").locator("option")).toHaveText(["Plan changes"]);
-    await sheet(page).getByLabel("PRD").selectOption({ label: "Plan changes" });
+    // A PRD has one track: one on another track is offered as a move from it (tracks-goal, owner Nov 9).
+    await expect(sheet(page).getByLabel("New track PRD").locator("option")).toHaveText(["No PRD", "Guided setup · move from Setup and onboarding", "Plan changes", "Usage alerts · move from Usage alerts track"]);
+    await sheet(page).getByLabel("New track PRD").selectOption({ label: "Plan changes" });
     await sheet(page).getByRole("button", { name: "Add", exact: true }).click();
     await expect(toasts(page)).toContainText("Added Partner setup track");
-    await expect(row(page, "Partner setup track")).toContainText("No owner · 0 features");
+    // Its PRD's feature with no track of its own reads under it now (tracks-goal: as the API's PRD-to-track read).
+    await expect(row(page, "Partner setup track")).toContainText("No owner · 1 feature");
     await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 4");
 
     // It shows its 16 live features (its own 4 and the 12 Goal map features the mock seeds on
@@ -165,7 +166,7 @@ test.describe("Tracks sheet", () => {
     await expect(row(page, "Welcome media track")).toHaveCount(0);
   });
 
-  test("when every PRD has a track, the add form says so and Add stays off", async ({ page }) => {
+  test("when every PRD has a track, the add form offers No PRD and adds; Add without a name says why", async ({ page }) => {
     await open(page);
     await page.getByTestId("tracks-open").click();
     await sheet(page).getByTestId("track-add").click();
@@ -173,10 +174,17 @@ test.describe("Tracks sheet", () => {
     await sheet(page).getByRole("button", { name: "Add", exact: true }).click();
     await expect(toasts(page)).toContainText("Added Pricing track");
     await sheet(page).getByTestId("track-add").click();
+    // tracks-goal: a track's PRD is optional; with none free, No PRD is the default and the rest move from their tracks.
+    await expect(sheet(page).getByLabel("New track PRD").locator("option")).toHaveText(["No PRD", "Guided setup · move from Guided setup track", "Plan changes · move from Pricing track", "Usage alerts · move from Usage alerts track"]);
+    await expect(sheet(page).getByLabel("New track PRD")).toHaveValue("");
+    const add = sheet(page).getByRole("button", { name: "Add", exact: true });
+    await expect(add).toBeDisabled();
+    await expect(add).toHaveAttribute("title", "Name the track");
     await sheet(page).getByLabel("New track name").fill("One more track");
-    await expect(sheet(page).getByText("Every PRD has a track")).toBeVisible();
-    await expect(sheet(page).getByLabel("PRD")).toHaveCount(0);
-    await expect(sheet(page).getByRole("button", { name: "Add", exact: true })).toBeDisabled();
+    await expect(add).toBeEnabled();
+    await expect(add).not.toHaveAttribute("title");
+    await add.click();
+    await expect(toasts(page)).toContainText("Added One more track");
   });
 
   test("an approver who does not decide proposes, naming who decides", async ({ page }) => {

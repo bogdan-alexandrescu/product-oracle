@@ -138,18 +138,30 @@ test.describe("a dragged Timeline bar, desktop", () => {
     await expect(page.getByTestId("zoom-all")).toHaveAttribute("aria-pressed", "true");
     const bars = chart.locator('[data-testid="timeline-bar"].cursor-grab');
     await expect(bars.first()).toBeVisible({ timeout: 15_000 });
+    // tb-mk: the bands are tracks now, and the first track's top rows are short October bars
+    // (too thin at All 3 years to grab), so the first bar wide enough and wholly in the chart's
+    // window sideways is picked, then scrolled into sight and checked in sight as before.
     const n = await bars.evaluateAll((bs) => {
       const inside = (b: Element) => {
         const r = b.getBoundingClientRect();
         let p = b.parentElement;
         while (p && !(p.scrollWidth > p.clientWidth && getComputedStyle(p).overflowX !== "visible")) p = p.parentElement;
         const w = p?.getBoundingClientRect() ?? { left: 0, right: innerWidth };
-        return r.width > 24 && r.left > w.left + 220 && r.right < w.right - 200 && r.top > 0 && r.bottom < innerHeight - 20;
+        return r.width > 24 && r.left > w.left + 220 && r.right < w.right - 200;
       };
       return bs.findIndex(inside);
     });
     expect(n).toBeGreaterThanOrEqual(0);
     const bar = bars.nth(n);
+    // Scrolled to the middle of the page: rows out of sight are sized by estimate until drawn.
+    await bar.evaluate((b) => b.scrollIntoView({ block: "center" }));
+    await expect(bar).toBeInViewport();
+    expect(
+      await bar.evaluate((b) => {
+        const r = b.getBoundingClientRect();
+        return r.top > 0 && r.bottom < innerHeight - 20;
+      }),
+    ).toBe(true);
     const id = await bar.getAttribute("data-bar-id");
     const was = await bar.getAttribute("data-start");
     const box = (await bar.boundingBox())!;
@@ -195,9 +207,21 @@ test.describe("a dragged Timeline bar, desktop", () => {
     await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
     const rows = page.getByTestId("timeline-row");
     await expect(rows).toHaveCount(500, { timeout: 15_000 });
-    // At 6 months the first movable bar is in sight (the Timeline opens on 3 months).
+    // At 6 months a movable bar is in sight (the Timeline opens on 3 months). tb-mk: the bands
+    // are tracks now, and the first track's top bars start before the window, under the sticky
+    // names, so the first movable bar that starts inside the window is the one grabbed.
     await page.getByTestId("zoom-6m").click();
-    const bar = page.locator('[data-testid="timeline-bar"][aria-label*="Arrows move it"]').first();
+    const movable = page.locator('[data-testid="timeline-bar"][aria-label*="Arrows move it"]');
+    await expect(movable.first()).toBeVisible();
+    const first = await movable.evaluateAll((bs) =>
+      bs.findIndex((b) => {
+        const r = b.getBoundingClientRect();
+        const name = b.closest('[data-testid="timeline-row"]')!.querySelector("button")!.getBoundingClientRect();
+        return r.width > 24 && r.left > name.right + 4;
+      }),
+    );
+    expect(first).toBeGreaterThanOrEqual(0);
+    const bar = movable.nth(first);
     await bar.scrollIntoViewIfNeeded();
     const box = (await bar.boundingBox())!;
     const [x, y] = [box.x + Math.min(box.width / 2, 20), box.y + box.height / 2];
