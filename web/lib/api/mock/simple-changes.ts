@@ -63,6 +63,7 @@ import {
   ROADMAPS,
   prdOwnerIdsOf,
   decidesMilestoneAsk,
+  roadmapRoute,
   goalTargetOf,
   setTargetName,
   readerDb,
@@ -1228,12 +1229,14 @@ function createMilestoneChange(db: SimpleDb, ctx: SimpleChangesCtx, body: Schema
   if (after && same(after, current)) return json(422, { detail: "after.milestone: nothing changes" });
   // milestone-rename: a Goal map milestone's proposal is its roadmap's, as a roadmap milestone's is.
   const doc = m ? stableUuid(`simple-doc/${m.roadmap}`) : kr!.roadmap ? stableUuid(`simple-doc/${kr!.roadmap}`) : null;
-  const decider = m ? db.deciders?.[m.roadmap] : kr!.decider;
+  // key_dates.route; a Goal map milestone off the Simple roadmap goes to the map's decider, else the owners.
+  const roadmap = m ? m.roadmap : kr!.decider ? null : kr!.roadmap;
+  const routed = roadmap ? roadmapRoute(db, roadmap, ctx.roles, ctx.owners) : kr!.decider ? [kr!.decider] : ctx.owners;
   const change: Change = {
     id: crypto.randomUUID(), session_id: null, document_id: doc, draft_ids: [], op: body.op, target: { milestone_id: String(body.target.milestone_id), roadmap_id: doc, name: m?.name ?? kr!.name },
     before: { milestone: current }, after: { milestone: after }, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
     decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
-    routed_to: decider ? [decider] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+    routed_to: routed, undoes_id: null, undone: false, can_decide: false, can_undo: false,
   };
   (db.changes ??= []).push(change);
   return json(201, { change: view(db, ctx, change), flags: [] });
@@ -1252,13 +1255,12 @@ function proposeTargetName(db: SimpleDb, ctx: SimpleChangesCtx, gt: NonNullable<
   const name = String(wanted.name).trim().slice(0, 200);
   if (name === current) return json(422, { detail: "after.milestone: nothing changes" });
   const doc = stableUuid(`simple-doc/${gt.roadmap}`);
-  const decider = db.deciders?.[gt.roadmap];
   const change: Change = {
     id: crypto.randomUUID(), session_id: null, document_id: doc, draft_ids: [], op: MILESTONE_OP,
     target: { milestone_id: gt.goal.id, roadmap_id: doc, name: current, goal_target: true },
     before: { milestone: { name: current } }, after: { milestone: { name } }, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
     decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
-    routed_to: decider ? [decider] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+    routed_to: roadmapRoute(db, gt.roadmap, ctx.roles, ctx.owners), undoes_id: null, undone: false, can_decide: false, can_undo: false,
   };
   (db.changes ??= []).push(change);
   return json(201, { change: view(db, ctx, change), flags: [] });

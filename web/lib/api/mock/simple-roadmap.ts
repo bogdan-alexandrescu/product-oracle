@@ -1421,6 +1421,16 @@ export function canEditRoadmap(db: SimpleDb, roadmap: string, me: { id: string; 
   return [...tracks].some((t) => db.track_owners?.[t] === me.id) && RANK[me.role] >= RANK.approver;
 }
 
+/** key_dates.route: who a proposal on a roadmap's own milestone goes to: its decider, else the
+ * owners of its tracks who are approvers or owners (by id), else the company's owners. */
+export function roadmapRoute(db: SimpleDb, roadmap: string, roles: Record<string, Role> | undefined, owners: string[]): string[] {
+  const decider = db.deciders?.[roadmap];
+  if (decider) return [decider];
+  const tracks = new Set(db.items.filter((s) => s.roadmap === roadmap && s.track).map((s) => s.track!));
+  const deciding = [...new Set([...tracks].flatMap((t) => db.track_owners?.[t] ?? []))].filter((id) => RANK[roles?.[id] ?? "viewer"] >= RANK.approver).sort();
+  return deciding.length ? deciding : owners;
+}
+
 /** simple-replaced-prds (service.load): an item of a replaced PRD is history, read in Detailed only. */
 export function ofReplacedPrd(db: SimpleDb, s: SeedItem): boolean {
   const replaced = db.replaced_prds ?? [];

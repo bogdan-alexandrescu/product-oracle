@@ -4178,17 +4178,18 @@ function load(): Db {
                     (db.simple_roadmap = seedSimpleRoadmap()).unapproved = ["alerts-roadmap"];
                     return db;
                   }
-              : scenario === "simple-milestones" || scenario === "simple-prd-milestones"
+              : scenario === "simple-milestones" || scenario === "simple-prd-milestones" || scenario === "simple-milestones-track-owner"
                 ? () => {
                     // build-milestones-on-roadmap: the roadmaps' own milestones per goal; with a PRD's (Usage alerts).
                     const db = seed();
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
-                    rm.goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
-                    if (scenario === "simple-prd-milestones") {
+                    rm.goal_milestones = scenario === "simple-prd-milestones" ? seedPrdMilestones() : seedOwnMilestones();
+                    if (scenario !== "simple-milestones") {
                       // Usage alerts' owner (drafts.who: its track's owner) is Nora Vance, an invented approver.
                       const nora = { email: "nora.vance@example.com", name: "Nora Vance", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid("member/nora.vance@example.com"), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
                       db.members.push(nora);
-                      rm.track_owners = { alerts: nora.id };
+                      // milestone-routes ("simple-milestones-track-owner"): she owns the Guided setup track too, and no roadmap has a decider.
+                      rm.track_owners = scenario === "simple-prd-milestones" ? { alerts: nora.id } : { alerts: nora.id, onboarding: nora.id };
                     }
                     return db;
                   }
