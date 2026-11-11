@@ -15,7 +15,7 @@ import { goalPosition, sortGoals, type OrderedGoal } from "@/lib/goal-order";
 import { withRoadmapCodes } from "./roadmap-codes";
 import { plainFlow } from "./simple-visuals";
 import { leftOut } from "./decision-notes";
-import { unitOk } from "./goals";
+import { unitOk } from "./goal-units";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
