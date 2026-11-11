@@ -266,8 +266,15 @@ export type AppliedDetail = { item_id: string };
 /** roadmap-talk: a chat card was applied, proposed, rejected or undone (the roadmap reads again). */
 export const CARD_CHANGED_EVENT = "simple:card-changed";
 
-export function sendCardChanged(): void {
-  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(CARD_CHANGED_EVENT));
+/** What a listener gets: `wait` takes the read it starts, so who sent the change can await them all. */
+export type CardChangedDetail = { wait: (read: Promise<unknown>) => void };
+
+/** Says a change once; resolves when every read it started (useQuery's) is done. */
+export function sendCardChanged(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  const reads: Promise<unknown>[] = [];
+  window.dispatchEvent(new CustomEvent<CardChangedDetail>(CARD_CHANGED_EVENT, { detail: { wait: (read) => void reads.push(read) } }));
+  return Promise.all(reads).then(() => undefined);
 }
 
 /** one-feature-panel: a feature panel changed a goal (its measure, target or date, or the item's goal): the goal buckets read again. */

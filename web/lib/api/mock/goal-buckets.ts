@@ -196,24 +196,40 @@ function moveOff(db: GoalBucketsDb, g: Goal, to: string | null): Feature[] {
 
 /** A roadmap item's own goals (the API's RoadmapItem.goal_ids): the one it moves most, then the others. */
 type ItemGoals = { key: string; roadmap?: string; goal?: string; goals?: string[] };
-const itemGoals = (s: ItemGoals) => [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])];
+const itemGoals = (s: ItemGoals) => [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])];
 
-/** trash_items.trash_goal: the items that name the goal as their own serve `to` instead (first,
- * unless they serve it already); their goals as they were, for Restore. */
-function moveItemsOff(items: ItemGoals[], g: Goal, to: Goal): NonNullable<TrashEntryRow["item_goals"]> {
+/** goal_buckets.move_items_off (Archive, and a delete to Trash with `to`): the items that name the
+ * goal lose it, those in Trash too; one that serves another live goal too keeps that one as its own
+ * (now first); the rest serve `to` instead (first, unless they serve it already), or no goal. Their
+ * goals as they were, for Undo and Restore. */
+function moveItemsOff(items: ItemGoals[], g: Goal, to: Goal | null, goals: Goal[]): NonNullable<TrashEntryRow["item_goals"]> {
   const from = itemGoalKey(g) ?? g.key;
-  const toKey = itemGoalKey(to) ?? to.key;
+  const toKey = to ? (itemGoalKey(to) ?? to.key) : "";
+  const live = (k: string) => !goals.some((x) => x.id !== g.id && (itemGoalKey(x) ?? x.key) === k && (x.archived || x.trashed));
   const was: NonNullable<TrashEntryRow["item_goals"]> = [];
   for (const s of items) {
     const ids = itemGoals(s);
     if (!ids.includes(from)) continue;
     was.push({ key: s.key, roadmap: s.roadmap, goals: ids, from, to: toKey });
     const rest = ids.filter((k) => k !== from);
-    const next = rest.includes(toKey) ? rest : [toKey, ...rest];
+    const next = rest.some(live) ? [...rest.filter(live), ...rest.filter((k) => !live(k))] : !toKey || rest.includes(toKey) ? rest : [toKey, ...rest];
     s.goal = next[0];
     s.goals = next.slice(1);
   }
   return was;
+}
+
+/** The API's one goal store: an item's goal ids (goalIdsOf) as the goal buckets' ids, so Priorities' goal_ids name the goals the buckets list. */
+export function bucketGoalIds(db: GoalBucketsDb | undefined, ids: string[]): string[] {
+  if (!db) return ids;
+  return [
+    ...new Set(
+      ids.map((id) => {
+        const k = goalKeyOf(db, id);
+        return (k && db.goals.find((g) => (itemGoalKey(g) ?? g.key) === k)?.id) || id;
+      }),
+    ),
+  ];
 }
 
 /** An item's id and its goals' ids as the API gives them (goalIdsOf), and back. */
@@ -287,8 +303,8 @@ export function archiveGoal(db: GoalBucketsDb, id: string, to: string | null, no
   if (!g) return json(404, { detail: "No such goal" });
   if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
   const features = moveOff(db, g, to).map(featureSnap);
-  // goal_buckets.archive (goal-delete-dated): with `to`, the items that name the goal as their own move there too.
-  const moved = to ? moveItemsOff(simple?.items ?? [], g, db.goals.find((x) => x.id === to)!) : [];
+  // goal_buckets.archive (goal-delete-dated): the items that name the goal move to `to` too, or to no goal.
+  const moved = moveItemsOff(simple?.items ?? [], g, db.goals.find((x) => x.id === to) ?? null, db.goals);
   const items = moved.map((w) => ({ item_id: itemIdOf(simple, w.key), goal_ids: w.goals.map(goalId) }));
   const undo = signed({ goals: [goalSnap(g)], features, items, added_goal_id: null });
   g.archived = true;
@@ -318,7 +334,7 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, 
   // G-4: the features that served it, which Trash says come back with it.
   const features = db.features.filter((f) => f.goal_ids.includes(g.id)).length;
   const before = to ? moveOff(db, g, to) : [];
-  const item_goals = to ? moveItemsOff(simple?.items ?? [], g, db.goals.find((x) => x.id === to)!) : [];
+  const item_goals = to ? moveItemsOff(simple?.items ?? [], g, db.goals.find((x) => x.id === to)!, db.goals) : [];
   g.trashed = true;
   const at = bin.now();
   for (const c of simple?.changes ?? []) {

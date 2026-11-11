@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { storeGoalOrder } from "@/components/simple/GoalOrder";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { GOAL_CHANGED_EVENT, sendCardChanged } from "@/lib/api/simple-chat";
+import { GOAL_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -439,7 +439,13 @@ export function FeatureRows({
  * A goal's features as ArchiveDialog counts and lists them: every live feature serving it, in the
  * plan or not (its slices, when the plan has it). `tag` is the code shown, null for none people know.
  */
-export type GoalFeatures = (goal: string) => { code: string; name: string; slices: Plan["slices"]; tag?: string | null }[];
+export type GoalFeatures = (goal: string) => { code: string; name: string; slices: Plan["slices"]; tag?: string | null; goal_ids?: string[] }[];
+
+/** The live goal other than `goal` the feature or item keeps as its own (an item's own goals first, else the feature's links), if any. */
+export function otherGoal(gb: Buckets, f: ReturnType<GoalFeatures>[number], goal: string): string | undefined {
+  const ids = f.goal_ids?.length ? f.goal_ids : (featureOf(gb, f.code, f.name)?.goal_ids ?? []);
+  return ids.find((g) => g !== goal && gb.goals.some((x) => x.id === g));
+}
 
 /**
  * EG1 a: the same question for Delete goal (eg1-a-hard: it goes to Settings > Trash first), and,
@@ -455,7 +461,7 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, 
   const list = listOf(goal.title);
   const others = gb.goals.filter((g) => g.id !== goal.id);
   const titleOf = (id: string) => gb.goals.find((g) => g.id === id)?.title ?? "";
-  const multi = list.filter((f) => (featureOf(gb, f.code, f.name)?.goal_ids ?? []).some((g) => g !== goal.id));
+  const multi = list.filter((f) => otherGoal(gb, f, goal.id));
   const rest = list.length - multi.length;
   const ms = [...new Set(list.flatMap((f) => f.slices.map((s) => s.milestone)))].sort();
   const msLabel = (code: string) => `${code} ${plan?.milestones.find((m) => m.code === code)?.name ?? ""}`.trim();
@@ -500,7 +506,7 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, 
             {multi.length > 0 && (
               <p>
                 {multi.length} {multi.length === 1 ? "serves" : "serve"} another goal too and {multi.length === 1 ? "goes" : "go"} there:{" "}
-                <span className="text-text2">{multi.map((f) => `${f.name} → ${titleOf(featureOf(gb, f.code, f.name)!.goal_ids.find((g) => g !== goal.id)!)}`).join("; ")}</span>
+                <span className="text-text2">{multi.map((f) => `${f.name} → ${titleOf(otherGoal(gb, f, goal.id)!)}`).join("; ")}</span>
               </p>
             )}
             {rest > 0 && (
@@ -720,10 +726,9 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
     try {
       const out = await go();
       setError(null);
-      // The note shows with the page as the change left it, so its place is checked against that.
+      // The note shows with the page as the change left it, so its place is checked against that
+      // (reload reads the page and an open feature panel again, once: sendCardChanged).
       await reload();
-      // An open feature panel reads its goal again.
-      sendCardChanged();
       setNote({ id: ++noteId, text, undo: out.undo });
       return true;
     } catch (e) {
@@ -825,7 +830,6 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
       try {
         await unwrap(api.POST("/v1/simple/goal-buckets/undo", { body: u }));
         await reload();
-        sendCardChanged();
         setNote({ id: ++noteId, text: <>Undone: every goal and link is back as it was.</> });
       } catch (e) {
         setError(errorMessage(e));
