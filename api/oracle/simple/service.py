@@ -206,18 +206,21 @@ def shift_plan(
 def flags_out(e: Entry, may: Any = None) -> list[SimpleFlag]:
     """The item's flags as the API shows them; ``may(entry)``: the reader decides it."""
     dependents = [
-        SimpleFlagDependent(id=d.row.id, title=d.row.title, can_decide=bool(may and may(d)))
+        _built(SimpleFlagDependent, id=d.row.id, title=d.row.title, can_decide=bool(may and may(d)))
         for d in e.cut_dependents
     ]
     return [
-        SimpleFlag(
+        _built(
+            SimpleFlag,
             kind=f.kind,
             reason=f.reason,
-            fixes=f.fixes,
-            state=f.state,  # type: ignore[arg-type]
+            fixes=list(f.fixes),
+            state=f.state,
             subject=f.subject,
             risk_note=f.risk_note,
-            moves=e.shift_moves.get(f.subject or "", []) if f.kind == "dependency_order" else [],
+            moves=list(e.shift_moves.get(f.subject or "", []))
+            if f.kind == "dependency_order"
+            else [],
             dependents=dependents if f.kind == "cut_with_dependents" else [],
         )  # fmt: skip
         for f in e.flags
@@ -980,7 +983,7 @@ def _ref(d: Document | None) -> SimpleDocRef | None:
 
 
 def _date(d: dates.Dated) -> SimpleDate:
-    return SimpleDate(date=d.date, source=d.source, estimated=d.estimated)
+    return _built(SimpleDate, date=d.date, source=d.source, estimated=d.estimated)
 
 
 def suggestion_out(
@@ -990,7 +993,8 @@ def suggestion_out(
     span: tuple[date, date] | None = None,
 ) -> DateSuggestionOut:
     start, end = span or (s.start_date, s.end_date)
-    return DateSuggestionOut(
+    return _built(
+        DateSuggestionOut,
         id=s.id,
         item_id=s.item_id,
         item_key=row.item_key,
@@ -998,7 +1002,7 @@ def suggestion_out(
         start_date=start,
         end_date=end,
         basis=s.basis,
-        status=s.status,  # type: ignore[arg-type]
+        status=s.status,
         created_at=s.created_at,
         decided_by=s.decided_by,
         decided_at=s.decided_at,
@@ -1221,6 +1225,68 @@ async def _open_decisions(
     return out
 
 
+def _goal_ref(goal: Entity) -> SimpleGoalRef:
+    return SimpleGoalRef(
+        id=goal.id,
+        key=goal.key,
+        title=goal.title,
+        metric=_metric(goal),
+        position=goal_position(goal.attrs),
+        target=_goal_target(goal),
+        due=_goal_due(goal),
+        current=_goal_current(goal),
+        unit=((goal.attrs or {}).get("unit") or None),
+    )
+
+
+def _track_ref(track: ProductTrack, goal: Entity | None) -> SimpleTrackRef:
+    return SimpleTrackRef(
+        id=track.id,
+        title=track.title,
+        goal_id=goal.id if goal else None,
+        goal_name=goal.title if goal else None,
+        order=track.position,
+    )
+
+
+_PLANS: dict[type, list[tuple[str, Any, Any]]] = {}
+
+
+def _built(cls: Any, **values: Any) -> Any:
+    """roadmap-speed: a response model from the read's own typed values, unvalidated, as
+    ``model_construct`` builds it (the fields in order, each list or dict default fresh) at
+    a fraction of its cost: the read builds some 4,000 of them."""
+    plan = _PLANS.get(cls)
+    if plan is None:
+        plan = _PLANS[cls] = [
+            (name, f.default, f.default_factory) for name, f in cls.model_fields.items()
+        ]
+    fields: dict[str, Any] = {}
+    for name, default, factory in plan:
+        if name in values:
+            fields[name] = values[name]
+        elif factory is not None:
+            fields[name] = factory()
+        else:
+            fields[name] = default.copy() if isinstance(default, list | dict) else default
+    m = cls.__new__(cls)
+    object.__setattr__(m, "__dict__", fields)
+    object.__setattr__(m, "__pydantic_fields_set__", set(values))
+    object.__setattr__(m, "__pydantic_extra__", None)
+    object.__setattr__(m, "__pydantic_private__", None)
+    return m
+
+
+def _shared(refs: dict | None, key: tuple, make: Any) -> Any:
+    """roadmap-speed: one reference object per goal, track or document for the whole read
+    (400 items name 4 goals and 5 tracks), built once; none kept without ``refs``."""
+    if refs is None:
+        return make()
+    if key not in refs:
+        refs[key] = make()
+    return refs[key]
+
+
 def item_out(
     e: Entry,
     principal: Any,
@@ -1230,13 +1296,18 @@ def item_out(
     decisions: dict[uuid.UUID, list[SimpleOpenDecision]] | None = None,
     extra: dict[uuid.UUID, dict[str, Any]] | None = None,
     decided: dict[uuid.UUID, list[SimpleOpenDecision]] | None = None,
+    refs: dict | None = None,
 ) -> SimpleRoadmapItem:
+    """roadmap-speed: built from the read's own typed values without validating them again
+    (:func:`_built`): pydantic deep-copied every list default of the ~60 fields per item.
+    ``refs``: the read's shared goal, track and document references (:func:`_shared`)."""
     row, r = e.row, e.resolved
     names = names or {}
     may = can_decide(principal, e, deciders) if principal is not None else False
     prd = _prd_code(row.prd_section_key)
     code, title = coded_title(row.title, e.code or prd)
-    return SimpleRoadmapItem(
+    return _built(
+        SimpleRoadmapItem,
         id=row.id,
         key=row.item_key,
         code=code,
@@ -1244,33 +1315,19 @@ def item_out(
         title=title,
         outcome=row.outcome,
         note=row.note,
-        horizon=e.horizon,  # type: ignore[arg-type]
-        roadmap=_ref(e.roadmap),  # type: ignore[arg-type]
-        prd=_ref(e.prd),
-        goal=SimpleGoalRef(
-            id=e.goal.id,
-            key=e.goal.key,
-            title=e.goal.title,
-            metric=_metric(e.goal),
-            position=goal_position(e.goal.attrs),
-            target=_goal_target(e.goal),
-            due=_goal_due(e.goal),
-            current=_goal_current(e.goal),
-            unit=((e.goal.attrs or {}).get("unit") or None),
-        )
-        if e.goal
-        else None,
-        track=SimpleTrackRef(
-            id=e.track.id,
-            title=e.track.title,
-            goal_id=e.track_goal.id if e.track_goal else None,
-            goal_name=e.track_goal.title if e.track_goal else None,
-            order=e.track.position,
+        horizon=e.horizon,
+        roadmap=_shared(refs, ("doc", e.roadmap.id), lambda: _ref(e.roadmap)),
+        prd=_shared(refs, ("doc", e.prd.id), lambda: _ref(e.prd)) if e.prd else None,
+        goal=_shared(refs, ("goal", e.goal.id), lambda: _goal_ref(e.goal)) if e.goal else None,
+        track=_shared(
+            refs,
+            ("track", e.track.id, e.track_goal.id if e.track_goal else None),
+            lambda: _track_ref(e.track, e.track_goal),
         )
         if e.track
         else None,
         confidence=row.confidence,
-        status=e.status,  # type: ignore[arg-type]
+        status=e.status,
         draft=row.draft,
         start=_date(r.start),
         end=_date(r.end),
@@ -1283,28 +1340,28 @@ def item_out(
         else None,
         milestone=e.milestone,
         phases=[
-            SimplePhase(key=p.key, start=p.start, end=p.end, estimated=p.estimated)  # type: ignore[arg-type]
+            _built(SimplePhase, key=p.key, start=p.start, end=p.end, estimated=p.estimated)
             for p in dates.phases(r.start, r.end, row.milestone, row.validation_gates)
         ],
-        depends_on=e.depends_on,
-        needed_by=e.needed_by,
+        depends_on=list(e.depends_on),
+        needed_by=list(e.needed_by),
         flags=flags_out(e, lambda d: can_decide(principal, d, deciders)),
-        owner=SimpleOwnerRef(id=e.owner_id, name=e.owner_name)
+        owner=_built(SimpleOwnerRef, id=e.owner_id, name=e.owner_name)
         if e.owner_id is not None and e.owner_name
         else None,
         own_owner_id=str(row.owner_id) if row.owner_id else None,
         own_decider_id=str(row.decider_id) if row.decider_id else None,
         depends_keys=list(row.depends_on or []),
         depends_key_of={str(d): k for d, k in e.depends_key_of.items()},
-        depends_keys_of={str(d): ks for d, ks in e.depends_keys_of.items()},
+        depends_keys_of={str(d): list(ks) for d, ks in e.depends_keys_of.items()},
         parent_key=row.parent_key,
         can_decide=may,
         deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
         reasons=_reasons(e),
-        open_decisions=(decisions or {}).get(row.id, []),
+        open_decisions=list((decisions or {}).get(row.id, [])),
         goal_ids=[str(g) for g in (row.goal_ids if e.goal_ids is None else e.goal_ids) or []],
         **(extra or {}).get(row.id, {}),
-        decided_in=(decided or {}).get(row.id, []),
+        decided_in=list((decided or {}).get(row.id, [])),
     )
 
 
@@ -1771,8 +1828,9 @@ async def _build(
     from oracle.simple import visuals
 
     flows = await visuals.flows_for(db, "feature", [e.row.id for e in shown])
+    refs: dict = {}
     items = [
-        item_out(e, principal, read.deciders, names, owners, decisions, extra, decided)
+        item_out(e, principal, read.deciders, names, owners, decisions, extra, decided, refs)
         for e in shown
     ]
     for it in items:
