@@ -35,7 +35,10 @@ const chip = (page: Page, code: string) => page.getByTestId("gm-chip").filter({ 
 const strip = (page: Page, name: string) => page.getByTestId("gm-strip-milestone").filter({ hasText: name });
 /** A feature's chip under one goal's column (a feature shows under each goal it serves). */
 async function chipUnder(page: Page, code: string, goal: string) {
-  const id = await page.getByTestId("gm-goal").filter({ hasText: goal }).getAttribute("data-goal");
+  const row = page.getByTestId("gm-goal").filter({ hasText: goal });
+  // A goal missing from the map fails here, by name, not as a wait for its id.
+  await expect(row, `the goal "${goal}" on the map`).toHaveCount(1);
+  const id = await row.getAttribute("data-goal");
   return page.locator(`[data-testid="gm-chip"][data-goal="${id}"]`).filter({ hasText: new RegExp(`${code}(?!\\d)`) });
 }
 const toast = (page: Page, text: string | RegExp) => page.getByRole("status").filter({ hasText: text });
