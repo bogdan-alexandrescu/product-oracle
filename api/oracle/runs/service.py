@@ -11838,7 +11838,6 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         await recheck_briefs(db, runs[c.run_id], [c])
     names = await _decider_names(db, owed)
     staged = await _staged_actions(db, mine)
-    live = await _live_reasons(db, mine)
     asked = await _open_questions(db, staged)
     owner = principal.role == "owner"
     waiting_runs: list[Run] = []
@@ -11877,14 +11876,16 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
             segment_title=sdef.title if sdef else None,
         )
 
-    checkpoints = [item(c) for c in mine]
-    deliveries = [item(c) for c in owed]
-    # D9: what each needs of me and how much, one review read each; the company-wide reads
-    # and each item's trace once for them all.
+    # D9: what each needs of me and how much, one review read each; the company-wide reads,
+    # the stops' draft actions, each item's trace and the baseline rows of the runs at Confirm
+    # the baseline once for them all, shared by each stop's gate (``live``) and summary.
     from oracle.runs import actions
 
     with batched():
         await actions.read_ahead(db, [c for c in mine if c.kind in actions.SUMMARIES], runs)
+        live = await _live_reasons(db, mine)
+        checkpoints = [item(c) for c in mine]
+        deliveries = [item(c) for c in owed]
         for c, row in zip(mine, checkpoints, strict=True):
             row.summary = await actions.inbox_summary(
                 db, c, principal, run=runs[c.run_id], console=row.console
