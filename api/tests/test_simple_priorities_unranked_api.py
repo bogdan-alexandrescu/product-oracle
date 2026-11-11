@@ -6,6 +6,7 @@ draft, pay-7 is ledger's second item). Each test's card is its docstring.
 
 from sqlalchemy import select
 
+from oracle.baseline.models import Entity
 from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import clock, make_people  # noqa: F401
@@ -41,3 +42,23 @@ async def test_unranked_item_moves_up_once_its_feature_ranks(client):
     assert out["unranked"] == []
     rows = {r["feature_id"]: r for r in out["rows"]}
     assert rows[w.ids["insights"]]["item_id"] == w.ids["pay-6"]
+
+
+async def test_rows_drafts_and_unranked_carry_every_goal_of_the_item(client):
+    """protects=each row, draft and unranked item carries the item's own goals in order
+    (``goal_ids``), so Archive and Delete of a goal list an item that serves it second;
+    fails_when=``goal_ids`` is missing or holds the first goal only; no_claim=the web."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    async with tenant_session(ctx.tenant_id) as s:
+        goals = {e.key: e.id for e in await s.scalars(select(Entity).where(Entity.type == "goal"))}
+        both = [goals["retention"], goals["growth"]]
+        for key in ("pay-1", "pay-5", "pay-6"):
+            row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == key))
+            row.goal_ids = both
+        await s.commit()
+    out = await w.read(client)
+    want = [str(g) for g in both]
+    assert {r["code"]: r["goal_ids"] for r in out["rows"]}["pay-1"] == want
+    assert {d["code"]: d["goal_ids"] for d in out["drafts"]}["pay-5"] == want
+    assert {u["code"]: u["goal_ids"] for u in out["unranked"]}["pay-6"] == want

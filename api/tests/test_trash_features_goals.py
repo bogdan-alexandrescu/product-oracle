@@ -1031,3 +1031,31 @@ async def test_restore_of_a_goal_keeps_a_new_first_goal_set_since_the_delete(cli
     assert r.status_code == 200, r.text
     # The reorder made since stays.
     assert (await w.links(client))["both"] == [later_id, "quiet"]
+
+
+@pytest.mark.asyncio
+async def test_a_goal_delete_moves_an_item_in_trash_too(client):
+    """protects=a goal deleted with a goal picked moves the items that name it, those in
+    Trash too, so one restored later serves the goal picked, not the deleted one; an item
+    that serves another goal too keeps that one; fails_when=an item in Trash still names
+    the deleted goal or one's own goal changes unasked; no_claim=Restore of the goal."""
+    w = await _world()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        to = await seed.entity("goal", "fewer-tickets", position=2)
+        own = await seed.entity("goal", "happier-riders", position=3)
+        b = await s.get(RoadmapItem, uuid.UUID(w.ids["cut-b"]))
+        b.goal_ids = [uuid.UUID(w.goal_id), own.id]
+        await s.commit()
+        to_id, own_id = str(to.id), str(own.id)
+    r = await client.delete(f"{ITEMS}/{w.ids['cut-a']}", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    entry = r.json()["entry"]["id"]
+    r = await client.delete(f"{BUCKETS}/goals/{w.goal_id}", params={"to_goal_id": to_id},
+                            headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await client.post(f"/v1/trash/{entry}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    items = await _items(client, w)
+    assert items["cut-a"]["goal_ids"] == [to_id]
+    assert items["cut-b"]["goal_ids"] == [own_id]
