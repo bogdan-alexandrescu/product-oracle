@@ -22,6 +22,11 @@ Test cards (protects / fails_when / no_claim):
   from Simple each write a revision; fails_when=either leaves none; no_claim=its features.
 - test_goal_map_target_edit_writes_a_revision: protects=the Goal map's target edit writes a
   revision with the old and new target; fails_when=none is written; no_claim=its history.
+- test_goal_form_add_writes_a_revision: protects=a goal added from the goal form has its
+  created revision; fails_when=none is written; no_claim=its features.
+- test_goal_milestone_rename_writes_a_revision: protects=renaming a goal's own roadmap
+  milestone (``milestone_name`` in the goal's attrs) writes a revision; fails_when=none is
+  written; no_claim=PRD milestones.
 """
 
 import uuid
@@ -31,11 +36,14 @@ from sqlalchemy import select
 
 from oracle.baseline.models import Entity, EntityRevision
 from oracle.tenancy import tenant_session
+from tests.baseline_helpers import make_ctx
+from tests.test_milestone_kinds_api import make, read, seed, targets
 from tests.test_simple_changes_api import CHANGES, make_people
+from tests.test_simple_goal_buckets_api import GOAL, World
 from tests.test_simple_goal_buckets_api import URL as BUCKETS
-from tests.test_simple_goal_buckets_api import World
 from tests.test_simple_goal_map_api import URL as GOAL_MAP
 from tests.test_simple_goal_map_api import world as goal_map_world
+from tests.test_simple_goal_milestones_api import MILESTONES
 from tests.test_simple_panel_fields import Panel, clock  # noqa: F401
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -160,3 +168,28 @@ async def test_goal_map_target_edit_writes_a_revision(client):
     assert attrs["target"] == 12
     assert len(revs) == 1
     assert revs[0].before["attrs"]["target"] == 10 and revs[0].after["attrs"]["target"] == 12
+
+
+async def test_goal_form_add_writes_a_revision(client):
+    w = await World().build()
+    r = await client.post(f"{BUCKETS}/goals", headers=w.as_("owner"), json=GOAL)
+    assert r.status_code == 201, r.text
+    attrs, revs = await _goal(w.ctx.tenant_id, r.json()["goal"]["id"])
+    assert attrs["metric"] == GOAL["measure"]
+    assert len(revs) == 1 and revs[0].before is None
+    assert revs[0].after["attrs"]["metric"] == GOAL["measure"]
+
+
+async def test_goal_milestone_rename_writes_a_revision(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx, due="2026-12-15")
+    await make(client, ctx, ids, name="Carts ready", date="2026-11-27")
+    [g] = targets(await read(client, ctx))
+    _, before = await _goal(ctx.tenant_id, ids["goal_id"])
+    r = await client.patch(f"{MILESTONES}/{g['id']}", json={"name": "Ten teams live"},
+                           headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    attrs, revs = await _goal(ctx.tenant_id, ids["goal_id"])
+    assert attrs["milestone_name"] == "Ten teams live"
+    assert len(revs) == len(before) + 1
+    assert revs[-1].after["attrs"]["milestone_name"] == "Ten teams live"
