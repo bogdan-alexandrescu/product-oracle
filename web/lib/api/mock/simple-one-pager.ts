@@ -286,17 +286,18 @@ export function seedBetAddedOnePager(): OnePagerDb {
 /**
  * The "one-pager-milestone-names" scenario (vqa one-pager 3): the plan's M2 milestone record is
  * named only by its code ("M2") while another of its items names it ("M2 · Ship to beta"): one
- * row, read by that name. Invented data.
+ * row, read by that name. Its milestones are the roadmap's M3 and M4 (roadmap-milestone-codes):
+ * the roadmap code decides the row, the name its items give it the label. Invented data.
  */
 export function seedMilestoneNamesOnePager(): OnePagerDb {
-  const item = (title: string, start: string, end: string, milestone: [string, string], record?: { id: string; name: string }): SliceItem =>
-    ({ title, horizon: "now", start, end, estimated: false, milestone, ...(record ? { record } : {}) });
+  const item = (title: string, start: string, end: string, milestone: [string, string], code: string, record?: { id: string; name: string }): SliceItem =>
+    ({ title, horizon: "now", start, end, estimated: false, milestone, code, ...(record ? { record } : {}) });
   return {
     ...seedOnePager(),
     slice: [
-      item("Setup checklist", "2026-11-02", "2026-11-27", ["M1 · Measured and mapped", "2026-12-04"]),
-      item("Calendar invites", "2026-11-09", "2026-12-04", ["M2", "2026-12-11"], { id: stableUuid("op-milestone/m2"), name: "M2" }),
-      item("Sample project", "2026-11-16", "2026-12-11", ["M2 · Ship to beta", "2026-12-18"], { id: stableUuid("op-milestone/m2"), name: "M2" }),
+      item("Setup checklist", "2026-11-02", "2026-11-27", ["M1 · Measured and mapped", "2026-12-04"], "M3"),
+      item("Calendar invites", "2026-11-09", "2026-12-04", ["M2", "2026-12-11"], "M4", { id: stableUuid("op-milestone/m2"), name: "M2" }),
+      item("Sample project", "2026-11-16", "2026-12-11", ["M2 · Ship to beta", "2026-12-18"], "M4", { id: stableUuid("op-milestone/m2"), name: "M2" }),
     ],
   };
 }

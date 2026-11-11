@@ -65,9 +65,11 @@ test("vqa one-pager 3: every milestone row of the Timeline strip reads its name"
   await login(page);
   await page.goto(URL);
   const labels = page.getByLabel("Timeline strip").getByTestId("plan-strip-label");
+  // roadmap-milestone-codes (train BM): each row reads the roadmap's code (M3, M4), never the
+  // PRD's written one, with the name the PRD's items give it.
   await expect(labels).toHaveText([
-    "M1 · Measured and mapped · 1 roadmap item",
-    "M2 · Ship to beta · 2 roadmap items",
+    "M3 · Measured and mapped · 1 roadmap item",
+    "M4 · Ship to beta · 2 roadmap items",
   ]);
 });
 
