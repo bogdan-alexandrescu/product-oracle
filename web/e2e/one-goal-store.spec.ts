@@ -147,9 +147,9 @@ test("once a goal is in Trash, the panel leaves it out and changes the feature's
   const pick = panel(page).getByTestId("card-goal-edit").getByLabel("Goal");
   const options = await pick.locator("option").allTextContents();
   expect(options.some((o) => o.includes("Grow retention"))).toBe(false);
-  const other = options.find((o) => o.trim() && !o.includes("Faster activation") && !/^(Pick|No goal)/.test(o))!;
+  const other = options.find((o) => o.trim() && !o.includes("Faster activation") && !o.startsWith("Its feature's goal"))!;
   await pick.selectOption({ label: other });
   await tap(panel(page).getByTestId("card-goal-edit").getByRole("button", { name: "Save" }));
-  await expect(goal).toContainText(other.replace(/^\d+ · /, "").replace(/…$/, ""));
+  await expect(goal).toContainText(other.replace(/ \(measured by .*\)$/, ""));
   await expect(page.getByText("Changed since you saw it")).toHaveCount(0);
 });

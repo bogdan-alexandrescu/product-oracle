@@ -40,6 +40,7 @@ import {
   openDraft,
   GOALS,
   MAP_GOALS,
+  featureGoalRef,
   mapGoalRef,
   goalId,
   goalIdsOf,
@@ -514,7 +515,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "feature_id") out[f] = s.feature_id ?? null;
     else if (f === "track_id") out[f] = s.track ? stableUuid(`simple-track/${s.track}`) : null;
     else if (f === "goal_ids") out[f] = goalIdsOf(s);
-    else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : s.map_goal && mapGoalRef(db, s.map_goal) ? s.map_goal : null;
+    else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : s.map_goal && mapGoalRef(db, s.map_goal) ? s.map_goal : (featureGoalRef(db, key)?.id ?? null);
     else if (f === "prd_document_id") out[f] = ownPrd(s).id;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
     else if (f === "parent_key") out[f] = s.parent ?? null;
