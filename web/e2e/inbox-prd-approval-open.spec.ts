@@ -87,7 +87,8 @@ test("a track owner who approves, with no decider named, approves and publishes 
   await bar(page).getByRole("button", { name: "Approve" }).click();
   // Theirs was the final approval: the draft is published, no working draft is left.
   await expect(bar(page)).toHaveCount(0);
-  await expect(page.getByText("A setup checklist with the next two steps")).toBeVisible();
+  // The one-pager's line (the whole PRD under it says it too, once it has read the new version).
+  await expect(page.getByTestId("one-pager-line-text").filter({ hasText: "A setup checklist with the next two steps" })).toBeVisible();
 
   // The owner has nothing left to approve.
   await switchTo(page);
