@@ -1612,6 +1612,28 @@ function seedGoalBucketsDatedScenario(): Db {
   return withRoadmapGoalBuckets(db);
 }
 
+/**
+ * "goal-buckets-three-goals" (goal-delete-r3): "goal-buckets-dated" with two more drafts that name
+ * the archived goal Cut support tickets in half: Team alert digest serves it first, then Grow
+ * retention and Faster activation; Snooze for a day serves Grow retention, then it; Alert tone picker
+ * serves Grow retention, then a key result of Faster activation. Invented data.
+ */
+export const GOAL_BUCKETS_THREE_GOALS_SCENARIO = "goal-buckets-three-goals";
+
+function seedGoalBucketsThreeGoalsScenario(): Db {
+  const db = seedGoalBucketsDatedScenario();
+  const rm = db.simple_roadmap!;
+  const archived = "cut-support-tickets-in-half";
+  rm.items.push({ key: "alert-team-digest", title: "Team alert digest", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: archived, goals: ["grow-retention", "faster-activation"], draft: true });
+  rm.items.push({ key: "alert-snooze-day", title: "Snooze for a day", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: [archived], draft: true });
+  // An item whose other goal is a key result of Faster activation: Archive keeps it on the key result.
+  const parent = db.baseline.entities.find((e) => e.type === "goal" && e.key === "faster-activation") ?? db.baseline.entities.find((e) => e.type === "goal")!;
+  db.baseline.entities.push({ ...parent, id: stableUuid("simple-goal/kr-quick-alert"), key: "kr-quick-alert", title: "KR 1 Teams get a first alert in a day", parent_id: parent.id, status: "confirmed", attrs: { metric: "teams", weight: 1 } });
+  rm.items.push({ key: "alert-tone", title: "Alert tone picker", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-quick-alert"], draft: true });
+  for (const k of ["alert-team-digest", "alert-snooze-day", "alert-tone"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
+  return db;
+}
+
 function withRoadmapGoalBuckets(db: Db): Db {
   const rm = db.simple_roadmap!;
   const goalOf = new Map(planSlices().map((x) => [x.feature_code.toLowerCase(), x.goal]));
@@ -4292,6 +4314,8 @@ function load(): Db {
                 ? seedGoalBucketsUndatedScenario
               : scenario === GOAL_BUCKETS_DATED_SCENARIO
                 ? seedGoalBucketsDatedScenario
+              : scenario === GOAL_BUCKETS_THREE_GOALS_SCENARIO
+                ? seedGoalBucketsThreeGoalsScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
               : scenario === PRIORITIES_PLAN_GOAL_NAMES_SCENARIO
