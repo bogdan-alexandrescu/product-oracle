@@ -25,7 +25,7 @@ import type { LadderMilestones } from "./simple-changes";
 import type { TrashDb, TrashEntryRow } from "./trash";
 
 import { FIT_COMPANY_SCENARIO } from "./fit-date";
-import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, LADDER_TWINS_SCENARIO, ladderMap } from "./goal-ladder";
+import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, LADDER_TRACK_OWNER_SCENARIO, LADDER_TWINS_SCENARIO, ladderMap } from "./goal-ladder";
 import { stableUuid } from "./ids";
 import { codedTitle, shownCode, shownTitle } from "./item-code";
 import { COMPANY_SLUG } from "./one-roadmap";
@@ -445,7 +445,7 @@ function seedReadings(map: GoalMap): void {
 
 export function seedGoalMap(scenario: string | null): GoalMap {
   const map =
-    scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : scenario === "goal-map-guardrail-goal" ? guardrailGoal() : scenario === FIT_COMPANY_SCENARIO ? companyRoadmap() : scenario === SCOREBOARD_SCENARIO ? scoreboard() : scenario === LADDER_SCENARIO ? ladderMap() : scenario === LADDER_KR_SCENARIO ? ladderMap(true) : scenario === LADDER_KR_CODES_SCENARIO ? ladderMap(true, true) : scenario === LADDER_TWINS_SCENARIO ? ladderMap(false, false, true) : plain();
+    scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : scenario === "goal-map-guardrail-goal" ? guardrailGoal() : scenario === FIT_COMPANY_SCENARIO ? companyRoadmap() : scenario === SCOREBOARD_SCENARIO ? scoreboard() : scenario === LADDER_SCENARIO || scenario === LADDER_TRACK_OWNER_SCENARIO ? ladderMap() : scenario === LADDER_KR_SCENARIO ? ladderMap(true) : scenario === LADDER_KR_CODES_SCENARIO ? ladderMap(true, true) : scenario === LADDER_TWINS_SCENARIO ? ladderMap(false, false, true) : plain();
   seedReadings(map);
   return withIds(map);
 }

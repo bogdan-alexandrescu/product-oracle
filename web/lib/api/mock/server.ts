@@ -220,7 +220,7 @@ import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInb
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrdSlug, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdFeeds, prdOwnerIdsOf, prdTrackOwnerIds, roadmapKeyOf, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, milestoneGoalInTrash, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
-import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, LADDER_TWINS_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
+import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, LADDER_TRACK_OWNER_SCENARIO, LADDER_TWINS_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -4174,6 +4174,13 @@ function load(): Db {
                     db.simple_roadmap = seedPrdCalmPage();
                     return db;
                   }
+              : scenario === "roadmap-md-prds-comma"
+                ? () => {
+                    // roadmap-md-prds: a PRD whose title holds a comma (invented).
+                    const db = seed();
+                    db.documents.find((d) => d.slug === "usage-alerts")!.title = "Usage alerts, phase 2";
+                    return db;
+                  }
               : scenario === "simple-unapproved-roadmap"
                 ? () => {
                     // walkb-roadmap review 5a: the Alerts roadmap was built from its PRD and has no approved version yet.
@@ -4445,24 +4452,30 @@ function load(): Db {
                     if (churn) churn.status = "confirmed";
                     return db;
                   }
-              : scenario === LADDER_SCENARIO || scenario === LADDER_KR_SCENARIO || scenario === LADDER_KR_CODES_SCENARIO || scenario === LADDER_TWINS_SCENARIO
+              : scenario === LADDER_SCENARIO || scenario === LADDER_KR_SCENARIO || scenario === LADDER_KR_CODES_SCENARIO || scenario === LADDER_TWINS_SCENARIO || scenario === LADDER_TRACK_OWNER_SCENARIO
                 ? () => {
                     // goal-ladder: the ladder's goals are Home's (one store, the same ids); each
                     // feature is its own Simple roadmap item, with its status, dates and what it waits on.
                     const db = seed();
                     const template = db.baseline.entities.find((e) => e.type === "goal")!;
                     for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
-                    for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO && scenario !== LADDER_TWINS_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) db.baseline.entities.push({ ...template, ...g, body: null, locked: false, locked_by: null, locked_at: null });
+                    for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO && scenario !== LADDER_TWINS_SCENARIO && scenario !== LADDER_TRACK_OWNER_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) db.baseline.entities.push({ ...template, ...g, body: null, locked: false, locked_by: null, locked_at: null });
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
                     // goal-map-editing: a feature on no milestone names its goal itself (by the goal's id).
                     rm.items = ladderItems(scenario === LADDER_KR_CODES_SCENARIO).map(({ goal, ...x }) => ({ ...x, heading: `${x.section.toUpperCase()} ${codedTitle(x.title, null)[1]}`, horizon: "next" as const, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium" as const, ...(goal ? { map_goal: goalMapIdOf(goal) } : {}) }));
                     // goal-map-editing: one goal store, so a ladder goal goes to Trash as any goal does; every goal not
                     // rejected is a bucket, proposed ones too (GET /v1/simple/goal-buckets).
                     const gb = (rm.goal_buckets = seedGoalBuckets());
-                    for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO && scenario !== LADDER_TWINS_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
+                    for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO && scenario !== LADDER_TWINS_SCENARIO && scenario !== LADDER_TRACK_OWNER_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
                     rm.ids = Object.fromEntries(rm.items.map((x) => [x.key, stableUuid(`simple-item/${x.key}`)]));
                     // roadmap-milestone-codes: the ladder's milestones are this roadmap's goal milestones (route copies them).
                     rm.map_milestones = { roadmap: "onboarding-roadmap", milestones: [] };
+                    if (scenario === LADDER_TRACK_OWNER_SCENARIO) {
+                      // milestone-routes: Nora Vance, an invented approver, owns the onboarding track; no decider.
+                      const nora = { email: "nora.vance@example.com", name: "Nora Vance", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid("member/nora.vance@example.com"), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                      db.members.push(nora);
+                      rm.track_owners = { onboarding: nora.id };
+                    }
                     return db;
                   }
               : scenario === APPROVED_ROADMAP_SCENARIO

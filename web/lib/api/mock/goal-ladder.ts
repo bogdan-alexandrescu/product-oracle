@@ -15,6 +15,8 @@ type GmFeature = Schemas["GmFeature"];
 type Status = GmMilestone["status"];
 
 export const LADDER_SCENARIO = "goal-ladder";
+/** milestone-routes: the goal-ladder world with a track owner who decides and no decider. */
+export const LADDER_TRACK_OWNER_SCENARIO = "goal-ladder-track-owner";
 /** The scenario's names, for its specs. */
 export const LADDER = { today: "2026-11-03" } as const;
 /** The feature with no roadmap item. */

@@ -52,3 +52,12 @@ test("the company roadmap's Markdown export names every PRD that feeds it, in th
   expect(md).not.toContain(OLD_PRD[1]);
   expect(md).not.toContain("<!-- ");
 });
+
+test("a PRD whose title holds a comma reads as one name in the line", async ({ page }) => {
+  // protects=commas part the titles, so a title holding one is quoted; fails_when="Usage alerts, phase 2"
+  // reads as two PRDs.
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-md-prds-comma"] as const);
+  await login(page);
+  const md = await exportMarkdown(page, "/documents/usage-alerts-roadmap/v/1");
+  expect(md).toContain('\nFrom the PRDs: "Usage alerts, phase 2"\n');
+});
