@@ -127,23 +127,29 @@ test("once a goal is in Trash, the panel leaves it out and changes the feature's
   await page.goto("/simple/priorities?tab=buckets");
   await tap(bucket(page).getByRole("button", { name: "More for Grow retention" }));
   await tap(page.getByRole("menuitem", { name: "Delete goal" }));
-  // This quarter is the calendar quarter of the dates: this scenario's alerts work is dated past it,
-  // so the bucket holds none of it and the dialog asks for no goal to move it to.
+  // This quarter's bucket holds none of the alerts work (it is dated past the quarter), yet the
+  // goal still holds it: the dialog names it and asks where it goes.
   const dialog = page.getByRole("dialog", { name: "Delete Grow retention" });
-  await expect(dialog.getByLabel("Goal", { exact: true })).toHaveCount(0);
+  await expect(dialog).not.toContainText("It holds no features.");
+  const to = dialog.getByLabel("Goal", { exact: true });
+  const goals = await to.locator("option").allTextContents();
+  await to.selectOption({ label: goals.find((o) => o.includes("Faster activation"))! });
+  await expect(dialog).toContainText("Faster activation will hold");
   await tap(dialog.getByRole("button", { name: "Delete goal" }));
   await expect(bucket(page)).toHaveCount(0);
 
   await tap(page.locator("#prio-tab-ranked"));
   await tap(page.getByTestId("prio-title").filter({ hasText: "Weekly alert digest" }));
   const goal = panel(page).getByTestId("card-goal");
+  await expect(goal).toContainText("Faster activation");
   await expect(goal).not.toContainText("Grow retention");
   await tap(panel(page).getByRole("button", { name: "Change the goal" }));
   const pick = panel(page).getByTestId("card-goal-edit").getByLabel("Goal");
   const options = await pick.locator("option").allTextContents();
   expect(options.some((o) => o.includes("Grow retention"))).toBe(false);
-  await pick.selectOption({ label: options.find((o) => o.startsWith("Faster activation"))! });
+  const other = options.find((o) => o.trim() && !o.includes("Faster activation") && !/^(Pick|No goal)/.test(o))!;
+  await pick.selectOption({ label: other });
   await tap(panel(page).getByTestId("card-goal-edit").getByRole("button", { name: "Save" }));
-  await expect(goal).toContainText("Faster activation");
+  await expect(goal).toContainText(other.replace(/^\d+ · /, "").replace(/…$/, ""));
   await expect(page.getByText("Changed since you saw it")).toHaveCount(0);
 });

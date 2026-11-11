@@ -141,8 +141,8 @@ for (const [where, size] of [
          * Card walk-prio-home-first-paint: protects = Simple's Home draws its frame at once while
          * the person's permissions are still on their way (the greeting, the goal band and cards as
          * skeleton placeholders, the rail's frame on a desktop), then fills them in place for an
-         * owner and a viewer alike: the goal band starts where its skeleton stood (measured from
-         * the greeting's sentence, which wraps to as many lines as what waits takes), no card the
+         * owner and a viewer alike: the goal band starts where its skeleton stood (the greeting's
+         * sentence keeps the two lines it wraps to from the first paint, on a desktop too), no card the
          * skeleton names moves, and the first card under the band starts where the skeleton's
          * first card stood (both measured from the band's foot, as the band grows with the goals); fails_when = Home stays blank until the permissions answer, or the
          * band or a card jumps when it fills (a viewer has no "Walk me through it", an owner has
@@ -169,14 +169,9 @@ for (const [where, size] of [
           await expect(page.getByTestId("home-goals-skeleton")).toBeVisible();
           await expect(page.getByTestId("home-skeleton-rows").first()).toBeVisible();
           if (where === "desktop") await expect(page.getByTestId("simple-nav-skeleton")).toBeVisible();
-          // The band is measured from the sentence's foot: the sentence wraps with what waits on you.
-          const lead = page.getByTestId("home-greeting").locator("p.simple-lead");
-          const leadFoot = async () => {
-            const b = (await lead.boundingBox())!;
-            return b.y + b.height;
-          };
+          // The sentence keeps its two lines from the first paint (it wraps with what waits on
+          // you), so the band is measured where it stands on the page: it never jumps.
           const before = (await goals.boundingBox())!;
-          const beforeY = before.y - (await leadFoot());
           // Cards are measured from the band's foot: the band itself grows with the goals there are.
           const foot = async () => (await goals.boundingBox())!.y + (await goals.boundingBox())!.height;
           const firstCard = (await cards.first().boundingBox())!.y - (await foot());
@@ -186,11 +181,10 @@ for (const [where, size] of [
           await expect(page.getByTestId("home-goal").first()).toBeVisible();
           await expect(page.getByTestId("simple-nav-skeleton")).toHaveCount(0);
           const after = (await goals.boundingBox())!;
-          const afterY = after.y - (await leadFoot());
           // qa-simple-home-36: a viewer known has no "Walk me through it" and no slot for it: the
           // band moves up by that slot once (never down); an owner's band stays where it stood.
-          if (role === "viewer") expect(afterY).toBeLessThanOrEqual(beforeY + 1);
-          else expect(Math.abs(afterY - beforeY)).toBeLessThanOrEqual(1);
+          if (role === "viewer") expect(after.y).toBeLessThanOrEqual(before.y + 1);
+          else expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
           expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(1);
           const filledFoot = await foot();
           for (const [name, top] of named) {
