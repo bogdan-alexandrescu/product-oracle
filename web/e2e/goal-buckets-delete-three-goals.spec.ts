@@ -15,11 +15,17 @@ import { expect, test, type Locator, type Page } from "./test";
  * Snooze for a day (left with only the archived goal) reads No goal, as the dialog counted it;
  * fails_when = it reads the archived goal.
  * Card goal-archive-key-result: protects = Archive lists Alert tone picker, whose other goal is a key result of
- * Faster activation, as kept on Faster activation (the API keeps it on the key result); fails_when = it is shown as moving.
+ * Faster activation, as staying on that key result, named (the API keeps it on the key result); fails_when = it is
+ * shown as moving, or the key result is not named (goal-delete-r4).
+ * Card goal-archive-key-result-title (goal-delete-r4): protects = after Archive with "Leave them with no goal", Alert
+ * tone picker's panel reads the key result it is left on by name, as the API's goal title; fails_when = its goal has
+ * no title ("Serves the goal undefined").
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
+/** The key result of Faster activation Alert tone picker serves (server.ts, invented). */
+const KR = "KR 1 Teams get a first alert in a day";
 const goal = (page: Page, title: string) => page.locator(`[data-testid="plan-goal"][data-goal="${title}"]`);
 const draft = (page: Page, title: string) => page.getByTestId("prio-draft").filter({ hasText: title });
 
@@ -81,8 +87,23 @@ test("An item left with only an archived goal reads No goal", async ({ page }) =
   await expect(draft(page, "Snooze for a day")).not.toContainText("Cut support tickets in half");
 });
 
-test("Archive goal lists an item whose other goal is a key result as kept on that goal", async ({ page }) => {
+test("Archive goal names the key result an item stays on", async ({ page }) => {
   await openPage(page);
   const dialog = await goalDialog(page, "Archive");
-  await expect(dialog).toContainText("Alert tone picker → Faster activation");
+  await expect(dialog).toContainText(`Alert tone picker stays on ${KR}`);
+  await expect(dialog).not.toContainText("Alert tone picker → Faster activation");
+});
+
+test("An item left on a key result reads that key result as its goal", async ({ page }) => {
+  await openPage(page);
+  const dialog = await goalDialog(page, "Archive");
+  await tap(dialog.getByRole("radio", { name: "Leave them with no goal (they show under No goal)" }));
+  await tap(dialog.getByRole("button", { name: "Archive goal" }));
+  await expect(goal(page, "Grow retention")).toHaveCount(0);
+
+  await ranked(page);
+  await tap(draft(page, "Alert tone picker").getByText("Alert tone picker", { exact: true }));
+  const panel = page.getByRole("dialog").filter({ hasText: "Serves the goal" });
+  await expect(panel).toContainText(`Serves the goal ${KR}`);
+  await expect(panel).not.toContainText("undefined");
 });
