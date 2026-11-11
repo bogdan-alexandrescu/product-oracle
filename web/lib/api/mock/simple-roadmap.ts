@@ -1794,7 +1794,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       reasons: [
         ...(s.notes ?? []),
         ...(s.why ? [s.why] : []),
-        ...(s.goal ? [`Serves the goal ${GOALS[s.goal]}.`] : []),
+        // goal-delete-r4: a key result it is left on by its own title (service._reasons' e.goal.title).
+        ...(s.goal ? [`Serves the goal ${GOALS[s.goal] ?? roadmapGoal(reader.full, s.goal).title}.`] : []),
         ...(s.section ? [`From ${rm.prd}: ${sectionLabel(s.section, s.heading, s.title).replace(/^[A-Z][A-Z0-9]*-\d+[a-z]?\s+/, "")}.`] : []),
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
