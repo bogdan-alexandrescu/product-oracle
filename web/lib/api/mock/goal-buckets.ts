@@ -9,13 +9,15 @@ import type { Schemas } from "@/lib/api/client";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
-import { GOALS, goalPositionOf, goalRank, goalInTrash, keptTarget, roadmapGoal, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
+import { GOALS, goalPositionOf, goalRank, goalInTrash, keptTarget, roadmapGoal, storedUnit, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
 // `key`: the Entity.key the API gives a goal at creation (goal_buckets._slug), named in its Trash entry.
 // edit-goals-prds EG1: a goal's owner (a member's id; seeded by email, matched to the member on first read) and when it was archived.
 // goal-order: `position`, the place Move up and Move down store on it (attrs.position, as the API's goals).
-type Goal = { id: string; key: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null; position?: number | null; on_roadmap?: boolean };
+type Goal = { id: string; key: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null; position?: number | null; on_roadmap?: boolean;
+  /** goal-target-kept: the unit of a target stored as a number (attrs.unit; "" none); unset, a target in words or its reading's. */
+  unit?: string };
 /** assumed_goal_ids: the links whose contribution is assumed (an approved order's, api ASSUMED_LINK). */
 type Feature = { id: string; key: string; title: string; goal_ids: string[]; assumed_goal_ids?: string[] };
 /** lazy: the default goals, seeded by the first route that read them rather than by the scenario. */
@@ -399,9 +401,10 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
       return json(409, { detail: "This goal changed since you opened it. Look again and save." });
     }
     // goal-target-kept (goal_buckets.typed_target): a measured goal's target stays a number in its unit.
-    const kept = keptTarget(g?.key ?? key, was.target, b.target);
+    const kept = keptTarget(g?.key ?? key, was.target, b.target, g ? g.unit : storedUnit(simple, key));
     if ("detail" in kept) return json(422, kept);
     const target = kept.target!;
+    if (g?.unit != null && kept.unit != null) g.unit = kept.unit;
     if (!g) {
       // milestone-kinds: a roadmap goal's on_roadmap (goal_buckets._fields), kept by its key.
       const shown = (simple as { goal_on_roadmap?: Record<string, boolean> }).goal_on_roadmap ??= {};

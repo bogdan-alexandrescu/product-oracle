@@ -181,8 +181,13 @@ def _target(attrs: dict[str, Any]) -> str | None:
 # goal-target-kept: a target typed as a number, with or without its unit, before or after
 # it ("60", "60 Conversions", "1,200 shops", "60%", "$1,200").
 _TYPED_TARGET = re.compile(r"(\D*?)(-?\d[\d,]*(?:\.\d+)?)\s*(.*)")
+# Commas only between thousands ("1,200", "12,000,000"), never "1,2".
+_NUMBER = re.compile(r"-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
 # A currency typed as its sign, as the goal's unit is stored (lower-cased).
 _SIGNS = {"$": "usd", "€": "eur", "£": "gbp"}
+# A stored currency unit as a person reads it ("usd" is "$").
+_READ = {v: k for k, v in _SIGNS.items()}
+NUMBER_TYPED = "Type the target as a number, like 60"
 NUMBER_KEPT = "A measured goal keeps its target: type its new number"
 
 
@@ -220,14 +225,17 @@ def typed_target(attrs: dict[str, Any], typed: str | None) -> dict[str, Any]:
     m = _TYPED_TARGET.fullmatch(_words(typed) or "")
     if m is None:
         raise TargetKept(NUMBER_KEPT)
+    if not _NUMBER.fullmatch(m.group(2)):
+        raise TargetKept(NUMBER_TYPED)
     unit = _words(f"{m.group(1)} {m.group(3)}") or ""
     unit = _SIGNS.get(unit, unit.lower())
     have = out["unit"].strip() if isinstance(out.get("unit"), str) else ""
     if unit and unit != have.lower():
         if have:
-            raise TargetKept(f"This goal is measured in {have}: type its new number")
+            read = _READ.get(have.lower(), have)
+            raise TargetKept(f"This goal is measured in {read}: type its new number")
         if not unit_ok(unit):
-            raise TargetKept("Type the target as a number, like 60")
+            raise TargetKept(NUMBER_TYPED)
         have = unit
     n = float(m.group(2).replace(",", ""))
     out["target"] = int(n) if n.is_integer() else n

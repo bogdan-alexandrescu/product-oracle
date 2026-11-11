@@ -14,6 +14,7 @@ import { goalPosition, sortGoals, type OrderedGoal } from "@/lib/goal-order";
 import { withRoadmapCodes } from "./roadmap-codes";
 import { plainFlow } from "./simple-visuals";
 import { leftOut } from "./decision-notes";
+import { unitOk } from "./goals";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
@@ -521,21 +522,37 @@ export const measuredUnit = (key: string, target: string | null): string | null 
 };
 /** A typed target's number, with its unit (if any) before or after it ("3", "3 Days", "$1,200"). */
 const TYPED_NUMBER = /^(\D*?)(-?\d[\d,]*(?:\.\d+)?)\s*(.*)$/;
+/** Commas only between thousands ("1,200", "12,000,000"), never "1,2". */
+const NUMBER = /^-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$/;
 const SIGNS: Record<string, string> = { $: "usd", "€": "eur", "£": "gbp" };
+/** A stored currency unit as a person reads it ("usd" is "$"). */
+const READ: Record<string, string> = Object.fromEntries(Object.entries(SIGNS).map(([sign, code]) => [code, sign]));
 /** goal-target-kept (goal_buckets.typed_target): the target goal `key` (its target reads `was`)
  * gets when a person types `typed`, or the API's 422 detail. A measured goal takes a number alone
- * or in its own unit (any case), in its unit; another unit, words only or nothing is refused. */
-export const keptTarget = (key: string | null | undefined, was: string | null, typed: string | null | undefined): { target: string | null } | { detail: string } => {
+ * or in its own unit (any case), in its unit; another unit, words only or nothing is refused.
+ * `stored`: the unit of a goal bucket's target stored as a number ("" none), else its reading's. */
+export const keptTarget = (key: string | null | undefined, was: string | null, typed: string | null | undefined, stored?: string): { target: string | null; unit?: string } | { detail: string } => {
   const words = (v: string | null | undefined) => (v ?? "").trim().replace(/\s+/g, " ") || null;
   const t = words(typed);
-  const unit = key ? measuredUnit(key, was) : null;
-  if (!unit || t === words(was)) return { target: t };
+  const unit = stored ?? (key ? measuredUnit(key, was) : null);
+  if (unit == null || t === words(was)) return { target: t };
   const m = t ? TYPED_NUMBER.exec(t) : null;
   if (!m) return { detail: "A measured goal keeps its target: type its new number" };
-  const u = (words(`${m[1]} ${m[3]}`) ?? "").toLowerCase();
-  if (u && (SIGNS[u] ?? u) !== unit.toLowerCase()) return { detail: `This goal is measured in ${unit}: type its new number` };
-  return { target: `${Number(m[2].replace(/,/g, ""))}${unit === "%" ? "%" : ` ${unit}`}` };
+  if (!NUMBER.test(m[2])) return { detail: "Type the target as a number, like 60" };
+  const typedUnit = words(`${m[1]} ${m[3]}`) ?? "";
+  const u = SIGNS[typedUnit] ?? typedUnit.toLowerCase();
+  let have = unit;
+  if (u && u !== unit.toLowerCase()) {
+    if (unit) return { detail: `This goal is measured in ${READ[unit.toLowerCase()] ?? unit}: type its new number` };
+    if (!unitOk(u)) return { detail: "Type the target as a number, like 60" };
+    have = u;
+  }
+  const n = Number(m[2].replace(/,/g, ""));
+  return { target: have === "%" ? `${n}%` : `${n} ${have}`.trim(), unit: have };
 };
+/** The unit of goal bucket `key`'s target stored as a number ("" none), else undefined (its reading's, or words). */
+export const storedUnit = (db: Pick<SimpleDb, "goal_buckets">, key: string | null | undefined): string | undefined =>
+  key ? bucketGoalOf(db, key)?.unit : undefined;
 export type RoadmapGoalFields = { title: string; metric: string | null; target: string | null; due: string | null };
 /** A goal's key from its id (the goal edit takes either kind of goal, as the API's one goal entity):
  * a roadmap goal's, or a goal bucket's of that key. */

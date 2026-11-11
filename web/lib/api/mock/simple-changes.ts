@@ -79,6 +79,7 @@ import {
   roadmapGoal,
   roadmapGoalKey,
   keptTarget,
+  storedUnit,
   goalInTrash,
   writeRoadmapGoal,
   seesDraft,
@@ -1000,7 +1001,7 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     // goal-target-kept: a measured goal keeps its number and unit: a bare number is in its unit,
     // clearing it is refused.
     const gk = roadmapGoalKey(String(target.goal_id ?? ""), db);
-    const kept = keptTarget(gk, gk ? roadmapGoal(db, gk).target : null, line(body.after?.target));
+    const kept = keptTarget(gk, gk ? roadmapGoal(db, gk).target : null, line(body.after?.target), storedUnit(db, gk));
     if ("detail" in kept) return json(422, kept);
     Object.assign(after, { measure, target: kept.target, due });
     for (const k of Object.keys(after)) if (!["measure", "target", "due"].includes(k)) delete after[k];

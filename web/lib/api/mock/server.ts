@@ -1620,6 +1620,9 @@ function seedGoalBucketsUndatedScenario(): Db {
   // goal-order: the company's goal order is the buckets' (each goal's place stored), so Move up and
   // Move down on Priorities read the same order as its buckets and the Roadmap's goal rows.
   placeBucketGoals(rm.goal_buckets, db.baseline.entities);
+  // goal-target-kept: Revenue's target is stored as a number in usd (a measured goal).
+  const revenue = rm.goal_buckets.goals.find((g) => g.key === "revenue");
+  if (revenue) revenue.unit = "usd";
   return db;
 }
 

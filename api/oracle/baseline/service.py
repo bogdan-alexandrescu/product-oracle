@@ -1460,6 +1460,15 @@ async def update_entity(
         if isinstance(changes.get("body"), str):
             changes = {**changes, "body": goals.without_placeholders(changes["body"])}
     if entity.type == "goal" and isinstance(changes.get("attrs"), dict):
+        target = changes["attrs"].get("target")
+        if (
+            isinstance(target, int | float)
+            and not isinstance(target, bool)
+            and "target_text" not in changes["attrs"]
+            and (entity.attrs or {}).get("target_text")
+        ):
+            # A numeric target replaces an older typed one, so the goal never reads stale text.
+            changes = {**changes, "attrs": {**changes["attrs"], "target_text": None}}
         merged = merge_attrs(entity.attrs, changes["attrs"])
         if merged != (entity.attrs or {}):
             checked, kept = await _goal_attrs(db, writer, merged, dict(entity.attrs or {}))
