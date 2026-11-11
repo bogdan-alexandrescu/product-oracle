@@ -23,8 +23,8 @@ Test cards (protects / fails_when / no_claim):
   under the twin's feature (the proposer may withdraw it, the owner decide it) and a second
   proposal is 409; fails_when=the proposal shows nowhere on Priorities.
 - test_a_twin_merge_proposal_names_both_features_by_code: protects=a twin merge's words name
-  each feature by its code and name (oracle-product: code shown with name); fails_when=the
-  words carry only the names.
+  each feature by the short code Priorities shows and its name (oracle-product: a code is shown
+  with its name); fails_when=the words carry only the names.
 - test_a_direct_twin_merge_closes_its_waiting_proposal: protects=an owner's Merge into… closes
   the twin's open proposal (declined; gone from Priorities and the Inbox; a later accept is 409,
   never 404); fails_when=the proposal stays open after the merge.
@@ -34,6 +34,7 @@ import uuid
 
 from oracle.baseline.models import Entity
 from oracle.roadmap.models import RoadmapItem
+from oracle.simple.priorities import _short_codes
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import CHANGES, clock, make_people  # noqa: F401
 from tests.test_simple_meeting_agenda import INBOX
@@ -85,12 +86,13 @@ async def test_a_commenter_proposes_a_twin_merge_an_owner_approves(client):
 async def test_a_twin_merge_proposal_names_both_features_by_code(client):
     w = await company_world()
     await _features(w, ("ledger-copy", "Ledger", 9))
-    # Each by the code Priorities shows it with: the row's and its twin's.
+    # Each by the short code Priorities shows it with: the row's, and the twin's own.
+    async with tenant_session(w.ctx.tenant_id) as s:
+        twin = (await _short_codes(s))["ledger-copy"]
     [row] = [r for r in (await w.read(client))["rows"] if r["feature_id"] == w.ids["ledger"]]
-    [twin] = [t for t in row["twins"] if t["feature_id"] == w.ids["ledger-copy"]]
-    assert row["code"] != twin["code"], (row, twin)
+    assert row["short_code"] and twin and row["short_code"] != twin, (row, twin)
     change = (await _propose(client, w)).json()["change"]
-    words = f"merged {twin['code']} Ledger into {row['code']} Ledger"
+    words = f"merged {twin} Ledger into {row['short_code']} Ledger"
     assert words in change["words"], change["words"]
     assert w.ids["ledger"] not in change["words"], change["words"]
 
