@@ -6,7 +6,7 @@ import { expect, test, type Page } from "./test";
 /*
  * Simple Goal map, drawn as the goals by tracks grid (the owner's pick of Nov 11): three goals as
  * columns in priority order with no arrows between them, the guardrail, each goal's milestones in
- * the strip under it and each feature drawn once as a chip; adding a roadmap feature from a
+ * the strip under it and each feature as a chip under each goal it serves; adding a roadmap feature from a
  * milestone's menu and opening a feature's panel. Desktop (1440x900) and phone (390x844).
  *
  * Test cards (protects / fails_when / no_claim) are each test's comment.
@@ -26,14 +26,20 @@ async function open(page: Page, scenario?: string) {
 
 const chip = (page: Page, name: string) => page.getByTestId("gm-chip").filter({ hasText: name });
 const strip = (page: Page, name: string) => page.getByTestId("gm-strip-milestone").filter({ hasText: name });
+/** A feature's chip under one goal's column, the goal read by its name. */
+async function chipUnder(page: Page, name: string, goal: string) {
+  const id = await page.getByTestId("gm-goal").filter({ hasText: goal }).getAttribute("data-goal");
+  return page.locator(`[data-testid="gm-chip"][data-goal="${id}"]`).filter({ hasText: name });
+}
 
 test.describe("desktop", () => {
   test.use(DESKTOP);
 
-  test("reads the goals and the guardrail, with features drawn once", async ({ page }) => {
+  test("reads the goals and the guardrail, with a feature's chip under each goal it serves", async ({ page }) => {
     // protects=the rail's Goal map opens the map: 3 goal columns with target, status and (behind
-    // the (i)) math, the guardrail strip, a feature serving two milestones drawn as one chip;
-    // fails_when=any is missing or a shared feature is drawn twice; no_claim=the API's math.
+    // the (i)) math, the guardrail strip, a feature serving milestones of two goals shown as one
+    // chip under each of them; fails_when=any is missing, the shared feature misses a goal it
+    // serves or shows twice under one; no_claim=the API's math.
     await open(page);
     await expect(page.getByRole("heading", { name: "Goal map" })).toBeVisible();
     const goals = page.getByTestId("gm-goal");
@@ -49,7 +55,11 @@ test.describe("desktop", () => {
     await expect(rail).toHaveText("Guardrails: on track ✓");
     await rail.hover();
     await expect(page.getByRole("tooltip").filter({ hasText: "Customer complaints = 0 every day" })).toContainText("Held 7 of 7 days");
-    await expect(chip(page, "Guided first week")).toHaveCount(1);
+    // Guided first week serves 50 sign-ups per rep (Sign-ups per rep per day) and $12k revenue per
+    // day (Revenue per day): two goals, so two chips, one under each.
+    await expect(chip(page, "Guided first week")).toHaveCount(2);
+    await expect(await chipUnder(page, "Guided first week", "Sign-ups per rep per day")).toHaveCount(1);
+    await expect(await chipUnder(page, "Guided first week", "Revenue per day")).toHaveCount(1);
   });
 
   test("attaches a roadmap feature not yet on the map from a milestone's menu", async ({ page }) => {

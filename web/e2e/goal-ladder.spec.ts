@@ -33,6 +33,11 @@ async function open(page: Page, scheme: "light" | "dark", role?: "commenter" | "
 /** A feature's chip by its code (F-03, never F-031). */
 const chip = (page: Page, code: string) => page.getByTestId("gm-chip").filter({ hasText: new RegExp(`${code}(?!\\d)`) });
 const strip = (page: Page, name: string) => page.getByTestId("gm-strip-milestone").filter({ hasText: name });
+/** A feature's chip under one goal's column (a feature shows under each goal it serves). */
+async function chipUnder(page: Page, code: string, goal: string) {
+  const id = await page.getByTestId("gm-goal").filter({ hasText: goal }).getAttribute("data-goal");
+  return page.locator(`[data-testid="gm-chip"][data-goal="${id}"]`).filter({ hasText: new RegExp(`${code}(?!\\d)`) });
+}
 const toast = (page: Page, text: string | RegExp) => page.getByRole("status").filter({ hasText: text });
 /** Opens a chip's ⋯ menu (it shows on hover or focus) and picks an item. */
 async function chipMenu(page: Page, c: Locator, item: string) {
@@ -49,15 +54,21 @@ for (const scheme of ["light", "dark"] as const) {
       test("at rest: the guardrail, goals as columns in priority order with their milestones and work", async ({ page }) => {
         // protects=the picked grid at real volume: the guardrail strip, the four goals in priority
         // order, each milestone in its goal's strip with its roadmap code and a month-first date,
-        // and each feature's chip with its code and its milestone; fails_when=the goal order is
-        // lost, a milestone is missing or a chip lacks its code; no_claim=pixel match.
+        // and each feature's chip under each goal it serves with its code and that goal's milestone;
+        // fails_when=the goal order is lost, a milestone is missing, a chip lacks its code or a
+        // feature misses a goal it serves; no_claim=pixel match.
         await open(page, scheme);
         await expect(page.getByTestId("gm-legend-guardrail")).toHaveText("Guardrails: on track ✓");
         await expect(page.getByTestId("gm-goal")).toHaveText([/Teams stay past their first year/, /New teams set up in one day/, /Larger teams add paid seats/, /Half the support tickets per team/]);
         await expect(page.getByTestId("gm-strip-milestone")).toHaveCount(12);
         await expect(strip(page, "Weekly active teams first measured")).toContainText(/M\d+\s*Weekly active teams first measured\s*Nov 13/);
-        await expect(chip(page, "F-03")).toContainText(/F-03\s*Renewal health score shown to account owners each Monday/);
-        await expect(chip(page, "F-03")).toContainText(/M\d+ Weekly active teams first measured/);
+        // F-03 serves Weekly active teams first measured (Teams stay past their first year) and
+        // Ticket volume measured by topic (Half the support tickets per team): a chip under each.
+        await expect(chip(page, "F-03")).toHaveCount(2);
+        const retention = await chipUnder(page, "F-03", "Teams stay past their first year");
+        await expect(retention).toContainText(/F-03\s*Renewal health score shown to account owners each Monday/);
+        await expect(retention).toContainText(/M\d+ Weekly active teams first measured/);
+        await expect(await chipUnder(page, "F-03", "Half the support tickets per team")).toContainText(/M\d+ Ticket volume measured by topic/);
         await expect(page.getByTestId("ld-canvas")).toHaveCount(0);
       });
 
