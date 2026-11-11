@@ -126,7 +126,7 @@ CHANGE_BUDGET = 0.6
 # suggestion; meetings/options 83, three reads per PRD).
 CEILINGS = {
     "goal-suggestions": 60,
-    "changes": 44,
+    "changes": 48,  # with changes made in 60 meetings: no read per meeting
     "drafts": 20,
     "removed": 39,
     "meetings-options": 15,

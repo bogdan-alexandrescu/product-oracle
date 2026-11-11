@@ -1,7 +1,8 @@
 """A company the size of a real one, for the Simple reads' timing and statement-count tests
 (tests/test_simple_reads_perf.py): 4 goals, 5 tracks, 25 PRDs each with its roadmap, 400 live
 roadmap items and 200 cut (Trash), about 2,000 Ground Truth entities, 1,500 changes (300
-proposed), 150 drafts (25 working), 60 meetings, 30 members and 120 goal suggestions.
+proposed, a fourth of the rest made in meetings), 150 drafts (25 working), 60 meetings, 30
+members and 120 goal suggestions.
 
 Invented example data only. Rows are added in bulk through the models; the caller's clock
 is the tests' (Nov 2, 2026)."""
@@ -192,13 +193,42 @@ async def seed_company(ctx: Ctx, *, prds: int = 25, per: int = 16, cut_per: int 
             if working:
                 co.drafts[rm.id] = d
         await s.flush()
+        meeting_sessions = []
+        for n in range(meetings):
+            ms = SimpleSession(kind="meeting", started_by=owner.id,
+                               started_at=AT + timedelta(days=n % 30),
+                               closed_at=AT + timedelta(days=n % 30, hours=1))  # fmt: skip
+            s.add(ms)
+            await s.flush()
+            s.add(
+                SimpleMeeting(
+                    title=f"Example review {n}",
+                    prd_document_id=co.prds[n % prds].id,
+                    origin="one_pager",
+                    session_id=ms.id,
+                    presenter_id=owner.id,
+                    attendee_ids=[p.id for p in people[:5]],
+                    joined_ids=[owner.id],
+                    status="ended",
+                    started_at=ms.started_at,
+                    ended_at=ms.closed_at,
+                    ended_by=owner.id,
+                )
+            )
+            meeting_sessions.append(ms.id)
+        await s.flush()
         for n in range(changes):
             item = live[n % len(live)]
             is_proposal = n < proposed
             draft = co.drafts.get(item.roadmap_document_id)
             s.add(
                 SimpleChange(
-                    session_id=None if is_proposal else session.id,
+                    # Every fourth applied change was made in a meeting.
+                    session_id=None
+                    if is_proposal
+                    else (
+                        meeting_sessions[n % len(meeting_sessions)] if n % 4 == 1 else session.id
+                    ),
                     document_id=item.roadmap_document_id,
                     op="edit_title",
                     target={"item_id": str(item.id)},
@@ -229,26 +259,5 @@ async def seed_company(ctx: Ctx, *, prds: int = 25, per: int = 16, cut_per: int 
                     )
                 )
 
-        for n in range(meetings):
-            ms = SimpleSession(kind="meeting", started_by=owner.id,
-                               started_at=AT + timedelta(days=n % 30),
-                               closed_at=AT + timedelta(days=n % 30, hours=1))  # fmt: skip
-            s.add(ms)
-            await s.flush()
-            s.add(
-                SimpleMeeting(
-                    title=f"Example review {n}",
-                    prd_document_id=co.prds[n % prds].id,
-                    origin="one_pager",
-                    session_id=ms.id,
-                    presenter_id=owner.id,
-                    attendee_ids=[p.id for p in people[:5]],
-                    joined_ids=[owner.id],
-                    status="ended",
-                    started_at=ms.started_at,
-                    ended_at=ms.closed_at,
-                    ended_by=owner.id,
-                )
-            )
         await s.commit()
     return co
