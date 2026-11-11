@@ -132,7 +132,7 @@ CHANGE_BUDGET = 0.6
 CEILINGS = {
     "goal-suggestions": 60,
     "changes": 45,  # with changes made in 60 meetings: no read per meeting
-    "drafts": 20,
+    "drafts": 15,  # the count and the log of a draft from one read of its changes
     "removed": 39,
     "meetings-options": 15,
     "feature-states": 9,
