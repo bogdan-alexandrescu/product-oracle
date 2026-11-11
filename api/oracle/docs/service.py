@@ -37,6 +37,7 @@ from oracle.docs.schemas import (
     DiffOut,
     DocumentOut,
     DocumentSummary,
+    ImportFix,
     ImportProblem,
     SectionOut,
     SectionVerdict,
@@ -771,9 +772,11 @@ def date_problems(
     headings: dict[str, str],
     *,
     update: bool,
+    prd_id: uuid.UUID | None = None,
 ) -> list[ImportProblem]:
     """One ``unverified_date`` problem per distinct date and item a roadmap writes without
-    a basis (date-warnings-honest: not one per mention)."""
+    a basis (date-warnings-honest: not one per mention), each with its fix: a date source
+    on Plan › Dates for the PRD (``prd_id``), filtered to the date's days (vqa-one-pager)."""
     from oracle.roadmap import doc_dates
 
     out = []
@@ -781,6 +784,7 @@ def date_problems(
         refs = doc_dates.problem_refs(m, prd_slug)
         if times > 1:
             refs["mentions"] = str(times)
+        days = [d.isoformat() for d in (m.days or (m.day,))]
         out.append(
             ImportProblem(
                 code="unverified_date",
@@ -789,6 +793,7 @@ def date_problems(
                 ),
                 section_key=m.section_key or None,
                 refs=refs,
+                fix=ImportFix(action="add_date_source", prd_document_id=prd_id, days=days),
             )
         )
     return out
@@ -978,7 +983,9 @@ async def _check_document_dates(
     )
     prd_slug, prd_title = prd or (None, None)
     headings = {sec.section_key: sec.heading for sec in draft.sections}
-    problems += date_problems(bad, prd_slug, prd_title, headings, update=document.kind == "update")
+    problems += date_problems(
+        bad, prd_slug, prd_title, headings, update=document.kind == "update", prd_id=prd_id
+    )
     if refuse:
         await db.rollback()
         raise DraftError(problems)

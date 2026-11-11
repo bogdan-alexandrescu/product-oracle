@@ -204,7 +204,7 @@ import { runGroupsOut } from "./simple-runs";
 import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
 import { rebuildsOut } from "./rebuilds";
-import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedHeadingCountOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedTwoCountsOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedBetAddedOnePager, seedHeadingCountOnePager, seedMilestoneNamesOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedTwoCountsOnePager, seedVqaOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -1346,6 +1346,9 @@ function seedSimpleWalkScenario(): Db {
  * the roadmap tray's "Dates to confirm". Invented data.
  */
 const UNDATED_PLAN_FEATURE = "F-11";
+
+/** "simple-plan" with one roadmap item of the PRD that no plan milestone holds (the When card's "No milestone" group). */
+export const ONE_PAGER_PLAN_LOOSE_SCENARIO = "one-pager-plan-loose";
 
 function seedSimplePlanScenario(datedAll = false): Db {
   const db = seedSimpleHomeOnePrdScenario();
@@ -4244,6 +4247,16 @@ function load(): Db {
                     db.simple_roadmap!.goal_milestones = seedPlanPrdMilestones();
                     return db;
                   }
+              : scenario === ONE_PAGER_PLAN_LOOSE_SCENARIO
+                ? () => {
+                    // Owner, Nov 10 ('Add rows to the plan card'): one of the PRD's roadmap items has no plan milestone.
+                    const db = seedSimplePlanScenario();
+                    const rm = db.simple_roadmap!;
+                    rm.items.push({ key: "plan-loose", title: "Calendar invite sync", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "low", start: 0, end: 25, source: "typed" });
+                    rm.ids["plan-loose"] = stableUuid("simple-item/plan-loose");
+                    db.simple_one_pager!.slice!.push({ id: rm.ids["plan-loose"], title: "Calendar invite sync", horizon: "later", start: "2027-01-04", end: "2027-01-29", estimated: true, milestone: null });
+                    return db;
+                  }
               : scenario === PRIORITIES_PLAN_GOAL_NAMES_SCENARIO
                 ? () => {
                     const db = seedSimplePlanScenario();
@@ -7074,7 +7087,6 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
     if (!d) return undefined;
     // C-13, vqa B-13: every PRD but the seed reads its own sections (one_pager.extract), never a copy
     // of Guided setup's; a PRD with no version yet reads none of them (every block "missing").
-    const cites = Object.fromEntries((read?.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]));
     // As the API, whose drafts, changes and decisions are rows of their own: a rebuilt page keeps
     // its draft (working or submitted, with its reviewers) and its notes, never only what the
     // version holds. Only the approval of the version a draft was submitted as settles it
@@ -7085,7 +7097,7 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
       draft: settled ? null : known.draft, approval: settled ? null : known.approval, decisions: known.decisions,
       changes: settled ? known.changes.filter((c) => c.status === "proposed") : known.changes,
     } : {};
-    return (others[d.id] = { ...prdOnePager({ id: d.id, slug: d.slug, title: d.title }, read?.sections ?? [], cites), visuals: db.simple_visuals, roadmap: db.simple_roadmap, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}), ...kept });
+    return (others[d.id] = { ...prdOnePager({ id: d.id, slug: d.slug, title: d.title }, read?.sections ?? []), visuals: db.simple_visuals, roadmap: db.simple_roadmap, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}), ...kept });
   };
   if (p[1] !== "simple") return seeded;
   if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;
@@ -8039,6 +8051,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   // "one-pager-run-prd": a run's Goal-traced PRD, its lines cited, while Oracle writes the page.
   // "one-pager-quick-read": the same PRD, its one_pager job failed: the quick read stays.
   // "one-pager-run-prd-walk": a run's approved PRD as Oracle's job wrote its page (CLD's walk B).
+  // "one-pager-bet-added": the PRD's next version gained a new first bet; the flows drawn before stay on their bets.
+  // "one-pager-milestone-names": a milestone record named only by its code beside an item that names it.
   db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd"
     ? seedRunPrdOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd-walk"
@@ -8053,6 +8067,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     ? seedHeadingCountOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-two-counts"
     ? seedTwoCountsOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-bet-added"
+    ? seedBetAddedOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-milestone-names"
+    ? seedMilestoneNamesOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-vqa"
+    ? seedVqaOnePager()
     : seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();

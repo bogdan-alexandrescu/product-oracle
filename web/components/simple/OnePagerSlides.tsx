@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { FlowPanel } from "@/components/simple/FlowVisual";
 import { WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
-import { PrdPlan } from "@/components/simple/PrdTimeline";
+import { looseItems, PrdPlan } from "@/components/simple/PrdTimeline";
 import type { Schemas } from "@/lib/api/client";
 
 type View = Schemas["OnePagerOut"];
@@ -90,7 +90,7 @@ export function OnePagerSlides({
         {b ? (
           <SlideLines b={b} v={v} lineWords={lineWords} quotes={quotes} sectionNames={sectionNames} />
         ) : plan ? (
-          <PrdPlan plan={plan} title={v.document.title} prd={v.document.slug} onPlan={onPlan} />
+          <PrdPlan plan={plan} title={v.document.title} prd={v.document.slug} loose={looseItems(v, codes)} onPlan={onPlan} />
         ) : v.plan ? (
           <div aria-label="Timeline strip" className="text-[18px]">
             <WithFeatureMarks>

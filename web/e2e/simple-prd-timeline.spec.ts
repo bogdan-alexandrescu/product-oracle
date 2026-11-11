@@ -243,6 +243,8 @@ for (const phone of [false, true]) {
           const legend = tl.getByTestId("timeline-legend");
           for (const w of ["M1", "M2", "M3", "Product manager's work, no engineering", "Today Oct 22", "Holidays Dec 28 – Jan 1", "milestone end"]) await expect(legend).toContainText(w);
           await expect(tl.getByRole("heading", { name: "Milestones: done when" })).toBeVisible();
+          // Every item of the PRD has a plan milestone here: no "No milestone" group (vqa-one-pager.spec.ts vqa-b).
+          await expect(tl.getByTestId("timeline-no-milestone")).toHaveCount(0);
           await expect(tl.getByRole("group", { name: "Milestones" }).getByRole("button")).toHaveText(["M1 Prove it", "M2 Scale volume", "M3 Open to all"]);
           // The decisions' row sits under the lanes, inside the strip.
           const lanesBottom = (await tl.getByTestId("timeline-lane").last().locator(":scope > div").last().boundingBox())!;

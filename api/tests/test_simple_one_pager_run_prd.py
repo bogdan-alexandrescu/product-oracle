@@ -15,9 +15,10 @@ Test cards (protects / fails_when / no_claim):
   the Primary's words; fails_when=it reads as a list of labels or a cut token;
   no_claim=sections of unlabelled leads (test_simple_one_pager_clear).
 - test_measure_from_its_source_never_ids: protects=an outcome whose definition is only
-  citation ids shows the cited source's words and its name, one defined elsewhere shows
-  that definition with its source's name, and one with neither says nothing;
-  fails_when="[c:c4] [c:c11]" is the measure.
+  citation ids has no measure (vqa one-pager 2: a citation's quote or title is never how
+  it is measured), one defined elsewhere in words shows that definition, and one with
+  neither says nothing; fails_when="[c:c4] [c:c11]", a cited quote or a cited title is
+  the measure or its source.
 - test_code_named_right_after_it: protects=a code named right after it in prose ("so F-11
   Photo editing is out") or in a table cell ("F-10 Auto albums") has its name; a code with
   none ("F-40 may slip") is still a "Needs a look" item; fails_when=a named code is listed
@@ -260,23 +261,15 @@ async def test_measure_from_its_source_never_ids(client):
     ctx = await run_world(client)
     view = await get(client, ctx, "owner", "photo-sorting")
     sorted_, find, renamed = block(view, "outcomes")["lines"]
-    assert (
-        sorted_["measure"]
-        == "photos given an album within 24 hours of upload, per library per week"
-    )
-    assert sorted_["measure_source"] == "Upload log export"
+    # vqa one-pager 2: only the PRD's own words say how an outcome is counted and where; a
+    # definition that is only citations is no measure, never a citation's quote or title.
+    assert sorted_["measure"] is None and sorted_["measure_source"] is None
     assert find["measure"] == "seconds from opening the library to opening the photo"
-    assert find["measure_source"] == "Library owner interviews"
+    assert find["measure_source"] is None
     assert renamed["measure"] is None and renamed["measure_source"] is None
-    # With no source the PRD defines, ids alone are no measure.
     sec = Section(section_key="s", heading="Success", level=3, ordinal=1, content_hash="x",
                   body_md="- Photos sorted within a day, counted as: [c:c4] [c:c11]", body_text="")  # fmt: skip
     assert checks.measures([sec]) == []
-    # A long excerpt is cut short, never the whole quote.
-    long = "photos given an album " + "within a day of upload " * 20
-    found = checks.measures([sec], {"c4": ("Upload log export", long)})
-    assert len(found[0].measure.split()) <= 21 and found[0].measure.endswith("…"), found
-    assert found[0].measure.startswith("photos given an album within a day")
 
 
 async def test_code_named_right_after_it(client):

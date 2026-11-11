@@ -55,6 +55,7 @@ class PlanItem:
 
 # M1..M99: "M1.5 · X" and "M2026 roadmap" are texts, not codes.
 _CODE = re.compile(r"^(M\d{1,2})(?![\w.])\s*[·:\-–—]?\s*(.*)$", re.IGNORECASE)
+_BARE = re.compile(r"M\d{1,2}", re.IGNORECASE)
 
 
 def milestone_of(text: str | None) -> tuple[str, str]:
@@ -111,21 +112,35 @@ def strip(items: list[PlanItem], today: date, coded: bool = False) -> SimplePlan
             label = _named(label, i.roadmap_code)
         keyed.setdefault(key, []).append((label, i))
     groups: dict[tuple[str, date | None], list[PlanItem]] = {}
+    names: dict[tuple[str, date | None], str] = {}
     begins: dict[tuple[str, date | None], date] = {}
     codes: dict[tuple[str, date | None], str | None] = {}
     for key, of in keyed.items():
         labels = Counter(label for label, _ in of)
-        bare = key.removeprefix("code:")
         # A named label ("M4 · Rollout") before the bare code ("M4"), then the commonest.
-        name = min(labels, key=lambda x: (x == bare, -labels[x], x))
+        name = min(labels, key=lambda x: (_BARE.fullmatch(x.strip()) is not None, -labels[x], x))
+        # A record named only by its code ("M2") reads the name its own items give that code
+        # (vqa one-pager 3), never another record's; ``coded``, read by its roadmap code
+        # (the roadmap code decides the row, the items' name its label).
+        said = Counter(
+            label
+            for _, i in of
+            if (raw := milestone_of(i.milestone)[1])
+            and (label := _named(raw, i.roadmap_code) if coded else raw) != name
+            and name in (milestone_of(label)[0], milestone_of(raw)[0])
+        )
+        if said:
+            name = min(said, key=lambda x: (-said[x], x))
         when = max((i.milestone_date for _, i in of if i.milestone_date), default=None)
-        groups[(name, when)] = [i for _, i in of]
+        # Each record (or code) is its own row: two records sharing a name and date stay two.
+        groups[(key, when)] = [i for _, i in of]
+        names[(key, when)] = name
         if coded:
-            codes[(name, when)] = of[0][1].roadmap_code
+            codes[(key, when)] = of[0][1].roadmap_code
         # A dated plan milestone (the PRD dates it): its row spans its start to its end.
         starts = [i.milestone_start for _, i in of if i.milestone_start]
         if starts:
-            begins[(name, when)] = min(starts)
+            begins[(key, when)] = min(starts)
     dated = [d for _, d in groups if d is not None]
     committed = [i.end for i in items if not i.estimated]
     first = min(
@@ -146,7 +161,12 @@ def strip(items: list[PlanItem], today: date, coded: bool = False) -> SimplePlan
     end = _add_months(months[-1], 1) - timedelta(days=1)
 
     def row(
-        name: str, when: date | None, of: list[PlanItem], milestone: bool, begin: date | None = None
+        name: str,
+        when: date | None,
+        of: list[PlanItem],
+        milestone: bool,
+        begin: date | None = None,
+        code: str | None = None,
     ) -> SimplePlanRow:
         planned = begin is not None and when is not None
         return SimplePlanRow(
@@ -159,13 +179,13 @@ def strip(items: list[PlanItem], today: date, coded: bool = False) -> SimplePlan
             milestone=milestone,
             past_edge=when is not None and when > end,
             item_ids=list(dict.fromkeys(i.id for i in of if i.id)),
-            code=codes.get((name, when)),
+            code=code,
         )
 
     ordered = sorted(
-        groups.items(), key=lambda kv: (kv[0][1] is None, kv[0][1] or date.max, kv[0][0])
+        groups.items(), key=lambda kv: (kv[0][1] is None, kv[0][1] or date.max, names[kv[0]])
     )
-    rows = [row(name, when, of, True, begins.get((name, when))) for (name, when), of in ordered]
+    rows = [row(names[k], k[1], of, True, begins.get(k), codes.get(k)) for k, of in ordered]
     if loose:
         rows.append(row(NO_MILESTONE, None, loose, False))
     return SimplePlanStrip(

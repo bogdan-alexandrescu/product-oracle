@@ -18,7 +18,7 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
 import { calendarDay, milestoneOut, oldMilestonesOut, routeMilestones, withKindStatus, type MockMilestone, type OldCtx } from "./simple-milestones";
-import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
+import { flowFor, flowsOfBets, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, planRowState, rowCodeTaken, type AppliedRecord } from "./approved-roadmap";
 import { codedTitle, prdCode } from "./item-code";
@@ -688,7 +688,9 @@ function betFlow(db: SimpleDb, s: SeedItem): Schemas["SimpleFlow"] | null {
     one(bets.filter((l) => !!code && words(l.text).includes(words(code)))) ??
     one(bets.filter((l) => l.keys.includes(s.section!))) ??
     one(bets.filter((l) => !!s.title.trim() && words(l.text).includes(words(s.title))));
-  return line ? flowFor(db.visuals, "one_pager_line", betSubject(op.flowKey ? `${op.flowKey}/${line.id}` : line.id)) : null;
+  // As one_pager.bet_flows: the flow on the bet it was drawn for (visuals.flows_of_bets).
+  const found = flowsOfBets(db.visuals, op.flowKey ?? op.doc.slug, bets.map((l) => ({ key: op.flowKey ? `${op.flowKey}/${l.id}` : l.id, text: l.text.split(/\s+/).filter(Boolean).join(" ") })));
+  return line ? found[bets.indexOf(line)].flow : null;
 }
 
 const DAY = 86_400_000;

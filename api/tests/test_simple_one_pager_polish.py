@@ -31,6 +31,12 @@ Test cards (protects / fails_when / no_claim):
 - test_a_merged_feature_is_not_on_the_plan (panel-menu): protects=a published feature
   merged into another (merged_into) is left off the one-pager's timeline and plan strip
   counts, as a cut one is; fails_when=it is listed or counted as live; no_claim=the web.
+- test_every_milestone_row_has_its_name (vqa one-pager 3): protects=each milestone row of the
+  strip reads its code with its name: an item of the PRD with no slice whose milestone (or
+  milestone record) says only its code takes the name the PRD's plan gives that code, or the
+  name that record's own items give it; fails_when=a row reads a bare code ("Milestone M2")
+  while the PRD names it, or a record takes (or merges into) another record's row of the same
+  code and date; no_claim=which code a row shows (an owner's decision).
 """
 
 from datetime import date
@@ -280,3 +286,75 @@ async def test_a_merged_feature_is_not_on_the_plan(client):
     assert "Merged away" not in [i["title"] for i in view["timeline"]]
     rows = {r["name"]: r["items"] for r in view["plan"]["rows"]}
     assert rows["M1"] == 3
+
+
+def test_every_milestone_row_has_its_name():
+    from types import SimpleNamespace as N
+
+    from oracle.simple import plan_strip
+
+    def item(milestone=None, slices=(), n=0):
+        return N(id=None, status="planned", slices=list(slices), estimated=False,
+                 start=N(date=date(2026, 11, 2 + n)), end=N(date=date(2026, 11, 20 + n)),
+                 milestone=milestone)  # fmt: skip
+
+    def ms(name, day, record_id=None, record_name=None):
+        return N(id=None, name=name, date=date(2026, 12, day), record_id=record_id,
+                 record_name=record_name, start_date=None)  # fmt: skip
+
+    sliced = N(milestone="M1", milestone_name="Measured and mapped", start_date=None,
+               end_date=None, milestone_start=None, milestone_end=date(2026, 12, 4))  # fmt: skip
+    items = [
+        item(slices=[sliced]),
+        item(ms("M2", 11), n=1),  # the PRD's own item, its milestone only its code
+        item(ms("M3", 18, "c3a1", "M3"), n=2),  # its milestone record named only by its code
+        item(ms("M4", 24), n=3),
+        item(ms("M4 · Rollout", 24), n=4),
+    ]
+    names = {"M1": "Measured and mapped", "M2": "Ship to beta", "M3": "Open to all"}
+    rows = plan_strip.strip(one_pager.plan_items(items, names), date(2026, 11, 2)).rows
+    assert [r.name for r in rows] == [
+        "M1 · Measured and mapped",
+        "M2 · Ship to beta",
+        "M3 · Open to all",
+        "M4 · Rollout",
+    ]
+
+    # Read by roadmap code (the one-pager's Timeline): the roadmap code decides the row, the
+    # name the PRD gives a milestone said only by its code decides its label.
+    def code_of(text, *ids):
+        return {"c3a1": "M7"}.get(str(ids[-1] if ids else None)) or {"M2": "M5", "M4": "M8"}.get(
+            plan_strip.milestone_of(text)[0]
+        )
+
+    rows = plan_strip.strip(
+        one_pager.plan_items(items, names, code_of), date(2026, 11, 2), coded=True
+    ).rows
+    assert [(r.name, r.code) for r in rows] == [
+        ("Measured and mapped", None),
+        ("M5 · Ship to beta", "M5"),
+        ("M7 · Open to all", "M7"),
+        ("M8 · Rollout", "M8"),
+    ]
+    # A record named only by its code reads the name its own items give it, never the name of
+    # another record (or code row) of the same code and date: those stay their own rows.
+    P, start, end, day = (
+        plan_strip.PlanItem,
+        date(2026, 11, 2),
+        date(2026, 11, 20),
+        date(2026, 12, 11),
+    )
+    rows = plan_strip.strip(
+        [
+            P(start, end, False, "M2 · Ship to beta", day, "c3a2", "M2"),
+            P(start, end, False, "M2", day, "c3a2", "M2"),
+            P(start, end, False, "M2 · Open to all", day),
+            P(start, end, False, "M2", day, "c3a3", "M2"),
+        ],
+        start,
+    ).rows
+    assert [(r.name, r.items) for r in rows] == [
+        ("M2", 1),
+        ("M2 · Open to all", 1),
+        ("M2 · Ship to beta", 2),
+    ]

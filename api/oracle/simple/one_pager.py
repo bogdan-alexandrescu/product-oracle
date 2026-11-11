@@ -60,7 +60,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs import visibility
-from oracle.docs.models import Citation, Document, DocumentVersion, Section
+from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.roadmap.tracks import on_prd as tracks_on_prd
@@ -447,11 +447,21 @@ def roadmap_codes_of(read: Any, prd_id: uuid.UUID) -> Callable[..., str | None]:
 
 
 def plan_items(
-    items: list[Any], code_of: Callable[..., str | None] | None = None
+    items: list[Any],
+    names: dict[str, str] | None = None,
+    code_of: Callable[..., str | None] | None = None,
 ) -> list[plan_strip.PlanItem]:
     """The plan strip's reading of a PRD's roadmap items (neither cut nor merged), each with
-    the milestone record that links it, when any; ``code_of`` (roadmap_codes_of): each with
-    its milestone's roadmap code."""
+    the milestone record that links it, when any. ``names``: the PRD plan's milestone names
+    by code; a milestone said only by its code ("M2", an item of the PRD with no slice, or
+    its milestone record) reads with its name ("M2 · Ship to beta", vqa one-pager 3).
+    ``code_of`` (roadmap_codes_of): each with its milestone's roadmap code."""
+    names = names or {}
+
+    def named(text: str | None) -> str | None:
+        code, label = plan_strip.milestone_of(text)
+        return f"{code} · {names[code]}" if text and label == code and names.get(code) else text
+
     out = []
     for i in items:
         # panel-menu: a merged feature (any, not only a draft) is off the plan as a cut one.
@@ -464,7 +474,7 @@ def plan_items(
                     sl.start_date or i.start.date,
                     sl.end_date or i.end.date,
                     not (sl.milestone_start and sl.milestone_end),
-                    f"{sl.milestone} · {sl.milestone_name}",
+                    named(f"{sl.milestone} · {sl.milestone_name}"),
                     sl.milestone_end,
                     milestone_start=sl.milestone_start,
                     id=_id(i),
@@ -478,10 +488,10 @@ def plan_items(
                 i.start.date,
                 i.end.date,
                 i.estimated,
-                (i.milestone.name or "Milestone") if i.milestone else None,
+                named(i.milestone.name or "Milestone") if i.milestone else None,
                 i.milestone.date if i.milestone else None,
                 str(i.milestone.record_id) if i.milestone and i.milestone.record_id else None,
-                i.milestone.record_name if i.milestone else None,
+                named(i.milestone.record_name) if i.milestone else None,
                 i.milestone.start_date if i.milestone else None,
                 _id(i),
                 code_of(
@@ -904,8 +914,10 @@ async def carry_keys(
     """Each new bet line takes the key (``visuals.bet_key``) of the bet it is on the page
     built before (the document's latest other row): line ids are positions, renumbered on
     every build, so a bet keeps its drawn flow when bets are added, dropped or reordered.
-    Matched by words (the earlier bet's, or the words the published draft gave it); then,
-    with as many bets as before, by place (a reworded bet); else a new key."""
+    Matched by words (the earlier bet's, or the words the published draft gave it); then by
+    the earlier bet it reads most like (``visuals.pair_alike``); then, with as many bets as
+    before, by place when that place's bet is unmatched (a bet reworded past likeness); else
+    a new key."""
     from oracle.simple import visuals
 
     q = select(SimpleOnePager).where(SimpleOnePager.document_id == document.id)
@@ -921,19 +933,47 @@ async def carry_keys(
     d = await db.scalar(select(SimpleDraft).where(SimpleDraft.version_id == v.id))
     if d is not None:
         edited = (d.overlay or {}).get("lines") or {}
+    # Each earlier bet's key is the key of the flow it showed (visuals.flows_of_bets): on a
+    # page whose keys were shifted, a bet's flow is under another bet's key or its own
+    # (``visuals.own_subject``), so the next page carries the flow, never the stored key.
+    keys = [visuals.bet_key(x) for x in old]
+    by_subject = {visuals.line_subject(document.id, k): k for k in keys}
+    by_subject |= {visuals.own_subject(document.id, k): k + "/own" for k in keys}
+    showed = await visuals.flows_of_bets(
+        db,
+        document.id,
+        [
+            (k, [t for t in (x.get("text"), edited.get(x.get("id"))) if t])
+            for k, x in zip(keys, old, strict=True)
+        ],
+    )
+    keys = [by_subject.get(sid, k) for k, (sid, _) in zip(keys, showed, strict=True)]
     words: dict[str, str] = {}
-    for x in old:
+    for x, k in zip(old, keys, strict=True):
         for t in (edited.get(x.get("id")), x.get("text")):
             if t:
-                words.setdefault(_said(t), visuals.bet_key(x))
+                words.setdefault(_said(t), k)
     used: set[str] = set()
     for x in new:
         key = words.get(_said(x["text"]))
         if key and key not in used:
             x["flow_key"] = key
             used.add(key)
-    by_place = {str(x.get("id")): visuals.bet_key(x) for x in old} if len(old) == len(new) else {}
-    taken = {visuals.bet_key(x) for x in old}
+    # Reworded (Oracle words each build its own way): the earlier bet it reads most like.
+    was = [
+        [] if k in used else [t for t in (edited.get(x.get("id")), x.get("text")) if t]
+        for x, k in zip(old, keys, strict=True)
+    ]
+    now = [[] if "flow_key" in x else [x["text"]] for x in new]
+    for j, i in visuals.pair_alike(was, now).items():
+        new[j]["flow_key"] = keys[i]
+        used.add(new[j]["flow_key"])
+    by_place = (
+        {str(x.get("id")): k for x, k in zip(old, keys, strict=True)}
+        if len(old) == len(new)
+        else {}
+    )
+    taken = set(keys) | {visuals.bet_key(x) for x in old}
     for x in new:
         if "flow_key" not in x:
             key = by_place.get(x["id"])
@@ -1015,7 +1055,8 @@ async def built(
 async def bet_flows(db: AsyncSession, document: Document) -> list[tuple[str, list[str], Any]]:
     """walkb-roadmap review: each bet of the PRD's published one-pager with the flow drawn for
     it (its words, its source sections, its ``SimpleFlow`` or None), as the page reads them: by
-    the bet's line, else by its words (0092_bet_flow_line_key). Nothing is written or queued."""
+    the bet it was drawn for (visuals.flows_of_bets), else by its words (0092_bet_flow_line_key).
+    Nothing is written or queued."""
     from oracle.simple import visuals
 
     try:
@@ -1028,13 +1069,13 @@ async def bet_flows(db: AsyncSession, document: Document) -> list[tuple[str, lis
         for x in blk.get("lines") or []
         if str(x.get("id", "")).startswith("bets-")
     ]
-    subjects = [visuals.line_subject(document.id, visuals.bet_key(x)) for x in bets]
-    flows = await visuals.flows_for(db, "one_pager_line", subjects)
-    by_words = [visuals.words_subject(document.id, str(x.get("text") or "")) for x in bets]
-    flows.update(await visuals.flows_for(db, "one_pager_line", by_words))
+    said = [str(x.get("text") or "") for x in bets]
+    found = await visuals.flows_of_bets(
+        db, document.id, [(visuals.bet_key(x), [t]) for x, t in zip(bets, said, strict=True)]
+    )
     return [
-        (str(x.get("text") or ""), list(x.get("source_keys") or []), flows.get(a) or flows.get(w))
-        for x, a, w in zip(bets, subjects, by_words, strict=True)
+        (t, list(x.get("source_keys") or []), flow)
+        for x, t, (_, flow) in zip(bets, said, found, strict=True)
     ]
 
 
@@ -1698,31 +1739,28 @@ async def read(
         )  # type: ignore[arg-type]
     # S10: each bet ("What we will build") carries its visual.
     bets = [x for blk in blocks for x in blk.lines if x.id.startswith("bets-")]
-    keys = {x["id"]: visuals.bet_key(x) for blk in page for x in blk["lines"]}
-    for x in bets:
-        x.flow_subject = visuals.line_subject(document.id, keys.get(x.id, x.id))
-    line_flows = await visuals.flows_for(db, "one_pager_line", [x.flow_subject for x in bets])
-    # A flow still keyed by a bet's words (0092_bet_flow_line_key left it: its words matched
-    # no line then) is read as before, by a bet with those words and no flow of its own.
-    by_words = {
-        visuals.words_subject(document.id, x.text): x
-        for x in bets
-        if x.flow_subject not in line_flows
-    }
-    for sid, flow in (await visuals.flows_for(db, "one_pager_line", list(by_words))).items():
-        by_words[sid].flow_subject, line_flows[sid] = sid, flow
+    # Each bet's flow by its key, on the bet it was drawn for (visuals.flows_of_bets); a flow
+    # still keyed by a bet's words (0092_bet_flow_line_key) by a bet with those words.
+    raw = {x["id"]: x for blk in page for x in blk["lines"]}
+    found = await visuals.flows_of_bets(
+        db,
+        document.id,
+        [
+            (
+                visuals.bet_key(raw.get(x.id) or {"id": x.id}),
+                [x.text, (raw.get(x.id) or {}).get("text") or ""],
+            )
+            for x in bets
+        ],
+    )
     # The request's own rule (visuals.may_revise of a bet: who changes the PRD directly).
     draws = await visuals.may_revise(db, principal, SimpleVisual(document_id=document.id))
-    for x in bets:
-        x.flow = visuals.one_pager_flow(line_flows.get(x.flow_subject))
+    for x, (sid, flow) in zip(bets, found, strict=True):
+        x.flow_subject, x.flow = sid, visuals.one_pager_flow(flow)
         x.can_draw_flow = x.flow is None and draws
     # Reads clearly (2026-10-30): who has it, measures, codes with names, footnotes; the
     # "Needs a look" items for the PRD's owners. After the flows: a flow still keyed by a
     # bet's words is found by the words before codes got their names.
-    cites = {
-        c.cite_key: (c.title or c.ref, c.excerpt)
-        for c in await db.scalars(select(Citation).where(Citation.version_id == b.version.id))
-    }
     patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
     # A heading's count fixed in the draft (owner, Nov 5): the drafted heading.
     heads = ((d.overlay or {}).get("headings") or {}) if sees and d else {}
@@ -1736,7 +1774,7 @@ async def read(
         else x
         for x in b.sections
     ]
-    looks = one_pager_checks.annotate(blocks, b.sections, cites, checked)
+    looks = one_pager_checks.annotate(blocks, b.sections, checked)
     # A draft in review takes no change that applies (_ensure refuses it): who would apply a
     # fix is offered none until it is approved. Who proposes still proposes, and an open
     # proposal stays on its item.
@@ -1805,16 +1843,17 @@ async def read(
         for i in mine
         if i.status not in ("cut", "merged")
     ]
+    called = {m.code: m.name for m in view.milestones if m.name} if view is not None else {}
     # roadmap-milestone-codes: each row reads its milestone's roadmap code, as the Roadmap does.
     plan = plan_strip.strip(
-        plan_items(mine, roadmap_codes_of(slice_, document.id)), slice_.today, coded=True
+        plan_items(mine, called, roadmap_codes_of(slice_, document.id)), slice_.today, coded=True
     )
     # A dated plan's span is the one its timeline draws (its milestones, or the dates the
     # lead accepted); else the items' dated milestones.
     if view is not None and view.dated and view.span:
         span: tuple[date, date] | None = (view.span.start, view.span.end)
     else:
-        span = milestone_span(plan_items(mine))
+        span = milestone_span(plan_items(mine, called))
     timeline = OnePagerBlock(
         key=TIMELINE.key, title=TIMELINE.title, rules=TIMELINE.rules, kind="timeline", lines=[]
     )
@@ -2070,8 +2109,10 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     new = " ".join(str(body.after.get("line") or "").split())
     if not isinstance(old, str):
         raise ChangeError(422, "before.line: the line as you saw it")
-    if not new or len(new) > LINE_MAX:
-        raise ChangeError(422, f"after.line: 1 to {LINE_MAX} characters")
+    # A line shown cut ("…", its whole text behind it) is edited from its whole words
+    # (vqa-one-pager): the new words may be as long as a whole line, never cut to LINE_MAX.
+    if not new or len(new) > FULL_MAX:
+        raise ChangeError(422, f"after.line: 1 to {FULL_MAX} characters")
     block = line_id.rsplit("-", 1)[0]
     if block == "problem" and len(new.split()) > PROBLEM_WORDS:
         raise ChangeError(422, f"The problem is at most {PROBLEM_WORDS} words")
@@ -2092,7 +2133,11 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
         raise _conflict("This line changed since you read it", text)
     if not bodies:
         raise ChangeError(409, "This line rests on no section of the PRD")
-    patched = patch_all(bodies, text, new)
+    # A published line shown cut patches the facts of its whole text, so the cut tail does
+    # not stay in the section beside the new words (vqa-one-pager).
+    published = _lines(b).get(line_id) or {}
+    whole = published.get("full") if text == published.get("text") else None
+    patched = (patch_all(bodies, whole, new) if whole else None) or patch_all(bodies, text, new)
     if patched is None:
         raise ChangeError(
             409,

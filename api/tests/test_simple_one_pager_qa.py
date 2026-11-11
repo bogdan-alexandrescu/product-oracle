@@ -13,6 +13,11 @@ Test cards (protects / fails_when / no_claim):
   fails_when=another PRD's plan (whose milestone slices the same feature code) names a row
   ("M1 · Billing beta"), merges into this PRD's M1 or sets the span; no_claim=the strip's
   layout.
+- test_a_plan_led_page_lists_the_items_with_no_plan_milestone: protects=a PRD whose plan has
+  its own milestones still sends each of its roadmap items with no plan milestone, by id,
+  in the strip's last row "No milestone" (the When card lists them there, owner Nov 10 'Add
+  rows to the plan card'); fails_when=such an item is left out of the strip; no_claim=the
+  card's look (web/e2e/vqa-one-pager.spec.ts).
 - test_timeline_reads_the_approved_versions_plan: protects=a PRD whose plan is read from
   its approved version's Milestones/Features tables (no stored plan) lists the company
   roadmap's items of those features, placed in its milestones; fails_when=only a stored
@@ -144,6 +149,31 @@ async def test_timeline_places_items_by_this_prds_plan(client, own_plan):
         assert names == ["No milestone"], names
         assert rows[0]["items"] == 2
         assert view["span_start"] is None and view["span_end"] is None
+
+
+async def test_a_plan_led_page_lists_the_items_with_no_plan_milestone(client):
+    ctx = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
+        pv = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id == prd.id))
+        s.add(SimplePrdPlan(document_id=prd.id, version_id=pv.id, status="ready", source="prd",
+                            data={"milestones": [{"code": "M1", "name": "Setup basics",
+                                                  "start": "2026-11-02", "end": "2026-12-18"}],
+                                  "features": [{"code": "F-07", "name": "Setup checklist",
+                                                "milestones": ["M1"]}]}))  # fmt: skip
+        await company_roadmap(s, prd.id, [
+            {"item_key": "own", "title": "Progress meter", "prd_document_id": prd.id,
+             "prd_section_key": "f-07"},
+            # No feature of the plan: no plan milestone.
+            {"item_key": "loose", "title": "Calendar invite sync", "prd_document_id": prd.id},
+        ])  # fmt: skip
+        await s.commit()
+    view = await get(client, ctx, "viewer")
+    ids = {i["title"]: i["id"] for i in view["timeline"]}
+    rows = view["plan"]["rows"]
+    assert [r["name"] for r in rows] == ["M1 · Setup basics", "No milestone"], rows
+    assert rows[0]["item_ids"] == [ids["Progress meter"]]
+    assert rows[-1]["item_ids"] == [ids["Calendar invite sync"]] and not rows[-1]["milestone"]
 
 
 PLAN_TABLES = """

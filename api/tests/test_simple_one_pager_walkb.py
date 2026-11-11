@@ -23,9 +23,16 @@ Test cards (protects / fails_when / no_claim):
   above its scope, exit and date lines is no disagreement; a count against a list of the
   same things still is; fails_when=the milestone is a "Needs a look" item, or the real one
   is not.
+- test_measure_is_the_lines_own_words_never_a_citation: protects=an outcome shows only the
+  measure its PRD line says in words (what is counted and where); one whose definition is
+  only citations (a meeting's, a feature's) has none ("How it is measured is not in the PRD
+  yet"); fails_when=a citation's excerpt (one quote on several outcomes, or cut with "…") or
+  a citation's title with its label ("(current name)") is a measure or its source.
 """
 
 # ruff: noqa: E501 - the fixture sections keep their long lines
+import inspect
+
 from oracle.docs.models import Section
 from oracle.simple import one_pager
 from oracle.simple import one_pager_checks as checks
@@ -84,7 +91,7 @@ def test_measure_from_success_lines():
         ),
     ]
     blk = OnePagerBlock(key="outcomes", title="Outcomes", rules="", kind="metrics", lines=lines)
-    checks.annotate([blk], [SUCCESS], {})
+    checks.annotate([blk], [SUCCESS])
     assert [x.measure for x in blk.lines] == [
         "share of new accounts live within 30 days, recomputed daily",
         "reported weekly per person",
@@ -156,7 +163,7 @@ def test_generated_words_read_month_first_and_whole():
         "80% of acc",
     )
     blk = OnePagerBlock(key="outcomes", title="Outcomes", rules="", kind="metrics", lines=[line])
-    checks.annotate([blk], [], {})
+    checks.annotate([blk], [])
     assert blk.lines[0].metric.to == "80% of accounts"
     assert blk.lines[0].text == "Accounts live on time from 55% to 80% of accounts by Mar 31, 2027"
     assert one_pager._upto("80% of accounts live within thirty days", 20) == "80% of accounts…"
@@ -187,3 +194,49 @@ def test_pdf_span_reads_month_first():
         one_pager.span_words(date(2026, 11, 2), date(2027, 2, 26)) == "Nov 2, 2026 – Feb 26, 2027"
     )
     assert one_pager.span_words(date(2026, 11, 2), date(2026, 12, 23)) == "Nov 2 – Dec 23, 2026"
+
+
+def test_measure_is_the_lines_own_words_never_a_citation():
+    # Cited by a meeting's notes and by a feature: never the measure (vqa one-pager 2).
+    success = sec(
+        "success",
+        "Success measures",
+        "- Pages fresh within a day from 40% to 70%, counted as: [c:m1]\n"
+        "- Cost per crawled page from $0.02 to $0.01, measured by: [c:m1]\n"
+        "- Crawl errors a week from 300 to 100, defined as: [c:m1] [c:f2]\n"
+        "- Faster fresh results, measured as: [c:f2]\n"
+        "- Sites added a week from 5 to 12, counted as: sites with a first full crawl [c:m1]; source: the crawl log",
+    )
+    lines = [
+        outcome(
+            "Pages fresh within a day from 40% to 70%", "Pages fresh within a day", "40%", "70%"
+        ),
+        outcome(
+            "Cost per crawled page from $0.02 to $0.01", "Cost per crawled page", "$0.02", "$0.01"
+        ),
+        outcome("Crawl errors a week from 300 to 100", "Crawl errors a week", "300", "100"),
+        outcome("Faster fresh results", "Faster fresh results", "", ""),
+        outcome("Sites added a week from 5 to 12", "Sites added a week", "5", "12"),
+    ]
+    blk = OnePagerBlock(key="outcomes", title="Outcomes", rules="", kind="metrics", lines=lines)
+    # The version's citations by id (title, excerpt): a meeting's quote, long enough to be cut,
+    # and a feature's title with its label. A build whose annotate still takes them (the read
+    # passed them before vqa one-pager 2) gets them, so one that turns them into a measure or
+    # its source fails here.
+    cites = {
+        "m1": (
+            "Weekly crawl review (current name)",
+            "we look at the fresh pages every morning and the crawl errors every Friday, "
+            "then agree what to fix first and who picks it up before the next review",
+        ),
+        "f2": ("F-02 Fresh index (current name)", "pages crawled again within a day of a change"),
+    }
+    takes = "cites" in inspect.signature(checks.annotate).parameters
+    checks.annotate([blk], [success], **({"cites": cites} if takes else {}))
+    assert [(x.measure, x.measure_source) for x in blk.lines] == [
+        (None, None),
+        (None, None),
+        (None, None),
+        (None, None),
+        ("sites with a first full crawl", "the crawl log"),
+    ]

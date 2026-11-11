@@ -13,7 +13,8 @@ import { expect, test, type Page } from "./test";
  * - protects=the quick read shows no [c:...] token, whole or cut, on the page or in the PDF;
  *   one quiet line says Oracle is still writing the page; who has it is a sentence (the
  *   Primary's words), never "Primary; Job story; …"; an outcome whose definition is only
- *   citation ids shows its source's words and name; one with none says so; a code named
+ *   citation ids says it has none (vqa one-pager 2: never a cited quote or title), one
+ *   defined in the PRD's words shows them; a code named
  *   right after it in prose is not a "Needs a look" item, one followed by a lowercase word
  *   ("F-50 requires login") is; when the job did not write the page, one line says it is
  *   the quick read; fails_when=any of those reads as
@@ -44,8 +45,11 @@ async function readsCleanly(page: Page) {
   await expect(problem).toContainText("Owners of small photo libraries who add a few hundred photos a week");
   await expect(article.getByTestId("problem-who")).toHaveCount(0);
   const outcomes = article.getByRole("region", { name: "Outcomes and how we measure them" });
-  await expect(outcomes.locator('[data-line="outcomes-1"]').getByTestId("outcome-measure")).toHaveText(
-    "counted as: photos given an album within 24 hours of upload, per library per week · from Upload log export",
+  // vqa one-pager 2: only the PRD's own words say how an outcome is counted; a definition that is only
+  // citations is none (never the cited quote or its title), a source named only by its citation none.
+  await expect(outcomes.locator('[data-line="outcomes-1"]').getByTestId("outcome-measure")).toHaveText("How it is measured is not in the PRD yet");
+  await expect(outcomes.locator('[data-line="outcomes-2"]').getByTestId("outcome-measure")).toHaveText(
+    "counted as: seconds from opening the library to opening the photo",
   );
   await expect(outcomes.locator('[data-line="outcomes-3"]').getByTestId("outcome-measure")).toHaveText("How it is measured is not in the PRD yet");
   await expect(article.getByRole("region", { name: "Not doing" })).toContainText("so F-11 Photo editing is out");

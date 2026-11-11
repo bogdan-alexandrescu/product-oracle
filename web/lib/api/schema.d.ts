@@ -27475,13 +27475,34 @@ export interface components {
         };
         /**
          * ImportErrorResponse
-         * @description 422 body when a draft cannot be imported. Lists every problem, not just the first.
+         * @description 422 body when a draft cannot be imported. Lists every problem, not just the first;
+         *     the detail names them (:func:`rejected_detail`).
          */
         ImportErrorResponse: {
             /** Detail */
             detail: string;
             /** Errors */
             errors: components["schemas"]["ImportProblem"][];
+        };
+        /**
+         * ImportFix
+         * @description The action that resolves a refused draft's problem (vqa-one-pager (e)):
+         *     ``add_date_source`` opens Plan › Dates for the PRD (``prd_document_id``, none when the
+         *     roadmap has no known PRD) filtered to the ``days`` (YYYY-MM-DD) that need a source.
+         */
+        ImportFix: {
+            /**
+             * Action
+             * @constant
+             */
+            action: "add_date_source";
+            /** Prd Document Id */
+            prd_document_id?: string | null;
+            /**
+             * Days
+             * @default []
+             */
+            days: string[];
         };
         /** ImportIssue */
         ImportIssue: {
@@ -27525,6 +27546,7 @@ export interface components {
             refs: {
                 [key: string]: string | string[];
             };
+            fix?: components["schemas"]["ImportFix"] | null;
         };
         /** ImportSkipped */
         ImportSkipped: {
