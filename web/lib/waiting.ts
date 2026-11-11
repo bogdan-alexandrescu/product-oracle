@@ -32,9 +32,9 @@ type Inbox = Awaited<ReturnType<typeof loadInbox>>;
  * (lib/api/shared-reads), so a move between pages shows the count read a moment ago at once;
  * RAIL_URLS' answers changing since reads them again (onReadChanged).
  */
-const RAIL = { headers: { [STALE_OK]: "1" } };
-export const railInbox = (signal?: AbortSignal) => unwrap(api.GET("/v1/inbox", { ...RAIL, signal }));
-export const railQuestions = (signal?: AbortSignal) => unwrap(api.GET("/v1/inbox/questions", { ...RAIL, signal }));
+const rail = (staleOk: boolean) => (staleOk ? { headers: { [STALE_OK]: "1" } } : {});
+export const railInbox = (signal?: AbortSignal, staleOk = true) => unwrap(api.GET("/v1/inbox", { ...rail(staleOk), signal }));
+export const railQuestions = (signal?: AbortSignal, staleOk = true) => unwrap(api.GET("/v1/inbox/questions", { ...rail(staleOk), signal }));
 export const RAIL_URLS = ["/v1/inbox", "/v1/inbox/questions"];
 
 /**

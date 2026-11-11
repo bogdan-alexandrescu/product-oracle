@@ -76,15 +76,14 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   const aborts = useRef(new AbortController());
   const [settled, setSettled] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
-  // A part read since (by the page, or behind the counts shown) answered something new.
-  useEffect(() => onReadChanged((url) => PART_URLS.includes(url) && setChanges((c) => c + 1)), []);
   useEffect(() => {
     const ctrl = (aborts.current = new AbortController());
     return () => ctrl.abort();
   }, []);
   // fresh: a page change or a change to what waits (not a re-read of a failed part): it drops the
   // re-read waiting to run, so no part is read twice at once; the back-off goes on.
-  const read = useCallback((parts: Part[], fresh: boolean) => {
+  // own: the parts this page shows itself, read with the page (sharing its call), not stale-ok.
+  const read = useCallback((parts: Part[], fresh: boolean, own: Part[] = []) => {
     if (fresh) {
       pending.current?.();
       pending.current = null;
@@ -92,7 +91,7 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
     const { signal } = aborts.current;
     const mine = parts.map((p) => (seq.current[p] = (seq.current[p] ?? 0) + 1));
     inflight.current += 1;
-    void Promise.allSettled(parts.map((p) => PART_READS[p](signal))).then((results) => {
+    void Promise.allSettled(parts.map((p) => PART_READS[p](signal, !own.includes(p)))).then((results) => {
       inflight.current -= 1;
       if (signal.aborted) return;
       const next: Got = {};
@@ -116,9 +115,13 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   useEffect(() => {
     if (enabled) read(["waiting", "roadmap", "inbox", "questions", "goals"], true);
   }, [enabled, pathname, changes, read]);
+  // simple-call-budget: a part read since (by the page, or behind the counts shown) answered
+  // something new: that part reads it again (shared, so no call), the rest keep their waits.
+  useEffect(() => onReadChanged((url) => PART_BY_URL.has(url) && read([PART_BY_URL.get(url)!], false)), [read]);
   const meetingsPath = pathname.startsWith("/simple/meetings") ? pathname : "";
   useEffect(() => {
-    if (enabled) read(["meetings"], true);
+    // On Meetings, its count reads with the page's own read, so one that fails there shows.
+    if (enabled) read(["meetings"], true, meetingsPath ? ["meetings"] : []);
   }, [enabled, changes, meetingsPath, read]);
   // counts-failed-part: while a part failed, read that part again once the reads have finished, after
   // a wait that doubles with each of its failed reads in a row, whatever started them (15 s, 30 s,
@@ -217,17 +220,24 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
  * simple-call-budget: each is stale-ok, so moving between pages shows the counts read a moment
  * ago at once instead of reading every list again; an answer that changed since reads them again.
  */
-const RAIL = { headers: { [STALE_OK]: "1" } };
-const PART_URLS = ["/v1/simple/decisions/waiting", "/v1/simple/roadmap/waiting", "/v1/inbox", "/v1/inbox/questions", "/v1/simple/goal-suggestions?status=open", "/v1/simple/meetings"];
+const rail = (staleOk: boolean) => (staleOk ? { headers: { [STALE_OK]: "1" } } : {});
 const PART_READS = {
-  waiting: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/decisions/waiting", { ...RAIL, signal })),
+  waiting: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/decisions/waiting", { ...rail(staleOk), signal })),
   // A failed light count falls back to the one list (never a failed part).
-  roadmap: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/roadmap/waiting", { ...RAIL, signal })).catch(() => null),
-  inbox: railInbox,
-  questions: railQuestions,
-  goals: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } }, ...RAIL, signal })),
-  meetings: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/meetings", { ...RAIL, signal })),
+  roadmap: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/roadmap/waiting", { ...rail(staleOk), signal })).catch(() => null),
+  inbox: (signal: AbortSignal, staleOk: boolean) => railInbox(signal, staleOk),
+  questions: (signal: AbortSignal, staleOk: boolean) => railQuestions(signal, staleOk),
+  goals: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } }, ...rail(staleOk), signal })),
+  meetings: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/meetings", { ...rail(staleOk), signal })),
 };
+const PART_BY_URL = new Map<string, Part>([
+  ["/v1/simple/decisions/waiting", "waiting"],
+  ["/v1/simple/roadmap/waiting", "roadmap"],
+  ["/v1/inbox", "inbox"],
+  ["/v1/inbox/questions", "questions"],
+  ["/v1/simple/goal-suggestions?status=open", "goals"],
+  ["/v1/simple/meetings", "meetings"],
+]);
 type Part = keyof typeof PART_READS;
 type Reads = { [P in Part]: Awaited<ReturnType<(typeof PART_READS)[P]>> };
 type Got = { [P in Part]?: { ok: true; value: Reads[P] } | { ok: false } };

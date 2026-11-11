@@ -164,14 +164,30 @@ function useInboxCount(enabled: boolean): number | null {
   const pathname = usePathname();
   const [n, setN] = useState<number | null>(null);
   const [changes, setChanges] = useState(0);
+  // The last of each read, so an answer that changed reads only itself again.
+  const last = useRef<{ inbox?: Awaited<ReturnType<typeof railInbox>>; questions?: readonly unknown[] }>({});
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
-  // simple-call-budget: read stale-ok, so again when an answer read since changed.
-  useEffect(() => onReadChanged((url) => RAIL_URLS.includes(url) && setChanges((c) => c + 1)), []);
+  // simple-call-budget: read stale-ok, so a read since that answered something new reads again.
+  useEffect(
+    () =>
+      onReadChanged((url) => {
+        if (!enabled || !RAIL_URLS.includes(url)) return;
+        const { inbox, questions } = last.current;
+        if (url === "/v1/inbox" && questions)
+          void railInbox().then((i) => setN(waitingCount((last.current.inbox = i), questions)), () => undefined);
+        if (url === "/v1/inbox/questions" && inbox)
+          void railQuestions().then((q) => setN(waitingCount(inbox, (last.current.questions = q))), () => undefined);
+      }),
+    [enabled],
+  );
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
     Promise.all([railInbox(), railQuestions().catch(() => [])])
-      .then(([inbox, questions]) => alive && setN(waitingCount(inbox, questions)))
+      .then(([inbox, questions]) => {
+        last.current = { inbox, questions };
+        if (alive) setN(waitingCount(inbox, questions));
+      })
       .catch(() => undefined);
     return () => {
       alive = false;
