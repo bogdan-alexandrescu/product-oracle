@@ -166,13 +166,17 @@ export type GoalView = {
   progress: { value: number | null; source: "own" | "subgoals" | null } | null;
 };
 
-/** B5 typed units as Home's figures: "%" and time units as is, currencies as a symbol, else a counted noun. */
+/**
+ * B5 typed units as figures: "%" and time units as is, currencies as a symbol, else a counted noun.
+ * goal-money-full (owner, Nov 11: "Short on Home only"): money reads in full ("$50,000") unless
+ * `short`, which Home's goals alone ask for ("$50k").
+ */
 const CURRENCY_SYMBOL: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
-function typedFigure(value: unknown, unit: unknown): Figure | null {
+function typedFigure(value: unknown, unit: unknown, short: boolean): Figure | null {
   if (typeof value !== "number" || !Number.isFinite(value) || typeof unit !== "string" || !unit) return null;
   // goal-figure-words: a currency stored in any case ("usd", as the goal form stores it).
   const currency = CURRENCY_SYMBOL[unit.trim().toUpperCase()] ?? "";
-  return { value, unit: currency ? "" : unit, currency, compact: !!currency && Math.abs(value) >= 1e3, range: null };
+  return { value, unit: currency ? "" : unit, currency, compact: short && !!currency && Math.abs(value) >= 1e3, range: null };
 }
 const COMPARISON_WAY: Record<string, Direction> = {
   at_least: { way: "up", strict: false },
@@ -181,22 +185,25 @@ const COMPARISON_WAY: Record<string, Direction> = {
   below: { way: "down", strict: true },
 };
 
-/** A typed figure as written: "45%", "$4M", "2 min", "400 teams". */
+/** A typed figure as written: "45%", "$4,000,000" ("$4M" on Home), "2 min", "400 teams". */
 function typedText(f: Figure): string {
-  if (f.currency) return `${f.currency}${amount(f.value, f.compact)}`;
-  return goalFigure(f.value, f.unit);
+  if (f.currency && f.compact) return `${f.currency}${amount(f.value, true)}`;
+  return goalFigure(f.value, f.currency || f.unit);
 }
 
 const text = (v: unknown) => (v == null || v === "" ? null : String(v));
 
-/** Live goals, in the one goal order, each followed by its subgoals, tagged G1, G1.1, G2… as the Baseline tags them. */
-export function goalViews(entities: EntityOut[], numbered: EntityOut[] = entities): GoalView[] {
+/**
+ * Live goals, in the one goal order, each followed by its subgoals, tagged G1, G1.1, G2… as the Baseline tags them.
+ * `short`: typed money in the short form ("$50k"), for Home's goals only (goal-money-full).
+ */
+export function goalViews(entities: EntityOut[], numbered: EntityOut[] = entities, { short = false }: { short?: boolean } = {}): GoalView[] {
   return goalTree(entities, numbered).map(({ goal: g, tag, code, name, parentId, children }) => {
     const a = g.attrs ?? {};
     const titled = TITLE_DOWN.test(g.title) ? "down" : TITLE_UP.test(g.title) ? "up" : null;
     // B5: typed values first; the text parser is the fallback for goals still on `*_text`.
-    const target = COMPARISON_WAY[a.comparison as string] ? typedFigure(a.target, a.unit) : null;
-    const current = typedFigure(a.current, a.unit);
+    const target = COMPARISON_WAY[a.comparison as string] ? typedFigure(a.target, a.unit, short) : null;
+    const current = typedFigure(a.current, a.unit, short);
     const targetRaw = a.target_text ?? a.target;
     const currentRaw = a.current_text ?? a.current;
     // qa-plan-4: the Baseline's rule (no evidence, no score), so Plan's ring and the Baseline's Goals table agree.
@@ -272,6 +279,11 @@ export function amount(n: number, compact: boolean): string {
   return `${round1(n)}`;
 }
 
+/** A money amount in full ("$20,000") unless written short ("$900k"); other figures as `amount` writes them ("300k", "1.6"). */
+function money(n: number, currency: string, compact: boolean): string {
+  return currency && !compact ? goalFigure(round1(n), currency) : `${currency}${amount(n, compact)}`;
+}
+
 /**
  * Where a goal stands against its target. The direction comes from the words ("reduce",
  * "below", "at least", a verb in the title), else from where the metric started in its
@@ -304,9 +316,9 @@ export function assess(g: GoalView, history?: Point[]): Progress {
   if (left <= 0) return { state: "met", text: "Target met" };
   const distance = left / (TIME[t.unit]?.ms ?? 1);
   const unit = t.unit === "%" ? "pts" : t.unit;
-  let shown = `${t.currency || c.currency}${amount(distance, t.compact || c.compact)}`;
+  let shown = money(distance, t.currency || c.currency, t.compact || c.compact);
   // Not met yet, however small the gap: a gap that rounds to 0 is shown to one significant digit.
-  if (Number(shown.replace(/^\D+/, "").replace(/[kMB]$/, "")) === 0) {
+  if (Number(shown.replace(/^\D+/, "").replace(/[kMB]$/, "").replace(/,/g, "")) === 0) {
     shown = `${t.currency || c.currency}${Number(distance.toPrecision(1))}`;
   }
   return { state: "togo", text: `${shown}${unit ? ` ${unit}` : ""} to go`, distance, unit, amount: shown };
@@ -351,7 +363,7 @@ export function measurementPoints(rows: { measured_on: string; value: number }[]
  */
 export function changeText(change: number, f: Figure | null, months: number): string {
   const sign = change > 0 ? "+" : "−";
-  const n = `${f?.currency ?? ""}${amount(Math.abs(change), !!f?.compact)}`;
+  const n = money(Math.abs(change), f?.currency ?? "", !!f?.compact);
   const unit = !f ? "" : f.unit === "%" ? "pts" : f.unit;
   return `${sign}${n}${unit ? ` ${unit}` : ""} in ${months} ${months === 1 ? "month" : "months"}`;
 }
@@ -363,9 +375,9 @@ export function spanMonths(points: Point[]): number {
   return Math.max(1, Math.round(ms / (30.4 * 24 * 3600 * 1000)));
 }
 
-/** The current value in its own terms: "38%", "900k", "$3.1M", "260 ms", "236" (a counted noun goes after the target). */
+/** The current value in its own terms: "38%", "900k", "$3.1M", "$30,000", "260 ms", "236" (a counted noun goes after the target). */
 export function formatFigure(f: Figure): string {
-  const n = `${f.currency}${amount(f.value, f.compact)}`;
+  const n = money(f.value, f.currency, f.compact);
   if (f.unit === "%") return `${n}%`;
   if (TIME[f.unit]) return `${n} ${f.unit}`;
   return n;

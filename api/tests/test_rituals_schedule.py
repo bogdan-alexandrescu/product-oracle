@@ -108,8 +108,14 @@ def test_invalid_schedules_are_refused(bad):
         ({"target": "45%"}, "No current value yet"),
         ({"target": "$4M", "current": "$3.1M"}, "$900k to go"),
         # goal-money-full: a typed money goal reads in full, as every page but Home shows it.
-        ({"target": 50000, "unit": "usd", "comparison": "at_least", "current": 30000}, "$20,000 to go"),
-        ({"target": 4_000_000, "unit": "USD", "comparison": "at_least", "current": 2_800_000}, "$1,200,000 to go"),
+        (
+            {"target": 50000, "unit": "usd", "comparison": "at_least", "current": 30000},
+            "$20,000 to go",
+        ),
+        (
+            {"target": 4_000_000, "unit": "USD", "comparison": "at_least", "current": 2_800_000},
+            "$1,200,000 to go",
+        ),
     ],
 )
 def test_distance_to_go_reads_like_home(attrs, text):

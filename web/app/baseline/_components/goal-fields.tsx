@@ -7,6 +7,7 @@ import { Button, InfoTip, InspectorSection, Notice, SegmentedControl } from "@/c
 import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type EntityDetail, type EntityOut, type Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
+import { goalFigure } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -39,7 +40,6 @@ export const UNITS = [
   { value: "h", label: "h" },
   { value: "days", label: "days" },
 ] as const;
-const CURRENCY: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
 export const COUNT = "count";
 
 export const HORIZONS = [
@@ -62,18 +62,9 @@ export function horizonTip(h: PlanningHorizons | null | undefined): string {
 export const WEIGHT_TIP = "How much this goal counts in priority scores, relative to the others";
 
 const isNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-const compact = (n: number) => {
-  for (const [s, v] of [["B", 1e9], ["M", 1e6], ["k", 1e3]] as const) if (Math.abs(n) >= v) return `${Math.round((n / v) * 10) / 10}${s}`;
-  return `${n}`;
-};
 
-/** A value in its unit: "45%", "$4M", "2 min", "400 teams". */
-export function figure(value: number, unit: string): string {
-  if (unit === "%") return `${value}%`;
-  const sign = CURRENCY[unit.trim().toUpperCase()];
-  if (sign) return `${sign}${compact(value)}`;
-  return `${value} ${unit}`;
-}
+/** A value in its unit, in the shared wording (goal-money-full: in full, short on Home only): "45%", "$4,000,000", "2 min", "400 teams". */
+export const figure = (value: number, unit: string): string => goalFigure(value, unit);
 
 /** The typed target, as symbol and figure ("≥ 45%") and in words ("At least 45%"); null when not typed. */
 export function typedTarget(attrs: Attrs): { short: string; words: string } | null {
