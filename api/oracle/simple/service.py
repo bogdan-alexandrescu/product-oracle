@@ -1035,10 +1035,13 @@ async def _prd_headings(db: AsyncSession, entries: list[Entry]) -> None:
     }
     if not wanted:
         return
+    # roadmap-speed: the heading alone, not every section's whole text.
     heads = {
-        (x.version_id, x.section_key): x.heading
-        for x in await db.scalars(
-            select(Section).where(Section.version_id.in_({v for v, _ in wanted}))
+        (version_id, key): heading
+        for version_id, key, heading in await db.execute(
+            select(Section.version_id, Section.section_key, Section.heading).where(
+                Section.version_id.in_({v for v, _ in wanted})
+            )
         )
     }
     for e in entries:
