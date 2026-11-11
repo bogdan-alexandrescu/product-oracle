@@ -9,7 +9,7 @@ import type { Schemas } from "@/lib/api/client";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
-import { GOALS, goalPositionOf, goalRank, goalInTrash, keptTarget, roadmapGoal, storedUnit, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
+import { GOALS, goalPositionOf, linkOf, goalRank, goalInTrash, keptTarget, roadmapGoal, storedUnit, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
 // `key`: the Entity.key the API gives a goal at creation (goal_buckets._slug), named in its Trash entry.
@@ -20,8 +20,13 @@ type Goal = { id: string; key: string; title: string; order: number; measure: st
   unit?: string };
 /** assumed_goal_ids: the links whose contribution is assumed (an approved order's, api ASSUMED_LINK). */
 type Feature = { id: string; key: string; title: string; goal_ids: string[]; assumed_goal_ids?: string[] };
-/** lazy: the default goals, seeded by the first route that read them rather than by the scenario. */
-export type GoalBucketsDb = { goals: Goal[]; features: Feature[]; lazy?: string[] };
+/** lazy: the default goals, seeded by the first route that read them rather than by the scenario; lazy_links: the
+ * feature-goal links seeded with them (linkOf) that no person has written since (a move drops its link). */
+export type GoalBucketsDb = { goals: Goal[]; features: Feature[]; lazy?: string[]; lazy_links?: string[] };
+/** A person wrote this feature's link to this goal: it is the API's link from now on, no longer a seeded one. */
+export function touchLink(db: GoalBucketsDb, featureId: string, goalId: string): void {
+  if (db.lazy_links) db.lazy_links = db.lazy_links.filter((x) => x !== linkOf(featureId, goalId));
+}
 type Undo = Schemas["GoalBucketsUndo"];
 
 const keyOf = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "goal";
@@ -87,7 +92,7 @@ export function seedGoalBuckets(): GoalBucketsDb {
  * roadmap read is the same before and after another page seeds them. */
 export function lazyGoalBuckets(): GoalBucketsDb {
   const db = seedGoalBuckets();
-  return { ...db, lazy: db.goals.map((g) => g.id) };
+  return { ...db, lazy: db.goals.map((g) => g.id), lazy_links: db.features.flatMap((f) => f.goal_ids.map((g) => linkOf(f.id, g))) };
 }
 
 export function seedGoalBucketsHard(): GoalBucketsDb {
@@ -190,6 +195,7 @@ function moveOff(db: GoalBucketsDb, g: Goal, to: string | null): Feature[] {
     const rest = f.goal_ids.filter((x) => x !== g.id);
     const first = f.goal_ids[0] === g.id;
     f.goal_ids = first && !rest.length && to ? [to] : rest;
+    if (first && !rest.length && to) touchLink(db, f.id, to);
     // The link that becomes first gets its contribution set (the API's TOP): no longer assumed.
     if (first) f.assumed_goal_ids = f.assumed_goal_ids?.filter((x) => x !== f.goal_ids[0]);
   }
@@ -442,6 +448,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     if (!db.goals.some((x) => x.id === to)) return json(404, { detail: "No such goal" });
     const undo = signed({ goals: [], features: [featureSnap(f)], added_goal_id: null });
     f.goal_ids = [to, ...f.goal_ids.filter((x) => x !== to && x !== body.from_goal_id)];
+    touchLink(db, f.id, to);
     // The goal it is dropped on gets its contribution set (the API's TOP): no longer assumed.
     f.assumed_goal_ids = f.assumed_goal_ids?.filter((x) => x !== to && x !== body.from_goal_id);
     return json(200, { goal: null, undo });

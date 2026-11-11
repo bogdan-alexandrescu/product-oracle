@@ -580,6 +580,8 @@ export function writeRoadmapGoal(db: Pick<SimpleDb, "goal_edits" | "goal_buckets
   if (b) Object.assign(b, { title: fields.title, measure: fields.metric, target: fields.target, due: fields.due });
   else (db.goal_edits ??= {})[key] = fields;
 }
+/** A goal buckets' feature-goal link, as GoalBucketsDb.lazy_links names it. */
+export const linkOf = (featureId: string, goalId: string): string => `${featureId}>${goalId}`;
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
 /**
  * service._goals: an item's goal when it links none directly (or those are in Trash): its
@@ -589,10 +591,11 @@ export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
 export function featureGoalRef(db: SimpleDb, key: string): Schemas["SimpleGoalRef"] | null {
   const gb = db.goal_buckets;
   const f = gb?.features.find((x) => x.key === featureKeyOf(db, key));
-  // The default goals a route seeded on first read (lazyGoalBuckets) are not this roadmap's goals (as targetGoals),
-  // so an item reads the same goal before and after another page seeds them, in its panel and in a change's before.
-  const lazy = new Set(gb?.lazy ?? []);
-  const g = gb?.goals.filter((x) => f?.goal_ids.includes(x.id) && !x.archived && !x.trashed && !lazy.has(x.id)).sort((a, b) => a.order - b.order)[0];
+  // The links a route seeded with the default goals on first read (lazyGoalBuckets) and no person has written since are
+  // not this roadmap's (as targetGoals), so an item reads the same goal before and after another page seeds them, in its
+  // panel and in a change's before; a link a person moved it onto is read, as the API's.
+  const lazy = new Set(gb?.lazy_links ?? []);
+  const g = gb?.goals.filter((x) => f?.goal_ids.includes(x.id) && !x.archived && !x.trashed && !lazy.has(linkOf(f.id, x.id))).sort((a, b) => a.order - b.order)[0];
   if (!g) return null;
   const k = Object.keys(GOALS).find((x) => x === g.key || GOALS[x].toLowerCase() === g.title.toLowerCase());
   return { id: k ? goalId(k) : g.id, key: k ?? g.key, title: g.title, metric: g.measure, target: g.target, due: g.due, position: goalPositionOf(k ?? g.key), ...(READINGS[k ?? g.key] ?? { current: null, unit: null }) };

@@ -29,7 +29,7 @@ import { stableUuid } from "./ids";
 import { changePhrase, changeSentence } from "./simple-change-words";
 import { milestoneValue, writeMilestone } from "./simple-milestones";
 import { addToCompany, featureItem, featureKeyOf, itemsOfFeature, priorityAfter, priorityBefore, prioritiesOut, sameName, twinBlock } from "./simple-priorities";
-import { archiveGoal, goalBucketsDb, trashGoal, unarchiveGoal, type GoalBucketsTrash } from "./goal-buckets";
+import { archiveGoal, goalBucketsDb, touchLink, trashGoal, unarchiveGoal, type GoalBucketsTrash } from "./goal-buckets";
 import {
   canDecideItem,
   canEditRoadmap,
@@ -1174,6 +1174,7 @@ function moveFeature(db: SimpleDb, key: string, goalIds: string[]): void {
   if (!f || !ids.length) return;
   const shown = f.goal_ids[0];
   f.goal_ids = [ids[0], ...f.goal_ids.filter((g) => g !== ids[0] && (g !== shown || ids.includes(shown)))];
+  touchLink(gb, f.id, ids[0]);
 }
 
 function apply(db: SimpleDb, c: Change, values: Values, undo = false): void {
