@@ -41,7 +41,7 @@ async def goal_suggestions(
     """The open goal suggestions the reader may accept, as additions.listing(status="open")
     lists them (oldest first; a failed-checks one only to owners): (the suggestion, its
     goal's title)."""
-    goals, rows = await additions.readable(db, principal, None, "open")
+    goals, rows, _ = await additions.readable(db, principal, None, "open")
     if not rows:
         return []
     asked = {r.goal_id for r in rows}

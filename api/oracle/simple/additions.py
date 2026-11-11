@@ -1173,9 +1173,10 @@ def _brief(g: Entity) -> SimpleGoalBrief:
 
 async def readable(
     db: AsyncSession, principal: Any, goal_id: uuid.UUID | None, status: str | None
-) -> tuple[list[Entity], list[SimpleGoalSuggestion]]:
+) -> tuple[list[Entity], list[SimpleGoalSuggestion], bool]:
     """The confirmed goals (one, with ``goal_id``) and their suggestions the reader reads, oldest
-    first, as listing lists them (also the waiting list's, waiting_reads.goal_suggestions)."""
+    first, as listing lists them (also the waiting list's, waiting_reads.goal_suggestions), and
+    whether the reader is an owner."""
     goals = await _goals(db)
     if goal_id is not None:
         goals = [g for g in goals if g.id == goal_id]
@@ -1187,15 +1188,14 @@ async def readable(
     )
     # oracle.simple.quality: a suggestion that failed its checks twice is the owners' to look at.
     owner = has_role(principal.role, "owner")
-    return goals, [r for r in rows if owner or not r.checks]
+    return goals, [r for r in rows if owner or not r.checks], owner
 
 
 async def listing(
     db: AsyncSession, principal: Any, goal_id: uuid.UUID | None, status: str | None
 ) -> SimpleGoalSuggestionsOut:
-    goals, rows = await readable(db, principal, goal_id, status)
+    goals, rows, owner = await readable(db, principal, goal_id, status)
     by_id = {g.id: g for g in goals}
-    owner = has_role(principal.role, "owner")
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     live = _live_goals(read_)
     pending = set(
