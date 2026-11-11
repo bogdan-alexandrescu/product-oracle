@@ -247,7 +247,10 @@ export function twinBlock(db: SimpleDb, may: (s: SeedItem) => boolean, source: s
   return null;
 }
 
-/** The key of the item standing for the feature `fid`, undefined for no such feature. */
+/**
+ * The key of the item standing for the feature `fid`, undefined for no such feature. It rebuilds the whole index on
+ * each call: one call per request; build the index once if you need it in a loop.
+ */
 export function featureItem(db: SimpleDb, fid: string): string | undefined {
   return featureItems(db).get(fid);
 }
