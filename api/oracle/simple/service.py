@@ -30,7 +30,8 @@ from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import any_, bindparam, or_, select
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import company_time
@@ -319,6 +320,12 @@ def _versions(
     return out
 
 
+def _any_of(column: Any, values: Any) -> Any:
+    """``column = ANY($1)``, the values one array parameter (roadmap-speed): a long list neither
+    expands into a parameter each on every read nor makes a new statement per length."""
+    return column == any_(bindparam(None, list(values), type_=ARRAY(column.type)))
+
+
 async def documents(db: AsyncSession) -> list[Document]:
     """The roadmaps and PRDs by title, read once per read (roadmap-speed)."""
     from oracle.simple import drafts
@@ -459,7 +466,8 @@ async def load(
     records: dict[tuple[Any, str], list[TrackerRecord]] = defaultdict(list)
     prd_records: dict[tuple[Any, str], list[TrackerRecord]] = defaultdict(list)
     if keys:
-        for rec in await db.scalars(select(TrackerRecord).where(TrackerRecord.item_key.in_(keys))):
+        tracked = select(TrackerRecord).where(_any_of(TrackerRecord.item_key, keys))
+        for rec in await db.scalars(tracked):
             if rec.track_id is not None:
                 records[(rec.track_id, rec.item_key)].append(rec)
             else:
@@ -849,7 +857,7 @@ async def efforts(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, 
             Entity.attrs.has_key("effort"),
             Entity.attrs["effort"],
             Entity.attrs["effort_weeks"],
-        ).where(Entity.id.in_(ids))
+        ).where(_any_of(Entity.id, ids))
     ):
         attrs = {"effort": effort} if has_effort else {}
         if weeks_of is not None:
@@ -882,7 +890,7 @@ async def _read_goals(db: AsyncSession, features: set[uuid.UUID]) -> dict[uuid.U
     goals = await goal_reads.goals_by_id(db)
     edges = await db.execute(
         select(Edge.src_id, Edge.dst_id).where(
-            Edge.type == "supports", Edge.status != "rejected", Edge.src_id.in_(features)
+            Edge.type == "supports", Edge.status != "rejected", _any_of(Edge.src_id, features)
         )
     )
     found = [
@@ -906,7 +914,7 @@ async def _ladder_goals(db: AsyncSession, items: set[uuid.UUID]) -> dict[uuid.UU
         select(MilestoneFeature.item_id, TrackMilestone.goal_id)
         .join(TrackMilestone, TrackMilestone.id == MilestoneFeature.milestone_id)
         .where(
-            MilestoneFeature.item_id.in_(items),
+            _any_of(MilestoneFeature.item_id, items),
             TrackMilestone.deleted_at.is_(None),
             TrackMilestone.status != "dropped",
         )
@@ -1314,7 +1322,7 @@ async def _tasks(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list[S
             select(RoadmapItemTask)
             .where(
                 RoadmapItemTask.roadmap_document_id.in_({d for d, _ in keyed}),
-                RoadmapItemTask.item_key.in_({k for _, k in keyed}),
+                _any_of(RoadmapItemTask.item_key, {k for _, k in keyed}),
                 RoadmapItemTask.status != "dropped",
             )
             .order_by(RoadmapItemTask.position, RoadmapItemTask.created_at, RoadmapItemTask.id)
@@ -1366,7 +1374,7 @@ async def decided_of_rows(
         await db.execute(
             select(RoadmapItem.id, RoadmapItem.roadmap_document_id, RoadmapItem.item_key).where(
                 RoadmapItem.roadmap_document_id.in_({d for d, _ in keyed}),
-                RoadmapItem.item_key.in_({k for _, k in keyed}),
+                _any_of(RoadmapItem.item_key, {k for _, k in keyed}),
             )
         )
     ).all():
