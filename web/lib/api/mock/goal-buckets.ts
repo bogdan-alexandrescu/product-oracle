@@ -9,7 +9,7 @@ import type { Schemas } from "@/lib/api/client";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
-import { GOALS, goalPositionOf, goalRank, goalInTrash, roadmapGoal, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
+import { GOALS, goalPositionOf, goalRank, goalInTrash, keptTarget, roadmapGoal, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
 // `key`: the Entity.key the API gives a goal at creation (goal_buckets._slug), named in its Trash entry.
@@ -398,11 +398,15 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     if (b.seen && (norm(b.seen.title) !== norm(was.title) || norm(b.seen.measure) !== norm(was.metric) || norm(b.seen.target) !== norm(was.target) || norm(b.seen.due) !== norm(was.due))) {
       return json(409, { detail: "This goal changed since you opened it. Look again and save." });
     }
+    // goal-target-kept (goal_buckets.typed_target): a measured goal's target stays a number in its unit.
+    const kept = keptTarget(g?.key ?? key, was.target, b.target);
+    if ("detail" in kept) return json(422, kept);
+    const target = kept.target!;
     if (!g) {
       // milestone-kinds: a roadmap goal's on_roadmap (goal_buckets._fields), kept by its key.
       const shown = (simple as { goal_on_roadmap?: Record<string, boolean> }).goal_on_roadmap ??= {};
       const undo = signed({ goals: [{ id: p[4], title: was.title, status: "confirmed", attrs: { metric: was.metric, target_text: was.target, due: was.due }, on_roadmap: shown[key!] ?? true }], features: [], added_goal_id: null });
-      const now = { title: b.title!.trim(), metric: b.measure!.trim(), target: b.target!.trim(), due: b.due! };
+      const now = { title: b.title!.trim(), metric: b.measure!.trim(), target, due: b.due! };
       writeRoadmapGoal(simple, key!, now);
       const onRoadmap = (b as { on_roadmap?: boolean | null }).on_roadmap;
       if (onRoadmap != null) shown[key!] = onRoadmap;
@@ -411,7 +415,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     const owner = ownerIn(b, people);
     if (!owner.ok) return json(422, { detail: "Pick a member as its owner" });
     const undo = signed({ goals: [goalSnap(g)], features: [], added_goal_id: null });
-    Object.assign(g, { title: b.title!.trim(), measure: b.measure!.trim(), target: b.target!.trim(), due: b.due! });
+    Object.assign(g, { title: b.title!.trim(), measure: b.measure!.trim(), target, due: b.due! });
     if (owner.set) g.owner_id = owner.id;
     const onRoadmap = (b as { on_roadmap?: boolean | null }).on_roadmap;
     if (onRoadmap != null) g.on_roadmap = onRoadmap;

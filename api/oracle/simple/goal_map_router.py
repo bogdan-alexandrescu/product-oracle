@@ -94,7 +94,9 @@ async def edit_goal(
     goal_id: uuid.UUID, body: GoalTargetIn, principal: Approver, db: TenantDB
 ) -> GoalMapOut:
     who = await _who(db, principal)
-    return await _run(db, principal, goal_map.edit_goal(db, goal_id, body.target, who))
+    return await _run(
+        db, principal, goal_map.edit_goal(db, goal_id, body.target, who, principal.actor)
+    )
 
 
 @router.post("/milestones", response_model=GoalMapOut)

@@ -78,6 +78,7 @@ import {
   shiftToQuarter,
   roadmapGoal,
   roadmapGoalKey,
+  keptTarget,
   goalInTrash,
   writeRoadmapGoal,
   seesDraft,
@@ -996,7 +997,12 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     if (!measure || measure.length > 300) return json(422, { detail: "after.measure: required, at most 300 characters" });
     const due = line(body.after?.due);
     if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return json(422, { detail: "after.due: a day as YYYY-MM-DD" });
-    Object.assign(after, { measure, target: line(body.after?.target), due });
+    // goal-target-kept: a measured goal keeps its number and unit: a bare number is in its unit,
+    // clearing it is refused.
+    const gk = roadmapGoalKey(String(target.goal_id ?? ""), db);
+    const kept = keptTarget(gk, gk ? roadmapGoal(db, gk).target : null, line(body.after?.target));
+    if ("detail" in kept) return json(422, kept);
+    Object.assign(after, { measure, target: kept.target, due });
     for (const k of Object.keys(after)) if (!["measure", "target", "due"].includes(k)) delete after[k];
   }
   const before: Values = ranking

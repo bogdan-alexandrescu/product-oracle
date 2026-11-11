@@ -849,10 +849,16 @@ async def order_areas(db: AsyncSession, ids: list[uuid.UUID]) -> None:
         areas[aid].position = i
 
 
-async def edit_goal(db: AsyncSession, goal_id: uuid.UUID, target: float, who: str) -> None:
+async def edit_goal(
+    db: AsyncSession, goal_id: uuid.UUID, target: float, who: str, actor: str = "system"
+) -> None:
+    """The goal's new target, in its target history and its revision (``actor``'s)."""
+    from oracle.baseline import service as baseline
+
     goal = next((g for g in await _goals(db) if g.id == goal_id), None)
     if goal is None:
         raise GoalMapError(404, "No such goal")
+    before = baseline.entity_snapshot(goal)
     a = dict(goal.attrs or {})
     unit = a.get("unit") or ""
     today = company_time.today(await company_time.company_time_zone(db))
@@ -863,8 +869,11 @@ async def edit_goal(db: AsyncSession, goal_id: uuid.UUID, target: float, who: st
     }
     a["target_history"] = [entry, *(a.get("target_history") or [])]
     a["target"] = int(target) if float(target).is_integer() else target
+    # goal-target-kept: a typed target text would read apart from the new number.
+    a.pop("target_text", None)
     goal.attrs = a
     flag_modified(goal, "attrs")
+    baseline.revise(db, actor, goal, before, "Target changed on the Goal map")
 
 
 async def _check_after(
