@@ -31,6 +31,7 @@ from oracle.docs.parser import (
     parse_draft,
     parse_draft_async,
     section_revision,
+    without_prds_line,
 )
 from oracle.docs.schemas import (
     CitationOut,
@@ -1218,6 +1219,7 @@ async def import_draft(
     commit: bool = True,
     template_only: bool = False,
     run_creates: bool = False,
+    exported: bool = False,
 ) -> ImportResult:
     """Import a draft as the next version of ``doc``.
 
@@ -1256,6 +1258,10 @@ async def import_draft(
     run's versions is in (a member created it meanwhile), the import is a
     :class:`SlugTakenError`, never a version of that document.
 
+    ``exported``: the draft is a file a person imports (the import route). A roadmap's
+    loses the "From the PRDs: ..." line its markdown export writes under its title
+    (oracle.docs.parser.without_prds_line); no other import or edit drops it.
+
     ``commit=False`` flushes the version and leaves the commit to the caller, which writes
     more in the same transaction (a roadmap change set's proposal, oracle.roadmap.changeset).
 
@@ -1282,6 +1288,8 @@ async def import_draft(
             )
         except safe_yaml.ParseTimeout as exc:
             raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
+    if exported and (found.kind if found is not None else kind) == "roadmap":
+        markdown = without_prds_line(markdown)
     # Off the event loop, time-capped: the draft is untrusted text (oracle.safe_yaml).
     try:
         draft = await parse_draft_async(markdown)
@@ -1293,6 +1301,11 @@ async def import_draft(
         raise
     if refused := await _oracle_ref_problems(db, draft.citations):
         raise DraftError(refused)
+    if exported and found is None and kind is None and await _draft_kind(db, draft) == "roadmap":
+        # A new document that is a roadmap by its front matter (or template).
+        if (stripped := without_prds_line(markdown)) != draft.markdown:
+            markdown = stripped
+            draft = await parse_draft_async(markdown)
     if draft.template is None and template is not None:
         draft.template, draft.template_version = template
     if run_id is not None:

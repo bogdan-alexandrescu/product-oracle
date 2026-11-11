@@ -175,7 +175,8 @@ function createMapLink(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simpl
     target: { feature, milestone, from_milestone: from, item_id: feature, title: f.title, name: m.name, from_name: from ? (links.milestone(from)?.name ?? null) : null },
     before: {}, after: {}, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
     decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
-    routed_to: kr?.decider ? [kr.decider] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+    // goal_map_asks: key_dates.route, the map's decider, else the roadmap's track owners who decide, else the owners.
+    routed_to: kr?.decider ? [kr.decider] : kr?.roadmap ? roadmapRoute(db, kr.roadmap, ctx.roles, ctx.owners) : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
   };
   (db.changes ??= []).push(change);
   return json(201, { change: view(db, ctx, change), flags: [] });

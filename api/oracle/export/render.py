@@ -99,8 +99,8 @@ class ExportVersion:
     all_sections: list[Section] = field(default_factory=list)
     # Provenance (O4b): the document version this one was built from.
     source: VersionSource | None = None
-    # A roadmap's: the titles of the PRDs that feed it, in the company's PRD order
-    # (:func:`feeding_prds`); the markdown export names them under its title.
+    # A roadmap's markdown export: the titles of the PRDs that feed it, in the company's PRD
+    # order (:func:`feeding_prds`, read for that format only), named under its title.
     prds: list[str] = field(default_factory=list)
     # v2 (§7, §16.9): each section's internal claim-to-source links, for the appendix
     # only ({"key", "links": [{"claim", "label", "kind", "confidence"}]}).
@@ -545,8 +545,6 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
 
         sources = await version_sources(db, [version.source_version_id])
         ev.source = sources.get(version.source_version_id)
-    if document.kind == "roadmap":
-        ev.prds = await feeding_prds(db, version)
     from oracle.trace.evidence import appendix_links
 
     ev.evidence_links = await appendix_links(db, version)
@@ -1576,8 +1574,8 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
     (raw-tokens-everywhere).
 
     A roadmap's names the PRDs that feed it in one plain line under its title (owner,
-    Nov 10): "From the PRDs: Scale, User Safety" (:func:`prds_line`), which the import
-    drops (oracle.docs.parser ``EXPORT_PRDS_RE``).
+    Nov 10): "From the PRDs: Scale, User Safety" (:func:`prds_line`), which a roadmap's
+    import drops (oracle.docs.parser ``without_prds_line``).
     """
     from oracle.roadmap import doc_dates
 
@@ -1603,10 +1601,12 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
 
 def prds_line(body: str, prds: list[str]) -> str:
     """``body`` with "From the PRDs: <titles>" in a paragraph of its own under its first
-    level-1 heading (the title), or at its top when it has none; unchanged with no PRDs."""
+    level-1 heading (the title), or at its top when it has none; unchanged with no PRDs.
+    Commas part the titles, so a title holding one is quoted ('"Scale, phase 2"')."""
     if not prds:
         return body
-    line = "From the PRDs: " + ", ".join(" ".join(t.split()) for t in prds)
+    titles = (" ".join(t.split()) for t in prds)
+    line = "From the PRDs: " + ", ".join(f'"{t}"' if "," in t else t for t in titles)
     m = re.search(r"^# [^\n]*\n?", body, re.M)
     if m is None:
         return f"{line}\n\n{body.lstrip()}"

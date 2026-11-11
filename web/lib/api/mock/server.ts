@@ -5935,10 +5935,12 @@ function feedingPrds(db: Db, doc: DocumentRow, v: VersionRow): string[] {
 }
 
 /** As the API's export/render.py prds_line: "From the PRDs: <titles>" in a paragraph of its own under the first
- * level-1 heading (the title), or at the top when there is none; unchanged with no PRDs. */
+ * level-1 heading (the title), or at the top when there is none; unchanged with no PRDs. Commas part the titles,
+ * so a title holding one is quoted. */
 function prdsLine(body: string, prds: string[]): string {
   if (!prds.length) return body;
-  const line = `From the PRDs: ${prds.map((t) => t.split(/\s+/).filter(Boolean).join(" ")).join(", ")}`;
+  const titles = prds.map((t) => t.split(/\s+/).filter(Boolean).join(" "));
+  const line = `From the PRDs: ${titles.map((t) => (t.includes(",") ? `"${t}"` : t)).join(", ")}`;
   const m = /^# [^\n]*\n?/m.exec(body);
   if (!m) return `${line}\n\n${body.trimStart()}`;
   const rest = body.slice(m.index + m[0].length).replace(/^\n+/, "");

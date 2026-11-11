@@ -173,7 +173,9 @@ async def import_version(
             DraftError([ImportProblem(code="invalid_encoding", message="body must be UTF-8")])
         )
     try:
-        result = await service.import_draft(db, doc, markdown, principal, base_version=base_version)
+        result = await service.import_draft(
+            db, doc, markdown, principal, base_version=base_version, exported=True
+        )
     except DraftError as exc:
         return _draft_rejected(exc)
     except service.NotFoundError as exc:
