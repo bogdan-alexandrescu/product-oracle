@@ -1,6 +1,7 @@
 "use client";
 
 import { api, unwrap } from "@/lib/api/client";
+import { forgetReads, STALE_OK } from "@/lib/api/shared-reads";
 
 /**
  * What waits on the signed-in person: the Inbox's rows and the questions asked of them
@@ -25,6 +26,16 @@ function shared<T>(key: string, load: () => Promise<T>): Promise<T> {
 export const loadInbox = () => shared("inbox", () => unwrap(api.GET("/v1/inbox")));
 
 type Inbox = Awaited<ReturnType<typeof loadInbox>>;
+
+/**
+ * simple-call-budget: the rails' badges read the Inbox and my questions stale-ok
+ * (lib/api/shared-reads), so a move between pages shows the count read a moment ago at once;
+ * RAIL_URLS' answers changing since reads them again (onReadChanged).
+ */
+const RAIL = { headers: { [STALE_OK]: "1" } };
+export const railInbox = (signal?: AbortSignal) => unwrap(api.GET("/v1/inbox", { ...RAIL, signal }));
+export const railQuestions = (signal?: AbortSignal) => unwrap(api.GET("/v1/inbox/questions", { ...RAIL, signal }));
+export const RAIL_URLS = ["/v1/inbox", "/v1/inbox/questions"];
 
 /**
  * What waits on me, as the rail badge, Home and /inbox count it: each new or open item
@@ -102,6 +113,7 @@ export function onWaitingChanged(fn: () => void): () => void {
 /** Forget what is cached without telling anyone: the next read fetches. */
 export function invalidateWaiting() {
   cache.clear();
+  forgetReads();
 }
 
 /**

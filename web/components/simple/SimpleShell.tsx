@@ -15,8 +15,8 @@ import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { LINK_KINDS } from "@/lib/roadmap-links";
 import { api, unwrap } from "@/lib/api/client";
-import { loadWaiting } from "@/lib/simple-waiting";
-import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
+import { onReadChanged, STALE_OK } from "@/lib/api/shared-reads";
+import { onWaitingChanged, railInbox, railQuestions, waitingCount } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
@@ -76,6 +76,8 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   const aborts = useRef(new AbortController());
   const [settled, setSettled] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
+  // A part read since (by the page, or behind the counts shown) answered something new.
+  useEffect(() => onReadChanged((url) => PART_URLS.includes(url) && setChanges((c) => c + 1)), []);
   useEffect(() => {
     const ctrl = (aborts.current = new AbortController());
     return () => ctrl.abort();
@@ -211,17 +213,20 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
 
 /**
  * The parts the rail's counts add up, each read on its own. The rail's own reads stop when it
- * unmounts (`signal`); the reads it shares with the page (the one list, the Inbox and the questions,
- * lib/waiting) run on for the page, and the rail only drops their answers.
+ * unmounts (`signal`); a read it shares with the page (lib/api/shared-reads) runs on for the page.
+ * simple-call-budget: each is stale-ok, so moving between pages shows the counts read a moment
+ * ago at once instead of reading every list again; an answer that changed since reads them again.
  */
+const RAIL = { headers: { [STALE_OK]: "1" } };
+const PART_URLS = ["/v1/simple/decisions/waiting", "/v1/simple/roadmap/waiting", "/v1/inbox", "/v1/inbox/questions", "/v1/simple/goal-suggestions?status=open", "/v1/simple/meetings"];
 const PART_READS = {
-  waiting: () => loadWaiting(),
+  waiting: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/decisions/waiting", { ...RAIL, signal })),
   // A failed light count falls back to the one list (never a failed part).
-  roadmap: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/roadmap/waiting", { signal })).catch(() => null),
-  inbox: () => loadInbox(),
-  questions: () => loadMyQuestions(),
-  goals: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } }, signal })),
-  meetings: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/meetings", { signal })),
+  roadmap: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/roadmap/waiting", { ...RAIL, signal })).catch(() => null),
+  inbox: railInbox,
+  questions: railQuestions,
+  goals: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } }, ...RAIL, signal })),
+  meetings: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/meetings", { ...RAIL, signal })),
 };
 type Part = keyof typeof PART_READS;
 type Reads = { [P in Part]: Awaited<ReturnType<(typeof PART_READS)[P]>> };

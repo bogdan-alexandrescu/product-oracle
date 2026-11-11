@@ -14,7 +14,8 @@ import { resetMockData } from "@/lib/api/mock/server";
 import { leave } from "@/lib/leave-guard";
 import { useMe } from "@/lib/me";
 import { useSettingsTabs } from "@/lib/settings-tabs";
-import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
+import { onReadChanged } from "@/lib/api/shared-reads";
+import { onWaitingChanged, RAIL_URLS, railInbox, railQuestions, waitingCount } from "@/lib/waiting";
 import { ScreenSubjectProvider } from "@/lib/screen-subject";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
@@ -164,10 +165,12 @@ function useInboxCount(enabled: boolean): number | null {
   const [n, setN] = useState<number | null>(null);
   const [changes, setChanges] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
+  // simple-call-budget: read stale-ok, so again when an answer read since changed.
+  useEffect(() => onReadChanged((url) => RAIL_URLS.includes(url) && setChanges((c) => c + 1)), []);
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    Promise.all([loadInbox(), loadMyQuestions().catch(() => [])])
+    Promise.all([railInbox(), railQuestions().catch(() => [])])
       .then(([inbox, questions]) => alive && setN(waitingCount(inbox, questions)))
       .catch(() => undefined);
     return () => {
