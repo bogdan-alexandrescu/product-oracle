@@ -257,6 +257,20 @@ test("the rail: a count read again behind the one shown, that fails, shows no nu
   await expect(inbox).not.toHaveText(/\d/);
 });
 
+test("Detailed's rail: the Inbox badge whose list fails when read again shows no number, not the last one", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+  const badge = page.getByTestId("nav-inbox-badge");
+  await expect(badge).toHaveText(/^\d+$/, { timeout: 15_000 });
+  await page.waitForTimeout(2_500);
+  await page.evaluate(([key, p]) => localStorage.setItem(key, p), [MOCK_FAIL_KEY, "/v1/inbox/questions"] as const);
+  const before = await calls(page, "/v1/inbox/questions");
+  await page.getByTestId("nav-inbox").click();
+  await expect.poll(() => calls(page, "/v1/inbox/questions"), { timeout: 15_000 }).toBeGreaterThan(before);
+  await expect(badge).toHaveCount(0, { timeout: 3_000 });
+});
+
 test("Inbox: failed notifications mark the Needs you count and the tab counts as partial", async ({ page }) => {
   await failing(page, "/v1/me/notifications");
   await login(page);
