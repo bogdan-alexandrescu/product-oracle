@@ -43,7 +43,9 @@ Test cards (protects / fails_when / no_claim):
   Beta" (Nov 15) joined by code is not Goal 1's: Goal 1's own "M3 Beta" (Nov 1) keeps M1 and
   the rest read M2, whichever goal comes first; fails_when=with Goal 1 first all four read M1.
 - test_codes_do_not_depend_on_goal_or_list_order: protects=over a handful of fixed cases, every
-  goal order and every order of the list give the same codes; fails_when=any one differs.
+  goal order and every order of the list give the same codes (a joined group goes by its
+  earliest goal's own milestone, round-3 review); fails_when=any one differs; no_claim=two goals'
+  own milestones contending for one PRD milestone (the first goal in goal order takes it).
 - test_of_two_matching_prd_milestones_the_closest_date_joins: protects=a goal's "Beta" joins
   the matching PRD milestone closest in date, then the one of its exact name, not the first by
   id; fails_when=the exact name wins over the closer date.
@@ -269,10 +271,20 @@ def _order_cases():
          gm("M2", "Pilot", "2026-12-01", goal=G2)],
         [], [],
     )  # fmt: skip
+    # Round-3 review: a group the roadmap's own "M2 Beta" holds goes by its earliest goal's own
+    # milestone (Goal 1's, Nov 1), not the first goal's, so Goal 1's "M1 Pilot" reads M2 either way.
+    yield (
+        [gm("M2", "Beta", "2026-12-01", goal=None), gm("M2", "Beta", "2026-11-01"),
+         gm("M2", "Beta", "2026-11-20", goal=G2), gm("M1", "Pilot", "2026-11-10")],
+        [], [],
+    )  # fmt: skip
 
 
 @pytest.mark.parametrize("case", list(_order_cases()))
 def test_codes_do_not_depend_on_goal_or_list_order(case):
+    """Every goal order and list order give the same codes. The one documented exception, not
+    exercised here: when two goals' own milestones contend for one PRD milestone, the first goal in
+    goal order takes it."""
     goal_ms, track_ms, items = case
     seen = set()
     for rank in (RANK, {G1: 1, G2: 0}):
