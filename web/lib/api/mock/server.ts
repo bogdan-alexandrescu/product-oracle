@@ -1603,6 +1603,13 @@ function seedGoalBucketsUndatedScenario(): Db {
   const db = seedSimplePlanScenario(true);
   const rm = db.simple_roadmap!;
   rm.plan_undated = true;
+  // Grow retention's work is this quarter's again (the one-PRD seed puts it 180 days on): with no
+  // dated plan a bucket holds its Now features, and a column follows the dates (board-quarters).
+  for (const s of rm.items) {
+    if (s.roadmap !== "alerts-roadmap" || s.horizon !== "now" || s.start == null || s.end == null) continue;
+    Object.assign(s, { start: s.start - 180, end: s.end - 180 });
+    if (s.milestone?.day != null) s.milestone.day -= 180;
+  }
   const goalOf = new Map(planSlices().map((x) => [x.feature_code.toLowerCase(), x.goal]));
   for (const s of rm.items) {
     const goal = s.section ? goalOf.get(s.section) : undefined;
