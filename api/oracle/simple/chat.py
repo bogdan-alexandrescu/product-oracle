@@ -298,7 +298,7 @@ def _draft_entry(
     decider decides it); ``effort``: its feature's, in weeks (service.efforts)."""
     resolved, h = dates.resolve_by_dates(service._candidates(row, [], {}, {}), read.windows, effort)
     return service.Entry(
-        row=row, roadmap=prd, prd=prd, track=None, goal=None, window=read.windows[h],
+        row=row, roadmap=prd, prd=prd, track=None, goal=None, window=dates.board(read.windows)[h],
         resolved=resolved, horizon=h,
         status=service._status(row, [], set()), milestone=service._milestone(row, None, {}),
     )  # fmt: skip

@@ -131,6 +131,15 @@ def windows(horizons: dict[str, int], today: date) -> dict[str, tuple[date, date
     }
 
 
+def board(wins: dict[str, tuple[date, date]]) -> dict[str, tuple[date, date]]:
+    """board-quarters: the three columns' windows, Next and Later derived from Now's quarter
+    when ``wins`` lacks them (a caller that holds only Now's); given ones are kept."""
+    q0 = wins["now"][0]
+    q1, q2 = add_months(q0, 3), add_months(q0, 6)
+    later = (q2, add_months(q2, 3) - DAY)
+    return {"now": (q0, q1 - DAY), "next": (q1, q2 - DAY), "later": later, **wins}
+
+
 def add_months(day: date, months: int) -> date:
     """``day`` moved ``months`` calendar months, clamped to the month's last day."""
     year, month = divmod(day.month - 1 + months, 12)
@@ -182,6 +191,7 @@ def resolve_by_dates(
 ) -> tuple[Resolved, str]:
     """board-quarters: an item's dates and the column they put it in; a bar no source dates
     is Later's estimate, a part no source gives is estimated in its own column's window."""
+    wins = board(wins)
     r = resolve(candidates, wins["later"], effort_weeks)
     if r.undated:
         return r, "later"
