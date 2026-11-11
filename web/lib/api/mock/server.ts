@@ -2537,6 +2537,26 @@ function seedSimpleWaits(): Db {
   return db;
 }
 
+/**
+ * home-greeting-fit "every-wait": "simple-waits" plus a proposal on the owner's item (by the
+ * commenter) and an open task the owner holds, so every kind Home's greeting names waits at once
+ * (decisions, proposals, broken links, runs, tasks and more in the Inbox). Invented data.
+ */
+function seedEveryWait(): Db {
+  const db = seedSimpleWaits();
+  const rm = (db.simple_roadmap ??= seedSimpleRoadmap());
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
+  seedSimpleProposal(rm, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
+  const me = db.members.find((m) => m.id === db.user_id);
+  (rm.targets ??= {})[stableUuid("every-wait/task")] = {
+    kind: "item_task", title: "Write the digest copy", status: "todo", owner_id: db.user_id, owner_name: me?.name ?? null, due_date: null, item_id: rm.ids["alert-digest"], at: "2026-10-27T09:30:00Z",
+  };
+  return db;
+}
+
 /** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
 function seedScopeReview(kept = false, manyQuestions = false, otherPrd = false): Db {
   const db = seed();
@@ -4021,6 +4041,8 @@ function load(): Db {
             ? () => seedBaselineReview(scenario === "baseline-review-console")
           : scenario === "simple-waits"
             ? seedSimpleWaits
+          : scenario === "every-wait"
+            ? seedEveryWait
           : scenario === "scope-review" || scenario === "scope-review-kept" || scenario === "scope-review-questions" || scenario === "scope-review-other-prd"
             ? () => seedScopeReview(scenario === "scope-review-kept", scenario === "scope-review-questions", scenario === "scope-review-other-prd")
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO || scenario === SHARED_DATE_SCENARIO || scenario === NOT_CLAIMS_SCENARIO || scenario === TWO_WAY_DATES_SCENARIO

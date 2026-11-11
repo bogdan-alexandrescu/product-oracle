@@ -1,7 +1,7 @@
 import { login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
-import { MOCK_FAIL_ONCE_KEY, MOCK_SIMPLE_MODE_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
+import { MOCK_FAIL_ONCE_KEY, MOCK_SCENARIO_KEY, MOCK_SIMPLE_MODE_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
 
 /**
  * Simple production walk (#723): the line on Priorities marks each row that misses it (a
@@ -136,67 +136,99 @@ for (const [where, size] of [
         });
       }
 
-      for (const [role, email] of Object.entries(ROLES)) {
-        /**
-         * Card walk-prio-home-first-paint: protects = Simple's Home draws its frame at once while
-         * the person's permissions are still on their way (the greeting, the goal band and cards as
-         * skeleton placeholders, the rail's frame on a desktop), then fills them in place for an
-         * owner and a viewer alike: the goal band starts where its skeleton stood (the greeting's
-         * sentence keeps the two lines it wraps to from the first paint, on a desktop too), no card the
-         * skeleton names moves, and the first card under the band starts where the skeleton's
-         * first card stood (both measured from the band's foot, as the band grows with the goals); fails_when = Home stays blank until the permissions answer, or the
-         * band or a card jumps when it fills (a viewer has no "Walk me through it", an owner has
-         * cards a viewer does not); no_claim = how fast the real API answers, the cards' contents
-         * (simple-home specs).
-         */
-        test(`Home paints its frame and skeleton at once, then fills in place (${role})`, async ({ page, context }) => {
-          await login(page, email);
-          await page.goto("/home");
-          await context.addInitScript(
-            ([slow, ms]) => {
-              if (!sessionStorage.getItem("walk-prio-slow")) {
-                localStorage.setItem(slow, "/v1/me/capabilities");
-                localStorage.setItem(ms, "4000");
-                sessionStorage.setItem("walk-prio-slow", "1");
-              }
-            },
-            [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY],
-          );
-          await page.goto("/simple");
-          const goals = page.getByTestId("home-goals");
-          const cards = page.getByTestId("simple-page").locator("section.simple-card");
-          await expect(page.getByTestId("home-greeting")).toHaveAttribute("data-skeleton", "true", { timeout: 2500 });
-          await expect(page.getByTestId("home-goals-skeleton")).toBeVisible();
-          await expect(page.getByTestId("home-skeleton-rows").first()).toBeVisible();
-          if (where === "desktop") await expect(page.getByTestId("simple-nav-skeleton")).toBeVisible();
-          // The sentence keeps its two lines from the first paint (it wraps with what waits on
-          // you), so the band is measured where it stands on the page: it never jumps.
-          const before = (await goals.boundingBox())!;
-          // Cards are measured from the band's foot: the band itself grows with the goals there are.
-          const foot = async () => (await goals.boundingBox())!.y + (await goals.boundingBox())!.height;
-          const firstCard = (await cards.first().boundingBox())!.y - (await foot());
-          const named = await cards.evaluateAll((els) => els.filter((e) => e.getAttribute("aria-label")).map((e) => [e.getAttribute("aria-label")!, e.getBoundingClientRect().top] as const));
-          const skeletonFoot = await foot();
-          await expect(page.getByTestId("home-sentence")).toBeVisible({ timeout: 8000 });
-          await expect(page.getByTestId("home-goal").first()).toBeVisible();
-          await expect(page.getByTestId("simple-nav-skeleton")).toHaveCount(0);
-          const after = (await goals.boundingBox())!;
-          // qa-simple-home-36: a viewer known has no "Walk me through it" and no slot for it: the
-          // band moves up by that slot once (never down); an owner's band stays where it stood.
-          if (role === "viewer") expect(after.y).toBeLessThanOrEqual(before.y + 1);
-          else expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
-          expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(1);
-          const filledFoot = await foot();
-          for (const [name, top] of named) {
-            const now = await page.getByRole("region", { name, exact: true }).evaluate((e) => e.getBoundingClientRect().top);
-            expect(Math.abs(now - filledFoot - (top - skeletonFoot)), name).toBeLessThanOrEqual(1);
-          }
-          expect(Math.abs((await cards.first().boundingBox())!.y - filledFoot - firstCard)).toBeLessThanOrEqual(1);
-          await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
-        });
-      }
     });
   }
+}
+
+/** The empty space under the greeting's sentence, in lines: its box's foot less its last line's foot. */
+async function spareLines(page: Page): Promise<number> {
+  return page.getByTestId("home-sentence").evaluate((span) => {
+    const p = span.parentElement!;
+    const range = document.createRange();
+    range.selectNodeContents(p);
+    const lines = [...range.getClientRects()];
+    const last = Math.max(...lines.map((r) => r.bottom));
+    return (p.getBoundingClientRect().bottom - last) / parseFloat(getComputedStyle(p).lineHeight);
+  });
+}
+
+for (const width of [390, 601, 800, 1024, 1366, 1512]) {
+  const phone = width < 600;
+  test.describe(`${width} px`, () => {
+    test.use(phone ? { viewport: { width, height: 844 }, hasTouch: true, isMobile: true } : { viewport: { width, height: 820 } });
+
+    for (const [role, email] of Object.entries(ROLES)) {
+      /**
+       * Card walk-prio-home-first-paint: protects = Simple's Home draws its frame at once while
+       * the person's permissions are still on their way (the greeting, the goal band and cards as
+       * skeleton placeholders, the rail's frame beside it), then fills them in place: with every
+       * kind of work waiting (the "every-wait" scenario) the owner's greeting is its longest form
+       * (three kinds, then "and more", then the Inbox) and the goal band starts where its
+       * skeleton stood, within 1 px, at 390, 601 (beside the rail), 800, 1024, 1366 and 1512 px:
+       * the skeleton keeps the lines that longest form wraps to and the page's own action row
+       * ("Walk me through it" and "+ New PRD", wrapping as they do); a shorter greeting (a
+       * viewer's) keeps no more than half a line of empty space under it, and its band only
+       * moves up, never down; no card the skeleton names moves, and the first card under the
+       * band starts where the skeleton's first card stood (both measured from the band's foot,
+       * as the band grows with the goals); fails_when = Home stays blank until the permissions
+       * answer, the greeting names every kind or overflows the lines kept for it, the action row
+       * wraps to two rows where the skeleton kept one, or a short greeting leaves empty lines;
+       * no_claim = how fast the real API answers, the cards' contents (simple-home specs).
+       */
+      test(`Home paints its frame and skeleton at once, then fills in place (${role})`, async ({ page, context }) => {
+        await context.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "every-wait"] as const);
+        await login(page, email);
+        await page.goto("/home");
+        await context.addInitScript(
+          ([slow, ms]) => {
+            if (!sessionStorage.getItem("walk-prio-slow")) {
+              localStorage.setItem(slow, "/v1/me/capabilities");
+              localStorage.setItem(ms, "4000");
+              sessionStorage.setItem("walk-prio-slow", "1");
+            }
+          },
+          [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY],
+        );
+        await page.goto("/simple");
+        const goals = page.getByTestId("home-goals");
+        const cards = page.getByTestId("simple-page").locator("section.simple-card");
+        await expect(page.getByTestId("home-greeting")).toHaveAttribute("data-skeleton", "true", { timeout: 2500 });
+        await expect(page.getByTestId("home-goals-skeleton")).toBeVisible();
+        await expect(page.getByTestId("home-skeleton-rows").first()).toBeVisible();
+        if (!phone) await expect(page.getByTestId("simple-nav-skeleton")).toBeVisible();
+        const before = (await goals.boundingBox())!;
+        // Cards are measured from the band's foot: the band itself grows with the goals there are.
+        const foot = async () => (await goals.boundingBox())!.y + (await goals.boundingBox())!.height;
+        const firstCard = (await cards.first().boundingBox())!.y - (await foot());
+        const named = await cards.evaluateAll((els) => els.filter((e) => e.getAttribute("aria-label")).map((e) => [e.getAttribute("aria-label")!, e.getBoundingClientRect().top] as const));
+        const skeletonFoot = await foot();
+        await expect(page.getByTestId("home-sentence")).toBeVisible({ timeout: 8000 });
+        await expect(page.getByTestId("home-goal").first()).toBeVisible();
+        await expect(page.getByTestId("simple-nav-skeleton")).toHaveCount(0);
+        const sentence = page.getByTestId("home-sentence");
+        if (role === "owner") {
+          // The longest form: three kinds by importance, then "and more", then the Inbox.
+          await expect(sentence).toHaveText("Decisions, a proposal, broken links and more wait on you. More waits in your Inbox.");
+          await expect(page.getByRole("button", { name: "Walk me through it" })).toBeVisible();
+          await expect(page.getByRole("button", { name: "New PRD" })).toBeVisible();
+        } else await expect(sentence).toHaveText("Here is where the plan stands.");
+        const after = (await goals.boundingBox())!;
+        // The owner's longest greeting fills the lines the skeleton kept: the band stays. A
+        // viewer's short greeting and no action row: the band moves up once, never down.
+        if (role === "owner") expect(Math.abs(after.y - before.y), `band moved from ${before.y} to ${after.y}`).toBeLessThanOrEqual(1);
+        else expect(after.y, `band moved from ${before.y} to ${after.y}`).toBeLessThanOrEqual(before.y + 1);
+        expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(1);
+        expect(await spareLines(page)).toBeLessThanOrEqual(0.5);
+        const filledFoot = await foot();
+        for (const [name, top] of named) {
+          const now = await page.getByRole("region", { name, exact: true }).evaluate((e) => e.getBoundingClientRect().top);
+          expect(Math.abs(now - filledFoot - (top - skeletonFoot)), name).toBeLessThanOrEqual(1);
+        }
+        expect(Math.abs((await cards.first().boundingBox())!.y - filledFoot - firstCard)).toBeLessThanOrEqual(1);
+        await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
+      });
+    }
+  });
 }
 
 /**
