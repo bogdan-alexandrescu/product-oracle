@@ -13,12 +13,14 @@ const bar = (page: Page, key: string) => page.locator(`[data-testid="timeline-ro
 const ganttBar = (page: Page, key: string) => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 const dayAfter = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 
-/** The second bar starts the day after the first ends (its dates; else on `on`), and is drawn after it. */
-async function startsAfter(page: Page, first: string, then: string, on?: string) {
+/** The second bar starts the day after the first ends (its dates; else on `on`; `from`: no
+ * earlier than that day), and is drawn after it. */
+async function startsAfter(page: Page, first: string, then: string, on?: string, from?: string) {
   await expect(bar(page, then)).toBeVisible();
   const end = (await bar(page, first).getAttribute("data-end"))!;
-  await expect(bar(page, then)).toHaveAttribute("data-start", on ?? dayAfter(end));
-  expect((on ?? dayAfter(end)) > end).toBe(true);
+  const want = on ?? (from && from > dayAfter(end) ? from : dayAfter(end));
+  await expect(bar(page, then)).toHaveAttribute("data-start", want);
+  expect(want > end).toBe(true);
   const a = (await bar(page, first).boundingBox())!;
   const b = (await bar(page, then).boundingBox())!;
   expect(b.x).toBeGreaterThanOrEqual(a.x + a.width - 1);
@@ -53,7 +55,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await expect(page.getByTestId("conflicts")).toBeVisible();
       await expect(page.locator('[data-testid="conflict"][data-item="alert-sso"]')).toHaveCount(0);
       if (viewport.width > 600) {
-        await startsAfter(page, "alert-export", "alert-sso");
+        // board-quarters: an undated bar is Later's, from its first quarter (Apr 1 on the mock's Oct 22).
+        await startsAfter(page, "alert-export", "alert-sso", undefined, "2027-04-01");
         // Still drawn as estimated (the Gantt names each bar's kind).
         await page.getByTestId("format-gantt").click();
         await expect(ganttBar(page, "alert-sso")).toHaveAttribute("data-kind", "estimated");

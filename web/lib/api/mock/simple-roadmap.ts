@@ -27,7 +27,7 @@ import { codedTitle, prdCode } from "./item-code";
 export { codedTitle, prdCode, shownCode, shownName } from "./item-code";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
-import { startEffort } from "./simple-priorities";
+import { featureKeyOf, startEffort } from "./simple-priorities";
 import { basePlan as fitBasePlan, PLAN_TARGET as FIT_PLAN_TARGET, schedule as fitSchedule } from "./fit-date-engine";
 
 type Item = Schemas["SimpleRoadmapItem"];
@@ -581,6 +581,19 @@ export function writeRoadmapGoal(db: Pick<SimpleDb, "goal_edits" | "goal_buckets
   else (db.goal_edits ??= {})[key] = fields;
 }
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
+/**
+ * service._goals: an item's goal when it links none directly (or those are in Trash): its
+ * feature's, the first live goal that feature serves in the goal order, so a goal deleted with
+ * its features moved to another reads that one. Named as targetGoals names it.
+ */
+export function featureGoalRef(db: SimpleDb, key: string): Schemas["SimpleGoalRef"] | null {
+  const gb = db.goal_buckets;
+  const f = gb?.features.find((x) => x.key === featureKeyOf(db, key));
+  const g = gb?.goals.filter((x) => f?.goal_ids.includes(x.id) && !x.archived && !x.trashed).sort((a, b) => a.order - b.order)[0];
+  if (!g) return null;
+  const k = Object.keys(GOALS).find((x) => x === g.key || GOALS[x].toLowerCase() === g.title.toLowerCase());
+  return { id: k ? goalId(k) : g.id, key: k ?? g.key, title: g.title, metric: g.measure, target: g.target, due: g.due, position: goalPositionOf(k ?? g.key), ...(READINGS[k ?? g.key] ?? { current: null, unit: null }) };
+}
 /** The item's goal_ids as the API reads them (set_goals' before): the goal it moves most first. */
 export function goalIdsOf(s: { goal?: string; goals?: string[] }): string[] {
   return [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId);
@@ -1812,8 +1825,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code_from: s.feature_id && db.feature_codes?.[s.feature_id] && db.feature_codes[s.feature_id] !== prdCode(s.section) ? "feature" : prdCode(s.section) ? "prd" : null,
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      // service.load: the first goal it is linked to directly (goal_ids) that is not in Trash, else its Goal map goal.
-      goal: linked(s) ? { id: stableUuid(`simple-goal/${linked(s)}`), key: linked(s)!, ...roadmapGoal(reader.full, linked(s)!), position: goalPositionOf(linked(s)!), ...READINGS[linked(s)!] } : s.map_goal ? mapGoalRef(reader.full, s.map_goal) : (reader.full.map_goals?.[db.ids[s.key]] ?? null),
+      // service.load: the first goal it is linked to directly (goal_ids) that is not in Trash, else its Goal map goal, else its feature's.
+      goal: linked(s) ? { id: stableUuid(`simple-goal/${linked(s)}`), key: linked(s)!, ...roadmapGoal(reader.full, linked(s)!), position: goalPositionOf(linked(s)!), ...READINGS[linked(s)!] } : s.map_goal ? mapGoalRef(reader.full, s.map_goal) : (reader.full.map_goals?.[db.ids[s.key]] ?? featureGoalRef(reader.full, s.key)),
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track], ...trackGoal(db, s.track), order: trackPlace(db, s.track) } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),

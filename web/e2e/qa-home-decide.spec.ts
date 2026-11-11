@@ -83,14 +83,14 @@ for (const phone of [false, true]) {
     test("ritual-retry: a ritual that failed to prepare offers Retry on Home, as the Inbox does", async ({ page }) => {
       await page.addInitScript((key) => localStorage.setItem(key, "1"), MOCK_RITUAL_FAILED_KEY);
       await login(page);
-      // An open row (not new) is under the Inbox's Seen tab.
-      const seen = async () => {
-        const tab = page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ });
+      // A failed-to-prepare row stays New until an owner opens the occurrence (rituals.spec 12i).
+      const fresh = async () => {
+        const tab = page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^New/ });
         await tab.click();
         await expect(tab).toHaveAttribute("aria-selected", "true");
       };
       await page.goto("/simple/inbox");
-      await seen();
+      await fresh();
       const need = page.getByTestId("ritual-need").filter({ visible: true, hasText: /^Ritual failed to prepare · / });
       await expect(need).toHaveCount(1);
       await page.goto("/simple");
@@ -99,7 +99,7 @@ for (const phone of [false, true]) {
       await row.getByRole("button", { name: "Retry" }).click();
       await expect(row).toHaveCount(0);
       await page.goto("/simple/inbox");
-      await seen();
+      await fresh();
       await expect(need).toHaveCount(0);
     });
 

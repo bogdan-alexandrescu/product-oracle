@@ -9,6 +9,7 @@ import { Walk } from "@/app/simple/_home/walk";
 import { runStopsOf, StopCard } from "@/app/simple/_home/run-stops";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
 import { GtWaitingLine } from "@/app/simple/_home/gt-flags";
+import { LEAD } from "@/app/simple/_home/skeleton";
 import { MarkForItem, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Icon } from "@/components/ds/Icon";
 import { Button } from "@/components/ds/Button";
@@ -742,13 +743,13 @@ export default function SimpleHome() {
           </ul>
         </Dialog>
       )}
-      <header data-testid="home-greeting" className="-mt-4 flex flex-col gap-1">
+      <header data-testid="home-greeting" className="@container -mt-4 flex flex-col gap-1">
         <div className="flex items-center justify-between gap-2">
           <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
           {/* F-28, the owner's pick (Nov 5): a hidden Set up comes back from Home's menu. */}
           {setupHidden && <HomeMenu onShowSetup={() => void hideSetup(false)} />}
         </div>
-        <p className="simple-lead max-[600px]:min-h-[2lh]">
+        <p className={LEAD}>
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>

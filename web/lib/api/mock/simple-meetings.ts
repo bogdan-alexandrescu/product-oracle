@@ -1143,8 +1143,11 @@ export function meetingInboxRows(db: MeetingsDb | undefined, me: string, seen: s
 }
 
 function row(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecisionRow"] {
+  // As meeting_decisions: a question decided in a meeting is the question's own decision (its id and number).
+  const n = d.question ? Number(d.question.code.replace(/^Q/, "")) : NaN;
   return {
-    id: d.id, number: d.number, title: d.question?.title ?? d.title, origin: d.question ? "prd" : d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
+    ...(Number.isFinite(n) ? { id: stableUuid(`simple-question/${n}`), number: 100 + n } : { id: d.id, number: d.number }),
+    title: d.question?.title ?? d.title, origin: d.question ? "prd" : d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
     decided_at: d.status === "decided" ? d.at : null, created_at: d.at, subjects: d.subjects, flow: decidedFlow(ctx, d),
     code: d.question?.code ?? null, chosen: d.question?.chosen ?? null,
     // QA (unique codes): a PRD's question names its PRD (the meeting's, its document subject).

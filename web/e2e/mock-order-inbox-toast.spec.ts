@@ -5,7 +5,7 @@ import { expect, test, type Page } from "./test";
 /**
  * Pre-demo QA, driven through Simple's UI on the mock's invented data:
  * - P-1 / V-1 / V-2 / S-13: the mock's data does not depend on which page opens first (the Goal
- *   map's features are seeded with the db, not on the map's first read): the Roadmap's Q1 2027,
+ *   map's features are seeded with the db, not on the map's first read): the Roadmap's Q2 2027,
  *   Priorities' ranked list and the Inbox badge read the same whichever order they open in.
  * - S-7: Simple's rail Inbox opens Simple's own Inbox (/simple/inbox), in Simple, with no console error.
  * - P-4: "Decide as recommended" on Decisions says the question by its code and its words, and
@@ -14,7 +14,7 @@ import { expect, test, type Page } from "./test";
 
 test.use({ viewport: { width: 1512, height: 900 } });
 
-type Counts = { q1: string[]; ranked: string[]; inbox: string };
+type Counts = { q2: string[]; ranked: string[]; inbox: string };
 
 /** What `read` returns once it reads the same three times running, 300 ms apart (the page has settled). */
 async function settled<T>(read: () => Promise<T>): Promise<T> {
@@ -36,28 +36,29 @@ async function goalMap(page: Page) {
 async function counts(page: Page): Promise<Counts> {
   await page.goto("/simple/roadmap");
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap" })).toBeVisible();
-  // The Roadmap's Q1 2027: its timeline rows, from Q1 2027 to Q1 2027 (the items, by their names).
-  await page.getByTestId("filter-from").selectOption({ label: "Q1 2027" });
-  await page.getByTestId("filter-to").selectOption({ label: "Q1 2027" });
+  // The Roadmap's Q2 2027: its timeline rows, from Q2 2027 to Q2 2027 (the items, by their names).
+  // Columns are calendar quarters from the dates: an undated map feature is Later's, from Q2 2027.
+  await page.getByTestId("filter-from").selectOption({ label: "Q2 2027" });
+  await page.getByTestId("filter-to").selectOption({ label: "Q2 2027" });
   await expect(page.getByTestId("filter-to")).toHaveValue(/./);
-  const q1 = await settled(async () => [...new Set(await page.getByTestId("timeline-row").evaluateAll((rows) => rows.map((r) => r.getAttribute("data-item") ?? "")))].sort());
+  const q2 = await settled(async () => [...new Set(await page.getByTestId("timeline-row").evaluateAll((rows) => rows.map((r) => r.getAttribute("data-item") ?? "")))].sort());
   await page.goto("/simple/priorities");
   await expect(page.getByTestId("prio-row").first()).toBeVisible();
   // Priorities' ranked list, by the features' names.
   const ranked = await settled(async () => (await page.getByTestId("prio-row").getByTestId("prio-title").allTextContents()).map((t) => t.trim()));
   const inbox = page.getByTestId("simple-nav").getByTestId("simple-nav-inbox-count");
   await expect(inbox).toBeVisible();
-  return { q1, ranked, inbox: await settled(async () => (await inbox.textContent())!.trim()) };
+  return { q2, ranked, inbox: await settled(async () => (await inbox.textContent())!.trim()) };
 }
 
 test.describe("P-1: the mock's counts do not depend on which page opens first", () => {
   // fails_when: the Goal map's first read adds its features to the roadmap, so the counts read
-  // before it differ from those read after it (Q1 2027 4 -> 16 items, Priorities 10 -> 22, Inbox 11 -> 22).
+  // before it differ from those read after it (Q2 2027's items, Priorities 10 -> 22, Inbox 11 -> 22).
   test("Roadmap, Priorities and the Inbox badge first, then the Goal map: the same counts", async ({ page }) => {
     await login(page);
     const before = await counts(page);
     // The map's features (roadmap items gm-f1 ...) are on the Roadmap from the first load, not only once the map was opened.
-    expect(before.q1).toContain("gm-f1");
+    expect(before.q2).toContain("gm-f1");
     await goalMap(page);
     const after = await counts(page);
     expect(after).toEqual(before);

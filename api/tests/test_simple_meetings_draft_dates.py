@@ -9,8 +9,9 @@ on the roadmap and records the meeting's decision.
 Test cards (protects / fails_when / no_claim):
 
 - test_the_meeting_reads_the_runs_draft: protects=the draft's items with their dates, in
-  roadmap order, and what the PRD's Simple roadmap still lacks; fails_when=the meeting
-  lacks them or they show on the roadmap before approval; no_claim=the web.
+  roadmap order, each in the column its dates put it in, and what the PRD's Simple roadmap
+  still lacks; fails_when=the meeting lacks them, shows a stored column over its dates,
+  or they show on the roadmap before approval; no_claim=the web.
 - test_change_dates_and_leave_out_stay_draft: protects=Change dates and Leave out on a
   draft item; fails_when=a change reaches the roadmap or a viewer may change.
 - test_approve_these_dates_puts_them_on_the_roadmap: protects=Approve these N dates: the
@@ -75,7 +76,9 @@ async def test_the_meeting_reads_the_runs_draft(client):
     m = await start(client, w)
     assert drafted(m) == [
         ("Save a cart for later", "now", "2026-11-09", "2026-12-18"),
-        ("Carts kept across devices", "next", "2026-12-07", "2027-01-22"),
+        # board-quarters: its column comes from its dates (it starts this quarter), not
+        # the "next" it was stored with.
+        ("Carts kept across devices", "now", "2026-12-07", "2027-01-22"),
         ("Turn a cart into a quote", "later", "2027-04-05", "2027-05-28"),
     ]
     assert drafted(await get(client, w, m["id"], who="commenter")) == drafted(m)

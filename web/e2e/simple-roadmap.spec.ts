@@ -182,7 +182,15 @@ for (const [where, use] of [
         if (where === "desktop") {
           const c = (await card.boundingBox())!;
           const b = (await body(page, "alert-digest").boundingBox())!;
-          expect(Math.abs(c.y - (b.y + b.height))).toBeLessThan(24);
+          // BGD (Nov 10): the card fits the viewport, below its bar where it fits, else above
+          // it, else as high as it needs (its details scrolling inside).
+          const vh = page.viewportSize()!.height;
+          expect(c.y).toBeGreaterThanOrEqual(15);
+          expect(c.y + c.height).toBeLessThanOrEqual(vh - 15);
+          expect(Math.abs(c.x - b.x)).toBeLessThan(24);
+          if (b.y + b.height + c.height <= vh - 16) expect(Math.abs(c.y - (b.y + b.height))).toBeLessThan(24);
+          else if (b.y - 6 - c.height >= 16) expect(Math.abs(c.y + c.height - b.y)).toBeLessThan(24);
+          else expect(Math.abs(c.y - 16)).toBeLessThan(2);
         }
         await card.getByRole("button", { name: "Close" }).click();
         await expect(card).toHaveCount(0);
