@@ -129,8 +129,16 @@ for (const phone of [false, true]) {
         } else {
           // Past the header a bar keeps the PRD's title (D2).
           await expect(page.getByTestId("timeline-stick")).toHaveCount(0);
-          await tl.getByTestId("timeline-step").first().scrollIntoViewIfNeeded();
-          await page.evaluate(() => window.scrollBy(0, 200));
+          // Scroll the timeline up to the phone's top bar, by measuring: the header wraps taller where
+          // the font runs wider (CI's fonts), so a fixed scroll can leave its actions on screen.
+          const top = page.getByTestId("phone-header");
+          const by = (await tl.boundingBox())!.y - (await top.boundingBox())!.height;
+          await page.mouse.move(195, 600);
+          await page.mouse.wheel(0, by);
+          await expect.poll(async () => (await tl.boundingBox())!.y - (await top.boundingBox())!.height).toBeLessThan(10);
+          // Past the header: its last row (the actions) has gone under the top bar.
+          const present = page.getByRole("button", { name: "Present", exact: true });
+          expect((await present.boundingBox())!.y + (await present.boundingBox())!.height).toBeLessThanOrEqual((await top.boundingBox())!.height);
           const stick = page.getByTestId("timeline-stick");
           await expect(stick).toBeVisible();
           await expect(stick).toContainText("Guided setup");
