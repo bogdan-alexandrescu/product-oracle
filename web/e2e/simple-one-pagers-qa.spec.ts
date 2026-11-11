@@ -110,6 +110,9 @@ test("the Usage alerts Timeline strip places its plan's features under its own m
   await expect(strip).toBeVisible();
   // Guided setup's item of the plan's F-13, under Usage alerts' milestones.
   await expect(strip.getByText("Public signup").first()).toBeAttached();
-  await expect(strip).toContainText("M1 · Prove it");
-  await expect(strip).toContainText("M2 · Scale volume");
+  // roadmap-milestone-codes (owner Nov 10): the plan's own M1 and M2 are no roadmap milestone, so
+  // their rows read their names alone, never the PRD's written code.
+  await expect(strip).toContainText("Prove it · 7 roadmap items");
+  await expect(strip).toContainText("Scale volume · 7 roadmap items");
+  await expect(strip).not.toContainText("M1 · Prove it");
 });

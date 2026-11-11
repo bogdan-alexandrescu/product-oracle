@@ -136,7 +136,10 @@ for (const where of ["desktop", "phone"] as const) {
     const card = page.getByTestId("floating-card");
     const task = card.getByTestId("card-task");
     await expect(task).toHaveCount(1);
-    await expect(task).toHaveText("Draft the digest email · Theo Brandt · due Nov 20 · To do");
+    // ec1 'Edit each row in place': the title, then its owner and due day, and its status pill.
+    await expect(task).toContainText("Draft the digest email");
+    await expect(task).toContainText("Theo Brandt · due Nov 20");
+    await expect(task.getByTestId("task-status")).toHaveText("To do ▾");
     // The account menu is the desktop rail's: sign out there, then come back as Theo.
     await card.getByRole("button", { name: "Close" }).click();
     await expect(card).toHaveCount(0);
@@ -226,11 +229,12 @@ for (const where of ["desktop", "phone"] as const) {
 
 /**
  * Card walkc-review-card-no-tasks: protects = an item with no tasks keeps the picked card
- * design: no "Tasks" part and no "No tasks yet" line, and with the card open a click on the
- * rail still goes to that page; fails_when = every card shows an empty Tasks part;
+ * design: no task rows and no "No tasks yet" line, only '+ Add a task' (ec1 'Edit each row in
+ * place', Nov 5), and with the card open a click on the rail still goes to that page;
+ * fails_when = an empty card shows a "No tasks yet" line;
  * no_claim = a card with tasks (the test above).
  */
-test("an item with no tasks shows no Tasks part on its card", async ({ page }) => {
+test("an item with no tasks lists none on its card, only the owner's '+ Add a task'", async ({ page }) => {
   await login(page);
   await page.goto(URL);
   await expect(page.getByTestId("simple-chart")).toBeVisible();
@@ -239,6 +243,7 @@ test("an item with no tasks shows no Tasks part on its card", async ({ page }) =
   const card = page.getByTestId("item-panel").getByTestId("floating-card");
   await expect(card).toBeVisible();
   await expect(card.getByText("Proposals on it")).toBeVisible();
-  await expect(card.getByTestId("card-tasks")).toHaveCount(0);
+  await expect(card.getByTestId("card-task")).toHaveCount(0);
+  await expect(card.getByTestId("card-tasks").getByRole("button", { name: "+ Add a task" })).toBeVisible();
   await expect(card.getByText("No tasks yet")).toHaveCount(0);
 });

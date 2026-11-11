@@ -911,7 +911,9 @@ async def enrich(db: AsyncSession, document_id: uuid.UUID, view: View) -> View:
         return view
     names = {g.name.strip().lower() for g in view.goals}
     tracked: dict[str, Entity] = {}
-    for e in await db.scalars(select(Entity).where(Entity.type == "goal")):
+    from oracle.simple import goal_reads
+
+    for e in await goal_reads.all_goals(db):
         name = (e.title or "").strip().lower()
         if name not in names or e.status == "rejected":
             continue

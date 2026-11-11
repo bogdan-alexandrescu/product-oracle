@@ -46,45 +46,49 @@ test("impact: the lineage names a Ground Truth item's kind, not its raw key", as
   await expect(upstream.getByRole("link", { name: /f\.guided-setup/ })).toHaveCount(0);
 });
 
-test("impact: a recorded change highlights the rail by what it is about, not always PRDs", async ({ page }) => {
+/**
+ * Opens the version 2 Impact's table, picks an output and follows its "Recorded change"; with
+ * `alone`, opens that change's page on its own (qa-plan-12: from a PRD's Impact it stays with PRDs).
+ * Each case is its own test: three page loads each, one 30 s budget each on a loaded runner.
+ */
+async function openRecordedChange(page: Page, output: string, alone: boolean) {
   await scenario(page, "impact");
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2/impact");
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
   const table = page.getByRole("grid", { name: "Affected outputs" });
-  const nav = page.getByRole("navigation", { name: "Oracle" });
+  await table.getByText(output).first().click();
+  await page.getByRole("complementary", { name: new RegExp(output) }).getByRole("link", { name: "Recorded change" }).click();
+  await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
+  if (alone) await page.goto(new URL(page.url()).pathname);
+  return page.getByRole("navigation", { name: "Oracle" });
+}
 
+test("impact: a recorded change on a deleted Ground Truth item highlights Ground Truth in the rail, not PRDs", async ({ page }) => {
   // A change on a deleted Ground Truth item (a requirement) belongs with Ground Truth, never PRDs,
   // when it is opened on its own (qa-plan-12: opened from a PRD's Impact, it stays with PRDs).
-  await table.getByText("Acceptance tests").first().click();
-  await page.getByRole("complementary", { name: /Acceptance tests/ }).getByRole("link", { name: "Recorded change" }).click();
-  await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
-  await page.goto(new URL(page.url()).pathname);
+  const nav = await openRecordedChange(page, "Acceptance tests", true);
   await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Requirement “Guest checkout keeps the cart” deleted");
   await expect(nav.getByTestId("nav-baseline")).toHaveAttribute("aria-current", "page");
   await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
-
-  // A change on a source's permission belongs with neither PRDs nor Ground Truth: the rail stays quiet.
+  // Back twice (the change opened on its own, then from the table) is the PRD's Impact again.
   await page.goBack();
   await page.goBack();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
-  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
-  await table.getByText("Early shipping cost brief").first().click();
-  await page.getByRole("complementary", { name: /Early shipping cost brief/ }).getByRole("link", { name: "Recorded change" }).click();
-  await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
-  await page.goto(new URL(page.url()).pathname);
+  await expect(page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" })).toBeVisible();
+});
+
+test("impact: a recorded change on a source's permission leaves the rail quiet", async ({ page }) => {
+  // A change on a source's permission belongs with neither PRDs nor Ground Truth: the rail stays quiet.
+  const nav = await openRecordedChange(page, "Early shipping cost brief", true);
   await expect(page.getByText(/^Impact:/).filter({ visible: true })).toBeVisible();
   await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
   await expect(nav.getByTestId("nav-baseline")).not.toHaveAttribute("aria-current", "page");
+});
 
+test("impact: a recorded change on a PRD section highlights PRDs in the rail", async ({ page }) => {
   // A change on a PRD section still belongs with PRDs, as before.
-  await page.goBack();
-  await page.goBack();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
-  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
-  await table.getByText("Saved addresses tech brief").first().click();
-  await page.getByRole("complementary", { name: /Saved addresses tech brief/ }).getByRole("link", { name: "Recorded change" }).click();
-  await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
+  const nav = await openRecordedChange(page, "Saved addresses tech brief", false);
   await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Checkout redesign PRD v2");
   await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
 });

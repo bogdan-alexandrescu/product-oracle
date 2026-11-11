@@ -51,6 +51,8 @@ export interface TrashEntryRow {
   agenda?: { meeting_id: string; row: unknown; at: number };
   /** port-an-decisions: a deleted request's row, put back on Restore. */
   request?: unknown;
+  /** feature-panel: a dropped task's status before the drop, put back on Restore (root status_before). */
+  task_status?: string;
 }
 
 export interface TrashDb {
@@ -188,7 +190,7 @@ export const entryOut = (e: TrashEntryRow, now: string, canRestore = false): Sch
  * whoever deleted a feature, a goal, a decision, a question or a meeting's agenda item restores it too. */
 export function mayRestore(entry: TrashEntryRow, me: { id: string; role: string }): boolean {
   if (me.role === "owner") return true;
-  return entry.out.deleted_by === me.id && ["feature", "goal", "decision", "question", "agenda_item", "milestone"].includes(entry.out.root.type);
+  return entry.out.deleted_by === me.id && ["feature", "goal", "decision", "question", "agenda_item", "milestone", "task"].includes(entry.out.root.type);
 }
 
 /** trash-features-goals: the Simple rows a feature's or a goal's entry marks `trashed`; the mock
@@ -204,6 +206,8 @@ export type TrashedSimple = {
   sheet?: { id?: string; trashed?: boolean }[];
   /** goal-map-editing: the Goal map's milestones (`trashed` while in Trash). */
   goal_map?: { milestones: { id: string; trashed?: boolean }[] };
+  /** feature-panel: the non-versioned targets, a dropped task among them (trash._task_back). */
+  targets?: Record<string, Record<string, unknown>>;
 };
 
 /** trash-features-goals: takes `entry` out of Trash, putting back the feature or the goal it
@@ -246,8 +250,18 @@ export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string,
   }
   if (root.type === "decision" || root.type === "question") simple?.sheet?.filter((r) => r.id === root.id).forEach((r) => (r.trashed = false));
   if (root.type === "milestone") simple?.goal_map?.milestones.filter((m) => m.id === root.id).forEach((m) => (m.trashed = false));
+  // trash._task_back: a dropped task goes back to the status it had.
+  const task = root.type === "task" ? simple?.targets?.[root.id] : undefined;
+  if (task && task.status === "dropped") task.status = entry.task_status ?? "todo";
+  // trash._task_feature_in_trash: its feature still in Trash, the answer says it shows when that is restored.
+  const ids = simple && "ids" in simple ? (simple as SimpleDb).ids : {};
+  const key = task ? Object.keys(ids).find((k) => ids[k] === task.item_id) : undefined;
+  const held = key ? db.entries.find((e) => e.out.root.type === "feature" && e.out.root.slug === key) : undefined;
   db.entries = db.entries.filter((e) => e !== entry);
-  return entryOut(entry, now);
+  const out = entryOut(entry, now);
+  if (!held) return out;
+  const f = held.out.root;
+  return { ...out, not_restored: [{ item: f, reason: `it shows when ${f.code ? `${f.code} ${f.title}` : f.title} is restored` }] };
 }
 
 function take<T>(rows: T[], keep: (row: T) => boolean): T[] {

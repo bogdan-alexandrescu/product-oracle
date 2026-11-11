@@ -55,21 +55,29 @@ test("the goal counters follow the lanes' goal order, the Goal map's goals too",
   await roadmap(page);
   const cards = page.getByTestId("goal-counters").getByTestId("goal-counter");
   await expect(cards.first()).toBeVisible();
-  await expect(page.getByTestId("timeline-lane").first()).toBeVisible();
+  // tb-mk: the Timeline's bands are tracks; the Waterfall keeps the goal lanes.
+  await page.getByTestId("format-waterfall").click();
+  // Track everywhere (owner Nov 10): the Waterfall starts in track bands.
+  await expect(page.getByTestId("group-track")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("chart-group").first()).toContainText(/track/i);
+  // Its goal lanes are a Group by Goal away.
+  await page.getByTestId("group-goal").click();
+  await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("chart-group").first()).toBeVisible();
   const onCards = (await cards.locator("p:first-child").allInnerTexts()).map((t) => t.replace(/^\s*\d+\s*/, "").trim());
-  const onLanes = (await page.getByTestId("timeline-lane").allInnerTexts()).map((t) => t.split("\n")[0].replace(/ · \d+ items?$/, "").replace(/^\s*\d+\s*/, "").trim());
+  const onLanes = await page.getByTestId("chart-group").evaluateAll((els) => els.map((e) => e.getAttribute("data-add-label") ?? ""));
   expect(onCards).toContain("Sign-ups per rep per day");
   expect(onCards).toEqual(onLanes.filter((n) => onCards.includes(n)));
 });
 
-test("Status set to Cut in the panel lists the feature as cut today, by who cut it", async ({ page }) => {
+test("Cut from the panel's menu lists the feature as cut today, by who cut it", async ({ page }) => {
   await login(page);
   await roadmap(page);
   await openRoadmapItem(page, "alert-export");
   await expect(panel(page)).toBeVisible();
-  await tap(panel(page).getByRole("button", { name: "Change the status" }));
-  await panel(page).getByTestId("card-status-edit").getByLabel("Status").selectOption("cut");
-  await tap(panel(page).getByTestId("card-status-edit").getByRole("button", { name: "Save" }));
+  await tap(panel(page).getByRole("button", { name: "More actions" }));
+  await tap(panel(page).getByRole("menuitem", { name: "Cut from the roadmap" }));
+  await tap(page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }));
   await expect(panel(page).getByTestId("item-cut")).toHaveText(/^Cut on [A-Z][a-z]{2} \d+ by Avery Stone/);
   await page.keyboard.press("Escape");
   await tap(page.getByTestId("removed-open"));
@@ -85,14 +93,28 @@ async function setStatus(page: Page, status: string, word: string) {
 }
 
 // changes.py set_status: Planned clears only the panel's own mark and goes back to the tracker's status.
-for (const [first, word] of [["done", "Done"], ["cut", "Cut"]] as const) {
-  test(`an in-progress feature set to ${word} then to Planned reads In progress again`, async ({ page }) => {
-    await login(page);
-    await roadmap(page);
-    await openRoadmapItem(page, "alert-rules");
-    await expect(panel(page).getByTestId("card-status")).toContainText("In progress");
-    await setStatus(page, first, word);
-    await setStatus(page, "planned", "In progress");
-    await expect(panel(page).getByTestId("card-status")).not.toContainText("Planned");
-  });
-}
+test("an in-progress feature set to Done then to Planned reads In progress again", async ({ page }) => {
+  await login(page);
+  await roadmap(page);
+  await openRoadmapItem(page, "alert-rules");
+  await expect(panel(page).getByTestId("card-status")).toContainText("In progress");
+  await setStatus(page, "done", "Done");
+  await setStatus(page, "planned", "In progress");
+  await expect(panel(page).getByTestId("card-status")).not.toContainText("Planned");
+});
+
+// pm1 '⋯ menu by the close': Cut and Restore are the panel menu's; Restore is set_status planned.
+test("an in-progress feature cut then restored from the panel's menu reads In progress again", async ({ page }) => {
+  await login(page);
+  await roadmap(page);
+  await openRoadmapItem(page, "alert-rules");
+  await expect(panel(page).getByTestId("card-status")).toContainText("In progress");
+  await tap(panel(page).getByRole("button", { name: "More actions" }));
+  await tap(panel(page).getByRole("menuitem", { name: "Cut from the roadmap" }));
+  await tap(page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }));
+  await expect(panel(page).getByTestId("card-status")).toContainText("Cut");
+  await tap(panel(page).getByRole("button", { name: "More actions" }));
+  await tap(panel(page).getByRole("menuitem", { name: "Restore to the roadmap" }));
+  await expect(panel(page).getByTestId("card-status")).toContainText("In progress");
+  await expect(panel(page).getByTestId("card-status")).not.toContainText("Planned");
+});

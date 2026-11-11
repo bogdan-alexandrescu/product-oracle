@@ -7,8 +7,9 @@
   are put back through the change engine: op ``restore`` (a feature), ``unarchive_goal``
   (oracle.simple.goal_asks) and ``restore_goal_milestone`` (oracle.simple.plan_changes).
 - ``GET /v1/simple/tracks`` (viewer and up): every track not in Trash (paused and closed
-  too), who may change each, who may own one and the PRDs a new track can take. Tracks
-  are added, edited and deleted through the change engine (``add_track``, ``edit_track``,
+  too), in the company's track order (track-order: ``order``, lower first), who may change
+  each, who may own one and the PRDs a new track can take. Tracks are added, edited, moved
+  and deleted through the change engine (``add_track``, ``edit_track``, ``move_track``,
   ``delete_track``).
 """
 
@@ -28,7 +29,7 @@ from oracle.baseline.models import Entity
 from oracle.docs.models import Document
 from oracle.members.names import display_name
 from oracle.roadmap import company
-from oracle.roadmap.models import ProductTrack, TrackMilestone
+from oracle.roadmap.models import TRACK_ORDER, ProductTrack, TrackMilestone
 from oracle.simple import drafts, goal_asks, goal_buckets, plan_changes, service
 from oracle.simple.models import SimpleChange
 from oracle.simple.router import Reader
@@ -172,9 +173,7 @@ async def list_simple_tracks(principal: Reader, db: TenantDB) -> SimpleTracks:
     names = {u.id: display_name(u.email, u.name) for u in users}
     owners = await plan_changes.company_owners(db)
     is_owner = has_role(principal.role, "owner")
-    rows = list(
-        await db.scalars(select(ProductTrack).order_by(ProductTrack.created_at, ProductTrack.id))
-    )
+    rows = list(await db.scalars(select(ProductTrack).order_by(*TRACK_ORDER)))
     # replaced-prd-history: a replaced PRD's tracks are history, not in Tracks.
     history = await company.history_track_ids(db)
     rows = [t for t in rows if t.id not in history]
@@ -208,7 +207,7 @@ async def list_simple_tracks(principal: Reader, db: TenantDB) -> SimpleTracks:
             goal_id=t.goal_id if t.goal_id in goal_names else None,
             goal_name=goal_names.get(t.goal_id) if t.goal_id else None, can_decide=decides,
             decider_name=names.get(route[0]) if route else None,
-            feature_count=features[t.id], moves_count=moves[t.id],
+            feature_count=features[t.id], moves_count=moves[t.id], order=t.position,
         ))  # fmt: skip
     people = sorted(
         (

@@ -85,7 +85,8 @@ for (const phone of [false, true]) {
           // texts' M1 and M2 are the PRD's words and name no roadmap milestone: their items are not
           // in one, and no row is named by them. Each row is one milestone, by its code and name.
           for (const t of texts) expect(t).not.toMatch(/Measure it|Ship to beta/);
-          expect(texts.slice(0, -1)).toEqual(["M1 · Beta · 1 item", "M2 · Beta launch · 3 items"]);
+          // The goals' target dates (milestone-kinds) take M2 to M4, so the undated Beta launch is M5.
+          expect(texts.slice(0, -1)).toEqual(["M1 · Beta · 1 item", "M5 · Beta launch · 3 items"]);
           const loose = plan.getByTestId("home-strip-row").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^Not in a milestone · \d+ items?$/ }) });
           await loose.hover();
           expect(((await loose.getAttribute("title")) ?? "").split("\n").slice(1)).toEqual(
@@ -103,7 +104,10 @@ for (const phone of [false, true]) {
           await setUp(page, scheme, EMAILS[role]);
           await page.goto("/simple/prds/guided-setup");
           const strip = page.getByLabel("Timeline strip");
-          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["M1 · Measure it, make it safe · 3 roadmap items", "M2 · Ship to beta · 2 roadmap items", "Beta launch · 3 roadmap items", "No milestone · 1 roadmap item"]);
+          // roadmap-milestone-codes (owner Nov 10): the PRD's written M1 and M2 name no roadmap
+          // milestone, so those rows read their names alone, never the PRD's own code.
+          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["Measure it, make it safe · 3 roadmap items", "Ship to beta · 2 roadmap items", "Beta launch · 3 roadmap items", "No milestone · 1 roadmap item"]);
+          await expect(strip).not.toContainText("M1 · Measure it");
           await expect(strip).not.toContainText("dry run");
 
           const problem = page.getByRole("region", { name: "Problem and who has it" });
@@ -124,7 +128,7 @@ for (const phone of [false, true]) {
           if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);
           else expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
-          await strip.getByTestId("plan-strip-row").filter({ hasText: "M1 · Measure it, make it safe · 3 roadmap items" }).click();
+          await strip.getByTestId("plan-strip-row").filter({ hasText: "Measure it, make it safe · 3 roadmap items" }).click();
           await expect(page).toHaveURL(/\/simple\/roadmap\?prd=guided-setup$/);
         });
 

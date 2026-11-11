@@ -207,8 +207,9 @@ test("the Scale track keeps its own PRD in the Tracks sheet and its owner is not
   const sheet = page.getByTestId("tracks-sheet");
   const row = sheet.getByTestId("track-row").filter({ has: page.getByText("Scale track", { exact: true }) });
   await sheet.getByRole("button", { name: "Change Scale track" }).click();
-  // tracks-goal: a track lists its PRDs (none, one or many); the Scale track holds only its own.
+  // tracks-goal: a track lists its PRDs (none, one or many, each with Remove); the Scale track holds only its own.
   await expect(row.getByTestId("track-prds").getByTestId("track-prd-title")).toHaveText(["Scale"]);
+  await expect(row.getByRole("button", { name: "Remove Scale from Scale track" })).toBeVisible();
   await row.getByLabel("Owner").selectOption({ label: "Priya Raman" });
   await expect(row).toContainText("Priya Raman ·");
   await page.getByRole("button", { name: "Close" }).first().click();

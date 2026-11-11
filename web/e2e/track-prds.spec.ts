@@ -113,4 +113,30 @@ test.describe("Tracks: a track holds many PRDs", () => {
     await expect(page.getByTestId("inbox-state-tabs")).toBeVisible();
     await expect(page.getByTestId("track-suggestion-title")).toHaveCount(0);
   });
+
+  // Card track-proposal-declined: protects = the track's decider declining the PRD owner's
+  // proposal brings Oracle's suggestion back to them, with its actions; fails_when = the PRD
+  // stays "Proposed to" or the suggestion is gone after a decline.
+  test("a declined proposal brings the suggested track back to the PRD's owner", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.addInitScript((key) => localStorage.setItem(key, "track-suggestion-approver"), MOCK_SCENARIO_KEY);
+    await login(page, "approver@example.com");
+    await page.goto("/inbox");
+    await page.getByRole("button", { name: "Put Plan changes on Guided setup track" }).click();
+    await expect(page.getByTestId("track-suggestion-proposed")).toContainText("Proposed to");
+
+    await signOut(page);
+    await login(page);
+    await page.goto("/inbox");
+    const asked = page.getByRole("row").filter({ hasText: "Put Plan changes on Guided setup track" });
+    await asked.getByRole("button", { name: "Decline", exact: true }).click();
+    await expect(page.getByRole("row").filter({ hasText: "Put Plan changes on Guided setup track" })).toHaveCount(0);
+
+    await signOut(page);
+    await login(page, "approver@example.com");
+    await page.goto("/inbox");
+    await expect(page.getByTestId("track-suggestion-title")).toHaveText(["Plan changes"]);
+    await expect(page.getByTestId("track-suggestion-proposed")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Put Plan changes on Guided setup track" })).toBeVisible();
+  });
 });

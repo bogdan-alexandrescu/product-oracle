@@ -60,6 +60,8 @@ class GoalBucketGoal(BaseModel):
     can_edit: bool = False
     owner_id: uuid.UUID | None = None
     owner_name: str | None = None
+    # milestone-kinds: its target date shows on the roadmap as a goal milestone.
+    on_roadmap: bool = True
 
 
 class ArchivedGoal(BaseModel):
@@ -107,6 +109,8 @@ class GoalIn(BaseModel):
     owner_id: uuid.UUID | None = None
     # The goal as the form read it (edit only): a goal changed since is refused with 409.
     seen: GoalSeen | None = None
+    # milestone-kinds (edit only): show its target date on the roadmap; left out, as it was.
+    on_roadmap: bool | None = None
 
 
 GOAL_CHANGED = "This goal changed since you opened it. Look again and save."
@@ -133,6 +137,7 @@ class GoalSnap(BaseModel):
     title: str
     status: str
     attrs: dict[str, Any]
+    on_roadmap: bool = True
 
 
 class GoalBucketsUndo(BaseModel):
@@ -179,10 +184,9 @@ def _due(attrs: dict[str, Any]) -> date | None:
 
 
 async def _goals(db: AsyncSession) -> list[Entity]:
-    rows = await db.scalars(
-        select(Entity).where(Entity.type == "goal", Entity.status != "rejected")
-    )
-    return sort_goals(list(rows))
+    from oracle.simple import goal_reads
+
+    return sort_goals(g for g in await goal_reads.all_goals(db) if g.status != "rejected")
 
 
 def _owner_id(attrs: dict[str, Any]) -> uuid.UUID | None:
@@ -216,6 +220,7 @@ def _goal_out(
         can_edit=edits,
         owner_id=owner,
         owner_name=(names or {}).get(owner) if owner else None,
+        on_roadmap=g.on_roadmap is not False,
     )
 
 
@@ -357,6 +362,8 @@ def _fields(g: Entity, body: GoalIn) -> None:
             attrs.pop("owner", None)
         else:
             attrs["owner"] = str(body.owner_id)
+    if body.on_roadmap is not None:
+        g.on_roadmap = body.on_roadmap
     if body.target != _target(attrs):
         # A new target is kept as typed; one left as it was keeps Baseline's number and unit.
         attrs["target_text"] = body.target
@@ -376,7 +383,8 @@ def _changed_since(g: Entity, seen: GoalSeen) -> bool:
 
 
 def _goal_snap(g: Entity) -> GoalSnap:
-    return GoalSnap(id=g.id, title=g.title, status=g.status, attrs=dict(g.attrs or {}))
+    return GoalSnap(id=g.id, title=g.title, status=g.status, attrs=dict(g.attrs or {}),
+                    on_roadmap=g.on_roadmap is not False)  # fmt: skip
 
 
 async def _trashed_without_live(db: AsyncSession, feature_ids: set[uuid.UUID]) -> set[uuid.UUID]:
@@ -600,6 +608,7 @@ async def undo_goal_buckets(
     for snap in body.goals:
         g = await _entity(db, snap.id, "goal")
         g.title, g.status, g.attrs = snap.title, snap.status, snap.attrs
+        g.on_roadmap = snap.on_roadmap
         if g.status != "rejected":
             g.archived_at = g.archived_by = None
     for f in body.features:

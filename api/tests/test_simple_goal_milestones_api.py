@@ -158,7 +158,7 @@ async def test_prd_milestones_appear_dated_and_propose_through_the_change_engine
     assert listed["M1"]["can_change"] is False
     assert listed["M2"]["date"] is None
     m1_id = listed["M1"]["id"]
-    r = await client.patch(f"{MILESTONES}/{m1_id}", json={"name": "Renamed"},
+    r = await client.patch(f"{MILESTONES}/{m1_id}", json={"item_ids": [str(uuid.uuid4())]},
                            headers=ctx.as_("commenter"))  # fmt: skip
     assert r.status_code == 422, r.text
     r = await client.patch(f"{MILESTONES}/{m1_id}", json={"date": "2026-12-04"},
@@ -333,7 +333,8 @@ async def test_a_prd_milestone_refuses_its_name_goal_and_items_even_with_a_date(
         await s.commit()
     await seed_prd_roadmap(ctx, owner.id)
     m1_id = by_code(await get_roadmap(client, ctx, "commenter"))["M1"]["id"]
-    for extra in ({"name": "Renamed"}, {"goal_id": str(uuid.uuid4())},
+    # milestone-rename: its name may be proposed (tests.test_milestone_rename_api).
+    for extra in ({"goal_id": str(uuid.uuid4())},
                   {"item_ids": [str(uuid.uuid4())]}):  # fmt: skip
         r = await client.patch(f"{MILESTONES}/{m1_id}", json={"date": "2026-12-04", **extra},
                                headers=ctx.as_("commenter"))  # fmt: skip

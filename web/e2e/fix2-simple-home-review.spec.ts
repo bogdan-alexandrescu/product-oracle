@@ -113,6 +113,10 @@ test("the Roadmap's goal cards count what Home's goal tiles count: a cut item is
   // The Waterfall names each goal lane's count of live items (the cut one sits below the line).
   await page.getByTestId("format-waterfall").click();
   await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
+  // Track everywhere (owner Nov 10): the Waterfall starts in track bands; the goal lanes are a Group by Goal away.
+  await expect(page.getByTestId("chart-group").first()).toContainText(/track/i);
+  await page.getByTestId("group-goal").click();
+  await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("below-the-line").first()).toBeAttached();
   const drawn = (await page.getByTestId("chart-group").filter({ hasText: "Faster activation" }).getByTestId("lane-count").textContent())!.trim();
   expect(drawn).toMatch(/^\d+ items?$/);

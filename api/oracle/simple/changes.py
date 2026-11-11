@@ -211,7 +211,7 @@ KEY_DATE_OPS = ("add_key_date", "edit_key_date", "remove_key_date")
 SHEET_OPS = ("edit_decision", "edit_question", "withdraw_decision", "add_question")
 QUESTION_OPS = ("decide_question", "name_decider", *SHEET_OPS)
 # removed-tracks: things put back and tracks changed (oracle.simple.plan_changes).
-PLAN_OPS = ("restore_goal_milestone", "add_track", "edit_track", "delete_track")
+PLAN_OPS = ("restore_goal_milestone", "add_track", "edit_track", "move_track", "delete_track")
 
 
 class ChangeError(Exception):

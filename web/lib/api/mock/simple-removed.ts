@@ -1,16 +1,16 @@
 /**
  * Mock of Simple's removed list and tracks (oracle.simple.removed, oracle.simple.plan_changes):
  * GET /v1/simple/removed, GET /v1/simple/tracks, and the change ops restore_goal_milestone,
- * add_track, edit_track and delete_track through POST /v1/simple/changes. A cut feature is put
+ * add_track, edit_track, move_track and delete_track through POST /v1/simple/changes. A cut feature is put
  * back with the engine's own "restore" op, an archived goal with the goal asks' unarchive_goal
  * (./simple-changes.ts).
  */
 import type { Schemas } from "@/lib/api/client";
 
 import { mockNowMs } from "./clock";
-import { seedGoalBuckets } from "./goal-buckets";
+import { lazyGoalBuckets, seedGoalBuckets } from "./goal-buckets";
 import { stableUuid } from "./ids";
-import { canDecideItem, canEditRoadmap, closed, deciderIds, GOALS, ROADMAPS, TRACKS, trackGoal, type SimpleDb } from "./simple-roadmap";
+import { canDecideItem, canEditRoadmap, closed, deciderIds, GOALS, ROADMAPS, TRACKS, trackGoal, trackKeys, trackPlace, type SimpleDb } from "./simple-roadmap";
 import type { MockMilestone } from "./simple-milestones";
 import type { TrashEntryRow } from "./trash";
 
@@ -52,11 +52,18 @@ type Db = SimpleDb & {
 function askedFor(db: Db, prd: string): Schemas["SimpleChangeOut"] | undefined {
   return (db.changes ?? []).find((c) => c.status === "proposed" && (c.op === "add_track" || c.op === "edit_track") && ((c.after as { add_prd_id?: string }).add_prd_id === prd || ((c.after as { prd_ids?: string[] }).prd_ids ?? []).includes(prd)));
 }
+/** tracks-goal: PRDs (ids) put on a track directly close the open proposals that asked to put them on one: declined by who placed them (as plan_changes._close_asked). */
+const closeAsked = (db: Db, by: string, prds: string[]) => {
+  for (const p of prds) {
+    const c = askedFor(db, p);
+    if (c) Object.assign(c, { status: "declined", decided_by: by, decided_at: now(), can_decide: false });
+  }
+};
 /** A proposed track change for any of these PRDs (ids), not decided yet (plan_changes._asked; a removal counts too). */
 const asked = (db: Db, prds: string[]) => prds.some((p) => askedFor(db, p) || (db.changes ?? []).some((c) => c.status === "proposed" && c.op === "edit_track" && (c.after as { remove_prd_id?: string }).remove_prd_id === p));
 
 /** The company's goals a track may be tied to: neither archived nor in Trash, in their order. */
-const liveGoals = (db: Db) => (db.goal_buckets ??= seedGoalBuckets()).goals.filter((g) => !g.archived && !g.trashed).sort((a, b) => a.order - b.order);
+const liveGoals = (db: Db) => (db.goal_buckets ??= lazyGoalBuckets()).goals.filter((g) => !g.archived && !g.trashed).sort((a, b) => a.order - b.order);
 /** tracks-goal: a track's PRDs, its first one first. */
 export const prdsOf = (st: TrackState | undefined): string[] => (st ? [st.prd, ...(st.more ?? [])].filter(Boolean) : []);
 const setPrds = (st: TrackState, titles: string[]) => {
@@ -115,7 +122,7 @@ function seed(db: Db, ctx: RemovedCtx): Log {
   const owner = ctx.owners[0] ?? ctx.id;
   const other = Object.keys(ctx.names).find((x) => x !== owner) ?? owner;
   db.items.filter((s) => s.status === "cut").forEach((s, n) => (log[`feature:${s.key}`] = { at: daysAgo(15 + 7 * n), by: n % 2 ? other : owner }));
-  const gb = (db.goal_buckets ??= seedGoalBuckets());
+  const gb = (db.goal_buckets ??= lazyGoalBuckets());
   const gid = stableUuid(`goal-bucket/${ARCHIVED_GOAL}`);
   if (!gb.goals.some((g) => g.id === gid)) gb.goals.push({ id: gid, key: "fewer-billing-tickets", title: ARCHIVED_GOAL, order: gb.goals.length + 1, measure: "Billing tickets a month", target: "Under 40", due: "2027-06-30", archived: true });
   log[`goal:${gid}`] = { at: daysAgo(17), by: other };
@@ -156,7 +163,17 @@ function change(ctx: RemovedCtx, body: Schemas["SimpleChangeIn"], applied: boole
   return { change: c as unknown as Schemas["SimpleChangeOut"], flags: [] } as unknown as Schemas["SimpleChangeResult"];
 }
 
-const OPS = new Set(["restore_goal_milestone", "add_track", "edit_track", "delete_track"]);
+/** replaced-prd-history (company.history_track_ids): a replaced PRD's own track and its roadmap's track are history, not in Tracks. */
+function historyKeys(db: Db, states: Record<string, TrackState>): Set<string | undefined> {
+  const history = new Set(db.history_roadmaps ?? []);
+  const replaced = new Set(db.replaced_prd_titles ?? []);
+  return new Set([
+    ...Object.entries(db.extra_roadmaps ?? {}).filter(([slug]) => history.has(slug)).map(([, r]) => r.track),
+    ...Object.keys(TRACKS).filter((k) => replaced.has(states[k]?.prd)),
+  ]);
+}
+
+const OPS = new Set(["restore_goal_milestone", "add_track", "edit_track", "move_track", "delete_track"]);
 
 /** GET /v1/simple/removed, GET /v1/simple/tracks and the plan ops; null when not one of them. */
 /**
@@ -207,17 +224,14 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
   if (p[2] === "tracks" && m === "GET" && !p[3]) {
     // replaced-prd-history (company.history_track_ids): a replaced PRD's own track and its
     // roadmap's track are history.
-    const history = new Set(db.history_roadmaps ?? []);
-    const replaced = new Set(db.replaced_prd_titles ?? []);
-    const gone = new Set([
-      ...Object.entries(db.extra_roadmaps ?? {}).filter(([slug]) => history.has(slug)).map(([, r]) => r.track),
-      ...Object.keys(TRACKS).filter((k) => replaced.has(states[k]?.prd)),
-    ]);
-    const tracks = Object.entries(TRACKS).filter(([k]) => !gone.has(k)).map(([k, title]) => {
+    const gone = historyKeys(db, states);
+    // track-order: in the company's track order (order, 1 = first).
+    const tracks = trackKeys(db).filter((k) => !gone.has(k)).map((k) => {
+      const title = TRACKS[k];
       const own = db.track_owners?.[k];
       const decides = owner || (own === ctx.id && RANK[ctx.role] >= RANK.approver);
       const st = states[k];
-      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: st.prd ? prdId(st.prd) : null, prd_title: st.prd || null, prds: prdsOf(st).map((t) => ({ id: prdId(t), title: t })), ...trackGoal(db, k), can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: db.items.filter((s) => s.track === k && !closed(s)).length, moves_count: db.items.filter((s) => s.track === k).length };
+      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: st.prd ? prdId(st.prd) : null, prd_title: st.prd || null, prds: prdsOf(st).map((t) => ({ id: prdId(t), title: t })), ...trackGoal(db, k), can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: db.items.filter((s) => s.track === k && !closed(s)).length, moves_count: db.items.filter((s) => s.track === k).length, order: trackPlace(db, k) };
     });
     // As takeable_prds: every accepted PRD not on a track in Trash, with the track it is on now.
     const prds = allPrds()
@@ -242,7 +256,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
   }
   // tracks-goal (owner Nov 9): accepting a proposed track change (in the decider's Inbox) applies it as it is then, putting on or
   // taking off only its PRD; ./simple-changes.ts then marks it accepted.
-  const proposal = p[2] === "changes" && m === "POST" && p[4] === "accept" ? (db.changes ?? []).find((c) => c.id === p[3] && c.status === "proposed" && (c.op === "add_track" || c.op === "edit_track")) : undefined;
+  const proposal = p[2] === "changes" && m === "POST" && p[4] === "accept" ? (db.changes ?? []).find((c) => c.id === p[3] && c.status === "proposed" && (c.op === "add_track" || c.op === "edit_track" || c.op === "move_track")) : undefined;
   if (proposal && ctx.role !== "owner" && !proposal.routed_to.includes(ctx.id)) return null;
   if (!proposal && (p[2] !== "changes" || m !== "POST" || p[3])) return null;
   const body = (proposal ? { op: proposal.op, target: proposal.target, before: {}, after: proposal.after } : await req.clone().json().catch(() => ({}))) as Schemas["SimpleChangeIn"];
@@ -317,7 +331,10 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
       if (a.owner_id) (db.track_owners ??= {})[k] = a.owner_id;
     };
     if (proposal) return (make(), null);
-    if (owner) make();
+    if (owner) {
+      make();
+      closeAsked(db, ctx.id, want);
+    }
     // Undo removes the track while it holds nothing; one that anything references since goes to Trash.
     return done(change(ctx, body, owner, ctx.owners, `added the track ${title}`), () => {
       if (!(added in TRACKS)) return;
@@ -335,6 +352,26 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
   const decides = owner || (own === ctx.id && RANK[ctx.role] >= RANK.approver);
   const route = own && own !== ctx.id ? [own] : ctx.owners;
   const title = TRACKS[k];
+  if (body.op === "move_track") {
+    // track-order (plan_changes.move_track): one step up or down the company's track order, not past either end; Undo puts the order back.
+    const to = a.to;
+    if (to !== "up" && to !== "down") return json(422, { detail: "after.to: up or down" });
+    const all = trackKeys(db);
+    const shown = all.filter((x) => !historyKeys(db, states).has(x));
+    const at = shown.indexOf(k);
+    const next = to === "up" ? at - 1 : at + 1;
+    if (next < 0 || next >= shown.length) return json(proposal ? 409 : 422, { detail: `${proposal ? "outdated: " : ""}the track is ${to === "up" ? "first" : "last"} already` });
+    const was = db.track_order ? [...db.track_order] : undefined;
+    const step = () => {
+      // As plan_changes._place: the listed tracks swap places; every track keeps a place number.
+      const [i, j] = [all.indexOf(shown[at]), all.indexOf(shown[next])];
+      [all[i], all[j]] = [all[j], all[i]];
+      db.track_order = all;
+    };
+    if (proposal) return (step(), null);
+    if (decides) step();
+    return done(change(ctx, { ...body, target: { ...t, title } }, decides, route, `moved the track ${title} ${to}`), () => void (db.track_order = was), true);
+  }
   if (body.op === "delete_track") {
     if (decides) trashTrack(k);
     return done(change(ctx, body, decides, route, `moved the track ${title} to Trash`), () => {
@@ -352,6 +389,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     if (!decides && asked(db, [prdId(prd)])) return json(409, { detail: "A change to that PRD's track waits for a decision already" });
     const putBack = snapshot();
     if (decides) putPrds(k, adding ? [...prdsOf(states[k]), prd] : prdsOf(states[k]).filter((x) => x !== prd));
+    if (decides && adding) closeAsked(db, ctx.id, [prdId(prd)]);
     const res = change(ctx, { ...body, target: { ...t, title, prd_titles: { [prdId(prd)]: prd } } }, decides, route, `${adding ? "put" : "took"} ${prd} ${adding ? "on" : "off"} ${title}`);
     return done(res, putBack, true);
   }
@@ -390,6 +428,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     if (decides) {
       if ("goal_id" in a) states[k].goal = goal?.id ?? null;
       if (titles) putPrds(k, titles as string[]);
+      closeAsked(db, ctx.id, put.map(prdId));
       if (a.title != null && a.title.trim()) setTitle(db, k, a.title.trim());
       if (a.status != null) states[k].status = a.status as Status;
       if ("owner_id" in a) {

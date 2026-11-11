@@ -39,7 +39,8 @@ test("a feature merged into one that is then deleted reads 'Merged into a delete
   await expect(toasts(page)).toContainText("Merged 'Alert routing by team' into Mobile alert push in your working draft");
 
   await open(page, "alert-mobile");
-  await menu(page, "Delete feature");
+  await menu(page, "Move to Trash…");
+  await tap(page.getByRole("alertdialog").getByRole("button", { name: "Move to Trash" }));
   await expect(toasts(page)).toContainText("Moved Mobile alert push to Trash.");
 
   await page.goto("/simple/roadmap");

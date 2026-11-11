@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 # port-an-decisions: a meeting's agenda item or a request.
 # removed-tracks: a product track.
 # goal-map-editing: a goal milestone.
+# feature-panel: a roadmap item's dropped task.
 TrashItemType = Literal[
     "document",
     "intake",
@@ -21,6 +22,7 @@ TrashItemType = Literal[
     "request",
     "track",
     "milestone",
+    "task",
 ]
 
 
@@ -32,7 +34,7 @@ class TrashItem(BaseModel):
     slug: str | None = None
     title: str
     # A document's kind (prd, roadmap, spec, update, ...), "intake", a run's flow,
-    # "feature", "goal", "Track" or "Milestone".
+    # "feature", "goal", "Track", "Milestone" or "Task".
     kind: str
     # A feature's code on its roadmap ("F-26"), shown before its name.
     code: str | None = None

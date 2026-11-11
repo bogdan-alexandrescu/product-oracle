@@ -63680,6 +63680,7 @@
                   "restore_goal_milestone",
                   "add_track",
                   "edit_track",
+                  "move_track",
                   "delete_track",
                   "edit_decision",
                   "edit_question",
@@ -64111,6 +64112,7 @@
               "restore_goal_milestone",
               "add_track",
               "edit_track",
+              "move_track",
               "delete_track",
               "edit_decision",
               "edit_question",
@@ -83452,6 +83454,11 @@
               }
             ],
             "title": "Owner Name"
+          },
+          "on_roadmap": {
+            "type": "boolean",
+            "title": "On Roadmap",
+            "default": true
           }
         },
         "type": "object",
@@ -83718,6 +83725,17 @@
                 "type": "null"
               }
             ]
+          },
+          "on_roadmap": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Roadmap"
           }
         },
         "type": "object",
@@ -84155,6 +84173,11 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Attrs"
+          },
+          "on_roadmap": {
+            "type": "boolean",
+            "title": "On Roadmap",
+            "default": true
           }
         },
         "type": "object",
@@ -88560,6 +88583,7 @@
               "restore_goal_milestone",
               "add_track",
               "edit_track",
+              "move_track",
               "delete_track",
               "edit_decision",
               "edit_question",
@@ -123673,6 +123697,7 @@
               "restore_goal_milestone",
               "add_track",
               "edit_track",
+              "move_track",
               "delete_track",
               "edit_decision",
               "edit_question",
@@ -123838,6 +123863,7 @@
               "restore_goal_milestone",
               "add_track",
               "edit_track",
+              "move_track",
               "delete_track",
               "edit_decision",
               "edit_question",
@@ -125877,6 +125903,213 @@
               }
             ],
             "title": "Roadmap Code"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sub_goal",
+              "goal",
+              "delivery",
+              "decision",
+              "outside",
+              "handoff"
+            ],
+            "title": "Kind",
+            "default": "delivery"
+          },
+          "done_when_line": {
+            "type": "string",
+            "title": "Done When Line",
+            "default": ""
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "on_track",
+              "at_risk",
+              "hit",
+              "missed"
+            ],
+            "title": "Status",
+            "default": "on_track"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "status_set": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "on_track",
+                  "at_risk",
+                  "hit",
+                  "missed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Set"
+          },
+          "status_set_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Set By Name"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "sub_goal_of_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Goal Of Id"
+          },
+          "sub_goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Sub Goal Ids",
+            "default": []
+          },
+          "home_track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Track Id"
+          },
+          "home_track_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Track Name"
+          },
+          "from_track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Track Id"
+          },
+          "to_track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Track Id"
+          },
+          "from_track_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Track Name"
+          },
+          "to_track_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Track Name"
+          },
+          "goal_target": {
+            "type": "boolean",
+            "title": "Goal Target",
+            "default": false
           }
         },
         "type": "object",
@@ -125932,6 +126165,153 @@
             "type": "string",
             "title": "Counts When",
             "default": ""
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sub_goal",
+              "goal",
+              "delivery",
+              "decision",
+              "outside",
+              "handoff"
+            ],
+            "title": "Kind",
+            "default": "delivery"
+          },
+          "done_when_line": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Done When Line",
+            "default": ""
+          },
+          "status_set": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "on_track",
+                  "at_risk",
+                  "hit",
+                  "missed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Set"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMaximum": 100000000000000.0,
+                "exclusiveMinimum": -100000000000000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMaximum": 100000000000000.0,
+                "exclusiveMinimum": -100000000000000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMaximum": 100000000000000.0,
+                "exclusiveMinimum": -100000000000000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "sub_goal_of_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Goal Of Id"
+          },
+          "home_track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Track Id"
+          },
+          "from_track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Track Id"
+          },
+          "to_track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Track Id"
           }
         },
         "type": "object",
@@ -126006,6 +126386,165 @@
               }
             ],
             "title": "Counts When"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "sub_goal",
+                  "goal",
+                  "delivery",
+                  "decision",
+                  "outside",
+                  "handoff"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "done_when_line": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done When Line"
+          },
+          "status_set": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "on_track",
+                  "at_risk",
+                  "hit",
+                  "missed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Set"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMaximum": 100000000000000.0,
+                "exclusiveMinimum": -100000000000000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMaximum": 100000000000000.0,
+                "exclusiveMinimum": -100000000000000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMaximum": 100000000000000.0,
+                "exclusiveMinimum": -100000000000000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "sub_goal_of_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Goal Of Id"
+          },
+          "home_track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Track Id"
+          },
+          "from_track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Track Id"
+          },
+          "to_track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Track Id"
           }
         },
         "type": "object",
@@ -126650,6 +127189,41 @@
                 "type": "null"
               }
             ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sub_goal",
+              "goal",
+              "delivery",
+              "decision",
+              "outside",
+              "handoff"
+            ],
+            "title": "Kind",
+            "default": "delivery"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "on_track",
+              "at_risk",
+              "hit",
+              "missed"
+            ],
+            "title": "Status",
+            "default": "on_track"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
           }
         },
         "type": "object",
@@ -127844,6 +128418,17 @@
             ],
             "title": "Counts When"
           },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
           "asked_of": {
             "anyOf": [
               {
@@ -128734,6 +129319,17 @@
             "type": "array",
             "title": "Item Ids",
             "default": []
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
           }
         },
         "type": "object",
@@ -130435,6 +131031,17 @@
             ],
             "title": "Own Owner Id"
           },
+          "own_decider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Own Decider Id"
+          },
           "depends_keys": {
             "items": {
               "type": "string"
@@ -130762,6 +131369,14 @@
             "type": "array",
             "title": "Applied Versions",
             "default": []
+          },
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleRoadmapTrack"
+            },
+            "type": "array",
+            "title": "Tracks",
+            "default": []
           }
         },
         "type": "object",
@@ -130774,6 +131389,94 @@
           "milestones"
         ],
         "title": "SimpleRoadmapOut"
+      },
+      "SimpleRoadmapTrack": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "goal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Name"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "prds": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePrdRef"
+            },
+            "type": "array",
+            "title": "Prds",
+            "default": []
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "on_track",
+              "at_risk",
+              "stale"
+            ],
+            "title": "Health",
+            "default": "on_track"
+          },
+          "health_reason": {
+            "type": "string",
+            "title": "Health Reason",
+            "default": ""
+          },
+          "order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleRoadmapTrack",
+        "description": "milestone-kinds: a track band on the roadmap read, in the Tracks order, with its\nhealth: ``at_risk`` (a feature ends after a milestone it serves), ``stale`` (not checked\nin 14 days) or ``on_track``, and a short reason."
       },
       "SimpleRoadmapWaiting": {
         "properties": {
@@ -131661,6 +132364,17 @@
               }
             ],
             "title": "Goal Name"
+          },
+          "order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order"
           }
         },
         "type": "object",
@@ -131792,6 +132506,17 @@
             "type": "integer",
             "title": "Moves Count",
             "default": 0
+          },
+          "order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order"
           }
         },
         "type": "object",
@@ -142790,7 +143515,8 @@
               "agenda_item",
               "request",
               "track",
-              "milestone"
+              "milestone",
+              "task"
             ],
             "title": "Type"
           },

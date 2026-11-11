@@ -148,7 +148,7 @@ for (const [phone, dark] of [
       await bar(page, "adaptive-pacing").click();
       const floating = page.getByTestId("floating-card");
       await expect(floating.getByRole("heading", { level: 2 })).toHaveText("Adaptive pacing");
-      await expect(floating.getByRole("heading", { level: 3 })).toHaveText(["Why", "Open decisions", "Flow", "Proposals on it"]);
+      await expect(floating.getByRole("heading", { level: 3 })).toHaveText(["Why", "Open decisions", "Tasks", "Flow", "Proposals on it"]);
       await tap(floating.getByRole(phone ? "tab" : "button", { name: "Talk to Oracle" }));
       const c = floating;
       const talk = c.getByTestId("item-talk");

@@ -17,7 +17,7 @@ import { leftOut } from "./decision-notes";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
-import { milestoneOut, oldMilestonesOut, routeMilestones, type MockMilestone, type OldCtx } from "./simple-milestones";
+import { calendarDay, milestoneOut, oldMilestonesOut, routeMilestones, withKindStatus, type MockMilestone, type OldCtx } from "./simple-milestones";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, planRowState, rowCodeTaken, type AppliedRecord } from "./approved-roadmap";
@@ -177,6 +177,10 @@ interface SimpleDb {
   agenda_midway?: { topic: string; by: string } | null;
   /** D-a: each track's owner (track key -> person id); their role (Who.roles) says whether they decide. */
   track_owners?: Record<string, string>;
+  /** tb-mk: a track last checked on that day (long ago: its band's warning mark). */
+  track_checked?: Record<string, string>;
+  /** track-order (owner Nov 9): the company's track order as moved (track keys, first first; product_tracks.position). A track not in it follows, in TRACKS' order (when it was made): a new one goes last. */
+  track_order?: string[];
   /** RP2 'Draft layer on roadmap': each draft PRD's run (PRD id -> run), as DraftRoadmap.run_id
    * and prd_version_id hold it (./meeting-draft.ts draftPrdsOut). */
   draft_runs?: Record<string, { run_id: string; version: number; cancelled?: boolean }>;
@@ -197,12 +201,18 @@ interface SimpleDb {
   goal_buckets?: import("./goal-buckets").GoalBucketsDb;
   /** one-feature-panel: a roadmap goal edited through the goal edit (goal key -> its fields). */
   goal_edits?: Record<string, RoadmapGoalFields>;
+  /** milestone-kinds: a roadmap goal with no goal bucket shown (true) or not (false) as a goal milestone
+   * (the goal's on_roadmap, written by PATCH /v1/simple/goal-buckets/goals/{id}); left out, true. */
+  goal_on_roadmap?: Record<string, boolean>;
   /** pre-demo QA P-6: item id -> the goal it serves on the Goal map (service._ladder_goals), read when the item has no goal of its own. */
   map_goals?: Record<string, Schemas["SimpleGoalRef"]>;
   /** roadmap-milestone-codes: goal-ladder's Goal map milestones, which are this roadmap's own goal
    * milestones in the API (goal_map._on_map reads the same rows), so the read codes them too
    * (server.ts copies them from the map on each request: goalMapMilestones). */
   map_milestones?: { roadmap: string; milestones: { id: string; name: string; date: string | null; goal_id: string; rank: number }[] };
+  /** milestone-rename: a goal's own milestone's name once renamed (goal id -> name; the goal's
+   * attrs.milestone_name in the API); renaming it never renames the goal. */
+  goal_milestone_names?: Record<string, string>;
   goal_jobs?: Record<string, { until: number; job_id: string; origin: "auto" | "on_demand" }>;
   auto_done?: string[];
   /** S7: the seeds a merge changed, as they were (change id -> seeds), for its undo. */
@@ -517,6 +527,75 @@ export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug
 export const ROADMAP_SLUGS = (): string[] => (newCompany() ? [] : Object.keys(ROADMAPS));
 /** Whether a commenter or viewer reads the roadmap (oracle.docs.visibility). */
 export const readsRoadmap = (slug: string, role: Role): boolean => !(role === "commenter" || role === "viewer") || ROADMAPS[slug]?.visibility === "company";
+/** The roadmap slug of a roadmap's id (any roadmap the mock knows), else null. */
+export const slugOfRoadmapId = (id: unknown): string | null => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
+
+/** milestone-kinds: the company's goals a goal target may be made of (service._goal_targets' goals), with
+ * milestone-rename's name: its own (db.goal_milestone_names) once renamed, else the goal's title. */
+export function targetGoals(db: SimpleDb): { key: string; id: string; title: string; name: string; due: string | null; on: boolean; metric: string | null }[] {
+  const buckets = (db.goal_buckets?.goals ?? []).filter((g) => !g.trashed);
+  const bucketOf = (k: string) => buckets.find((g) => g.key === k || g.title.toLowerCase() === (GOALS[k] ?? "").toLowerCase());
+  const goals: { key: string; id: string; title: string; due: string | null; on: boolean; metric: string | null }[] = [];
+  const matched = new Set<string>();
+  for (const k of Object.keys(GOALS)) {
+    const b = bucketOf(k);
+    if (b) matched.add(b.id);
+    if (b?.archived || goalInTrash(db, k)) continue;
+    const f = roadmapGoal(db, k);
+    goals.push({ key: k, id: goalId(k), title: f.title ?? GOALS[k], due: b?.due ?? f.due, on: b?.on_roadmap ?? db.goal_on_roadmap?.[k] ?? true, metric: f.metric });
+  }
+  // The default goals a route seeded on first read (lazyGoalBuckets) are not this roadmap's goals.
+  const lazy = new Set(db.goal_buckets?.lazy ?? []);
+  for (const b of buckets) if (!matched.has(b.id) && !b.archived && !lazy.has(b.id)) goals.push({ key: b.key, id: b.id, title: b.title, due: b.due, on: b.on_roadmap ?? true, metric: b.measure });
+  return goals.map((g) => ({ ...g, name: db.goal_milestone_names?.[g.id]?.trim() || g.title }));
+}
+
+/** milestone-rename (goal_milestones._target): a goal on the roadmap with a date (its milestone's id is the
+ * goal's) and the roadmap its milestone sits on (the company roadmap, else its features', else the first). */
+export function goalTargetOf(db: SimpleDb, id: unknown): { goal: ReturnType<typeof targetGoals>[number]; roadmap: string } | null {
+  const goal = targetGoals(db).find((g) => g.id === id && g.due && g.on);
+  const roadmap = db.company_roadmap ?? db.items.find((s) => !s.trashed && goalIdsOf(s).includes(String(id)))?.roadmap ?? ROADMAP_SLUGS()[0];
+  return goal && roadmap ? { goal, roadmap } : null;
+}
+
+/** milestone-rename (goal_milestones._set_target_name): the goal's title again drops the override. */
+export function setTargetName(db: SimpleDb, goal: { id: string; title: string }, name: string): void {
+  const names = (db.goal_milestone_names ??= {});
+  if (name.trim() === goal.title) delete names[goal.id];
+  else names[goal.id] = name.trim();
+}
+
+/** milestone-rename (key_dates.may_decide on a roadmap's own milestone's proposal): an owner, who it is
+ * routed to, or who changes its roadmap (drafts.can_edit). */
+export const decidesMilestoneAsk = (db: SimpleDb, c: Pick<Schemas["SimpleChangeOut"], "routed_to" | "document_id"> & { target: Record<string, unknown> }, me: { id: string; role: Role }): boolean => {
+  const rm = slugOfRoadmapId(c.target.document_id ?? c.document_id);
+  return me.role === "owner" || (c.routed_to ?? []).includes(me.id) || (!!rm && canEditRoadmap(db, rm, me));
+};
+
+/** milestone-rename (goal_milestones.with_asks): a roadmap's own milestone, a goal's or the Goal map's
+ * with an open edit_goal_milestone proposal reads it as pending (the name, date and rule asked, who it
+ * waits for, whether this reader decides it); the latest open one wins. */
+function withAsks(db: SimpleDb, out: Schemas["SimpleGoalMilestone"][], me?: Who): Schemas["SimpleGoalMilestone"][] {
+  const asks = (db.changes ?? []).filter((c) => c.op === "edit_goal_milestone" && c.status === "proposed" && !!c.before && "milestone" in c.before);
+  if (!asks.length) return out;
+  return out.map((m) => {
+    if (m.prd || m.pending) return m;
+    const c = asks.filter((x) => (x.target as Record<string, unknown>).milestone_id === m.id).pop();
+    const after = (c?.after as Record<string, unknown> | null)?.milestone as Record<string, unknown> | null | undefined;
+    if (!c || !after || typeof after !== "object") return m;
+    const differs = (v: unknown, now: unknown) => (v != null && v !== now ? (v as string) : null);
+    const to = (c.routed_to ?? [])[0];
+    return {
+      ...m,
+      pending: {
+        name: differs(after.name, m.name), date: differs(after.date, m.date),
+        counts_when: differs(after.counts_when, m.counts_when), asked_of: to ? (me?.names?.[to] ?? null) : null, change_id: c.id,
+        can_decide: !!me && decidesMilestoneAsk(db, c as Schemas["SimpleChangeOut"] & { target: Record<string, unknown> }, me),
+      },
+    };
+  });
+}
+
 type StoredTask = { id: string; title: string; status: Schemas["SimpleItemTask"]["status"]; owner_id: string | null; owner_name: string | null; due_date: string | null; item_id: string; at: string };
 const storedTasks = (db: SimpleDb): StoredTask[] =>
   Object.entries(db.targets ?? {})
@@ -547,6 +626,19 @@ export const closed = (s: SeedItem): boolean => s.status === "cut" || !!s.merged
 /** roadmap-done (owner, Nov 4), as the API's status: a done (shipped) item is off the roadmap, never checked, and holds nothing up. */
 export const doneItem = (s: SeedItem): boolean => !closed(s) && !s.draft && s.status === "done";
 export const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
+/** track-order (the API's TRACK_ORDER): TRACKS' keys in the company's track order, every read that lists tracks in order follows it. */
+export function trackKeys(db: { track_order?: string[] }): string[] {
+  const at = (k: string) => {
+    const n = (db.track_order ?? []).indexOf(k);
+    return n < 0 ? Infinity : n;
+  };
+  return Object.keys(TRACKS)
+    .map((k, n) => [k, n] as const)
+    .sort((a, b) => at(a[0]) - at(b[0]) || a[1] - b[1])
+    .map(([k]) => k);
+}
+/** track-order: a track's place number (product_tracks.position, lower first) as the reads carry it as `order`. */
+export const trackPlace = (db: { track_order?: string[] }, k: string): number => trackKeys(db).indexOf(k) + 1;
 
 const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
@@ -996,6 +1088,13 @@ export function ownPrd(s: SeedItem): Schemas["SimpleDocRef"] {
   if (s.prd_doc) return s.prd_doc;
   if (s.from_prd) return { id: stableUuid(`simple-prd/${s.from_prd.slug}`), slug: s.from_prd.slug, title: s.from_prd.title };
   return itemPrd(s);
+}
+
+/** ownPrd(s).slug, without deriving the PRD's id (prdOrder reads it for every item). */
+export function ownPrdSlug(s: SeedItem): string {
+  if (s.prd_doc) return s.prd_doc.slug;
+  if (s.from_prd) return s.from_prd.slug;
+  return ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-");
 }
 
 /** A milestone no plan dates (the new SimpleMilestone fields, empty). */
@@ -1544,7 +1643,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       prd: ownPrd(s),
       // service.load: the first goal it is linked to directly (goal_ids) that is not in Trash, else its Goal map goal.
       goal: linked(s) ? { id: stableUuid(`simple-goal/${linked(s)}`), key: linked(s)!, ...roadmapGoal(reader.full, linked(s)!), position: goalPositionOf(linked(s)!), ...READINGS[linked(s)!] } : s.map_goal ? mapGoalRef(reader.full, s.map_goal) : (reader.full.map_goals?.[db.ids[s.key]] ?? null),
-      track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track], ...trackGoal(db, s.track) } : null,
+      track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track], ...trackGoal(db, s.track), order: trackPlace(db, s.track) } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
       draft: !!s.draft,
@@ -1573,6 +1672,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       owner: ownerOf(db, s, me?.names),
       // one-feature-panel: the item's own owner (set_owner's before) and its stored dependency keys.
       own_owner_id: namedOn(db, s.key, "owner_id") ?? null,
+      // one-feature-panel: the item's own decider (set_decider's before).
+      own_decider_id: namedOn(db, s.key, "decider_id") ?? null,
       depends_keys: s.depends ?? [],
       depends_key_of: Object.fromEntries((s.depends ?? []).flatMap((k) => { const d = depOf(k); return d && d !== s.key ? [[db.ids[d], k]] : []; }).reverse()),
       depends_keys_of: (s.depends ?? []).reduce<Record<string, string[]>>((o, k) => { const d = depOf(k); if (d && d !== s.key) (o[db.ids[d]] ??= []).push(k); return o; }, {}),
@@ -1641,6 +1742,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   );
   const groups = new Map<string, { title: string; sort: string; item_ids: string[] }>();
   const prdRank = prdRanker();
+  // track-order: track groups in the company's track order.
+  const trackRank = new Map(trackKeys(db).map((k, n) => [stableUuid(`simple-track/${k}`), n]));
   for (const i of shown) {
     const ref = group === "goal" ? laneGoal(i) : group === "track" ? i.track : i.prd;
     const none = { goal: "No goal", track: "No track", prd: "No PRD" }[group];
@@ -1652,7 +1755,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         ? goalOrderKey(String(ref.key))
         : group === "prd"
           ? `0${String(prdRank(ref)).padStart(16, "0")}${ref.title}`
-          : `0${ref.title}`;
+          : `0${String(trackRank.get(ref.id) ?? 1e9).padStart(16, "0")}${ref.title}`;
     const g = groups.get(key) ?? { title: ref?.title ?? none, sort, item_ids: [] };
     g.item_ids.push(i.id);
     groups.set(key, g);
@@ -1688,26 +1791,112 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them);
   // while the company roadmap exists, its own alone (older roadmaps are history, company.feeding_ids).
   const liveGoalMilestones = (db.goal_milestones ?? []).filter((m) => !m.deleted && (!db.company_roadmap || m.roadmap === db.company_roadmap) && readable.includes(m.roadmap));
-  const goalMilestoneOut = (x: (typeof liveGoalMilestones)[number]) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer", me && { role: me.role, id: me.id, names: me.names, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, (slug) => roadmapTitle(db, slug));
+  const ownRights = (slug: string) => role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, slug, me));
+  const rightsOn = (slug: string | null) => {
+    const can_change = !!slug && ownRights(slug);
+    return { can_change, can_propose: !can_change && role !== "viewer" };
+  };
+  const goalMilestoneOut = (x: (typeof liveGoalMilestones)[number]) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : ownRights(x.roadmap), role !== "viewer", me && { role: me.role, id: me.id, names: me.names, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, (slug) => roadmapTitle(db, slug));
+  // milestone-kinds (service._goal_targets): each company goal with a date and on_roadmap as a goal
+  // milestone (id: the goal's) on the company roadmap, else the roadmap its features are on, else the
+  // first readable one, measured by the goal's metric (start, target, latest reading; its comparison
+  // at_most or below: lower is better); changed on the goal, not here.
+  const goalTargetDown = new Map<string, boolean | undefined>();
+  const goalTargets: Schemas["SimpleGoalMilestone"][] = (() => {
+    if (!readable.length) return [];
+    const numOf = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    const goals = targetGoals(db);
+    const company = db.company_roadmap && readable.includes(db.company_roadmap) ? db.company_roadmap : null;
+    return goals.flatMap((g) => {
+      if (!g.due || !g.on) return [];
+      const mine = items.filter((i) => i.goal?.id === g.id);
+      const on = mine.find((i) => readable.some((r) => roadmapId(r) === i.roadmap.id))?.roadmap.id;
+      const rid = (company ? roadmapId(company) : on) ?? roadmapId(readable[0]);
+      const attrs = companyGoals.find((x) => x.key === g.key)?.attrs ?? {};
+      const comparison = typeof attrs.comparison === "string" ? attrs.comparison : null;
+      goalTargetDown.set(g.id, comparison ? comparison === "at_most" || comparison === "below" : undefined);
+      return [{
+        id: g.id, roadmap_id: rid, code: "", name: g.name, date: g.due, goal_id: g.id, item_ids: mine.map((i) => i.id),
+        counts_when: "", progress: "not_started" as Schemas["SimpleGoalMilestone"]["progress"], prd: null, prd_owner: null, pending: null,
+        carried_from: null, kind: "goal" as const, done_when_line: "", status: "on_track" as const,
+        status_reason: null, status_set: null, status_set_by_name: null, measure: g.metric ?? (typeof attrs.metric === "string" ? attrs.metric : null),
+        baseline: numOf(attrs.start), target: numOf(attrs.target), current: numOf(attrs.current) ?? READINGS[g.key]?.current ?? null,
+        sub_goal_of_id: null, sub_goal_ids: [], home_track_id: null, home_track_name: null, from_track_id: null, to_track_id: null,
+        from_track_name: null, to_track_name: null, goal_target: true,
+        // milestone-rename (goal_milestones.target_rights): who decides its roadmap renames it.
+        ...rightsOn(slugOfRoadmapId(rid)),
+      }];
+    });
+  })();
   // roadmap-milestone-codes: each milestone's one code across every readable roadmap and item, numbered
   // before the filters so a filtered read shows the codes Home and the Goal map show (oracle.simple.service).
   const onMap = db.map_milestones && readable.includes(db.map_milestones.roadmap) ? db.map_milestones : null;
   const mapRanks = new Map((onMap?.milestones ?? []).map((m) => [m.goal_id, m.rank]));
+  // milestone-rename: the map's milestones are the roadmap's own (TrackMilestone rows): its rights.
   const mapMilestoneOut = (m: NonNullable<typeof onMap>["milestones"][number]): Schemas["SimpleGoalMilestone"] => ({
     id: m.id, roadmap_id: roadmapId(onMap!.roadmap), code: "", name: m.name, date: m.date, goal_id: m.goal_id, item_ids: [], counts_when: "", progress: "not_started",
-    prd: null, prd_owner: null, pending: null, can_change: false, can_propose: false, carried_from: null,
+    prd: null, prd_owner: null, pending: null, ...rightsOn(onMap!.roadmap), carried_from: null, kind: "goal", done_when_line: "", status: "on_track",
+    status_reason: null, status_set: null, status_set_by_name: null, measure: null, baseline: null, target: null, current: null,
+    sub_goal_of_id: null, sub_goal_ids: [], home_track_id: null, home_track_name: null, from_track_id: null, to_track_id: null,
+    from_track_name: null, to_track_name: null, goal_target: false,
   });
-  const goalMilestonesOf = (slug?: string | null) => [...liveGoalMilestones.filter((m) => !slug || m.roadmap === slug).map(goalMilestoneOut), ...(onMap && (!slug || onMap.roadmap === slug) ? onMap.milestones.map(mapMilestoneOut) : [])];
-  const coded = withRoadmapCodes({ goal_milestones: goalMilestonesOf(null), milestones: trackMilestones(readable), items }, (id) => goalRanks.get(id) ?? mapRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
+  // milestone-rename (goal_milestones.with_asks): an open edit_goal_milestone proposal reads as pending.
+  const ownGoalMilestones = withAsks(db, [...liveGoalMilestones.map(goalMilestoneOut), ...(onMap?.milestones ?? []).map(mapMilestoneOut), ...goalTargets], me);
+  const coded = withRoadmapCodes({ goal_milestones: ownGoalMilestones, milestones: trackMilestones(readable), items }, (id) => goalRanks.get(id) ?? mapRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
   const codeOf = new Map<string, string | null>([...coded.goal_milestones, ...(coded.milestones as { id: string; roadmap_code?: string | null }[])].map((m) => [m.id, m.roadmap_code ?? null]));
   const withCode = <M extends { id: string }>(m: M) => ({ ...m, roadmap_code: codeOf.get(m.id) ?? null });
+  // tb-mk: each milestone's status and reason (goal_milestones.status_of), and every live track as a band.
+  const itemOf = new Map(items.map((i) => [i.id, { title: i.title, end: i.end.date }]));
+  const trackTitle = (id: string) => {
+    const k = Object.keys(TRACKS).find((x) => stableUuid(`simple-track/${x}`) === id);
+    return k ? TRACKS[k] : null;
+  };
+  const statusOf = (outs: Schemas["SimpleGoalMilestone"][]) => outs.map((m) => withKindStatus(m, outs, (id) => itemOf.get(id), today, trackTitle, m.goal_target ? goalTargetDown.get(m.id) : undefined));
+  const allGoalMilestones = statusOf(ownGoalMilestones.map(withCode));
+  const shownGoalMilestones = allGoalMilestones.filter((m) => !chosen || m.roadmap_id === roadmapId(chosen));
+  // service._track_bands: every live track (company.history_track_ids left out: a history roadmap's
+  // track, a replaced PRD's), in the Tracks order; at risk when a feature of it ends after a milestone
+  // it serves (the latest by most days), else stale when not checked, else on track.
+  const historyTracks = new Set([
+    ...Object.entries(db.extra_roadmaps ?? {}).filter(([slug]) => (db.history_roadmaps ?? []).includes(slug)).map(([, r]) => r.track),
+    ...Object.keys(TRACKS).filter((k) => {
+      const prdOf = (db as SimpleDb & { track_state?: Record<string, { prd?: string }> }).track_state?.[k]?.prd;
+      return !!prdOf && (db.replaced_prd_titles ?? []).includes(prdOf);
+    }),
+  ]);
+  const byMilestone = new Map(allGoalMilestones.map((m) => [m.id, m]));
+  const roadmapTracks = trackKeys(db).filter((k) => !historyTracks.has(k)).map((k) => {
+    const id = stableUuid(`simple-track/${k}`);
+    const own = items.filter((i) => i.track?.id === id);
+    const late: { days: number; title: string; end: string; m: Schemas["SimpleGoalMilestone"] }[] = [];
+    for (const i of own) {
+      const ms = allGoalMilestones.filter((m) => m.item_ids.includes(i.id));
+      const picked = i.milestone?.id ? byMilestone.get(i.milestone.id) : undefined;
+      if (picked && !ms.includes(picked)) ms.push(picked);
+      for (const m of ms) if (m.date && i.end.date > m.date) late.push({ days: (Date.parse(i.end.date) - Date.parse(m.date)) / 86_400_000, title: i.title, end: i.end.date, m });
+    }
+    const worst = late.sort((a, b) => b.days - a.days || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0))[0];
+    const why = worst ? `At risk: ${worst.title} ends ${calendarDay(worst.end, today)}, after ${`${worst.m.roadmap_code ?? worst.m.code} ${worst.m.name}`.trim().replace(/\s+/g, " ")} on ${calendarDay(worst.m.date!, today)}` : null;
+    const stale = db.track_checked?.[k];
+    return {
+      id,
+      title: TRACKS[k],
+      ...trackGoal(db, k),
+      owner_name: db.track_owners?.[k] ? ((db as { names?: Record<string, string> }).names?.[db.track_owners[k]] ?? null) : null,
+      prds: [...new Set(own.flatMap((i) => (i.prd ? [i.prd.title] : [])))].map((t) => ({ id: stableUuid(`simple-doc/${t}`), title: t })),
+      health: why ? ("at_risk" as const) : stale ? ("stale" as const) : ("on_track" as const),
+      health_reason: why ?? (stale ? `Not checked since ${calendarDay(stale.slice(0, 10))}` : "On track: every feature ends before its milestone"),
+      order: trackPlace(db, k),
+    };
+  });
   return {
     today, group,
     windows: { now: { start: w.now[0], end: w.now[1] }, next: { start: w.next[0], end: w.next[1] }, later: { start: w.later[0], end: w.later[1] } },
     groups: [...groups.entries()].sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
     items: shown,
     milestones: trackMilestones(chosen ? [chosen] : readable).map(withCode),
-    goal_milestones: goalMilestonesOf(chosen).map(withCode),
+    goal_milestones: shownGoalMilestones,
+    tracks: roadmapTracks,
     old_milestones: oldMilestonesOut(db.goal_milestones ?? [], role, oldCtx(db)),
     // service.build: the span of the shown items' PRDs' plans only (a replaced plan PRD's goes with its items).
     span: db.plan && shown.some((i) => !!i.prd && (i.prd.slug === PLAN_PRD_SLUG || !!db.plan?.prds?.includes(i.prd.slug))) ? planSpan() : null,
@@ -1813,7 +2002,7 @@ function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: st
       const own = (db.key_dates?.[slug] ?? []).filter((k) => !copies.has(`${k.id}/${k.name}/${k.note}`)).map((k) => {
         const was = pub?.find((x) => x.id === k.id);
         const inDraft = pub !== null && (!was || JSON.stringify(was) !== JSON.stringify(k));
-        return { id: k.id, roadmap: ref(slug), name: k.name, date: k.date, note: k.note, in_draft: inDraft, prd: null };
+        return { id: k.id, roadmap: ref(slug), name: k.name, date: k.date, note: k.note, in_draft: inDraft, prd: null, kind: "delivery" as const, status: "on_track" as const, status_reason: null };
       });
       return [...own, ...fromPrds];
     })
@@ -1845,6 +2034,9 @@ function prdKeyDates(db: SimpleDb, slug: string, roadmap: Schemas["SimpleDocRef"
         date: m.date,
         note: null,
         in_draft: false,
+        kind: "delivery" as const,
+        status: "on_track" as const,
+        status_reason: null,
         prd,
       })),
     );
@@ -1994,6 +2186,17 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     return json(200, { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
+  // milestone-rename (goal_milestones.rename_target): PATCH on a goal's own milestone (id: the goal's)
+  // takes its name alone; who decides its roadmap renames it, anyone else is refused (they propose).
+  const target = p[3] === "milestones" && p[4] && !p[5] && m === "PATCH" && !(db.goal_milestones ?? []).some((x) => x.id === p[4]) ? goalTargetOf(db, p[4]) : null;
+  if (target) {
+    const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    if (Object.keys(b).join() !== "name" || !String(b.name ?? "").trim()) return json(422, { detail: "A goal's milestone: only its name changes here (the rest is the goal's)" });
+    if (me.role === "viewer" || me.role === "commenter" || !canEditRoadmap(db, target.roadmap, me)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) changes its milestones" });
+    setTargetName(db, target.goal, String(b.name));
+    const { goal } = goalTargetOf(db, p[4])!;
+    return json(200, { id: goal.id, roadmap_id: roadmapId(target.roadmap), code: "", name: goal.name, date: goal.due, goal_id: goal.id, kind: "goal", goal_target: true, can_change: true, can_propose: false, item_ids: [], counts_when: "", progress: "not_started", prd: null, prd_owner: null, pending: null, carried_from: null });
+  }
   const ms = await routeMilestones(db, { ...me, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, req, p, slugOf, (r) => canEditRoadmap(db, r, me), (r) => !!db.company_roadmap && r !== db.company_roadmap, oldCtx(db));
   if (ms) return ms;
   if (p[3] !== "date-suggestions") return null;

@@ -122,6 +122,10 @@ test.describe("desktop", () => {
     await expect(tiles.first()).toBeVisible();
     await page.getByTestId("format-waterfall").click();
     await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
+    // Track everywhere (owner Nov 10): the Waterfall starts in track bands; the goal lanes are a Group by Goal away.
+    await expect(page.getByTestId("chart-group").first()).toContainText(/track/i);
+    await page.getByTestId("group-goal").click();
+    await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
     for (const goal of ["Faster activation", "Grow retention"]) {
       const drawn = (await page.getByTestId("chart-group").filter({ hasText: goal }).getByTestId("lane-count").textContent())!.trim();
       expect(drawn).toMatch(/^\d+ items?$/);

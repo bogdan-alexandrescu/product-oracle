@@ -60,11 +60,23 @@ test.describe("desktop", () => {
       for (const c of await cards.all()) goals.push([(await c.locator("p").first().textContent())!.trim(), num(await c.locator("b.tnum").first().textContent())]);
       expect(goals.length).toBeGreaterThan(0);
 
-      // The Timeline's lanes ("Faster activation · 3 items"), each a row per item it counts.
+      // tb-mk: the Timeline's bands are tracks; the Gantt's Group by Goal draws a lane per goal,
+      // a row per item it counts.
+      await format(page, "gantt");
+      await page.getByTestId("group-goal").click();
+      await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
       for (const [goal, n] of goals) {
-        const lane = page.getByTestId("timeline-lane").filter({ hasText: new RegExp(`^${escaped(goal).source} · \\d+ items?$`) });
-        await expect(lane, `${goal}'s Timeline lane`).toHaveCount(1);
-        expect(Number(/· (\d+) items?$/.exec((await lane.textContent())!)?.[1]), `${goal}: Timeline vs its card`).toBe(n);
+        const lane = page.getByTestId("chart-group").filter({ has: page.locator(`[title="${goal}"]`) });
+        await expect(lane, `${goal}'s Gantt lane`).toHaveCount(1);
+        const rows = await lane.evaluate((el) => {
+          const ids = new Set<string>();
+          for (let e = el.nextElementSibling; e && !["chart-group", "below-the-line"].includes(e.getAttribute("data-testid") ?? ""); e = e.nextElementSibling) {
+            const l = e.querySelector('[data-testid="chart-label"]:not([data-depth])');
+            if (l) ids.add(l.getAttribute("data-item-id") ?? "");
+          }
+          return ids.size;
+        });
+        expect(rows, `${goal}: Gantt vs its card`).toBe(n);
       }
       // The Waterfall's lanes.
       await format(page, "waterfall");

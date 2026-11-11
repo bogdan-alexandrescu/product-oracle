@@ -171,6 +171,8 @@ export type PlanInput = {
   record?: { id: string; name: string | null; label?: string; of?: string | null; also?: string[] } | null;
   /** The roadmap item it reads (the one-pager lists a row's items by it). */
   id?: string | null;
+  /** roadmap-milestone-codes: its milestone's roadmap-wide code (the one-pager, `coded`). */
+  roadmapCode?: string | null;
 };
 
 /** The plan strip shows this many rows; the rest are "+N more on the roadmap". */
@@ -216,7 +218,16 @@ export function milestoneOf(text: string | null): [string, string] {
   return head ? [head, head] : ["Milestone", "Milestone"];
 }
 
-export function planByMonth(items: PlanInput[], today: string, through: string | null = null): PlanStrip | null {
+/** plan_strip._named: a row's label by its roadmap code ("M1 · Beta" in M2 -> "M2 · Beta"), its name alone with none. */
+function namedBy(label: string, code: string | null | undefined): string {
+  const m = MILESTONE_CODE.exec(label);
+  const name = m ? m[2].trim() : label;
+  if (code) return name ? `${code} · ${name}` : code;
+  return name || label;
+}
+
+/** `coded` (the one-pager, plan_strip.strip(coded=True)): rows read each input's roadmap code, one row per code. */
+export function planByMonth(items: PlanInput[], today: string, through: string | null = null, coded = false): PlanStrip | null {
   if (items.length === 0) return null;
   // One row per milestone (the record the item links, else its code, else its text before
   // any note), not per text.
@@ -227,10 +238,14 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
       loose.push(i);
       continue;
     }
-    const [key, label] = i.record ? [`record:${i.record.id}`, i.record.label ?? milestoneOf(i.record.name)[1]] : milestoneOf(i.milestone);
+    let [key, label] = i.record ? [`record:${i.record.id}`, i.record.label ?? milestoneOf(i.record.name)[1]] : milestoneOf(i.milestone);
+    if (coded) {
+      key = i.roadmapCode ? `code:${i.roadmapCode}` : `name:${key}`;
+      label = namedBy(label, i.roadmapCode);
+    }
     keyed.set(key, [...(keyed.get(key) ?? []), { label, i }]);
   }
-  const groups = new Map<string, { name: string; date: string | null; begins: string | null; of: PlanInput[]; whose: string | null; also: string[] }>();
+  const groups = new Map<string, { name: string; date: string | null; begins: string | null; of: PlanInput[]; whose: string | null; also: string[]; code?: string | null }>();
   for (const [key, of] of keyed) {
     const counts = new Map<string, number>();
     for (const x of of) counts.set(x.label, (counts.get(x.label) ?? 0) + 1);
@@ -245,7 +260,7 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
     const whose = of.find((x) => x.i.record?.of)?.i.record?.of ?? null;
     // Names its items' records read beside the row's own (a track's on two roadmaps), the row's own never.
     const also = [...new Set(of.flatMap((x) => x.i.record?.also ?? []))].filter((n) => !sameWords(n, name.replace(" · ", " ")));
-    groups.set(key.startsWith("record:") ? key : `${name}|${date ?? ""}`, { name, date, begins: starts.length ? minOf(starts) : null, of: of.map((x) => x.i), whose, also });
+    groups.set(key.startsWith("record:") && !coded ? key : `${name}|${date ?? ""}`, { name, date, begins: starts.length ? minOf(starts) : null, of: of.map((x) => x.i), whose, also, code: coded ? (of[0].i.roadmapCode ?? null) : undefined });
   }
   const dated = [...groups.values()].flatMap((g) => (g.date ? [g.date] : []));
   const committed = items.filter((i) => !i.estimated).map((i) => i.end);
@@ -263,7 +278,7 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
   }
   const months = Array.from({ length: n }, (_, k) => addMonths(start, k));
   const end = new Date(Date.parse(`${addMonths(months.at(-1)!, 1)}T00:00:00Z`) - DAY).toISOString().slice(0, 10);
-  const row = (name: string, date: string | null, of: PlanInput[], milestone: boolean, begins: string | null = null, whose: string | null = null, also: string[] = []): PlanStrip["rows"][number] => ({
+  const row = (name: string, date: string | null, of: PlanInput[], milestone: boolean, begins: string | null = null, whose: string | null = null, also: string[] = [], code?: string | null): PlanStrip["rows"][number] => ({
     name,
     date,
     items: of.length,
@@ -275,10 +290,11 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
     item_ids: [...new Set(of.flatMap((i) => (i.id ? [i.id] : [])))],
     ...(whose ? { of: whose } : {}),
     ...(also.length ? { also } : {}),
+    ...(coded ? { code: code ?? null } : {}),
   });
   const rows = [...groups.values()]
     .sort((a, b) => (a.date === null) !== (b.date === null) ? (a.date === null ? 1 : -1) : byCodePoint(a.date ?? "", b.date ?? "") || byCodePoint(a.name, b.name))
-    .map((g) => row(g.name, g.date, g.of, true, g.begins, g.whose, g.also));
+    .map((g) => row(g.name, g.date, g.of, true, g.begins, g.whose, g.also, g.code));
   if (loose.length) rows.push(row("No milestone", null, loose, false));
   return {
     start,
@@ -375,7 +391,9 @@ const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowe
  * of two tracks' "M1", never a guess).
  */
 export function homePlanInputs(data: Roadmap): PlanInput[] {
-  const goals = data.goal_milestones ?? [];
+  // milestone-kinds: a goal's own target date (goal_target) lists the goal's features but holds
+  // none of them: they stay in the milestones they are placed in.
+  const goals = (data.goal_milestones ?? []).filter((m) => !m.goal_target);
   const live = new Map(goals.map((m) => [m.id, m]));
   // A milestone with a start and an end is a PRD's plan milestone, never read here.
   const tracks = data.milestones.filter((m) => m.status !== "dropped" && !(m.start_date && m.end_date));
