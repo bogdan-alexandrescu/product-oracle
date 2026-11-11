@@ -4,7 +4,8 @@
  * (undated last; one date: goal order, no goal last, then name); a goal milestone that is the
  * same milestone as a track milestone (one of its code holding items on its roadmap: the one, for
  * one of no goal, else one whose name it leads or follows, whatever else of the code is there)
- * or as a PRD's (or the roadmap's own) milestone of its code with a name that matches shares its code.
+ * or as a PRD's (or the roadmap's own) milestone of its code with a name that matches shares its code;
+ * a goal's own milestone whose name matches a PRD's milestone of any code or goal on its roadmap too.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -51,13 +52,17 @@ export function withRoadmapCodes<T extends { goal_milestones?: Gm[]; milestones:
     const hits = of.filter(ok).sort((p, q) => Number(!same(p)) - Number(!same(q)) || (p.id < q.id ? -1 : 1));
     return hits[0]?.id ?? null;
   };
-  for (const g of [...goals].sort((p, q) => Number(!!p.goal_id) - Number(!!q.goal_id) || (p.id < q.id ? -1 : 1))) {
+  // No goal first, then a PRD's of a goal (a goal's own may join either), then a goal's own.
+  const order = (g: Gm) => Number(!!g.goal_id) + Number(!!g.goal_id && !g.prd);
+  for (const g of [...goals].sort((p, q) => order(p) - order(q) || (p.id < q.id ? -1 : 1))) {
     const code = gmCode(g);
     const there = tracks.filter((t) => !!code && split(t.name)[0] === code && !!held.get(t.id)?.has(g.roadmap_id));
     const plain = goals.filter((o) => !!code && !o.goal_id && o !== g && o.roadmap_id === g.roadmap_id && gmCode(o) === code);
     const alike = new Set(goals.filter((o) => o.roadmap_id === g.roadmap_id && gmCode(o) === code).map((o) => `${o.goal_id ?? ""}|${o.prd?.id ?? ""}`));
     const alone = alike.size === 1 && there.length === 1;
-    let to = !g.goal_id && there.length === 1 ? there[0].id : (best(g, there, alone) ?? (g.goal_id ? best(g, plain, false) : null));
+    // Goal map twins (Nov 10): a goal's own milestone is a PRD's on its roadmap of the same name, whatever the PRD's code or goal.
+    const twins = goals.filter((o) => !!o.prd && o !== g && o.roadmap_id === g.roadmap_id);
+    let to = !g.goal_id && there.length === 1 ? there[0].id : (best(g, there, alone) ?? (g.goal_id ? (best(g, plain, false) ?? (g.prd ? null : best(g, twins, false))) : null));
     if (!to) {
       groups.set(g.id, [g]);
       continue;

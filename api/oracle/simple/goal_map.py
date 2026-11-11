@@ -15,7 +15,8 @@ and the features serving them.
   on track at three quarters of the threshold or more, at risk below. A gate nobody has
   confirmed yet is only proposed. A goal milestone with no threshold has no gate yet.
 - The milestones are the goal milestones of Simple Roadmap (``roadmap_id`` and ``goal_id``
-  set, not deleted), in the order of what each comes after (``after_id``, picked by people).
+  set, not deleted; a PRD's only while its plan holds it, as the roadmap reads it), in the
+  order of what each comes after (``after_id``, picked by people).
 - The scoreboard (owner, Nov 5): each goal names the metric that gives it its readings (a
   live metric whose ``goal_id`` is the goal: its weekly values become the goal's
   measurements) and what is missing (``metric``: none and no reading; ``values``: a metric
@@ -419,6 +420,21 @@ async def _on_map(db: AsyncSession) -> list[TrackMilestone]:
     ).all()
     feeding = set(await company.feeding_ids(db, list({m.roadmap_id for m in rows})))
     rows = [m for m in rows if m.roadmap_id in feeding]
+    # Goal map codes (Nov 10): a PRD's milestone is on the map while its PRD's plan holds it
+    # (by its code, the PRD not in Trash), as the roadmap reads it (goal_milestones
+    # .list_for_roadmaps): one the plan dropped has no roadmap code, so it is not drawn.
+    if prd_ids := {m.origin_prd_id for m in rows if m.origin_prd_id is not None}:
+        from oracle.simple import plan as plans
+
+        live = {
+            d.id
+            for d in await db.scalars(
+                select(Document).where(Document.id.in_(prd_ids), Document.deleted_at.is_(None))
+            )
+        }
+        views = await plans.views(db, live)
+        held = {(p, pm.code) for p, v in views.items() for pm in v.milestones}
+        rows = [m for m in rows if m.origin_prd_id is None or (m.origin_prd_id, m.code) in held]
     by = {m.id: m for m in rows}
     depth: dict[uuid.UUID, int] = {}
 

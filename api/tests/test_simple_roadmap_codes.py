@@ -19,6 +19,10 @@ Test cards (protects / fails_when / no_claim):
   of the old code keeps them split.
 - test_a_goal_milestone_joins_a_prd_milestone_whose_name_it_leads: protects=a goal's and a
   PRD's milestone of one code and matching names are one.
+- test_a_goal_milestone_joins_its_twin_prd_milestone_of_another_code (goal map twins,
+  Nov 10): protects=a goal's own "M4 Agents onboarded" and a PRD's undated milestone of the
+  same name (the PRD's own code, its goal set) are one milestone with one code; a PRD
+  milestone with no goal joins too; fails_when=the twin keeps a code of its own.
 - test_no_name_is_hidden_by_a_join: protects=a name that matches neither keeps its own code.
 - test_roadmap_read_codes_and_renumber_on_move: protects=``GET /v1/simple/roadmap`` gives each
   goal milestone its roadmap code across goals, and moving one earlier renumbers the later
@@ -134,6 +138,26 @@ def test_a_goal_milestone_joins_a_prd_milestone_whose_name_it_leads():
     own = gm("M1", "Measured", "2026-11-25")
     assign([own, prd], [], [], RANK)
     assert own.roadmap_code == prd.roadmap_code == "M1"
+
+
+@pytest.mark.parametrize("prd_goal", [G1, G2, None])
+def test_a_goal_milestone_joins_its_twin_prd_milestone_of_another_code(prd_goal):
+    """Join whenever names match (the owner, Nov 9): the PRD's code (its plan's "M1") is not
+    the goal's ("M4"), and the PRD's milestone carries a goal of its own; still one."""
+    own = gm("M4", "Agents onboarded", "2026-12-31")
+    twin = gm("M1", "Agents onboarded", None, goal=prd_goal, prd=True)
+    other = gm("M2", "Pilot live", "2026-11-30", goal=G2)
+    assign([twin, own, other], [], [], RANK)
+    assert own.roadmap_code == twin.roadmap_code == "M2"
+    assert other.roadmap_code == "M1"
+
+
+def test_two_prd_milestones_of_one_name_are_not_joined_to_each_other():
+    """Only a goal's own milestone joins a PRD's: two PRDs' milestones keep their codes."""
+    a = gm("M1", "Beta", "2026-11-20", prd=True)
+    b = gm("M1", "Beta", "2026-11-25", goal=G2, prd=True)
+    assign([a, b], [], [], RANK)
+    assert {a.roadmap_code, b.roadmap_code} == {"M1", "M2"}
 
 
 def test_no_name_is_hidden_by_a_join():

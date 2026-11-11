@@ -12,7 +12,9 @@ roadmap's own) and it is the one such track, or their names match (one's words l
 other's), whatever else of the code the roadmap holds; one with no name matches only as the
 roadmap's only one of that code (the owner's "Join
 whenever names match", Nov 9). A goal's milestone whose name matches a PRD's (or the roadmap's
-own) milestone of its code on its roadmap is that milestone too. No name is hidden: each
+own) milestone of its code on its roadmap is that milestone too, and so is a goal's own
+milestone whose name matches a PRD's milestone of any code or goal on its roadmap (the Goal
+map's twins, Nov 10). No name is hidden: each
 surface shows the longer name and lists the other ("Also: ...").
 
 Codes go by date (undated last); on one date by goal order (``oracle.baseline.goal_order``,
@@ -102,7 +104,11 @@ def assign(
         )
         return hits[0].id if hits else None
 
-    for gm in sorted(goal_ms, key=lambda g: (g.goal_id is not None, str(g.id))):
+    # No goal first, then a PRD's of a goal (a goal's own may join either), then a goal's own.
+    def order(g: SimpleGoalMilestone) -> tuple:
+        return (g.goal_id is not None) + (g.prd is None and g.goal_id is not None), str(g.id)
+
+    for gm in sorted(goal_ms, key=order):
         code = _gm_code(gm)
         there = [
             tm
@@ -124,9 +130,16 @@ def assign(
                 if g.roadmap_id == gm.roadmap_id and _gm_code(g) == code
             }
             alone = len(alike) == 1 and len(there) == 1
-            to = best(gm, there, alone) or (
-                best(gm, plain, False) if gm.goal_id is not None else None
-            )
+            # Goal map twins (Nov 10): a goal's own milestone is a PRD's milestone on its
+            # roadmap of the same name, whatever the PRD's code (its plan's) or goal.
+            twins = [
+                g
+                for g in goal_ms
+                if g.prd is not None and g is not gm and g.roadmap_id == gm.roadmap_id
+            ]
+            to = best(gm, there, alone)
+            if to is None and gm.goal_id is not None:
+                to = best(gm, plain, False) or (best(gm, twins, False) if gm.prd is None else None)
         if to is None:
             groups[gm.id] = [gm]
             continue

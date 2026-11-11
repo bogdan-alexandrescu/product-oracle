@@ -54,6 +54,18 @@ const KRS: [GmGoal & { position: number }, string][] = [
  * reads G-B.1.2. F-21 is on both milestones, G-B.2's listed first; F-01, on Goal 1's M1, serves G-B.1.
  */
 export const LADDER_KR_CODES_SCENARIO = "goal-ladder-key-result-codes";
+/**
+ * goal-map twins (Nov 10): the ladder with three PRD milestones on the map (invented): an undated
+ * twin of Goal 2's own "Imports finish without help" from the PRD "Bulk imports" (its plan's M1),
+ * an undated one of its own on Goal 3, and a Jan 29 one the PRD's plan no longer holds.
+ */
+export const LADDER_TWINS_SCENARIO = "goal-ladder-twins";
+export const LADDER_TWINS = {
+  twin: "Imports finish without help",
+  prd: { id: "prd-bulk-imports", slug: "bulk-imports", title: "Bulk imports" },
+  lone: "Seat changes from the admin page",
+  stale: "40 replies per agent per day",
+} as const;
 const CODE_KRS: [GmGoal & { position: number }, string, string, "confirmed" | "proposed"][] = [
   [goal("lk22", "Teams finish setup on the first day", "Teams done with setup on the day they sign up.", 35, 60, "%", "at_risk", 0), "lg2", "2026-09-02T09:00:00Z", "confirmed"],
   [goal("lk211", "Imports matched with no manual fix", "Imports whose columns all match on their own.", null, 80, "%", "not_measured", 0), "lk21", "2026-09-03T09:00:00Z", "proposed"],
@@ -112,6 +124,13 @@ const MILESTONES: GmMilestone[] = [
   ms("lm11", "lg4", "Help answers inside every screen", 100, 40, "2027-01-15", "on_track", "Support"),
   ms("lm12", "lg4", "Tickets per team down to 1.5", null, null, "2027-03-12", "no_gate", "Onboarding"),
 ];
+
+/** The twins scenario's PRD milestones (goal-map.ts's Held: `prd`, its plan's code, `out_of_plan`). */
+const TWIN_MILESTONES = [
+  { ...ms("lm13", "lg2", LADDER_TWINS.twin, null, null, null, "no_gate", "Platform"), prd: LADDER_TWINS.prd, prd_code: "M1" },
+  { ...ms("lm14", "lg3", LADDER_TWINS.lone, null, null, null, "no_gate", "Billing"), prd: LADDER_TWINS.prd, prd_code: "M2" },
+  { ...ms("lm15", "lg4", LADDER_TWINS.stale, 40, null, "2027-01-29", "not_measured", "Support"), prd: LADDER_TWINS.prd, prd_code: "M3", out_of_plan: true },
+] as unknown as GmMilestone[];
 
 // [name, goal, milestone, area, status, start, end, waits on (row numbers)]
 type Row = [string, string | null, string, string, "done" | "in_progress" | "planned", string | null, string | null, number[]];
@@ -194,7 +213,7 @@ const ALSO: Record<number, string> = { 3: "m10" };
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** The ladder's goal map (short ids: goal-map.ts gives them the API's UUIDs; features are "f1"...). */
-export function ladderMap(keyResults = false, codes = false): GoalMap {
+export function ladderMap(keyResults = false, codes = false, twins = false): GoalMap {
   const features: GmFeature[] = ROWS.flatMap(([name, g, m, a], i) => {
     if (!g || !m) return [];
     const milestones = (codes && i + 1 === 21 ? ["m6", m] : [m, ...(ALSO[i + 1] ? [ALSO[i + 1]] : [])]).map((x) => `l${x}`);
@@ -209,7 +228,10 @@ export function ladderMap(keyResults = false, codes = false): GoalMap {
     areas: AREAS.map((a) => ({ id: area(a), name: a, lever: a })),
     guardrail: { name: "Pages load in under 2 seconds", rule: "for 95% of views", current: 0, days: [0, 0, 0, 0, 0, 0, 0], held: true },
     // kr-in-goal-map: M3 is a milestone of the key result "Half of teams check in from mobile".
-    milestones: MILESTONES.map((m) => ({ ...m, ...(keyResults && m.id === "lm3" ? { goal: "lk12" } : {}), ...(codes && m.id === "lm5" ? { goal: "lk21" } : {}), ...(codes && m.id === "lm6" ? { goal: "lk22" } : {}) })),
+    milestones: [
+      ...MILESTONES.map((m) => ({ ...m, ...(keyResults && m.id === "lm3" ? { goal: "lk12" } : {}), ...(codes && m.id === "lm5" ? { goal: "lk21" } : {}), ...(codes && m.id === "lm6" ? { goal: "lk22" } : {}) })),
+      ...(twins ? TWIN_MILESTONES : []),
+    ],
     features,
     gaps: [],
     unplaced: [],

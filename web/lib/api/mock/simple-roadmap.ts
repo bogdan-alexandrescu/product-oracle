@@ -218,7 +218,7 @@ interface SimpleDb {
   /** roadmap-milestone-codes: goal-ladder's Goal map milestones, which are this roadmap's own goal
    * milestones in the API (goal_map._on_map reads the same rows), so the read codes them too
    * (server.ts copies them from the map on each request: goalMapMilestones). */
-  map_milestones?: { roadmap: string; milestones: { id: string; name: string; date: string | null; goal_id: string; rank: number }[] };
+  map_milestones?: { roadmap: string; milestones: { id: string; name: string; date: string | null; goal_id: string; rank: number; code?: string; prd?: { id: string; slug: string; title: string } }[] };
   /** milestone-rename: a goal's own milestone's name once renamed (goal id -> name; the goal's
    * attrs.milestone_name in the API); renaming it never renames the goal. */
   goal_milestone_names?: Record<string, string>;
@@ -1933,8 +1933,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const mapRanks = new Map((onMap?.milestones ?? []).map((m) => [m.goal_id, m.rank]));
   // milestone-rename: the map's milestones are the roadmap's own (TrackMilestone rows): its rights.
   const mapMilestoneOut = (m: NonNullable<typeof onMap>["milestones"][number]): Schemas["SimpleGoalMilestone"] => ({
-    id: m.id, roadmap_id: roadmapId(onMap!.roadmap), code: "", name: m.name, date: m.date, goal_id: m.goal_id, item_ids: [], counts_when: "", progress: "not_started",
-    prd: null, prd_owner: null, pending: null, ...rightsOn(onMap!.roadmap), carried_from: null, kind: "goal", done_when_line: "", status: "on_track",
+    id: m.id, roadmap_id: roadmapId(onMap!.roadmap), code: m.code ?? "", name: m.name, date: m.date, goal_id: m.goal_id, item_ids: [], counts_when: "", progress: "not_started",
+    prd: m.prd ?? null, prd_owner: null, pending: null, ...rightsOn(onMap!.roadmap), carried_from: null, kind: "goal", done_when_line: "", status: "on_track",
     status_reason: null, status_set: null, status_set_by_name: null, measure: null, baseline: null, target: null, current: null,
     sub_goal_of_id: null, sub_goal_ids: [], home_track_id: null, home_track_name: null, from_track_id: null, to_track_id: null,
     from_track_name: null, to_track_name: null, goal_target: false,

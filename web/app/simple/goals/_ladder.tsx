@@ -26,6 +26,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type PointerEvent as RPointerEvent, type RefObject, type WheelEvent as RWheelEvent } from "react";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ds/Button";
 import { Icon } from "@/components/ds/Icon";
 import { confirmInPage } from "@/components/ds/ConfirmDialog";
@@ -35,6 +36,7 @@ import { storeGoalOrder } from "@/components/simple/GoalOrder";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { GmFeature, GmGoal, GmMilestone, GmStatus, GoalMap } from "@/lib/api/mock/goal-map";
 import { formatCount } from "@/lib/format";
+import { joinTwins } from "@/lib/goal-map-twins";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
@@ -97,6 +99,9 @@ interface V {
   goals: GmGoal[];
   ms: GmMilestone[];
   msCode: Map<string, string>;
+  // Goal map twins: a kept card's twin's other name (its (i)); a PRD's milestone's PRD.
+  also: Map<string, string>;
+  prdOf: Map<string, Schemas["SimpleDocRef"]>;
   feats: LdFeature[];
   byId: Map<string, LdFeature>;
   sel: string | null;
@@ -212,10 +217,12 @@ export async function moveKrGoal(m: GmMilestone, goal: string, what: string, rel
 }
 
 export function GoalLadder(props: LadderProps) {
-  const { map } = props;
   const { can, me } = useMe();
   const phone = usePhone();
   const roadmap = useQuery("simple-roadmap:goal-map", () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })));
+  // Goal map twins (Nov 10): a PRD's milestone the roadmap codes as one with a goal's own is drawn once.
+  const { map, also } = useMemo(() => joinTwins(props.map, roadmap.data?.goal_milestones), [props.map, roadmap.data]);
+  const prdOf = useMemo(() => new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.prd ? [[m.id, m.prd] as const] : []))), [roadmap.data]);
   const items = useMemo(() => new Map((roadmap.data?.items ?? []).map((i) => [i.id, i])), [roadmap.data]);
   // The person's own pending suggestions: a suggested link shows on the card that would wait.
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
@@ -780,7 +787,7 @@ export function GoalLadder(props: LadderProps) {
   }, [menu, arrow, sel, sheet, edit, may]);
 
   const firstLoose = goals.find((g) => feats.some((x) => x.free && x.goal === g.id));
-  const v: V = { map, goals, ms, msCode, feats, byId, sel, setSel: (id) => { setSel(id); setRefused(null); }, edit, canChange, krCan, may, asked, phone, places, live, menu, setMenu, arrow, setArrow: (key) => setArrowAt(key ? { key, sel } : null), adding, setAdding, drop, refused, fresh, flash, flashGoal: firstLoose?.id ?? null, onOpen: props.onOpen, act };
+  const v: V = { map, goals, ms, msCode, also, prdOf, feats, byId, sel, setSel: (id) => { setSel(id); setRefused(null); }, edit, canChange, krCan, may, asked, phone, places, live, menu, setMenu, arrow, setArrow: (key) => setArrowAt(key ? { key, sel } : null), adding, setAdding, drop, refused, fresh, flash, flashGoal: firstLoose?.id ?? null, onOpen: props.onOpen, act };
   const drag = { setLive, setDrop };
 
   return (
@@ -1107,6 +1114,10 @@ function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
 
 function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
   const p = useLadderProps();
+  const router = useRouter();
+  // A PRD's milestone is changed in its PRD's plan, never moved to Trash here (always refused).
+  const prd = v.prdOf.get(m.id);
+  const trash = prd ? { w: `Open ${prd.title}`, on: () => router.push(`/simple/one-pagers/${prd.slug}`) } : { w: "Move to Trash", on: () => void v.act.trashKr(m.id), crit: true };
   const key = `ms:${m.id}`;
   const area = v.map.areas.find((a) => a.id === m.areas[0])?.name;
   const live = v.live?.id === m.id ? v.live : null;
@@ -1128,7 +1139,7 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
       data-testid="ld-milestone"
       tabIndex={v.edit && v.may ? 0 : undefined}
       onKeyDown={(e) => {
-        if ((e.key === "Delete" || e.key === "Backspace") && v.edit && v.may && e.target === e.currentTarget) {
+        if ((e.key === "Delete" || e.key === "Backspace") && v.edit && v.may && !prd && e.target === e.currentTarget) {
           e.preventDefault();
           e.stopPropagation();
           void v.act.trashKr(m.id);
@@ -1173,6 +1184,11 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
             {m.name}
           </span>
         )}
+        {v.also.has(m.id) && (
+          <InfoTip label={`Also: ${v.also.get(m.id)}`} testId="ld-ms-also">
+            Also: {v.also.get(m.id)}
+          </InfoTip>
+        )}
         {v.edit && v.may && <span className="ml-auto"><More label={`More for ${m.name}`} open={v.menu === key} onClick={() => v.setMenu(v.menu === key ? null : key)} /></span>}
       </span>
       <span className="text-[12px] leading-4 text-text2" title={m.measure}>
@@ -1203,14 +1219,14 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
                   ...(at > 0 ? [{ w: "Move up", on: () => void v.act.stepKr(m.id, -1) }] : []),
                   ...(at < krs.length - 1 ? [{ w: "Move down", on: () => void v.act.stepKr(m.id, 1) }] : []),
                   { w: "Move to…", on: () => v.act.krTo(m.id) },
-                  { w: "Move to Trash", on: () => void v.act.trashKr(m.id), crit: true },
+                  trash,
                 ]
               : // every-field-editable: anyone else who may propose asks to move it to another goal, or
                 // (goal-map-editing) to Trash.
                 v.may
                 ? [
                     { w: "Move to another goal…", on: () => v.act.krTo(m.id) },
-                    { w: "Move to Trash", on: () => void v.act.trashKr(m.id), crit: true },
+                    trash,
                   ]
                 : []),
           ]}
