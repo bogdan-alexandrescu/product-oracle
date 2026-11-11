@@ -49,7 +49,11 @@ function goal(id: string, name: string, target: number, current: number, unit: s
 const GOALS: GmGoal[] = [
   goal("gtdemos", "Booked demos per rep per day", 40, 31, "", "on_track", "Key results: 60% of calls reach a decision maker · 8 open demo slots per rep each day"),
   goal("gtpayments", "Failed payments per day", 0, 3, "", "at_risk", "Key results: card retries recover 90% · no payment stuck over 1 hour"),
-  goal("gtactivations", "Activations per team per week", 30, 18, "", "at_risk", "Key results: setup done in 1 day · 70% of invited people sign in"),
+  // Not measured yet: no metric, one to pick (with last week's value).
+  {
+    ...goal("gtactivations", "Activations per team per week", 30, 18, "", "at_risk", "Key results: setup done in 1 day · 70% of invited people sign in"),
+    current: null, status: "not_measured", metric: null, read_on: null, choices: [{ id: "metric-gtactivations-weekly", title: "Weekly team activations", last: 22 }],
+  },
   goal("gtrevenue", "Revenue per day", 20000, 13400, "$", "on_track", "Key results: 25% pick the annual plan · upgrades at day 20 reach 12%"),
 ];
 
@@ -59,8 +63,10 @@ type Ms = GmMilestone & { prd?: { id: string; slug: string; title: string }; prd
 function ms(id: string, name: string, g: string, iso: string, status: Status, threshold: number | null, prd?: string): Ms {
   const gl = GOALS.find((x) => x.id === g)!;
   const [, m, d] = iso.split("-").map(Number);
+  // As the API reads a gate: none set is No gate; a goal not measured leaves it not measured.
+  const read: Status = threshold === null ? "no_gate" : gl.current === null ? "not_measured" : status;
   return {
-    id, name, goal: g, measure: gl.measure, threshold, unit: gl.unit, current: gl.current, status, areas: [], depends: [],
+    id, name, goal: g, measure: gl.measure, threshold, unit: gl.unit, current: gl.current, status: read, areas: [], depends: [],
     month: MON[m - 1], due: `${MON[m - 1]} ${d}`, due_on: iso, days: Array.from({ length: 7 }, () => gl.current),
     confirmed: status === "met" ? "Robin Example" : null, confirmed_on: status === "met" ? "Nov 2" : null, proposed: false, can_change: true,
     ...(prd ? { prd: { id: `prd-${id}`, slug: prd.toLowerCase().replace(/[^a-z]+/g, "-"), title: prd }, prd_code: "" } : {}),
@@ -168,6 +174,14 @@ const HARD_MS: [string, string, Status, number][] = [
   ["Every team on the new booking page", "2027-03-05", "at_risk", 37],
 ];
 
+/** Each link's expected lift and confidence, by feature and milestone (none: "" and Medium). */
+const LIFTS: Record<string, Record<string, [string, "High" | "Medium" | "Low"]>> = {
+  "Lead list ranking": { gtm5: ["+2 demos a day", "High"] },
+  "No-show reminder texts": { gtm5: ["+1 demo a day", "High"], gtm9: ["+3 demos a day", "Low"] },
+};
+/** A feature on two milestones of one goal: its first milestone's row, and the other one. */
+export const GM_TRACKS_TWO = { name: "No-show reminder texts", also: "gtm9" } as const;
+
 /** Each goal's rows (the hard case's first goal at volume, and the two features with no track). */
 function rowsOf(hard: boolean): Record<string, Row[]> {
   const rows: Record<string, Row[]> = Object.fromEntries(Object.entries(ROWS).map(([k, v]) => [k, [...v]]));
@@ -197,10 +211,12 @@ export function tracksMap(hard: boolean): GoalMap {
     if (!m) return [];
     const lift = state === "shipped" ? "helping" : state === "nothelping" ? "not_helping" : "not_measured";
     const lever = GM_TRACKS.find((t) => t.area === area)?.lever ?? "";
-    return [{
-      id, name, code: "", area, milestones: [m], lever, expected: "", confidence: "Medium" as const, released: state !== "planned", measured: null, lift,
-      links: [{ milestone: m, expected: "", confidence: "Medium" as const, measured: null, lift, shipped_on: state === "planned" ? null : "Oct 20", before: null, after: null }],
-    }];
+    const on = name === GM_TRACKS_TWO.name ? [m, GM_TRACKS_TWO.also] : [m];
+    const links = on.map((x) => {
+      const [expected, confidence] = LIFTS[name]?.[x] ?? ["", "Medium" as const];
+      return { milestone: x, expected, confidence, measured: null, lift, shipped_on: state === "planned" ? null : "Oct 20", before: null, after: null };
+    });
+    return [{ id, name, code: "", area, milestones: on, lever, expected: links[0].expected, confidence: links[0].confidence, released: state !== "planned", measured: null, lift, links }];
   });
   return {
     goals: GOALS.map((g) => ({ ...g, history: [...g.history] })),

@@ -122,6 +122,14 @@ test.describe("Goal map: goals by tracks grid", () => {
     await expect(track(page, "No track")).toHaveCount(1);
     await expect(chip(page, "Help center search")).toContainText("No milestone");
     await expect(goal(page, "Booked demos per rep per day").getByTitle("Booked demos per rep per day")).toBeVisible();
+    // A goal's name is clamped to two lines; a long feature name keeps to one line on its chip.
+    const name = goal(page, "Booked demos per rep per day").getByTitle("Booked demos per rep per day");
+    const [clamp, h, lh] = await name.evaluate((el) => [getComputedStyle(el).webkitLineClamp, el.getBoundingClientRect().height, parseFloat(getComputedStyle(el).lineHeight)] as const);
+    expect(clamp).toBe("2");
+    expect(h).toBeLessThanOrEqual(2 * lh + 1);
+    const long = chip(page, "Call queue autopilot that skips leads").getByTitle(/Call queue autopilot that skips leads/);
+    const [ch, clh] = await long.evaluate((el) => [el.getBoundingClientRect().height, parseFloat(getComputedStyle(el).lineHeight)] as const);
+    expect(ch).toBeLessThanOrEqual(clh + 1);
   });
 });
 
