@@ -35,6 +35,21 @@ async function tabTo(page: Page, to: Locator, max = 80) {
   await expect(to).toBeFocused();
 }
 
+/**
+ * Shown on screen, not only "visible" to Playwright, which counts a ⋯ clipped inside a 1 px sr-only
+ * box as visible: it has a box wider than 1 px and is what a click at its centre lands on.
+ */
+async function expectShown(el: Locator) {
+  await expect(el).toBeVisible();
+  const shown = () =>
+    el.evaluate((e) => {
+      const r = e.getBoundingClientRect();
+      const at = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return r.width > 1 && !!at && e.contains(at);
+    });
+  await expect.poll(shown).toBe(true);
+}
+
 test.describe("Goal map: goals by tracks grid", () => {
   test.use(DESKTOP);
 
@@ -158,19 +173,19 @@ test.describe("Goal map: goals by tracks grid", () => {
     await page.mouse.move(0, 0);
     const more = m.getByRole("button", { name: /More for .*32 demos per rep/ });
     await tabTo(page, more);
-    await expect(more).toBeVisible();
+    await expectShown(more);
     await page.keyboard.press("Enter");
     await expect(page.getByRole("menuitem", { name: "Rename" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("menu")).toHaveCount(0);
     await expect(more).toBeFocused();
-    await expect(more).toBeVisible();
+    await expectShown(more);
     // A chip's menu, from one of its items.
     const c = chip(page, "Rep calendar sync");
     await tabTo(page, c.getByRole("button", { name: /Rep calendar sync/ }).first());
     const cmore = c.getByRole("button", { name: /More for .*Rep calendar sync/ });
     await tabTo(page, cmore, 2);
-    await expect(cmore).toBeVisible();
+    await expectShown(cmore);
     await page.keyboard.press("Enter");
     await page.keyboard.press("Tab");
     await expect(page.getByRole("menuitem", { name: "Move to…" })).toBeVisible();
@@ -178,7 +193,7 @@ test.describe("Goal map: goals by tracks grid", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByRole("menu")).toHaveCount(0);
     await expect(cmore).toBeFocused();
-    await expect(cmore).toBeVisible();
+    await expectShown(cmore);
   });
 
   test("the hard case: long names stay in two lines, features with no track get a No track row", async ({ page }) => {
