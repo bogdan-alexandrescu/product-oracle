@@ -28,7 +28,7 @@ import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changePhrase, changeSentence } from "./simple-change-words";
 import { milestoneValue, writeMilestone } from "./simple-milestones";
-import { addToCompany, featureItem, featureKeyOf, itemsOfFeature, priorityAfter, priorityBefore, prioritiesOut, sameName, twinBlock } from "./simple-priorities";
+import { addToCompany, featureItem, featureKeyOf, featureShortCodes, itemsOfFeature, priorityAfter, priorityBefore, prioritiesOut, sameName, twinBlock } from "./simple-priorities";
 import { archiveGoal, goalBucketsDb, touchLink, trashGoal, unarchiveGoal, type GoalBucketsTrash } from "./goal-buckets";
 import {
   canDecideItem,
@@ -444,7 +444,8 @@ function twinPair(db: SimpleDb, fid: string, into: string): Response | { source:
 }
 
 /**
- * prio-twin-propose (oracle.simple.twin_merges): op merge_twin, target {feature_id, into_id}. An approver's runs
+ * prio-twin-propose (oracle.simple.twin_merges): op merge_twin, target {feature_id, into_id} (kept with each one's title
+ * and the code Priorities shows it by). An approver's runs
  * mergeTwin at once; a commenter's is proposed to the company's owners (one open per twin); a viewer's is 403.
  */
 async function createTwinMerge(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Promise<Response> {
@@ -453,11 +454,13 @@ async function createTwinMerge(db: SimpleDb, ctx: SimpleChangesCtx, body: Schema
   const into = String(body.target.into_id ?? "");
   const pair = twinPair(db, fid, into);
   if (pair instanceof Response) return pair;
+  const short = featureShortCodes(db);
+  const codeOf = (key: string) => short.get(featureKeyOf(db, key)) ?? featureKeyOf(db, key);
   const applies = ctx.role === "owner" || ctx.role === "approver";
   if (!applies && (db.changes ?? []).some((c) => c.op === body.op && c.status === "proposed" && c.target.feature_id === fid)) return json(409, { detail: "This merge is proposed already" });
   const change: Change = {
     id: crypto.randomUUID(), session_id: null, document_id: null, draft_ids: [],
-    op: body.op, target: { feature_id: fid, into_id: into, title: pair.sourceTitle, into_title: pair.keptTitle }, before: {}, after: {},
+    op: body.op, target: { feature_id: fid, into_id: into, title: pair.sourceTitle, into_title: pair.keptTitle, code: codeOf(pair.source), into_code: codeOf(pair.kept) }, before: {}, after: {},
     status: applies ? "applied" : "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
     decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
     routed_to: applies ? [] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,

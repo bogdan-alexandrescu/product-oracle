@@ -559,6 +559,43 @@ function pickLine(key: string | null, offered: Line[], same?: Map<string, Line>)
  */
 export const PRIORITIES_BUCKET_ONLY_SCENARIO = "priorities-bucket-only";
 
+/**
+ * The items that rank, one per feature, whoever reads (priorities.py `_items`): every roadmap's open items, the
+ * company roadmap's first. A draft item is never ranked: it sits under "Not ranked yet", with no row and no bucket
+ * weeks (here each item stands for its own feature, so a draft has no row at all). prio-unranked: an item linked to no
+ * feature (its seed's feature_id null, as the Ground Truth scenario's Export to sheets) has no ranked feature: no row,
+ * listed in `unranked` instead.
+ */
+export function rankedItems(db: SimpleDb, all: Item[] = openItems(db)): Item[] {
+  return all.filter((i) => !i.draft && !noFeature(db, i));
+}
+
+const noFeature = (db: SimpleDb, i: Item): boolean => db.items.find((s) => s.key === i.key)?.feature_id === null;
+
+/** Every roadmap's open items as an owner reads them, the company roadmap's first. */
+function openItems(db: SimpleDb): Item[] {
+  const cut = new Set(db.items.filter((s) => closed(s)).map((s) => s.key));
+  const on = roadmapOut(db, "owner", new URLSearchParams())!.items.filter((i) => i.status !== "cut" && !cut.has(i.key));
+  return [...on, ...offCompany(db, on).filter((i) => i.status !== "cut" && !cut.has(i.key))];
+}
+
+/**
+ * Each feature's short code (priorities._short_codes) by its feature key (featureKeyOf), as Priorities shows it. In
+ * the mock each item's key is its feature's key (its own code when it has one); FEATURES is in creation order, a
+ * feature outside it after them by key. With a plan, a feature the plan names is keyed by the plan's code (F-06), so
+ * one feature reads one code on every tab.
+ */
+export function featureShortCodes(db: SimpleDb, ranked: Item[] = rankedItems(db)): Map<string, string> {
+  const featureKey = (k: string): string => featureKeyOf(db, k);
+  const created = [...Object.keys(FEATURES), ...ranked.map((i) => i.key).filter((k) => !FEATURES[k]).sort()].map(featureKey);
+  const prdCodes = Object.fromEntries(ranked.filter((i) => i.code).map((i) => [featureKey(i.key), i.code!]));
+  // Each feature's shown name (priorities.py `_shown_names`): its item's title as every reader
+  // sees it, else its seed item's.
+  const names = Object.fromEntries([...db.items.map((i) => [featureKey(i.key), i.title]), ...ranked.map((i) => [featureKey(i.key), i.title])]);
+  const shorts = shortCodes(created, prdCodes, names);
+  return new Map(created.map((k, n) => [k, shorts[n]]));
+}
+
 export function prioritiesOut(
   db: SimpleDb,
   ctx: PrioritiesCtx,
@@ -582,14 +619,8 @@ export function prioritiesOut(
   // Every feature ranks (the baseline is company-wide); one whose item the reader may not see
   // is a row with no item, never reorderable (priorities.py).
   const seen = new Set(read.items.map((i) => i.id));
-  const on = roadmapOut(db, "owner", new URLSearchParams())!.items.filter((i) => i.status !== "cut" && !cut.has(i.key));
-  const all = [...on, ...offCompany(db, on).filter((i) => i.status !== "cut" && !cut.has(i.key))];
-  // A draft item is never ranked (priorities.py `_items`): it sits under "Not ranked yet", with no
-  // row and no bucket weeks. Here each item stands for its own feature, so a draft has no row at all.
-  // prio-unranked: an item linked to no feature (its seed's feature_id null, as the Ground Truth
-  // scenario's Export to sheets) has no ranked feature: no row, listed in `unranked` instead.
-  const noFeature = (i: Item) => db.items.find((s) => s.key === i.key)?.feature_id === null;
-  const ranked = all.filter((i) => !i.draft && !noFeature(i));
+  const all = openItems(db);
+  const ranked = rankedItems(db, all);
   const byId = new Map(ranked.map((i) => [i.id, i]));
   const keyOf = (i: Item) => i.key;
   const score = new Map<string, number>();
@@ -669,18 +700,8 @@ export function prioritiesOut(
       before_override: (stored(db, i.id).override as Record<string, unknown> | undefined) ?? null,
     };
   });
-  // In the mock each item's key is its feature's key (its own code when it has one); FEATURES
-  // is in creation order, a feature outside it after them by key.
-  // With a plan, a feature the plan names is keyed by the plan's code (F-06), so one feature reads one code on every tab.
-  const featureKey = (k: string): string => featureKeyOf(db, k);
-  const created = [...Object.keys(FEATURES), ...yours.map((i) => i.key).filter((k) => !FEATURES[k]).sort()].map(featureKey);
-  const prdCodes = Object.fromEntries(yours.filter((i) => i.code).map((i) => [featureKey(i.key), i.code!]));
-  // Each feature's shown name (priorities.py `_shown_names`): its item's title as every reader
-  // sees it, else its seed item's.
-  const names = Object.fromEntries([...db.items.map((i) => [featureKey(i.key), i.title]), ...ranked.map((i) => [featureKey(i.key), i.title])]);
-  const shorts = shortCodes(created, prdCodes, names);
-  const short = new Map(created.map((k, n) => [k, shorts[n]]));
-  yours.forEach((i, n) => (rows[n].short_code = short.get(featureKey(i.key))!));
+  const short = featureShortCodes(db, ranked);
+  yours.forEach((i, n) => (rows[n].short_code = short.get(featureKeyOf(db, i.key))!));
   // prio-company: the feature's own code beside its name (priorities.FEATURE_CODE), never letters made up.
   rows.forEach((r) => (r.own_key = /^[A-Z]{1,3}-\d+$/.test(r.short_code) ? r.short_code : null));
   // plan-charts: with a plan, its PRD's items are in it (Goal buckets lists the rest outside it).
@@ -784,7 +805,7 @@ export function prioritiesOut(
     });
   // prio-unranked (priorities.py `_unranked`): the reader's live, non-draft items no row holds.
   const unranked: Schemas["SimplePriorityUnranked"][] = live
-    .filter((i) => !i.draft && noFeature(i))
+    .filter((i) => !i.draft && noFeature(db, i))
     .map((i) => ({ item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, roadmap: i.roadmap }));
   const buckets: Schemas["SimpleGoalBucket"][] = [];
   for (const r of kept) {

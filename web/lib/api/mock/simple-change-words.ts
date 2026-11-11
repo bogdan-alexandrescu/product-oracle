@@ -144,7 +144,11 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     // edit-goals-prds: a goal archived or moved to Trash (goal_asks).
     case "archive_goal": return `archived the goal ${quoted(target.title) ?? "a goal"}`;
     // prio-twin-propose (change_words: merge_twin): a same-name twin's feature merged into its row's.
-    case "merge_twin": return `merged ${quoted(target.title) ?? "a feature"} into ${quoted(target.into_title) ?? "its same name"}`;
+    // Each by its code and name ("merged ledger-copy Ledger into pay-1 Ledger").
+    case "merge_twin": {
+      const named = (code: unknown, title: unknown) => [code, title].filter(Boolean).join(" ");
+      return `merged ${named(target.code, target.title) || item || "a feature"} into ${named(target.into_code, target.into_title) || "its same name"}`;
+    }
     case "delete_goal": return `moved the goal ${quoted(target.title) ?? "a goal"} to Trash`;
     case "unarchive_goal": return `restored the goal ${quoted(target.title) ?? "a goal"}`;
     // goal-map-link-asks (goal_map_asks, change_words.py): a feature put on a goal milestone, or moved there.
