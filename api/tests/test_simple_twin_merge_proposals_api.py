@@ -22,6 +22,9 @@ Test cards (protects / fails_when / no_claim):
 - test_a_waiting_twin_merge_shows_on_its_twin: protects=Priorities lists the open merge_twin
   under the twin's feature (the proposer may withdraw it, the owner decide it) and a second
   proposal is 409; fails_when=the proposal shows nowhere on Priorities.
+- test_a_twin_merge_proposal_names_both_features_by_code: protects=a twin merge's words name
+  each feature by its code and name (oracle-product: code shown with name); fails_when=the
+  words carry only the names.
 - test_a_direct_twin_merge_closes_its_waiting_proposal: protects=an owner's Merge into… closes
   the twin's open proposal (declined; gone from Priorities and the Inbox; a later accept is 409,
   never 404); fails_when=the proposal stays open after the merge.
@@ -77,6 +80,19 @@ async def test_a_commenter_proposes_a_twin_merge_an_owner_approves(client):
     assert r.json()["change"]["status"] == "accepted", r.text
     assert not await _twin_left(w), "the accepted merge left the twin"
     assert await _feature_of(w, "dev-1") == w.ids["ledger"], "the item was left with no feature"
+
+
+async def test_a_twin_merge_proposal_names_both_features_by_code(client):
+    w = await company_world()
+    await _features(w, ("ledger-copy", "Ledger", 9))
+    # Each by the code Priorities shows it with: the row's and its twin's.
+    [row] = [r for r in (await w.read(client))["rows"] if r["feature_id"] == w.ids["ledger"]]
+    [twin] = [t for t in row["twins"] if t["feature_id"] == w.ids["ledger-copy"]]
+    assert row["code"] != twin["code"], (row, twin)
+    change = (await _propose(client, w)).json()["change"]
+    words = f"merged {twin['code']} Ledger into {row['code']} Ledger"
+    assert words in change["words"], change["words"]
+    assert w.ids["ledger"] not in change["words"], change["words"]
 
 
 async def test_a_declined_twin_merge_changes_nothing(client):
