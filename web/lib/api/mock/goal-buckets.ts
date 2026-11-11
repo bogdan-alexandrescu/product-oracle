@@ -205,8 +205,17 @@ const itemGoals = (s: ItemGoals) => [...new Set([...(s.goal ? [s.goal] : []), ..
 function moveItemsOff(items: ItemGoals[], g: Goal, to: Goal | null, goals: Goal[]): NonNullable<TrashEntryRow["item_goals"]> {
   const from = itemGoalKey(g) ?? g.key;
   const toKey = to ? (itemGoalKey(to) ?? to.key) : "";
-  // The goal's own key results go with it (move_items_off): an item on one is not kept there by it.
-  const live = (k: string) => goalParentKey(k) !== from && !goals.some((x) => x.id !== g.id && (itemGoalKey(x) ?? x.key) === k && (x.archived || x.trashed));
+  const gone = (k: string) => goals.some((x) => x.id !== g.id && (itemGoalKey(x) ?? x.key) === k && (x.archived || x.trashed));
+  // The goal's key results go with it, at any depth, as do those under an archived goal (move_items_off):
+  // an item on one is not kept there by it.
+  const live = (k: string) => {
+    const seen = new Set<string>();
+    for (let at: string | undefined = k; at; at = goalParentKey(at)) {
+      if (at === from || gone(at) || seen.has(at)) return false;
+      seen.add(at);
+    }
+    return true;
+  };
   const was: NonNullable<TrashEntryRow["item_goals"]> = [];
   for (const s of items) {
     const ids = itemGoals(s);

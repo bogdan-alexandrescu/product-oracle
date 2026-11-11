@@ -521,7 +521,7 @@ export const goalInTrash = (db: Pick<SimpleDb, "goal_buckets">, key: string): bo
 export const goalArchived = (db: Pick<SimpleDb, "goal_buckets">, key: string): boolean =>
   (db.goal_buckets?.goals ?? []).some((g) => g.archived && (g.key === key || g.title.toLowerCase() === (GOALS[key] ?? PLAN_GOALS[key] ?? "").toLowerCase()));
 /** The seeded fields of a roadmap goal (a goal bucket of its key starts from them). */
-export const roadmapGoalSeed = (key: string): RoadmapGoalFields => ({ title: GOALS[key] ?? PLAN_GOALS[key] ?? goalTitles.get(key)!, metric: METRICS[key] ?? null, target: TARGETS[key]?.[0] ?? null, due: TARGETS[key]?.[1] ?? null });
+export const roadmapGoalSeed = (key: string): RoadmapGoalFields => ({ title: GOALS[key] ?? PLAN_GOALS[key] ?? goalTitles.get(key) ?? "", metric: METRICS[key] ?? null, target: TARGETS[key]?.[0] ?? null, due: TARGETS[key]?.[1] ?? null });
 /** The goal's fields as read: its goal bucket's (one goal store, as the API's one goal entity), else an edit, else its seed. */
 export const roadmapGoal = (db: Pick<SimpleDb, "goal_edits" | "goal_buckets">, key: string): RoadmapGoalFields => {
   const b = bucketGoalOf(db, key);
