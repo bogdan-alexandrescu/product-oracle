@@ -32,6 +32,12 @@ Test cards (protects / fails_when / no_claim):
   fails_when=the group goes by the PRD's date.
 - test_two_goals_own_milestones_do_not_share_one_prd_twin: protects=two goals' own "Beta"
   and a PRD's "Beta" of no goal: at most one joins it, so two codes; fails_when=both read one.
+- test_a_goal_milestone_does_not_join_a_group_holding_another_goals_milestone (review of
+  797e41166, "Join only within the same goal", the owner, Nov 11): protects=a PRD's "M2 Beta"
+  of no goal (Dec 1) that Goal 1's PRD "M2 Beta" (Nov 1) and Goal 1's own "Beta" (Nov 1) joined
+  is Goal 1's: Goal 2's own "Beta" (Dec 1) keeps a code of its own; fails_when=all four read M1.
+- test_a_goal_milestone_joins_a_group_of_its_own_goal: protects=the same three without Goal
+  2's still read one code (same-goal joins still join); fails_when=Goal 1's own splits off.
 - test_of_two_matching_prd_milestones_the_closest_date_joins: protects=a goal's "Beta" joins
   the matching PRD milestone closest in date, then the one of its exact name, not the first by
   id; fails_when=the exact name wins over the closer date.
@@ -190,6 +196,27 @@ def test_two_goals_own_milestones_do_not_share_one_prd_twin():
     assign([twin, b, a], [], [], RANK)
     assert a.roadmap_code != b.roadmap_code
     assert twin.roadmap_code == a.roadmap_code  # Goal 1 comes first in goal order
+
+
+def test_a_goal_milestone_does_not_join_a_group_holding_another_goals_milestone():
+    """Join only within the same goal, by the group a PRD milestone joined (review of 797e41166)."""
+    plain = gm("M2", "Beta", "2026-12-01", goal=None, prd=True)
+    prd1 = gm("M2", "Beta", "2026-11-01", prd=True)
+    own1 = gm("M1", "Beta", "2026-11-01")
+    own2 = gm("M1", "Beta", "2026-12-01", goal=G2)
+    assign([plain, prd1, own1, own2], [], [], RANK)
+    assert plain.roadmap_code == prd1.roadmap_code == own1.roadmap_code == "M1"
+    assert own2.roadmap_code == "M2"
+
+
+def test_a_goal_milestone_joins_a_group_of_its_own_goal():
+    plain = gm("M2", "Beta", "2026-12-01", goal=None, prd=True)
+    prd1 = gm("M2", "Beta", "2026-11-01", prd=True)
+    own1 = gm("M1", "Beta", "2026-11-01")
+    pilot = gm("M3", "Pilot", "2026-11-15", goal=G2)
+    assign([plain, prd1, own1, pilot], [], [], RANK)
+    assert plain.roadmap_code == prd1.roadmap_code == own1.roadmap_code == "M1"
+    assert pilot.roadmap_code == "M2"
 
 
 def test_of_two_matching_prd_milestones_the_closest_date_joins():

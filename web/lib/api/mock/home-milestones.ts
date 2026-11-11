@@ -367,6 +367,31 @@ export function seedHomeMilestoneLeadGoals(): SimpleDb {
   return rm;
 }
 
+export const HOME_MILESTONE_GOAL_GROUPS_SCENARIO = "home-milestones-goal-groups";
+
+/**
+ * home-milestones-goal-groups (review of 797e41166, "Join only within the same goal", the owner,
+ * Nov 11): on Onboarding, the Setup guide PRD's "M2 · Early access" of no goal (Dec 1, Setup
+ * checklist), the Import guide PRD's "M2 · Early access" under Faster activation (Nov 1, Sample data
+ * import), Faster activation's own "Early access" (Nov 1, Health log) and Grow retention's own
+ * "Early access" (Dec 1, Welcome video). The first three are one milestone, Faster activation's;
+ * Grow retention's keeps its own row.
+ */
+export function seedHomeMilestoneGoalGroups(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  const beta = (id: string, code: string, date: string, goal: string | null, gate: string, prd?: { slug: string; title: string }): MockMilestone => ({
+    id: stableUuid(`simple-gm/goal-groups-${id}`), roadmap: "onboarding-roadmap", code, name: "Early access", date, goal, gates: [gate], counts_when: "", progress: "not_started", ...(prd ? { prd } : {}),
+  });
+  rm.goal_milestones = [
+    beta("plain", "M2", "2026-12-01", null, "setup-checklist", { slug: "setup-guide", title: "Setup guide" }),
+    beta("prd", "M2", "2026-11-01", "faster-activation", "setup-import", { slug: "import-guide", title: "Import guide" }),
+    beta("faster", "M1", "2026-11-01", "faster-activation", "setup-health-log"),
+    beta("retention", "M1", "2026-12-01", "grow-retention", "setup-video"),
+  ];
+  rm.items = rm.items.map((s) => (s.key === "setup-video" ? { ...s, goal: "grow-retention" } : s));
+  return rm;
+}
+
 export const HOME_MILESTONE_TWO_ROADMAPS_SCENARIO = "home-milestones-two-roadmaps";
 export const HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO = "home-milestones-two-roadmaps-swapped";
 
