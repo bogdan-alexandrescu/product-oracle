@@ -10,7 +10,7 @@
   query through it, 0.05 ms against a 0.70 ms sequential scan without it, and so do the
   questions' and tracks' open proposals and Trash's deleted items (EXPLAIN, speed review).
 
-The 5 s lock_timeout is reset at the end: Alembic runs every pending migration in one
+Both ways take a 5 s lock_timeout, reset at the end: Alembic runs every pending migration in one
 transaction, and a SET LOCAL would bind the ones after this.
 
 Revision ID: 0130_simple_change_indexes
@@ -45,7 +45,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("SET LOCAL lock_timeout = '5s'")
     op.drop_index("ix_simple_changes_op", table_name=T)
     op.drop_index("ix_simple_changes_draft_ids", table_name=T)
     op.drop_index("ix_simple_changes_proposed", table_name=T)
     op.drop_index("ix_simple_changes_at_seq", table_name=T)
+    op.execute("RESET lock_timeout")
