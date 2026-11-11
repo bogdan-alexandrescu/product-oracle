@@ -846,6 +846,8 @@ async def edit_goal(
     }
     a["target_history"] = [entry, *(a.get("target_history") or [])]
     a["target"] = int(target) if float(target).is_integer() else target
+    # goal-target-kept: a typed target text would read apart from the new number.
+    a.pop("target_text", None)
     goal.attrs = a
     flag_modified(goal, "attrs")
     baseline.revise(db, actor, goal, before, "Target changed on the Goal map")

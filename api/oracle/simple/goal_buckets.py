@@ -178,13 +178,16 @@ def _target(attrs: dict[str, Any]) -> str | None:
     return f"{n}{unit}" if unit == "%" else f"{n} {unit}".strip()
 
 
-# goal-target-kept: a target typed as a number, with or without its unit ("60",
-# "60 conversions", "1,200 shops", "60%").
-_TYPED_TARGET = re.compile(r"(-?\d[\d,]*(?:\.\d+)?)\s*(.*)")
+# goal-target-kept: a target typed as a number, with or without its unit, before or after
+# it ("60", "60 Conversions", "1,200 shops", "60%", "$1,200").
+_TYPED_TARGET = re.compile(r"(\D*?)(-?\d[\d,]*(?:\.\d+)?)\s*(.*)")
+# A currency typed as its sign, as the goal's unit is stored (lower-cased).
+_SIGNS = {"$": "usd", "€": "eur", "£": "gbp"}
+NUMBER_KEPT = "A measured goal keeps its target: type its new number"
 
 
 class TargetKept(ValueError):
-    """A measured goal's target cleared from a quick field: refused (422)."""
+    """A measured goal's target cleared, or typed in words or another unit: refused (422)."""
 
 
 def _words(v: Any) -> str | None:
@@ -197,35 +200,40 @@ def typed_target(attrs: dict[str, Any], typed: str | None) -> dict[str, Any]:
     """goal-target-kept: ``attrs`` with the target a person typed in Simple (the goal form,
     the feature panel). The target as it reads now (whitespace aside) changes nothing. A
     measured goal (a number in ``target``) never loses its number or unit here: a number
-    typed, with or without a unit, is its new target (its unit kept when none is typed);
-    other words are kept as ``target_text`` beside the number; clearing it is refused
-    (``TargetKept``). A goal with no number keeps what is typed as text, as before."""
+    typed alone, or with the goal's unit in any case, is its new target in the goal's unit;
+    a number in another unit, words only and clearing it are refused (``TargetKept``), so
+    no ``target_text`` ever reads apart from its number. A goal with no number keeps what
+    is typed as text, as before."""
     out = dict(attrs)
     if _words(typed) == _words(_target(attrs)):
         return out
     measured = isinstance(attrs.get("target"), int | float) and not isinstance(
         attrs.get("target"), bool
     )
-    if typed is None or not typed.strip():
-        if measured:
-            raise TargetKept("A measured goal keeps its target: type its new number")
-        out.pop("target_text", None)
-        return out
-    m = _TYPED_TARGET.fullmatch(" ".join(typed.split()))
-    unit = m.group(2).strip() if m else ""
-    if measured and m and (not unit or unit_ok(unit)):
-        n = float(m.group(1).replace(",", ""))
-        out["target"] = int(n) if n.is_integer() else n
-        if unit:
-            out["unit"] = unit
-        elif isinstance(out.get("unit"), str):
-            out["unit"] = out["unit"].strip()
-        out.pop("target_text", None)
-        return out
-    # A new target is kept as typed; a measured goal keeps its number and unit beside it.
-    out["target_text"] = typed
     if not measured:
-        out.pop("target", None)
+        if typed is None or not typed.strip():
+            out.pop("target_text", None)
+        else:
+            out["target_text"] = typed
+            out.pop("target", None)
+        return out
+    m = _TYPED_TARGET.fullmatch(_words(typed) or "")
+    if m is None:
+        raise TargetKept(NUMBER_KEPT)
+    unit = _words(f"{m.group(1)} {m.group(3)}") or ""
+    unit = _SIGNS.get(unit, unit.lower())
+    have = out["unit"].strip() if isinstance(out.get("unit"), str) else ""
+    if unit and unit != have.lower():
+        if have:
+            raise TargetKept(f"This goal is measured in {have}: type its new number")
+        if not unit_ok(unit):
+            raise TargetKept("Type the target as a number, like 60")
+        have = unit
+    n = float(m.group(2).replace(",", ""))
+    out["target"] = int(n) if n.is_integer() else n
+    if have:
+        out["unit"] = have
+    out.pop("target_text", None)
     return out
 
 

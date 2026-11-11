@@ -74,8 +74,7 @@ import {
   readDates,
   roadmapGoal,
   roadmapGoalKey,
-  measuredUnit,
-  TYPED_TARGET,
+  keptTarget,
   goalInTrash,
   writeRoadmapGoal,
   seesDraft,
@@ -834,12 +833,9 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     // goal-target-kept: a measured goal keeps its number and unit: a bare number is in its unit,
     // clearing it is refused.
     const gk = roadmapGoalKey(String(target.goal_id ?? ""), db);
-    const unit = gk ? measuredUnit(gk, roadmapGoal(db, gk).target) : null;
-    let typed = line(body.after?.target);
-    if (unit && !typed) return json(422, { detail: "A measured goal keeps its target: type its new number" });
-    const m = unit && typed ? TYPED_TARGET.exec(typed) : null;
-    if (m && !m[2]) typed = `${Number(m[1].replace(/,/g, ""))}${unit === "%" ? "%" : ` ${unit}`}`;
-    Object.assign(after, { measure, target: typed, due });
+    const kept = keptTarget(gk, gk ? roadmapGoal(db, gk).target : null, line(body.after?.target));
+    if ("detail" in kept) return json(422, kept);
+    Object.assign(after, { measure, target: kept.target, due });
     for (const k of Object.keys(after)) if (!["measure", "target", "due"].includes(k)) delete after[k];
   }
   const before: Values = ranking

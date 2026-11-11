@@ -501,6 +501,23 @@ export const measuredUnit = (key: string, target: string | null): string | null 
   const m = unit && target ? TYPED_TARGET.exec(target) : null;
   return m && m[2] === unit ? unit! : null;
 };
+/** A typed target's number, with its unit (if any) before or after it ("3", "3 Days", "$1,200"). */
+const TYPED_NUMBER = /^(\D*?)(-?\d[\d,]*(?:\.\d+)?)\s*(.*)$/;
+const SIGNS: Record<string, string> = { $: "usd", "€": "eur", "£": "gbp" };
+/** goal-target-kept (goal_buckets.typed_target): the target goal `key` (its target reads `was`)
+ * gets when a person types `typed`, or the API's 422 detail. A measured goal takes a number alone
+ * or in its own unit (any case), in its unit; another unit, words only or nothing is refused. */
+export const keptTarget = (key: string | null | undefined, was: string | null, typed: string | null | undefined): { target: string | null } | { detail: string } => {
+  const words = (v: string | null | undefined) => (v ?? "").trim().replace(/\s+/g, " ") || null;
+  const t = words(typed);
+  const unit = key ? measuredUnit(key, was) : null;
+  if (!unit || t === words(was)) return { target: t };
+  const m = t ? TYPED_NUMBER.exec(t) : null;
+  if (!m) return { detail: "A measured goal keeps its target: type its new number" };
+  const u = (words(`${m[1]} ${m[3]}`) ?? "").toLowerCase();
+  if (u && (SIGNS[u] ?? u) !== unit.toLowerCase()) return { detail: `This goal is measured in ${unit}: type its new number` };
+  return { target: `${Number(m[2].replace(/,/g, ""))}${unit === "%" ? "%" : ` ${unit}`}` };
+};
 export type RoadmapGoalFields = { title: string; metric: string | null; target: string | null; due: string | null };
 /** A goal's key from its id (the goal edit takes either kind of goal, as the API's one goal entity):
  * a roadmap goal's, or a goal bucket's of that key. */
