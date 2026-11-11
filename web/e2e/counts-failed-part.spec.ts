@@ -455,3 +455,62 @@ test("the rail: a page change drops the re-read already waiting, so the failed p
   await page.waitForTimeout(6_000);
   expect(await calls(page, "/v1/inbox/questions")).toBe(before + 1);
 });
+
+/*
+ * counts-failed-read-2: a list that failed stays failed in the count until it reads again, and the
+ * count reads it again on its own. fails_when: Detailed's badge comes back with a number made of
+ * fresh questions and the Inbox's rows from before they failed; a failed count (Detailed's badge or
+ * Simple's rail) stays without its number until the person opens another page.
+ */
+test("Detailed's rail: questions that change while the Inbox's rows fail show no badge; it comes back once the rows read", async ({ page, context }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+  const badge = page.getByTestId("nav-inbox-badge");
+  await expect(badge).toHaveText(/^\d+$/, { timeout: 15_000 });
+  // In another tab, a question asked of me is answered: my questions change.
+  const other = await context.newPage();
+  await other.setViewportSize({ width: 1440, height: 900 });
+  await other.goto("/inbox");
+  const row = other.getByTestId("inbox-questions").locator("tr[data-row]").filter({ hasText: "Which metric" });
+  await row.getByRole("button", { name: "Answer" }).click();
+  await other.getByRole("textbox", { name: "Your answer" }).fill("Time to pay, from the example dashboard.");
+  await other.getByRole("button", { name: "Send answer" }).click();
+  await expect(row.getByRole("button", { name: "Answer" })).toHaveCount(0, { timeout: 15_000 });
+  await other.close();
+  // Back here, past the shared answers' 2 s: the Inbox's rows fail, and my questions answer late.
+  await page.waitForTimeout(2_500);
+  await page.evaluate(
+    ([failKey, slowKey, msKey]) => {
+      localStorage.setItem(failKey, "/v1/inbox");
+      localStorage.setItem(slowKey, "/v1/inbox/questions");
+      localStorage.setItem(msKey, "2500");
+    },
+    [MOCK_FAIL_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY] as const,
+  );
+  const before = await calls(page, "/v1/inbox/questions");
+  await page.getByTestId("nav-inbox").click();
+  await expect(badge).toHaveCount(0, { timeout: 3_000 });
+  // My questions land, changed, while the rows still fail: still no number.
+  await expect.poll(() => calls(page, "/v1/inbox/questions"), { timeout: 15_000 }).toBeGreaterThan(before);
+  await page.waitForTimeout(4_000);
+  await expect(badge).toHaveCount(0);
+  // The rows read again: the badge comes back on its own, after the back-off, with no page change.
+  await page.evaluate(([failKey, slowKey]) => [failKey, slowKey].forEach((k) => localStorage.removeItem(k)), [MOCK_FAIL_KEY, MOCK_SLOW_KEY] as const);
+  await page.clock.runFor(16_000);
+  await expect(badge).toHaveText(/^\d+$/, { timeout: 5_000 });
+});
+
+test("the rail: a failed part's count comes back once its read works again, with no page change", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await failing(page, "/v1/inbox/questions");
+  await login(page);
+  await page.goto("/simple/one-pagers");
+  const inbox = page.getByTestId("simple-nav-inbox-count");
+  await expect(inbox).toHaveAttribute("title", /could not load/i, { timeout: 15_000 });
+  await page.evaluate((key) => localStorage.removeItem(key), MOCK_FAIL_KEY);
+  await page.clock.runFor(16_000);
+  await expect(inbox).toHaveText(/^\d+$/, { timeout: 5_000 });
+  await expect(inbox).not.toHaveAttribute("title", /could not load/i);
+});
