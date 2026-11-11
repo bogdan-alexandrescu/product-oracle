@@ -522,17 +522,38 @@ async def move_off(db: AsyncSession, g: Entity, to_goal_id: uuid.UUID | None) ->
 
 
 async def move_items_off(
-    db: AsyncSession, goal_id: uuid.UUID, to_goal_id: uuid.UUID
+    db: AsyncSession, goal_id: uuid.UUID, to_goal_id: uuid.UUID | None
 ) -> list[ItemGoalsSnap]:
-    """The roadmap items that name the goal as their own serve ``to_goal_id`` instead
-    (first, unless they serve it already). Their goals as they were."""
+    """The roadmap items that name the goal (those in Trash too, so one restored later does
+    not name it) lose it: an item that serves another live goal too keeps that one as its
+    own (now first), as :func:`move_off` keeps a feature's; the rest serve ``to_goal_id``
+    instead, or no goal. Their goals as they were, for Undo."""
+    rows = list(
+        await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.goal_ids.contains([goal_id]))
+            .execution_options(**{INCLUDE_TRASHED: True})
+            .with_for_update()
+        )
+    )
+    others = {i for r in rows for i in r.goal_ids or [] if i != goal_id}
+    live = set(
+        await db.scalars(
+            select(Entity.id).where(
+                Entity.id.in_(others), Entity.type == "goal", Entity.status != "rejected"
+            )
+        )
+    )
     before = []
-    for row in await db.scalars(
-        select(RoadmapItem).where(RoadmapItem.goal_ids.contains([goal_id])).with_for_update()
-    ):
+    for row in rows:
         before.append(ItemGoalsSnap(item_id=row.id, goal_ids=list(row.goal_ids)))
         ids = [i for i in row.goal_ids if i != goal_id]
-        row.goal_ids = ids if to_goal_id in ids else [to_goal_id, *ids]
+        if any(i in live for i in ids):
+            row.goal_ids = sorted(ids, key=lambda i: i not in live)
+        elif to_goal_id is None or to_goal_id in ids:
+            row.goal_ids = ids
+        else:
+            row.goal_ids = [to_goal_id, *ids]
     return before
 
 
@@ -571,8 +592,8 @@ async def archive(
         if to.id == g.id or to.status == "rejected":
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick another goal")
     undo = GoalBucketsUndo(goals=[_goal_snap(g)], features=await move_off(db, g, to_goal_id))
-    if to_goal_id is not None:
-        undo.items = await move_items_off(db, g.id, to_goal_id)
+    # With no goal picked the items leave it too (they show under No goal); Undo puts them back.
+    undo.items = await move_items_off(db, g.id, to_goal_id)
     g.status = "rejected"
     now = company_time.now()
     g.attrs = {**(g.attrs or {}), "archived_at": now.isoformat()}
@@ -643,7 +664,10 @@ async def undo_goal_buckets(
         await _restore_links(db, f)
     for item in body.items:
         row = await db.scalar(
-            select(RoadmapItem).where(RoadmapItem.id == item.item_id).with_for_update()
+            select(RoadmapItem)
+            .where(RoadmapItem.id == item.item_id)
+            .execution_options(**{INCLUDE_TRASHED: True})
+            .with_for_update()
         )
         if row is not None:
             row.goal_ids = list(item.goal_ids)

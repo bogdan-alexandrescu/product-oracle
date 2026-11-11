@@ -43701,6 +43701,11 @@ export interface components {
             /** Title */
             title: string;
             goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            /**
+             * Goal Ids
+             * @default []
+             */
+            goal_ids: string[];
             roadmap: components["schemas"]["SimpleDocRef"];
             /**
              * Applies
@@ -43818,6 +43823,11 @@ export interface components {
             /** Title */
             title: string;
             goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            /**
+             * Goal Ids
+             * @default []
+             */
+            goal_ids: string[];
             /** Milestone */
             milestone?: string | null;
             /** Horizon */
@@ -43908,6 +43918,11 @@ export interface components {
             /** Title */
             title: string;
             goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            /**
+             * Goal Ids
+             * @default []
+             */
+            goal_ids: string[];
             roadmap: components["schemas"]["SimpleDocRef"];
         };
         /** SimpleQuarter */

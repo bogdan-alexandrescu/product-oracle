@@ -129690,6 +129690,14 @@
               }
             ]
           },
+          "goal_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Goal Ids",
+            "default": []
+          },
           "roadmap": {
             "$ref": "#/components/schemas/SimpleDocRef"
           },
@@ -129976,6 +129984,14 @@
               }
             ]
           },
+          "goal_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Goal Ids",
+            "default": []
+          },
           "milestone": {
             "anyOf": [
               {
@@ -130195,6 +130211,14 @@
                 "type": "null"
               }
             ]
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Goal Ids",
+            "default": []
           },
           "roadmap": {
             "$ref": "#/components/schemas/SimpleDocRef"
