@@ -256,6 +256,8 @@ interface SimpleDb {
   /** item-milestone: tracks Simple knows besides TRACKS and the added roadmaps' own (key -> title),
    * known as knowExtraRoadmaps knows theirs. */
   extra_tracks?: Record<string, string>;
+  /** goal-map-tracks: the company's tracks are extra_tracks alone (none of TRACKS' seeded ones), known as knowExtraRoadmaps knows them. */
+  tracks_only?: boolean;
   /** qa-prio-twins: item keys whose feature Oracle only proposed: ranked, but not in /v1/feature-states (confirmed only). */
   proposed_features?: string[];
   /** one-roadmap-many-prds (api/oracle/roadmap/company.feeding_ids): the company roadmap's slug;
@@ -380,7 +382,9 @@ export function trackGoal(db: SimpleDb, track: string): { goal_id: string | null
 
 export function mapGoalRef(db: Pick<SimpleDb, "goal_buckets">, id: string): Schemas["SimpleGoalRef"] | null {
   if (!(id in MAP_GOALS) || db.goal_buckets?.goals.some((g) => g.id === id && g.trashed)) return null;
-  return { id, key: id, title: MAP_GOALS[id], metric: null, position: null, target: null, due: null, current: null, unit: null };
+  // goal-map-tracks: one store, so its goal bucket (same id) gives its name, measure and target as edited.
+  const b = db.goal_buckets?.goals.find((g) => g.id === id);
+  return { id, key: id, title: b?.title || MAP_GOALS[id], metric: b?.measure || null, position: b?.position ?? null, target: b?.target || null, due: b?.due ?? null, current: null, unit: null };
 }
 
 /**
@@ -869,10 +873,21 @@ export function knowManyPlans(db: { items: { key: string; roadmap: string }[] } 
  * while it is the roadmap's, as knowManyPlans; taken out again once it is not.
  */
 let extraAdded: { roadmaps: string[]; tracks: string[] } = { roadmaps: [], tracks: [] };
-export function knowExtraRoadmaps(db: { extra_roadmaps?: SimpleDb["extra_roadmaps"]; extra_tracks?: SimpleDb["extra_tracks"] } | undefined): void {
+/** goal-map-tracks: TRACKS' seeded tracks a tracks_only db leaves out (key -> title), put back once it is not loaded. */
+let tracksLeftOut: Record<string, string> = {};
+export function knowExtraRoadmaps(db: { extra_roadmaps?: SimpleDb["extra_roadmaps"]; extra_tracks?: SimpleDb["extra_tracks"]; tracks_only?: boolean } | undefined): void {
   for (const k of extraAdded.roadmaps) delete ROADMAPS[k];
   for (const k of extraAdded.tracks) delete TRACKS[k];
   extraAdded = { roadmaps: [], tracks: [] };
+  for (const [k, title] of Object.entries(tracksLeftOut)) TRACKS[k] = title;
+  tracksLeftOut = {};
+  if (db?.tracks_only) {
+    for (const k of Object.keys(TRACKS)) {
+      if (k in (db.extra_tracks ?? {})) continue;
+      tracksLeftOut[k] = TRACKS[k];
+      delete TRACKS[k];
+    }
+  }
   for (const [slug, r] of Object.entries(db?.extra_roadmaps ?? {})) {
     if (!(slug in ROADMAPS)) {
       ROADMAPS[slug] = { title: r.title, visibility: "company", prd: r.prd, draft: 1 };

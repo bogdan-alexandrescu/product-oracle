@@ -221,6 +221,7 @@ import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPr
 import { closed, GOALS, MAP_GOALS, prdFeeds, prdOwnerIdsOf, prdTrackOwnerIds, roadmapKeyOf, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, milestoneGoalInTrash, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, LADDER_TRACK_OWNER_SCENARIO, LADDER_TWINS_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
+import { GM_TRACKS, GM_TRACKS_HARD_SCENARIO, GM_TRACKS_SCENARIO, tracksGoals, tracksItems } from "./goal-map-tracks";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -4486,6 +4487,32 @@ function load(): Db {
                     }
                     return db;
                   }
+              : scenario === GM_TRACKS_SCENARIO || scenario === GM_TRACKS_HARD_SCENARIO
+                ? () => {
+                    // goal-map-tracks: as goal-ladder, the map's goals are Home's (Baseline goals and goal buckets,
+                    // the same ids) and each feature is its own Simple roadmap item, here on one of the company's
+                    // five tracks (the map's rows), which are its only tracks.
+                    const db = seed();
+                    const template = db.baseline.entities.find((e) => e.type === "goal")!;
+                    for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
+                    const goals = tracksGoals(goalMapIdOf);
+                    for (const g of goals) db.baseline.entities.push({ ...template, ...g, body: null, locked: false, locked_by: null, locked_at: null });
+                    const rm = (db.simple_roadmap = seedSimpleRoadmap());
+                    // Each item names its goal itself (by the goal's id): off its last milestone it is unplaced under it.
+                    rm.items = tracksItems(scenario === GM_TRACKS_HARD_SCENARIO).map(({ goal, ...x }) => ({ ...x, heading: `${x.section.toUpperCase()} ${x.title}`, horizon: "next" as const, roadmap: "onboarding-roadmap", confidence: "medium" as const, map_goal: goalMapIdOf(goal) }));
+                    rm.ids = Object.fromEntries(rm.items.map((x) => [x.key, stableUuid(`simple-item/${x.key}`)]));
+                    const gb = (rm.goal_buckets = seedGoalBuckets());
+                    for (const g of goals) {
+                      const t = Number(g.attrs.target);
+                      gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: g.attrs.unit === "$" ? `$${t.toLocaleString("en-US")}` : String(t), due: null, archived: false });
+                    }
+                    rm.extra_tracks = Object.fromEntries(GM_TRACKS.map((t) => [t.key, t.title]));
+                    rm.track_order = GM_TRACKS.map((t) => t.key);
+                    rm.tracks_only = true;
+                    // roadmap-milestone-codes: the map's milestones are this roadmap's goal milestones (route copies them).
+                    rm.map_milestones = { roadmap: "onboarding-roadmap", milestones: [] };
+                    return db;
+                  }
               : scenario === APPROVED_ROADMAP_SCENARIO
                 ? () => seedApprovedRoadmapScenario()
               : scenario === CROWDED_MILESTONES_SCENARIO
@@ -8301,7 +8328,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p, bin);
     if (bucketsRes) return bucketsRes;
     // goal-ladder: add_item (and goal-map-editing: set_goal) may name any confirmed goal by its id (additions._where), as Home's goals are the map's.
-    if (db.goal_map) for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") MAP_GOALS[e.id] = e.title;
+    // goal-map-tracks: one goal store, so a goal bucket of the same id (renamed in Simple) names it.
+    const bucketTitle = (e: { id: string; title: string }) => db.simple_roadmap?.goal_buckets?.goals.find((g) => g.id === e.id)?.title || e.title;
+    if (db.goal_map) for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") MAP_GOALS[e.id] = bucketTitle(e);
     // goal-map-editing: the map's milestones are Simple Roadmap's own (edit, Trash, restore).
     const ladderMsRes = await routeLadderMilestone(db, { id: me.id, role: me.role, name: simpleNames[me.id] ?? me.email }, r, p, bin.trash, bin.now);
     if (ladderMsRes) return ladderMsRes;
@@ -8313,7 +8342,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       const read = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, new Request("http://mock/v1/simple/roadmap"), ["v1", "simple", "roadmap"], new URLSearchParams());
       const body = read && read.ok ? ((await read.json()) as { items: { id: string; title: string; status: string; goal?: { id: string } | null }[] }) : { items: [] };
       return body.items;
-    }, () => db.baseline.entities.filter((e) => e.type === "goal"), (goalId) => !!db.simple_roadmap?.goal_buckets?.goals.some((g) => g.id === goalId && g.trashed));
+    }, () => db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ ...e, title: bucketTitle(e) })), (goalId) => !!db.simple_roadmap?.goal_buckets?.goals.some((g) => g.id === goalId && g.trashed));
     // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
     if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
     // pre-demo QA P-6: the panel reads the goal each feature serves on the map (one link, service._ladder_goals).
