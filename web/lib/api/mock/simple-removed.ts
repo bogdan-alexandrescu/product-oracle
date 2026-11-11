@@ -43,7 +43,8 @@ type Db = SimpleDb & {
   plan_proposed?: string[];
   /** Track names as Simple changed them (TRACKS is the module's; it is rebuilt on a reload). */
   track_titles?: Record<string, string>;
-  trashed_tracks?: Record<string, { title: string; state: TrackState; owner?: string; items: string[] }>;
+  /** `published`: per open draft, the keys of its published items that were on the track (trash.delete_track clears both). */
+  trashed_tracks?: Record<string, { title: string; state: TrackState; owner?: string; items: string[]; published?: Record<string, string[]> }>;
   /** tracks-goal: the PRD Oracle suggests a track for in the Inbox ("" none). */
   track_suggestion?: string;
 };
@@ -228,13 +229,22 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     // Roadmap Nov 10 (removed.list_simple_tracks): a track's counts are what the reader's
     // Roadmap shows, the working draft for one who reads it, else the published items.
     const shown = readerDb(db, ctx).items;
+    // Tracks sheet review (Nov 11): Move to Trash also clears the published items the reader's draft moved
+    // off the track; moves_count counts them (each once), draft_off_count names them.
+    const shownKeys = new Set(shown.map((s) => s.key));
+    const drafted = new Set(openDrafts(db).map((d) => d.roadmap));
+    const published = [...db.items.filter((s) => !drafted.has(s.roadmap)), ...openDrafts(db).flatMap((d) => d.published.items)];
+    const offOf = (k: string) => {
+      const on = new Set(shown.filter((s) => s.track === k).map((s) => s.key));
+      return new Set(published.filter((s) => s.track === k && shownKeys.has(s.key) && !on.has(s.key)).map((s) => s.key)).size;
+    };
     // track-order: in the company's track order (order, 1 = first).
     const tracks = trackKeys(db).filter((k) => !gone.has(k)).map((k) => {
       const title = TRACKS[k];
       const own = db.track_owners?.[k];
       const decides = owner || (own === ctx.id && RANK[ctx.role] >= RANK.approver);
       const st = states[k];
-      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: st.prd ? prdId(st.prd) : null, prd_title: st.prd || null, prds: prdsOf(st).map((t) => ({ id: prdId(t), title: t })), ...trackGoal(db, k), can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: shown.filter((s) => s.track === k && !closed(s)).length, moves_count: shown.filter((s) => s.track === k).length, order: trackPlace(db, k) };
+      return { id: trackId(k), title, status: st.status, owner_id: own ?? null, owner_name: name(own), prd_id: st.prd ? prdId(st.prd) : null, prd_title: st.prd || null, prds: prdsOf(st).map((t) => ({ id: prdId(t), title: t })), ...trackGoal(db, k), can_decide: decides, decider_name: decides ? null : (name(own) ?? deciderName), feature_count: shown.filter((s) => s.track === k && !closed(s)).length, moves_count: shown.filter((s) => s.track === k).length + offOf(k), draft_off_count: offOf(k), order: trackPlace(db, k) };
     });
     // As takeable_prds: every accepted PRD not on a track in Trash, with the track it is on now.
     const prds = allPrds()
@@ -299,7 +309,14 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     const own = db.track_owners?.[k];
     const items = db.items.filter((s) => s.track === k);
     for (const s of items) s.track = undefined;
-    (db.trashed_tracks ??= {})[k] = { title, state: states[k], owner: own, items: items.map((s) => s.key) };
+    // As trash.delete_track: the published items on it go to no track as well as the open drafts' ones.
+    const published: Record<string, string[]> = {};
+    for (const d of openDrafts(db)) {
+      const on = d.published.items.filter((s) => s.track === k);
+      for (const s of on) s.track = undefined;
+      if (on.length) published[d.out.id] = on.map((s) => s.key);
+    }
+    (db.trashed_tracks ??= {})[k] = { title, state: states[k], owner: own, items: items.map((s) => s.key), published };
     delete TRACKS[k];
     const at = now();
     trash().push({
@@ -446,6 +463,9 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
 }
 
 /** Settings › Trash's Restore of a track: it and the features that were on it come back. */
+/** The roadmaps' open drafts (drafts.OPEN), each holding its published items. */
+const openDrafts = (db: SimpleDb) => (db.drafts ?? []).filter((d) => ["working", "submitted"].includes(d.out.status));
+
 export function restoreTrack(db: Db, released: unknown): boolean {
   const k = (released as { track?: string } | undefined)?.track;
   const t = k ? db.trashed_tracks?.[k] : undefined;
@@ -454,6 +474,7 @@ export function restoreTrack(db: Db, released: unknown): boolean {
   (db.track_state ??= {})[k] = t.state;
   if (t.owner) (db.track_owners ??= {})[k] = t.owner;
   for (const s of db.items) if (t.items.includes(s.key) && !s.track) s.track = k;
+  for (const d of openDrafts(db)) for (const s of d.published.items) if (t.published?.[d.out.id]?.includes(s.key) && !s.track) s.track = k;
   delete db.trashed_tracks![k];
   return true;
 }

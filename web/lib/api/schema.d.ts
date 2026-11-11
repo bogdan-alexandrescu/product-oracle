@@ -44946,6 +44946,11 @@ export interface components {
              * @default 0
              */
             moves_count: number;
+            /**
+             * Draft Off Count
+             * @default 0
+             */
+            draft_off_count: number;
             /** Order */
             order?: number | null;
         };

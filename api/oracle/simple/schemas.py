@@ -2908,6 +2908,9 @@ class SimpleTrackRow(BaseModel):
     feature_count: int = 0
     # Every feature on it, cut and merged ones too: what Move to Trash sends to no track.
     moves_count: int = 0
+    # Of ``moves_count``, those still on it in the published version that the reader's draft
+    # moved to another track or none (Move to Trash clears them there too).
+    draft_off_count: int = 0
     # track-order (owner Nov 9): its place number in the company's track order (lower first;
     # none: after every numbered one, oldest first), which Move up and Move down change (op
     # ``move_track``). The list comes in that order.

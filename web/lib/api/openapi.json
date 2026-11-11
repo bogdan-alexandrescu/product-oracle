@@ -132825,6 +132825,11 @@
             "title": "Moves Count",
             "default": 0
           },
+          "draft_off_count": {
+            "type": "integer",
+            "title": "Draft Off Count",
+            "default": 0
+          },
           "order": {
             "anyOf": [
               {

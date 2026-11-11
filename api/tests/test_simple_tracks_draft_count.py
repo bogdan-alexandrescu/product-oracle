@@ -145,7 +145,8 @@ async def test_move_to_trash_moves_the_drafts_features_off_and_restore_puts_them
     async with tenant_session(w.ctx.tenant_id) as s:
         d = await s.scalar(select(SimpleDraft).where(SimpleDraft.status.in_(OPEN)))
         assert all(d.overlay[i]["track_id"] is None for i in moved)
-    assert await counts(client, w, "owner") == {"Track": (4, 9)}
+    # On no track, they read as on the track their PRD is on (Track), as published ones do.
+    assert await counts(client, w, "owner") == {"Track": (9, 9)}
     # Restore from Trash puts the five back on Gift boxes in the draft.
     trash = (await client.get("/v1/trash", headers=w.ctx.as_("owner"))).json()
     entry = next(e for e in trash if e["root"]["type"] == "track")
