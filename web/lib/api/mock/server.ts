@@ -213,7 +213,7 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { codesSeen, groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
-import { PRIORITIES_PLAN_MILESTONES_SCENARIO, seedOldMilestones, seedOwnMilestones, seedPlanPrdMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
+import { ONE_PAGER_MILESTONE_RENAME_SCENARIO, PICKED_MILESTONE, PRIORITIES_PLAN_MILESTONES_SCENARIO, seedOldMilestones, seedOwnMilestones, seedPlanPrdMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
 import { codedTitle, openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
@@ -4186,6 +4186,14 @@ function load(): Db {
                     // walkb-roadmap review 5a: the Alerts roadmap was built from its PRD and has no approved version yet.
                     const db = seed();
                     (db.simple_roadmap = seedSimpleRoadmap()).unapproved = ["alerts-roadmap"];
+                    return db;
+                  }
+              : scenario === ONE_PAGER_MILESTONE_RENAME_SCENARIO
+                ? () => {
+                    const db = seed();
+                    const rm = (db.simple_roadmap = seedSimpleRoadmap());
+                    rm.goal_milestones = seedOwnMilestones();
+                    rm.items = rm.items.map((s) => (s.key === PICKED_MILESTONE.item ? { ...s, milestone: { name: null, day: null, id: PICKED_MILESTONE.id } } : s));
                     return db;
                   }
               : scenario === "simple-milestones" || scenario === "simple-prd-milestones" || scenario === "simple-milestones-track-owner"

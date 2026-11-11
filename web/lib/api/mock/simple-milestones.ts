@@ -212,6 +212,12 @@ export function seedPrdMilestones(): MockMilestone[] {
   ];
 }
 
+/** one-pager-milestone-rename: "simple-milestones" whose Weekly alert digest (Usage alerts) has the Alerts
+ * roadmap's own "Alerts live for 50 teams" picked as its milestone: the Usage alerts one-pager's Timeline strip
+ * draws it as a row. */
+export const ONE_PAGER_MILESTONE_RENAME_SCENARIO = "one-pager-milestone-rename";
+export const PICKED_MILESTONE = { item: "alert-digest", id: stableUuid("simple-gm/m1") };
+
 /** milestone-rename on Priorities: "simple-plan" whose plan's PRD (Guided setup) has its milestones on the roadmap. */
 export const PRIORITIES_PLAN_MILESTONES_SCENARIO = "priorities-plan-milestones";
 

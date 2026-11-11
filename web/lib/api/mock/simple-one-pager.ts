@@ -731,7 +731,8 @@ function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem
       if (!own) return [{ ...base, milestone: null }];
       return [{
         ...base,
-        milestone: i.milestone?.date ? [i.milestone.name ?? "Milestone", i.milestone.date] as [string, string] : null,
+        // As one_pager.plan_items: its milestone, dated or not (a picked roadmap milestone has no day of its own).
+        milestone: i.milestone ? [i.milestone.name ?? "Milestone", i.milestone.date ?? null] as [string, string | null] : null,
         ...(i.milestone?.record_id ? { record: { id: i.milestone.record_id, name: i.milestone.record_name ?? "Milestone" } } : {}),
         ...(i.milestone?.start_date ? { milestoneStart: i.milestone.start_date } : {}),
         // The track milestone naming it is its record (the API's milestone.record_id), its items' list or its own.
