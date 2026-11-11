@@ -23,6 +23,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { GoalLadder, moveKrGoal, proposeKrGoal, type KrLine } from "./_ladder";
 import { FeaturePanel, type Placement } from "./_panel";
+import { GoalMapVariants, v2MilestoneCodes, type GmVariant } from "./_variants"; // MOCK-HOOK goal-map-v2
 
 /** one-feature-panel: each feature's code (its roadmap item's), shown before its name. */
 const Codes = createContext<Map<string, string>>(new Map());
@@ -240,6 +241,7 @@ export function GoalMapPage() {
   const params = useSearchParams();
   const asked = folded?.top(params.get("goal")) ?? params.get("goal");
   const askedName = params.get("name");
+  const gm = process.env.NEXT_PUBLIC_API_MOCKS === "1" && ["a", "b", "c", "d"].includes(params.get("gm") ?? "") ? (params.get("gm") as GmVariant) : null; // MOCK-HOOK goal-map-v2: local-only switch
   const picked = map?.goals.find((g) => g.id === asked)?.id ?? map?.goals.find((g) => !!askedName && g.name.toLowerCase() === askedName.toLowerCase())?.id ?? null;
   // A goal left off the map (no number to aim at): a line names it and why, never the top in silence.
   const off = map && asked && !picked ? (map.off_map.find((g) => g.id === asked) ?? (askedName ? { id: asked, key: asked, name: askedName } : null)) : null;
@@ -372,7 +374,19 @@ export function GoalMapPage() {
           {flash}
         </p>
       )}
-      {/* goal-ladder: the ladder on a pan-and-zoom canvas (a phone: one goal at a time). */}
+      {/* MOCK-HOOK goal-map-v2: one of the four proposals in place of the ladder. */}
+      {gm ? ( // MOCK-HOOK
+        <GoalMapVariants // MOCK-HOOK
+          variant={gm} // MOCK-HOOK
+          map={map} // MOCK-HOOK
+          setMap={(m) => q.setData(() => m)} // MOCK-HOOK
+          reload={refresh} // MOCK-HOOK
+          codes={codes} // MOCK-HOOK
+          onOpen={setPanel} // MOCK-HOOK
+          onAttach={(m, area) => open("attach", undefined, m, area)} // MOCK-HOOK
+          head={<h1 className="simple-h1 max-[600px]:sr-only">Goal map</h1>} // MOCK-HOOK
+        /> // MOCK-HOOK
+      ) : ( // MOCK-HOOK
       <GoalLadder
         map={map}
         setMap={(m) => {
@@ -409,11 +423,12 @@ export function GoalMapPage() {
         guardrail={<Guardrail map={map} />}
         flags={<Flags map={map} open={open} />}
       />
+      )} {/* MOCK-HOOK */}
 
       {edit && draft && (
         <Editor map={map} edit={edit} draft={draft} setDraft={setDraft} goal={map.goals.find((g) => g.id === goalId) ?? map.goals[0]} onClose={close} onSave={() => void save()} open={open} onOpen={(f) => setPanel(f)} />
       )}
-      {panel && <FeaturePanel id={panel.id} code={codes.get(panel.id)} name={panel.name} placed={placement(map, panel.id, msCodes)} onClose={() => setPanel(null)} />}
+      {panel && <FeaturePanel id={panel.id} code={codes.get(panel.id)} name={panel.name} placed={placement(map, panel.id, gm ? v2MilestoneCodes(map) : msCodes) /* MOCK-HOOK goal-map-v2 */} onClose={() => setPanel(null)} />}
       {prd && (
         <NewPrdSheet
           prefill={prd}

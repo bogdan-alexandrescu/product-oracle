@@ -26,6 +26,7 @@ import type { TrashDb, TrashEntryRow } from "./trash";
 
 import { FIT_COMPANY_SCENARIO } from "./fit-date";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, LADDER_TWINS_SCENARIO, ladderMap } from "./goal-ladder";
+import { GM_V2_HARD_SCENARIO, GM_V2_SCENARIO, goalMapV2 } from "./goal-map-v2"; // MOCK-HOOK
 import { stableUuid } from "./ids";
 import { codedTitle, shownCode, shownTitle } from "./item-code";
 import { COMPANY_SLUG } from "./one-roadmap";
@@ -444,6 +445,8 @@ function seedReadings(map: GoalMap): void {
 }
 
 export function seedGoalMap(scenario: string | null): GoalMap {
+  // MOCK-HOOK goal-map-v2: the four proposals' invented map; a feature's own goal gets its API id.
+  if (scenario === GM_V2_SCENARIO || scenario === GM_V2_HARD_SCENARIO) { const v2 = withIds(goalMapV2(scenario === GM_V2_HARD_SCENARIO)); v2.features = v2.features.map((f) => ({ ...f, goal: id((f as unknown as { goal: string }).goal) })); return v2; } // MOCK-HOOK
   const map =
     scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : scenario === "goal-map-guardrail-goal" ? guardrailGoal() : scenario === FIT_COMPANY_SCENARIO ? companyRoadmap() : scenario === SCOREBOARD_SCENARIO ? scoreboard() : scenario === LADDER_SCENARIO ? ladderMap() : scenario === LADDER_KR_SCENARIO ? ladderMap(true) : scenario === LADDER_KR_CODES_SCENARIO ? ladderMap(true, true) : scenario === LADDER_TWINS_SCENARIO ? ladderMap(false, false, true) : plain();
   seedReadings(map);
@@ -621,7 +624,7 @@ export async function routeGoalMap(
       const name = it ? shownTitle(it, fc) : codedTitle(f.name, null)[1];
       // Its code as the roadmap reads it (GmFeature.code; "" for none).
       const code = (it ? shownCode(it, fc) : codedTitle(f.name, null)[0]) ?? "";
-      return links.length ? [{ ...f, name, code, milestones: f.milestones.filter((m) => on.has(m)), links }] : [];
+      return links.length || (f as { goal?: string }).goal /* MOCK-HOOK goal-map-v2: a feature with no milestone stays under its goal */ ? [{ ...f, name, code, milestones: f.milestones.filter((m) => on.has(m)), links }] : [];
     });
     return { goals, milestones, features };
   };
