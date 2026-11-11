@@ -204,11 +204,13 @@ function Menu({ k, label, items, c }: { k: string; label: string; items: { w: st
   );
 }
 
+const featureMenuKey = (f: Chip) => `f-${f.goal}-${f.id}`;
+
 function featureMenu(f: Chip, c: Ctx) {
   const name = `${c.codes.get(f.id) ?? ""} ${f.name}`.trim();
   return (
     <Menu
-      k={`f-${f.goal}-${f.id}`}
+      k={featureMenuKey(f)}
       label={name}
       c={c}
       items={[{ w: "Open", on: () => c.onOpen(f) }, ...(c.map.can_edit ? [{ w: "Move to…", on: () => c.setMover(f) }, { w: "Move to Trash", on: () => void c.act.trashFeature(f), crit: true }] : [])]}
@@ -271,16 +273,19 @@ function Rename({ id, was, c, className }: { id: string; was: string; c: Ctx; cl
   );
 }
 
-/** A feature's status mark; its ⋯ menu takes the same place on hover or focus. */
+/** A feature's status mark; its ⋯ menu takes the same place on hover or focus, and while its menu is open.
+ * The open menu is read from state, not CSS :has(): a :has() rule is global and made every style
+ * recalculation on the 500-item Roadmap's drag ten times slower (dod-perf). */
 function Slot({ f, c }: { f: Chip; c: Ctx }) {
   const s = fstate(f);
+  const open = c.menu === featureMenuKey(f);
   return (
     <span className="flex w-6 shrink-0 justify-center max-[600px]:w-auto max-[600px]:gap-1">
-      <span className={`flex text-[12px] group-hover:hidden group-focus-within:hidden group-has-[[aria-expanded=true]]:hidden max-[600px]:flex! ${s.cls}`} title={s.w}>
+      <span className={`${open ? "hidden" : "flex"} text-[12px] group-hover:hidden group-focus-within:hidden max-[600px]:flex! ${s.cls}`} title={s.w}>
         {s.mark || <span className="m-1 size-2 rounded-full border border-text-faint" />}
       </span>
       {/* A phone has no hover: its ⋯ stays beside the mark. */}
-      <span className="hidden group-hover:inline-flex group-focus-within:inline-flex group-has-[[aria-expanded=true]]:inline-flex max-[600px]:inline-flex">{featureMenu(f, c)}</span>
+      <span className={`${open ? "inline-flex" : "hidden"} group-hover:inline-flex group-focus-within:inline-flex max-[600px]:inline-flex`}>{featureMenu(f, c)}</span>
     </span>
   );
 }
@@ -616,7 +621,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     {c.renaming === m.id ? <Rename id={m.id} was={m.name} c={c} className="text-[12px]" /> : <span className="truncate" title={m.name}>{m.name}</span>}
                     <span className="whitespace-nowrap text-text2">{day(m.due_on)}</span>
                     {m.threshold === null && <Status s="no_gate" small on={m.can_change ? () => c.onEdit({ kind: "gate", milestone: m.id }) : undefined} hint="Set the gate" />}
-                    <span className="hidden group-hover:inline-flex has-[[aria-expanded=true]]:inline-flex max-[600px]:inline-flex">{milestoneMenu(m, c)}</span>
+                    <span className={`${c.menu === `m-${m.id}` ? "inline-flex" : "hidden"} group-hover:inline-flex max-[600px]:inline-flex`}>{milestoneMenu(m, c)}</span>
                   </span>
                 ))}
             </div>
