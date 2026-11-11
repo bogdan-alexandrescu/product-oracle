@@ -563,12 +563,19 @@ async def create(
     if s is not None:
         s.status, s.change_id, s.item_id = "accepted", c.id, uuid.UUID(target["item_id"])
         s.decided_by, s.decided_at = me, now
-    flags = await changes._flags(db, c, await drafts.overlays_for(db, principal)) if applies else []
+    flags, after_read = [], None
+    if applies:
+        # The answer is told on the read the flags were built on (one roadmap build).
+        flags, after_read = await changes._flags_and_read(
+            db, c, await drafts.overlays_for(db, principal)
+        )
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
                        data={"op": c.op, "target": target, "after": after,
                              "document_id": str(doc.id)})  # fmt: skip
     await db.commit()
-    return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=flags)
+    return SimpleChangeResult(
+        change=await changes.one_out(db, principal, c, after_read), flags=flags
+    )
 
 
 async def decide(
@@ -599,11 +606,15 @@ async def decide(
     c.status = "accepted" if action == "accept" else "declined"
     c.decided_by, c.decided_at, c.decision_reason = me, now, reason
     await db.flush()
-    flags = await changes._flags(db, c, await drafts.overlays_for(db, principal))
+    flags, after_read = await changes._flags_and_read(
+        db, c, await drafts.overlays_for(db, principal)
+    )
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
                        data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
     await db.commit()
-    return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=flags)
+    return SimpleChangeResult(
+        change=await changes.one_out(db, principal, c, after_read), flags=flags
+    )
 
 
 async def undo(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChangeResult:

@@ -19,8 +19,9 @@ Test cards (protects / fails_when / no_claim):
   once for its check and once for its answer, within a statement ceiling;
   fails_when=it builds it a third time; no_claim=meeting sessions' extra work.
 - test_a_change_answers_as_the_history_tells_it: protects=the change POST's answer (an
-  applied edit, a proposal, an undo) tells the change exactly as GET /v1/simple/changes
-  does on a fresh read (the answer reuses the read it built for its flags);
+  applied edit, a proposal, an undo, an accepted goal suggestion) tells the change exactly
+  as GET /v1/simple/changes does on a fresh read (the answer reuses the read it built for
+  its flags);
   fails_when=the answer is told on a stale read; no_claim=the flags (their own tests).
 - test_quick_title_match_scores_as_the_full_one: protects=the matcher's shortcut (Looks
   like) scores every pair as the full ratio does, and skips only pairs under LOOKS_LIKE;
@@ -227,6 +228,15 @@ async def test_a_change_answers_as_the_history_tells_it(client):
                              headers=ctx.as_("owner"))  # fmt: skip
     assert undo.status_code in (200, 201), undo.text
     await as_history("owner", undo.json()["change"])
+    # Accepting a goal suggestion adds the feature (oracle.simple.additions).
+    open_ = await client.get("/v1/simple/goal-suggestions", headers=ctx.as_("owner"))
+    first = open_.json()["suggestions"][0]
+    added = await client.post(f"/v1/simple/goal-suggestions/{first['id']}/accept",
+                              json={"roadmap_id": str(co.roadmaps[0].id)},
+                              headers=ctx.as_("owner"))  # fmt: skip
+    assert added.status_code in (200, 201), added.text
+    assert added.json()["change"]["op"] == "add_item"
+    await as_history("owner", added.json()["change"])
 
 
 def test_quick_title_match_scores_as_the_full_one():
