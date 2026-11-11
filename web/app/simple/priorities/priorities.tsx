@@ -953,7 +953,7 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
   if (refused)
     return (
       <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
-        <div role="dialog" aria-modal="true" aria-label={`Why move ${nameOf(row)}`} className="w-full max-w-md rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
+        <div role="dialog" aria-modal="true" aria-label={`Why move ${nameOf(row)}`} className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
           <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">{nameOf(row)} stays #{row.rank}</h2>
           <p className="mt-1 text-[length:var(--simple-small)] text-text2" data-testid="move-refused">
             {refused}
@@ -974,7 +974,7 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
         role="dialog"
         aria-modal="true"
         aria-label={`Why move ${nameOf(row)}`}
-        className="w-full max-w-md rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
@@ -2228,8 +2228,12 @@ function UndatedBuckets({ data, suggestions, reload, kr }: { data: Out; suggesti
   const buckets: Bucket[] = all.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0)).map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
   const percent = sharePercents(buckets.map((b) => b.weeks));
   const weeksOf = (r: Row) => (r.effort == null ? "" : weeksWords(r.effort));
-  // A goal's features as Archive counts them: its bucket's.
-  const featuresOf: GoalFeatures = (title) => (buckets.find((b) => !b.no_goal && sameGoal(b.title, title))?.codes ?? []).map((c) => ({ code: c, name: rowOf.get(c)?.title ?? c, slices: [] }));
+  // A goal's features as Archive and Delete count them: every live feature serving it, whatever its
+  // dates (a bucket holds only this quarter's work), so none loses its goal unasked.
+  const featuresOf: GoalFeatures = (title) => {
+    const g = gb?.goals.find((x) => sameGoal(x.title, title));
+    return g ? (gb?.features ?? []).filter((f) => f.goal_ids?.includes(g.id)).map((f) => ({ code: f.key, name: rowOf.get(f.key)?.title ?? f.title, slices: [] })) : [];
+  };
   const acts = useGoalActs({ gb, plan: null, featuresOf, writes, rights });
   // Round 6: no work this quarter is said in words, not as "0 weeks" over an empty chart.
   const planned = data.weeks_total > 0;

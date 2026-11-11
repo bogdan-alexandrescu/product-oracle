@@ -59,6 +59,12 @@ const CODE = /^([A-Z]{1,3}-\d+)([a-j])?$/;
  * PRD's feature F-09; a slice flag's feature F-15, so one add clears every slice of it by code),
  * else the flagged item's own code or its slice's feature's (F-02; F-09 for an item F-09a).
  */
+/** " as F-13": the code a feature got as it joined the Ground Truth, for the save's notice; none when it has no code. */
+const asCode = (e: { key: string; title: string }) => {
+  const code = named(e.title, e.key).code;
+  return code ? ` as ${code}` : "";
+};
+
 function addCode(flag: Flag, target: string): string | undefined {
   return CODE.exec(target)?.[1] ?? CODE.exec(flag.item?.code ?? "")?.[1];
 }
@@ -193,13 +199,13 @@ export function GroundTruthFlags({
       if (!out.entity) return wait(flag, `Sent “${name}” for approval.`);
       // A PRD's feature whose code was taken (the key is from its name) is linked by its code too.
       if (!item && flag.where.prd && key !== target) await unwrap(api.POST("/v1/baseline/prd-links", { body: { prd_document_id: flag.where.prd.id, code: target, feature_id: out.entity.id } }));
-      return { text: `Added “${name}” to the Ground Truth.` };
+      return { text: `Added “${name}” to the Ground Truth${asCode(out.entity)}.` };
     });
 
   const confirm = (flag: Flag, target: string) =>
     act(async () => {
-      await unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", { params: { path: { entity_id: target } } }));
-      return { text: `Confirmed “${flag.feature?.name ?? subject(flag).name}”.` };
+      const e = await unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", { params: { path: { entity_id: target } } }));
+      return { text: `Confirmed “${flag.feature?.name ?? subject(flag).name}”${asCode(e)}.` };
     });
 
   const takeOff = (flag: Flag, target: string) =>

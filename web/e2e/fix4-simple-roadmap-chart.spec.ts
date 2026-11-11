@@ -239,7 +239,7 @@ test.describe("phone", () => {
     // qa4-simple-roadmap-33: the count alone ("4 items"), no "up to 1 at once".
     for (const q of await quarters.all()) {
       const head = (await q.locator("h3").textContent())!;
-      const n = Number(/· (\d+) items/.exec(head)?.[1]);
+      const n = Number(/· (\d+) items?/.exec(head)?.[1]);
       expect(head).not.toMatch(/at once/);
       await expect(q.getByTestId("timeline-row")).toHaveCount(n);
     }

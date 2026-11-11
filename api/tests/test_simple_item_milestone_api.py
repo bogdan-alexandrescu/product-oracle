@@ -18,6 +18,11 @@ Test cards (protects / fails_when / no_claim):
   pick waits on the decider; the milestone is deleted meanwhile, and accepting it is refused in
   plain words with the item left in no milestone and the proposal still open; fails_when=the
   accept places the item in a deleted milestone; no_claim=declining it (the change engine's).
+- test_undo_back_into_a_milestone_deleted_since_is_refused: protects=an item moved out of a
+  milestone that is then put in Trash: Undo, which would point it back at that milestone, is
+  refused with a 422 in a forward pick's words, the item left where it is and the change still
+  undoable once nothing changed; fails_when=Undo writes the deleted milestone back;
+  no_claim=a typed (name and day) milestone, which has no Trash.
 - test_company_roadmap_lists_each_prds_milestones_in_one_goal: protects=two PRDs whose items
   serve the same goal on the company roadmap both have their own M1 listed (a PRD's milestones
   are coded per PRD, not per goal), and an item of one PRD is placed in the other PRD's M1;
@@ -226,3 +231,29 @@ async def test_a_proposed_pick_of_a_milestone_deleted_since_is_refused_on_accept
     assert _item(await _read(client, ctx, "decider"), a)["milestone"] is None
     rows = (await client.get(CHANGES, headers=ctx.as_("decider"))).json()
     assert {c["id"]: c["status"] for c in rows}[proposal["id"]] == "proposed", rows
+
+
+async def test_undo_back_into_a_milestone_deleted_since_is_refused(client):
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["im"])
+    a = w.ids["im-a"]
+    async with tenant_session(ctx.tenant_id) as s:
+        own = TrackMilestone(track_id=None, roadmap_id=uuid.UUID(w.roadmap_id), code="M1",
+                             name="Beta for ten teams", target_date=date(2026, 12, 4))  # fmt: skip
+        s.add(own)
+        await s.commit()
+        own_id = own.id
+    r = await _post(client, ctx, "decider", a, None, {"id": str(own_id)})
+    assert r.status_code == 201, r.text
+    it = _item(await _read(client, ctx, "decider"), a)
+    shown = {k: it["milestone"][k] for k in ("id", "name", "date")}
+    r = await _post(client, ctx, "decider", a, shown, None)
+    assert r.status_code == 201, r.text
+    cleared = r.json()["change"]
+    async with tenant_session(ctx.tenant_id) as s:
+        (await s.get(TrackMilestone, own_id)).deleted_at = datetime.now(UTC)
+        await s.commit()
+    r = await client.post(f"{CHANGES}/{cleared['id']}/undo", headers=ctx.as_("decider"))
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "That milestone was deleted.", r.text
+    assert _item(await _read(client, ctx, "decider"), a)["milestone"] is None

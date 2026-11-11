@@ -1011,6 +1011,7 @@ async def test_baseline_yaml_is_merged_through_the_import(client, owner, runtime
         headers=auth,
     )
     assert resp.status_code == 201, resp.text
+    checkout_id = resp.json()["entity"]["id"]
     runtime.script["baseline"] = [
         Outcome(artifacts={"baseline.yaml": RUN_BASELINE, "summary.md": "# Summary\n"})
     ]
@@ -1026,7 +1027,10 @@ async def test_baseline_yaml_is_merged_through_the_import(client, owner, runtime
 
     graph = (await client.get("/v1/baseline/graph", headers=auth)).json()
     by_key = {e["key"]: e for e in graph["entities"]}
-    assert by_key["checkout"]["title"] == "Checkout"  # locked: unchanged
+    # Confirmed, checkout joined with a code; the run's YAML still names it by its old key.
+    checkout = next(e for e in graph["entities"] if e["id"] == checkout_id)
+    assert checkout["key"] == "F-01" and "checkout" not in by_key
+    assert checkout["title"] == "Checkout"  # locked: unchanged
     assert by_key["guided-setup"]["origin"] == "agent"
     assert by_key["guided-setup"]["run_id"] == run["id"]
     assert by_key["activation"]["status"] == "proposed"  # goals are confirmed by people

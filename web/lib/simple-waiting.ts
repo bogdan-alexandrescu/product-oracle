@@ -11,17 +11,25 @@ import { invalidateWaiting as invalidateInbox, onWaitingChanged, waitingChanged 
  * shared rather than fetched again, a failure never.
  */
 const FRESH_MS = 2000;
-let hit: { at: number; promise: ReturnType<typeof fetchWaiting> } | null = null;
+// `at`: when the read answered; null while it is on its way.
+let hit: { at: number | null; promise: ReturnType<typeof fetchWaiting> } | null = null;
 
 const fetchWaiting = () => unwrap(api.GET("/v1/simple/decisions/waiting"));
 
 export function loadWaiting() {
-  if (hit && Date.now() - hit.at < FRESH_MS) return hit.promise;
+  // QA: a read still on its way is shared however long it takes (the rail's, then the page's
+  // once its own list arrives), so a slow answer is never asked for twice; fresh is counted from
+  // when it answered.
+  if (hit && (hit.at === null || Date.now() - hit.at < FRESH_MS)) return hit.promise;
   const promise = fetchWaiting();
-  hit = { at: Date.now(), promise };
-  promise.catch(() => {
-    if (hit?.promise === promise) hit = null;
-  });
+  const mine: NonNullable<typeof hit> = { at: null, promise };
+  hit = mine;
+  promise.then(
+    () => (mine.at = Date.now()),
+    () => {
+      if (hit === mine) hit = null;
+    },
+  );
   return promise;
 }
 

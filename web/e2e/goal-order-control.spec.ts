@@ -21,13 +21,13 @@ async function start(page: Page, role?: "viewer") {
 
 /** The goal names in `list`, each without its number. */
 async function names(list: Locator): Promise<string[]> {
-  return (await list.allInnerTexts()).map((t) => t.replace(/^\s*\d+\s*/, "").trim());
+  return (await list.allInnerTexts()).map((t) => t.replace(/^\s*\d+\s*(·\s*)?/, "").trim());
 }
 
 /** Each card's number and name in `cards`, as "1 Grow retention". */
 async function numbered(cards: Locator, name: string): Promise<string[]> {
   const out: string[] = [];
-  for (const card of await cards.all()) out.push(`${await card.getByTestId("order-num").first().innerText()} ${(await card.getByTestId(name).first().innerText()).replace(/^\s*\d+\s*/, "").trim()}`);
+  for (const card of await cards.all()) out.push(`${await card.getByTestId("order-num").first().innerText()} ${(await card.getByTestId(name).first().innerText()).replace(/^\s*\d+\s*(·\s*)?/, "").trim()}`);
   return out;
 }
 

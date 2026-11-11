@@ -816,6 +816,10 @@ ChangeOp = Literal[
     # owners by who may not (oracle.simple.goal_asks).
     "archive_goal",
     "unarchive_goal",
+    # goal-map-link-asks: a feature put on a goal milestone (or its link moved from another),
+    # suggested by who may propose but not edit the Goal map, routed to the feature's
+    # roadmap's decider (oracle.simple.goal_map_asks).
+    "link_goal_map",
     # roadmap-decide: a dependent no longer depends on a cut item (its fix).
     "remove_dependency",
     # removed-tracks: a removed goal milestone put back; a track added, edited (title, owner,
@@ -1164,6 +1168,8 @@ class InboxSimpleApproval(BaseModel):
 
     draft_id: uuid.UUID
     document: SimpleDocRef
+    # inbox-prd-approval-open: a PRD's draft opens on its one-pager, a roadmap's on the roadmap.
+    document_kind: Literal["roadmap", "prd"] = "roadmap"
     version: int | None
     submitted_by: uuid.UUID | None
     # inbox-meeting-proposals fix: who submitted it, by name (or e-mail).
@@ -1657,6 +1663,8 @@ class OnePagerDraft(BaseModel):
     # may add more when sending (build-review: Send for approval…).
     reviewers: list[SimplePersonRef] = []
     can_submit: bool
+    # inbox-prd-approval-open: submitted, and the caller's approval is one it waits for.
+    can_approve: bool = False
     # Remind (owner, 2026-10-26): the last nudge to a waiting reviewer, and whether the
     # caller (the PRD's owners, its decider) may nudge one now (each at most once a day).
     reminded_at: dt.datetime | None = None
@@ -2528,6 +2536,8 @@ class SimpleDecisionRow(BaseModel):
     flow: SimpleDecidedFlow | None = None
     # prd-questions: a PRD's question keeps its code ("Q10"); a decided one, its answer.
     code: str | None = None
+    # QA (unique codes): a PRD's question names its PRD (one the reader reads).
+    prd_title: str | None = None
     chosen: str | None = None
     # edit-decisions (ec1 b): every field the sheet shows and changes, what the reader may
     # do there, and the last change made from it.
@@ -2740,6 +2750,9 @@ class SimpleWaitingItem(BaseModel):
         "proposal",
         "goal_suggestion",
         "goal",
+        # The Inbox's other counted "Needs you" rows (Add predictions, launches, rituals,
+        # metrics, requests), opened where the Inbox opens them.
+        "inbox",
     ]
     # Unique in the list (kind and id); ``ref_id`` is the id its own endpoint acts on (the
     # checkpoint, question, decision's number, item, date suggestion, draft, change, goal

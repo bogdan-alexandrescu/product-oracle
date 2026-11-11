@@ -58,7 +58,9 @@ test.describe("desktop", () => {
     await expect(undated).toHaveText(["Budgets per team"]);
     expect([...(await drawn.allTextContents()), ...(await undated.allTextContents())].sort()).toEqual([...titles].sort());
     // In the Group by's groups, with Today's line, a milestone and a dependency.
-    // B-26's "Horizon" heading waits for Chart's laneWord (Simple's _timeline.tsx, left for the Simple port).
+    // B-26: the label column's heading names the Group by ("Horizon", not the lane's "Track").
+    const heading = timeline.getByTestId("chart-labels").locator("> div").first();
+    await expect(heading).toHaveText("Horizon");
     await expect(timeline.getByTestId("chart-labels")).toContainText("Now");
     await expect(timeline.getByTestId("lane-count")).toHaveText(["5 items", "1 item"]);
     await expect(timeline.getByTestId("today-pill")).toBeVisible();
@@ -78,7 +80,10 @@ test.describe("desktop", () => {
     await expect(inspector).toContainText("Budgets per team");
 
     // The Group by regroups the Timeline as it does the table.
+    await page.getByRole("group", { name: "Group by" }).getByRole("button", { name: "Goal", exact: true }).click();
+    await expect(heading).toHaveText("Goal");
     await page.getByRole("group", { name: "Group by" }).getByRole("button", { name: "PRD", exact: true }).click();
+    await expect(heading).toHaveText("PRD");
     await expect(timeline.getByTestId("chart-labels")).toContainText("PRD");
     await expect(timeline.getByTestId("lane-count")).toHaveText(["6 items"]);
 

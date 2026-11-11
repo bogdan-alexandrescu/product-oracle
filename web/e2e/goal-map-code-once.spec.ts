@@ -57,6 +57,8 @@ test.describe("Goal map: a feature's code shows once, 1440", () => {
     await ed.getByLabel("Feature").fill(LADDER_CODED.code);
     const pick = ed.getByTestId("gm-attach-list").getByRole("button").filter({ hasText: LADDER_CODED.name });
     await expect(pick.locator("span.font-semibold")).toHaveText(coded);
+    // The code shows as its chip before the name, never inside it.
+    await expect(pick.locator(".simple-code")).toHaveText(LADDER_CODED.code);
     await pick.click();
     await ed.getByTestId("gm-save").click();
     await expect(page.getByTestId("gm-flash")).toHaveText(`Attached: ${once} now also serves Imports finish without help.`);

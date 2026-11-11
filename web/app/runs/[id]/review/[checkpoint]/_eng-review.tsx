@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
-import { Button, Chip, Page, PageHeader, SegmentedControl } from "@/components/ds";
+import { Button, Chip, Page, PageHeader, SegmentedControl, toast } from "@/components/ds";
 import { Menu } from "@/components/review/parts";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -170,6 +170,8 @@ export function EngReview({
         }),
       );
       await onDecided();
+      // inbox-eng-send-back: what happened and to whom, as the other review actions say it.
+      if (decision === "changes_requested") toast({ message: "Sent back to the architect" });
       router.push(`/runs/${run.id}`);
     } catch (e) {
       setError(errorMessage(e));

@@ -23,6 +23,7 @@ import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from 
 import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type BrandingDb } from "./branding";
 import { capabilitiesOut } from "./capabilities";
 import { daysInWords } from "./days";
+import { stripRawTokens } from "@/lib/raw-tokens";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
@@ -201,7 +202,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
+import { codesSeen, groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
@@ -209,8 +210,8 @@ import { knowPrdOrder } from "./prd-rank";
 import { codedTitle, openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrdSlug, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
-import { closed, GOALS, MAP_GOALS, prdOwnerIdsOf, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
-import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
+import { closed, GOALS, MAP_GOALS, prdFeeds, prdOwnerIdsOf, prdTrackOwnerIds, roadmapKeyOf, seesDraft, shownDates, storedDates } from "./simple-roadmap";
+import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, milestoneGoalInTrash, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
@@ -678,6 +679,12 @@ export const MOCK_SLOW_KEY = "po-mock-slow";
 /** brief-answers review: tests set this localStorage key to a refusal's words to have Start refuse an accepted research run with them. */
 export const MOCK_RUN_START_REFUSED_KEY = "po-mock-run-start-refused";
 export const MOCK_SLOW_MS = 1500;
+/**
+ * QA (Home and the Inbox agree): with the "empty" scenario, tests set this localStorage key so
+ * the new company has one PRD with one open feedback item, a counted Inbox row Home does not
+ * draw itself.
+ */
+export const MOCK_EMPTY_FEEDBACK_KEY = "po-mock-empty-feedback";
 /** A test may hold the slow call longer (ms, in localStorage). */
 export const MOCK_SLOW_MS_KEY = "po-mock-slow-ms";
 /**
@@ -819,6 +826,40 @@ function seedEmpty(): Db {
     status: "active" as const,
     open_tokens: 0,
   }));
+  if (typeof localStorage !== "undefined" && localStorage.getItem(MOCK_EMPTY_FEEDBACK_KEY)) {
+    const doc: DocumentRow = {
+      id: uuid(),
+      slug: FLEET_DOC.slug,
+      title: FLEET_DOC.title,
+      status: "in_review",
+      kind: "prd",
+      template: FLEET_DOC.template ?? null,
+      template_version: FLEET_DOC.template_version ?? null,
+      theme: null,
+      created_at: FLEET_DOC.versions[0].created_at,
+      updated_at: FLEET_DOC.versions.at(-1)!.created_at,
+    };
+    db.documents.push(doc);
+    for (const v of FLEET_DOC.versions) db.versions.push(buildVersion(doc, v));
+    const created_at = "2026-10-19T10:00:00Z";
+    db.feedback.push({
+      id: uuid(),
+      document_id: doc.id,
+      raised_on_version: FLEET_DOC.versions.length,
+      kind: "general",
+      comment_id: null,
+      section_review_id: null,
+      section_key: null,
+      summary: "Say how drivers learn of a changed slot.",
+      anchor: null,
+      verdict: null,
+      status: "open",
+      addressed_in_version: null,
+      resolution_note: null,
+      created_at,
+      updated_at: created_at,
+    });
+  }
   return db;
 }
 
@@ -1801,7 +1842,10 @@ function seedOneRoadmapScenario(): Db {
   const oldRoadmap = doc(uuid(), OLD_ROADMAP[0], OLD_ROADMAP[1], "roadmap");
   // replaced-prd-history: its v2, never sent: read-only history, never approved.
   db.versions.push(buildVersion(oldRoadmap, { number: 2, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: `${OLD_ROADMAP[1]}, a draft never sent.` }], citations: [] }));
-  doc(uuid(), COMPANY_SLUG, COMPANY_TITLE, "roadmap", { company_roadmap: true });
+  const company = doc(uuid(), COMPANY_SLUG, COMPANY_TITLE, "roadmap", { company_roadmap: true });
+  // As the API: a PRD run's company roadmap version is built from that PRD's version.
+  const cv = db.versions.find((v) => v.document_id === company.id);
+  if (cv) (cv as { source?: { document_id: string; version?: number } | null }).source = { document_id: areas[0].id, version: 1 };
   db.simple_roadmap = seedCompanyRoadmap(seedSimpleRoadmap());
   return db;
 }
@@ -5049,7 +5093,7 @@ function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] 
   const hidden = member ? hiddenDecisionEntities(db, member) : new Set<string>();
   return routeBaseline(
     db.baseline,
-    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id) },
+    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id), codesSeen: () => codesSeen(db.simple_roadmap) },
     req,
     p.slice(2),
     q,
@@ -5121,8 +5165,12 @@ function historyRoadmapRefs(db: Db): Map<string, string[]> {
 /** replaced-prd-history: the roadmaps Simple leaves out, by slug: a replaced PRD's own roadmap,
  * and one in Trash (a trashed row is out of every read). */
 function historyRoadmaps(db: Db): string[] {
-  const trashed = (db.trash?.entries ?? []).flatMap((e) => (e.documents as { kind?: string; slug: string }[]).filter((d) => d.kind === "roadmap").map((d) => d.slug));
-  return [...historyRoadmapRefs(db).keys(), ...trashed];
+  return [...historyRoadmapRefs(db).keys(), ...trashedRoadmaps(db)];
+}
+
+/** The roadmap documents in Trash, by slug. */
+function trashedRoadmaps(db: Db): string[] {
+  return (db.trash?.entries ?? []).flatMap((e) => (e.documents as { kind?: string; slug: string }[]).filter((d) => d.kind === "roadmap").map((d) => d.slug));
 }
 
 /** one-roadmap-many-prds: the PRDs that replace `doc`, by name (oracle.roadmap.company.refs). */
@@ -5210,6 +5258,8 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
 function markReplaced(db: Db, simple: SimpleDb): void {
   simple.replaced_prds = replacedPrds(db);
   simple.history_roadmaps = historyRoadmaps(db);
+  // delete-prd-simple: a roadmap in Trash takes its items out of Simple (oracle.trash.filter).
+  simple.trashed_roadmaps = trashedRoadmaps(db).map(roadmapKeyOf);
   simple.replaced_prd_titles = db.documents.filter((d) => d.kind === "prd" && liveReplacers(db, d).length).map((d) => d.title);
   const to: NonNullable<SimpleDb["replaced_with"]> = {};
   for (const d of db.documents.filter((x) => x.kind === "prd" && liveReplacers(db, x).length)) {
@@ -5696,6 +5746,107 @@ function versionMarkdown(doc: DocumentRow, v: VersionRow): string {
     .map((s) => `${"#".repeat(s.level)} ${s.heading} {#${s.section_key}}\n\n${s.body_md}\n`)
     .join("\n");
   return `${head}\n${body}`;
+}
+
+/** A fenced code block (``` or ~~~, closed by the same fence or the end), as api/oracle/raw_tokens.py _FENCE. */
+const MD_FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[ \t]*$|(?![\s\S]))/gm;
+/** "[c:c1]" or "[c:c1, c2]", with the space before it (raw_tokens.py _CITE). */
+const MD_CITE = /(?<![ \t])[ \t]*\[c:\s*([^[\]\n]*?)\s*\]/g;
+/** What stays as written when days are put in words (export/render.py _NOT_PROSE). */
+const MD_NOT_PROSE = new RegExp(
+  [
+    "(`+)[^`\\n]*?\\1(?!`)",
+    "\\]\\((?:[^()\\s]|\\([^()\\s]*\\))*(?:\\s+(?:\"[^\"\\n]*\"|'[^'\\n]*'|\\([^()\\n]*\\)))?\\s*\\)",
+    "<!--.*?-->",
+    "<[A-Za-z/!][^<>\\n]*>",
+    "^[ \\t]{0,3}\\[[^\\]\\n]+\\]:[ \\t]*\\S+",
+    "\\b[A-Za-z][\\w+.-]*:\\/\\/[^\\s<>]*[^\\s<>.,;:!?)\\]'\"*_]",
+    "\\bwww\\.[^\\s<>]*[^\\s<>.,;:!?)\\]'\"*_]",
+  ].join("|"),
+  "gm",
+);
+
+/**
+ * As the API's raw_tokens.markdown_footnotes with citation_labels: each `[c:id]` as a footnote
+ * (`[^1]`, numbered in order of first use, skipping numbers the text uses itself) defined at the end
+ * (`[^1]: Title (source: ref)`); one that points to no citation, and any other raw marker, is dropped.
+ */
+function markdownFootnotes(markdown: string, citations: VersionRow["citations"]): string {
+  const byKey = new Map(citations.map((c) => [c.cite_key, c]));
+  const label = (key: string): string | null => {
+    const c = byKey.get(key);
+    if (!c) return null;
+    const title = c.title || c.excerpt || "";
+    const where = [c.source, c.ref].filter(Boolean).join(": ");
+    const text = title && where ? `${title} (${where})` : title || where;
+    return text.split(/\s+/).filter(Boolean).join(" ") || null;
+  };
+  const parts: [string, boolean][] = [];
+  let last = 0;
+  for (const m of markdown.matchAll(MD_FENCE)) {
+    parts.push([markdown.slice(last, m.index), false], [m[0], true]);
+    last = m.index! + m[0].length;
+  }
+  parts.push([markdown.slice(last), false]);
+  const taken = new Set(parts.filter(([, code]) => !code).flatMap(([t]) => [...t.matchAll(/\[\^([^\]\s]+)\]/g)].map((m) => m[1])));
+  const numbers = new Map<string, number>();
+  const notes: string[] = [];
+  const nextNumber = () => {
+    let n = Math.max(0, ...numbers.values()) + 1;
+    while (taken.has(String(n))) n++;
+    return n;
+  };
+  const ref = (_all: string, keys: string) => {
+    const refs: string[] = [];
+    for (const key of keys.split(",").map((k) => k.trim())) {
+      if (!key) continue;
+      if (!numbers.has(key)) {
+        const text = label(key);
+        if (text == null) continue;
+        numbers.set(key, nextNumber());
+        notes.push(`[^${numbers.get(key)}]: ${stripRawTokens(text).trim()}`);
+      }
+      refs.push(`[^${numbers.get(key)}]`);
+    }
+    return refs.join("");
+  };
+  const body = parts.map(([t, code]) => (code ? t : stripRawTokens(t.replace(MD_CITE, ref)))).join("");
+  return notes.length ? `${body.replace(/\n+$/, "")}\n\n${notes.join("\n")}\n` : body;
+}
+
+/** As the API's export/render.py in_prose: `rewrite` applied outside fenced code, code spans, links, URLs and tags. */
+function inProse(text: string, rewrite: (s: string) => string): string {
+  let fence: string | null = null;
+  return (text.match(/[^\n]*\n|[^\n]+$/g) ?? [])
+    .map((line) => {
+      const mark = /^[ \t]{0,3}(`{3,}|~{3,})/.exec(line);
+      if (fence == null && mark) fence = mark[1][0].repeat(mark[1].length);
+      else if (fence != null && line.trim().startsWith(fence)) fence = null;
+      else if (fence == null) {
+        let at = 0;
+        const out: string[] = [];
+        for (const m of line.matchAll(MD_NOT_PROSE)) {
+          out.push(rewrite(line.slice(at, m.index)), m[0]);
+          at = m.index! + m[0].length;
+        }
+        return out.join("") + rewrite(line.slice(at));
+      }
+      return line;
+    })
+    .join("");
+}
+
+/**
+ * The full layer's markdown export, as the API's export/render.py render_markdown (X-17): no banner
+ * comment, `[c:id]` citations as Markdown footnotes, and the days after the front matter month
+ * first ("Oct 31, 2026"); the front matter and each heading's `{#id}` stay so it imports again.
+ */
+function exportMarkdown(doc: DocumentRow, v: VersionRow): string {
+  const markdown = markdownFootnotes(versionMarkdown(doc, v), v.citations);
+  const m = /^---[ \t]*\r?\n[\s\S]*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|$(?![\s\S]))/m.exec(markdown);
+  if (!markdown.startsWith("---") || !m || m.index !== 0) return inProse(markdown, daysInWords);
+  const head = markdown.slice(0, m[0].length);
+  return (head.endsWith("\n") ? head : `${head}\n`) + inProse(markdown.slice(m[0].length), daysInWords);
 }
 
 function escapeHtml(s: string) {
@@ -7015,11 +7166,17 @@ async function route(db: Db, req: Request): Promise<Response> {
       // edit-decisions: Restore puts a decision or a PRD's question back on Simple's Decisions too.
       // goal-map-editing: and a goal map milestone back on the map.
       simple: () => db.simple_roadmap && { ...db.simple_roadmap, sheet: [...(db.simple_meetings?.decisions ?? []), ...(db.simple_meetings?.questions?.questions ?? [])], goal_map: db.goal_map },
+      // delete-prd-simple: the roadmap items and tracks a PRD feeds, named by Delete PRD.
+      // Read from the seed when Simple has not been opened yet, never storing it (the dependents only read).
+      feeds: (slugs, gone) => prdFeeds(db.simple_roadmap ?? seedSimpleRoadmap(), slugs, gone),
       // As the API: the draft only when the person starting the run may see it.
       roadmapRead: (starter) => roadmapRead(db.documents, db.versions, db.simple_roadmap, String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"), (d) => seesDraft(d, starter, db.simple_roadmap)),
       onRestore: (released) => (db.simple_roadmap && restoreTrack(db.simple_roadmap, released)) || relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
-      // every-field: as trash_items._codes_free, never one code on two items.
-      refuseRestore: (entry) => (db.simple_roadmap ? restoreCodeTaken(db.simple_roadmap, me, entry) : null),
+      // every-field: as trash_items._codes_free, never one code on two items; goal-map-editing: a
+      // milestone never comes back under a goal in Trash (trash._milestone_goal_live).
+      refuseRestore: (entry) =>
+        (entry.out.root.type === "milestone" ? milestoneGoalInTrash(db, entry.out.root.id) : null) ??
+        (db.simple_roadmap ? restoreCodeTaken(db.simple_roadmap, me, entry) : null),
       // port-an-decisions: Restore puts a meeting's removed agenda item or a deleted request back.
       restoreRoot: (entry) => {
         if (entry.request !== undefined) {
@@ -8059,7 +8216,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       const why = d && readOnlyWhy(db, d);
       if (why) return json(409, { detail: why });
     }
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced, ladder: ladderMilestones(db, me) }, r, p, q);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced, ladder: ladderMilestones(db, { id: me.id, role: me.role, name: simpleNames[me.id] ?? me.email }, bin.trash, bin.now) }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
@@ -8334,10 +8491,17 @@ async function route(db: Db, req: Request): Promise<Response> {
     const questionRows = db.simple_meetings?.questions
       ? questionInboxRows({ me: { id: me.id, role: me.role }, members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })) }, db.simple_meetings.questions, seenBefore)
       : { proposals: [], decisions: [] };
-    const onePagerRows = onePagerInboxRows([...(db.simple_one_pager ? [db.simple_one_pager] : []), ...Object.values(db.simple_one_pagers ?? {})], { id: me.id, role: me.role }, seenBefore);
+    const onePagerRows = onePagerInboxRows([...(db.simple_one_pager ? [db.simple_one_pager] : []), ...Object.values(db.simple_one_pagers ?? {})], { id: me.id, role: me.role }, seenBefore, {
+      // As routeOnePager's context: Guided setup's decider is Dana Decider.
+      deciderOf: (d) => (d.doc.slug === "guided-setup" ? (db.members.find((x) => x.email === "dana.decider@example.com")?.id ?? null) : null),
+      // As routeOnePager's trackOwners: with the "track-owner" flag the approver owns Guided setup's track.
+      trackOwnersOf: (d) => (d.doc.slug === "guided-setup" && mockApproverOwnsTrack() ? db.members.filter((x) => x.email === "approver@example.com").map((x) => x.id) : []),
+      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+    });
     const newest = (a: Schemas["InboxSimpleChange"], b: Schemas["InboxSimpleChange"]) => ((b.decided_at ?? b.at) > (a.decided_at ?? a.at) ? 1 : -1);
     simpleRows.simple_proposals = [...simpleRows.simple_proposals, ...questionRows.proposals, ...onePagerRows.proposals];
     simpleRows.simple_decisions = [...simpleRows.simple_decisions, ...questionRows.decisions, ...onePagerRows.decisions].sort(newest);
+    simpleRows.simple_approvals = [...simpleRows.simple_approvals, ...onePagerRows.approvals].sort((a, b) => ((a.submitted_at ?? "") < (b.submitted_at ?? "") ? -1 : 1));
     Object.assign(inbox, simpleRows);
     // inbox-meeting-proposals fix: Oracle's open date suggestions and goals' open suggestions I may decide.
     const simpleCtx = {
@@ -8898,7 +9062,7 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
       return new Response(exportHtml(doc, brief, db.branding, badge), { headers: { "content-type": "text/html" } });
     }
     if (format === "md") {
-      return new Response(`<!-- ${banner(doc, v)} -->\n${versionMarkdown(doc, v)}`, {
+      return new Response(exportMarkdown(doc, v), {
         headers: { "content-type": "text/markdown" },
       });
     }

@@ -295,7 +295,8 @@ export function trackSuggestionRows(rows: TrackSuggestion[], busy: string | null
  * Simple S3b, inbox-meeting-proposals fix: roadmap versions from Simple drafts waiting for my
  * approval as a required reviewer (the API's `simple_approvals`): the roadmap by name, the
  * version, who sent it and when; Open goes to the roadmap at that draft (?draft=<id>, which the
- * roadmap reads to bring its banner into sight), whose Approve approves it.
+ * roadmap reads to bring its banner into sight), whose Approve approves it. A PRD's draft
+ * (inbox-prd-approval-open) opens on its one-pager, whose working-draft banner has Approve.
  */
 export function approvalRows(rows: Approval[], seenBefore: string | null | undefined): StatedNeed[] {
   return rows.map((a) => {
@@ -322,7 +323,10 @@ export function approvalRows(rows: Approval[], seenBefore: string | null | undef
       // An approval: listed and counted with approvals (Home's Approvals), not with proposals.
       group: "roadmap-approvals",
       action: (
-        <LinkButton href={`/simple/roadmap?roadmap=${a.document.id}&draft=${a.draft_id}`} aria-label={`Open ${what} to approve it`}>
+        <LinkButton
+          href={a.document_kind === "prd" ? `/simple/one-pagers/${encodeURIComponent(a.document.slug)}?draft=${a.draft_id}` : `/simple/roadmap?roadmap=${a.document.id}&draft=${a.draft_id}`}
+          aria-label={`Open ${what} to approve it`}
+        >
           Open
         </LinkButton>
       ),

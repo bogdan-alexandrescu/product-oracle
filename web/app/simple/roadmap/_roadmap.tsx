@@ -1924,6 +1924,8 @@ export function SimpleRoadmap() {
             onChange={(v) => {
               setCard(null);
               setPop(null);
+              // roadmap-milestone-panel-close: the milestone's card closes with the view it was opened on.
+              ms?.setDraft(null);
               setFormat(v);
               if (!groupPicked.current) setF((p) => ({ ...p, group: v === "timeline" ? "goal" : "track" }));
             }}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ds";
+import { useFitViewport } from "@/lib/fit-viewport";
 import { keyDateWords } from "@/lib/milestone-code";
 
 import type { Act } from "./_card";
@@ -38,6 +39,8 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
   const [form, setForm] = useState<Draft>(EMPTY);
   const [adding, setAdding] = useState<Draft>(EMPTY);
   const ref = useRef<HTMLDivElement>(null);
+  // BGD (Nov 10): the editor's height is capped to the viewport, its rows scrolling under the heading.
+  const fit = useFitViewport(ref, { on: !phone });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -97,9 +100,10 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
       aria-label="Key dates"
       data-testid="key-dates-editor"
       data-sheet={phone ? "bottom" : "float"}
-      className={`${phone ? "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl" : "absolute top-full right-0 z-40 mt-2 w-[440px] rounded-xl"} max-w-[calc(100vw-16px)] overflow-y-auto border border-line bg-surface p-4 shadow-tip outline-none`}
+      style={{ maxHeight: fit.maxHeight }}
+      className={`${phone ? "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl" : "absolute top-full right-0 z-40 mt-2 w-[440px] rounded-xl"} max-w-[calc(100vw-16px)] overflow-y-auto overscroll-contain border border-line bg-surface p-4 shadow-tip outline-none`}
     >
-      <div className="flex items-start gap-2">
+      <div className="sticky -top-4 z-10 -mx-4 -mt-4 flex items-start gap-2 bg-surface px-4 pt-4">
         <h2 className="flex-1 text-lg font-semibold">
           Key dates
           {chosen && <span className="text-text2" data-testid="key-dates-of">{` · ${chosen.title}`}</span>}

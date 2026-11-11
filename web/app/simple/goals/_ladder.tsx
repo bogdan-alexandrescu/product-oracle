@@ -38,7 +38,7 @@ import { formatCount } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
-import { ChangeFailed, propose, statusWord, undo, type Item } from "../roadmap/_lib";
+import { ChangeFailed, deciderWords, propose, statusWord, undo, type Item } from "../roadmap/_lib";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const day = (iso: string | null | undefined) => (iso ? `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}` : "");
@@ -248,7 +248,7 @@ export function GoalLadder(props: LadderProps) {
   );
   const feats = useMemo(() => {
     // goal-map-editing: the features on no milestone are cards too, under the goal their item serves.
-    const loose: GmFeature[] = map.unplaced.map((u) => ({ id: u.id, name: u.name, area: null, milestones: [], lever: "", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [] }));
+    const loose: GmFeature[] = map.unplaced.map((u) => ({ id: u.id, name: u.name, code: u.code, area: null, milestones: [], lever: "", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [] }));
     const on = new Set([...map.features, ...loose].map((f) => f.id));
     const goalOf = new Map(map.milestones.map((m) => [m.id, m.goal]));
     const mapGoals = new Set(map.goals.map((g) => g.id));
@@ -256,7 +256,8 @@ export function GoalLadder(props: LadderProps) {
     const base: LdFeature[] = [...map.features, ...loose].map((f) => {
       const item = items.get(f.id);
       const free = !f.milestones.length;
-      return { f, item, code: item?.code ?? "", goal: free ? (freeGoal.get(f.id) ?? null) : (goalOf.get(f.milestones[0]) ?? null), waits: (item?.depends_on ?? []).filter((d) => on.has(d)), wanted: [] as string[], suggested: [] as string[], free };
+      // A feature the reader's roadmap read leaves out keeps the map's own code.
+      return { f, item, code: item?.code || f.code || "", goal: free ? (freeGoal.get(f.id) ?? null) : (goalOf.get(f.milestones[0]) ?? null), waits: (item?.depends_on ?? []).filter((d) => on.has(d)), wanted: [] as string[], suggested: [] as string[], free };
     });
     const by = new Map(base.map((x) => [x.f.id, x]));
     for (const x of base) for (const d of x.waits) by.get(d)?.wanted.push(x.f.id);
@@ -283,6 +284,11 @@ export function GoalLadder(props: LadderProps) {
     const x = byId.get(id);
     return x ? `${x.code} ${x.f.name}`.trim() : "";
   }, [byId]);
+  /** goal-map-editing: who a suggestion waits for: its feature's deciders, else the map's approver. */
+  const waitsFor = (feature?: string) => {
+    const d = (feature ? items.get(feature)?.deciders : undefined) ?? roadmap.data?.items.find((i) => i.deciders?.length)?.deciders;
+    return deciderWords(d?.length ? d : map.approver ? [map.approver] : undefined);
+  };
   const failed = (e: unknown) => toast({ message: e instanceof ChangeFailed || e instanceof Error ? e.message : "Oracle could not make this change" });
 
   /** One change through the engine: applied (with Undo) or, for a commenter, a suggestion. */
@@ -291,7 +297,7 @@ export function GoalLadder(props: LadderProps) {
     const c = r.change;
     await reload();
     toast({
-      message: c.status === "applied" ? done : `Suggested: ${suggested}.${map.approver ? ` Sent to ${map.approver}.` : ""}`,
+      message: c.status === "applied" ? done : `Suggested: ${suggested}; it waits for ${waitsFor(String(body.target.item_id ?? body.target.feature ?? ""))}`,
       action:
         c.status === "applied" && c.can_undo
           ? { label: "Undo", onClick: () => void (onUndo ? onUndo() : undo(c.id).then(() => undefined)).then(reload, failed) }
@@ -383,7 +389,7 @@ export function GoalLadder(props: LadderProps) {
           setRefused([on, waiter]);
           toast({ message: `Not added, it would make a loop: ${named(on)} already waits on ${named(waiter)}` });
         } else if (said.startsWith("after.depends_on: item or feature keys")) {
-          toast({ message: `Not added: ${byId.get(on)?.f.name ?? "this feature"} has no roadmap item yet to link to` });
+          toast({ message: `Not added: ${named(on) || "this feature"} has no roadmap item yet to link to` });
         } else if (said.startsWith("after.depends_on: no item or feature has the key")) {
           toast({ message: "Not added: no feature has that key" });
         } else if (said) {
@@ -504,9 +510,15 @@ export function GoalLadder(props: LadderProps) {
           } else await act.move(feature, x.f.milestones[0], ref);
           return;
         }
-        // A commenter: the goal the milestone serves, as a suggestion; within its own goal, none.
-        if (m.goal !== x.goal) await act.dropFeature(feature, `free:${m.goal}`);
-        else refuse("Only owners and approvers put a feature on a milestone");
+        // A commenter: the goal the milestone serves, as a suggestion; within its own goal, the link
+        // (or its move) as a suggestion to the decider.
+        if (m.goal !== x.goal) return act.dropFeature(feature, `free:${m.goal}`);
+        try {
+          const from = x.free ? null : (x.f.milestones[0] ?? null);
+          await change({ op: "link_goal_map", target: { feature, milestone: ref, from_milestone: from }, before: {}, after: {} }, `Moved ${named(feature)} to ${krName(ref)}`, `move ${named(feature)} to ${krName(ref)}`);
+        } catch (e) {
+          failed(e);
+        }
         return;
       }
       const goal = ref === "none" ? null : ref;
@@ -524,8 +536,13 @@ export function GoalLadder(props: LadderProps) {
         return;
       }
       const links = x.f.links;
+      // Never half done: a step that fails puts back the links already let go.
+      const off: typeof links = [];
       try {
-        for (const l of links) props.setMap(await detachLink(feature, l.milestone));
+        for (const l of links) {
+          props.setMap(await detachLink(feature, l.milestone));
+          off.push(l);
+        }
         // Off its milestones it serves its item's own goal: set it when that is not the one dropped on.
         const read = await unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } }));
         const now = read.items.find((i) => i.id === feature)?.goal?.id ?? null;
@@ -557,6 +574,7 @@ export function GoalLadder(props: LadderProps) {
         });
       } catch (e) {
         failed(e);
+        for (const l of off) await attachLink(feature, l.milestone, x.f.area, l.expected, l.confidence.toLowerCase() as "high" | "medium" | "low").catch(() => undefined);
         await reload();
       }
     },
@@ -689,7 +707,19 @@ export function GoalLadder(props: LadderProps) {
     trashKr: async (milestone) => {
       setMenu(null);
       const name = krName(milestone);
+      const m = map.milestones.find((x) => x.id === milestone);
       try {
+        // goal-map-editing: who may not change it suggests it, to the roadmap's decider.
+        if (!krCan(milestone)) {
+          if (!m) return;
+          const r = await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: milestone }, before: { milestone: { name: m.name } }, after: { milestone: null } } }));
+          await reload();
+          toast({
+            message: `Suggested: move ${name} to Trash; it waits for ${waitsFor()}`,
+            action: { label: "Undo", onClick: () => void unwrap(api.POST("/v1/simple/changes/{change_id}/withdraw", { params: { path: { change_id: r.change.id } } })).then(reload, failed) },
+          });
+          return;
+        }
         await unwrap(api.DELETE("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } } }));
         await reload();
         toast({
@@ -1096,9 +1126,9 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
     <div
       data-ld-ms={m.id}
       data-testid="ld-milestone"
-      tabIndex={v.edit && v.krCan(m.id) ? 0 : undefined}
+      tabIndex={v.edit && v.may ? 0 : undefined}
       onKeyDown={(e) => {
-        if ((e.key === "Delete" || e.key === "Backspace") && v.edit && v.krCan(m.id) && e.target === e.currentTarget) {
+        if ((e.key === "Delete" || e.key === "Backspace") && v.edit && v.may && e.target === e.currentTarget) {
           e.preventDefault();
           e.stopPropagation();
           void v.act.trashKr(m.id);
@@ -1143,7 +1173,7 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
             {m.name}
           </span>
         )}
-        {v.edit && v.canChange && <span className="ml-auto"><More label={`More for ${m.name}`} open={v.menu === key} onClick={() => v.setMenu(v.menu === key ? null : key)} /></span>}
+        {v.edit && v.may && <span className="ml-auto"><More label={`More for ${m.name}`} open={v.menu === key} onClick={() => v.setMenu(v.menu === key ? null : key)} /></span>}
       </span>
       <span className="text-[12px] leading-4 text-text2" title={m.measure}>
         {m.threshold === null ? <>Reads <b className="text-text">{num(m.current, mUnit(m.unit))}</b> · no gate yet</> : <><b className="text-text">{num(m.current, mUnit(m.unit))}</b> of {num(m.threshold, mUnit(m.unit))}</>}
@@ -1160,9 +1190,14 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
         <MenuList
           testId="ld-ms-menu"
           items={[
-            { w: m.proposed ? "Set and confirm the gate" : "Edit the gate", on: () => { v.setMenu(null); p.onGate(m.id); } },
-            { w: "Attach a feature…", on: () => { v.setMenu(null); p.onAttach(m.id, m.areas[0] ?? ""); } },
-            ...(p.onPrd ? [{ w: "New PRD from it", on: () => { v.setMenu(null); p.onPrd!(m.id); } }] : []),
+            // A commenter's menu holds only what they may suggest.
+            ...(v.canChange
+              ? [
+                  { w: m.proposed ? "Set and confirm the gate" : "Edit the gate", on: () => { v.setMenu(null); p.onGate(m.id); } },
+                  { w: "Attach a feature…", on: () => { v.setMenu(null); p.onAttach(m.id, m.areas[0] ?? ""); } },
+                  ...(p.onPrd ? [{ w: "New PRD from it", on: () => { v.setMenu(null); p.onPrd!(m.id); } }] : []),
+                ]
+              : []),
             ...(v.krCan(m.id)
               ? [
                   ...(at > 0 ? [{ w: "Move up", on: () => void v.act.stepKr(m.id, -1) }] : []),
@@ -1170,8 +1205,14 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
                   { w: "Move to…", on: () => v.act.krTo(m.id) },
                   { w: "Move to Trash", on: () => void v.act.trashKr(m.id), crit: true },
                 ]
-              : // every-field-editable: anyone else who may propose asks to move it to another goal.
-                v.may ? [{ w: "Move to another goal…", on: () => v.act.krTo(m.id) }] : []),
+              : // every-field-editable: anyone else who may propose asks to move it to another goal, or
+                // (goal-map-editing) to Trash.
+                v.may
+                ? [
+                    { w: "Move to another goal…", on: () => v.act.krTo(m.id) },
+                    { w: "Move to Trash", on: () => void v.act.trashKr(m.id), crit: true },
+                  ]
+                : []),
           ]}
         />
       )}
@@ -1703,8 +1744,8 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
         void v.act.dropFeature(id, t);
         return;
       }
-      // A card on no milestone has no place on the canvas: it snaps back.
-      if (!x || x.free) return;
+      // Free canvas: any card, one on no milestone too, stays where it is put.
+      if (!x) return;
       const at = v.places.get(id);
       void v.act.place(id, Math.round((at?.x ?? 0) + dx), Math.round((at?.y ?? 0) + dy));
     }

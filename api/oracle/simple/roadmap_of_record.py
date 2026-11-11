@@ -257,9 +257,9 @@ def prompt_lines(
             if record.trashed_prd.get(key) not in hidden.document_ids and not hidden.names(name)
         ]
     source = (
-        "the owner's working draft, newer than the published version: it holds the owner's "
-        "edits, so it wins over the published roadmap, the approved PRD versions and any "
-        "earlier draft"
+        "the roadmap's working draft, newer than the published version: it holds the "
+        "latest edits, so it wins over the published roadmap, the approved PRD versions and "
+        "any earlier draft"
         if record.draft
         else "the published version (no newer working draft)"
     )

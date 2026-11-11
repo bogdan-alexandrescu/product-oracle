@@ -1194,6 +1194,16 @@ class Who:
     company_owners: list[uuid.UUID]
 
 
+def drafts_who(w: Who, document_id: uuid.UUID) -> drafts.Who:
+    """The page's ``who`` as oracle.simple.drafts reads it (its decider, required reviewers and
+    track owners): a one-pager read never asks the database again (review read budget)."""
+    return drafts.Who(
+        deciders={document_id: w.decider},
+        reviewers={document_id: list(w.reviewers)},
+        owners={document_id: set(w.track_owners)},
+    )
+
+
 async def who(db: AsyncSession, document: Document) -> Who:
     policy = await db.scalar(
         select(DocumentReviewPolicy).where(DocumentReviewPolicy.document_id == document.id)
@@ -1826,6 +1836,7 @@ async def read(
             ],
             reviewers=[SimplePersonRef(id=i, name=names.get(i, "someone")) for i in required],
             can_submit=d.status == "working" and decides(principal, w),
+            can_approve=drafts.can_approve(principal, d, drafts_who(w, d.document_id)),
             reminded_at=reminded_at(d),
             can_remind=may_remind(principal, w) and bool(due_reminders(d, now)),
             approved_in=titles.get(uuid.UUID(approved_sid)) if approved_sid else None,

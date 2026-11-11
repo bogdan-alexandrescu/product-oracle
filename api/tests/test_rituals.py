@@ -505,6 +505,30 @@ async def test_pre_read_and_record_notes_rows_in_the_inbox(client, ctx, at):
     assert not any(r["occurrence_id"] == occ["id"] for r in inbox["rituals"])
 
 
+async def test_record_notes_is_seen_only_once_its_owner_opened_it(client, ctx, at):
+    """protects=bug inbox-ritual-seen (Nov 5): a Record notes row stays new through Inbox
+    visits (mark_seen) and a pre-read opened before the end; it is seen (open) once its
+    owner opens the occurrence after the end; fails_when=it is open as soon as it shows or
+    after a visit to the Inbox; no_claim=the web Inbox (Playwright)."""
+    occ = await ready_occurrence(client, ctx, at)
+    resp = await client.post(f"/v1/ritual-occurrences/{occ['id']}/read", headers=ctx.as_("owner"))
+    assert resp.status_code == 204
+    at(rituals.parse_time(occ["ends_at"]) + timedelta(minutes=1))
+
+    def notes(inbox):
+        (row,) = [r for r in inbox["rituals"] if r["occurrence_id"] == occ["id"]]
+        assert row["reason"] == "record_notes" and row["counts"] is True
+        return row["state"]
+
+    params = {"mark_seen": "true"}
+    seen = await client.get("/v1/inbox", params=params, headers=ctx.as_("owner"))
+    assert notes(seen.json()) == "new"
+    assert notes((await client.get("/v1/inbox", headers=ctx.as_("owner"))).json()) == "new"
+    resp = await client.post(f"/v1/ritual-occurrences/{occ['id']}/read", headers=ctx.as_("owner"))
+    assert resp.status_code == 204
+    assert notes((await client.get("/v1/inbox", headers=ctx.as_("owner"))).json()) == "open"
+
+
 async def test_skip_needs_a_reason(client, ctx, at):
     """protects=Skip needs a reason and is the owner's; fails_when=an empty reason
     skips; no_claim=the screen's wording."""

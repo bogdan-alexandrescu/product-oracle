@@ -43,6 +43,13 @@ Test cards (protects / fails_when / no_claim):
   F-40), or as a code given and taken back (an alias Give it a code never gives again);
   fails_when=two features read one code, a code key reads F-40.2, or the refusal names a
   type:key.
+- test_a_feature_gets_its_code_when_it_joins: protects=every feature has a code, given when
+  it joins the Ground Truth (the owner, Nov 4: "Code + name, all"): one an approver adds reads
+  the next F-number at once, one added with a code keeps it (never renumbered), and a
+  proposed one gets none until it is confirmed, then the next;
+  the check flags no_code for none of them; fails_when=a feature joins with no code, an
+  existing code is renumbered, or a proposed feature gets one; no_claim=a feature written
+  straight to the table (a seed), which Give it a code still fixes.
 - test_scoped_to_the_company: protects=another company cannot give our feature a code or link
   our PRD; fails_when=a route reaches across tenants.
 """
@@ -425,3 +432,25 @@ async def test_a_code_key_is_read_one_way_and_taken_once(client):
     # No two Ground Truth features read one code.
     codes = [f["feature"]["code"] for f in _of(await _check(client, ctx), "no_goal")]
     assert len(codes) == len(set(codes)) and "F-09" in codes and "F-09.2" not in codes
+
+
+async def test_a_feature_gets_its_code_when_it_joins(client):
+    w = await world()
+    ctx = w["ctx"]
+    # F-01..F-03 in the Ground Truth, F-09 and F-15 in the PRD, the next is F-16.
+    planner = await entity(client, ctx, "approver", type="feature", key="trip-planner",
+                           title="Trip planner")  # fmt: skip
+    assert (planner["key"], planner["status"]) == ("F-16", "confirmed")
+    assert await _key(ctx, planner["id"]) == "F-16"
+    kept = await entity(client, ctx, "approver", type="feature", key="F-30", title="Route maps")
+    assert kept["key"] == "F-30"
+    # Proposed: no code yet; confirmed, the next one (F-30 is the highest now).
+    later = await entity(client, ctx, "approver", type="feature", key="packing-list",
+                         title="Packing list", status="proposed")  # fmt: skip
+    assert later["key"] == "packing-list"
+    r = await client.post(f"/v1/baseline/entities/{later['id']}/confirm",
+                          headers=ctx.as_("approver"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert r.json()["key"] == "F-31"
+    flagged = {f["feature"]["id"] for f in _of(await _check(client, ctx), "no_code")}
+    assert not flagged & {planner["id"], kept["id"], later["id"]}, flagged

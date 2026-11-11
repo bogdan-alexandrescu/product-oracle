@@ -8,6 +8,8 @@ import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRo
 import { Walk } from "@/app/simple/_home/walk";
 import { runStopsOf, StopCard } from "@/app/simple/_home/run-stops";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
+import { GtWaitingLine } from "@/app/simple/_home/gt-flags";
+import { LEAD } from "@/app/simple/_home/skeleton";
 import { MarkForItem, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Icon } from "@/components/ds/Icon";
 import { Button } from "@/components/ds/Button";
@@ -50,7 +52,7 @@ import {
 } from "@/lib/simple-home";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { shownTitle } from "@/lib/placeholders";
-import { loadInbox } from "@/lib/waiting";
+import { drawnOnHome, loadInbox, loadMyQuestions, waitingCount } from "@/lib/waiting";
 import { invalidateWaiting, loadWaiting, onWaitingChanged, waitingChanged } from "@/lib/simple-waiting";
 import { WAITING_KIND, WaitingRow } from "@/components/simple/WaitingItems";
 
@@ -121,6 +123,7 @@ const BESIDES: [Schemas["SimpleWaitingItem"]["kind"], string, string][] = [
   ["proposal", "proposal", "proposals"],
   ["goal_suggestion", "goal suggestion", "goal suggestions"],
   ["goal", "proposed goal", "proposed goals"],
+  ["inbox", "Inbox item", "Inbox items"],
 ];
 function allBesides(items: Schemas["SimpleWaitingItem"][]): string {
   return joinAnd(
@@ -192,6 +195,8 @@ export default function SimpleHome() {
   useItemChanged(reloadAll);
 
   const inbox = useQuery(k("inbox"), loadInbox, { keepPrevious: true });
+  // Review: the questions asked of me, the rail's other part (lib/waiting waitingCount).
+  const asked = useQuery(k("asked"), loadMyQuestions, { keepPrevious: true });
   // vqa-simple-runs: Back to Home shows the page as it was left (cacheComponents keeps its
   // state): read everything again, and draw no run stop until the Inbox is read, so a stop just
   // approved on the run's page never shows again. Before paint, so nothing stale flashes.
@@ -404,8 +409,9 @@ export default function SimpleHome() {
   // confirm and goal suggestions I decide, each with its action in place.
   // home-draft-in-review: a draft the drafts card shows lives only there (Home only; other pages keep their rows).
   const draftIds = new Set(myDrafts.map((d) => d.id));
+  // QA: and the Inbox's other counted rows (Add predictions, launches, rituals, metrics, requests), so Home and the Inbox agree.
   const alsoWaiting = (waiting.data?.items ?? []).filter(
-    (i) => (i.kind === "draft" && !draftIds.has(i.ref_id)) || i.kind === "goal_suggestion" || (i.kind === "date" && !i.op),
+    (i) => (i.kind === "draft" && !draftIds.has(i.ref_id)) || i.kind === "goal_suggestion" || (i.kind === "date" && !i.op) || i.kind === "inbox",
   );
   const stopCount = runStops?.length ?? 0;
   // walkc-roadmap-tasks: the open tasks on roadmap items that wait on me.
@@ -413,30 +419,61 @@ export default function SimpleHome() {
   // Every broken link the tile counts: those I decide wait on me, the others I may propose fixes for.
   const brokenMine = broken.filter((b) => b.item.can_decide).length;
   const brokenOthers = broken.length - brokenMine;
-  const waits = waitSentence([
+  // Review: what the rail's Inbox counts and Home draws no row for (open feedback, cost approvals,
+  // discussions, reports, ...) is one row, "N more in your Inbox", so Home never says nothing
+  // waits while the rail counts something.
+  const listed = waiting.data?.items ?? [];
+  const ofKind = (kind: Schemas["SimpleWaitingItem"]["kind"]) => listed.filter((i) => i.kind === kind).length;
+  const moreInInbox =
+    inbox.data && asked.data
+      ? Math.max(
+          0,
+          waitingCount(inbox.data, asked.data) -
+            drawnOnHome(inbox.data, asked.data, {
+              stops: stopCount,
+              questions: waiting.data?.questions.length ?? 0,
+              decisions: ofKind("decision"),
+              drafts: ofKind("draft"),
+              proposals: toDecide.length,
+              dates: listed.filter((i) => i.kind === "date" && !i.op).length,
+              goalSuggestions: ofKind("goal_suggestion"),
+              inboxRows: ofKind("inbox"),
+            }),
+        )
+      : 0;
+  const inboxCount = alsoWaiting.filter((i) => i.kind === "inbox").length + moreInInbox;
+  const parts: [number, string, string][] = [
     [decisionCount, "decision", "decisions"],
     [proposalRows === toDecide ? toDecide.length : 0, "proposal", "proposals"],
     [brokenMine, "broken link", "broken links"],
     [stopCount, "run", "runs"],
     [myTasks.length, "task", "tasks"],
-  ]);
+  ];
+  // Review: the Inbox's rows (the rail's count) read in a short sentence of their own after the
+  // others, with no number as the others ("More waits in your Inbox."); alone, as the others do.
+  const waits =
+    inboxCount === 0
+      ? waitSentence(parts)
+      : parts.every(([n]) => n === 0)
+        ? waitSentence([[inboxCount, "thing in your Inbox", "things in your Inbox"]])
+        : `${waitSentence(parts)} More waits in your Inbox.`;
   const brokenWords = brokenOthers === 1 ? "a broken link" : "broken links";
   // home-honest-loading: what waits is said only once every source it counts has answered
   // (the role, the decisions and tasks, the proposals, the roadmap's links, the run stops).
   const answered = (q: { data?: unknown; error?: unknown }) => q.data !== undefined || !!q.error;
-  const known = capsReady && (reads || ([waiting, changes, roadmap, inbox].every(answered) && runStops !== undefined));
+  const known = capsReady && (reads || ([waiting, changes, roadmap, inbox, asked].every(answered) && runStops !== undefined));
   const sentence = !known
     ? "Checking what waits on you…"
     : reads
     ? "Here is where the plan stands."
     : brokenOthers === 0
       ? waits
-      : brokenMine + decisionCount + stopCount + myTasks.length + (proposalRows === toDecide ? toDecide.length : 0) === 0
+      : brokenMine + decisionCount + stopCount + myTasks.length + inboxCount + (proposalRows === toDecide ? toDecide.length : 0) === 0
         ? `You can propose fixes for ${brokenWords}.`
         : `${waits} You can also propose fixes for ${brokenWords}.`;
   // Nothing waits and no review is due (a new company): no walk to offer. Unknown until its reads answer.
-  const counted = [waiting, changes, roadmap, meeting, inbox].every((q) => q.data !== undefined || !!q.error);
-  const nothingToWalk = counted && stopCount + decisionCount + toDecide.length + mine.length + broken.length + myTasks.length === 0 && !meeting.data?.next;
+  const counted = [waiting, changes, roadmap, meeting, inbox, asked].every((q) => q.data !== undefined || !!q.error);
+  const nothingToWalk = counted && stopCount + decisionCount + toDecide.length + mine.length + broken.length + myTasks.length + inboxCount === 0 && !meeting.data?.next;
   // qa-simple-home-16: nothing waits on me (no decision, no proposal): one line, not two empty cards and two 0 tiles.
   // An empty section alone is not shown either (its tile neither): the cards that wait on me lead.
   // build-rundecide RD3 a: the PRDs' questions I own wait in a card per PRD; this card keeps the other judgement calls.
@@ -444,7 +481,7 @@ export default function SimpleHome() {
   const prdWaiting = waitingByPrd([...(waiting.data?.questions ?? []).filter((q) => !decidedHere.some((d) => d.id === q.id)), ...decidedHere]);
   const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0;
   const proposalsEmpty = !!changes.data && proposalRows.length === 0;
-  const quiet = !(revisit && inbox.loading) && decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0 && stopCount === 0 && myTasks.length === 0 && alsoWaiting.length === 0;
+  const quiet = !(revisit && inbox.loading) && decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0 && stopCount === 0 && myTasks.length === 0 && alsoWaiting.length === 0 && moreInInbox === 0;
   // qa-onboarding-21: a tile that cannot apply yet (no roadmap items, so no links to break) is not shown.
   const tilesShown = (
     [
@@ -686,13 +723,13 @@ export default function SimpleHome() {
           </ul>
         </Dialog>
       )}
-      <header data-testid="home-greeting" className="-mt-4 flex flex-col gap-1">
+      <header data-testid="home-greeting" className="@container -mt-4 flex flex-col gap-1">
         <div className="flex items-center justify-between gap-2">
           <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
           {/* F-28, the owner's pick (Nov 5): a hidden Set up comes back from Home's menu. */}
           {setupHidden && <HomeMenu onShowSetup={() => void hideSetup(false)} />}
         </div>
-        <p className="simple-lead max-[600px]:min-h-[2lh]">
+        <p className={LEAD}>
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
@@ -945,6 +982,8 @@ export default function SimpleHome() {
               </Link>
             </p>
           ))}
+          {/* The owner's pick (Nov 10): the Ground Truth flags, one line at the foot of the card. */}
+          <GtWaitingLine />
         </section>
       )}
 
@@ -972,6 +1011,7 @@ export default function SimpleHome() {
               </Link>
             </p>
           )}
+          {!(tilesReady && (tilesShown.length > 0 || myDrafts.length > 0)) && <GtWaitingLine />}
         </section>
       )}
 
@@ -1047,12 +1087,20 @@ export default function SimpleHome() {
           </button>
         </p>
       )}
-      {!reads && alsoWaiting.length > 0 && (
-        <HomeCard id="also-waiting" icon="flag" title="Also waiting for you" count={alsoWaiting.length} all="/simple/decisions" allLabel="All that waits on you">
+      {!reads && alsoWaiting.length + moreInInbox > 0 && (
+        <HomeCard id="also-waiting" icon="flag" title="Also waiting for you" count={alsoWaiting.length + moreInInbox} all="/simple/decisions" allLabel="All that waits on you">
           <ul data-testid="home-also-waiting-list">
             {alsoWaiting.map((i) => (
               <WaitingRow key={i.key} item={i} />
             ))}
+            {moreInInbox > 0 && (
+              <li className="flex flex-wrap items-center gap-3 border-t border-line py-3 first:border-t-0" data-testid="home-inbox-more">
+                <span className="min-w-0 flex-1 break-words">{moreInInbox} more in your Inbox</span>
+                <Link href="/simple/inbox" className="simple-button simple-button-primary">
+                  Open
+                </Link>
+              </li>
+            )}
           </ul>
         </HomeCard>
       )}
@@ -1282,6 +1330,7 @@ export default function SimpleHome() {
 
       {reads ? (
         <>
+          <GtWaitingLine card />
           <HomeCard id="next-milestone" icon="flag" title="What the next milestone delivers" all="/simple/roadmap" allLabel="All of the roadmap">
             <Block q={roadmap} testId="home-milestone">
               {(r) => {

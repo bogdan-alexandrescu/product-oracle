@@ -40,6 +40,7 @@ import {
   openDraft,
   GOALS,
   MAP_GOALS,
+  featureGoalRef,
   mapGoalRef,
   goalId,
   goalIdsOf,
@@ -72,6 +73,9 @@ import {
   draftPrds,
   readableRoadmap,
   readDates,
+  readColumn,
+  quarterWindows,
+  shiftToQuarter,
   roadmapGoal,
   roadmapGoalKey,
   goalInTrash,
@@ -125,7 +129,67 @@ export interface LadderMilestones {
   /** milestone-rename: `roadmap`, the roadmap (slug) the map's milestones sit on. */
   find: (id: string) => { value: Record<string, unknown>; can_change: boolean; name: string; decider: string | null; roadmap?: string | null } | null;
   /** milestone-rename: writes an accepted proposal's name, date and goal. */
-  write: (id: string, after: Record<string, unknown>) => void;
+  write: (id: string, after: Record<string, unknown> | null) => void;
+  /** goal-map-link-asks: the map's links (goal-map.ts), for a link_goal_map change. */
+  links?: {
+    feature: (id: string) => { title: string; milestones: string[]; area: string | null } | null;
+    milestone: (id: string) => { name: string; areas: string[] } | null;
+    firstArea: () => string | null;
+    /** The Goal map's POST /links and /links/move; null when done. */
+    attach: (feature: string, milestone: string, area: string) => Response | null;
+    move: (feature: string, from: string, to: string) => Response | null;
+  };
+}
+
+/** goal-map-link-asks (oracle.simple.goal_map_asks): a feature put on a goal milestone
+ * (target.from_milestone null) or its link moved there, suggested by who may propose but not edit
+ * the Goal map (a commenter), routed to the map's roadmap's decider; accepted, it applies as the
+ * Goal map's own POST /links (in the milestone's first area, else the feature's, else the map's
+ * first) or /links/move does. */
+const MAP_LINK_OP = "link_goal_map";
+
+function mapLinkArea(links: NonNullable<LadderMilestones["links"]>, feature: string, milestone: string): string | null {
+  return links.milestone(milestone)?.areas[0] ?? links.feature(feature)?.area ?? links.firstArea();
+}
+
+function createMapLink(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Response {
+  if (ctx.role === "viewer") return json(403, { detail: "Viewers may not propose a change" });
+  if (approves(ctx)) return json(409, { detail: "You change this directly on the Goal map" });
+  const links = ctx.ladder?.links;
+  const feature = String(body.target.feature ?? "");
+  const milestone = String(body.target.milestone ?? "");
+  const from = body.target.from_milestone ? String(body.target.from_milestone) : null;
+  const f = links?.feature(feature);
+  if (!links || !f) return json(404, { detail: "No such feature" });
+  const m = links.milestone(milestone);
+  if (!m) return json(404, { detail: "No such milestone" });
+  if (from === milestone) return json(422, { detail: "It is on that milestone already" });
+  if (from && !f.milestones.includes(from)) return json(404, { detail: "The feature is not on that milestone" });
+  if (!from && f.milestones.includes(milestone)) return json(422, { detail: "It is on that milestone already" });
+  if (!from && !mapLinkArea(links, feature, milestone)) return json(422, { detail: "The map has no area to put it in" });
+  if ((db.changes ?? []).some((c) => c.op === MAP_LINK_OP && c.status === "proposed" && c.target.feature === feature && c.target.milestone === milestone)) return json(409, { detail: "This is asked already" });
+  const kr = ctx.ladder?.find(milestone);
+  const doc = kr?.roadmap ? stableUuid(`simple-doc/${kr.roadmap}`) : null;
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: null, document_id: doc, draft_ids: [], op: body.op,
+    target: { feature, milestone, from_milestone: from, item_id: feature, title: f.title, name: m.name, from_name: from ? (links.milestone(from)?.name ?? null) : null },
+    before: {}, after: {}, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
+    decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
+    routed_to: kr?.decider ? [kr.decider] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  (db.changes ??= []).push(change);
+  return json(201, { change: view(db, ctx, change), flags: [] });
+}
+
+/** An accepted link_goal_map: the Goal map's own attach or move; null when done. */
+function applyMapLink(ctx: SimpleChangesCtx, c: Change): Response | null {
+  const links = ctx.ladder?.links;
+  if (!links) return json(404, { detail: "No such feature or milestone" });
+  const feature = String(c.target.feature), milestone = String(c.target.milestone);
+  if (c.target.from_milestone) return links.move(feature, String(c.target.from_milestone), milestone);
+  if (!links.milestone(milestone)) return json(404, { detail: "No such milestone" });
+  const area = mapLinkArea(links, feature, milestone);
+  return area ? links.attach(feature, milestone, area) : json(422, { detail: "The map has no area to put it in" });
 }
 
 /** edit-goals-prds (oracle.simple.goal_asks): a goal archived or restored, asked by who may not
@@ -346,6 +410,12 @@ function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op"
   if (c.op === "edit_goal_milestone" && c.before && !("milestone" in c.before)) return ctx.role === "owner" || prdOwnerIds(db, c.document_id).includes(ctx.id);
   // milestone-rename: a roadmap's own milestone's (a goal's, the Goal map's) as goal_milestones.with_asks reads it.
   if (c.op === MILESTONE_OP) return decidesMilestoneAsk(db, c as Change, ctx);
+  // goal-map-link-asks (goal_map_asks.may_decide, as key_dates.may_decide): an owner, whom it is
+  // routed to, or who changes the map's roadmap directly.
+  if (c.op === MAP_LINK_OP) {
+    const rm = roadmapOfDoc(db, c.document_id);
+    return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
+  }
   if (KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
@@ -395,7 +465,7 @@ export function meetingRoute(db: SimpleDb, attendees: string[], ctx: Pick<Simple
 
 /** changes.current_route: who decides an open proposal now; else its stored route. */
 function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c: Change): string[] {
-  if (c.status !== "proposed" || KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP) return c.routed_to;
+  if (c.status !== "proposed" || KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP || c.op === MAP_LINK_OP) return c.routed_to;
   // walkc-meeting: a proposal made in a meeting stays with the meeting's deciders.
   if (db.meeting_proposals?.includes(c.id) && c.routed_to.length) return c.routed_to;
   if (c.op === "add_item" && !keyOf(db, c.target.item_id)) {
@@ -445,7 +515,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "feature_id") out[f] = s.feature_id ?? null;
     else if (f === "track_id") out[f] = s.track ? stableUuid(`simple-track/${s.track}`) : null;
     else if (f === "goal_ids") out[f] = goalIdsOf(s);
-    else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : s.map_goal && mapGoalRef(db, s.map_goal) ? s.map_goal : null;
+    else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : s.map_goal && mapGoalRef(db, s.map_goal) ? s.map_goal : (featureGoalRef(db, key)?.id ?? null);
     else if (f === "prd_document_id") out[f] = ownPrd(s).id;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
     else if (f === "parent_key") out[f] = s.parent ?? null;
@@ -465,6 +535,11 @@ function statusAfter(s: ReturnType<typeof seed>, status: string, by: string): Va
   return { cut: status === "cut", shipped: status === "done" ? (s.shipped ?? { note: PANEL_DONE, by, on: iso(mockNowMs()).slice(0, 10) }) : kept };
 }
 
+/** The status the tracker gives the item, read before a cut or a shipped mark is written (kept as its tracked). */
+function trackerStatus(s: ReturnType<typeof seed>): NonNullable<ReturnType<typeof seed>["tracked"]> {
+  return !s.status || s.status === "cut" || s.status === "draft" || (s.status === "done" && s.shipped) ? "planned" : s.status;
+}
+
 function write(db: SimpleDb, key: string, values: Values, target: Values): void {
   const s = seed(db, key);
   if ("start_date" in values) {
@@ -474,7 +549,11 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("horizon" in values) s.horizon = values.horizon as typeof s.horizon;
   if ("position" in values) s.position = values.position as number;
   // set_status's {cut, shipped} is written below, from the tracker's status read before either is written.
-  if ("cut" in values && !("shipped" in values)) s.status = values.cut ? "cut" : "planned";
+  // cut / restore write {cut} alone: restored, it reads as service._status, its shipped mark, then the tracker's status.
+  if ("cut" in values && !("shipped" in values)) {
+    s.tracked ??= trackerStatus(s);
+    s.status = values.cut ? "cut" : s.shipped ? "done" : s.tracked;
+  }
   if ("title" in values) s.title = String(values.title);
   if ("draft" in values) s.draft = !!values.draft;
   if ("goal_ids" in values) {
@@ -504,7 +583,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("parent_key" in values) s.parent = (values.parent_key as string | null) ?? undefined;
   if ("shipped" in values) {
     // changes.py set_status ({cut, shipped}): it reads as service._status: cut, then its shipped mark, then the tracker's status.
-    s.tracked ??= !s.status || s.status === "cut" || s.status === "draft" || (s.status === "done" && s.shipped) ? "planned" : s.status;
+    s.tracked ??= trackerStatus(s);
     s.shipped = (values.shipped as typeof s.shipped) ?? null;
     s.status = values.cut ? "cut" : s.shipped ? "done" : s.tracked;
   }
@@ -626,6 +705,7 @@ function sees(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): boolean {
   if ((db.drafts ?? []).some((d) => (c.draft_ids ?? []).includes(d.out.id) && seesDraft(d, ctx, db))) return true;
   if ((db.sessions ?? []).some((s) => s.id === c.session_id && s.started_by === ctx.id)) return true;
   // changes.sees: the document's owners and who decides it; a PRD milestone's ask is its PRD owner's.
+  if (c.op === MAP_LINK_OP) return decidesChange(db, ctx, c);
   if (c.op !== MILESTONE_OP || !c.before || "milestone" in c.before) return false;
   // changes.sees: and the PRD's reviewers, its decider among them (its review policy's), and its owners (drafts.who).
   const slug = prdSlugOf(db, c.document_id);
@@ -1279,6 +1359,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   if (body.op === "delete_item") return createDeleteItem(db, ctx, body);
   if (body.op === MILESTONE_OP) return createMilestoneChange(db, ctx, body);
   if (GOAL_ASK_OPS.includes(body.op) || body.op === "delete_goal") return createGoalAsk(db, ctx, body);
+  if (body.op === MAP_LINK_OP) return createMapLink(db, ctx, body);
   const now = iso(mockNowMs());
   if (KEY_DATE_OPS.includes(body.op)) {
     // The Roadmap filter names the roadmap as roadmap_id (as add_item does); either works.
@@ -1366,6 +1447,10 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const r = readDates(seen, key);
       const shown = { start_date: r.start, end_date: r.end };
       if (!same(seenNow, shown)) return conflict(db, ctx, shown, [String(target.item_id)], lead);
+    } else if (body.op === "change_horizon") {
+      // board-quarters (changes.py SHOWN): before is the column the read shows, from the dates.
+      const shown = { horizon: readColumn(seen, key).horizon };
+      if (!same(seenNow, shown)) return conflict(db, ctx, shown, [String(target.item_id)], lead);
     } else if (body.op === "edit_title" && !same(seenNow, now_)) {
       // roadmap-edit-fixes: the read shows a title's code apart from its name.
       const s = seed(seen, key);
@@ -1398,7 +1483,12 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       stored = ["start_date", "end_date", "date_source"];
     } else if (body.op === "change_horizon") {
       if (!["now", "next", "later"].includes(String(a.horizon))) return json(422, { detail: "after.horizon: now, next or later" });
-      after = { horizon: a.horizon };
+      // board-quarters (changes.py): the shown dates move by whole quarters into the new
+      // column, length kept, typed; an undated item takes the quarter; horizon is history.
+      const r = readColumn(seen, key);
+      const [start, end] = shiftToQuarter(r.undated ? null : r.start, r.undated ? null : r.end, a.horizon as "now" | "next" | "later", quarterWindows(companyToday()));
+      after = { horizon: a.horizon, start_date: start, end_date: end, date_source: "typed" };
+      stored = ["horizon", "start_date", "end_date", "date_source"];
     } else if (body.op === "reorder") after = { position: Number(a.position) };
     else if (body.op === "cut" || body.op === "restore") after = { cut: body.op === "cut" };
     else if (body.op === "remove_dependency") {
@@ -1622,6 +1712,10 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     if (!s || s.closed_at || idle(s)) return json(409, { detail: "Its session is closed: undo works only in the change's session" });
     if (c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.after)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "Changed since");
     let undone: { before: Values; after: Values } | undefined;
+    // As changes.undo: the milestone put back is checked as a pick is (it may be in Trash since).
+    const backMs = c.op === "set_milestone" ? (c.before.milestone as Values | null | undefined) : undefined;
+    const gone = backMs && typeof backMs === "object" && backMs.id ? pickRefused(db, c.target.item_id, backMs.id) : null;
+    if (gone) return json(422, { detail: gone });
     if (TARGETS[c.op]) writeTarget(db, c, c.before, true, ctx);
     else if (KEY_DATE_OPS.includes(c.op)) {
       const rm = roadmapOfDoc(db, c.target.document_id)!;
@@ -1687,7 +1781,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       // every-field-editable: a Goal ladder key result's new goal (milestone-rename: its name and date too).
       if (!same(kr.value, c.before.milestone)) return json(409, { detail: { message: "outdated: the milestone changed since the proposal", current: { milestone: kr.value }, changed_by: null, changed_at: null } });
       const after = c.after.milestone as Record<string, unknown> | null;
-      if (after) ctx.ladder!.write(String(c.target.milestone_id), after);
+      ctx.ladder!.write(String(c.target.milestone_id), after);
     } else if (c.target.goal_target || !ms) return json(404, { detail: "The milestone is gone" });
     else {
     if (!same(milestoneValue(ms, db.ids), c.before.milestone)) return json(409, { detail: { message: "outdated: the milestone changed since the proposal", current: { milestone: milestoneValue(ms, db.ids) }, changed_by: null, changed_at: null } });
@@ -1733,6 +1827,9 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   else if (p[4] === "accept" && GOAL_ASK_OPS.includes(c.op)) {
     const err = applyGoalAsk(db, ctx, c);
     if (err) return err;
+  } else if (p[4] === "accept" && c.op === MAP_LINK_OP) {
+    const err = applyMapLink(ctx, c);
+    if (err) return err;
   } else if (p[4] === "accept" && c.op === "delete_item") {
     const key = keyOf(db, c.target.item_id);
     if (!key) return json(404, { detail: "The feature is gone" });
@@ -1767,7 +1864,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     apply(db, c, c.after);
   }
   Object.assign(c, { status: p[4] === "accept" ? "accepted" : "declined", decided_by: ctx.id, decided_at: now, decision_reason: body.reason ?? null });
-  return json(200, { change: view(db, ctx, c), flags: TARGETS[c.op] || KEY_DATE_OPS.includes(c.op) ? [] : flagsFor(db, touched(c)) });
+  return json(200, { change: view(db, ctx, c), flags: TARGETS[c.op] || KEY_DATE_OPS.includes(c.op) || c.op === MAP_LINK_OP ? [] : flagsFor(db, touched(c)) });
 }
 
 /** changes._free_code: who already has ``code`` (another item of the roadmap or a Ground Truth feature), in plain words; null when it is free. */
@@ -1900,7 +1997,7 @@ export function simpleInboxRows(
       .filter((d) => d.out.status === "submitted" && (d.out.waiting_on.includes(me) || (!d.out.decider_approved && !!who.role && approverOf(db!, { id: me, role: who.role }, d))))
       .sort((a, b) => ((a.out.submitted_at ?? "") < (b.out.submitted_at ?? "") ? -1 : 1))
       .map((d) => ({
-        draft_id: d.out.id, document: { id: d.out.document.id, slug: d.out.document.slug, title: d.out.document.title }, version: d.out.version ?? null, submitted_by: d.out.submitted_by ?? null,
+        draft_id: d.out.id, document: { id: d.out.document.id, slug: d.out.document.slug, title: d.out.document.title }, document_kind: "roadmap" as const, version: d.out.version ?? null, submitted_by: d.out.submitted_by ?? null,
         submitted_by_name: d.out.submitted_by ? (who.names?.[d.out.submitted_by] ?? null) : null, submitted_at: d.out.submitted_at ?? null,
         decider_approved: !!d.out.decider_approved, state: !seen || (d.out.submitted_at ?? "") > seen ? ("new" as const) : ("open" as const),
       })),

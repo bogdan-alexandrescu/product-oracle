@@ -333,7 +333,8 @@ async def import_yaml(
         principal, origin, run_id=run_id, reason=reason, proposals_only=proposals_only
     )
     # One change event per subject kind for the whole file, not one per item.
-    async with service.batched_changes(db):
+    # The codes taken read once for the file's new features (fixes.codes_once).
+    async with service.batched_changes(db), fixes.codes_once(db):
         return await _merge(db, data, writer, principal)
 
 

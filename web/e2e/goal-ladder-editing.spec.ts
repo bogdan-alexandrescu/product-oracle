@@ -85,17 +85,19 @@ for (const [label, size] of [["1440", DESKTOP], ["390", PHONE]] as const) {
 
     test("a feature on no milestone, put on a milestone: it moves there and the badge count drops", async ({ page }) => {
       // protects=every feature is on the ladder (F-66 under Goal 1's "Not on a key result"), the
-      // badge leads to those groups, and a drop (or Move to… on a phone) links it to M3 with Undo;
+      // badge opens the list of them, and a drop (or Move to… on a phone) links it to M3 with Undo;
       // fails_when=unlinked features are not drawn, the drop only places the card, or the badge
       // keeps its count; no_claim=the API's link (pytest test_simple_goal_ladder_editing_api).
       await open(page);
       const badge = page.getByTestId("gm-flag-unplaced");
       await expect(badge).toHaveText("6 features serve no gate");
       await badge.click();
-      if (phone(page)) await expect(page.getByRole("tab", { name: "Goal 1", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByTestId("gm-flag-list").getByTestId("gm-unplaced")).toHaveCount(6);
+      await page.getByTestId("gm-flag-list").getByRole("button", { name: "Close" }).click();
+      await expect(page.getByTestId("gm-flag-list")).toHaveCount(0);
+      if (phone(page)) await goalTab(page, 1);
       const free = page.getByTestId("ld-free").filter({ has: card(page, "F-66") });
       await expect(free).toBeVisible();
-      await expect(free).toHaveAttribute("data-flash", "1");
       await expect(free).toContainText("Not on a key result");
       if (!phone(page)) await expect(page.getByTestId("ld-nogoal")).toContainText("F-64");
       await page.getByTestId("ld-edit").click();
@@ -179,21 +181,23 @@ for (const [label, size] of [["1440", DESKTOP], ["390", PHONE]] as const) {
       await expect(row.getByRole("button", { name: /Restore/ })).toBeVisible();
     });
 
-    test("an approver who is not the roadmap's decider gets no Move to Trash on a milestone", async ({ page }) => {
+    test("an approver who is not the roadmap's decider suggests a milestone's Trash, never moves it", async ({ page }) => {
       // protects=a milestone's can_change (the roadmap's owner or decider, as the API's 403 checks) gates
-      // its ⋯ menu's Move to Trash and Move to…, its grip and its Delete key, not the map's can_edit: an approver turns on Edit ladder
-      // and sees no Move to Trash or Move to… on a key result (its gate and attach items stay);
-      // fails_when=the approver is offered a Trash the API then refuses; no_claim=the decider's own menu.
+      // its ⋯ menu's Move to… and Move up/down and its grip, not the map's can_edit; its Move to Trash
+      // and Delete key become a suggestion to the decider (goal-map-editing); fails_when=the approver
+      // is offered a move the API then refuses, or the Delete key moves it; no_claim=the decider's own menu.
       await open(page, "approver");
       await page.getByTestId("ld-edit").click();
       const kr = krCard(page, "Renewal rate at 85% for spring renewals");
       await expect(kr).toHaveCount(1);
       await kr.focus();
       await page.keyboard.press("Delete");
+      await expect(toast(page, "Suggested: move")).toContainText(/Renewal rate at 85% for spring renewals to Trash; it waits for (?!the roadmap's owner)\S/);
       await expect(kr).toHaveCount(1);
       await kr.getByTestId("ld-more").first().click();
       await expect(page.getByRole("menuitem", { name: "Edit the gate" })).toBeVisible();
-      for (const name of ["Move to Trash", "Move to…", "Move up", "Move down"]) {
+      await expect(page.getByRole("menuitem", { name: "Move to Trash", exact: true })).toHaveCount(1);
+      for (const name of ["Move to…", "Move up", "Move down"]) {
         await expect(page.getByRole("menuitem", { name, exact: true })).toHaveCount(0);
       }
       await page.keyboard.press("Escape");

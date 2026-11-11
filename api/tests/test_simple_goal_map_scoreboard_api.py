@@ -153,7 +153,9 @@ async def test_gaps_and_unplaced_features(client):
     ctx, ids = await world()
     body = await read(client, ctx, "viewer")
     assert body["gaps"] == [{"milestone": ids["m2"], "area": ids["scale"]}]
-    assert body["unplaced"] == [{"id": ids["f3"], "name": "Rep leaderboard", "goal": None}]
+    assert body["unplaced"] == [
+        {"id": ids["f3"], "name": "Rep leaderboard", "goal": None, "code": ""}
+    ]
     r = await client.post(
         f"{URL}/links",
         json={"feature": ids["f3"], "milestone": ids["m2"], "area": ids["scale"]},
@@ -219,9 +221,13 @@ async def test_unplaced_reads_as_the_reader(client):
                           created_by=owner, participant_ids=[owner]))  # fmt: skip
         await s.commit()
     mine = await read(client, ctx, "owner")
-    assert mine["unplaced"] == [{"id": ids["f3"], "name": "Rep leaderboard, renamed", "goal": None}]
+    assert mine["unplaced"] == [
+        {"id": ids["f3"], "name": "Rep leaderboard, renamed", "goal": None, "code": ""}
+    ]
     theirs = await read(client, ctx, "viewer")
-    assert theirs["unplaced"] == [{"id": ids["f3"], "name": "Rep leaderboard", "goal": None}]
+    assert theirs["unplaced"] == [
+        {"id": ids["f3"], "name": "Rep leaderboard", "goal": None, "code": ""}
+    ]
 
 
 async def test_pick_an_unknown_metric_is_404(client):

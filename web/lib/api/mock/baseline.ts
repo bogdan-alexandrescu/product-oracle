@@ -10,6 +10,7 @@ import { goalPosition, sortGoals } from "@/lib/goal-order";
 import { goalName, withoutPlaceholders } from "@/lib/placeholders";
 
 import { DEPOSITS_IDS } from "./blockers";
+import { ANY_CODE, codeOnJoin, formerKeys, findByKey } from "./feature-codes";
 import { describe, proposer } from "./describe";
 import { goalCheck, readText, refusedProblems, todayIso, unitOk, type GoalProblem } from "./goals";
 import { MOCK_SCENARIO_KEY, PRODUCT_CHAT_ID, seededItemId } from "./ids";
@@ -65,6 +66,8 @@ export type BaselineCaller = {
   sourceItem?: (itemId: string) => CitedItem | null;
   /** A hidden decision's baseline entity (docs/visibility): absent from the caller's entity list and reads. */
   hidden?: (entityId: string) => boolean;
+  /** codes-on-join: the codes next_code reads besides the features' own (every PRD's feature codes, every item's PRD section). */
+  codesSeen?: () => string[];
 };
 
 /** What citing a source item copies from it. */
@@ -741,6 +744,8 @@ type Changes = {
   status?: EntityRow["status"] | null;
   /** #345: a subgoal's parent goal; null promotes it. */
   parent_id?: string | null;
+  /** codes-on-join: a feature's new key (typed in the same edit that may confirm it). */
+  key?: string | null;
 };
 
 /** The subset of `changes` that differs from the entity, attrs merged (as service._entity_changes). */
@@ -754,6 +759,12 @@ function entityDiff(e: EntityRow, changes: Changes): Partial<EntityRow> {
   }
   if (changes.status != null && changes.status !== e.status) out.status = changes.status;
   if ("parent_id" in changes && (changes.parent_id ?? null) !== (e.parent_id ?? null)) out.parent_id = changes.parent_id ?? null;
+  // codes-on-join: only a feature's key changes here, a code read one way (F-9 is F-09).
+  const key = typeof changes.key === "string" && e.type === "feature" ? (canonicalCode(changes.key) ?? changes.key.trim()) : "";
+  if (key && key !== e.key) {
+    if (key.length > 120 || !(KEY_RE.test(key) || CODE_KEY_RE.test(key))) throw new MockError(422, "key: lowercase letters, digits, . _ -, or a feature code");
+    out.key = key;
+  }
   return out;
 }
 
@@ -818,7 +829,7 @@ function updateEntity(
   s: BaselineState,
   e: EntityRow,
   changes: Changes,
-  writer: { origin: "user" | "agent"; userId: string; reason?: string | null; runId?: string | null },
+  writer: { origin: "user" | "agent"; userId: string; reason?: string | null; runId?: string | null; seen?: string[] },
 ): ProposalRow | null {
   if (e.type === "goal") {
     // As service.update_entity: a goal's name is stripped and never blank; it and the description are written
@@ -830,6 +841,7 @@ function updateEntity(
   const diff = entityDiff(e, changes);
   if (Object.keys(diff).length === 0) return null;
   if (e.type === "goal" && diff.status === "confirmed") throw new MockError(422, "confirm a goal with POST .../confirm");
+  if (diff.key) keyRefusal(s, e.type, diff.key, e);
   if (e.locked && writer.origin !== "user") {
     const fields = Object.fromEntries(Object.entries(changes).filter(([k]) => k in diff));
     const p: ProposalRow = {
@@ -857,23 +869,54 @@ function updateEntity(
     }
   }
   if (writer.origin === "user") lock(e, writer.userId);
+  const revise = (from: Record<string, unknown>) =>
+    (s.revisions ??= []).push({
+      id: newId(),
+      entity_id: e.id,
+      edge_id: null,
+      before: from,
+      after: entitySnapshot(e),
+      actor: writer.runId ? `run:${writer.runId}` : `user:${writer.userId}`,
+      reason: writer.reason ?? null,
+      created_at: e.updated_at,
+    });
+  // codes-on-join: a feature this edit confirms gets its code (fixes.code_on_join). A key typed in the same edit is
+  // written first, as its own revision, so the old key and the typed one both stay its aliases.
+  if (diff.status === "confirmed" && diff.key) {
+    revise(before);
+    const typed = entitySnapshot(e);
+    codeOnJoin(s, e, writer.seen ?? []);
+    if (e.key !== typed.key) revise(typed);
+    return null;
+  }
+  if (diff.status === "confirmed") codeOnJoin(s, e, writer.seen ?? []);
   // A revision for the change, as service._revision records it.
-  (s.revisions ??= []).push({
-    id: newId(),
-    entity_id: e.id,
-    edge_id: null,
-    before,
-    after: entitySnapshot(e),
-    actor: writer.runId ? `run:${writer.runId}` : `user:${writer.userId}`,
-    reason: writer.reason ?? null,
-    created_at: e.updated_at,
-  });
+  revise(before);
   return null;
+}
+
+/**
+ * A key no other entity of the type has, as service.create_entity refuses one: a feature's key read as a code
+ * (F-9 is F-09) is one feature's, and a key a feature had before (its alias, fixes.former_keys) is that feature's.
+ */
+function keyRefusal(s: BaselineState, type: string, key: string, self?: EntityRow): void {
+  const code = type === "feature" ? canonicalCode(key) : null;
+  if (code) {
+    const had = [...s.entities.filter((e) => e.type === "feature" && e !== self).map((e) => e.key), ...(s.codesGiven ?? []), ...formerKeys(s).keys()];
+    if (had.some((k) => (canonicalCode(k) ?? k) === code)) throw new MockError(409, `Another feature already has the code ${code}.`);
+  }
+  const holder = findByKey(s, type, key);
+  if (!holder || holder === self) return;
+  if (holder.key !== key) {
+    const name = ANY_CODE.test(holder.key) ? `${holder.key} ${holder.title}` : holder.title;
+    throw new MockError(409, `The key ${key} is ${name}'s old key.`);
+  }
+  throw new MockError(409, `${type}:${key} already exists`);
 }
 
 /** F4: Approve at the Engineering check sets a feature's effort, as the deciding person's edit (locked). */
 export function setEntityEffort(s: BaselineState, key: string, size: string, userId: string, runId: string) {
-  const e = s.entities.find((x) => x.type === "feature" && x.key === key);
+  const e = findByKey(s, "feature", key);
   const effort = size.toUpperCase();
   if (!e || String(e.attrs?.effort ?? "").toUpperCase() === effort) return;
   updateEntity(s, e, { attrs: { effort } }, { origin: "user", userId, reason: `Engineering check of run ${runId}` });
@@ -889,20 +932,17 @@ function canonicalCode(key: string): string | null {
 }
 
 /** A person's new entity, as service.create_entity: confirmed and locked, a goal proposed (B2). */
-function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: string): EntityRow {
+function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: string, seen: string[] = []): EntityRow {
   if (input.type === "goal" && typeof input.title === "string" && !input.title.trim()) throw new MockError(422, "A goal needs a name");
   if (!input.title?.trim()) throw new MockError(422, "title must not be empty");
   if (!input.key || input.key.length > 120 || !(KEY_RE.test(input.key) || CODE_KEY_RE.test(input.key))) throw new MockError(422, "key: lowercase letters, digits, . _ -");
   if (CODE_KEY_RE.test(input.key) && input.type !== "feature") throw new MockError(422, "Only a feature's key can be a feature code.");
   // A code key is stored as the check reads it (F-9 is F-09) and is one feature's: refused when a feature's key, or a
   // code once given and taken back (an alias never given again), reads it, as service.create_entity.
+  // A key a feature had before is its alias (service.find_entity): refused, naming that feature.
   const code = input.type === "feature" ? canonicalCode(input.key) : null;
-  if (code) {
-    input = { ...input, key: code };
-    const had = [...s.entities.filter((e) => e.type === "feature").map((e) => e.key), ...(s.codesGiven ?? [])];
-    if (had.some((k) => (canonicalCode(k) ?? k) === code)) throw new MockError(409, `Another feature already has the code ${code}.`);
-  }
-  if (s.entities.some((e) => e.type === input.type && e.key === input.key)) throw new MockError(409, `${input.type}:${input.key} already exists`);
+  if (code) input = { ...input, key: code };
+  keyRefusal(s, input.type, input.key);
   if (input.type === "goal" && input.status === "confirmed") {
     throw new MockError(422, "goals start proposed; confirm them with POST .../confirm");
   }
@@ -943,6 +983,13 @@ function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: 
     reason: input.reason ?? null,
     created_at: at,
   });
+  if (e.type === "feature") {
+    // codes-on-join: its code as a revision of its own, so the key it was added with stays its alias.
+    const before = entitySnapshot(e);
+    codeOnJoin(s, e, seen);
+    if (e.key !== before.key)
+      (s.revisions ??= []).push({ id: newId(), entity_id: e.id, edge_id: null, before, after: entitySnapshot(e), actor: `user:${userId}`, reason: input.reason ?? null, created_at: at });
+  }
   return e;
 }
 
@@ -1013,7 +1060,7 @@ export function acceptNewFeatures(
   const added: EntityRow[] = [];
   for (const key of keys) {
     const mine = creates.get(key) ?? [];
-    const exists = s.entities.some((e) => e.type === "feature" && e.key === key);
+    const exists = !!findByKey(s, "feature", key);
     // Rejected before the first is accepted (as the API: it would otherwise close it as already done).
     for (const p of mine.slice(exists ? 0 : 1)) reject(p);
     if (exists) continue;
@@ -1299,7 +1346,7 @@ function noOp(s: BaselineState, p: ProposalRow): boolean {
   }
   if (pay.op !== "create") return false;
   if (pay.kind === "edge") return s.edges.some((e) => e.src_id === f.src_id && e.dst_id === f.dst_id && e.type === f.type);
-  return s.entities.some((e) => e.type === f.type && e.key === f.key);
+  return !!findByKey(s, String(f.type ?? ""), String(f.key ?? ""));
 }
 
 /** As service.close_siblings' query: a new item of the same type, or a link between the same two items. */
@@ -1387,6 +1434,7 @@ export async function routeBaseline(
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
   const isMember = caller.isMember ?? (() => true);
+  const seen = () => caller.codesSeen?.() ?? [];
   // B5: a goal carries its goal_check (null for other types).
   const entityOut = (e: EntityRow) =>
     ({
@@ -1525,7 +1573,7 @@ export async function routeBaseline(
 
     if (head === "entities" && !id && m === "POST") {
       const input = await body<Schemas["EntityCreate"]>();
-      const e = createEntity(s, input, caller.userId);
+      const e = createEntity(s, input, caller.userId, seen());
       const out: Schemas["EntityWriteOut"] = { applied: true, entity: entityOut(e), proposal: null };
       return json(201, out);
     }
@@ -1580,6 +1628,7 @@ export async function routeBaseline(
         if (refusal) return fail(422, refusal);
         const proposal = updateEntity(s, e, input as Changes, {
           origin: input.origin ?? "user",
+          seen: seen(),
           userId: caller.userId,
           reason: input.reason,
           runId: input.run_id,
@@ -1596,6 +1645,8 @@ export async function routeBaseline(
           e.status = status;
           e.updated_at = now();
           lock(e, caller.userId);
+          // codes-on-join: a feature confirmed gets its code in the same write (fixes.code_on_join).
+          if (status === "confirmed") codeOnJoin(s, e, seen());
           (s.revisions ??= []).push({
             id: newId(),
             entity_id: e.id,
@@ -1695,7 +1746,7 @@ export async function routeBaseline(
           if (s.edges.some((e) => e.src_id === f.src_id && e.dst_id === f.dst_id && e.type === f.type))
             p.payload = { ...p.payload, outcome: "already_done", note: "This link already exists" };
           else createEdge(s, f as unknown as Schemas["EdgeCreate"], caller.userId);
-        } else createEntity(s, f as unknown as Schemas["EntityCreate"], caller.userId);
+        } else createEntity(s, f as unknown as Schemas["EntityCreate"], caller.userId, seen());
       } else if (action === "accept") {
         const payload = p.payload as { op: string; kind: string; fields?: Changes };
         if (payload.kind !== "entity" || payload.op !== "update") {
@@ -1714,7 +1765,7 @@ export async function routeBaseline(
         const problems = goalRefusal(target, without(payload.fields ?? {}, keys).attrs);
         if (problems.length) return refuse(problems);
         p.payload = { ...p.payload, summary: describe(p, s.entities, s.edges), ...(keys.length ? { skipped_fields: keys } : {}) };
-        updateEntity(s, target, without(payload.fields ?? {}, keys), { origin: "user", userId: caller.userId });
+        updateEntity(s, target, without(payload.fields ?? {}, keys), { origin: "user", userId: caller.userId, seen: seen() });
       }
       if (action === "reject") p.payload = { ...p.payload, summary: describe(p, s.entities, s.edges) };
       Object.assign(p, {
@@ -1780,7 +1831,7 @@ export async function routeBaseline(
       }
       const target = c.entity_id ? findEntity(c.entity_id) : undefined;
       if (!target) return fail(501, "Only entity conflicts can be resolved in mock mode");
-      updateEntity(s, target, changesFor(c.field, value), { origin: "user", userId: caller.userId });
+      updateEntity(s, target, changesFor(c.field, value), { origin: "user", userId: caller.userId, seen: seen() });
       c.resolution = {
         ...(c.resolution ?? {}),
         winner: input.claim ?? null,

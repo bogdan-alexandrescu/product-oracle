@@ -1141,6 +1141,23 @@ export function MsCard() {
   const [busy, setBusy] = useState(false);
   // milestone-rights: the API's refusal, on the card it came from (the person's input stays).
   const [failed, setFailed] = useState<{ on: string; words: string } | null>(null);
+  // roadmap-milestone-panel-close: Escape closes the card, as it does the Roadmap's other panels;
+  // an Escape a dialog over it, or a "+N" / same-day list, already took is theirs alone.
+  const open = !!ms?.draft;
+  const close = ms?.setDraft;
+  useEffect(() => {
+    if (!open || !close) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const at = e.target as Element | null;
+      const over = at?.closest?.('[role="dialog"], [role="alertdialog"]');
+      if (over && !["ms-card", "ms-prd-card", "ms-kind-picker"].includes(over.getAttribute("data-testid") ?? "")) return;
+      if (at?.closest?.("[data-ms-pop]")) return;
+      close(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, close]);
   if (!ms?.draft) return null;
   const d = ms.draft;
   const on = d.id ?? "new";

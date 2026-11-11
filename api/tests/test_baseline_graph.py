@@ -24,7 +24,9 @@ async def ctx():
 
 
 async def test_user_edit_locks_and_writes_revisions(client, ctx):
+    # A feature added to the Ground Truth gets its code (F-01) as a revision of its own.
     feat = await entity(client, ctx, type="feature", key="guided-setup", attrs={"effort": "M"})
+    assert feat["key"] == "F-01"
     assert feat["origin"] == "user"
     assert feat["status"] == "confirmed"
     assert feat["locked"] is True
@@ -48,9 +50,13 @@ async def test_user_edit_locks_and_writes_revisions(client, ctx):
 
     revs = await client.get(f"{B}/entities/{feat['id']}/revisions", headers=ctx.as_("viewer"))
     revs = revs.json()
-    assert len(revs) == 2
-    latest, created = revs
+    assert len(revs) == 3
+    # Created and coded are written in one transaction (one timestamp): told apart by shape.
+    latest = revs[0]
+    created = next(r for r in revs[1:] if r["before"] is None)
+    coded = next(r for r in revs[1:] if r["before"] is not None)
     assert created["before"] is None and created["after"]["key"] == "guided-setup"
+    assert coded["before"]["key"] == "guided-setup" and coded["after"]["key"] == "F-01"
     assert latest["before"]["title"] == "Guided setup"
     assert latest["after"]["title"] == "Guided setup v2"
     assert latest["actor"] == f"user:{ctx.users['approver'].id}"
@@ -65,7 +71,7 @@ async def test_user_edit_locks_and_writes_revisions(client, ctx):
         f"{B}/entities/{feat['id']}", json={"title": "Guided setup v2"}, headers=ctx.as_("owner")
     )
     revs = await client.get(f"{B}/entities/{feat['id']}/revisions", headers=ctx.as_("owner"))
-    assert len(revs.json()) == 3
+    assert len(revs.json()) == 4
 
 
 async def test_api_token_edits_lock_too(client, ctx):
@@ -342,7 +348,9 @@ async def test_commenter_proposes_new_items(client, ctx):
     ents = (
         await client.get(f"{B}/entities", params={"type": "feature"}, headers=ctx.as_("viewer"))
     ).json()
-    assert [e["key"] for e in ents] == ["bulk-edit"]
+    # Accepted, it joins the Ground Truth and gets its code.
+    assert [e["key"] for e in ents] == ["F-01"]
+    assert ents[0]["title"] == "Bulk edit"
     assert ents[0]["locked"] is True
 
     bad = await client.post(

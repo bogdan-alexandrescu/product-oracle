@@ -4,11 +4,11 @@ Against Postgres, on tests.test_simple_changes_api's World.
 Test card (protects / fails_when / no_claim):
 
 - test_a_horizon_move_moves_an_items_own_dates: protects=moving a dated item (typed Oct 1 -
-  Nov 15) from Now to Later shifts its own dates by as many days as Later's window starts
-  after Now's, keeping its length, so the roadmap read draws it in Later; undo puts the
-  horizon and the dates back; an undated item gets no dates of its own (its resolved span
-  is Later's window); fails_when=the move writes only the horizon and the dated item stays
-  at its old dates; no_claim=engineering or tracker dates, which are not the item's to move.
+  Nov 15) from Now to Later shifts its own dates by whole quarters (board-quarters: into
+  Later's first quarter), keeping its length, so the roadmap read draws it in Later; undo
+  puts the horizon and the dates back; fails_when=the move writes only the horizon and the
+  dated item stays at its old dates; no_claim=undated and engineering-dated items
+  (tests.test_simple_board_quarters_api).
 """
 
 from datetime import date, timedelta
@@ -29,7 +29,7 @@ async def test_a_horizon_move_moves_an_items_own_dates(client):
     read = (await client.get(URL, headers=ctx.as_("owner"))).json()
     win = {h: date.fromisoformat(read["windows"][h]["start"]) for h in ("now", "later")}
     shift = win["later"] - win["now"]
-    assert shift > timedelta(0)
+    assert shift > timedelta(0) and win["later"].day == 1
 
     r = await w.post(client, "decider", "change_horizon", after={"horizon": "later"})
     assert r.status_code == 201, r.text
@@ -50,13 +50,3 @@ async def test_a_horizon_move_moves_an_items_own_dates(client):
     assert undo.status_code == 201, undo.text
     a = await w.item("change_horizon-a")
     assert (a.horizon, a.start_date, a.end_date) == ("now", date(2026, 10, 1), date(2026, 11, 15))
-
-    u_id = w.ids["change_horizon-u"]
-    r = await client.post(CHANGES, headers=ctx.as_("decider"), json={
-        "op": "change_horizon", "target": {"item_id": u_id},
-        "before": {"horizon": "now"}, "after": {"horizon": "later"}})  # fmt: skip
-    assert r.status_code == 201, r.text
-    u = await w.item("change_horizon-u")
-    assert (u.horizon, u.start_date, u.end_date) == ("later", None, None)
-    items = await read_items(client, ctx)
-    assert items["change_horizon-u"]["start"]["date"] == win["later"].isoformat()

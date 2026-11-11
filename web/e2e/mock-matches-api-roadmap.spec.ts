@@ -64,7 +64,7 @@ test("the goal counters follow the lanes' goal order, the Goal map's goals too",
   await page.getByTestId("group-goal").click();
   await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("chart-group").first()).toBeVisible();
-  const onCards = (await cards.locator("p:first-child").allInnerTexts()).map((t) => t.replace(/^\s*\d+\s*/, "").trim());
+  const onCards = (await cards.locator("p:first-child").allInnerTexts()).map((t) => t.replace(/^\s*\d+\s*(·\s*)?/, "").trim());
   const onLanes = await page.getByTestId("chart-group").evaluateAll((els) => els.map((e) => e.getAttribute("data-add-label") ?? ""));
   expect(onCards).toContain("Sign-ups per rep per day");
   expect(onCards).toEqual(onLanes.filter((n) => onCards.includes(n)));
@@ -116,5 +116,36 @@ test("an in-progress feature cut then restored from the panel's menu reads In pr
   await tap(panel(page).getByRole("button", { name: "More actions" }));
   await tap(panel(page).getByRole("menuitem", { name: "Restore to the roadmap" }));
   await expect(panel(page).getByTestId("card-status")).toContainText("In progress");
+  await expect(panel(page).getByTestId("card-status")).not.toContainText("Planned");
+});
+
+async function cutFromMenu(page: Page) {
+  await tap(panel(page).getByRole("button", { name: "More actions" }));
+  await tap(panel(page).getByRole("menuitem", { name: "Cut from the roadmap" }));
+  await tap(page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }));
+  await expect(panel(page).getByTestId("card-status")).toContainText("Cut");
+}
+
+// changes.py cut / restore write {cut} alone: the status reads as service._status, the tracker's again (test_simple_panel_fields).
+test("an in-progress feature cut, restored from the Removed list, cut and restored again reads In progress each time", async ({ page }) => {
+  await login(page);
+  await roadmap(page);
+  await openRoadmapItem(page, "alert-rules");
+  await expect(panel(page).getByTestId("card-status")).toContainText("In progress");
+  const title = (await panel(page).getByRole("heading").first().innerText()).trim();
+  for (let round = 0; round < 2; round++) {
+    await cutFromMenu(page);
+    await page.keyboard.press("Escape");
+    await tap(page.getByTestId("removed-open"));
+    const row = page.getByRole("dialog", { name: "Removed from your plans" }).getByTestId("removed-row").filter({ hasText: title });
+    await tap(row.getByRole("button", { name: "Restore", exact: true }));
+    await expect(row).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await openRoadmapItem(page, "alert-rules");
+    await expect(panel(page).getByTestId("card-status")).toContainText("In progress");
+  }
+  // Cut once more, then Planned: the tracker's status, not planned.
+  await cutFromMenu(page);
+  await setStatus(page, "planned", "In progress");
   await expect(panel(page).getByTestId("card-status")).not.toContainText("Planned");
 });

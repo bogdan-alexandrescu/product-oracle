@@ -29,6 +29,21 @@ type Ritual = Omit<RitualOut, "last_pre_read" | "schedule" | "waits_for_goal"> &
 type Occurrence = Omit<OccurrenceOut, "kind" | "title" | "duration_min" | "owner_id" | "attendee_ids" | "timezone" | "read_by_me" | "decisions" | "summary_offered"> & {
   summary_reads?: number;
   read_by: string[];
+  /** inbox-ritual-seen: when each reader last opened it (the API's ritual_reads.read_at). */
+  read_at?: Record<string, string>;
+  /** When it last failed to prepare (the API's ritual_occurrences.failed_at). */
+  failed_at?: string;
+};
+
+/** Mock-only flags for the rituals scenario: "prepare-failed" seeds the Quarterly goals
+ * review's next meeting as failed to prepare (the ticker's third failed attempt). */
+export const MOCK_RITUALS_KEY = "po-mock-rituals";
+const ritualFlags = (): string[] => {
+  try {
+    return (localStorage.getItem(MOCK_RITUALS_KEY) ?? "").split(",");
+  } catch {
+    return [];
+  }
 };
 
 export interface RitualsDb {
@@ -37,7 +52,16 @@ export interface RitualsDb {
   mode: "on_demand" | "always";
   /** The Company time zone the rituals last followed (the API moves them on a change). */
   zone?: string;
+  /** MOCK_RITUAL_FAILED_KEY: the failed occurrence was made (once). */
+  failed_seeded?: boolean;
 }
+
+/**
+ * QA (Home and the Inbox agree): tests set this localStorage key so the first active ritual's next
+ * occurrence failed to prepare (three tries), as the ticker leaves one: an owner's counted Inbox row
+ * with Retry.
+ */
+export const MOCK_RITUAL_FAILED_KEY = "po-mock-ritual-failed";
 
 /** A decision as the rituals mock reads it from the decision log (./decisions.ts). */
 type LoggedDecision = { id: string; number: number; title: string; subjects: { [key: string]: unknown }[] };
@@ -465,6 +489,13 @@ export function seedRituals(ctx: RitualsContext, scenario: boolean): RitualsDb {
       summary_note: "Summary failed · Summarize with Oracle to retry",
     }),
   );
+  if (ritualFlags().includes("prepare-failed")) {
+    const review = db.rituals.find((r) => r.kind === "goals_review")!;
+    const next = new Date(review.next_due_at!);
+    const failedAt = new Date(t.getTime() - 3_600_000).toISOString();
+    db.occurrences.push(occurrence(ctx, review, next, { status: "failed", attempts: 3, error: "RuntimeError: goals unavailable", failed_at: failedAt }));
+    review.next_due_at = nextOccurrence(review.schedule, next).toISOString();
+  }
   return db;
 }
 
@@ -534,6 +565,13 @@ function tick(db: RitualsDb, ctx: RitualsContext) {
   wakeOnFirstGoal(ctx, db);
   for (const o of db.occurrences) {
     if (o.status === "ready" && Date.parse(o.ends_at) + MISSED_AFTER_MS <= t) o.status = "missed";
+  }
+  if (!db.failed_seeded && typeof localStorage !== "undefined" && localStorage.getItem(MOCK_RITUAL_FAILED_KEY)) {
+    const r = db.rituals.find((x) => x.status === "active" && x.next_due_at);
+    if (r) {
+      db.failed_seeded = true;
+      db.occurrences.push(occurrence(ctx, r, new Date(r.next_due_at!), { status: "failed", attempts: 3, error: "A block could not be read" }));
+    }
   }
 }
 
@@ -624,9 +662,11 @@ function ritualOut(db: RitualsDb, r: Ritual, ctx?: RitualsContext): RitualOut {
 function occurrenceOut(ctx: RitualsContext, r: Ritual, o: Occurrence): OccurrenceOut {
   const out: Partial<Occurrence> = { ...o };
   delete out.read_by;
+  delete out.read_at;
+  delete out.failed_at;
   delete out.summary_reads;
   return {
-    ...(out as Omit<Occurrence, "read_by" | "summary_reads">),
+    ...(out as Omit<Occurrence, "read_by" | "read_at" | "failed_at" | "summary_reads">),
     kind: r.kind,
     title: r.title,
     duration_min: r.duration_min,
@@ -658,15 +698,21 @@ export function ritualInbox(ctx: RitualsContext, db: RitualsDb): Schemas["InboxR
     const r = db.rituals.find((x) => x.id === o.ritual_id)!;
     const row = (reason: Schemas["InboxRitual"]["reason"], state: Schemas["InboxRitual"]["state"], counts: boolean) =>
       rows.push({ occurrence_id: o.id, ritual_id: r.id, title: r.title, due_at: o.due_at, reason, state, counts });
+    // inbox-ritual-seen: new until I opened the occurrence (after `since`); an Inbox visit never makes it seen.
+    const seen = (since?: string) => {
+      const at = o.read_at?.[me];
+      const opened = since ? !!at && Date.parse(at) >= Date.parse(since) : o.read_by.includes(me);
+      return opened ? ("open" as const) : ("new" as const);
+    };
     if (o.status === "failed") {
-      if (r.status === "active" && atLeast(ctx.me.role, "owner")) row("failed", "open", true);
+      if (r.status === "active" && atLeast(ctx.me.role, "owner")) row("failed", seen(o.failed_at), true);
     } else if (o.status !== "ready") continue;
     else if (t < Date.parse(o.ends_at)) {
       if (me === r.owner_id || r.attendee_ids.includes(me)) {
         const done = o.read_by.includes(me);
         row("pre_read", done ? "done" : "new", !done);
       }
-    } else if (me === r.owner_id) row("record_notes", "open", true);
+    } else if (me === r.owner_id) row("record_notes", seen(o.ends_at), true);
   }
   return rows;
 }
@@ -953,6 +999,7 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
   }
   if (p.length === 4 && m === "POST" && p[3] === "read") {
     if (!o.read_by.includes(ctx.me.id)) o.read_by.push(ctx.me.id);
+    (o.read_at ??= {})[ctx.me.id] = now().toISOString();
     return new Response(null, { status: 204 });
   }
   if (p.length === 4 && m === "POST" && (p[3] === "held" || p[3] === "skip")) {
@@ -980,6 +1027,7 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
     } else {
       const missed = Date.parse(o.ends_at) + MISSED_AFTER_MS <= now().getTime();
       Object.assign(o, { status: !o.pre_read.built_at ? "failed" : missed ? "missed" : "ready", skip_reason: null });
+      if (!o.pre_read.built_at) o.failed_at = now().toISOString();
     }
     return json(200, occurrenceOut(ctx, r, o));
   }

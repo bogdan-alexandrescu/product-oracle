@@ -3,7 +3,9 @@ waiting cards, the Decisions page's "Waiting for you" and the rail's counts read
 (GET /v1/simple/decisions/waiting ``items``): the run stops they may decide, the roadmap's
 broken links on items they decide, the drafts waiting for their approval, the PRD questions
 they own, the decision-log calls proposed to them, the proposals on their items, the dates to
-confirm, the goal suggestions they decide and the proposed goals they may confirm. Each item
+confirm, the goal suggestions they decide, the proposed goals they may confirm, and the
+Inbox's other counted "Needs you" rows (Add predictions, launches, rituals, metrics,
+requests), so Home and the Inbox agree. Each item
 says what it is, its action in words and where it is done; acting on it (through that kind's
 own endpoint) drops it from the next read, so every page and the rail agree.
 """
@@ -34,21 +36,23 @@ _STOP_ACTION = {
 
 
 async def _stops(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
+    # The Inbox's own stops (the same deciders and hidden runs), read alone: building the
+    # whole Inbox here made every read grow with the company's open runs.
     from oracle.runs import service as runs
 
-    inbox = await runs.inbox(db, principal)
-    out = []
-    for c in sorted(inbox.checkpoints, key=lambda c: c.created_at):
-        if not c.can_decide or c.status != "pending":
-            continue
-        out.append(SimpleWaitingItem(
-            kind="run_stop", key=f"run_stop:{c.id}", ref_id=str(c.id),
+    return [
+        SimpleWaitingItem(
+            kind="run_stop",
+            key=f"run_stop:{c.id}",
+            ref_id=str(c.id),
             title=_STOP_ACTION.get(c.kind, "Open the stop"),
             detail=_stop_for(c),
             action=_STOP_ACTION.get(c.kind, "Open the stop"),
-            href=f"/runs/{c.run_id}", at=c.created_at,
-        ))  # fmt: skip
-    return out
+            href=f"/runs/{c.run_id}",
+            at=c.created_at,
+        )  # fmt: skip
+        for c in await runs.waiting_stops(db, principal)
+    ]
 
 
 def _stop_for(c: Any) -> str:
@@ -181,6 +185,95 @@ async def _goals(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
     ]
 
 
+async def _inbox(db: AsyncSession, principal: Any) -> list[SimpleWaitingItem]:
+    """The Inbox's other counted "Needs you" rows, read by the Inbox's own row builders and
+    worded as the Inbox words them (web/app/inbox/_needs.tsx): Add predictions and Outcome
+    check due, the launches, rituals, unusual weeks and requests waiting on this person."""
+    from oracle.launches import service as launches
+    from oracle.metrics.review import inbox_rows as metric_rows
+    from oracle.quality.outcomes import inbox_rows as outcome_rows
+    from oracle.requests.inbox import inbox_rows as request_rows
+    from oracle.rituals.service import inbox_rows as ritual_rows
+
+    def row(key: str, title: str, detail: str, href: str, at: Any = None, action: str = "Open",
+            ref_id: str | None = None) -> SimpleWaitingItem:  # fmt: skip
+        return SimpleWaitingItem(
+            kind="inbox", key=key, ref_id=ref_id or key.rsplit(":", 1)[-1],
+            title=title, detail=detail, action=action, href=href, at=at,
+        )  # fmt: skip
+
+    out = [
+        row(
+            f"outcome:{o.reason}:{o.id}",
+            o.title,
+            "Plan › Outcomes",
+            f"/plan/outcomes?outcome={o.id}",
+        )  # fmt: skip
+        for o in await outcome_rows(db, principal)
+        if o.counts
+    ]
+    out += [
+        row(
+            f"launch:{r.reason}:{r.launch_id}",
+            f"{_LAUNCH.get(r.reason, 'Launch')} · {r.title}",
+            r.item,
+            f"/roadmap/launches?launch={r.launch_id}",
+            r.at,
+        )  # fmt: skip
+        for r in await launches.inbox_rows(db, principal)
+        if r.counted
+    ]
+    # A ritual that failed to prepare is retried in place (its ritual's POST
+    # /v1/rituals/{id}/prepare) and opens Company > Rituals, as the Inbox's row does.
+    out += [
+        row(
+            f"ritual:{r.reason}:{r.occurrence_id}",
+            f"{_RITUAL[r.reason]} · {r.title}",
+            "Rituals",
+            "/company/rituals" if r.reason == "failed" else f"/company/rituals/{r.occurrence_id}",
+            r.due_at,
+            "Retry" if r.reason == "failed" else "Open",
+            str(r.ritual_id) if r.reason == "failed" else None,
+        )  # fmt: skip
+        for r in await ritual_rows(db, principal)
+        if r.counts and r.state in ("new", "open")
+    ]
+    out += [
+        row(
+            f"metric:{m.reason}:{m.variance_id or m.metric_id}",
+            f"{_METRIC[m.reason]} · {m.metric_title}",
+            "Metrics",
+            f"/company/rituals/{m.occurrence_id}"
+            if m.reason != "pull_failed" and m.occurrence_id
+            else f"/company/metrics?metric={m.metric_id}",
+        )  # fmt: skip
+        for m in await metric_rows(db, principal)
+        if m.counts
+    ]
+    out += [
+        row(
+            f"request:{r.reason}:{r.request_id}",
+            f"{_REQUEST[r.reason]} · {r.title}",
+            "Requests",
+            f"/requests?request={r.request_id}",
+            r.at,
+        )  # fmt: skip
+        for r in await request_rows(db, principal)
+        if r.counts
+    ]
+    return out
+
+
+# The Inbox's words for each row (web/app/inbox/_needs.tsx).
+_LAUNCH = {"ready": "Ready to launch", "set_tier": "Set tier", "notes_to_send": "Notes to send"}
+_RITUAL = {"pre_read": "Pre-read ready", "record_notes": "Record notes",
+           "failed": "Ritual failed to prepare"}  # fmt: skip
+_METRIC = {"explain": "Explain an unusual week", "find_out": "Find out",
+           "pull_failed": "Metric not read for a day"}  # fmt: skip
+_REQUEST = {"replies_to_send": "Replies to send", "asked_again": "Asked again since you said no",
+            "answer": "Answer to your request"}  # fmt: skip
+
+
 def _questions(qs: list[SimpleQuestion]) -> list[SimpleWaitingItem]:
     return [
         SimpleWaitingItem(
@@ -221,7 +314,8 @@ async def items(
     db: AsyncSession, principal: Any, qs: list[SimpleQuestion]
 ) -> list[SimpleWaitingItem]:
     """The one list, run stops first, then the questions, decision-log calls, roadmap,
-    drafts, proposals, goal suggestions and proposed goals. Each source is read as its own
+    drafts, proposals, goal suggestions and proposed goals, then the Inbox's other counted
+    rows (Add predictions, launches, rituals, metrics, requests). Each source is read as its own
     page reads it, so what this person cannot see or decide is never here."""
     if getattr(principal, "user_id", None) is None:
         return []
@@ -233,6 +327,7 @@ async def items(
     out += await _proposals(db, principal)
     out += await _goal_suggestions(db, principal)
     out += await _goals(db, principal)
+    out += await _inbox(db, principal)
     return out
 
 

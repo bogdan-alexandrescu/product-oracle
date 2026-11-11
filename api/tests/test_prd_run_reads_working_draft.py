@@ -356,3 +356,39 @@ async def test_a_draft_with_edits_but_no_change_rows_dates_from_when_it_was_made
         await s.flush()
         assert await roadmap_of_record._edited_at(s, edited) is None
         await s.rollback()
+
+
+async def test_a_run_started_with_the_owner_s_personal_token_reads_the_working_draft():
+    # PR 1333: a run started through a personal API token acts as its person, so it reads
+    # what they may see: the owner's token reads the working draft, not the published one.
+    import uuid
+
+    from oracle.auth.deps import Principal
+    from oracle.runs import service as runs_service
+    from oracle.runs.schemas import RunCreate
+
+    w = await world(starter=None)
+    owner = w["users"]["owner"]
+    token = Principal(tenant_id=w["tenant"], kind="user", role="owner", user_id=owner.id,
+                      token_id=uuid.uuid4())  # fmt: skip
+    async with tenant_session(w["tenant"]) as s:
+        run_id = await runs_service.create_run(
+            s, token, RunCreate(flow="baseline_to_prd", document="digest"), commit=False
+        )
+        await s.commit()
+        assert (await s.get(Run, run_id)).created_by == owner.id
+    prompt, knobs = await _prompt({**w, "run": run_id})
+    assert knobs["roadmap_read"] == DRAFT_LABEL
+    assert DRAFT_LABEL in prompt and "Weekly summary email" in prompt
+    assert "Digest preview" in prompt
+
+
+async def test_the_prompt_names_the_working_draft_as_no_one_person_s():
+    # PR 1333: any decider's working draft is read (the draft's own rule), so the prompt
+    # calls it the roadmap's working draft, not "the owner's".
+    w = await world(starter="commenter")
+    await _let_in(w, "decider")
+    prompt, _ = await _prompt(w)
+    assert DRAFT_LABEL in prompt
+    assert "owner's" not in prompt
+    assert "the roadmap's working draft, newer than the published version" in prompt

@@ -36,11 +36,11 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import safe_yaml
-from oracle.baseline.models import Edge, Entity
+from oracle.baseline.models import Edge, Entity, EntityRevision
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.roadmap import codes, schedule
 from oracle.roadmap.models import HORIZONS, DraftRoadmap, RoadmapItem
@@ -160,16 +160,50 @@ def _merged(lists: list[list[Entity]]) -> list[Entity]:
 async def _by_type_and_key(
     db: AsyncSession, wanted: set[tuple[str, str]]
 ) -> dict[tuple[str, str], Entity]:
+    """{(type, key): its entity, not a rejected one} in one read however many keys: a feature
+    no entity has the key of is the one that had it before its code (oracle.baseline.fixes
+    .features_by_keys, live), read in the same statement through its revisions."""
     if not wanted:
         return {}
-    rows = await db.scalars(
-        select(Entity).where(
-            Entity.type.in_({t for t, _ in wanted}),
-            Entity.key.in_({k for _, k in wanted}),
-            Entity.status != "rejected",
+    feature_keys = {k for t, k in wanted if t == "feature"}
+    old = EntityRevision.before["key"].astext
+    rows = await db.execute(
+        select(Entity, old)
+        .outerjoin(
+            EntityRevision,
+            and_(
+                EntityRevision.entity_id == Entity.id,
+                Entity.type == "feature",
+                old.in_(feature_keys),
+                old != EntityRevision.after["key"].astext,
+            ),
         )
+        .where(
+            or_(
+                and_(
+                    Entity.type.in_({t for t, _ in wanted}),
+                    Entity.key.in_({k for _, k in wanted}),
+                ),
+                old.is_not(None),
+            )
+        )
+        # The latest holder of each former key last, so it wins.
+        .order_by(EntityRevision.created_at.asc().nulls_first())
     )
-    return {(e.type, e.key): e for e in rows if (e.type, e.key) in wanted}
+    out: dict[tuple[str, str], Entity] = {}
+    held: set[str] = set()
+    former: dict[str, Entity] = {}
+    for e, was in rows.all():
+        if (e.type, e.key) in wanted:
+            held |= {e.key} if e.type == "feature" else set()
+            if e.status != "rejected":
+                out[(e.type, e.key)] = e
+        if was is not None and e.status != "rejected":
+            former[was] = e
+    for k, e in former.items():
+        if k not in held:
+            out[("feature", k)] = e
+    return out
 
 
 async def _linked_by_section(

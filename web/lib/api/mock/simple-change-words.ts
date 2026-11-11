@@ -145,6 +145,11 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "archive_goal": return `archived the goal ${quoted(target.title) ?? "a goal"}`;
     case "delete_goal": return `moved the goal ${quoted(target.title) ?? "a goal"} to Trash`;
     case "unarchive_goal": return `restored the goal ${quoted(target.title) ?? "a goal"}`;
+    // goal-map-link-asks (goal_map_asks, change_words.py): a feature put on a goal milestone, or moved there.
+    case "link_goal_map": {
+      const to = quoted(target.name) ?? "a milestone";
+      return target.from_milestone ? `moved ${x} from ${quoted(target.from_name) ?? "its milestone"} to ${to}` : `put ${x} on ${to}`;
+    }
     // roadmap-decide: a cut item's fix, the dependency dropped (change_words.py).
     case "remove_dependency": {
       const dep = quoted((target.titles as unknown[] | undefined)?.[1]);
@@ -168,7 +173,7 @@ export function changeSentence(
   const what = changePhrase(c.op, target, before, after, item);
   let words = `${who} ${what}`;
   // What was asked, not done: "proposed: move F-26 Alert rules engine to Trash" (change_words.describe).
-  const asked = c.op === "delete_item" || c.op === "delete_goal" ? `move${what.slice("moved".length)}` : c.op === "archive_goal" ? `archive${what.slice("archived".length)}` : c.op === "unarchive_goal" ? `restore${what.slice("restored".length)}` : what;
+  const asked = c.op === "delete_item" || c.op === "delete_goal" ? `move${what.slice("moved".length)}` : c.op === "archive_goal" ? `archive${what.slice("archived".length)}` : c.op === "unarchive_goal" ? `restore${what.slice("restored".length)}` : c.op === "link_goal_map" && what.startsWith("moved") ? `move${what.slice("moved".length)}` : what;
   if (c.status === "proposed") words = `${who} proposed: ${asked}`;
   else if (c.status === "declined") words = `${who} proposed: ${asked} · declined`;
   if (undone) words += " · undone";

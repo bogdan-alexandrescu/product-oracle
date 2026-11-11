@@ -11,10 +11,11 @@ Test cards (protects / fails_when / no_claim):
   lowercase anchor such as "section f-01") or a code ("F-01"), or the draft number is
   missing; no_claim=the other reasons (rationale, goal).
 - test_later_starts_where_next_ends: protects=the roadmap's Later window starts the day
-  after Next ends (Jul 1, 2027 when Next ends Jun 30, 2027) and ends where the long
-  horizon ends (today + 24 months), and an undated Later item's estimated bar starts
-  there; fails_when=Later starts at today + 1 year (Nov 2, 2027), leaving a gap after
-  Next; no_claim=the Settings page's planning horizons (unchanged).
+  after Next ends (board-quarters: Next is exactly the next calendar quarter, Jan 1 to
+  Mar 31, 2027, so Later starts Apr 1, 2027) and ends where the long horizon ends
+  (today + 24 months), and an undated Later item's estimated bar starts there;
+  fails_when=Next is not the next quarter, or Later leaves a gap after it;
+  no_claim=the Settings page's planning horizons (unchanged).
 """
 
 from datetime import date, timedelta
@@ -70,11 +71,11 @@ async def test_later_starts_where_next_ends(client):
         await s.commit()
     body = await get(client, ctx, "viewer")
     w = body["windows"]
-    assert w["next"] == {"start": "2027-01-01", "end": "2027-06-30"}
-    assert w["later"] == {"start": "2027-07-01", "end": "2028-11-02"}
+    assert w["next"] == {"start": "2027-01-01", "end": "2027-03-31"}
+    assert w["later"] == {"start": "2027-04-01", "end": "2028-11-02"}
     assert date.fromisoformat(w["later"]["start"]) == date.fromisoformat(
         w["next"]["end"]
     ) + timedelta(days=1)
     later = by_key(body)["referrals"]
-    assert later["start"]["date"] == "2027-07-01"
+    assert later["start"]["date"] == "2027-04-01"
     assert later["start"]["estimated"] is True

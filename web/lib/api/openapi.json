@@ -63676,6 +63676,7 @@
                   "delete_goal",
                   "archive_goal",
                   "unarchive_goal",
+                  "link_goal_map",
                   "remove_dependency",
                   "restore_goal_milestone",
                   "add_track",
@@ -64108,6 +64109,7 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
+              "link_goal_map",
               "remove_dependency",
               "restore_goal_milestone",
               "add_track",
@@ -71851,6 +71853,22 @@
             "type": "array",
             "title": "Working Runs",
             "default": []
+          },
+          "feeds": {
+            "items": {
+              "$ref": "#/components/schemas/TrashItem"
+            },
+            "type": "array",
+            "title": "Feeds",
+            "default": []
+          },
+          "feeds_going": {
+            "items": {
+              "$ref": "#/components/schemas/TrashItem"
+            },
+            "type": "array",
+            "title": "Feeds Going",
+            "default": []
           }
         },
         "type": "object",
@@ -71860,7 +71878,7 @@
           "published"
         ],
         "title": "DependentsOut",
-        "description": "What the delete dialog lists: the root and everything that goes to Trash with it.\n``published``: ask once more, the external copy stays where it is. ``working_runs``:\nruns to cancel before the delete is allowed."
+        "description": "What the delete dialog lists: the root and everything that goes to Trash with it.\n``published``: ask once more, the external copy stays where it is. ``working_runs``:\nruns to cancel before the delete is allowed. ``feeds`` (delete-prd-simple): the roadmap\nitems and tracks a PRD feeds that stay, without it; ``feeds_going``: those that go to\nTrash with it (on its own roadmap, or a track holding no other PRD)."
       },
       "DeriveIn": {
         "properties": {
@@ -82637,6 +82655,11 @@
             "type": "string",
             "title": "Name"
           },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "default": ""
+          },
           "area": {
             "anyOf": [
               {
@@ -83328,6 +83351,11 @@
               }
             ],
             "title": "Goal"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "default": ""
           }
         },
         "type": "object",
@@ -88443,6 +88471,15 @@
           "document": {
             "$ref": "#/components/schemas/SimpleDocRef"
           },
+          "document_kind": {
+            "type": "string",
+            "enum": [
+              "roadmap",
+              "prd"
+            ],
+            "title": "Document Kind",
+            "default": "roadmap"
+          },
           "version": {
             "anyOf": [
               {
@@ -88579,6 +88616,7 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
+              "link_goal_map",
               "remove_dependency",
               "restore_goal_milestone",
               "add_track",
@@ -100273,6 +100311,11 @@
           "can_submit": {
             "type": "boolean",
             "title": "Can Submit"
+          },
+          "can_approve": {
+            "type": "boolean",
+            "title": "Can Approve",
+            "default": false
           },
           "reminded_at": {
             "anyOf": [
@@ -123693,6 +123736,7 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
+              "link_goal_map",
               "remove_dependency",
               "restore_goal_milestone",
               "add_track",
@@ -123859,6 +123903,7 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
+              "link_goal_map",
               "remove_dependency",
               "restore_goal_milestone",
               "add_track",
@@ -124343,6 +124388,17 @@
               }
             ],
             "title": "Code"
+          },
+          "prd_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Title"
           },
           "chosen": {
             "anyOf": [
@@ -133015,7 +133071,8 @@
               "draft",
               "proposal",
               "goal_suggestion",
-              "goal"
+              "goal",
+              "inbox"
             ],
             "title": "Kind"
           },

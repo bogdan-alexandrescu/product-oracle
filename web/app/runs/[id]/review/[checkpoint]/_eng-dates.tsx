@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
-import { Button, Chip, Icon, Inspector, InspectorSection, Page, PageHeader, Sheet, Split } from "@/components/ds";
+import { Button, Chip, Icon, Inspector, InspectorSection, Page, PageHeader, Sheet, Split, toast } from "@/components/ds";
 import { RawFileSheet } from "@/components/review/RawFileSheet";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -145,6 +145,8 @@ export function EngDates({
         }),
       );
       await onDecided();
+      // inbox-eng-send-back: what happened and to whom, as the other review actions say it.
+      if (decision === "changes_requested") toast({ message: "Sent back to the architect" });
       router.push(`/runs/${run.id}`);
     } catch (e) {
       setError(errorMessage(e));

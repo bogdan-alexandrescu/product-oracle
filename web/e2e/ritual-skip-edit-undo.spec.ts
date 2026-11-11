@@ -20,7 +20,8 @@ async function openTheEndedRefresh(page: Page) {
   await page.goto("/inbox");
   await page.clock.setSystemTime(new Date("2026-11-04T12:00:00Z"));
   await page.goto("/inbox");
-  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();
+  // inbox-ritual-seen: not opened yet, the Record notes row is New, never Seen.
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^New/ }).click();
   const row = page.getByTestId("inbox-rituals").locator("tr[data-row]").filter({ hasText: "Record notes · Monthly roadmap refresh" });
   await row.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);

@@ -110,7 +110,8 @@ test.describe("desktop", () => {
     await page.getByTestId("format-gantt").click();
     const scroller = page.getByTestId("chart-scroll");
     const sv = (await scroller.boundingBox())!;
-    const a = (await slice(page, "F-05a").boundingBox())!;
+    // board-quarters: F-05 has no dates of its own, so it is Later's; F-12a is dated work.
+    const a = (await slice(page, "F-12a").boundingBox())!;
     expect(a.x, "the current milestone's work is in view without scrolling first").toBeGreaterThanOrEqual(sv.x - 1);
     expect(a.x).toBeLessThan(sv.x + sv.width);
   });

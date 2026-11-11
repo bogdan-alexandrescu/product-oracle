@@ -277,7 +277,10 @@ for (const phone of [false, true]) {
        */
       test("A: Decisions, Home and the meeting's agenda as the mock-up draws them", async ({ page }) => {
         await decisions(page);
+        // QA: the page's explanation sits behind the (i) beside the heading.
+        await page.getByTestId("page-info").click();
         await expect(page.getByText("What waits for you, soonest first. Then every decision, beside the meeting that took it.")).toBeVisible();
+        await page.getByTestId("page-info").click();
         const sw = page.getByRole("group", { name: "Show decisions as" });
         const swBox = (await sw.boundingBox())!;
         const prdBox = (await page.getByRole("combobox").first().boundingBox())!;

@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 
 import { Button, confirmInPage, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { useFeatureDelete } from "@/components/simple/FeatureDelete";
+import { useFitViewport } from "@/lib/fit-viewport";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
 import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
 import { Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
@@ -925,21 +926,29 @@ export function FloatingCard({
     setLeft(baseLeft > room ? Math.max(0, room) : null);
   }, [wide, phone, beside, baseLeft]);
 
+  // BGD (Nov 10): the floating card fits the viewport (below its bar, above it, or as high as it
+  // needs), its details scrolling under the header.
+  const float = !phone && !beside;
+  const barOf = useCallback(() => document.querySelector(`[data-bar-id="${CSS.escape(item.id)}"]`), [item.id]);
+  const fit = useFitViewport(ref, {
+    on: float,
+    top: style.position !== "relative" && typeof style.top === "number" ? style.top : undefined,
+    anchor: barOf,
+    follow: style.position === "relative",
+  });
   const place = phone
     ? wide
       ? "fixed inset-0 z-50 flex h-dvh flex-col"
       : `fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t h-[85dvh]`
     : beside
       ? "fixed z-40 flex w-[840px] flex-col rounded-xl border"
-      : `absolute z-40 rounded-xl border p-4 ${wide ? "w-[760px]" : "w-[380px]"}`;
+      : `absolute z-40 flex flex-col rounded-xl border ${wide ? "w-[760px]" : "w-[380px]"}`;
   const placeStyle: React.CSSProperties | undefined = phone
     ? // A part-height sheet (the Timeline's) keeps the marked row in sight above it.
       !wide && style.height ? { height: style.height } : undefined
     : beside
       ? { top: 16, bottom: 16, right: talkRight }
-      : left == null
-        ? style
-        : { ...style, left };
+      : { ...style, ...(left == null ? {} : { left }), ...(fit.top == null ? {} : { top: fit.top }), maxHeight: fit.maxHeight };
 
   const [renaming, setRenaming] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -1471,7 +1480,7 @@ export function FloatingCard({
         data-flow-open={flowOpen ? "true" : "false"}
         style={placeStyle}
         data-backdrop={phone && wide ? "" : undefined}
-        className={`${place} ${phone ? "max-w-none overflow-hidden" : "max-w-[calc(100vw-16px)]"} border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${!phone && !beside ? "overflow-y-auto" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
+        className={`${place} ${phone ? "max-w-none overflow-hidden" : "max-w-[calc(100vw-16px)]"} border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${float ? "overflow-hidden" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
       >
       {phone ? (
         <>
@@ -1508,7 +1517,7 @@ export function FloatingCard({
             <div
               role="tabpanel"
               aria-label="Details"
-              className="min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4"
             >
               {details}
             </div>
@@ -1528,8 +1537,10 @@ export function FloatingCard({
         </>
       ) : (
         <>
-          {head}
-          {details}
+          <div className="flex-none px-4 pt-4">{head}</div>
+          <div data-fit-body="" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
+            {details}
+          </div>
         </>
       )}
     </div>

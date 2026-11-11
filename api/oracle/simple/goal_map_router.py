@@ -132,7 +132,7 @@ async def detach_feature_link(body: DetachIn, principal: Approver, db: TenantDB)
 async def place_card(body: PlaceIn, principal: Reader, db: TenantDB) -> GoalMapOut:
     """goal-ladder place_card: where this person put a card on the canvas (viewers too: a
     place is their own view and never changes data)."""
-    return await _run(db, principal, goal_map.place_card(db, principal.id, body))
+    return await _run(db, principal, goal_map.place_card(db, principal, body))
 
 
 @router.delete("/places", response_model=GoalMapOut)

@@ -4,6 +4,7 @@ import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { login } from "./helpers";
 import { expect, test } from "./test";
+import { dateIntoThisQuarter } from "./this-quarter";
 
 /*
  * prio-company (the owner, Nov 4: "a person always sees what is happening to a roadmap shared
@@ -100,6 +101,8 @@ for (const scheme of ["light", "dark"] as const) {
 
       test("a roadmap feature outside the plan opens the one feature panel from Goal buckets", async ({ page }) => {
         await setUp(page, scheme, phone);
+        // The alerts roadmap's work is dated past this quarter (board-quarters): date one into it first.
+        await dateIntoThisQuarter(page, [{ title: "Alert rules engine", start: "2026-11-02", end: "2026-11-27" }]);
         await page.getByRole("tab", { name: "Goal buckets" }).click();
         const outside = page.getByTestId("plan-outside");
         await outside.getByRole("button", { name: "Alert rules engine", exact: true }).click();

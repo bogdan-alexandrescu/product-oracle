@@ -151,9 +151,10 @@ async def test_every_uploaded_document_is_read_with_its_relevant_sections(client
 async def test_the_baseline_features_the_brief_names_are_read_with_their_evidence(client, fake):
     _, _, payload, _ = await _read(client, fake, _quiet)
     features = {f["key"]: f for f in payload["untrusted_data"]["features"]}
-    assert set(features) == {"pricing-engine", "routing-engine"}
-    pricing = features["pricing-engine"]
-    assert pricing["ref"] == "feat:pricing-engine" and pricing["title"] == "Pricing engine"
+    # Confirmed, each joined the Ground Truth with a code (its slug stays an alias).
+    assert set(features) == {"F-01", "F-02"}
+    pricing = next(f for f in features.values() if f["title"] == "Pricing engine")
+    assert pricing["ref"] == f"feat:{pricing['key']}"
     assert pricing["description"] == "Computes a quote from the rate card with volume discounts."
     assert pricing["status"] == "confirmed"
     assert [e["excerpt"] for e in pricing["evidence"]] == ["Rate cards are kept per shop."]
@@ -162,12 +163,18 @@ async def test_the_baseline_features_the_brief_names_are_read_with_their_evidenc
     assert "rate card" not in outside
 
 
+def _feature_ref(payload, title):
+    return next(f["ref"] for f in payload["untrusted_data"]["features"] if f["title"] == title)
+
+
 def _calls_them_missing(payload):
     src = _source(payload, "Quote builder v1 PRD.md")["ref"]
+    pricing = _feature_ref(payload, "Pricing engine")
+    routing = _feature_ref(payload, "Routing engine")
     return {
         "items": [
             {"field": "scope", "text": "The next version keeps both engines.",
-             "evidence_refs": [src, "feat:pricing-engine", "feat:routing-engine"]},
+             "evidence_refs": [src, pricing, routing]},
         ],
         "gaps": [
             {"category": "constraints", "importance": "critical", "statement": MISSING,
@@ -198,7 +205,7 @@ async def test_the_read_cites_them_and_never_calls_them_missing(client, fake):
         assert MISSING not in {g.statement for g in gaps}
         intake = await s.get(ProductIntake, job.intake_id)
         [stored] = [i for i in intake.analysis["items"] if i["text"].startswith("The next")]
-        assert stored["feature_keys"] == ["pricing-engine", "routing-engine"]
+        assert sorted(stored["feature_keys"]) == ["F-01", "F-02"]
 
 
 def test_described_check_reads_features_and_sections():

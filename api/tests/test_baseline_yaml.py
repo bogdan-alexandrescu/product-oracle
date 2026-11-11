@@ -115,6 +115,8 @@ async def test_round_trip(client, ctx):
     feat = await entity(
         client, ctx, type="feature", key="guided-setup", body="Walk through.", attrs={"effort": "M"}
     )
+    # A confirmed feature joins the Ground Truth with its code; a proposed one keeps its key.
+    assert feat["key"] == "F-01"
     other = await entity(client, ctx, type="feature", key="sample-data", origin="agent")
     sup = await edge(client, ctx, feat, goal, "supports", attrs={"contribution": 2})
     await edge(client, ctx, other, feat, "depends_on")
@@ -128,7 +130,7 @@ async def test_round_trip(client, ctx):
     doc = yaml.safe_load(exported.text)
     assert doc["version"] == 1
     assert [f"{e['type']}:{e['key']}" for e in doc["entities"]] == [
-        "feature:guided-setup",
+        "feature:F-01",  # guided-setup, by its code
         "feature:sample-data",
         "goal:activation",
     ]

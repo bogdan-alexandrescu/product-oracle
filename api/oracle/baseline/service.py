@@ -235,6 +235,12 @@ async def get_edge(db: AsyncSession, edge_id: uuid.UUID) -> Edge:
 
 
 async def find_entity(db: AsyncSession, type_: str, key: str) -> Entity | None:
+    """The entity of that type and key; for a feature, also the one that had ``key`` before
+    (its code given when it joined the Ground Truth: the old key stays its alias)."""
+    if type_ == "feature":
+        from oracle.baseline import fixes
+
+        return (await fixes.features_by_keys(db, [key])).get(key)
     return await db.scalar(select(Entity).where(Entity.type == type_, Entity.key == key))
 
 
@@ -1351,7 +1357,11 @@ async def create_entity(
             key = code
             if await fixes.code_taken(db, code):
                 raise ConflictError(f"Another feature already has the code {code}.")
-    if await find_entity(db, type_, key) is not None:
+    if (found := await find_entity(db, type_, key)) is not None:
+        if found.key != key:
+            # A key a feature had before it was given its code stays that feature's.
+            name = f"{found.key} {found.title}" if fixes.canonical_code(found.key) else found.title
+            raise ConflictError(f"The key {key} is {name}'s old key.")
         raise ConflictError(f"{type_}:{key} already exists")
     await check_parent(db, type_, parent_id)
     check_managed_attrs(writer, {}, attrs)
@@ -1382,6 +1392,13 @@ async def create_entity(
     db.add(entity)
     await db.flush()
     _revision(db, writer, None, entity_snapshot(entity), entity=entity)
+    if type_ == "feature":
+        # Its code as a revision of its own, so the key it was added with stays its alias.
+        before = entity_snapshot(entity)
+        await fixes.code_on_join(db, entity)
+        fixes.took(db, entity)
+        if entity.key != before["key"]:
+            _revision(db, writer, before, entity_snapshot(entity), entity=entity)
     await db.flush()
     return WriteResult(entity=entity, kept_as_text=kept)
 
@@ -1455,6 +1472,10 @@ async def update_entity(
         setattr(entity, f, value)
     lock(entity, writer)
     await db.flush()
+    if diff.get("status") == "confirmed":
+        from oracle.baseline import fixes
+
+        await fixes.code_on_join(db, entity)
     _revision(db, writer, before, entity_snapshot(entity), entity=entity)
     if entity.type == "goal" and ("title" in diff or "body" in diff):
         # A goal's name or description changed (the goal panel's Edit): who, from what, to what.
@@ -1490,6 +1511,10 @@ async def set_entity_status(
         entity.status = status
         lock(entity, writer)
         await db.flush()
+        if status == "confirmed":
+            from oracle.baseline import fixes
+
+            await fixes.code_on_join(db, entity)
         _revision(db, writer, before, entity_snapshot(entity), entity=entity)
         await scoring.rescore_around(db, [entity.id], include_supporters=True)
         await db.flush()

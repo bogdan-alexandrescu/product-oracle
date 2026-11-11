@@ -275,3 +275,50 @@ async def test_a_changelog_occurrence_is_not_covered():
     assert "changelog" not in COVERED
     assert "investor_update" not in COVERED and "board_meeting" not in COVERED
     assert {"goals_checkin", "roadmap_refresh", "goals_review", "custom"} <= COVERED
+
+
+async def test_a_failed_row_is_new_until_opened_since_it_last_failed(client, ctx, at, monkeypatch):
+    """protects=review minor (inbox-ritual-seen): the owners' failed-to-prepare row stays New
+    through visits to the Inbox, is Seen once an owner opened the occurrence, and is New
+    again when a Retry fails it again (its failure time is the since); fails_when=it is Seen
+    as soon as it shows, after a visit, or stays Seen after failing again; no_claim=the web
+    Inbox (rituals.spec.ts)."""
+    await tick(ctx.tenant_id)
+    seeded = await rituals_of(ctx.tenant_id)
+
+    async def broken(*args, **kwargs):
+        raise RuntimeError("tracks unavailable")
+
+    monkeypatch.setitem(blocks.BUILDERS, "tracks", broken)
+    start = at(seeded["roadmap_refresh"].next_due_at)
+    for _ in range(3):
+        await tick(ctx.tenant_id)
+    (refresh,) = await occurrences_of(ctx.tenant_id, seeded["roadmap_refresh"].id)
+    assert refresh.status == "failed"
+
+    async def state(**params) -> str:
+        inbox = (await client.get("/v1/inbox", params=params, headers=ctx.as_("owner"))).json()
+        (row,) = [r for r in inbox["rituals"] if r["occurrence_id"] == str(refresh.id)]
+        assert row["reason"] == "failed"
+        return row["state"]
+
+    assert await state(mark_seen="true") == "new"
+    assert await state() == "new"
+    at(start + timedelta(minutes=5))
+    read = f"/v1/ritual-occurrences/{refresh.id}/read"
+    assert (await client.post(read, headers=ctx.as_("owner"))).status_code == 204
+    assert await state() == "open"
+    # Retry fails again: the row is New until it is opened again.
+    at(start + timedelta(minutes=10))
+    resp = await client.post(
+        f"/v1/rituals/{seeded['roadmap_refresh'].id}/prepare", headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 200, resp.text
+    for _ in range(3):
+        await tick(ctx.tenant_id)
+    (refresh,) = await occurrences_of(ctx.tenant_id, seeded["roadmap_refresh"].id)
+    assert refresh.status == "failed"
+    assert await state() == "new"
+    at(start + timedelta(minutes=15))
+    assert (await client.post(read, headers=ctx.as_("owner"))).status_code == 204
+    assert await state() == "open"
