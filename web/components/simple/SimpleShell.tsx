@@ -16,7 +16,7 @@ import { useMe } from "@/lib/me";
 import { LINK_KINDS } from "@/lib/roadmap-links";
 import { api, unwrap } from "@/lib/api/client";
 import { onReadChanged, onReadFailed, STALE_OK } from "@/lib/api/shared-reads";
-import { onWaitingChanged, railInbox, railQuestions, waitingCount } from "@/lib/waiting";
+import { onWaitingChanged, railInbox, railQuestions, readAgainLater, retryWait, waitingCount } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
@@ -131,28 +131,12 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   const failedParts = PARTS.filter((p) => got[p]?.ok === false).join(",");
   useEffect(() => {
     if (!enabled || !failedParts || inflight.current > 0) return;
-    let onShow: (() => void) | null = null;
-    const cancel = () => {
-      clearTimeout(t);
-      if (onShow) document.removeEventListener("visibilitychange", onShow);
-    };
     // The failed parts are read again together, after the wait of the one that failed most.
     const tries = Math.max(...(failedParts.split(",") as Part[]).map((p) => fails.current[p] ?? 1));
-    const again = () => {
+    const cancel = readAgainLater(retryWait(tries - 1), () => {
       pending.current = null;
       read(failedParts.split(",") as Part[], false);
-    };
-    // A hidden tab holds the read back until it is shown again, while the wait keeps counting:
-    // a tab hidden past its wait reads at once when shown.
-    const t = setTimeout(() => {
-      if (!document.hidden) return again();
-      onShow = () => {
-        if (document.hidden) return;
-        document.removeEventListener("visibilitychange", onShow!);
-        again();
-      };
-      document.addEventListener("visibilitychange", onShow);
-    }, retryWait(tries - 1));
+    });
     pending.current = cancel;
     return () => {
       cancel();
@@ -244,11 +228,6 @@ type Part = keyof typeof PART_READS;
 type Reads = { [P in Part]: Awaited<ReturnType<(typeof PART_READS)[P]>> };
 type Got = { [P in Part]?: { ok: true; value: Reads[P] } | { ok: false } };
 const PARTS = Object.keys(PART_READS) as Part[];
-
-/** How long the rail waits to read again a part whose read failed: 15 s, doubling with each failure in a row, at most 5 min. */
-const RETRY_MS = 15_000;
-const RETRY_MAX_MS = 5 * 60_000;
-const retryWait = (tries: number) => Math.min(RETRY_MS * 2 ** tries, RETRY_MAX_MS);
 
 /** A count whose part failed (counts-wait review): its words say so, or alone when no number shows. */
 function failedWords(words: string, n: number): string {

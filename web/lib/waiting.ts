@@ -37,6 +37,33 @@ export const railInbox = (signal?: AbortSignal, staleOk = true) => unwrap(api.GE
 export const railQuestions = (signal?: AbortSignal, staleOk = true) => unwrap(api.GET("/v1/inbox/questions", { ...rail(staleOk), signal }));
 export const RAIL_URLS = ["/v1/inbox", "/v1/inbox/questions"];
 
+/** How long a rail waits to read again a count whose read failed: 15 s, doubling with each failure in a row, at most 5 min. */
+const RETRY_MS = 15_000;
+const RETRY_MAX_MS = 5 * 60_000;
+export const retryWait = (tries: number) => Math.min(RETRY_MS * 2 ** tries, RETRY_MAX_MS);
+
+/**
+ * counts-failed-part: runs `again` after `wait` ms, never while the tab is hidden: a hidden tab
+ * holds it back until it is shown again, while the wait keeps counting, so a tab hidden past its
+ * wait reads at once when shown. Returns the cancel.
+ */
+export function readAgainLater(wait: number, again: () => void): () => void {
+  let onShow: (() => void) | null = null;
+  const t = setTimeout(() => {
+    if (!document.hidden) return again();
+    onShow = () => {
+      if (document.hidden) return;
+      document.removeEventListener("visibilitychange", onShow!);
+      again();
+    };
+    document.addEventListener("visibilitychange", onShow);
+  }, wait);
+  return () => {
+    clearTimeout(t);
+    if (onShow) document.removeEventListener("visibilitychange", onShow);
+  };
+}
+
 /**
  * What waits on me, as the rail badge, Home and /inbox count it: each new or open item
  * (owner, 2026-10-20), so the Inbox's New + Open tabs. The API's total counts checkpoints,
