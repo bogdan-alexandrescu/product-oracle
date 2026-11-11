@@ -161,22 +161,27 @@ for (const width of [390, 601, 800, 1024, 1366, 1512]) {
       /**
        * Card walk-prio-home-first-paint: protects = Simple's Home draws its frame at once while
        * the person's permissions are still on their way (the greeting, the goal band and cards as
-       * skeleton placeholders, the rail's frame beside it), then fills them in place: with every
-       * kind of work waiting (the "every-wait" scenario) the owner's greeting is its longest form
-       * (three kinds, then "and more", then the Inbox) and the goal band starts where its
-       * skeleton stood, within 1 px, at 390, 601 (beside the rail), 800, 1024, 1366 and 1512 px:
-       * the skeleton keeps the lines that longest form wraps to and the page's own action row
-       * ("Walk me through it" and "+ New PRD", wrapping as they do); a shorter greeting (a
+       * skeleton placeholders, the rail's frame beside it), then fills them in place: with one of
+       * each kind of work waiting (the "every-wait-one" scenario), in the afternoon, for an owner
+       * with a 12-letter first name, the owner's greeting is its longest form (three kinds in the
+       * singular, then "and more", then the Inbox) and the goal band starts where its skeleton
+       * stood, within 1 px, at 390, 601 (beside the rail), 800, 1024, 1366 and 1512 px, and
+       * stands there too while Home checks what waits (the waiting read held): the skeleton and
+       * the page's own line keep the lines that longest form wraps to until it is known, and the
+       * page's own action row ("Walk me through it" and "+ New PRD", wrapping as they do); a shorter greeting (a
        * viewer's) keeps no more than half a line of empty space under it, and its band only
        * moves up, never down; no card the skeleton names moves, and the first card under the
        * band starts where the skeleton's first card stood (both measured from the band's foot,
        * as the band grows with the goals); fails_when = Home stays blank until the permissions
-       * answer, the greeting names every kind or overflows the lines kept for it, the action row
+       * answer, the greeting names every kind or overflows the lines kept for it, the band moves
+       * while Home checks what waits, the action row
        * wraps to two rows where the skeleton kept one, or a short greeting leaves empty lines;
        * no_claim = how fast the real API answers, the cards' contents (simple-home specs).
        */
       test(`Home paints its frame and skeleton at once, then fills in place (${role})`, async ({ page, context }) => {
-        await context.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "every-wait"] as const);
+        await context.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "every-wait-one"] as const);
+        // The afternoon: "Good afternoon", the longest greeting word (2:30 PM in the owner's zone).
+        await page.clock.setSystemTime(new Date("2026-10-22T21:30:00Z"));
         await login(page, email);
         await page.goto("/home");
         await context.addInitScript(
@@ -207,8 +212,9 @@ for (const width of [390, 601, 800, 1024, 1366, 1512]) {
         await expect(page.getByTestId("simple-nav-skeleton")).toHaveCount(0);
         const sentence = page.getByTestId("home-sentence");
         if (role === "owner") {
-          // The longest form: three kinds by importance, then "and more", then the Inbox.
-          await expect(sentence).toHaveText("Decisions, a proposal, broken links and more wait on you. More waits in your Inbox.");
+          // The longest form: three kinds by importance, each in the singular, then "and more", then the Inbox.
+          await expect(page.getByTestId("home-greeting").getByText("Good afternoon, Christabelle.")).toBeVisible();
+          await expect(sentence).toHaveText("A decision, a proposal, a broken link and more wait on you. More waits in your Inbox.");
           await expect(page.getByRole("button", { name: "Walk me through it" })).toBeVisible();
           await expect(page.getByRole("button", { name: "New PRD" })).toBeVisible();
         } else await expect(sentence).toHaveText("Here is where the plan stands.");
@@ -225,6 +231,18 @@ for (const width of [390, 601, 800, 1024, 1366, 1512]) {
           expect(Math.abs(now - filledFoot - (top - skeletonFoot)), name).toBeLessThanOrEqual(1);
         }
         expect(Math.abs((await cards.first().boundingBox())!.y - filledFoot - firstCard)).toBeLessThanOrEqual(1);
+        if (role === "owner") {
+          // Home again with what waits held: the page's own line, "Checking what waits on you…",
+          // keeps the skeleton's lines, so the band stands where the skeleton and the filled page put it.
+          await page.evaluate(([slow, ms]) => (localStorage.setItem(slow, "/v1/simple/decisions/waiting"), localStorage.setItem(ms, "4000")), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
+          await page.reload();
+          await expect(sentence).toHaveText("Checking what waits on you…", { timeout: 3000 });
+          const checking = (await goals.boundingBox())!;
+          expect(Math.abs(checking.y - before.y), `band moved from ${before.y} to ${checking.y} while checking`).toBeLessThanOrEqual(1);
+          expect(Math.abs(checking.y - after.y), `band at ${checking.y} while checking, ${after.y} filled`).toBeLessThanOrEqual(1);
+          await expect(sentence).toHaveText(/^A decision, a proposal, a broken link and more/, { timeout: 8000 });
+          expect(Math.abs((await goals.boundingBox())!.y - after.y)).toBeLessThanOrEqual(1);
+        }
         await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
       });
     }

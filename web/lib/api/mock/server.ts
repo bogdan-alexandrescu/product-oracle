@@ -2576,6 +2576,23 @@ function seedEveryWait(): Db {
   return db;
 }
 
+/**
+ * home-greeting-fit "every-wait-one": "every-wait" with one of each kind the greeting names first
+ * (one decision, ./simple-questions.ts; one proposal; one broken link: Weekly alert digest's on
+ * Alert rules engine, the other items' links and milestones left out) and an owner with a
+ * 12-letter first name, so the greeting is its longest form. Invented data.
+ */
+function seedEveryWaitOne(): Db {
+  const db = seedEveryWait();
+  for (const item of db.simple_roadmap!.items) {
+    delete item.milestone;
+    if (item.key !== "alert-digest") delete item.depends;
+  }
+  const me = db.members.find((m) => m.id === db.user_id)!;
+  me.name = "Christabelle Stone";
+  return db;
+}
+
 /** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
 function seedScopeReview(kept = false, manyQuestions = false, otherPrd = false): Db {
   const db = seed();
@@ -4062,6 +4079,8 @@ function load(): Db {
             ? seedSimpleWaits
           : scenario === "every-wait"
             ? seedEveryWait
+          : scenario === "every-wait-one"
+            ? seedEveryWaitOne
           : scenario === "scope-review" || scenario === "scope-review-kept" || scenario === "scope-review-questions" || scenario === "scope-review-other-prd"
             ? () => seedScopeReview(scenario === "scope-review-kept", scenario === "scope-review-questions", scenario === "scope-review-other-prd")
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO || scenario === SHARED_DATE_SCENARIO || scenario === NOT_CLAIMS_SCENARIO || scenario === TWO_WAY_DATES_SCENARIO
