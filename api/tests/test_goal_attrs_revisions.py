@@ -31,6 +31,15 @@ Test cards (protects / fails_when / no_claim):
 - test_goal_map_target_edit_drops_target_text: protects=the Goal map's target edit drops a
   stale typed target text, so the target shown is the new number; fails_when=the old text
   still reads as the target; no_claim=its history.
+- test_goal_form_refusal_names_unit_as_read: protects=the refusal of a number in another
+  unit names a currency goal's unit as a person reads it ("$", "€", "£"), other units as
+  stored; fails_when=it names the stored code ("usd"); no_claim=the web.
+- test_goal_form_target_commas_only_between_thousands: protects=a typed number takes commas
+  only as thousands separators ("1,200", "12,000,000"); "1,2" and the like are refused in
+  plain words, changing nothing; fails_when="1,2" saves as 12; no_claim=text-only goals.
+- test_baseline_numeric_target_drops_target_text: protects=a Baseline write of a numeric
+  target drops an older typed target text, so the goal buckets show the new number;
+  fails_when=the stale text still reads as the target; no_claim=agent writes kept as text.
 - test_goal_ask_archive_and_restore_write_revisions: protects=an asked archive and restore,
   accepted by an owner, each write a revision; fails_when=the Ask path leaves none;
   no_claim=the ask's routing (test_simple_goal_owner_asks_api).
@@ -276,3 +285,56 @@ async def test_goal_ask_archive_and_restore_write_revisions(client):
     await asked("unarchive_goal")
     _, revs = await _goal(tid, gid)
     assert len(revs) == 2 and revs[1].after["status"] == "confirmed"
+
+
+async def _measured_goal(client, unit: str):
+    w = await World().build()
+    tid, gid = w.ctx.tenant_id, w.goals["grow"]
+    await _set_attrs(tid, gid, {"position": 1, "metric": "Shops live", "target": 40,
+                                "unit": unit, "due": "2027-03-31"})  # fmt: skip
+    body = {"title": "Grow", "measure": "Shops live", "due": "2027-03-31"}
+
+    async def patch(target: str):
+        return await client.patch(f"{BUCKETS}/goals/{gid}", headers=w.as_("owner"),
+                                  json={**body, "target": target})  # fmt: skip
+
+    return w, tid, gid, patch
+
+
+async def test_goal_form_refusal_names_unit_as_read(client):
+    for unit, shown in (("usd", "$"), ("EUR", "€"), ("gbp", "£"), ("shops", "shops")):
+        _, _, _, patch = await _measured_goal(client, unit)
+        r = await patch("70 partners")
+        assert r.status_code == 422, (unit, r.text)
+        assert r.json()["detail"] == f"This goal is measured in {shown}: type its new number"
+
+
+async def test_goal_form_target_commas_only_between_thousands(client):
+    w, tid, gid, patch = await _measured_goal(client, "shops")
+    for typed, n in (("1,200", 1200), ("12,000,000 shops", 12000000), ("1,234.5", 1234.5)):
+        r = await patch(typed)
+        assert r.status_code == 200, (typed, r.text)
+        attrs, _ = await _goal(tid, gid)
+        assert attrs["target"] == n, (typed, attrs)
+    _, revs = await _goal(tid, gid)
+    for typed in ("1,2", "12,00 shops", "1,2345", "1,,200"):
+        r = await patch(typed)
+        assert r.status_code == 422, (typed, r.text)
+        assert r.json()["detail"] == "Type the target as a number, like 60"
+    attrs, after = await _goal(tid, gid)
+    assert attrs["target"] == 1234.5 and len(after) == len(revs)
+
+
+async def test_baseline_numeric_target_drops_target_text(client):
+    w = await World().build()
+    tid, gid = w.ctx.tenant_id, w.goals["grow"]
+    await _set_attrs(tid, gid, {"position": 1, "metric": "Shops live", "unit": "shops",
+                                "comparison": "at_least", "target_text": "about seventy",
+                                "due": "2027-03-31"})  # fmt: skip
+    r = await client.patch(f"/v1/baseline/entities/{gid}", json={"attrs": {"target": 70}},
+                           headers=w.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    attrs, _ = await _goal(tid, gid)
+    assert attrs["target"] == 70 and "target_text" not in attrs, attrs
+    grow = next(g for g in (await w.read(client))["goals"] if g["id"] == gid)
+    assert grow["target"] == "70 shops"
