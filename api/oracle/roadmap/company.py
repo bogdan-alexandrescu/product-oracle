@@ -79,14 +79,20 @@ class NotFound(CompanyError):
 
 
 async def active(db: AsyncSession) -> Document | None:
-    """The company's one roadmap not in Trash, if there is one."""
-    return await db.scalar(
-        select(Document).where(
-            Document.company_roadmap.is_(True),
-            Document.kind == "roadmap",
-            Document.deleted_at.is_(None),
+    """The company's one roadmap not in Trash, if there is one; read once per session until
+    it writes (roadmap-speed: one Simple roadmap read asks four times), as :func:`history`."""
+    session = db.sync_session
+    info = session.info
+    # Unflushed changes (the read would autoflush them) read afresh.
+    if _ACTIVE not in info or session.new or session.dirty or session.deleted:
+        info[_ACTIVE] = await db.scalar(
+            select(Document).where(
+                Document.company_roadmap.is_(True),
+                Document.kind == "roadmap",
+                Document.deleted_at.is_(None),
+            )
         )
-    )
+    return info[_ACTIVE]
 
 
 async def ensure(db: AsyncSession, principal: Principal) -> tuple[Document, bool]:
@@ -139,6 +145,7 @@ class History:
 
 NO_HISTORY = History({}, {}, frozenset())
 _CACHE = "replaced_prd_history"
+_ACTIVE = "company_roadmap"
 
 
 @event.listens_for(Session, "after_flush")
@@ -147,12 +154,14 @@ _CACHE = "replaced_prd_history"
 @event.listens_for(Session, "after_soft_rollback")
 def _forget(session: Session, *_: Any) -> None:
     session.info.pop(_CACHE, None)
+    session.info.pop(_ACTIVE, None)
 
 
 @event.listens_for(Session, "do_orm_execute")
 def _forget_on_write(state: ORMExecuteState) -> None:
     if not state.is_select:
         state.session.info.pop(_CACHE, None)
+        state.session.info.pop(_ACTIVE, None)
 
 
 async def history(db: AsyncSession) -> History:

@@ -38,7 +38,6 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.goal_order import goal_position, goal_sort_key
 from oracle.baseline.models import Edge, Entity
-from oracle.docs import prd_order
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
 from oracle.priorities.scoring import effort_weeks
@@ -46,7 +45,6 @@ from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company
 from oracle.roadmap import tracks as tracks_mod
 from oracle.roadmap.models import (
-    TRACK_ORDER,
     ProductTrack,
     RoadmapChangeSet,
     RoadmapItem,
@@ -226,6 +224,14 @@ def flags_out(e: Entry, may: Any = None) -> list[SimpleFlag]:
 
 
 async def waiting(db: AsyncSession, principal: Any, roadmap: str | None = None) -> tuple[int, int]:
+    from oracle.simple import drafts
+
+    # roadmap-speed: a read that writes nothing (drafts.one_read).
+    with drafts.one_read():
+        return await _waiting(db, principal, roadmap)
+
+
+async def _waiting(db: AsyncSession, principal: Any, roadmap: str | None = None) -> tuple[int, int]:
     """The broken links and the dates to confirm of the whole roadmap as ``principal`` reads
     it: every red flag with a one-click fix (an end past its milestone too, as Home and the
     side menu's waiting list count them, pre-demo QA S-5); an open date
@@ -238,8 +244,7 @@ async def waiting(db: AsyncSession, principal: Any, roadmap: str | None = None) 
     read = await load(db, await drafts.overlays_for(db, principal), light=True)
     chosen: uuid.UUID | None = None
     if roadmap:
-        rows = await db.scalars(select(Document).where(Document.kind == "roadmap"))
-        readable = {d.id: d for d in rows}
+        readable = {d.id: d for d in await documents(db) if d.kind == "roadmap"}
         feeding = set(await company.feeding_ids(db, list(readable)))
         doc = next(
             (d for i, d in readable.items() if i in feeding and roadmap in (str(d.id), d.slug)),
@@ -314,6 +319,22 @@ def _versions(
     return out
 
 
+async def documents(db: AsyncSession) -> list[Document]:
+    """The roadmaps and PRDs by title, read once per read (roadmap-speed)."""
+    from oracle.simple import drafts
+
+    async def read() -> list[Document]:
+        return list(
+            await db.scalars(
+                select(Document)
+                .where(Document.kind.in_(("roadmap", "prd")))
+                .order_by(Document.title)
+            )
+        )
+
+    return await drafts.once("documents", read)
+
+
 async def load(
     db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | None = None, light: bool = False
 ) -> Read:
@@ -325,10 +346,7 @@ async def load(
 
     today = await company_time.company_today(db)
     windows = dates.windows(await company_horizons(db), today)
-    docs = {
-        d.id: d
-        for d in await db.scalars(select(Document).where(Document.kind.in_(("roadmap", "prd"))))
-    }
+    docs = {d.id: d for d in await documents(db)}
     # one-roadmap-many-prds: the company roadmap alone while there is one.
     roadmap_ids = await company.feeding_ids(
         db, [d.id for d in docs.values() if d.kind == "roadmap"]
@@ -391,13 +409,22 @@ async def load(
     tracks: dict[uuid.UUID, ProductTrack] = {}
     owner_roles: dict[uuid.UUID, str] = {}
     owner_names: dict[uuid.UUID, str] = {}
-    for t, role, name, email in (
-        await db.execute(
-            select(ProductTrack, User.role, User.name, User.email).outerjoin(
-                User, (User.id == ProductTrack.owner_id) & User.disabled_at.is_(None)
+    # roadmap-speed: the tracks and members the rest of the read reads too, once.
+    if light:
+        owned = (
+            await db.execute(
+                select(ProductTrack, User.role, User.name, User.email).outerjoin(
+                    User, (User.id == ProductTrack.owner_id) & User.disabled_at.is_(None)
+                )
             )
-        )
-    ).all():
+        ).all()
+    else:
+        live = {u.id: u for u in await drafts.all_users(db) if u.disabled_at is None}
+        owned = [
+            (t, *((u.role, u.name, u.email) if (u := live.get(t.owner_id)) else (None,) * 3))
+            for t in await drafts.all_tracks(db)
+        ]
+    for t, role, name, email in owned:
         tracks[t.id] = t
         if role is not None:
             owner_roles[t.id] = role
@@ -405,14 +432,9 @@ async def load(
     # chat-actions: an item's own owner (set_owner) is named over its track's.
     people = (
         {
-            u: (role, name or email)
-            for u, role, name, email in (
-                await db.execute(
-                    select(User.id, User.role, User.name, User.email).where(
-                        User.disabled_at.is_(None)
-                    )
-                )
-            ).all()
+            u.id: (u.role, u.name or u.email)
+            for u in await drafts.all_users(db)
+            if u.disabled_at is None
         }
         if not light
         else {}
@@ -478,12 +500,20 @@ async def load(
         if s.slice_code is not None and first.slice_code is not None:
             a, b = spans.get(s.item_id, (s.start_date, s.end_date))
             spans[s.item_id] = (min(a, s.start_date), max(b, s.end_date))
-    deciders = {
-        p.document_id: p.decider_id
-        for p in await db.scalars(
-            select(DocumentReviewPolicy).where(DocumentReviewPolicy.document_id.in_(roadmap_ids))
-        )
-    }
+    # roadmap-speed: the roadmaps' policies as drafts.who reads them (once per read); the
+    # counts read the policies alone.
+    deciders = (
+        (await drafts.who(db, set(roadmap_ids))).deciders
+        if not light
+        else {
+            p.document_id: p.decider_id
+            for p in await db.scalars(
+                select(DocumentReviewPolicy).where(
+                    DocumentReviewPolicy.document_id.in_(roadmap_ids)
+                )
+            )
+        }
+    )
     track_ms: dict[tuple[uuid.UUID, str], TrackMilestone] = {}
     for m in milestones:
         if m.status == "dropped":
@@ -817,7 +847,21 @@ async def efforts(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, 
 
 
 async def _goals(db: AsyncSession, features: set[uuid.UUID]) -> dict[uuid.UUID, Entity]:
-    """Feature id -> the first confirmed goal it supports (the one goal order)."""
+    """Feature id -> the first confirmed goal it supports (the one goal order); within one
+    read (drafts.one_read) each feature is read once (roadmap-speed)."""
+    from oracle.simple import drafts
+
+    async def fresh() -> dict[uuid.UUID, Entity | None]:
+        return {}
+
+    memo = await drafts.once("feature_goals", fresh)
+    if missing := features - set(memo):
+        found = await _read_goals(db, missing)
+        memo.update({f: found.get(f) for f in missing})
+    return {f: g for f in features if (g := memo[f]) is not None}
+
+
+async def _read_goals(db: AsyncSession, features: set[uuid.UUID]) -> dict[uuid.UUID, Entity]:
     out: dict[uuid.UUID, Entity] = {}
     if not features:
         return out
@@ -1245,6 +1289,7 @@ def item_out(
 async def _tasks(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list[SimpleItemTask]]:
     """walkc-roadmap-tasks: each item's tasks (not dropped, in order), found by the item's
     roadmap and key so a later version's item keeps them, with their owners' names."""
+    from oracle.simple import drafts
     from oracle.simple.models import RoadmapItemTask
 
     if not shown:
@@ -1263,8 +1308,7 @@ async def _tasks(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list[S
     )
     people = {t.owner_id for t in rows if t.owner_id is not None}
     names = {
-        u.id: display_name(u.email, u.name)
-        for u in await db.scalars(select(User).where(User.id.in_(people)))
+        u.id: display_name(u.email, u.name) for u in await drafts.all_users(db) if u.id in people
     }
     out: dict[uuid.UUID, list[SimpleItemTask]] = defaultdict(list)
     for t in rows:
@@ -1549,27 +1593,20 @@ async def _track_bands(
     """milestone-kinds: every live track, in the Tracks order (track-order: the stored one), with
     its health: at risk when a feature of it ends after a milestone it serves, else stale
     when not checked in 14 days, else on track. ``goals``: as ``_goal_targets`` read them."""
-    rows = list(await db.scalars(select(ProductTrack).order_by(*TRACK_ORDER)))
+    from oracle.simple import drafts
+
+    rows = list(await drafts.all_tracks(db))
     history = await company.history_track_ids(db)
     rows = [t for t in rows if t.id not in history]
     if not rows:
         return []
     goal_names = {g.id: g.title for g in goals}
     prd_ids = {p for t in rows for p in t.prd_ids}
-    prds = (
-        {d.id: d.title for d in await db.scalars(select(Document).where(Document.id.in_(prd_ids)))}
-        if prd_ids
-        else {}
-    )
+    prds = {d.id: d.title for d in await documents(db) if d.id in prd_ids} if prd_ids else {}
     owner_ids = {t.owner_id for t in rows if t.owner_id}
-    owners = (
-        {
-            u.id: display_name(u.email, u.name)
-            for u in await db.scalars(select(User).where(User.id.in_(owner_ids)))
-        }
-        if owner_ids
-        else {}
-    )
+    owners = {
+        u.id: display_name(u.email, u.name) for u in await drafts.all_users(db) if u.id in owner_ids
+    }
     serving: dict[uuid.UUID, list[SimpleGoalMilestone]] = defaultdict(list)
     for m in goal_ms:
         for i in m.item_ids:
@@ -1651,12 +1688,7 @@ async def _build(
 
     # The Roadmap filter's choices: every roadmap the reader may read (the session's
     # principal: an approvers-only roadmap is absent for commenters and viewers).
-    readable = {
-        d.id: d
-        for d in await db.scalars(
-            select(Document).where(Document.kind == "roadmap").order_by(Document.title)
-        )
-    }
+    readable = {d.id: d for d in await documents(db) if d.kind == "roadmap"}
     # one-roadmap-many-prds: older per-PRD roadmaps are history, not a choice.
     feeding = set(await company.feeding_ids(db, list(readable)))
     readable = {i: d for i, d in readable.items() if i in feeding}
@@ -1685,23 +1717,19 @@ async def _build(
         and (end is None or e.resolved.start.date <= end)
     ]
     groups: dict[str, tuple[tuple, str, list[uuid.UUID]]] = {}
-    ranks = await prd_order.prd_ranks(db) if group == "prd" else {}
+    ranks = await key_dates.ranked_prds(db) if group == "prd" else {}
     for e in shown:
         key, title, sort = _group_of(e, group, ranks, parents)
         groups.setdefault(key, (sort, title, []))[2].append(e.row.id)
     ordered = sorted(groups.items(), key=lambda kv: kv[1][0])
-    owners = list(
-        await db.scalars(
-            select(User.id)
-            .where(User.role == "owner", User.disabled_at.is_(None))
-            .order_by(User.created_at, User.id)
-        )
-    )
+    users = await drafts.all_users(db)
+    owners = [
+        u.id
+        for u in sorted(users, key=lambda u: (u.created_at, u.id))
+        if u.role == "owner" and u.disabled_at is None
+    ]
     people = set(owners) | {i for e in shown for i in decider_ids(e, read.deciders)}
-    names = {
-        u.id: display_name(u.email, u.name)
-        for u in await db.scalars(select(User).where(User.id.in_(people)))
-    }
+    names = {u.id: display_name(u.email, u.name) for u in users if u.id in people}
     decisions = await _open_decisions(db, {e.row.id for e in shown})
     from oracle.simple import additions
 

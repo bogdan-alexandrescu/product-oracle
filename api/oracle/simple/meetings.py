@@ -354,9 +354,17 @@ def may_start(principal: Any, w: PrdWho) -> bool:
 
 
 async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    from oracle.simple import drafts
+
     if not ids:
         return {}
-    return {u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))}
+    # roadmap-speed: within one read the members are read once.
+    users = (
+        await drafts.all_users(db)
+        if drafts.reading()
+        else await db.scalars(select(User).where(User.id.in_(ids)))
+    )
+    return {u.id: u.name or u.email for u in users if u.id in ids}
 
 
 def _ref(i: uuid.UUID, names: dict[uuid.UUID, str]) -> SimplePersonRef:
