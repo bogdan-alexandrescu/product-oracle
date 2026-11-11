@@ -75,7 +75,7 @@ test.describe("desktop", () => {
     // protects=a feature chip opens Simple's one feature panel for it; fails_when=nothing opens;
     // no_claim=the panel's own edits (the roadmap specs).
     await open(page);
-    await chip(page, "One-tap sign-up link").getByRole("button", { name: /One-tap sign-up link/ }).click();
+    await chip(page, "One-tap sign-up link").getByRole("button", { name: /^F-\d+\s*One-tap sign-up link/ }).click();
     await expect(page.getByTestId("gm-feature-panel")).toBeVisible();
     await expect(page.getByTestId("floating-card").getByTestId("card-name")).toContainText("One-tap sign-up link");
   });
@@ -100,7 +100,7 @@ test.describe("phone", () => {
     await login(page, ADMIN.email);
     await page.goto("/simple/goals");
     await expect(page.getByTestId("gm-grid")).toBeVisible();
-    await chip(page, "One-tap sign-up link").getByRole("button", { name: /One-tap sign-up link/ }).click();
+    await chip(page, "One-tap sign-up link").getByRole("button", { name: /^F-\d+\s*One-tap sign-up link/ }).click();
     await expect(page.getByTestId("gm-feature-panel")).toBeVisible();
   });
 });
