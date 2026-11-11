@@ -16,7 +16,9 @@
  *   before that fails says so (`onReadFailed`), so what shows the older answer reads it again
  *   itself and shows that it failed, never the last answer.
  * - Answers older than STALE_MS are dropped, at most MAX_ENTRIES are kept (the oldest go first),
- *   and only text and JSON answers are kept (never a file such as a PDF).
+ *   and only text and JSON answers are kept (never a file such as a PDF). A dropped answer leaves
+ *   its mark (when it landed and its body's hash, at most MAX_MARKS of them), so a later read of it
+ *   that fails or differs still says so.
  */
 
 export const STALE_OK = "x-po-stale-ok";
@@ -25,6 +27,7 @@ const FRESH_MS = 2000;
 const RAIL_MS = 10_000;
 const STALE_MS = 5 * 60_000;
 const MAX_ENTRIES = 200;
+const MAX_MARKS = 1000;
 const CHANGED = "po:read-changed";
 const FAILED = "po:read-failed";
 // The request headers that change an answer, besides the URL (any x- header too, but the stale-ok mark).
@@ -35,13 +38,15 @@ type Entry = {
   at: number | null;
   /** The shared answer (never read itself: each caller gets a clone). */
   res: Promise<Response> | null;
-  /** Its body, to tell a changed answer from the same one. */
+  /** Its body's hash, to tell a changed answer from the same one. */
   body: string | null;
   /** A read of it again on its way. */
   next: Promise<Response> | null;
 };
 
 const entries = new Map<string, Entry>();
+// What is left of a dropped answer: when it landed and its body's hash, never the answer itself.
+const marks = new Map<string, { at: number; body: string }>();
 // Bumped by every write: a read begun under an older one is never shared.
 let generation = 0;
 
@@ -49,6 +54,7 @@ let generation = 0;
 export function forgetReads() {
   generation += 1;
   entries.clear();
+  marks.clear();
 }
 
 // A change said to the whole page (use-query's dataChanged, a chat card's sendCardChanged)
@@ -79,9 +85,35 @@ export function readKey(req: Request): string {
   return `${url.pathname}${url.search}${headers.join("")}`;
 }
 
+/** Drops a landed answer, leaving its mark (the oldest marks go first past MAX_MARKS). */
+function dropAnswer(key: string, e: Entry) {
+  entries.delete(key);
+  if (e.at === null || e.body === null) return;
+  marks.delete(key);
+  marks.set(key, { at: e.at, body: e.body });
+  for (const old of marks.keys()) {
+    if (marks.size <= MAX_MARKS) break;
+    marks.delete(old);
+  }
+}
+
 /** Drops the answers older than STALE_MS (no read takes them), keeping any read again on its way. */
 function dropOld(now: number) {
-  for (const [key, e] of entries) if (e.at !== null && now - e.at >= STALE_MS && !e.next) entries.delete(key);
+  for (const [key, e] of entries) if (e.at !== null && now - e.at >= STALE_MS && !e.next) dropAnswer(key, e);
+}
+
+/** A short hash of a body (cyrb53), so a mark keeps no answer. */
+function hash(body: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < body.length; i++) {
+    const c = body.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return `${body.length}:${(h2 >>> 0).toString(36)}${(h1 >>> 0).toString(36)}`;
 }
 
 function isWrite(req: Request): boolean {
@@ -128,7 +160,10 @@ function fetchShared(base: (req: Request) => Promise<Response>, req: Request, ke
   const gen = generation;
   // One caller aborting (the rail leaving a page) never aborts the read the others share.
   const res = base(new Request(req.url, { method: "GET", headers: req.headers, credentials: req.credentials }));
-  const entry: Entry = entries.get(key) ?? { at: null, res: null, body: null, next: null };
+  // A dropped answer's mark: this read still tells a failed or changed answer.
+  const mark = marks.get(key);
+  marks.delete(key);
+  const entry: Entry = entries.get(key) ?? { at: mark?.at ?? null, res: null, body: mark?.body ?? null, next: null };
   if (!entry.res) entry.res = res;
   entry.next = res;
   entries.set(key, entry);
@@ -142,8 +177,9 @@ function fetchShared(base: (req: Request) => Promise<Response>, req: Request, ke
     // An answer was shared before: whatever shows it reads it again and shows that it failed.
     if (entry.at !== null) window.dispatchEvent(new CustomEvent(FAILED, { detail: url }));
   };
-  const done = (body: string) => {
+  const done = (text: string) => {
     if (gen !== generation || entries.get(key) !== entry) return;
+    const body = hash(text);
     const changed = entry.body !== null && entry.body !== body;
     entry.res = res;
     entry.at = Date.now();
@@ -152,9 +188,9 @@ function fetchShared(base: (req: Request) => Promise<Response>, req: Request, ke
     // The newest answer goes last, so the oldest go first past MAX_ENTRIES.
     entries.delete(key);
     entries.set(key, entry);
-    for (const old of entries.keys()) {
+    for (const [old, e] of entries) {
       if (entries.size <= MAX_ENTRIES) break;
-      entries.delete(old);
+      dropAnswer(old, e);
     }
     if (changed) window.dispatchEvent(new CustomEvent(CHANGED, { detail: url }));
   };
