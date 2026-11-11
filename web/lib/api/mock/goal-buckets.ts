@@ -9,7 +9,7 @@ import type { Schemas } from "@/lib/api/client";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
-import { GOALS, goalPositionOf, goalRank, goalInTrash, roadmapGoal, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
+import { GOALS, goalId, goalPositionOf, goalRank, goalInTrash, roadmapGoal, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
 // `key`: the Entity.key the API gives a goal at creation (goal_buckets._slug), named in its Trash entry.
@@ -165,7 +165,7 @@ const featureSnap = (f: Feature) => ({
 // The API signs each undo and refuses one it did not give; the mock signs with a plain hash of the rest.
 const sigOf = (u: Omit<Undo, "sig">) => {
   let h = 2166136261;
-  for (const c of JSON.stringify({ goals: u.goals ?? [], features: u.features ?? [], added_goal_id: u.added_goal_id ?? null })) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
+  for (const c of JSON.stringify({ goals: u.goals ?? [], features: u.features ?? [], items: u.items ?? [], added_goal_id: u.added_goal_id ?? null })) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
   return `mock-${h.toString(16)}`;
 };
 const signed = (u: Omit<Undo, "sig">): Undo => ({ ...u, sig: sigOf(u) });
@@ -215,6 +215,10 @@ function moveItemsOff(items: ItemGoals[], g: Goal, to: Goal): NonNullable<TrashE
   }
   return was;
 }
+
+/** An item's id and its goals' ids as the API gives them (goalIdsOf), and back. */
+const itemIdOf = (simple: { ids?: Record<string, string> } | undefined, key: string) => simple?.ids?.[key] ?? stableUuid(`simple-item/${key}`);
+const goalKeyOf = (db: GoalBucketsDb, id: string) => [...Object.keys(GOALS), ...db.goals.map((g) => g.key)].find((k) => goalId(k) === id);
 
 /** The item goal key of a bucket goal: the roadmap's goal of that name. */
 const itemGoalKey = (g: Goal | undefined) => (g ? Object.keys(GOALS).find((k) => GOALS[k].toLowerCase() === g.title.toLowerCase()) : undefined);
@@ -278,11 +282,15 @@ export type GoalBucketsTrash = {
 };
 
 /** Archive (goal_buckets.archive), also an accepted Ask to archive: the Undo, or an error. */
-export function archiveGoal(db: GoalBucketsDb, id: string, to: string | null, now: string): Undo | Response {
+export function archiveGoal(db: GoalBucketsDb, id: string, to: string | null, now: string, simple?: { items?: ItemGoals[]; ids?: Record<string, string> }): Undo | Response {
   const g = db.goals.find((x) => x.id === id && !x.archived && !x.trashed);
   if (!g) return json(404, { detail: "No such goal" });
   if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
-  const undo = signed({ goals: [goalSnap(g)], features: moveOff(db, g, to).map(featureSnap), added_goal_id: null });
+  const features = moveOff(db, g, to).map(featureSnap);
+  // goal_buckets.archive (goal-delete-dated): with `to`, the items that name the goal as their own move there too.
+  const moved = to ? moveItemsOff(simple?.items ?? [], g, db.goals.find((x) => x.id === to)!) : [];
+  const items = moved.map((w) => ({ item_id: itemIdOf(simple, w.key), goal_ids: w.goals.map(goalId) }));
+  const undo = signed({ goals: [goalSnap(g)], features, items, added_goal_id: null });
   g.archived = true;
   g.archived_at = now;
   return undo;
@@ -442,7 +450,7 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     return json(200, { goal: { ...goalOut(g, people), id: p[4] }, undo });
   }
   if (p[3] === "goals" && p[5] === "archive" && m === "POST") {
-    const undo = archiveGoal(db, p[4], (body.to_goal_id as string | null | undefined) ?? null, bin?.now() ?? new Date().toISOString());
+    const undo = archiveGoal(db, p[4], (body.to_goal_id as string | null | undefined) ?? null, bin?.now() ?? new Date().toISOString(), simple as { items?: ItemGoals[]; ids?: Record<string, string> });
     if (undo instanceof Response) return undo;
     return json(200, { goal: null, undo });
   }
@@ -482,6 +490,14 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
         f.goal_ids = s.links.map((l) => l.goal_id);
         f.assumed_goal_ids = s.links.filter((l) => (l.attrs as Record<string, unknown> | null)?.contribution_assumed === true).map((l) => l.goal_id);
       }
+    }
+    // The items' own goals as they were (ItemGoalsSnap).
+    for (const s of u.items ?? []) {
+      const item = (simple as { items?: ItemGoals[]; ids?: Record<string, string> }).items?.find((x) => itemIdOf(simple as { ids?: Record<string, string> }, x.key) === s.item_id);
+      if (!item) continue;
+      const keys = (s.goal_ids ?? []).map((id) => goalKeyOf(db, id)).filter((k): k is string => !!k);
+      item.goal = keys[0];
+      item.goals = keys.slice(1);
     }
     if (u.added_goal_id) {
       const g = db.goals.find((x) => x.id === u.added_goal_id);

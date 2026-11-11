@@ -203,7 +203,7 @@ function applyGoalAsk(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" 
   const id = String(c.target.goal_id ?? "");
   const to = (c.target.to_goal_id as string | null | undefined) ?? null;
   if (c.op === "archive_goal") {
-    const undo = archiveGoal(gb, id, to, iso(mockNowMs()));
+    const undo = archiveGoal(gb, id, to, iso(mockNowMs()), db);
     return undo instanceof Response ? undo : null;
   }
   if (c.op === "unarchive_goal") {

@@ -13,8 +13,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * features in the plan" and offers no goal.
  * Card goal-delete-dated-moves: protects = the picked goal is what each moved feature's panel reads
  * after the delete (a roadmap item and a draft); fails_when = they are left with no goal.
- * Card goal-archive-dated-lists: protects = Archive goal lists the same features; fails_when = it
- * counts only the plan's.
+ * Card goal-archive-dated-lists: protects = Archive goal lists the same features and moves them to
+ * the picked goal, a draft linked to it directly too, and Undo puts them back; fails_when = it
+ * counts only the plan's, or the draft keeps the archived goal.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -82,8 +83,22 @@ test("a dated plan's Delete goal lists the goal's features outside the plan and 
   await expect(read).not.toContainText("Grow retention");
 });
 
-test("a dated plan's Archive goal lists the same features and asks where they go", async ({ page }) => {
+test("a dated plan's Archive goal lists the same features, moves them to the picked goal, and Undo puts them back", async ({ page }) => {
   await open(page);
   const dialog = await dialogFor(page, "Archive goal", "Archive Grow retention");
   await listsThem(dialog);
+  const to = dialog.getByLabel("Goal", { exact: true });
+  const goals = await to.locator("option").allTextContents();
+  await to.selectOption({ label: goals.find((o) => o.includes("Faster activation"))! });
+  await tap(dialog.getByRole("button", { name: "Archive goal" }));
+  await expect(goal(page, "Grow retention")).toHaveCount(0);
+  const draft = (title: string) => goal(page, title).getByTestId("plan-feature").filter({ hasText: "Monthly alert recap" });
+  await tap(draft("Faster activation").getByTestId("plan-feature-open"));
+  await expect(panel(page).getByTestId("card-goal")).toContainText("Faster activation");
+  await page.keyboard.press("Escape");
+  await expect(panel(page)).toHaveCount(0);
+
+  await tap(page.getByRole("button", { name: "Undo" }));
+  await expect(draft("Grow retention")).toHaveCount(1);
+  await expect(draft("Faster activation")).toHaveCount(0);
 });
