@@ -30,6 +30,11 @@ Test cards (protects / fails_when / no_claim):
   dialog says: the archived goal's key result is not another live goal it keeps;
   fails_when=the item is left on a key result of the archived goal; no_claim=key results
   of other goals (test_archive_keeps_an_items_other_goal_and_leaves_none_unasked).
+- test_archive_counts_no_nested_key_result_of_the_goal_as_live: protects=a key result
+  of a key result of the archived goal (any depth), or one under an archived goal, keeps no
+  item: the item moves to the goal picked, as the dialog lifts a key result to its top goal;
+  fails_when=only direct key results count and the item stays on the nested one;
+  no_claim=direct key results (test_archive_counts_no_key_result_of_the_goal_as_live).
 - test_move_feature_and_undo: protects=moving a feature makes the new goal its first
   link and drops the old one; Undo restores both links; a viewer gets 403;
   fails_when=the old link stays or the new one is not first; no_claim=the web's drag.
@@ -239,6 +244,36 @@ async def test_archive_counts_no_key_result_of_the_goal_as_live(client, pick):
         item = await seed.item(rv, pv, "recap", draft=True, goal_ids=[grow, kr.id])
         await s.commit()
         item_id, kr_id = item.id, kr.id
+
+    r = await client.post(f"{URL}/goals/{grow}/archive", headers=w.as_("owner"),
+                          json={"to_goal_id": str(to) if pick else None})  # fmt: skip
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        goals = list((await s.get(RoadmapItem, item_id)).goal_ids or [])
+    assert goals == ([to, kr_id] if pick else [kr_id])
+
+
+@pytest.mark.parametrize("pick", [False, True])
+@pytest.mark.parametrize("under", ["grow", "archived"])
+async def test_archive_counts_no_nested_key_result_of_the_goal_as_live(client, pick, under):
+    w = await World().build()
+    third = (await client.post(f"{URL}/goals", headers=w.as_("owner"), json=GOAL)).json()["goal"]
+    grow, to = uuid.UUID(w.goals["grow"]), uuid.UUID(third["id"])
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        top = grow
+        if under == "archived":
+            gone = await seed.entity("goal", "gone")
+            gone.status = "rejected"
+            top = gone.id
+        kr1 = await seed.entity("goal", "kr-1")
+        kr1.parent_id = top
+        kr2 = await seed.entity("goal", "kr-2")
+        kr2.parent_id = kr1.id
+        _, pv, _, rv = await seed.roadmap("shops")
+        item = await seed.item(rv, pv, "recap", draft=True, goal_ids=[grow, kr2.id])
+        await s.commit()
+        item_id, kr_id = item.id, kr2.id
 
     r = await client.post(f"{URL}/goals/{grow}/archive", headers=w.as_("owner"),
                           json={"to_goal_id": str(to) if pick else None})  # fmt: skip
