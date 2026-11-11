@@ -168,7 +168,7 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: cd web && npm ci && npx playwright install --with-deps chromium
+      - run: cd web && npm ci && for i in 1 2 3; do npx playwright install --with-deps chromium && break; [ "$i" = 3 ] && exit 1; echo "Playwright install failed (try $i of 3; an Ubuntu mirror is often down for a minute), retrying in 30 s"; sleep 30; done
       # Postgres is the service above, so the target must not start the compose one.
       - run: make e2e E2E_POSTGRES=
       - if: failure()
@@ -199,7 +199,7 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: cd web && npm ci && npx playwright install --with-deps chromium
+      - run: cd web && npm ci && for i in 1 2 3; do npx playwright install --with-deps chromium && break; [ "$i" = 3 ] && exit 1; echo "Playwright install failed (try $i of 3; an Ubuntu mirror is often down for a minute), retrying in 30 s"; sleep 30; done
       - run: cd web && npm run build:mock
       - run: cd web && E2E_PREBUILT=1 E2E_WORKERS=4 npm run test:ci -- --shard=${{ matrix.shard }}/8
       - if: failure()
@@ -219,7 +219,7 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: cd web && npm ci && npx playwright install --with-deps chromium
+      - run: cd web && npm ci && for i in 1 2 3; do npx playwright install --with-deps chromium && break; [ "$i" = 3 ] && exit 1; echo "Playwright install failed (try $i of 3; an Ubuntu mirror is often down for a minute), retrying in 30 s"; sleep 30; done
       - run: cd web && E2E_TIMING=1 npx playwright test --grep @timing --workers=1
       - if: failure()
         uses: actions/upload-artifact@v4
