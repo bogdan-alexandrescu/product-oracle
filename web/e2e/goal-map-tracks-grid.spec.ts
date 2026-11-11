@@ -50,6 +50,13 @@ async function expectShown(el: Locator) {
   await expect.poll(shown).toBe(true);
 }
 
+/** Focus went on to the next stop: not dropped to the page, not pulled back to the menu's own ⋯. */
+async function expectFocusMovedOn(page: Page, more: RegExp) {
+  const focused = await page.evaluate(() => (document.activeElement === document.body ? "body" : document.activeElement?.getAttribute("aria-label") ?? ""));
+  expect(focused).not.toBe("body");
+  expect(focused).not.toMatch(more);
+}
+
 test.describe("Goal map: goals by tracks grid", () => {
   test.use(DESKTOP);
 
@@ -194,6 +201,30 @@ test.describe("Goal map: goals by tracks grid", () => {
     await expect(page.getByRole("menu")).toHaveCount(0);
     await expect(cmore).toBeFocused();
     await expectShown(cmore);
+  });
+
+  test("Tab past a menu's last item closes the menu and leaves focus where Tab took it", async ({ page }) => {
+    // protects: a ⋯ menu closes when focus leaves it and its ⋯ (strip and chip), without pulling
+    // focus back. fails_when: the menu stays open after Tab leaves it, or focus jumps back to the ⋯.
+    // no_claim: where the next Tab stop is.
+    await open(page);
+    await page.mouse.move(0, 0);
+    const more = strip(page, "32 demos per rep").getByRole("button", { name: /More for .*32 demos per rep/ });
+    await tabTo(page, more);
+    await page.keyboard.press("Enter");
+    await tabTo(page, page.getByRole("menu").getByRole("menuitem").last(), 10);
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await expectFocusMovedOn(page, /More for .*32 demos per rep/);
+    // A chip's menu too.
+    const c = chip(page, "Rep calendar sync");
+    const cmore = c.getByRole("button", { name: /More for .*Rep calendar sync/ });
+    await tabTo(page, cmore);
+    await page.keyboard.press("Enter");
+    await tabTo(page, page.getByRole("menu").getByRole("menuitem").last(), 10);
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await expectFocusMovedOn(page, /More for .*Rep calendar sync/);
   });
 
   test("the hard case: long names stay in two lines, features with no track get a No track row", async ({ page }) => {
