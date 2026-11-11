@@ -188,7 +188,8 @@ function GoalInfo({ g, krs }: { g: GmGoal; krs: KrLine[] }) {
   );
 }
 
-/** A ⋯ menu; Escape closes it and puts focus back on its ⋯. */
+/** A ⋯ menu; Escape closes it and puts focus back on its ⋯; focus moving elsewhere (Tab past its last item) closes it
+ * and leaves focus there. A blur to nowhere (a click Safari does not focus) keeps it open, so the click still lands. */
 function Menu({ k, label, items, c }: { k: string; label: string; items: { w: string; on: () => void; crit?: boolean }[]; c: Ctx }) {
   const open = c.menu === k;
   const more = useRef<HTMLButtonElement>(null);
@@ -200,6 +201,9 @@ function Menu({ k, label, items, c }: { k: string; label: string; items: { w: st
         e.stopPropagation();
         c.setMenu(null);
         more.current?.focus();
+      }}
+      onBlur={(e) => {
+        if (open && e.relatedTarget instanceof Node && !e.currentTarget.contains(e.relatedTarget)) c.setMenu(null);
       }}
     >
       <button ref={more} type="button" aria-label={`More for ${label}`} aria-expanded={open} data-testid={`gm-menu-${k}`} onClick={(e) => (e.stopPropagation(), c.setMenu(open ? null : k))} className={`rounded-md px-1 leading-none text-text2 hover:bg-surface2 ${open ? "bg-surface2" : ""}`}>
