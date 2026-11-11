@@ -2456,16 +2456,18 @@ function PlanBuckets({ data, plan: read, suggestions, reload, kr }: { data: Out;
   const [note, setNote] = useState<Note | null>(null);
   const noteSlot = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const writes = useBucketWrites(bucketsQ.reload, setNote, setError);
+  // goal-delete-dated: a goal's Archive or Delete moves its drafts and roadmap items too, so the page's own read comes again with the buckets'.
+  const reloadAll = async () => {
+    await Promise.all([bucketsQ.reload(), reload()]);
+  };
+  const writes = useBucketWrites(reloadAll, setNote, setError);
   const rights = useBucketRights(gb);
   // Tasks in place: add, edit and cut a goal's features on the roadmap, each with Undo.
   const tasks = useBucketTasks({
     rows: data.rows,
     plan: read,
     may: rights.task,
-    reload: async () => {
-      await Promise.all([bucketsQ.reload(), reload()]);
-    },
+    reload: reloadAll,
     setNote,
     setError,
   });
