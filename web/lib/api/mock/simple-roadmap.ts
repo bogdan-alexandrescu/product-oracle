@@ -418,7 +418,10 @@ export function knowCompanyGoals(goals: (OrderedGoal & { key: string })[]): void
 /** kr-in-goal-card: each key result's (a subgoal's) top confirmed parent goal key, by its key, up its
  * confirmed parents at any depth (service._parent_goals, service._lane_goal). */
 let goalParents = new Map<string, string>();
-export function knowGoalParents(goals: { id: string; key: string; type: string; status: string; parent_id?: string | null }[]): void {
+/** goal-delete-r4: each Ground Truth goal's title by its key, so a key result an item is left on reads its own title (the API's goal ref). */
+let goalTitles = new Map<string, string>();
+export function knowGoalParents(goals: { id: string; key: string; title?: string; type: string; status: string; parent_id?: string | null }[]): void {
+  goalTitles = new Map(goals.flatMap((g) => (g.type === "goal" && g.title ? [[g.key, g.title] as const] : [])));
   type G = (typeof goals)[number];
   const parents = new Map(goals.filter((g) => g.type === "goal" && g.status === "confirmed").map((g) => [g.id, g]));
   const top = (g: G): G => {
@@ -513,7 +516,7 @@ export const goalInTrash = (db: Pick<SimpleDb, "goal_buckets">, key: string): bo
 export const goalArchived = (db: Pick<SimpleDb, "goal_buckets">, key: string): boolean =>
   (db.goal_buckets?.goals ?? []).some((g) => g.archived && (g.key === key || g.title.toLowerCase() === (GOALS[key] ?? PLAN_GOALS[key] ?? "").toLowerCase()));
 /** The seeded fields of a roadmap goal (a goal bucket of its key starts from them). */
-export const roadmapGoalSeed = (key: string): RoadmapGoalFields => ({ title: GOALS[key] ?? PLAN_GOALS[key], metric: METRICS[key] ?? null, target: TARGETS[key]?.[0] ?? null, due: TARGETS[key]?.[1] ?? null });
+export const roadmapGoalSeed = (key: string): RoadmapGoalFields => ({ title: GOALS[key] ?? PLAN_GOALS[key] ?? goalTitles.get(key)!, metric: METRICS[key] ?? null, target: TARGETS[key]?.[0] ?? null, due: TARGETS[key]?.[1] ?? null });
 /** The goal's fields as read: its goal bucket's (one goal store, as the API's one goal entity), else an edit, else its seed. */
 export const roadmapGoal = (db: Pick<SimpleDb, "goal_edits" | "goal_buckets">, key: string): RoadmapGoalFields => {
   const b = bucketGoalOf(db, key);
