@@ -1059,3 +1059,86 @@ async def test_a_goal_delete_moves_an_item_in_trash_too(client):
     items = await _items(client, w)
     assert items["cut-a"]["goal_ids"] == [to_id]
     assert items["cut-b"]["goal_ids"] == [own_id]
+
+
+async def _three_goals(w: World) -> dict[str, uuid.UUID]:
+    """G (the one deleted), H (archived), K (live) and T (the goal picked)."""
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        ids = {"G": uuid.UUID(w.goal_id)}
+        for name, key, pos in (("H", "calmer-nights", 2), ("K", "happier-riders", 3),
+                               ("T", "fewer-tickets", 4)):  # fmt: skip
+            ids[name] = (await seed.entity("goal", key, position=pos)).id
+        (await s.get(Entity, ids["H"])).status = "rejected"
+        await s.commit()
+    return ids
+
+
+async def _goal_ids(w: World, item: str) -> list[uuid.UUID]:
+    async with tenant_session(w.ctx.tenant_id) as s:
+        return list((await s.get(RoadmapItem, uuid.UUID(w.ids[item]))).goal_ids or [])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("order", ["GHK", "GKH", "HGK", "HKG", "KGH", "KHG"])
+async def test_restore_of_a_goal_gives_three_goals_back_in_their_order(client, order):
+    """protects=an item that serves the deleted goal G, an archived H and a live K, in any
+    order: Delete G with a goal picked, then Restore G, and its goals read exactly as before;
+    fails_when=the live goal stays first or G comes back at its old index among the moved
+    ones; no_claim=a goal given to the item since (the merge, next test)."""
+    w = await _world()
+    g = await _three_goals(w)
+    was = [g[c] for c in order]
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(RoadmapItem, uuid.UUID(w.ids["cut-a"]))).goal_ids = was
+        await s.commit()
+    r = await client.delete(f"{BUCKETS}/goals/{g['G']}", params={"to_goal_id": str(g["T"])},
+                            headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert g["G"] not in await _goal_ids(w, "cut-a")
+    r = await client.post(f"{BUCKETS}/goals/{g['G']}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert await _goal_ids(w, "cut-a") == was
+
+
+@pytest.mark.asyncio
+async def test_restore_of_a_goal_merges_into_an_item_edited_since(client):
+    """protects=an item whose goals changed after the delete keeps the change, and G goes
+    back at its old place; fails_when=Restore puts back the old list over the edit;
+    no_claim=features' links."""
+    w = await _world()
+    g = await _three_goals(w)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(RoadmapItem, uuid.UUID(w.ids["cut-a"]))).goal_ids = [g["G"], g["H"], g["K"]]
+        await s.commit()
+    r = await client.delete(f"{BUCKETS}/goals/{g['G']}", params={"to_goal_id": str(g["T"])},
+                            headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(RoadmapItem, uuid.UUID(w.ids["cut-a"]))).goal_ids = [g["H"], g["K"], g["T"]]
+        await s.commit()
+    r = await client.post(f"{BUCKETS}/goals/{g['G']}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert await _goal_ids(w, "cut-a") == [g["G"], g["H"], g["K"], g["T"]]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("how", ["archive", "delete"])
+async def test_an_item_left_with_only_an_archived_goal_reads_no_goal(client, how):
+    """protects=an item serving G and an archived H, whose G is archived to no goal (or
+    deleted), reads No goal on the roadmap and in its panel while keeping H in goal_ids for
+    Undo; fails_when=the archived H shows as its goal; no_claim=Priorities (its own test)."""
+    w = await _world()
+    g = await _three_goals(w)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(RoadmapItem, uuid.UUID(w.ids["cut-a"]))).goal_ids = [g["G"], g["H"]]
+        await s.commit()
+    if how == "archive":
+        r = await client.post(f"{BUCKETS}/goals/{g['G']}/archive", headers=w.ctx.as_("owner"),
+                              json={"to_goal_id": None})  # fmt: skip
+    else:
+        r = await client.delete(f"{BUCKETS}/goals/{g['G']}", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    item = (await _items(client, w))["cut-a"]
+    assert item["goal"] is None
+    assert str(g["H"]) in item["goal_ids"]

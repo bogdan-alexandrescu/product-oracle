@@ -62,3 +62,25 @@ async def test_rows_drafts_and_unranked_carry_every_goal_of_the_item(client):
     assert {r["code"]: r["goal_ids"] for r in out["rows"]}["pay-1"] == want
     assert {d["code"]: d["goal_ids"] for d in out["drafts"]}["pay-5"] == want
     assert {u["code"]: u["goal_ids"] for u in out["unranked"]}["pay-6"] == want
+
+
+async def test_an_item_left_with_only_an_archived_goal_reads_no_goal(client):
+    """protects=an item serving growth and an archived retention, whose growth is archived
+    to no goal, reads No goal in Priorities (as the dialog counted it) while keeping
+    retention in ``goal_ids`` for Undo; fails_when=the archived goal shows as its goal;
+    no_claim=the roadmap (its own test)."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    async with tenant_session(ctx.tenant_id) as s:
+        goals = {e.key: e for e in await s.scalars(select(Entity).where(Entity.type == "goal"))}
+        goals["retention"].status = "rejected"
+        both = [goals["growth"].id, goals["retention"].id]
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "pay-6"))
+        row.goal_ids = both
+        await s.commit()
+    r = await client.post(f"/v1/simple/goal-buckets/goals/{both[0]}/archive",
+                          headers=ctx.as_("owner"), json={"to_goal_id": None})  # fmt: skip
+    assert r.status_code == 200, r.text
+    un = {u["code"]: u for u in (await w.read(client))["unranked"]}["pay-6"]
+    assert un["goal"] is None
+    assert un["goal_ids"] == [str(both[1])]
