@@ -39,16 +39,18 @@ test("a move to another goal's milestone that fails leaves the feature on its mi
   // no milestone or in the other goal; no_claim=the API's own rollback.
   await open(page);
   const goal1 = await page.getByTestId("gm-goal").first().getAttribute("data-goal");
+  // F-03 serves Goal 2 too, so it has a chip there as well: this is Goal 1's.
   const inGoal1 = () => page.locator(`[data-testid="gm-cell"][data-goal="${goal1}"]`).filter({ has: chip(page, "F-03") });
-  await expect(chip(page, "F-03")).toContainText("Weekly active teams first measured");
+  const own = () => page.locator(`[data-testid="gm-cell"][data-goal="${goal1}"]`).getByTestId("gm-chip").filter({ hasText: /F-03(?!\d)/ });
+  await expect(own()).toContainText("Weekly active teams first measured");
   await page.evaluate(([k, v]) => localStorage.setItem(k, v), [MOCK_FAIL_ONCE_KEY, "POST /v1/simple/goal-map/links/move"] as const);
-  await menu(page, chip(page, "F-03"), "Move to…");
+  await menu(page, own(), "Move to…");
   await page.getByTestId("gm-mover").getByRole("button", { name: /Imports finish without help/ }).click();
   await expect(page.getByRole("status").filter({ hasText: "Mock failure" })).toBeVisible();
-  await expect(chip(page, "F-03")).toContainText("Weekly active teams first measured");
+  await expect(own()).toContainText("Weekly active teams first measured");
   await expect(inGoal1()).toHaveCount(1);
   await page.reload();
-  await expect(chip(page, "F-03")).toContainText("Weekly active teams first measured");
+  await expect(own()).toContainText("Weekly active teams first measured");
   await expect(inGoal1()).toHaveCount(1);
 });
 

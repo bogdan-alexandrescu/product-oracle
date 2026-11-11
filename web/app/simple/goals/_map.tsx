@@ -208,7 +208,7 @@ function featureMenu(f: Chip, c: Ctx) {
   const name = `${c.codes.get(f.id) ?? ""} ${f.name}`.trim();
   return (
     <Menu
-      k={`f-${f.id}`}
+      k={`f-${f.goal}-${f.id}`}
       label={name}
       c={c}
       items={[{ w: "Open", on: () => c.onOpen(f) }, ...(c.map.can_edit ? [{ w: "Move to…", on: () => c.setMover(f) }, { w: "Move to Trash", on: () => void c.act.trashFeature(f), crit: true }] : [])]}
