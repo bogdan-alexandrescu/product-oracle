@@ -29,6 +29,7 @@ Test cards (protects / fails_when / no_claim):
 
 import re
 import time
+import uuid
 from typing import Any
 
 import pytest
@@ -111,6 +112,44 @@ async def test_waiting_reads_no_statement_per_row(client, company):
         assert len(body["items"]) > 500
         print(f"{role}: {n} statements, {len(body['items'])} items")
         assert n <= MAX_STATEMENTS, n
+
+
+async def goals_on_no_roadmap(ctx, n: int) -> None:
+    """``n`` more confirmed goals on no roadmap, each with an open suggestion."""
+    from oracle.baseline.models import Entity
+    from oracle.simple.models import SimpleGoalSuggestion
+
+    async with tenant_session(ctx.tenant_id) as s:
+        for _ in range(n):
+            key = uuid.uuid4().hex[:8]
+            goal = Entity(type="goal", key=f"goal-{key}", title=f"Goal {key}", status="confirmed",
+                          origin="user")  # fmt: skip
+            s.add(goal)
+            await s.flush()
+            s.add(SimpleGoalSuggestion(goal_id=goal.id, title=f"Feature for {key}",
+                                       outcome="Faster setup", evidence=[],
+                                       origin="auto"))  # fmt: skip
+        await s.commit()
+
+
+async def test_waiting_reads_first_roadmap_once(client):
+    """With no company roadmap, the goals on no roadmap file under the company's first
+    roadmap: read once per request, not once per such goal."""
+    from oracle.docs.models import Document
+
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(Document(slug="roadmap-only", title="Example roadmap", kind="roadmap",
+                       status="approved", visibility="company"))  # fmt: skip
+        await s.commit()
+    counts = []
+    for more in (1, 3):
+        await goals_on_no_roadmap(ctx, more)
+        await read(client, ctx.as_("owner"))
+        n, _, body = await read(client, ctx.as_("owner"))
+        assert sum(i["kind"] == "goal_suggestion" for i in body["items"]) == len(counts) * 3 + 1
+        counts.append(n)
+    assert counts[1] == counts[0], counts
 
 
 async def token(ctx, name: str, user: str | None, scope: str | None = None) -> dict:
