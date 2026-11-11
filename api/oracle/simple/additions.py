@@ -1063,11 +1063,16 @@ _ACTIVE = object()
 
 
 async def _job_document(
-    db: AsyncSession, goal: Entity, read_: service.Read | None = None, active: Any = _ACTIVE
+    db: AsyncSession,
+    goal: Entity,
+    read_: service.Read | None = None,
+    active: Any = _ACTIVE,
+    first: dict[str, Document | None] | None = None,
 ) -> Document | None:
     """The roadmap a goal's suggestions job is filed under (and whose decider decides its
     suggestions): the company roadmap while there is one, else one holding its items, else
-    the company's first roadmap. ``active``: company.active, when the caller read it."""
+    the company's first roadmap. ``active``: company.active, when the caller read it;
+    ``first``: where a caller asking for several goals keeps the first roadmap, read once."""
     if active is _ACTIVE:
         active = await company.active(db)
     if active is not None:
@@ -1076,9 +1081,14 @@ async def _job_document(
     for e in read_.entries:
         if e.goal is not None and e.goal.id == goal.id:
             return e.roadmap
-    return await db.scalar(
+    if first is not None and "doc" in first:
+        return first["doc"]
+    doc = await db.scalar(
         select(Document).where(Document.kind == "roadmap").order_by(Document.created_at).limit(1)
     )
+    if first is not None:
+        first["doc"] = doc
+    return doc
 
 
 async def _enqueue_suggestions(
@@ -1331,7 +1341,8 @@ async def deciding(
     them (the first of _route: the decider, else its approving owners, else the company's
     owners; None without ``who``, for a caller that never names them: the waiting list)."""
     active = await company.active(db) if goals else None
-    docs = {g.id: await _job_document(db, g, read_, active) for g in goals}
+    first: dict[str, Document | None] = {}
+    docs = {g.id: await _job_document(db, g, read_, active, first) for g in goals}
     w = await drafts.who(db, {d.id for d in docs.values() if d is not None})
     routes: dict[uuid.UUID, uuid.UUID | None] = {}
     out: dict[uuid.UUID, tuple[bool, uuid.UUID | None]] = {}

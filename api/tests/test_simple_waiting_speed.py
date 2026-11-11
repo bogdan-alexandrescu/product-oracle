@@ -17,6 +17,9 @@ Test cards (protects / fails_when / no_claim):
   read, which reads each PRD's questions in once) stay under MAX_STATEMENTS with several
   hundred waiting items (any per-row read passes it many times
   over); fails_when=a source reads per item, change or suggestion; no_claim=wall-clock time.
+- test_waiting_reads_first_roadmap_once: protects=with no company roadmap, the list reads the
+  company's first roadmap once for all goals on no roadmap (1 such goal, then 4: the same
+  statement count); fails_when=it is read once per such goal; no_claim=the Inbox's rows.
 - test_waiting_says_what_it_said_before: protects=for every role, a roadmap's decider, its
   required reviewer, a track owner, an approver track owner deciding a roadmap with no
   decider, a member's API token, a read-only one and a service token, the response is
