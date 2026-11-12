@@ -36,6 +36,12 @@ Test cards (protects / fails_when / no_claim):
   result to its top goal;
   fails_when=only direct key results count and the item stays on the nested one;
   no_claim=direct key results (test_archive_counts_no_key_result_of_the_goal_as_live).
+- test_list_leaves_out_a_key_result_under_a_goal_gone: protects=the goal buckets list a
+  key result (at any depth) only while the walk up its parents reaches a top goal, as
+  Archive's move_items_off counts one live: one under an archived goal or a goal in Trash
+  is left out (and no feature lists it), one under a live or proposed goal is listed;
+  fails_when=a key result of a goal in Trash or an archived goal lists as a live goal, so
+  the Archive dialog says an item goes there while Archive moves it; no_claim=the web.
 - test_move_feature_and_undo: protects=moving a feature makes the new goal its first
   link and drops the old one; Undo restores both links; a viewer gets 403;
   fails_when=the old link stays or the new one is not first; no_claim=the web's drag.
@@ -285,6 +291,41 @@ async def test_archive_counts_no_nested_key_result_of_the_goal_as_live(client, p
     async with tenant_session(w.ctx.tenant_id) as s:
         goals = list((await s.get(RoadmapItem, item_id)).goal_ids or [])
     assert goals == ([to, kr_id] if pick else [kr_id])
+
+
+@pytest.mark.parametrize("under", ["grow", "proposed", "archived", "trashed"])
+async def test_list_leaves_out_a_key_result_under_a_goal_gone(client, under):
+    w = await World().build()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        top = uuid.UUID(w.goals["grow"])
+        if under != "grow":
+            parent = await seed.entity("goal", "parent")
+            if under == "proposed":
+                parent.status = "proposed"
+            elif under == "archived":
+                parent.status = "rejected"
+            else:
+                parent.deleted_at = datetime.now(UTC)
+            top = parent.id
+        kr1 = await seed.entity("goal", "kr-1")
+        kr1.parent_id = top
+        kr2 = await seed.entity("goal", "kr-2")
+        kr2.parent_id = kr1.id
+        feature = await seed.entity("feature", "on-kr")
+        await seed.supports(feature, kr2)
+        await s.commit()
+        krs = {str(kr1.id), str(kr2.id)}
+
+    out = await w.read(client)
+    listed = {g["id"] for g in out["goals"]}
+    on_kr = next(f for f in out["features"] if f["key"] == "on-kr")
+    if under in ("grow", "proposed"):
+        assert krs <= listed
+        assert on_kr["goal_ids"] == [str(kr2.id)]
+    else:
+        assert not krs & listed
+        assert on_kr["goal_ids"] == []
 
 
 @pytest.mark.asyncio
