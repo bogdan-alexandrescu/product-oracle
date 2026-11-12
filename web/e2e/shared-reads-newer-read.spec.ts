@@ -7,7 +7,8 @@ import { expect, test } from "./test";
  * Runs the module in Node with a stand-in window and transport; no page.
  *
  * fails_when = a read after the first try failed answers that failure (or fetches a third time) while the
- * newer read is still on its way, or the callers waiting on the first try get its failure.
+ * newer read is still on its way, or the callers waiting on the first try get its failure, or a newer read's
+ * failure when a read begun after it gives an answer.
  */
 
 type Pending = { req: Request; answer: (res: Response) => void; fail: (err: Error) => void };
@@ -63,4 +64,23 @@ test("a first read that fails after a newer read began gives the newer read's fa
   calls[1]!.fail(new Error("newer try lost"));
   await expect(first).rejects.toThrow("newer try lost");
   await expect(next).rejects.toThrow("newer try lost");
+});
+
+test("a first read that fails gives way to the newest read, even one begun after it failed", async () => {
+  const { read, calls } = await setup();
+  const first = read(new Request(URL_A));
+  read(new Request(URL_A, { cache: "no-store" })).catch(() => undefined);
+  calls[0]!.fail(new Error("first try lost"));
+  await settle();
+  // A third read begins after the first failed, while the second is still on its way.
+  const newest = read(new Request(URL_A, { cache: "no-store" }));
+  expect(calls).toHaveLength(3);
+
+  calls[1]!.fail(new Error("second try lost"));
+  calls[2]!.answer(json({ count: 3 }));
+  for (const res of [first, newest]) {
+    const r = await res;
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ count: 3 });
+  }
 });
