@@ -290,9 +290,12 @@ def live_block(sources: list[Any]) -> str:
         ),
         "Every tool result carries cite.ref (l:1, l:2, ...). Cite every fact you take from "
         "a tool result with its ref as [l:n], for example [l:1]. Never state a count, a "
-        "meeting or any detail of one that did not come from a tool result in this answer; "
-        f'when a tool answers with an error, say only "{plan_ctx.SOURCE_DOWN}", never its '
-        "code or the source's name.",
+        "meeting or any detail of one that did not come from a tool result in this answer. "
+        # The errors table (#710): a refused read says what to do (reconnect, ask a
+        # narrower question); only a source that is down is the plain line (2026-10-27).
+        "When a tool answers with an error, give the asker its detail sentence as written, "
+        "since it says what to do, never its HTTP code; when it answers "
+        f'"{plan_ctx.SOURCE_DOWN}", say only that.',
     ]
     return "\n".join(lines)
 
