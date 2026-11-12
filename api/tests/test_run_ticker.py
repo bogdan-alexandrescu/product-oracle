@@ -23,7 +23,7 @@ from sqlalchemy.pool import NullPool
 from oracle.auth import jwks
 from oracle.claude_accounts import sweep as claude_sweep
 from oracle.claude_accounts import usage
-from oracle.claude_accounts.models import ClaudeSweepLease
+from oracle.claude_accounts.models import ClaudeAccountHold, ClaudeSweepLease
 from oracle.config import get_settings
 from oracle.db import get_engine
 from oracle.jobs import kinds
@@ -786,7 +786,10 @@ async def test_a_job_is_never_cut_mid_call_by_the_tick(client, ticker_on, claude
     # Only jobs that could finish inside the tick were claimed; the rest wait, unclaimed.
     assert "running" not in statuses
     assert out["llm_jobs"]["ran"] == statuses.count("succeeded") == 2
-    assert statuses.count("queued") == 3
+    queued = [j for j in await _jobs(tenant_id) if j.status == "queued"]
+    assert len(queued) == 3
+    # Never claimed, not claimed and given back: none of them started.
+    assert [(j.started_at, j.attempts) for j in queued] == [(None, 0)] * 3
 
 
 async def test_no_job_is_claimed_when_less_than_a_call_remains(
@@ -983,7 +986,7 @@ async def test_a_job_swaps_to_no_account_it_has_no_time_left_for(
     client, ticker_on, claude, monkeypatch
 ):
     tenant_id = await _backlog(client, 1)
-    await add_account(tenant_id, "spare", windows={"five_hour": window(0.3)})
+    spare = await add_account(tenant_id, "spare", windows={"five_hour": window(0.3)})
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 1.0)
     monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 1.6)
     # The call takes 0.7 s of a clock that moves only by the calls: under load the tick's
@@ -1001,6 +1004,12 @@ async def test_a_job_swaps_to_no_account_it_has_no_time_left_for(
     assert out["llm_jobs"]["retried"] == 1
     [job] = await _jobs(tenant_id)
     assert (job.status, job.attempts) == ("queued", 1)
+    # No swap was made: the hold stayed on the first account, and the spare took none.
+    assert (job.account_label, job.via) == ("personal", "account")
+    async with tenant_session(tenant_id) as s:
+        holds = list(await s.scalars(select(ClaudeAccountHold)))
+    assert holds and str(spare.account_id) not in {str(h.account_id) for h in holds}
+    assert [(h.swapped_from, h.swapped_to) for h in holds] == [(None, None)] * len(holds)
 
 
 async def test_no_job_runs_with_a_limit_of_zero(client, ticker_on, claude, monkeypatch):
