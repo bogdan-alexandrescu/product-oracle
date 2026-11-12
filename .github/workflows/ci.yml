@@ -179,8 +179,8 @@ jobs:
           name: e2e-results
           path: web/test-results/
 
-  # BGD, Nov 6, 2026 ("Move it to CI, sharded"): a train's or hotfix's pull request runs the whole
-  # mock-backed Playwright suite here, split 8 ways on the runner pool, instead of on CLD's laptop.
+  # BGD, Nov 6, 2026 ("Move it to CI, sharded"), and Nov 12 (CI on main pushes only): every push to
+  # main runs the whole mock-backed Playwright suite here, split 8 ways on the runner pool.
   # Each shard builds the mock app once, then runs its share with the e2e/ci.env settings.
   mock-e2e:
     runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
