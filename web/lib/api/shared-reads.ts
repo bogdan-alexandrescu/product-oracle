@@ -10,7 +10,8 @@
  *   (up to STALE_MS), it takes the last answer at once and reads it again behind it.
  * - A read that must see what is there now (`cache: "no-store"` or "reload": Publish's check for a
  *   newer version, opening Recent chats) never takes a shared answer, nor a read begun before it: it
- *   fetches, and its answer is shared from then on.
+ *   fetches, and its answer is shared from then on. A read begun before it that then fails is never the shared
+ *   answer: whoever waits on it gets the newer read's answer, or its failure.
  * - Any answer that differs from the one shared before it says so (`onReadChanged`), so what
  *   shows an older answer reads it again.
  * - Any write (a non-GET, or a GET that marks something seen) drops every shared answer, and
@@ -58,6 +59,16 @@ export function forgetReads() {
   generation += 1;
   entries.clear();
   marks.clear();
+}
+
+/**
+ * Drops the shared answers of `path` and below it (`/v1/discussions/<id>`: the discussion, its messages, ...),
+ * and those on their way, without telling anyone: the next read of each fetches; every other answer stays.
+ */
+export function forgetReadsOf(path: string) {
+  const under = (key: string) => key.startsWith(path) && /^($|[/?\n])/.test(key.slice(path.length));
+  for (const key of [...entries.keys()]) if (under(key)) entries.delete(key);
+  for (const key of [...marks.keys()]) if (under(key)) marks.delete(key);
 }
 
 // A change said to the whole page (use-query's dataChanged, a chat card's sendCardChanged)
@@ -160,6 +171,24 @@ export function sharedReads(base: (req: Request) => Promise<Response>): (req: Re
   };
 }
 
+/**
+ * A first read's answer, the one shared while it is on its way: if it fails once a newer read of it began (a
+ * no-store read), the newer read's answer or its failure instead, so a failed first try never stays the answer.
+ */
+function orNewer(res: Promise<Response>, entry: Entry): Promise<Response> {
+  const newer = () => {
+    const n = entry.next ?? entry.res;
+    return n && n !== res && n !== shared ? n : null;
+  };
+  const shared: Promise<Response> = res.then(
+    (r) => (r.ok ? r : (newer() ?? r)),
+    (err) => newer() ?? Promise.reject(err),
+  );
+  // Nobody may wait on it: its failure is still handled (each caller's copy has its own).
+  shared.catch(() => undefined);
+  return shared;
+}
+
 function fetchShared(base: (req: Request) => Promise<Response>, req: Request, key: string): Promise<Response> {
   const gen = generation;
   // One caller aborting (the rail leaving a page) never aborts the read the others share.
@@ -168,7 +197,9 @@ function fetchShared(base: (req: Request) => Promise<Response>, req: Request, ke
   const mark = marks.get(key);
   marks.delete(key);
   const entry: Entry = entries.get(key) ?? { at: mark?.at ?? null, res: null, body: mark?.body ?? null, next: null };
-  if (!entry.res) entry.res = res;
+  // What its callers wait on: a failed first try gives way to a newer read of it.
+  const answer = orNewer(res, entry);
+  if (!entry.res) entry.res = answer;
   entry.next = res;
   entries.set(key, entry);
   // The URL as listeners know it (onReadChanged, onReadFailed): the key without its headers.
@@ -211,5 +242,5 @@ function fetchShared(base: (req: Request) => Promise<Response>, req: Request, ke
     },
     failed,
   );
-  return res;
+  return answer;
 }
