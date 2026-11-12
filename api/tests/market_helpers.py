@@ -3,6 +3,7 @@ fetcher (LinkFetcher with a mock transport and resolver, so its guards run), mad
 alternatives on ``.example`` hosts, and a ready digest occurrence."""
 
 import asyncio
+import time
 import uuid
 from dataclasses import dataclass, field
 
@@ -31,6 +32,8 @@ class FakeWeb:
     slow: set[str] = field(default_factory=set)
     # host -> never answer (the fetcher's own time cap ends the read)
     hang: set[str] = field(default_factory=set)
+    # seconds each never-answering request waited before the fetcher cut it off
+    hung: list[float] = field(default_factory=list)
     requests: list[str] = field(default_factory=list)
 
     def page(self, url: str, body: str, status: int = 200, kind: str = "text/html") -> None:
@@ -46,9 +49,12 @@ class FakeWeb:
         status, body, kind = self.pages.get(url, (404, "not found", "text/plain"))
         return httpx.Response(status, text=body, headers={"content-type": kind})
 
-    @staticmethod
-    async def _never() -> httpx.Response:
-        await asyncio.sleep(3600)
+    async def _never(self) -> httpx.Response:
+        began = time.monotonic()
+        try:
+            await asyncio.sleep(3600)
+        finally:
+            self.hung.append(time.monotonic() - began)
         raise AssertionError("unreachable")
 
     def fetcher(self) -> LinkFetcher:
