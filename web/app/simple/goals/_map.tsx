@@ -606,16 +606,21 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
         <span />
         {goals.map((g) => (
           <div key={g.id} data-goal={g.id} data-testid="gm-goal" className="group flex flex-col gap-1 rounded-2xl border border-line bg-surface p-3">
-            <div className="flex items-center gap-2">
-              <span className="text-[24px] leading-none font-bold">{num(g.target, g.unit)}</span>
-              <span className="ml-auto flex items-center gap-1">
-                <Status s={g.status} {...goalFix(g, all.filter((m) => m.goal === g.id), c)} />
+            {/* One row when it fits; else the target wraps beside the (i) and ⋯ (floated top right, so never pushed
+                out) and the status moves under it, still on the right. Lines as tall as the target's glyphs, so a
+                status under it never meets them; -3px so the row takes the room it did. */}
+            <div className="-my-[3px] flow-root">
+              <span className="float-right ml-1 flex h-[30px] items-center gap-1">
                 <GoalInfo g={g} krs={lines.get(g.id) ?? []} />
                 {goalMenu(
                   g,
                   all.filter((m) => m.goal === g.id),
                   c,
                 )}
+              </span>
+              <span className="text-[24px] leading-[30px] font-bold">{num(g.target, g.unit)}</span>
+              <span className="float-right ml-2 flex h-[30px] items-center">
+                <Status s={g.status} {...goalFix(g, all.filter((m) => m.goal === g.id), c)} />
               </span>
             </div>
             {c.renaming === g.id ? (
