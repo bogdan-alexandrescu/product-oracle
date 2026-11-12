@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 import { shortDay, sourceWord, spanWords } from "@/app/simple/roadmap/_lib";
-import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
+import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
 import { api, unwrap } from "@/lib/api/client";
 import { applyCard, CORRECT_FIELDS, discardCard, FLOW_OPS, isActionPreview, sendApplied, sendCardChanged, sendPreview, undoCard, type ActionPreview, type ChatCard as Card, type ChatPreview } from "@/lib/api/simple-chat";
 import { useMe } from "@/lib/me";
@@ -129,7 +129,6 @@ export function ChatCard({
   const [previewing, setPreviewing] = useState(false);
   // A chat action's Preview: its description, shown in the card.
   const [described, setDescribed] = useState(false);
-  const [wide, setWide] = useState(false);
   const [routedTo, setRoutedTo] = useState<string[] | null>(null);
   // roadmap-talk: Correct opens the card's fields, prefilled with Oracle's reading.
   const [fields, setFields] = useState<Record<string, string> | null>(null);
@@ -264,20 +263,15 @@ export function ChatCard({
           ))}
         </ul>
       )}
-      {FLOW_OPS.has(card.op) && (
-        <div className="flex flex-col gap-2">
-          {card.flow ? (
-            <button type="button" aria-label={`Open the flow for ${card.flow.title}`} aria-expanded={wide} onClick={() => setWide((w) => !w)} className="self-start rounded-md border border-line bg-surface p-1" data-testid="flow-thumb">
-              <FlowThumb flow={card.flow} />
-            </button>
-          ) : (
-            <span className="self-start rounded-md border border-dashed border-line px-2 py-1 text-text2 simple-small" data-testid="flow-none">
-              No flow yet
-            </span>
-          )}
-          {wide && card.flow && <FlowDetail flow={card.flow} />}
-        </div>
-      )}
+      {FLOW_OPS.has(card.op) &&
+        (card.flow ? (
+          // S10: the card's flow is its chat_card visual, in the one flow viewer (pick A's row).
+          <FlowPanel row subject={subjectOf(card.flow) ?? { kind: "chat_card", id: card.id }} openLabel={`Open the flow for ${card.flow.title}`} showHint={false} />
+        ) : (
+          <span className="self-start rounded-md border border-dashed border-line px-2 py-1 text-text2 simple-small" data-testid="flow-none">
+            No flow yet
+          </span>
+        ))}
       {open && described && action && (
         <div className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-dashed border-line px-2 py-1.5 [overflow-wrap:anywhere]" data-testid="chat-card-preview" data-kind={action.kind}>
           {actionWords(action).map((line, n) => (

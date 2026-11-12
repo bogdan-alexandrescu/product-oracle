@@ -13,7 +13,7 @@
  * Undo) or rejects.
  */
 import type { Schemas } from "@/lib/api/client";
-import { plainFlow } from "./simple-visuals";
+import { bundleFlow, plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { newCompany, stableUuid } from "./ids";
 import { canEditRoadmap, closed, GOALS, goalId, goalOrderKey, goalPositionOf, knowTalkGoals, MAP_GOALS, mapGoalRef, roadmapId, lookalikes, matchesOf, TALK_GOALS, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
@@ -209,7 +209,7 @@ function out(db: SimpleDb, s: GoalSuggestionRow, ctx: Ctx): Schemas["SimpleGoalS
   return {
     id: s.id, goal: { id: idOf(db, ctx, s.goal), key: s.goal, title: titleOf(db, ctx, s.goal) }, title: s.title, outcome: s.outcome, why: s.why, evidence: s.evidence,
     status: s.status, reason: s.reason, origin: s.origin, created_at: s.created_at, decided_by_name: s.decided_by_name, decided_at: s.decided_at,
-    change_id: s.change_id, item_id: s.item_id, looks_like: open ? matchesOf(db, lookalikes(db, s.title, null)) : [], flow: s.flow,
+    change_id: s.change_id, item_id: s.item_id, looks_like: open ? matchesOf(db, lookalikes(db, s.title, null)) : [], flow: bundleFlow(db.visuals, "suggestion", s.id, s.flow),
     proposed_by_name: s.proposed_by ? (ctx.names[s.proposed_by] ?? null) : null,
     can_accept: open && decides,
     can_reject: open && decides,

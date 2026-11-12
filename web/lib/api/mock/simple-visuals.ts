@@ -286,6 +286,28 @@ export function flowFor(db: VisualsDb | undefined, kind: string, id: string): Fl
   return cleanFlow(v?.versions.at(-1) ?? null);
 }
 
+/** A flow another mock writes as a plain bundle (a chat card's, a goal suggestion's, a meeting's
+ * decided draft item's): Oracle drew it with its subject (request_visual), so its visual holds the
+ * bundle as version 1, with numbered notes; the newest drawing as the API's flow_for serves it. */
+export function bundleFlow(db: VisualsDb | undefined, kind: string, id: string, f: Flow | null): Flow | null {
+  if (!f) return null;
+  if (!db) return { ...f, subject_kind: kind, subject_id: id };
+  if (!db.visuals[`${kind}:${id}`]) {
+    const steps = f.steps.map((label, i) => step(`s${i + 1}`, label, null, i === 0 ? "same" : "new"));
+    add(db, kind, id, f.title, flowOf(kind, id, 1, 1, {
+      title: f.title,
+      goal: f.goal ?? f.title,
+      steps,
+      screen: f.screen,
+      notes: [
+        { n: 1, target: steps[1]?.id ?? "s1", note: "The new step it adds", section_key: null, requirement: null },
+        { n: 2, target: "r2", note: "Where it shows on the screen", section_key: null, requirement: null },
+      ],
+    }));
+  }
+  return flowFor(db, kind, id);
+}
+
 /** The one-pager's shape of a flow. */
 export function onePagerFlow(f: Flow | null): Schemas["OnePagerFlow"] | null {
   return f ? { title: f.title, steps: f.steps, screen: f.touches_screen ? f.screen.title : null, subject_kind: f.subject_kind, subject_id: f.subject_id, version: f.version } : null;

@@ -12,7 +12,7 @@ import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { reloadWaiting } from "@/lib/waiting";
 
-import { FlowDetail } from "./Flow";
+import { FlowPanel, subjectOf } from "./FlowVisual";
 
 /**
  * Simple S7: Oracle's suggested features for a goal, wherever a goal shows (the roadmap's
@@ -281,13 +281,13 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
       {wide && !phone && s.flow && (
         // qa-simple-plan-36: the opened flow scrolls into view.
         <div ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })} data-testid="flow-detail-wrap">
-          <FlowDetail flow={s.flow} />
+          <FlowPanel subject={subjectOf(s.flow) ?? { kind: "suggestion", id: s.id }} />
         </div>
       )}
       {phone && s.flow && (
         <Sheet open={wide} title={s.flow.title} onClose={() => setWide(false)} full testId="flow-sheet">
           <div className="p-4">
-            <FlowDetail flow={s.flow} />
+            <FlowPanel subject={subjectOf(s.flow) ?? { kind: "suggestion", id: s.id }} />
           </div>
         </Sheet>
       )}

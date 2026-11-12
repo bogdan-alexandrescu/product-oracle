@@ -5,12 +5,12 @@ import { expect, test, type BrowserContext, type Page } from "./test";
 /**
  * Simple S8 (#723), the review's finding: each decided flow is linked. A meeting decides a
  * proposal for a new feature (the draft item "Team invite nudges"); the end screen and the
- * Decisions page show its flow thumbnail, which widens in place (a full-height sheet on a
- * phone), or "No flow yet" while S10 has drawn none. On the mock's invented data; the
+ * Decisions page show its flow thumbnail, which opens S10's flow viewer (a full-height sheet
+ * on a phone), or "No flow yet" while S10 has drawn none. On the mock's invented data; the
  * mock's "flow" flag stands for S10's bundle being drawn.
  *
  * Card meeting-decided-flow: protects = a decision on a new flow carries its flow thumbnail
- * on the end screen (widened: the user flow and the wireframe) and on the Decisions page;
+ * on the end screen (opened: the user flow and the wireframe) and on the Decisions page;
  * "No flow yet" without one; a decision on a planned item shows neither; fails_when = the
  * decided flow is not linked; no_claim = how S10 draws the flow.
  */
@@ -50,14 +50,12 @@ for (const phone of [false, true]) {
       await expect(taken(page, "Moved Setup checklist").getByTestId("flow-thumb")).toHaveCount(0);
       await expect(taken(page, "Moved Setup checklist").getByTestId("flow-none")).toHaveCount(0);
       await row.getByRole("button", { name: "Open the flow for Team invite nudges" }).click();
-      const detail = phone ? page.getByTestId("flow-sheet") : row;
-      await expect(detail.getByTestId("flow-detail")).toContainText("User flow: Invite your team");
-      await expect(detail.getByRole("img", { name: "Wireframe of Invite step" })).toBeVisible();
-      if (!phone) await expect(row).toHaveAttribute("data-wide", "true");
-      else {
-        await page.keyboard.press("Escape");
-        await expect(page.getByTestId("flow-sheet")).toBeHidden();
-      }
+      // S10's one flow viewer: across the page on a desktop, a full-height sheet on a phone.
+      const detail = page.getByTestId("flow-detail");
+      await expect(detail).toContainText("Invite your team · flow");
+      await expect(detail.getByRole("img", { name: /^Wireframe of Invite step/ })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(detail).toHaveCount(0);
 
       await page.getByRole("region", { name: "Delivery" }).getByRole("button", { name: "Send" }).click();
       await page.getByRole("link", { name: "Open the Decisions page" }).click();

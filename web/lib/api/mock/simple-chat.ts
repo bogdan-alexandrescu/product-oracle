@@ -17,7 +17,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { goalFigure } from "@/lib/goal-figure";
-import { plainFlow } from "./simple-visuals";
+import { bundleFlow, plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, stableUuid } from "./ids";
@@ -1846,7 +1846,7 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   // walkc-meeting r2 (chat.cards_out): a proposed card whose proposal was declined since reads as declined, by whom and when.
   const no = c.status === "proposed" && c.change_id ? db.changes?.find((x) => x.id === c.change_id && x.status === "declined") : undefined;
   const declined = no ? { status: "declined" as const, decided_by_name: no.decided_by ? (ctx.names[no.decided_by] ?? "someone") : null, decided_at: no.decided_at ?? null } : {};
-  return { change_words: null, correct: null, ...rest, ...declined, ...may, ...asksOut, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx), replaced_by: replacedBy(chat, c), ...(c.status === "open" && replacedBy(chat, c) ? { correct: null } : {}) };
+  return { change_words: null, correct: null, ...rest, flow: bundleFlow(db.visuals, "chat_card", c.id, c.flow), ...declined, ...may, ...asksOut, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx), replaced_by: replacedBy(chat, c), ...(c.status === "open" && replacedBy(chat, c) ? { correct: null } : {}) };
 }
 
 function rulesOut(m: Meeting, ctx: ChatCtx) {

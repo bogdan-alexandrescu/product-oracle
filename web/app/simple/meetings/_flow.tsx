@@ -1,14 +1,11 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
-import { Sheet } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
 import { formatInZone } from "@/lib/dates";
 
-import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
-
-import { usePhone } from "../priorities/priorities";
+import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
 
 /** qa-simple-decide-30: the one link style of Meetings, a meeting and Decisions. */
 export const LINK = "font-semibold text-accent-ink hover:underline";
@@ -28,37 +25,24 @@ export function momentWords(at: string, zone: string, day = false, zoned = false
 
 /**
  * A decision in a list, with the new flow or feature it decided (S8: each decided flow is
- * linked): train T's flow thumbnail widens the row in place to the user flow and the
- * wireframe (a full-height sheet on a phone), or "No flow yet" while S10 has drawn none.
+ * linked): its flow in S10's one flow viewer (pick A's row: the thumbnail opens it across the
+ * page, a full-height sheet on a phone), or "No flow yet" while S10 has drawn none.
  */
 export function DecidedItem({ flow, id, className, testId, children }: { flow?: Schemas["SimpleDecidedFlow"] | null; id?: string; className?: string; testId?: string; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const phone = usePhone();
   const drawn = flow?.flow ?? null;
-  const wide = open && !phone && !!drawn;
   return (
-    <li id={id} data-testid={testId} data-wide={wide ? "true" : "false"} className={`flex flex-wrap items-center gap-2 ${className ?? ""}`}>
+    <li id={id} data-testid={testId} className={`flex flex-wrap items-center gap-2 ${className ?? ""}`}>
       {children}
       {flow &&
         (drawn ? (
-          <button type="button" aria-label={`Open the flow for ${flow.title}`} aria-expanded={open} onClick={() => setOpen(!open)} className="rounded-md border border-line bg-surface p-1" data-testid="flow-thumb">
-            <FlowThumb flow={drawn} />
-          </button>
+          <div className="basis-full">
+            <FlowPanel row subject={subjectOf(drawn) ?? { kind: flow.kind, id: flow.id }} openLabel={`Open the flow for ${flow.title}`} showHint={false} />
+          </div>
         ) : (
           <span className="rounded-md border border-dashed border-line px-2 py-1 text-[length:var(--simple-small)] text-text2" data-testid="flow-none">
             No flow yet
           </span>
         ))}
-      {wide && drawn && (
-        <div className="basis-full">
-          <FlowDetail flow={drawn} />
-        </div>
-      )}
-      {phone && drawn && (
-        <Sheet open={open} title={drawn.title} onClose={() => setOpen(false)} full testId="flow-sheet">
-          <FlowDetail flow={drawn} />
-        </Sheet>
-      )}
     </li>
   );
 }
