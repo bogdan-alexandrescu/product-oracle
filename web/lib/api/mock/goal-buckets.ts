@@ -159,12 +159,18 @@ export function seedGoalBucketsWith(
  * else target in its unit), with the unit of a target stored as a number ("" none).
  */
 function attrsTarget(attrs: Record<string, unknown> | null | undefined): Pick<Goal, "target" | "unit"> {
-  if (attrs?.target_text) return { target: String(attrs.target_text) };
+  if (attrs?.target_text) return { target: pyStr(attrs.target_text) };
   const n = attrs?.target;
   if (n == null) return { target: null };
-  const unit = typeof attrs?.unit === "string" ? attrs.unit : "";
+  // As Python's `attrs.get("unit") or ""`: any set unit, as str() reads it.
+  const unit = attrs?.unit ? pyStr(attrs.unit) : "";
   if (typeof n === "number") return { target: targetRead(n, unit), unit };
-  return { target: unit === "%" ? `${n}${unit}` : `${n} ${unit}`.trim() };
+  return { target: unit === "%" ? `${pyStr(n)}${unit}` : `${pyStr(n)} ${unit}`.trim() };
+}
+
+/** A stored value as Python's str() reads it (a bool is "True" / "False"). */
+function pyStr(v: unknown): string {
+  return typeof v === "boolean" ? (v ? "True" : "False") : String(v);
 }
 
 /**

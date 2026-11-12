@@ -19,6 +19,7 @@ test("Goal buckets: a key result's stored target reads in its unit", async ({ pa
   const goal = page.locator('[data-testid="plan-goal"][data-goal="Grow retention"]');
   const kr = goal.getByRole("list", { name: "Grow retention's key results" }).getByTestId("goal-kr").filter({ hasText: "Teams read their alerts" });
   await expect(kr).toHaveCount(1);
+  await expect(kr.getByTestId("goal-kr-tip")).toBeVisible();
   await kr.getByTestId("goal-kr-tip").click();
   await expect(page.getByText("Alerts read: 60%")).toBeVisible();
 });
