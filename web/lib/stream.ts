@@ -7,7 +7,7 @@
  */
 import { MOCK_MODE } from "@/lib/api/client";
 import { mockFetch } from "@/lib/api/mock/server";
-import { forgetReads } from "@/lib/api/shared-reads";
+import { forgetReads, forgetReadsOf } from "@/lib/api/shared-reads";
 
 export type StreamError = {
   reason: string;
@@ -50,6 +50,8 @@ export function parseEvents(buffer: string): {
 }
 
 export async function openStream(url: string, h: StreamHandlers): Promise<void> {
+  // The reply's discussion (`/v1/discussions/<id>` of `…/messages/<id>/stream`).
+  const discussion = url.split("?")[0]!.replace(/\/messages\/[^/]+\/stream$/, "");
   for (let attempt = 0; attempt < 2; attempt++) {
     if (attempt > 0) h.onReset?.();
     let ended = false;
@@ -82,13 +84,15 @@ export async function openStream(url: string, h: StreamHandlers): Promise<void> 
           const data = JSON.parse(e.data);
           if (e.event === "delta") h.onDelta(String(data.text ?? ""));
           else if (e.event === "citations") h.onCitations?.(data);
-          // The reply has changed what the API answers: a read after it (SimpleAsk's loadAsk) fetches.
+          // The reply proposed changes (the event comes only when it made some): what the rail and the
+          // pages count changed, so every read after it fetches.
           else if (e.event === "changes") {
-            forgetReads();
+            if (Array.isArray(data) && data.length) forgetReads();
             h.onChanges?.(data);
           } else if (e.event === "done") {
             ended = true;
-            forgetReads();
+            // The reply changed its own discussion only: a read of it after it (SimpleAsk's loadAsk) fetches.
+            forgetReadsOf(discussion);
             h.onDone(data);
           } else if (e.event === "error") {
             ended = true;
