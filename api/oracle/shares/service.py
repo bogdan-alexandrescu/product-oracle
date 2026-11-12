@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
-from oracle.auth.service import hash_password, verify_password
+from oracle.auth.service import hash_password, verify_password, waste_password_check
 from oracle.shares.models import ShareLink
 
 EXPIRY_CHOICES = {
@@ -73,13 +73,11 @@ def verify_passcode(passcode_hash: str, passcode: str) -> bool:
     return verify_password(passcode_hash, passcode)
 
 
-# Verified when no link matches, so a guess at a token takes the time a real one does.
-_DUMMY_HASH = hash_passcode(secrets.token_urlsafe(16))
-
-
 def verify_or_waste(passcode_hash: str | None, passcode: str) -> bool:
+    # With no link's hash, a check is still spent, so a guess at a token takes the time a
+    # real one does.
     if passcode_hash is None:
-        verify_passcode(_DUMMY_HASH, passcode)
+        waste_password_check(passcode)
         return False
     return verify_passcode(passcode_hash, passcode)
 

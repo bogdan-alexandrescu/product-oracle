@@ -98,6 +98,23 @@ async def verify_password_async(password_hash: str, password: str) -> bool:
     return await asyncio.to_thread(verify_password, password_hash, password)
 
 
+# The hash of no one's password that an unknown email or a share link without a passcode is
+# checked against; made on first use, not at import (each new instance would pay for it
+# before serving).
+_dummy_hash: str | None = None
+
+
+def waste_password_check(password: str) -> None:
+    """Spend what one password check costs on no account, so a miss takes the time a wrong
+    password does. The first call makes the dummy hash instead of checking against it: a
+    hash costs what a check does, so the first miss is no slower than the next."""
+    global _dummy_hash
+    if _dummy_hash is None:
+        _dummy_hash = hash_password(secrets.token_hex(16))
+        return
+    verify_password(_dummy_hash, password)
+
+
 def hash_token(raw: str) -> str:
     # Tokens are 256-bit random secrets, so a fast hash is enough (no brute force).
     return hashlib.sha256(raw.encode()).hexdigest()
@@ -188,7 +205,7 @@ async def _authenticate(email: str, password: str) -> tuple[User | None, User | 
             return None, user
     # Equalise timing when the email is unknown.
     if not removed:
-        await verify_password_async(_DUMMY_HASH, password)
+        await asyncio.to_thread(waste_password_check, password)
     return None, None
 
 
@@ -392,6 +409,3 @@ async def caller_refusal(session: AsyncSession, principal: "Principal", role: Ro
         if not has_role(row.role, role):
             return f"Requires the {role} role"
     return None
-
-
-_DUMMY_HASH = hash_password(secrets.token_hex(16))
