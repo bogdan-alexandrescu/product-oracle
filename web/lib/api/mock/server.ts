@@ -1705,6 +1705,20 @@ function seedGoalBucketsThreeGoalsScenario(): Db {
   return db;
 }
 
+/**
+ * "goal-buckets-key-result-target" (goal-target-kept): "goal-buckets-dated" with a confirmed key result of Grow
+ * retention whose target is stored as a number in its unit (60, "%"), as the goal buckets read it. Invented data.
+ */
+export const GOAL_BUCKETS_KR_TARGET_SCENARIO = "goal-buckets-key-result-target";
+
+function seedGoalBucketsKeyResultTargetScenario(): Db {
+  const db = seedGoalBucketsDatedScenario();
+  const grow = db.baseline.entities.find((e) => e.type === "goal" && e.key === "grow-retention")!;
+  db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-alerts-read"), key: "kr-alerts-read", title: "KR 1 Teams read their alerts", parent_id: grow.id, status: "confirmed", attrs: { metric: "Alerts read", target: 60, unit: "%", weight: 1 } });
+  withKeyResultBuckets(db.simple_roadmap!.goal_buckets!, db.baseline.entities);
+  return db;
+}
+
 function withRoadmapGoalBuckets(db: Db): Db {
   const rm = db.simple_roadmap!;
   const goalOf = new Map(planSlices().map((x) => [x.feature_code.toLowerCase(), x.goal]));
@@ -4405,6 +4419,8 @@ function load(): Db {
                 ? seedGoalBucketsUndatedScenario
               : scenario === GOAL_BUCKETS_DATED_SCENARIO
                 ? seedGoalBucketsDatedScenario
+              : scenario === GOAL_BUCKETS_KR_TARGET_SCENARIO
+                ? seedGoalBucketsKeyResultTargetScenario
               : scenario === GOAL_BUCKETS_THREE_GOALS_SCENARIO
                 ? seedGoalBucketsThreeGoalsScenario
               : scenario === GOAL_BUCKETS_SHORT_CLASH_SCENARIO
