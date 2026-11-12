@@ -112,8 +112,11 @@ export type ChatMessage = {
   source?: string | null;
   /** ask-length-limit: where the parts Oracle cannot change yet are changed (Priorities, Roadmap). */
   links?: ChatLink[];
+  /** #710 in Simple: the live reads of the asker's sources Oracle's answer used (each a live chip). */
+  live_reads?: ChatLiveRead[];
 };
 
+export type ChatLiveRead = { ref: string; source: string; call: string; read_at: string; item_id?: string | null };
 export type ChatLink = { label: string; href: string };
 /** ask-length-limit: the most a chat message holds (the API's ChatIn), and where its quiet count shows. */
 export const CHAT_TEXT_MAX = 4000;

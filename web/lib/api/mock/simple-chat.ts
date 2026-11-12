@@ -25,6 +25,7 @@ import { changePhrase } from "./simple-change-words";
 import { CUT_ALL, cutDependents, cutRoute, markMeetingProposal, meetingRoute, proposalRoute, proposeOffAgenda, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
 import { GOALS, goalId, itemDeciderId, itemOwnerId, knowTalkGoals, lookalikes, prdCode, roadmapOut, simpleWindows, storedDates, type SimpleDb } from "./simple-roadmap";
 import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
+import { liveReply } from "./live";
 
 type Values = Record<string, unknown>;
 type Item = Schemas["SimpleRoadmapItem"];
@@ -111,6 +112,8 @@ interface StoredMessage {
   source?: string | null;
   /** ask-length-limit: where the parts Oracle cannot change yet are changed. */
   links?: { label: string; href: string }[];
+  /** #710 in Simple: the live reads Oracle's answer used (chat.ChatMessageOut.live_reads). */
+  live_reads?: Record<string, unknown>[];
   /** Private: the reader's job for a pending (or failed) line. */
   reading?: { text: string; role: Role; meeting_id: string | null; attempts: number; ask: boolean; document_id?: string | null };
 }
@@ -1143,6 +1146,18 @@ export function takeReaderWrote(): boolean {
   return was;
 }
 
+/**
+ * #710 in Simple (chat._LiveRun): in the person's own Ask chat (never a meeting's), a question
+ * their live sources answer is the reader's, and its answer reads them live (./live.ts's
+ * scripted reads), its reads on the line and no raw [l:n]. With no connection it is not one:
+ * the reader hands it to Ask, which says so.
+ */
+function liveAnswer(text: string): (Reply & { live_reads: Record<string, unknown>[] }) | null {
+  const r = liveReply(text, true);
+  if (!r?.reads) return null;
+  return { kind: "answer", body: r.pieces.join("").replace(/\s*\[l:\d{1,4}\]/g, ""), cards: [], live_reads: r.citations };
+}
+
 /** The thread's pending lines, read now (the reader's job ends on the thread's next read). */
 function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx, s8?: ChatMeetings): void {
   const t = chat.threads[key];
@@ -1159,9 +1174,10 @@ function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx, s
       continue;
     }
     const meeting = r.meeting_id ? (chat.meetings[r.meeting_id] ?? null) : null;
-    const reply = redoReading(chat, key, msg.id, r.text) ?? readLine(db, { ...ctx, role: r.role }, r, itemsFor(db, ctx, meeting), meeting);
+    const live = meeting ? null : liveAnswer(r.text);
+    const reply = live ?? redoReading(chat, key, msg.id, r.text) ?? readLine(db, { ...ctx, role: r.role }, r, itemsFor(db, ctx, meeting), meeting);
     Object.assign(msg, {
-      kind: reply.kind, body: reply.body, retry: false, at: now(), links: reply.links ?? [],
+      kind: reply.kind, body: reply.body, retry: false, at: now(), links: reply.links ?? [], live_reads: live?.live_reads ?? [],
       card_ids: storeCards(db, chat, reply.cards, msg.id, key, meeting),
       choices: (reply.choices ?? []).map((c, index) => ({ index, label: c.label })),
       choice_drafts: (reply.choices ?? []).map((c) => c.draft),
@@ -1925,7 +1941,8 @@ function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, c
   const reply = redo && again ? again : read(text);
   // A question about something not on the roadmap is Ask's (the one box writes nothing); a
   // change phrase naming no item is read by the reader in context, as the API does.
-  const asksElsewhere = reply.understood === false && !!reply.missing;
+  const live = !meeting && !!liveAnswer(text);
+  const asksElsewhere = !live && reply.understood === false && !!reply.missing;
   if (asksElsewhere && onlyUnderstood) return false;
   if (!asksElsewhere && reply.missing) reply.understood = false;
   const t = (chat.threads[key] ??= { id: crypto.randomUUID(), meeting_id: meeting?.id ?? null, owner_id: meeting ? null : ctx.id, messages: [] });
@@ -1934,7 +1951,7 @@ function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, c
   t.messages.push(person);
   const id = crypto.randomUUID();
   const base = { id, author_kind: "oracle" as const, author_id: null, author_name: "Oracle", at, reply_to: person.id, picked: null, retry: false };
-  if (reply.understood === false && !asksElsewhere) {
+  if (live || (reply.understood === false && !asksElsewhere)) {
     t.messages.push({ ...base, kind: "pending", body: "Reading that…", card_ids: [], choices: [], reading: { text, role: ctx.role, meeting_id: meeting?.id ?? null, attempts: 0, ask: onlyUnderstood, document_id: documentId } });
     return true;
   }

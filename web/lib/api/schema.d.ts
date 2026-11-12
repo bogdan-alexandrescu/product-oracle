@@ -19676,6 +19676,25 @@ export interface components {
             /** Items */
             items: components["schemas"]["ChatSummaryOut"][];
         };
+        /**
+         * ChatLiveReadOut
+         * @description A live read of the asker's source an answer used (#710's live citation): its chip.
+         */
+        ChatLiveReadOut: {
+            /** Ref */
+            ref: string;
+            /** Source */
+            source: string;
+            /** Call */
+            call: string;
+            /**
+             * Read At
+             * Format: date-time
+             */
+            read_at: string;
+            /** Item Id */
+            item_id?: string | null;
+        };
         /** ChatMessageOut */
         ChatMessageOut: {
             /**
@@ -19721,6 +19740,8 @@ export interface components {
             source?: string | null;
             /** Links */
             links?: components["schemas"]["ChatLinkOut"][];
+            /** Live Reads */
+            live_reads?: components["schemas"]["ChatLiveReadOut"][];
         };
         /** ChatModeIn */
         ChatModeIn: {

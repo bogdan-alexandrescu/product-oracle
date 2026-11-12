@@ -64356,6 +64356,47 @@
         ],
         "title": "ChatListOut"
       },
+      "ChatLiveReadOut": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "call": {
+            "type": "string",
+            "title": "Call"
+          },
+          "read_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Read At"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "source",
+          "call",
+          "read_at"
+        ],
+        "title": "ChatLiveReadOut",
+        "description": "A live read of the asker's source an answer used (#710's live citation): its chip."
+      },
       "ChatMessageOut": {
         "properties": {
           "id": {
@@ -64469,6 +64510,13 @@
             },
             "type": "array",
             "title": "Links"
+          },
+          "live_reads": {
+            "items": {
+              "$ref": "#/components/schemas/ChatLiveReadOut"
+            },
+            "type": "array",
+            "title": "Live Reads"
           }
         },
         "type": "object",
