@@ -14,6 +14,9 @@ const URL = "/simple/prds/guided-setup";
 
 for (const phone of [false, true]) {
   test(`${phone ? "phone" : "desktop"}: printing a one-pager leaves out the navigation`, async ({ page }) => {
+    // protects: in print view, on a 1440 px desktop and on a 390 px phone (one test each) with the owner's Ask panel open, the Guided setup one-pager hides the menu, tab bar, phone top bar, dock and Ask chat and spans the whole body; on screen the menu is back
+    // fails_when: the side menu, a bar, the dock or the open Ask chat is still shown in print, the page does not start at the left edge or run to the right one, or the menu is gone on screen
+    // no_claim: a real printer or PDF file, the page breaks, and any page besides Guided setup
     await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     // An owner, with the Ask panel open: it is the page's, not the printout's.
     await login(page);
@@ -40,6 +43,9 @@ for (const phone of [false, true]) {
 }
 
 test("landscape: the printed one-pager's text runs across the sheet", async ({ page }) => {
+  // protects: at 1056 px wide (landscape Letter, or no margins) in print view, the Guided setup one-pager's text block is wider than 900 px and within 80 px of the body width
+  // fails_when: the text keeps its 820 px column beside an empty margin-note column
+  // no_claim: other widths, a real printer or PDF file, and the navigation (the other print test)
   // A landscape Letter page (or one printed with no margins) is about 1056 px wide.
   await page.setViewportSize({ width: 1056, height: 816 });
   await login(page);

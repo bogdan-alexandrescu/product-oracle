@@ -38,6 +38,9 @@ test.describe("desktop", () => {
   test.use({ viewport: DESKTOP });
 
   test("plain words: engineer-weeks without .0, names on the bars, risks and decision days (qa-28, 7, 29)", async ({ page }) => {
+    // protects: on the PRD plan at 1440 wide, capacity reads "56 engineer-weeks" and "16 engineer-weeks, 1 of it buffer" with no "EW" or "PM-owned", bars name their features, risks read "Likelihood: Medium · Impact: Medium", and a decision's day reads the same in the timeline and the milestone card
+    // fails_when: an "EW" or ".0 EW" shows, a bar shows only feature codes, a risk or decision day is worded differently, or the card says "M1 exit"
+    // no_claim: other scenarios or phone width, or that the numbers are right for real data (only the mock's Guided setup plan is read)
     await open(page);
     await expect(page.getByTestId("one-pager-meta")).toContainText("56 engineer-weeks");
     const tl = page.getByRole("region", { name: "Timeline" });
@@ -62,6 +65,9 @@ test.describe("desktop", () => {
   });
 
   test("a bar or a flag brings its milestone's card into view (qa-8)", async ({ page }) => {
+    // protects: at 1440 wide, clicking a milestone's bar (M2) or its end flag (M3) shows that milestone's card, scrolls the page down to it and leaves its heading in view
+    // fails_when: the click opens the wrong milestone, the page does not scroll, or the card's heading stays out of view
+    // no_claim: the exact scroll distance, keyboard use, or phone width
     await open(page, "simple-plan", ADMIN.email);
     const tl = page.getByRole("region", { name: "Timeline" });
     const part = page.getByTestId("milestone-part");
@@ -78,6 +84,9 @@ test.describe("desktop", () => {
   });
 
   test("Done when is a bulleted list and 'flow below' leads to the flow (qa-26, 27)", async ({ page }) => {
+    // protects: at 1440 wide, the "Done when" items are bullets (a dot of 8 px or less, no box border) and a feature's "flow below" button brings that feature's flow into view
+    // fails_when: the items show an empty checkbox square, or "flow below" leaves the flow out of view
+    // no_claim: the bullet's colour or look, or other milestones' lists
     await open(page);
     const part = page.getByTestId("milestone-part");
     const items = part.getByTestId("part-done-when").getByRole("listitem");
@@ -95,6 +104,9 @@ test.describe("desktop", () => {
   });
 
   test("goal sub-lines are at least 13 px (qa-47)", async ({ page }) => {
+    // protects: at 1440 wide, the Reliability goal reads "Now 99.6% · on track" and every small line in it has a font size of at least 13 px
+    // fails_when: a small line in the goal is under 13 px, or the goal's standing text is missing
+    // no_claim: other goals, phone width, or colour contrast
     await open(page);
     const goal = page.getByTestId("timeline-goal").filter({ hasText: "Reliability" });
     await expect(goal).toContainText("Now 99.6% · on track");
@@ -102,6 +114,9 @@ test.describe("desktop", () => {
   });
 
   test("labels in the strip sit on the card's paper, off the lines (qa-30)", async ({ page }) => {
+    // protects: at 1440 wide, the "M3 ends Feb 12" flag has a solid background, and no month name overlaps the Today pill (2 px gap or more)
+    // fails_when: the flag's background is see-through, or a month name touches the Today pill
+    // no_claim: the exact colour, other flags, or other widths
     await open(page);
     const tl = page.getByRole("region", { name: "Timeline" });
     const flag = tl.getByRole("button", { name: "M3 ends Feb 12" });
@@ -116,6 +131,9 @@ test.describe("desktop", () => {
   });
 
   test("with no dates: goals, each milestone's targets and decisions, and the hint (qa-5, 4, 32)", async ({ page }) => {
+    // protects: at 1440 wide, in the mock's plan with no dates, 4 goals show with their targets, the undated milestone shows its target and decisions, the card says "16 engineer-weeks capacity, nothing planned yet", and "Read the plan again" shows "Reading the plan…" (disabled) then "Read again"
+    // fails_when: a goal or a decision is missing, the hint is missing, the button is not busy and disabled while it reads, or it is not enabled after
+    // no_claim: that reading again finds real dates (the mock's read is slowed on purpose), or a plan with dates
     await open(page, "simple-plan-undated", ADMIN.email, "POST /v1/simple/prds/guided-setup/plan/read-again");
     const tl = page.getByRole("region", { name: "Timeline" });
     const goals = tl.getByTestId("timeline-goal");
@@ -141,6 +159,9 @@ test.describe("phone", () => {
   test.use({ viewport: PHONE, hasTouch: true });
 
   test("the goals and how each stands show on a phone (qa-6)", async ({ page }) => {
+    // protects: on a phone (390 wide), the goal list shows Growth as "Now 40 · behind" and Reliability as "on track", and the page is no wider than the screen
+    // fails_when: the goals or their standing are hidden on a phone, or the page scrolls sideways
+    // no_claim: the desktop layout, or goal standing beyond these two goals
     await open(page);
     const goals = page.getByTestId("timeline-goal-list");
     await expect(goals).toBeVisible();
@@ -150,6 +171,9 @@ test.describe("phone", () => {
   });
 
   test("a milestone shows once: a compact card whose link leads to its part (qa-15, 28)", async ({ page }) => {
+    // protects: on a phone (390 wide), the first milestone's step shows only a compact card ("to Nov 27 · 4 weeks · 16 engineer-weeks") with its "Done when" text shown once on the page, and the second step's link leads to that milestone's card in view
+    // fails_when: the milestone's "Done when" text shows twice, the compact card lacks its dates and weeks, or the link opens the wrong part or leaves it out of view
+    // no_claim: the desktop layout, or the exact count in the link beyond its pattern
     await open(page);
     const tl = page.getByRole("region", { name: "Timeline" });
     const m1 = tl.getByTestId("timeline-step").first();
@@ -164,6 +188,9 @@ test.describe("phone", () => {
   });
 
   test("with no dates, decisions sit under their milestone (qa-31, 5)", async ({ page }) => {
+    // protects: on a phone (390 wide), in the mock's plan with no dates, no decision floats in the timeline, each decision sits under its own milestone (Q3 under Prove it, Q8 under Scale volume), 4 goals show, and the add-dates hint shows
+    // fails_when: a free-floating decision shows, a decision sits under the wrong milestone, or the goals or the hint are missing
+    // no_claim: a plan with dates, the desktop layout, or the read-again button
     await open(page, "simple-plan-undated");
     const tl = page.getByRole("region", { name: "Timeline" });
     await expect(tl.getByTestId("timeline-decision")).toHaveCount(0);

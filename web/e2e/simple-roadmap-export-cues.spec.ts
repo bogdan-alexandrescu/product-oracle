@@ -47,6 +47,9 @@ async function exportPdf(page: Page): Promise<{ svg: string; pdf: string }> {
 }
 
 test("the Timeline's PDF: Today's pill on its line, an arrow on each cut bar, its words as text", async ({ page }) => {
+  // protects: in the Timeline's exported PDF at the 6 month zoom, the Today pill is centred on its line within 1 px, each bar the screen shows cut at the left or right edge has an arrow on that side, left arrows sit on the bar's left end, and the PDF has searchable text for the title, Today and the goals' lanes
+  // fails_when: the pill is off its line, a cut bar has no arrow (or an extra arrow appears), an earlier arrow points the wrong way or is off the bar's end, or the PDF's words are only a picture
+  // no_claim: the PDF's look beyond these checks, other zooms, non-ASCII lane names (skipped in the text search), and a real PDF viewer's search
   // board-quarters: undated bars sit in Later (from Apr 1, 2027), so six months show one
   // running past the last month.
   await openTimeline(page, "6m");
@@ -112,6 +115,9 @@ test("the Timeline's PDF: Today's pill on its line, an arrow on each cut bar, it
 
 for (const side of ["later", "earlier"] as const) {
   test(`a one-week bar the ${side} edge cuts to a sliver: its arrow in the chart, its name and dates readable`, async ({ page }) => {
+    // protects: at the 3 month zoom, when the chart's shortest bar (a week or less) is scrolled until a 1 to 8 px sliver shows at the later or earlier edge (one test each), its exported PDF has the whole name, an arrow on that edge inside the chart, and its dates inside the chart and clear of the arrow
+    // fails_when: the name is cut, the arrow is on the wrong side or outside the chart, or the dates or the white behind them run outside the chart or over the arrow
+    // no_claim: bars wider than a sliver, other zooms, and the Today pill or the PDF's text layer (the other test)
     await openTimeline(page);
     const scroll = page.getByTestId("timeline-scroll");
     // The chart's shortest bar (a week), and where the window shows it.

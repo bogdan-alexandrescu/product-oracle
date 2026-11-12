@@ -99,6 +99,9 @@ for (const scheme of ["light", "dark"] as const)
     test.use(DESKTOP);
 
     test(`${scheme}: five milestones in two weeks: every name reachable at 3 months, 6 months, 1 year and All`, async ({ page }) => {
+      // protects: with five milestones in two weeks on Example trails, at 3 months, 6 months, 1 year and All no two labels or +N chips overlap, and every milestone's name and date can be read from a label's hover or a chip's list
+      // fails_when: two labels or chips overlap, a hover shows the + Milestone hint, a chip's list length differs from its number, or a name cannot be reached
+      // no_claim: how it looks (screenshots are saved, not compared); the phone; the colour scheme only sets the theme
       await open(page, scheme);
       for (const z of ["3m", "6m", "1y", "all"]) {
         await zoom(page, z);
@@ -110,6 +113,9 @@ for (const scheme of ["light", "dark"] as const)
     });
 
     test(`${scheme}: a same-day pair reads "First name +1" and the chip opens the other`, async ({ page }) => {
+      // protects: at 3 months the Jan 15 pair shows "Trail beta" with a "+1" chip right after it; the chip's list opens the Route preview for group hikes card (Jan 15, 2027, "20 groups plan a hike with it"); Escape closes it and returns focus to the chip; the label opens its own card
+      // fails_when: the chip is not "+1" or sits more than 8 px from the label, the card lacks its name, date or note, Escape leaves focus elsewhere, or the label opens the wrong card or the + Milestone card
+      // no_claim: other zoom levels or pairs; how it looks
       await open(page, scheme);
       await zoom(page, "3m");
       await toJanuary(page);
@@ -140,6 +146,9 @@ for (const scheme of ["light", "dark"] as const)
     });
 
     test(`${scheme}: a label cut short gives its full name on hover and on focus`, async ({ page }) => {
+      // protects: at 3 months a label cut with dots shows its full name on hover (no + Milestone hint) and Tab reaches it with a ring and the same tip; Tab then reaches a +N chip whose entry opens a focused card, Escape and Close return focus, and no line takes a Tab stop
+      // fails_when: no label is cut, hover or focus shows no full name, Tab never reaches a label or chip, focus lands in the wrong place after a card closes, or a line takes the focus
+      // no_claim: how it looks (screenshots are saved, not compared); mouse paths at other zoom levels
       await open(page, scheme);
       await zoom(page, "3m");
       await toJanuary(page);
@@ -210,6 +219,9 @@ for (const scheme of ["light", "dark"] as const)
     });
 
     test(`${scheme}: a card taller than the chart keeps the month header and label row in sight`, async ({ page }) => {
+      // protects: at 3 months a click on Trail launch's line opens its card with focus, the card runs past the foot of the chart, and the chart stays scrolled to the top
+      // fails_when: the card does not open or take focus, focus scrolls the chart down off its top, or the card is not taller than the chart
+      // no_claim: that the month header and label row are seen on screen (only the chart's scroll position is read); other milestones
       await open(page, scheme);
       await zoom(page, "3m");
       await toJanuary(page);
@@ -230,6 +242,9 @@ for (const scheme of ["light", "dark"] as const)
     });
 
     test(`${scheme}: a milestone's line shows its name and opens it, never the + Milestone hint`, async ({ page }) => {
+      // protects: at 6 months, hovering Trail launch's line near its top and 120 px down shows "Trail launch, Jan 29, 2027" and no + Milestone hint, a click opens its card, and an empty stretch of the axis then shows the hint
+      // fails_when: the hint shows over the line, the name tip is missing, the click opens no card, or the empty axis offers no new milestone
+      // no_claim: other milestones or zoom levels; the new milestone is not made
       await open(page, scheme);
       await zoom(page, "6m");
       await toJanuary(page);
@@ -255,6 +270,9 @@ test.describe("phone", () => {
   test.use(PHONE);
 
   test("390 px keeps the list by quarter, every milestone named", async ({ page }) => {
+    // protects: at 390 px wide in the light theme the Q1 2027 quarter lists all five milestones, each as "M<number> name · day"
+    // fails_when: a milestone is missing from the quarter or its name or day is wrong
+    // no_claim: the dark theme; tapping a milestone; other quarters
     await open(page);
     const q = page.getByTestId("timeline-quarter").filter({ hasText: "Q1 2027" }).filter({ visible: true }).first();
     await expect(q).toBeVisible();

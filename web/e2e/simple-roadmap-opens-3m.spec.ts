@@ -51,6 +51,9 @@ test.describe("desktop", () => {
   test.use(DESKTOP);
 
   test("a first visit opens on 3 months: about 13 weeks from just before today", async ({ page }) => {
+    // protects: at 1440 wide, a first visit to the Simple roadmap Timeline opens with "3 months" picked (and not 6 months, 1 year or All), today's line just inside the left edge (under 120 px), and a view of 12 to 14 weeks
+    // fails_when: another zoom is picked on a first visit, today's line is off the left edge or far from it, or the view is not about 13 weeks wide
+    // no_claim: a return visit, other widths, or exact pixel positions
     await open(page);
     await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "true");
     for (const z of ["6m", "1y", "all"]) await expect(page.getByTestId(`zoom-${z}`)).toHaveAttribute("aria-pressed", "false");
@@ -66,6 +69,9 @@ test.describe("desktop", () => {
   });
 
   test("a person's own pick holds after Back to today and a trip to the Gantt; a new visit opens on 3 months", async ({ page }) => {
+    // protects: at 1440 wide, after picking "6 months" it stays picked after Back to today and after a trip to the Gantt and back, and a page reload opens on 3 months again
+    // fails_when: the pick falls back to 3 months after Back to today or the Gantt, or a reload keeps 6 months
+    // no_claim: other zooms, or a different person's pick (the next test)
     await open(page);
     await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "true");
     // 6 months stays picked after going back to today.
@@ -84,6 +90,9 @@ test.describe("desktop", () => {
   });
 
   test("someone else signed in when the tab comes back to the roadmap opens on 3 months, not on the last person's pick", async ({ page }) => {
+    // protects: at 1440 wide, when the first person picks "1 year", signs out, another person (the approver) signs in on a second tab, and the first tab goes Back to the roadmap, the Timeline opens on 3 months and not 1 year
+    // fails_when: the new person sees the last person's 1 year pick
+    // no_claim: that the same person's pick holds across a sign out, or other zooms
     await open(page);
     await page.getByRole("button", { name: "1 year", exact: true }).click();
     await expect(page.getByTestId("zoom-1y")).toHaveAttribute("aria-pressed", "true");
@@ -104,6 +113,9 @@ test.describe("desktop", () => {
   });
 
   test("scrolling right reaches the end of March 2027, where a milestone on Mar 15, 2027 is drawn as a line", async ({ page }) => {
+    // protects: at 1440 wide on the "Example trails" roadmap at 3 months (items end by Feb 26, 2027), sliding right reaches Mar 1, 2027 with at least 29 days beyond it, and a Delivery milestone added on the axis and dated Mar 15, 2027 shows its label "Trail map launch · Mar 15, 2027" and a tall line in view
+    // fails_when: the chart stops before the end of March 2027, or the milestone dated Mar 15, 2027 has no label or line
+    // no_claim: other zooms (the code says it holds at every zoom), other milestone kinds, or that the milestone is kept after a reload
     // The Example trails roadmap's items all end by Feb 26, 2027.
     await open(page, "approved-roadmap");
     await page.getByTestId("filter-roadmap").selectOption({ label: "Example trails" });

@@ -41,6 +41,9 @@ for (const width of [390, 320]) {
       test.use({ viewport: { width, height: 844 }, hasTouch: true });
 
       test("Today is named on the chart", async ({ page }) => {
+        // protects: on a 390 and a 320 wide phone, in the light and the dark theme, the Waterfall draws Today's line and a pill reading "Today" that sits inside the part of the chart in view
+        // fails_when: the line is missing, the pill does not read "Today", or the pill is cut off by the edge of the view
+        // no_claim: Today's exact date, the quarter labels, or scrolled positions
         const chart = await open(page, theme);
         const scroll = chart.getByTestId("chart-scroll");
 
@@ -56,6 +59,9 @@ for (const width of [390, 320]) {
       });
 
       test("every quarter label is whole", async ({ page }) => {
+        // protects: on a 390 and a 320 wide phone, in the light and the dark theme, no Waterfall quarter label is cut by the chart's edge or the edge of the view, at the start and scrolled to the end, each reads like "Q4 2026" or "Q2 '27", and the last shows at the end
+        // fails_when: a label is cut by an edge, a label is not in those forms, or the last label is out of view at the end
+        // no_claim: Today's pill, widths other than these two, or the label order
         const chart = await open(page, theme);
         const scroll = chart.getByTestId("chart-scroll");
 
@@ -78,6 +84,9 @@ test.describe("1440 wide", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test("the desktop's chart does not move", async ({ page }) => {
+    // protects: at 1440 wide, the Waterfall fits its box with nothing to scroll, its quarter labels start at their own lines in order (year in full on the first and each Q1), and the "Today" pill sits by its line
+    // fails_when: the chart is wider than its box, a label is moved off its line or is out of order or in the wrong form, or the Today pill is far from its line
+    // no_claim: phone widths, the dark theme, or scrolling
     const chart = await open(page, "light");
     const svg = chart.getByTestId("chart-svg");
     const scroll = chart.getByTestId("chart-scroll");
@@ -109,6 +118,9 @@ test.describe("1440 wide", () => {
 });
 
 test("no quarter label is cut at any width from 320 to 1680", async ({ page }) => {
+  // protects: as the window is resized across 14 widths from 320 to 1680 in the light theme, no Waterfall quarter label is cut by the chart's edge or the view's edge, at the start and scrolled to the end
+  // fails_when: at any of those widths a label is cut at either scroll place
+  // no_claim: the label text, Today's pill, the dark theme, or widths between the ones tried
   await page.setViewportSize({ width: 320, height: 844 });
   const chart = await open(page, "light");
   const scroll = chart.getByTestId("chart-scroll");

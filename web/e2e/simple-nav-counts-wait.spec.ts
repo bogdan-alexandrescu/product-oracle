@@ -47,6 +47,9 @@ async function slowMeetings(page: Page) {
 const seenOf = (page: Page) => page.evaluate(() => (window as unknown as { seen: string[] }).seen);
 
 test("the rail shows no count until the meetings read answers too", async ({ page }) => {
+  // protects: on a 1440 px desktop with a review live and the meetings read slowed by 2.5 s, the side menu paints no Roadmap count until the Meetings count (1) arrives with it
+  // fails_when: a set of counts is painted that has a Roadmap number while the Meetings count is still empty
+  // no_claim: the numbers' values beyond Meetings being 1, the phone's More, and other pages' counts
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await watchCounts(page);
@@ -65,6 +68,9 @@ test("the rail shows no count until the meetings read answers too", async ({ pag
 });
 
 test("on a phone, More shows one number: none until the meetings read answers", async ({ page }) => {
+  // protects: on a 390 px phone with a review live and the meetings read slowed by 2.5 s, the More tab's count ends on one number and never painted a different one on the way
+  // fails_when: More shows a lower number first and then jumps to a higher one once the meetings read answers
+  // no_claim: that the number is right (only that it is the same every time it is painted), the desktop side menu, and other tabs
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await watchCounts(page);

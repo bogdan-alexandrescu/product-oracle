@@ -1,6 +1,15 @@
 """A roadmap that was never approved: a newer version left in review by a run does not block
 its Simple working draft (hotfix, Nov 6: the company roadmap's draft could not be approved
-while a Nov 4 run's version 7 waited in review)."""
+while a Nov 4 run's version 7 waited in review).
+
+Test card (protects / fails_when / no_claim):
+
+- test_a_never_approved_roadmap_publishes_its_draft_over_a_run_version_in_review: protects=on
+  a roadmap with no approved version, a draft opened earlier is approved (200, "approved")
+  although a newer run version (2) now waits in review; fails_when=that waiting version
+  makes Approve answer an error (blocks the draft); no_claim=what the new version holds, or
+  the run version's own fate.
+"""
 
 import hashlib
 import uuid
