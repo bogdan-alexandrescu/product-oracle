@@ -13,6 +13,12 @@ citations) and amendment C6; fails_when=a shared chat's run gets MCP, a private 
 not, the Fireflies key reaches Claude Code, a token outlives its reply, or a live
 citation is lost or invented; no_claim=the real claude binary's MCP client and the web
 chip (lane 3).
+Card (errors in words, audit 2026-11-12): protects=section 1's errors table on an Ask
+reply: a refused live read (424, 429, 404, 403) reaches the person in the API's own
+sentence, which says what to do, and only a source that is down (5xx) becomes the plain
+line (the 2026-10-27 decision); fails_when=the prompt tells the model to replace every
+error with the plain line, the 9th read's 429 sentence does not reach the model, or a
+5xx does; no_claim=the model's own wording.
 """
 
 import asyncio
@@ -26,7 +32,7 @@ import pytest
 from sqlalchemy import text
 
 from oracle.claude_accounts.fallback import PLAN_TOKEN_PREFIX
-from oracle.discussions import replies
+from oracle.discussions import plan, replies
 from oracle.jobs import prompting
 from oracle.llm import gateway
 from oracle.llm.transports import ClaudeCodeTransport
@@ -35,6 +41,7 @@ from oracle.tenancy import tenant_session
 from tests.live_fakes import ARCHIVE_ENDPOINT, LIVE_KEY, FakeSources
 from tests.test_discussion_replies import ASK, Fake, read_stream, row, say, with_key
 from tests.test_discussions import company, private_with_approver, section, start
+from tests.test_live_ask_tokens import CAP, asked, mint
 from tests.test_live_fireflies import LABEL, _fireflies
 from tests.test_mcp import mcp_client, text_of
 
@@ -411,3 +418,39 @@ async def test_live_citations_mapping():
     assert body == "Count [l:1], goal [c:1], none  ."
     assert [c.get("kind") for c in cites] == ["entity", "live"]
     assert cites[1] == live[1]
+
+
+# protects=the errors table (audit 2026-11-12): the Live sources block tells the model to
+# pass a tool's error sentence on as written, without its HTTP code, and keeps the plain
+# line for a source that is down; fails_when=the block tells it to say only the plain line
+# for every error; no_claim=the tool results (the test below).
+def test_live_block_passes_refusals_on():
+    block = replies.live_block([])
+    assert f'error, say only "{plan.SOURCE_DOWN}"' not in block
+    assert "sentence" in block and "HTTP code" in block
+    assert plan.SOURCE_DOWN in block
+
+
+# protects=the errors table over MCP with an Ask reply's live token: a source that is down
+# (503) answers the plain line, never its code or the source's name, and the 9th read
+# answers the 429's own sentence; fails_when=the 429's sentence is replaced by the plain
+# line, or the 5xx reaches the model raw; no_claim=the other refusals' sentences
+# (test_live_fireflies).
+async def test_live_token_errors_reach_the_model_in_words(client, sources):
+    ctx, doc = await company(client)
+    ctx.doc = doc
+    conn = str(await _fireflies(ctx.tenant_id, ctx.users["commenter"], ARCHIVE_ENDPOINT))
+    _d, reply_id = await asked(client, ctx)
+    raw = await mint(ctx, "commenter", reply_id)
+    async with mcp_client(raw) as m:
+        sources.archive.fail = 503
+        down = await m.call_tool("live_fireflies_list_meetings", {"connection_id": conn})
+        assert down.is_error and text_of(down) == plan.SOURCE_DOWN
+        sources.archive.fail = None
+        for n in range(2, 9):
+            args = {"connection_id": conn, "limit": n}
+            result = await m.call_tool("live_fireflies_list_meetings", args)
+            assert not result.is_error, text_of(result)
+        ninth = await m.call_tool("live_fireflies_list_meetings", {"connection_id": conn})
+    assert ninth.is_error and CAP in text_of(ninth)
+    assert plan.SOURCE_DOWN not in text_of(ninth)
