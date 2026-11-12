@@ -21,7 +21,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * tone picker's panel reads the key result it is left on by name, as the API's goal title; fails_when = its goal has
  * no title ("Serves the goal undefined").
  * Card goal-archive-own-key-result (goal-delete-r4): protects = Archive Grow retention with Growth picked, and Alert
- * history export (on Grow retention and its own key result) reads Growth, as the dialog says (the API's
+ * log download (on Grow retention and its own key result) reads Growth, as the dialog says (the API's
  * move_items_off counts no key result of the archived goal as live); fails_when = it stays on the key result.
  * Card goal-archive-nested-key-result (goal-delete-r5): protects = Archive Grow retention with Growth picked, and Alert
  * quiet hours (on Grow retention and a key result of its key result) reads Growth, as the dialog says (move_items_off
@@ -128,7 +128,7 @@ test("An item left on a key result reads that key result as its goal", async ({ 
 test("An item on the archived goal and its own key result moves to the goal picked", async ({ page }) => {
   await openPage(page);
   const dialog = await goalDialog(page, "Archive");
-  await expect(dialog).not.toContainText("Alert history export →");
+  await expect(dialog).not.toContainText("Alert log download →");
   const pick = dialog.getByLabel("Goal", { exact: true });
   const label = (await pick.locator("option").allTextContents()).find((o) => o.endsWith("Growth"))!;
   await pick.selectOption({ label });
@@ -136,8 +136,8 @@ test("An item on the archived goal and its own key result moves to the goal pick
   await expect(goal(page, "Grow retention")).toHaveCount(0);
 
   await ranked(page);
-  await expect(draft(page, "Alert history export")).toContainText("Growth");
-  await expect(draft(page, "Alert history export")).not.toContainText("Teams come back in week two");
+  await expect(draft(page, "Alert log download")).toContainText("Growth");
+  await expect(draft(page, "Alert log download")).not.toContainText("Teams come back in week two");
 });
 
 test("An item on the archived goal and a key result of its key result moves to the goal picked", async ({ page }) => {
