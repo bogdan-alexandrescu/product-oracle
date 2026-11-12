@@ -29,6 +29,10 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card goal-archive-all-kept (goal-delete-r5): protects = with Team alert digest and Alert summary for leads moved to
  * Trash, the only item Archive keeps on another goal is Alert tone picker, on a key result, and the dialog says it
  * keeps another goal, not that it goes there; fails_when = it reads "serves another goal too and goes there".
+ * Card goal-archive-key-result-in-trash (goal-delete-r6): protects = with Faster activation deleted to Trash, Archive
+ * Grow retention with Growth picked, and Alert tone picker (on Grow retention and a key result of Faster activation)
+ * reads Growth, as the dialog says (move_items_off counts no key result under a goal in Trash as live); fails_when =
+ * the dialog says it stays on the key result, or it is left there.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -50,10 +54,10 @@ async function openPage(page: Page) {
   await expect(goal(page, "Grow retention")).toBeVisible();
 }
 
-async function goalDialog(page: Page, verb: "Archive" | "Delete") {
-  await tap(goal(page, "Grow retention").getByRole("button", { name: "More for Grow retention" }));
+async function goalDialog(page: Page, verb: "Archive" | "Delete", title = "Grow retention") {
+  await tap(goal(page, title).getByRole("button", { name: `More for ${title}` }));
   await tap(page.getByRole("menuitem", { name: `${verb} goal` }));
-  const dialog = page.getByRole("dialog", { name: `${verb} Grow retention` });
+  const dialog = page.getByRole("dialog", { name: `${verb} ${title}` });
   await expect(dialog).toBeVisible();
   return dialog;
 }
@@ -165,4 +169,25 @@ test("Archive says an item left on a key result keeps another goal", async ({ pa
   const dialog = await goalDialog(page, "Archive");
   await expect(dialog).toContainText(`1 keeps another goal: Alert tone picker stays on ${KR}`);
   await expect(dialog).not.toContainText("goes there");
+});
+
+test("An item on the archived goal and a key result of a goal in Trash moves to the goal picked", async ({ page }) => {
+  await openPage(page);
+  const del = await goalDialog(page, "Delete", "Faster activation");
+  await tap(del.getByLabel("Leave them with no goal"));
+  await tap(del.getByRole("button", { name: "Delete goal" }));
+  await expect(goal(page, "Faster activation")).toHaveCount(0);
+
+  const dialog = await goalDialog(page, "Archive");
+  await expect(dialog.getByTestId("goal-feature").filter({ hasText: "Alert tone picker" })).toBeVisible();
+  await expect(dialog).not.toContainText("Alert tone picker stays on");
+  const pick = dialog.getByLabel("Goal", { exact: true });
+  const label = (await pick.locator("option").allTextContents()).find((o) => o.endsWith("Growth"))!;
+  await pick.selectOption({ label });
+  await tap(dialog.getByRole("button", { name: "Archive goal" }));
+  await expect(goal(page, "Grow retention")).toHaveCount(0);
+
+  await ranked(page);
+  await expect(draft(page, "Alert tone picker")).toContainText("Growth");
+  await expect(draft(page, "Alert tone picker")).not.toContainText(KR);
 });
