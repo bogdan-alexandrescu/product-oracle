@@ -13,7 +13,7 @@ import { expect, test, type Page } from "./test";
  * a reply that proposes a decision, it does not.
  */
 
-const RAIL = ["GET /v1/simple/decisions/waiting", "GET /v1/simple/roadmap/waiting", "GET /v1/inbox", "GET /v1/inbox/questions"];
+const RAIL = ["GET /v1/simple/decisions/waiting", "GET /v1/simple/roadmap/waiting", "GET /v1/inbox/counts", "GET /v1/inbox/questions"];
 
 /** The calls the in-browser mock API has served since this page loaded. */
 const calls = (page: Page) => page.evaluate(() => [...((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? [])]);

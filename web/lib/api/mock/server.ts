@@ -6,6 +6,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
+import { inboxCounts } from "@/lib/inbox-counts";
 import { sortGoals } from "@/lib/goal-order";
 import { citationHref, formatDate, formatDay, goalFigure } from "@/lib/format";
 import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
@@ -9505,7 +9506,15 @@ export async function mockFetch(req: Request): Promise<Response> {
       req.method === "GET" && (url.pathname === "/v1/simple/roadmap" || url.pathname === "/v1/simple/roadmap/waiting" || url.pathname === "/v1/simple/decisions/waiting");
     if (req.method !== "GET") forgetRoadmapReads();
     roadmapReadsAt(roadmapRead);
-    let res = await route(db, req);
+    // inbox-reads: the Inbox's counts alone (as the API's GET /v1/inbox/counts) and a visit
+    // recorded without the Inbox's answer (POST /v1/inbox/seen), from the Inbox's own route.
+    const inboxCall = (search = "") => route(db, new Request(new URL(`/v1/inbox${search}`, url), { headers: req.headers }));
+    let res =
+      req.method === "GET" && url.pathname === "/v1/inbox/counts"
+        ? await inboxCall().then(async (r) => (r.ok ? json(200, inboxCounts((await r.json()) as Schemas["InboxOut"])) : r))
+        : req.method === "POST" && url.pathname === "/v1/inbox/seen"
+          ? await inboxCall("?mark_seen=true").then((r) => (r.ok ? new Response(null, { status: 204 }) : r))
+          : await route(db, req);
     // home-waiting-one-list: the waiting list's items, read from the routes each kind lives on.
     if (req.method === "GET" && url.pathname === "/v1/simple/decisions/waiting" && res.ok) res = await withWaitingItems(db, req, res);
     // I1: the runs' changes this call made, as webhook events (./webhooks.ts).

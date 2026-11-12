@@ -16,7 +16,8 @@ import { useMe } from "@/lib/me";
 import { LINK_KINDS } from "@/lib/roadmap-links";
 import { api, unwrap } from "@/lib/api/client";
 import { onReadChanged, onReadFailed, STALE_OK } from "@/lib/api/shared-reads";
-import { onWaitingChanged, railInbox, railQuestions, readAgainLater, retryWait, waitingCount } from "@/lib/waiting";
+import { inboxCounts } from "@/lib/inbox-counts";
+import { onWaitingChanged, railInbox, railInboxCounts, railQuestions, readAgainLater, retryWait, waitingCount } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
@@ -74,6 +75,11 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   // The re-read waiting to run (its cancel), and the reads' abort on unmount.
   const pending = useRef<(() => void) | null>(null);
   const aborts = useRef(new AbortController());
+  // inbox-reads: the page the reads are for (the Inbox part reads by it), set before the reads below run.
+  const path = useRef(pathname);
+  useEffect(() => {
+    path.current = pathname;
+  }, [pathname]);
   const [settled, setSettled] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
   useEffect(() => {
@@ -91,7 +97,7 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
     const { signal } = aborts.current;
     const mine = parts.map((p) => (seq.current[p] = (seq.current[p] ?? 0) + 1));
     inflight.current += 1;
-    void Promise.allSettled(parts.map((p) => PART_READS[p](signal, staleOk))).then((results) => {
+    void Promise.allSettled(parts.map((p) => PART_READS[p](signal, staleOk, path.current))).then((results) => {
       inflight.current -= 1;
       if (signal.aborted) return;
       const next: Got = {};
@@ -166,13 +172,8 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   // roadmap's: it counts in the Inbox beyond the tabs, as a one-pager wording does.
   const asks = items.filter((i) => (i.kind === "proposal" && i.op !== "set_section_number") || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
   // inbox-meeting-proposals fix: the Inbox's part the Roadmap tab counts too (a proposal on a
-  // PRD question or a one-pager line or number is not the roadmap's).
-  const inboxRoadmap = inbox
-    ? inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line", "set_section_number"].includes(x.op)).length +
-      inbox.simple_approvals.length +
-      inbox.simple_goal_suggestions.length +
-      (inbox.simple_track_suggestions?.filter((x) => !x.proposed).length ?? 0)
-    : 0;
+  // PRD question or a one-pager line or number is not the roadmap's: lib/inbox-counts).
+  const inboxRoadmap = inbox?.roadmap ?? 0;
   const all = inbox ? waitingCount(inbox, questions ?? []) : 0;
   // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now.
   // counts-failed-part: a failed meetings read shows no number, never the last one it read.
@@ -207,11 +208,18 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
  * ago at once instead of reading every list again; an answer that changed since reads them again.
  */
 const rail = (staleOk: boolean) => (staleOk ? { headers: { [STALE_OK]: "1" } } : {});
+/**
+ * inbox-reads: the pages that read the whole Inbox for themselves (Home's rows, the Inbox): there
+ * the rail takes its counts from that same read (shared, no call of its own); elsewhere it reads
+ * the Inbox's counts alone (GET /v1/inbox/counts), never the whole Inbox.
+ */
+const READS_INBOX = (path: string) => path === SIMPLE_HOME || path === "/simple/inbox";
 const PART_READS = {
   waiting: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/decisions/waiting", { ...rail(staleOk), signal })),
   // A failed light count falls back to the one list (never a failed part).
   roadmap: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/roadmap/waiting", { ...rail(staleOk), signal })).catch(() => null),
-  inbox: (signal: AbortSignal, staleOk: boolean) => railInbox(signal, staleOk),
+  inbox: (signal: AbortSignal, staleOk: boolean, path: string) =>
+    READS_INBOX(path) ? railInbox(signal, staleOk).then(inboxCounts) : railInboxCounts(signal, staleOk),
   questions: (signal: AbortSignal, staleOk: boolean) => railQuestions(signal, staleOk),
   goals: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } }, ...rail(staleOk), signal })),
   meetings: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/meetings", { ...rail(staleOk), signal })),
@@ -220,6 +228,7 @@ const PART_BY_URL = new Map<string, Part>([
   ["/v1/simple/decisions/waiting", "waiting"],
   ["/v1/simple/roadmap/waiting", "roadmap"],
   ["/v1/inbox", "inbox"],
+  ["/v1/inbox/counts", "inbox"],
   ["/v1/inbox/questions", "questions"],
   ["/v1/simple/goal-suggestions?status=open", "goals"],
   ["/v1/simple/meetings", "meetings"],

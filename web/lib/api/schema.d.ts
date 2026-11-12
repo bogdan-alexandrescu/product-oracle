@@ -6792,6 +6792,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/inbox/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Inbox Counts
+         * @description The Inbox's counts alone (the rails' badges): ``total`` as GET /v1/inbox's, and the
+         *     part of it the Simple Roadmap tab counts too; the rows shown only are not read.
+         */
+        get: operations["get_inbox_counts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/inbox/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Inbox Seen
+         * @description Record this visit as my last one (what 'new' is measured from next time), as GET
+         *     /v1/inbox?mark_seen=true does, without reading the Inbox.
+         */
+        post: operations["mark_inbox_seen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/internal/tick": {
         parameters: {
             query?: never;
@@ -27816,6 +27858,16 @@ export interface components {
              * @default 0
              */
             done: number;
+        };
+        /**
+         * InboxCountsOut
+         * @description The Inbox's counts alone (inbox-reads), for the rails' badges.
+         */
+        InboxCountsOut: {
+            /** Total */
+            total: number;
+            /** Roadmap */
+            roadmap: number;
         };
         /**
          * InboxDateBasis
@@ -64684,6 +64736,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_inbox_counts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxCountsOut"];
+                };
+            };
+        };
+    };
+    mark_inbox_seen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

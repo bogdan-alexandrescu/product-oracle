@@ -23252,6 +23252,61 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/inbox/counts": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Inbox Counts",
+        "description": "The Inbox's counts alone (the rails' badges): ``total`` as GET /v1/inbox's, and the\npart of it the Simple Roadmap tab counts too; the rows shown only are not read.",
+        "operationId": "get_inbox_counts",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxCountsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/inbox/seen": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Mark Inbox Seen",
+        "description": "Record this visit as my last one (what 'new' is measured from next time), as GET\n/v1/inbox?mark_seen=true does, without reading the Inbox.",
+        "operationId": "mark_inbox_seen",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/internal/tick": {
       "post": {
         "tags": [
@@ -86628,6 +86683,25 @@
         },
         "type": "object",
         "title": "InboxCounts"
+      },
+      "InboxCountsOut": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "roadmap": {
+            "type": "integer",
+            "title": "Roadmap"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "roadmap"
+        ],
+        "title": "InboxCountsOut",
+        "description": "The Inbox's counts alone (inbox-reads), for the rails' badges."
       },
       "InboxDateBasis": {
         "properties": {
