@@ -238,8 +238,14 @@ def _after(rows: list[SimplePriorityRow], deps: dict[str, list[str]]) -> None:
     """A row scored above some row ranked above it waits for a dependency: name the nearest
     one above it among what it needs (transitively)."""
     position = {r.feature_id: i for i, r in enumerate(rows)}
+    # read-speed: the lowest score above each row, kept as the rows go (not every row above
+    # each row again).
+    lowest: float | None = None
     for i, r in enumerate(rows):
-        if r.score is None or not any(o.score is not None and o.score < r.score for o in rows[:i]):
+        below = r.score is not None and lowest is not None and lowest < r.score
+        if r.score is not None and (lowest is None or r.score < lowest):
+            lowest = r.score
+        if not below:
             continue
         seen: set[str] = set()
         todo = list(deps.get(r.feature_id, []))
@@ -828,6 +834,13 @@ def _fold_twins(
 async def build(
     db: AsyncSession, principal: Any, line_key: str | None = None
 ) -> SimplePrioritiesOut:
+    # read-speed: the read writes nothing, so the members, documents, tracks, deciders and
+    # drafts its parts read are read once (drafts.one_read), as the roadmap read does.
+    with drafts.one_read():
+        return await _build(db, principal, line_key)
+
+
+async def _build(db: AsyncSession, principal: Any, line_key: str | None) -> SimplePrioritiesOut:
     ranking = await priorities.compute(db, METHOD, principal, overrides=True)
     overlays = await drafts.overlays_for(db, principal)
     read_ = await service.load(db, overlays)
