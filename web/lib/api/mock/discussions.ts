@@ -1271,20 +1271,26 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
           ...(script && "reads" in script && typeof script.reads === "number" && script.reads > 0 ? { live_reads: script.reads } : {}),
         })
       : null;
-    if (reply) proposeSectionEdit(d, row);
+    if (reply) proposeFromPanel(d, row, reply.id);
     return json(201, { message, reply: reply ? messageOut(reply) : null });
   };
-  /** G3 in the panel (mock): asked to rewrite or change a section, Oracle proposes a section_edit on it. */
-  const proposeSectionEdit = (d: DiscussionRow, x: MessageRow) => {
-    if (d.subject_kind !== "section" || !/\b(rewrite|change)\b/i.test(x.body)) return;
+  /**
+   * G3 in the panel (mock): asked to rewrite or change a section, Oracle proposes a section_edit on it; asked on
+   * any other subject to record a decision, it proposes the decision. Each comes from the reply (`from`), so the
+   * reply's stream sends it (as the API's _changes_of).
+   */
+  const proposeFromPanel = (d: DiscussionRow, x: MessageRow, from: string) => {
+    const line = x.body.trim().slice(0, 2000);
+    const section = d.subject_kind === "section" && /\b(rewrite|change)\b/i.test(x.body);
+    if (!section && !(d.subject_kind !== "section" && /\brecord a decision\b/i.test(x.body))) return;
     const section_key = String(d.subject.section_key);
-    const payload = { section_key, instruction: x.body.trim().slice(0, 2000) };
+    const payload = section ? { section_key, instruction: line } : { title: line.slice(0, 200) };
     (db.changes ??= []).push({
       id: ctx.uuid(),
       discussion_id: d.id,
-      kind: "section_edit",
-      label: `Change ${section_key}: ${payload.instruction}`,
-      target: { document_id: d.subject.document_id, version: d.subject.version, section_key },
+      kind: section ? "section_edit" : "decision",
+      label: section ? `Change ${section_key}: ${line}` : changeLabel("decision", payload),
+      target: section ? { document_id: d.subject.document_id, version: d.subject.version, section_key } : {},
       payload,
       edited_payload: null,
       rationale: null,
@@ -1298,7 +1304,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       decision_note: null,
       override_reason: null,
       reason: null,
-      from_message_id: null,
+      from_message_id: from,
       created_at: ctx.now(),
       lock_version: 1,
     });
@@ -1362,13 +1368,16 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         }
         await write({ status: "complete", body: text, citations });
         controller.enqueue(event("citations", citations));
-        // G3: the reply's changes, stored as it ends and sent before done.
-        // A panel chat's change comes from G7's stub above (proposeSectionEdit), not the canned two.
+        // G3: the reply's changes, stored as it ends and sent before done, only when it made some (replies._changes_of).
+        // A panel chat's change comes from G7's stub above (proposeFromPanel), not the canned two.
         if (d && d.origin !== "panel") {
           const made = cannedChanges(d, id, ctx.uuid, ctx.now());
           if (ctx.persist) await ctx.persist((saved) => addProposals((saved.changes ??= []), made));
           else addProposals((db.changes ??= []), made);
-          controller.enqueue(event("changes", made.map((c) => changeOut(c, d))));
+          if (made.length) controller.enqueue(event("changes", made.map((c) => changeOut(c, d))));
+        } else if (d) {
+          const made = ((ctx.current?.() ?? db).changes ?? []).filter((c) => c.from_message_id === id);
+          if (made.length) controller.enqueue(event("changes", made.map((c) => changeOut(c, d))));
         }
         controller.enqueue(event("done", messageOut({ ...x, status: "complete", body: text, citations })));
         controller.close();

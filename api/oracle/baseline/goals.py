@@ -382,10 +382,11 @@ def figure_words(value: float, unit: str | None) -> str:
     """goal-figure-words: a goal's number in its unit as people write it: a currency's sign
     before it ("$50,000", "€1,200", "£3.5"), other units after it ("1,200 shops", "60%",
     "3 days"); commas between thousands, decimals kept (a currency's to at most two, half up as
-    the web's goalFigure: "$13,400.56"), a whole float without ".0"."""
+    the web's goalFigure: "$13,400.56"), a whole float without ".0". An infinite currency value or
+    one past 1e26 (beyond Decimal's 28 digits at cents) prints as it is, unrounded."""
     u = (unit or "").strip()
     sign = CURRENCY_SIGNS.get(u.lower())
-    if sign and isinstance(value, float):
+    if sign and isinstance(value, float) and math.isfinite(value) and abs(value) < 1e26:
         value = float(Decimal(repr(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
     n = int(value) if isinstance(value, float) and value.is_integer() else value
     shown = f"{abs(n):,}"

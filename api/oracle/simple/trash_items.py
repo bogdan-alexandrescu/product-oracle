@@ -366,6 +366,7 @@ async def trash_goal(
     # G-4: Trash says how many features served it, so Restore's words name what comes back.
     served = len({e.src_id for e in await goal_buckets._links(db) if e.dst_id == goal.id})
     extra: dict[str, Any] = {"to_goal_id": None, "links": [], "goal_ids": {}}
+    # goal_ids_after only with a goal picked: a delete with none rewrites no item's goal_ids.
     if to_goal_id is not None:
         before = await goal_buckets.move_off(db, goal, to_goal_id)
         after: dict[uuid.UUID, list[uuid.UUID]] = {}

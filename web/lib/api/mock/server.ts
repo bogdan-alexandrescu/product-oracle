@@ -170,7 +170,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
+import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith, withKeyResultBuckets } from "./goal-buckets";
 import { proposeGoalDelete, restoreCodeTaken, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import {
@@ -1633,10 +1633,48 @@ function seedGoalBucketsDatedScenario(): Db {
 }
 
 /**
+ * "goal-buckets-short-clash" (goal-features-own-key): "goal-buckets-dated" with two invented roadmap items on Grow
+ * retention whose codes clash: Quiet mode schedule (short code QMS, made from its initials) serves the goal by its
+ * own goal only (its feature links no goal), and Weekly alert email's feature key is qms. Invented data.
+ */
+export const GOAL_BUCKETS_SHORT_CLASH_SCENARIO = "goal-buckets-short-clash";
+
+function seedGoalBucketsShortClashScenario(): Db {
+  const db = seedGoalBucketsDatedScenario();
+  const rm = db.simple_roadmap!;
+  rm.items.push({ key: "quiet-mode", title: "Quiet mode schedule", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention" });
+  rm.items.push({ key: "qms", title: "Weekly alert email", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention" });
+  for (const k of ["quiet-mode", "qms"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
+  withRoadmapGoalBuckets(db);
+  // The item serves the goal, its feature does not (the API's goal buckets list a feature by its own goal links).
+  rm.goal_buckets!.features = rm.goal_buckets!.features.filter((f) => f.key !== "quiet-mode");
+  return db;
+}
+
+/**
+ * "goal-buckets-linked-draft": "goal-buckets-short-clash" with two invented drafts on Grow retention: one linked
+ * to Quiet mode schedule's feature (shown on its row, so one feature with it), and one only named Weekly alert email
+ * (shown on its row too, but a feature of its own). Invented data.
+ */
+export const GOAL_BUCKETS_LINKED_DRAFT_SCENARIO = "goal-buckets-linked-draft";
+
+function seedGoalBucketsLinkedDraftScenario(): Db {
+  const db = seedGoalBucketsShortClashScenario();
+  const rm = db.simple_roadmap!;
+  rm.items.push({ key: "quiet-mode-draft", title: "Quiet mode schedule", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", feature: "quiet-mode", draft: true });
+  rm.items.push({ key: "weekly-alert-copy", title: "Weekly alert email", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", draft: true });
+  for (const k of ["quiet-mode-draft", "weekly-alert-copy"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
+  return db;
+}
+
+/**
  * "goal-buckets-three-goals" (goal-delete-r3): "goal-buckets-dated" with two more drafts that name
  * the archived goal Cut support tickets in half: Team alert digest serves it first, then Grow
  * retention and Faster activation; Snooze for a day serves Grow retention, then it; Alert tone picker
- * serves Grow retention, then a key result of Faster activation. Invented data.
+ * serves Grow retention, then a key result of Faster activation; Alert log download serves Grow retention, then
+ * its own key result (goal-delete-r4); Alert quiet hours serves Grow retention, then a key result of that key result
+ * (goal-delete-r5); Alert sound pack serves Grow retention, then a key result of its proposed key result (goal-delete-r7).
+ * Invented data.
  */
 export const GOAL_BUCKETS_THREE_GOALS_SCENARIO = "goal-buckets-three-goals";
 
@@ -1650,7 +1688,34 @@ function seedGoalBucketsThreeGoalsScenario(): Db {
   const parent = db.baseline.entities.find((e) => e.type === "goal" && e.key === "faster-activation") ?? db.baseline.entities.find((e) => e.type === "goal")!;
   db.baseline.entities.push({ ...parent, id: stableUuid("simple-goal/kr-quick-alert"), key: "kr-quick-alert", title: "KR 1 Teams get a first alert in a day", parent_id: parent.id, status: "confirmed", attrs: { metric: "teams", weight: 1 } });
   rm.items.push({ key: "alert-tone", title: "Alert tone picker", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-quick-alert"], draft: true });
-  for (const k of ["alert-team-digest", "alert-snooze-day", "alert-tone"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
+  // goal-delete-r4: an item on Grow retention and its own key result: Archive moves it to the goal picked.
+  const grow = db.baseline.entities.find((e) => e.type === "goal" && e.key === "grow-retention") ?? parent;
+  db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-week-two"), key: "kr-week-two", title: "KR 1 Teams come back in week two", parent_id: grow.id, status: "confirmed", attrs: { metric: "teams", weight: 1 } });
+  rm.items.push({ key: "alert-log", title: "Alert log download", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-week-two"], draft: true });
+  // goal-delete-r5: an item on Grow retention and a key result of its key result: Archive moves it to the goal picked too.
+  db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-week-two-mute"), key: "kr-week-two-mute", title: "KR 1.1 Teams set quiet hours in week two", parent_id: stableUuid("simple-goal/kr-week-two"), status: "confirmed", attrs: { metric: "teams", weight: 1 } });
+  rm.items.push({ key: "alert-quiet-hours", title: "Alert quiet hours", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-week-two-mute"], draft: true });
+  // goal-delete-r7: an item on Grow retention and a key result under its proposed key result: Archive moves it to the goal picked too.
+  db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-week-two-ideas"), key: "kr-week-two-ideas", title: "KR 2 Teams try new alerts in week two", parent_id: grow.id, status: "proposed", attrs: { metric: "teams", weight: 1 } });
+  db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-week-two-sound"), key: "kr-week-two-sound", title: "KR 2.1 Teams pick an alert sound in week two", parent_id: stableUuid("simple-goal/kr-week-two-ideas"), status: "confirmed", attrs: { metric: "teams", weight: 1 } });
+  rm.items.push({ key: "alert-sound-pack", title: "Alert sound pack", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-week-two-sound"], draft: true });
+  for (const k of ["alert-team-digest", "alert-snooze-day", "alert-tone", "alert-log", "alert-quiet-hours", "alert-sound-pack"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
+  // goal-delete-r7: the key results above among the goal buckets, as the API lists them.
+  withKeyResultBuckets(rm.goal_buckets!, db.baseline.entities);
+  return db;
+}
+
+/**
+ * "goal-buckets-key-result-target" (goal-target-kept): "goal-buckets-dated" with a confirmed key result of Grow
+ * retention whose target is stored as a number in its unit (60, "%"), as the goal buckets read it. Invented data.
+ */
+export const GOAL_BUCKETS_KR_TARGET_SCENARIO = "goal-buckets-key-result-target";
+
+function seedGoalBucketsKeyResultTargetScenario(): Db {
+  const db = seedGoalBucketsDatedScenario();
+  const grow = db.baseline.entities.find((e) => e.type === "goal" && e.key === "grow-retention")!;
+  db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-alerts-read"), key: "kr-alerts-read", title: "KR 1 Teams read their alerts", parent_id: grow.id, status: "confirmed", attrs: { metric: "Alerts read", target: 60, unit: "%", weight: 1 } });
+  withKeyResultBuckets(db.simple_roadmap!.goal_buckets!, db.baseline.entities);
   return db;
 }
 
@@ -1676,6 +1741,7 @@ function withRoadmapGoalBuckets(db: Db): Db {
   // goal-target-kept: Revenue's target is stored as a number in usd (a measured goal).
   const revenue = rm.goal_buckets.goals.find((g) => g.key === "revenue");
   if (revenue) Object.assign(revenue, { unit: "usd", target: targetRead(20000, "usd") });
+  withKeyResultBuckets(rm.goal_buckets, db.baseline.entities);
   return db;
 }
 
@@ -4353,8 +4419,14 @@ function load(): Db {
                 ? seedGoalBucketsUndatedScenario
               : scenario === GOAL_BUCKETS_DATED_SCENARIO
                 ? seedGoalBucketsDatedScenario
+              : scenario === GOAL_BUCKETS_KR_TARGET_SCENARIO
+                ? seedGoalBucketsKeyResultTargetScenario
               : scenario === GOAL_BUCKETS_THREE_GOALS_SCENARIO
                 ? seedGoalBucketsThreeGoalsScenario
+              : scenario === GOAL_BUCKETS_SHORT_CLASH_SCENARIO
+                ? seedGoalBucketsShortClashScenario
+              : scenario === GOAL_BUCKETS_LINKED_DRAFT_SCENARIO
+                ? seedGoalBucketsLinkedDraftScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
               : scenario === PRIORITIES_PLAN_MILESTONES_SCENARIO
@@ -8266,6 +8338,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   // lane-gt-ui: an item reads its feature's code (service.load's Entry.code).
   db.simple_roadmap.feature_codes = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature" && /^[A-Z]{1,3}-\d+[a-j]?$/.test(e.key)).map((e) => [e.id, e.key]));
   db.simple_roadmap.feature_keys = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature").map((e) => [e.id, e.key]));
+  db.simple_roadmap.feature_titles = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected").map((e) => [e.id, e.title]));
   // changes.py set_feature: the feature is a baseline feature, not rejected.
   if (p[1] === "simple" && p[2] === "changes" && !p[3] && m === "POST") {
     const c = await req.clone().json().catch(() => null) as { op?: string; after?: { feature_id?: string | null } } | null;

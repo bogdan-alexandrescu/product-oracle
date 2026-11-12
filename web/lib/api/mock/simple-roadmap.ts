@@ -62,6 +62,8 @@ interface SeedItem {
   suggested_depends?: string[];
   /** roadmap-edit-fixes: when Oracle's draft filled a field (a conflict it caused names Oracle). */
   drafted_at?: string;
+  /** roadmap-edit-fixes: the fields Oracle's draft filled (the item_draft job's `filled`). */
+  drafted?: string[];
   status?: Item["status"];
   /** one-feature-panel: the status the tracker gave it, kept once its panel sets one (planned reads it again). */
   tracked?: Item["status"];
@@ -245,6 +247,9 @@ interface SimpleDb {
   feature_codes?: Record<string, string>;
   /** Every Ground Truth feature's key by its id (changes._merge_plan reads its code from it). */
   feature_keys?: Record<string, string>;
+  /** roadmap-edit-fixes: the Ground Truth features Oracle's draft may pick (additions._features: not
+   * rejected), their names by id (server.ts). */
+  feature_titles?: Record<string, string>;
   /** build-milestones-on-roadmap: each roadmap's milestones per goal (./simple-milestones.ts). */
   goal_milestones?: MockMilestone[];
   /** roadmap-keydates review ("roadmap-keydates-uncoded"): a track milestone record's own day
@@ -432,7 +437,15 @@ export function knowCompanyGoals(goals: (OrderedGoal & { key: string })[]): void
 /** kr-in-goal-card: each key result's (a subgoal's) top confirmed parent goal key, by its key, up its
  * confirmed parents at any depth (service._parent_goals, service._lane_goal). */
 let goalParents = new Map<string, string>();
-export function knowGoalParents(goals: { id: string; key: string; type: string; status: string; parent_id?: string | null }[]): void {
+/** goal-delete-r4: each Ground Truth goal's title by its key, so a key result an item is left on reads its own title (the API's goal ref). */
+let goalTitles = new Map<string, string>();
+/** goal-delete-r4: each key result's own parent goal key, by its key (Entity.parent_id, one level up). */
+let goalParentKeys = new Map<string, string>();
+export const goalParentKey = (key: string): string | undefined => goalParentKeys.get(key);
+export function knowGoalParents(goals: { id: string; key: string; title?: string; type: string; status: string; parent_id?: string | null }[]): void {
+  goalTitles = new Map(goals.flatMap((g) => (g.type === "goal" && g.title ? [[g.key, g.title] as const] : [])));
+  const keyOf = new Map(goals.map((g) => [g.id, g.key]));
+  goalParentKeys = new Map(goals.flatMap((g) => (g.type === "goal" && g.parent_id && keyOf.has(g.parent_id) ? [[g.key, keyOf.get(g.parent_id)!] as const] : [])));
   type G = (typeof goals)[number];
   const parents = new Map(goals.filter((g) => g.type === "goal" && g.status === "confirmed").map((g) => [g.id, g]));
   const top = (g: G): G => {
@@ -570,7 +583,7 @@ export const goalInTrash = (db: Pick<SimpleDb, "goal_buckets">, key: string): bo
 export const goalArchived = (db: Pick<SimpleDb, "goal_buckets">, key: string): boolean =>
   (db.goal_buckets?.goals ?? []).some((g) => g.archived && (g.key === key || g.title.toLowerCase() === (GOALS[key] ?? PLAN_GOALS[key] ?? "").toLowerCase()));
 /** The seeded fields of a roadmap goal (a goal bucket of its key starts from them). */
-export const roadmapGoalSeed = (key: string): RoadmapGoalFields => ({ title: GOALS[key] ?? PLAN_GOALS[key], metric: METRICS[key] ?? null, target: TARGETS[key]?.[0] ?? null, due: TARGETS[key]?.[1] ?? null });
+export const roadmapGoalSeed = (key: string): RoadmapGoalFields => ({ title: GOALS[key] ?? PLAN_GOALS[key] ?? goalTitles.get(key) ?? "", metric: METRICS[key] ?? null, target: TARGETS[key]?.[0] ?? null, due: TARGETS[key]?.[1] ?? null });
 /** The goal's fields as read: its goal bucket's (one goal store, as the API's one goal entity), else an edit, else its seed. */
 export const roadmapGoal = (db: Pick<SimpleDb, "goal_edits" | "goal_buckets">, key: string): RoadmapGoalFields => {
   const b = bucketGoalOf(db, key);
@@ -1877,7 +1890,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       reasons: [
         ...(s.notes ?? []),
         ...(s.why ? [s.why] : []),
-        ...(s.goal ? [`Serves the goal ${GOALS[s.goal]}.`] : []),
+        // goal-delete-r4: a key result it is left on by its own title (service._reasons' e.goal.title).
+        ...(s.goal ? [`Serves the goal ${GOALS[s.goal] ?? roadmapGoal(reader.full, s.goal).title}.`] : []),
         ...(s.section ? [`From ${rm.prd}: ${sectionLabel(s.section, s.heading, s.title).replace(/^[A-Z][A-Z0-9]*-\d+[a-z]?\s+/, "")}.`] : []),
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
@@ -2286,10 +2300,24 @@ export function settleDrafting(db: SimpleDb): void {
   for (const s of db.items) {
     if (!s.drafting_until || s.drafting_until > now) continue;
     delete s.drafting_until;
-    // roadmap-edit-fixes: Oracle fills only what a person has not.
+    // roadmap-edit-fixes: Oracle fills only what a person has not (additions.run_item_draft): the
+    // outcome, and a feature (simplified: the first by key whose name shares a word with the title).
+    const filled: string[] = [];
     if (s.outcome == null) {
       s.outcome = `Teams get ${s.title.toLowerCase()} without asking support`;
+      filled.push("outcome");
+    }
+    const mine = WORDS(s.title);
+    const feature = Object.keys(db.feature_titles ?? {})
+      .sort((a, b) => (db.feature_keys?.[a] ?? a).localeCompare(db.feature_keys?.[b] ?? b))
+      .find((f) => [...WORDS(db.feature_titles![f])].some((w) => mine.has(w)));
+    if (!s.feature_id && feature) {
+      s.feature_id = feature;
+      filled.push("feature_id");
+    }
+    if (filled.length) {
       s.drafted_at = new Date(now).toISOString();
+      s.drafted = filled;
     }
     s.flow = plainFlow({
       title: s.title,

@@ -104,7 +104,8 @@ from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import Text, cast, func, or_, select, text, update
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -640,18 +641,25 @@ async def _oracle_filled(db: AsyncSession, item_id: str, fields: tuple[str, ...]
     )
     if not any(set(fields) & set((o or {}).get("filled") or ()) for o in outs):
         return False
-    rows = await db.scalars(select(SimpleChange).where(SimpleChange.status.in_(WRITTEN)))
+    rows = await _written(db, {item_id})
     return not any(c.op != "add_item" and _writes(c, {item_id}, set(fields)) for c in rows)
 
 
-async def _last_writer(
-    db: AsyncSession, item_ids: set[str], fields: set[str] | None = None
-) -> tuple[Any, Any]:
-    """(SimplePersonRef dict, when) of the last change through Simple that wrote these
-    fields of these items (any field when None); a tie on when goes to the one made last."""
-    rows = await db.scalars(
+async def _written(db: AsyncSession, item_ids: set[str]) -> Any:
+    """The last written changes that name these items (as ``_touched`` reads them), newest
+    first."""
+    ids = cast(sorted(item_ids), ARRAY(Text))
+    return await db.scalars(
         select(SimpleChange)
-        .where(SimpleChange.status.in_(WRITTEN))
+        .where(
+            SimpleChange.status.in_(WRITTEN),
+            or_(
+                SimpleChange.target["item_id"].astext == func.any(ids),
+                SimpleChange.target["subject"].astext == func.any(ids),
+                SimpleChange.after.has_any(ids),
+                SimpleChange.before.has_any(ids),
+            ),
+        )
         .order_by(
             SimpleChange.decided_at.desc().nulls_last(),
             SimpleChange.at.desc(),
@@ -659,6 +667,14 @@ async def _last_writer(
         )
         .limit(500)
     )
+
+
+async def _last_writer(
+    db: AsyncSession, item_ids: set[str], fields: set[str] | None = None
+) -> tuple[Any, Any]:
+    """(SimplePersonRef dict, when) of the last change through Simple that wrote these
+    fields of these items (any field when None); a tie on when goes to the one made last."""
+    rows = await _written(db, item_ids)
     best: tuple[datetime, int, uuid.UUID] | None = None
     added = False
     for c in rows:

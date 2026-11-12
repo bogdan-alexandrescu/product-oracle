@@ -26,6 +26,7 @@ import hashlib
 import hmac
 import re
 import uuid
+from collections.abc import Mapping
 from datetime import date, datetime
 from typing import Annotated, Any
 
@@ -263,10 +264,28 @@ def _due(attrs: dict[str, Any]) -> date | None:
         return None
 
 
+def is_live(goals: Mapping[uuid.UUID, Any], i: uuid.UUID, gone: uuid.UUID | None = None) -> bool:
+    """Live only when the walk up its parents reaches a top goal: a goal archived, ``gone``
+    (one Archive takes away) or not read (in Trash) is not, nor any key result below it.
+    ``goals`` by id, each with its ``id``, ``parent_id`` and ``status``; a proposed goal is live."""
+    seen: set[uuid.UUID] = set()
+    while i not in seen:
+        g = goals.get(i)
+        if g is None or g.id == gone or g.status == "rejected":
+            return False
+        if g.parent_id is None:
+            return True
+        seen.add(i)
+        i = g.parent_id
+    return False
+
+
 async def _goals(db: AsyncSession) -> list[Entity]:
+    """The live goals (key results too) in the one goal order (:func:`is_live`)."""
     from oracle.simple import goal_reads
 
-    return sort_goals(g for g in await goal_reads.all_goals(db) if g.status != "rejected")
+    goals = await goal_reads.goals_by_id(db)
+    return sort_goals(g for g in goals.values() if is_live(goals, g.id))
 
 
 def _owner_id(attrs: dict[str, Any]) -> uuid.UUID | None:
@@ -614,13 +633,16 @@ async def move_items_off(
         )
     )
     others = {i for r in rows for i in r.goal_ids or [] if i != goal_id}
-    live = set(
-        await db.scalars(
-            select(Entity.id).where(
-                Entity.id.in_(others), Entity.type == "goal", Entity.status != "rejected"
-            )
+    # The goal's key results go with it, at any depth, as do those under an archived goal
+    # or one in Trash:
+    # an item on one is not kept there by it (the dialog lifts a key result to its top goal).
+    goals = {
+        r.id: r
+        for r in await db.execute(
+            select(Entity.id, Entity.parent_id, Entity.status).where(Entity.type == "goal")
         )
-    )
+    }
+    live = {i for i in others if is_live(goals, i, goal_id)}
     before = []
     for row in rows:
         before.append(ItemGoalsSnap(item_id=row.id, goal_ids=list(row.goal_ids)))

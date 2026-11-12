@@ -247,7 +247,10 @@ export function twinBlock(db: SimpleDb, may: (s: SeedItem) => boolean, source: s
   return null;
 }
 
-/** The key of the item standing for the feature `fid`, undefined for no such feature. */
+/**
+ * The key of the item standing for the feature `fid`, undefined for no such feature. It rebuilds the whole index on
+ * each call: one call per request; build the index once if you need it in a loop.
+ */
 export function featureItem(db: SimpleDb, fid: string): string | undefined {
   return featureItems(db).get(fid);
 }
@@ -319,7 +322,8 @@ function offCompany(db: SimpleDb, on: Item[]): Item[] {
   }
 }
 
-const FEATURE_CODE = /^[A-Z]{1,3}-\d+$/;
+/** A feature code, a slice letter included (F-15a), as priorities.FEATURE_CODE reads it. */
+const FEATURE_CODE = /^[A-Z]{1,3}-\d+[a-j]?$/;
 
 /** Initials of up to three words of `name` (Team invite nudges TIN); a one-word name's first two letters (Pricing PR); then the name's first number, if it has one (Pay 1 PA1). */
 function initials(name: string): string {
@@ -703,7 +707,7 @@ export function prioritiesOut(
   const short = featureShortCodes(db, ranked);
   yours.forEach((i, n) => (rows[n].short_code = short.get(featureKeyOf(db, i.key))!));
   // prio-company: the feature's own code beside its name (priorities.FEATURE_CODE), never letters made up.
-  rows.forEach((r) => (r.own_key = /^[A-Z]{1,3}-\d+$/.test(r.short_code) ? r.short_code : null));
+  rows.forEach((r) => (r.own_key = FEATURE_CODE.test(r.short_code) ? r.short_code : null));
   // plan-charts: with a plan, its PRD's items are in it (Goal buckets lists the rest outside it).
   const plan = planOf(db, read, ctx.role);
   if (plan) {

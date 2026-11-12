@@ -7,9 +7,11 @@ import asyncio
 import base64
 import json
 import logging
+import math
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import jwt
 import pytest
@@ -21,7 +23,7 @@ from sqlalchemy.pool import NullPool
 from oracle.auth import jwks
 from oracle.claude_accounts import sweep as claude_sweep
 from oracle.claude_accounts import usage
-from oracle.claude_accounts.models import ClaudeSweepLease
+from oracle.claude_accounts.models import ClaudeAccountHold, ClaudeSweepLease
 from oracle.config import get_settings
 from oracle.db import get_engine
 from oracle.jobs import kinds
@@ -766,14 +768,16 @@ async def _jobs(tenant_id: uuid.UUID) -> list[LlmJob]:
         return list(await s.scalars(select(LlmJob).order_by(LlmJob.created_at)))
 
 
-@pytest.mark.timing
 async def test_a_job_is_never_cut_mid_call_by_the_tick(client, ticker_on, claude, monkeypatch):
     tenant_id = await _backlog(client, 5)
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 1.0)
     monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 2.5)
+    # Each call takes 0.8 s of a clock that moves only by the calls, and the hard limit is cut
+    # on that clock: under load the tick's earlier work outran the wall clock (-n 4).
+    tick = _StillTick(monkeypatch)
 
     async def slow(kind, payload):
-        await asyncio.sleep(0.8)
+        await tick.spend(0.8)
 
     claude.on_call = slow
     out = (await client.post(PATH, headers=bearer(id_token()))).json()
@@ -781,8 +785,11 @@ async def test_a_job_is_never_cut_mid_call_by_the_tick(client, ticker_on, claude
     statuses = [j.status for j in await _jobs(tenant_id)]
     # Only jobs that could finish inside the tick were claimed; the rest wait, unclaimed.
     assert "running" not in statuses
-    assert 1 <= out["llm_jobs"]["ran"] == statuses.count("succeeded") < 5
-    assert statuses.count("queued") == 5 - out["llm_jobs"]["ran"]
+    assert out["llm_jobs"]["ran"] == statuses.count("succeeded") == 2
+    queued = [j for j in await _jobs(tenant_id) if j.status == "queued"]
+    assert len(queued) == 3
+    # Never claimed, not claimed and given back: none of them started.
+    assert [(j.started_at, j.attempts) for j in queued] == [(None, 0)] * 3
 
 
 async def test_no_job_is_claimed_when_less_than_a_call_remains(
@@ -796,16 +803,19 @@ async def test_no_job_is_claimed_when_less_than_a_call_remains(
     assert (job.status, job.attempts) == ("queued", 0)
 
 
-@pytest.mark.timing
 async def test_a_job_whose_calls_keep_overrunning_fails_after_its_attempts(
     client, ticker_on, claude, monkeypatch
 ):
     tenant_id = await _backlog(client, 1)
     # A call that outlives the tick's hard limit anyway (a model call past its timeout).
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.01)
-    monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 1.0)
+    # The cut is fired once the call has started, not left to a 1 s hard limit: under load
+    # the tick's earlier work outran it, so the job was cut before its call (-n 4).
+    tick = _TickAsyncio()
+    monkeypatch.setattr(ticker, "asyncio", tick)
 
     async def hang(kind, payload):
+        tick.hard_limit.reschedule(asyncio.get_running_loop().time())
         await asyncio.sleep(30)
 
     claude.on_call = hang
@@ -823,22 +833,85 @@ async def test_a_job_whose_calls_keep_overrunning_fails_after_its_attempts(
     assert out["llm_jobs"]["ran"] == 0 and len(claude.calls) == llm_jobs.MAX_ATTEMPTS
 
 
+class _TickAsyncio:
+    """The router's ``asyncio``, keeping the tick's hard-limit timeout so a test can fire
+    it at a chosen moment instead of racing the wall clock."""
+
+    def __init__(self) -> None:
+        self.hard_limit: asyncio.Timeout | None = None
+
+    def __getattr__(self, name: str):
+        return getattr(asyncio, name)
+
+    def timeout(self, delay: float | None) -> asyncio.Timeout:
+        self.hard_limit = asyncio.timeout(delay)
+        return self.hard_limit
+
+
+class _GatewayClock:
+    """The gateway's ``time``, its clock moved ``ahead`` so a test can run a job out of time
+    at a chosen moment instead of racing the wall clock."""
+
+    def __init__(self) -> None:
+        self.ahead = 0.0
+
+    def __getattr__(self, name: str):
+        return getattr(time, name)
+
+    def monotonic(self) -> float:
+        return time.monotonic() + self.ahead
+
+
+class _StillTick(_TickAsyncio):
+    """The router's ``asyncio`` and the ticker's, the job worker's and the gateway's ``time``,
+    on a clock that moves only by what a test ``spend``s: the hard limit is cut when that
+    reaches it, never on the wall clock, so the machine's speed counts for nothing."""
+
+    def __init__(self, monkeypatch) -> None:
+        super().__init__()
+        self.now = 1000.0
+        self.ends = math.inf
+        monkeypatch.setattr(ticker, "asyncio", self)
+        for module in (ticker, llm_jobs, gateway):
+            monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: self.now))
+
+    def timeout(self, delay: float | None) -> asyncio.Timeout:
+        self.ends = self.now + (math.inf if delay is None else delay)
+        return super().timeout(None)
+
+    async def spend(self, seconds: float) -> None:
+        """Time a model call takes; cut there if the tick's hard limit falls inside it."""
+        self.now += seconds
+        if self.now >= self.ends:
+            self.hard_limit.reschedule(asyncio.get_running_loop().time())
+            await asyncio.sleep(30)
+
+
 async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
     client, ticker_on, claude, monkeypatch
 ):
     tenant_id = await _backlog(client, 1)
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.01)
-    monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 1.0)
+    # The cut is fired while the job reads its inputs, not left to a short hard limit: under
+    # load the tick's earlier work outran 1 s, so the job was cut before it was claimed, or
+    # was not claimed and the tick ended uncut (CI, Nov 11).
+    tick = _TickAsyncio()
+    monkeypatch.setattr(ticker, "asyncio", tick)
     reading = asyncio.Event()
+    started = asyncio.Event()
 
     async def slow_inputs(s, job, ask):
         # Reading the job's inputs outlives the tick: no model call has started.
         if not reading.is_set():
+            started.set()
+            tick.hard_limit.reschedule(asyncio.get_running_loop().time())
             await asyncio.sleep(30)
         return await ask("review_comments", {"job": str(job.id)})
 
     monkeypatch.setitem(kinds.RUNNERS, "review_comments", slow_inputs)
     out = (await client.post(PATH, headers=bearer(id_token()))).json()
+    # The job was claimed and cut while reading its inputs, not left unclaimed.
+    assert started.is_set()
     assert out["timed_out"] is True and claude.calls == []
     [job] = await _jobs(tenant_id)
     assert (job.status, job.attempts) == ("queued", 0)
@@ -846,30 +919,35 @@ async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
     assert (job.account_label, job.input_tokens, job.cost_usd) == (None, None, None)
     # Its claim is released: the next tick runs it.
     reading.set()
-    monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 240.0)
     out = (await client.post(PATH, headers=bearer(id_token()))).json()
     assert out["llm_jobs"]["succeeded"] == 1
     [job] = await _jobs(tenant_id)
     assert (job.status, job.attempts) == ("succeeded", 1)
 
 
-@pytest.mark.timing
 async def test_a_job_out_of_time_before_its_call_started_is_put_back_unspent(
     client, ticker_on, claude, monkeypatch
 ):
     tenant_id = await _backlog(client, 1)
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.6)
-    monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 1.5)
+    # The time runs out while the job reads its inputs, not left to a 1 s read against a short
+    # hard limit: under load the read outran the limit and the tick was cut instead (-n 4).
+    gateway_clock = _GatewayClock()
+    monkeypatch.setattr(gateway, "time", gateway_clock)
+    started = asyncio.Event()
     slow = [True]
 
     async def slow_inputs(s, job, ask):
         # Reading the inputs leaves less than a whole call: the gateway starts none.
         if slow[0]:
-            await asyncio.sleep(1.0)
+            started.set()
+            gateway_clock.ahead = 3600.0
         return await ask("review_comments", {"job": str(job.id)})
 
     monkeypatch.setitem(kinds.RUNNERS, "review_comments", slow_inputs)
     out = (await client.post(PATH, headers=bearer(id_token()))).json()
+    # The job was claimed and ran out of time while reading its inputs, not left unclaimed.
+    assert started.is_set()
     assert out["timed_out"] is False and claude.calls == []
     assert out["llm_jobs"] == {"ran": 0, "succeeded": 0, "failed": 0, "retried": 0}
     [job] = await _jobs(tenant_id)
@@ -877,6 +955,7 @@ async def test_a_job_out_of_time_before_its_call_started_is_put_back_unspent(
     assert (job.account_label, job.via, job.input_tokens) == (None, None, None)
     # Its attempt was given back: the next tick runs it, as its first.
     slow[0] = False
+    gateway_clock.ahead = 0.0
     out = (await client.post(PATH, headers=bearer(id_token()))).json()
     assert out["llm_jobs"]["succeeded"] == 1
     [job] = await _jobs(tenant_id)
@@ -903,17 +982,19 @@ async def test_the_v1_tick_runs_jobs_only_inside_the_ticks_time_limit(client, cl
     assert statuses.count("queued") == 5 - out["llm_jobs"]["ran"]
 
 
-@pytest.mark.timing
 async def test_a_job_swaps_to_no_account_it_has_no_time_left_for(
     client, ticker_on, claude, monkeypatch
 ):
     tenant_id = await _backlog(client, 1)
-    await add_account(tenant_id, "spare", windows={"five_hour": window(0.3)})
+    spare = await add_account(tenant_id, "spare", windows={"five_hour": window(0.3)})
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 1.0)
     monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 1.6)
+    # The call takes 0.7 s of a clock that moves only by the calls: under load the tick's
+    # earlier work outran 0.6 s of the wall clock, so the job was never claimed (-n 4).
+    tick = _StillTick(monkeypatch)
 
     async def slow(kind, payload):
-        await asyncio.sleep(0.7)
+        await tick.spend(0.7)
 
     claude.on_call = slow
     claude.script["review_comments"] = [LlmRateLimited("out of quota")]
@@ -923,6 +1004,12 @@ async def test_a_job_swaps_to_no_account_it_has_no_time_left_for(
     assert out["llm_jobs"]["retried"] == 1
     [job] = await _jobs(tenant_id)
     assert (job.status, job.attempts) == ("queued", 1)
+    # No swap was made: the hold stayed on the first account, and the spare took none.
+    assert (job.account_label, job.via) == ("personal", "account")
+    async with tenant_session(tenant_id) as s:
+        holds = list(await s.scalars(select(ClaudeAccountHold)))
+    assert holds and str(spare.account_id) not in {str(h.account_id) for h in holds}
+    assert [(h.swapped_from, h.swapped_to) for h in holds] == [(None, None)] * len(holds)
 
 
 async def test_no_job_runs_with_a_limit_of_zero(client, ticker_on, claude, monkeypatch):

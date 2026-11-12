@@ -733,11 +733,11 @@ function writesFields(c: Change, ids: string[], fields: string[] | null): boolea
   return wrote.some((f) => fields.includes(f));
 }
 
-/** changes._oracle_filled: Oracle's draft of a new item filled these fields (its outcome) and no
- * person has written them since; a person who saw them empty keeps their edit. */
+/** changes._oracle_filled: Oracle's draft of a new item filled these fields (its outcome, its
+ * feature) and no person has written them since; a person who saw them empty keeps their edit. */
 function oracleFilled(db: SimpleDb, id: string, fields: string[]): boolean {
   const s = db.items.find((x) => db.ids[x.key] === id);
-  if (!s?.drafted_at || !fields.includes("outcome")) return false;
+  if (!s?.drafted_at || !fields.some((f) => (s.drafted ?? []).includes(f))) return false;
   return !(db.changes ?? []).some((c) => ["applied", "accepted", "undone"].includes(c.status) && c.op !== "add_item" && writesFields(c, [id], fields));
 }
 
@@ -745,12 +745,16 @@ function conflict(db: SimpleDb, ctx: SimpleChangesCtx, current: Values, ids: str
   const fields = conflictFields(current);
   const writes = (db.changes ?? [])
     .filter((c) => ["applied", "accepted", "undone"].includes(c.status) && writesFields(c, ids, fields))
-    .map((c) => ({ at: c.status === "accepted" && c.decided_at ? c.decided_at : c.at, who: c.status === "accepted" && c.decided_by ? c.decided_by : c.by }));
+    .map((c) => ({ at: c.status === "accepted" && c.decided_at ? c.decided_at : c.at, who: c.status === "accepted" && c.decided_by ? c.decided_by : c.by, added: c.op === "add_item" }));
   const last = madeOrder(writes, (w) => [w.at], true)[0];
   // roadmap-edit-fixes (changes._last_writer): Oracle's draft filled it last: Oracle changed it.
-  // Only the outcome it filled; a person's write at the same moment came after it.
-  const oracle = fields && !fields.includes("outcome") ? undefined : db.items.filter((x) => ids.includes(db.ids[x.key]) && x.drafted_at).map((x) => x.drafted_at!).sort().reverse()[0];
-  if (oracle && (!last || oracle > last.at)) {
+  // Only the fields it filled; a person's write at the same moment came after it, the item's own add before it.
+  const oracle = db.items
+    .filter((x) => ids.includes(db.ids[x.key]) && x.drafted_at && (!fields || (x.drafted ?? []).some((f) => fields.includes(f))))
+    .map((x) => x.drafted_at!)
+    .sort()
+    .reverse()[0];
+  if (oracle && (!last || oracle > last.at || (oracle === last.at && last.added))) {
     return json(409, { detail: { message: `${lead}: changed by Oracle`, current, changed_by: { id: null, name: "Oracle" }, changed_at: oracle } });
   }
   const who = last ? { id: last.who, name: ctx.names[last.who] ?? "someone" } : null;
@@ -2192,8 +2196,9 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     roadmap ??= (goal ? db.items.find((x) => x.goal === goal && !closed(x) && visible.includes(x.roadmap))?.roadmap : undefined) ?? visible.find((r) => canEditRoadmap(db, r, ctx)) ?? visible[0];
     target.roadmap_id = roadmapId(roadmap);
     target.item_id = crypto.randomUUID();
-    const after: Values = { title, horizon, goal_ids: goal ? [goalId(goal)] : value in MAP_GOALS ? [value] : [], ...(quarter ? { quarter } : {}) };
-    if (typeof a.outcome === "string" && a.outcome.trim()) after.outcome = a.outcome.trim();
+    // additions.add_item: it writes the outcome, empty when none was given.
+    const outcome = typeof a.outcome === "string" && a.outcome.trim() ? a.outcome.trim() : null;
+    const after: Values = { title, horizon, goal_ids: goal ? [goalId(goal)] : value in MAP_GOALS ? [value] : [], outcome, ...(quarter ? { quarter } : {}) };
     // tb-mk (additions._live_track): a quick add on a track band names the band's track; the item lands on it.
     if (a.track_id != null) {
       if (!Object.keys(TRACKS).some((k) => stableUuid(`simple-track/${k}`) === a.track_id)) return json(422, { detail: "after.track_id: a product track" });

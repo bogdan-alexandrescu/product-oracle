@@ -28,7 +28,10 @@ Test cards (protects / fails_when / no_claim):
   while Oracle drafted (it read empty) keeps what they typed when Oracle's draft lands before
   their save: Oracle fills only what a person leaves empty; a later person's write still
   conflicts, by that person; fails_when=the save is refused as changed by Oracle and Oracle's
-  outcome stays.
+  outcome stays, or the later write is named as anyone but that person.
+- test_oracle_filled_reads_only_the_items_changes: protects=the check for Oracle's draft reads
+  the changes that name the item, not every change of the company; fails_when=it loads the
+  changes of other items.
 """
 
 import asyncio
@@ -36,12 +39,14 @@ import uuid
 from datetime import date
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 from oracle import company_time
+from oracle.auth.models import User
 from oracle.jobs.models import LlmJob
 from oracle.roadmap.models import RoadmapItem
-from oracle.simple import additions
+from oracle.simple import additions, changes
+from oracle.simple.models import SimpleChange
 from oracle.tenancy import tenant_session
 from tests.test_simple_additions_api import World
 from tests.test_simple_changes_api import CHANGES, make_people
@@ -230,17 +235,59 @@ async def test_a_person_edit_over_oracles_draft_stays(client):
         job.output = await additions.run_item_draft(s, job, ask)
         job.status = "succeeded"
         await s.commit()
-    # The person opened the outcome before Oracle's came in, and saves after it did.
-    r = await client.post(CHANGES, headers=w.as_("owner"), json={
+    async with tenant_session(w.ctx.tenant_id) as s:
+        other = User(email="robin@example.com", name="Robin Vale", password_hash="x",
+                     role="owner")  # fmt: skip
+        s.add(other)
+        await s.commit()
+    w.ctx.users["other"] = other
+    # A person opened the outcome before Oracle's came in, and saves after it did.
+    r = await client.post(CHANGES, headers=w.as_("other"), json={
         "op": "edit_outcome", "target": {"item_id": iid}, "before": {"outcome": None},
         "after": {"outcome": "Mine"}})  # fmt: skip
     assert r.status_code == 201, r.text
     assert (await w.items(client))[iid]["outcome"] == "Mine"
-    # A person's write since is still theirs: one who saw it empty is told who changed it.
+    # A person's write since is still theirs: another who saw it empty is told who changed it.
     r = await client.post(CHANGES, headers=w.as_("owner"), json={
         "op": "edit_outcome", "target": {"item_id": iid}, "before": {"outcome": None},
         "after": {"outcome": "Theirs"}})  # fmt: skip
     assert r.status_code == 409, r.text
-    assert r.json()["detail"]["changed_by"]["name"] != "Oracle"
+    assert r.json()["detail"]["changed_by"]["name"] == "Robin Vale"
     assert (await w.items(client))[iid]["outcome"] == "Mine"
     _ = date
+
+
+async def test_oracle_filled_reads_only_the_items_changes(client):
+    w = await World().build()
+    iid = (await w.add(client, "owner", "Import from files"))["change"]["target"]["item_id"]
+
+    async def ask(kind, payload):
+        return {"outcome": "Admins bring their data in one step.", "goal_key": "grow",
+                "feature_key": None, "depends_on": [],
+                "start_date": "2026-11-16", "end_date": "2026-12-18", "basis": "x"}  # fmt: skip
+
+    async with tenant_session(w.ctx.tenant_id) as s:
+        job = await _job(s, iid)
+        job.output = await additions.run_item_draft(s, job, ask)
+        job.status = "succeeded"
+        await s.commit()
+    # Many changes of other items.
+    seen = None
+    for n in range(12):
+        r = await client.post(CHANGES, headers=w.as_("owner"), json={
+            "op": "edit_outcome", "target": {"item_id": w.ids["import-b"]},
+            "before": {"outcome": seen}, "after": {"outcome": f"Step {n}"}})  # fmt: skip
+        assert r.status_code == 201, r.text
+        seen = f"Step {n}"
+    loaded: list[SimpleChange] = []
+
+    def on_load(target, _ctx):
+        loaded.append(target)
+
+    event.listen(SimpleChange, "load", on_load)
+    try:
+        async with tenant_session(w.ctx.tenant_id) as s:
+            assert await changes._oracle_filled(s, iid, ("outcome",))
+    finally:
+        event.remove(SimpleChange, "load", on_load)
+    assert loaded and all(c.target.get("item_id") == iid for c in loaded), len(loaded)
