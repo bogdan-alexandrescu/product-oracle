@@ -10,7 +10,7 @@
  */
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { toast as dsToast, type ToastAsk } from "@/components/ds";
 import { Icon } from "@/components/ds/Icon";
@@ -188,11 +188,25 @@ function GoalInfo({ g, krs }: { g: GmGoal; krs: KrLine[] }) {
   );
 }
 
+/** A ⋯ menu; Escape closes it and puts focus back on its ⋯; focus moving elsewhere (Tab past its last item) closes it
+ * and leaves focus there. A blur to nowhere (a click Safari does not focus) keeps it open, so the click still lands. */
 function Menu({ k, label, items, c }: { k: string; label: string; items: { w: string; on: () => void; crit?: boolean }[]; c: Ctx }) {
   const open = c.menu === k;
+  const more = useRef<HTMLButtonElement>(null);
   return (
-    <span className="relative inline-flex">
-      <button type="button" aria-label={`More for ${label}`} aria-expanded={open} data-testid={`gm-menu-${k}`} onClick={(e) => (e.stopPropagation(), c.setMenu(open ? null : k))} className={`rounded-md px-1 leading-none text-text2 hover:bg-surface2 ${open ? "bg-surface2" : ""}`}>
+    <span
+      className="relative inline-flex"
+      onKeyDown={(e) => {
+        if (!open || e.key !== "Escape") return;
+        e.stopPropagation();
+        c.setMenu(null);
+        more.current?.focus();
+      }}
+      onBlur={(e) => {
+        if (open && e.relatedTarget instanceof Node && !e.currentTarget.contains(e.relatedTarget)) c.setMenu(null);
+      }}
+    >
+      <button ref={more} type="button" aria-label={`More for ${label}`} aria-expanded={open} data-testid={`gm-menu-${k}`} onClick={(e) => (e.stopPropagation(), c.setMenu(open ? null : k))} className={`rounded-md px-1 leading-none text-text2 hover:bg-surface2 ${open ? "bg-surface2" : ""}`}>
         <Icon name="more" size={16} />
       </button>
       {open && (
@@ -627,7 +641,10 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     {c.renaming === m.id ? <Rename id={m.id} was={m.name} c={c} className="text-[12px]" /> : <span className="truncate" title={m.name}>{m.name}</span>}
                     <span className="whitespace-nowrap text-text2">{day(m.due_on)}</span>
                     {m.threshold === null && <Status s="no_gate" small on={m.can_change ? () => c.onEdit({ kind: "gate", milestone: m.id }) : undefined} hint="Set the gate" />}
-                    <span className={`${c.menu === `m-${m.id}` ? "inline-flex" : "hidden"} group-hover:inline-flex max-[600px]:inline-flex`}>{milestoneMenu(m, c)}</span>
+                    {/* Out of sight at rest, not display:none, so Tab reaches it; it shows on hover or focus as a chip's ⋯. */}
+                    <span className={`${c.menu === `m-${m.id}` ? "inline-flex" : "sr-only"} group-hover:not-sr-only group-hover:inline-flex group-focus-within:not-sr-only group-focus-within:inline-flex max-[600px]:not-sr-only max-[600px]:inline-flex`}>
+                      {milestoneMenu(m, c)}
+                    </span>
                   </span>
                 ))}
             </div>
