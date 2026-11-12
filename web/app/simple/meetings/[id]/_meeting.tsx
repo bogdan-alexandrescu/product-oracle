@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Button, confirmInPage, InfoTip, toast } from "@/components/ds";
+import { usePhoneAsk } from "@/components/ds/AppShell";
 import { setToastPlace } from "@/components/ds/Toast";
 import { MeetingChat } from "@/components/simple/chat/MeetingChat";
 import { MeetingClock } from "@/components/simple/FlowVisual";
@@ -169,6 +170,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const [cardTick, setCardTick] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const { busy, error, act } = useAct(reload);
+  const [askButton, askSheet] = usePhoneAsk(true);
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
@@ -292,8 +294,11 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
             </Button>
           )}
           {m.can.end && <Button className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => void end()}>End meeting</Button>}
+          {/* #1016: on a phone the meeting covers the app's header, so its Ask button sits here too. */}
+          {askButton}
         </div>
       </header>
+      {askSheet}
       {overBy > 0 && (
         <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2 text-base" data-testid="meeting-overrun">
           This meeting ran past its {m.length_min} minutes.
