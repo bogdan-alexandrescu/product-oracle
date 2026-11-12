@@ -114,6 +114,7 @@ KINDS = (
     "slice_parent_missing",
     "prd_feature_missing",
     "no_code",
+    "code_differs",
     "no_goal",
     "runs_today_on_roadmap",
 )
@@ -308,8 +309,8 @@ async def test_counts_per_kind(client):
     w = await world()
     out = await _check(client, w["ctx"])
     assert out["counts"] == {"unlinked_item": 2, "slice_parent_missing": 1,
-                             "prd_feature_missing": 2, "no_code": 1, "no_goal": 1,
-                             "runs_today_on_roadmap": 1}  # fmt: skip
+                             "prd_feature_missing": 2, "no_code": 1, "code_differs": 0,
+                             "no_goal": 1, "runs_today_on_roadmap": 1}  # fmt: skip
     assert out["total"] == 8 == len(out["flags"])
 
 
@@ -664,7 +665,8 @@ async def test_a_prd_flag_carries_its_goal(client):
 async def test_words_carry_no_ids(client):
     w = await world()
     out = await _check(client, w["ctx"])
-    assert {f["kind"] for f in out["flags"]} == set(KINDS)
+    # code_differs: tests/test_ground_truth_confirm_code.py.
+    assert {f["kind"] for f in out["flags"]} == set(KINDS) - {"code_differs"}
     ids = re.compile(r"[0-9a-f]{8}-|\b[A-Z]{1,3}-\d+|[a-z]+-[a-z]+|_")
     for f in out["flags"]:
         words = f["words"]
