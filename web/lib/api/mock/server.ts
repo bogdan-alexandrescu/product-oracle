@@ -1618,7 +1618,8 @@ function seedGoalBucketsDatedScenario(): Db {
  * retention and Faster activation; Snooze for a day serves Grow retention, then it; Alert tone picker
  * serves Grow retention, then a key result of Faster activation; Alert history export serves Grow retention, then
  * its own key result (goal-delete-r4); Alert quiet hours serves Grow retention, then a key result of that key result
- * (goal-delete-r5). Invented data.
+ * (goal-delete-r5); Alert sound pack serves Grow retention, then a key result of its proposed key result (goal-delete-r7).
+ * Invented data.
  */
 export const GOAL_BUCKETS_THREE_GOALS_SCENARIO = "goal-buckets-three-goals";
 
@@ -1639,7 +1640,11 @@ function seedGoalBucketsThreeGoalsScenario(): Db {
   // goal-delete-r5: an item on Grow retention and a key result of its key result: Archive moves it to the goal picked too.
   db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-week-two-mute"), key: "kr-week-two-mute", title: "KR 1.1 Teams set quiet hours in week two", parent_id: stableUuid("simple-goal/kr-week-two"), status: "confirmed", attrs: { metric: "teams", weight: 1 } });
   rm.items.push({ key: "alert-quiet-hours", title: "Alert quiet hours", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-week-two-mute"], draft: true });
-  for (const k of ["alert-team-digest", "alert-snooze-day", "alert-tone", "alert-history", "alert-quiet-hours"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
+  // goal-delete-r7: an item on Grow retention and a key result under its proposed key result: Archive moves it to the goal picked too.
+  db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-week-two-ideas"), key: "kr-week-two-ideas", title: "KR 2 Teams try new alerts in week two", parent_id: grow.id, status: "proposed", attrs: { metric: "teams", weight: 1 } });
+  db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-week-two-sound"), key: "kr-week-two-sound", title: "KR 2.1 Teams pick an alert sound in week two", parent_id: stableUuid("simple-goal/kr-week-two-ideas"), status: "confirmed", attrs: { metric: "teams", weight: 1 } });
+  rm.items.push({ key: "alert-sound-pack", title: "Alert sound pack", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-week-two-sound"], draft: true });
+  for (const k of ["alert-team-digest", "alert-snooze-day", "alert-tone", "alert-history", "alert-quiet-hours", "alert-sound-pack"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
   // goal-delete-r7: the key results above among the goal buckets, as the API lists them.
   withKeyResultBuckets(rm.goal_buckets!, db.baseline.entities);
   return db;

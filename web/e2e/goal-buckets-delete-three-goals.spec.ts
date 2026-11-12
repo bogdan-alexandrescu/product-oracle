@@ -33,6 +33,10 @@ import { expect, test, type Locator, type Page } from "./test";
  * Grow retention with Growth picked, and Alert tone picker (on Grow retention and a key result of Faster activation)
  * reads Growth, as the dialog says (move_items_off counts no key result under a goal in Trash as live); fails_when =
  * the dialog says it stays on the key result, or it is left there.
+ * Card goal-archive-proposed-key-result (goal-delete-r7): protects = Archive Grow retention with Growth picked, and
+ * Alert sound pack (on Grow retention and a key result of its proposed key result) reads Growth, as the dialog says
+ * (move_items_off walks up through a proposed goal, which counts as live, and the dialog lifts so too);
+ * fails_when = the dialog says it goes to the key result, or it is left there.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -190,4 +194,21 @@ test("An item on the archived goal and a key result of a goal in Trash moves to 
   await ranked(page);
   await expect(draft(page, "Alert tone picker")).toContainText("Growth");
   await expect(draft(page, "Alert tone picker")).not.toContainText(KR);
+});
+
+test("An item on the archived goal and a key result under its proposed key result moves to the goal picked", async ({ page }) => {
+  await openPage(page);
+  const dialog = await goalDialog(page, "Archive");
+  await expect(dialog.getByTestId("goal-feature").filter({ hasText: "Alert sound pack" })).toBeVisible();
+  await expect(dialog).not.toContainText("Alert sound pack →");
+  await expect(dialog).not.toContainText("Alert sound pack stays on");
+  const pick = dialog.getByLabel("Goal", { exact: true });
+  const label = (await pick.locator("option").allTextContents()).find((o) => o.endsWith("Growth"))!;
+  await pick.selectOption({ label });
+  await tap(dialog.getByRole("button", { name: "Archive goal" }));
+  await expect(goal(page, "Grow retention")).toHaveCount(0);
+
+  await ranked(page);
+  await expect(draft(page, "Alert sound pack")).toContainText("Growth");
+  await expect(draft(page, "Alert sound pack")).not.toContainText("Teams pick an alert sound in week two");
 });
