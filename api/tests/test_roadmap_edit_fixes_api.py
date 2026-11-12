@@ -235,24 +235,24 @@ async def test_a_person_edit_over_oracles_draft_stays(client):
         job.output = await additions.run_item_draft(s, job, ask)
         job.status = "succeeded"
         await s.commit()
-    # The person opened the outcome before Oracle's came in, and saves after it did.
-    r = await client.post(CHANGES, headers=w.as_("owner"), json={
-        "op": "edit_outcome", "target": {"item_id": iid}, "before": {"outcome": None},
-        "after": {"outcome": "Mine"}})  # fmt: skip
-    assert r.status_code == 201, r.text
-    assert (await w.items(client))[iid]["outcome"] == "Mine"
-    # A person's write since is still theirs: another who saw it empty is told who changed it.
     async with tenant_session(w.ctx.tenant_id) as s:
         other = User(email="robin@example.com", name="Robin Vale", password_hash="x",
                      role="owner")  # fmt: skip
         s.add(other)
         await s.commit()
     w.ctx.users["other"] = other
+    # A person opened the outcome before Oracle's came in, and saves after it did.
     r = await client.post(CHANGES, headers=w.as_("other"), json={
+        "op": "edit_outcome", "target": {"item_id": iid}, "before": {"outcome": None},
+        "after": {"outcome": "Mine"}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert (await w.items(client))[iid]["outcome"] == "Mine"
+    # A person's write since is still theirs: another who saw it empty is told who changed it.
+    r = await client.post(CHANGES, headers=w.as_("owner"), json={
         "op": "edit_outcome", "target": {"item_id": iid}, "before": {"outcome": None},
         "after": {"outcome": "Theirs"}})  # fmt: skip
     assert r.status_code == 409, r.text
-    assert r.json()["detail"]["changed_by"]["name"] == "owner@example.com"
+    assert r.json()["detail"]["changed_by"]["name"] == "Robin Vale"
     assert (await w.items(client))[iid]["outcome"] == "Mine"
     _ = date
 
