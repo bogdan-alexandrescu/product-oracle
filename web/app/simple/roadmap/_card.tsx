@@ -6,9 +6,8 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { Button, confirmInPage, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { useFitViewport } from "@/lib/fit-viewport";
-import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
-import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
-import { Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
+import { FlowPanel, subjectOf, type FlowSubject } from "@/components/simple/FlowVisual";
+import { FlowDiagram, Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
 import { flagKey } from "@/components/simple/chat/ChatCard";
 import { ItemTalk } from "@/components/simple/chat/ItemTalk";
 import { askThread, itemTalkPage, sendCardChanged, type ChatCard } from "@/lib/api/simple-chat";
@@ -861,13 +860,13 @@ export function FloatingCard({
 }) {
   // home-waiting-one-list: Oracle's dates are acted on by the one gate the Roadmap's popover uses.
   const { can } = useMe();
-  // The widened card's visual: a draft's own flow ("item", S7) or a proposal's visual (S10).
-  const [wide, setWide] = useState<FlowSubject | "item" | null>(null);
+  // The widened card's visual: a draft's own flow (S7) or a proposal's visual (S10).
+  const [wide, setWide] = useState<FlowSubject | null>(null);
   // roadmap-talk: the item's talk with Oracle, open beside the details (a phone: its tab).
   const [talk, setTalk] = useState(false);
   // The item's flow opened across the page (or its storyboard): the card steps out of its way.
   const [flowOpen, setFlowOpen] = useState(false);
-  const openFlow = (w: FlowSubject | "item" | null) => {
+  const openFlow = (w: FlowSubject | null) => {
     setWide(w);
     if (w && !phone) setTalk(false);
   };
@@ -1054,6 +1053,8 @@ export function FloatingCard({
     </div>
   );
 
+  // A draft's own flow (S7): its draft_item visual, opened in the widened card as a proposal's is.
+  const draftFlow = subjectOf(item.flow) ?? { kind: "draft_item", id: item.id };
   const flowPart = item.draft ? (
     item.status !== "merged" && (
       <Part title="Flow">
@@ -1063,10 +1064,10 @@ export function FloatingCard({
               type="button"
               data-testid="item-flow-thumb"
               aria-label="Open the flow"
-              onClick={() => openFlow(wide === "item" ? null : "item")}
-              className="rounded-md border border-line bg-surface p-1"
+              onClick={() => openFlow(wide?.id === draftFlow.id ? null : draftFlow)}
+              className="flex-none rounded-lg border border-line bg-surface p-1.5 hover:border-line-strong"
             >
-              <FlowPicture flow={item.flow} />
+              <FlowDiagram flow={item.flow} layout="mini" />
             </button>
           ) : (
             // fix4 review (qa-simple-roadmap-39): a draft has no flow to draw yet; it says why,
@@ -1347,7 +1348,7 @@ export function FloatingCard({
                       <FlowThumb
                         onOpen={() =>
                           openFlow(
-                            wide !== "item" && wide?.id === c.id
+                            wide?.id === c.id
                               ? null
                               : { kind: "change", id: c.id },
                           )
@@ -1388,34 +1389,11 @@ export function FloatingCard({
             <h3 className="font-semibold">
               The flow and the screen it touches
             </h3>
-            {wide === "item" ? (
-              <>
-                {item.flow ? (
-                  <FlowDetail flow={item.flow} />
-                ) : (
-                  <p
-                    className="mt-1 text-sm text-text2"
-                    data-testid="flow-empty"
-                  >
-                    No flow yet: Oracle has not drawn a user flow or a
-                    wireframe for this proposal.
-                  </p>
-                )}
-                <Button
-                  variant="ghost"
-                  className="mt-2"
-                  onClick={() => openFlow(null)}
-                >
-                  Close the flow
-                </Button>
-              </>
-            ) : (
-              <FlowPanel
-                key={`${wide.kind}-${wide.id}`}
-                subject={wide}
-                onClose={() => openFlow(null)}
-              />
-            )}
+            <FlowPanel
+              key={`${wide.kind}-${wide.id}`}
+              subject={wide}
+              onClose={() => openFlow(null)}
+            />
           </section>
         )}
       </div>

@@ -20,7 +20,7 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
 import { calendarDay, milestoneOut, oldMilestonesOut, routeMilestones, withKindStatus, type MockMilestone, type OldCtx } from "./simple-milestones";
-import { flowFor, flowsOfBets, type VisualsDb } from "./simple-visuals";
+import { bundleFlow, flowFor, flowsOfBets, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, planRowState, rowCodeTaken, type AppliedRecord } from "./approved-roadmap";
 import { codedTitle, prdCode } from "./item-code";
@@ -1904,7 +1904,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       // additions._parts: in roadmap order, open and cut mixed; never a merged one.
       parts: seeds.filter((x) => x.parent === s.key && !x.merged_into).map((x) => partRef(x)),
       drafting: !!s.drafting_until,
-      flow: s.draft ? (s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
+      // As additions: a draft's flow is its draft_item visual (numbered notes, comments).
+      flow: s.draft ? bundleFlow(db.visuals, "draft_item", db.ids[s.key], s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
       goal_ids: goalIdsOf(s),
       // S8: the decided decisions that changed the item (./simple-meetings.ts records them).
       decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
