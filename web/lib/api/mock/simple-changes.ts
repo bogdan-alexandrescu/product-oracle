@@ -733,11 +733,11 @@ function writesFields(c: Change, ids: string[], fields: string[] | null): boolea
   return wrote.some((f) => fields.includes(f));
 }
 
-/** changes._oracle_filled: Oracle's draft of a new item filled these fields (its outcome) and no
- * person has written them since; a person who saw them empty keeps their edit. */
+/** changes._oracle_filled: Oracle's draft of a new item filled these fields (its outcome, its
+ * feature) and no person has written them since; a person who saw them empty keeps their edit. */
 function oracleFilled(db: SimpleDb, id: string, fields: string[]): boolean {
   const s = db.items.find((x) => db.ids[x.key] === id);
-  if (!s?.drafted_at || !fields.includes("outcome")) return false;
+  if (!s?.drafted_at || !fields.some((f) => (s.drafted ?? []).includes(f))) return false;
   return !(db.changes ?? []).some((c) => ["applied", "accepted", "undone"].includes(c.status) && c.op !== "add_item" && writesFields(c, [id], fields));
 }
 
@@ -748,8 +748,12 @@ function conflict(db: SimpleDb, ctx: SimpleChangesCtx, current: Values, ids: str
     .map((c) => ({ at: c.status === "accepted" && c.decided_at ? c.decided_at : c.at, who: c.status === "accepted" && c.decided_by ? c.decided_by : c.by }));
   const last = madeOrder(writes, (w) => [w.at], true)[0];
   // roadmap-edit-fixes (changes._last_writer): Oracle's draft filled it last: Oracle changed it.
-  // Only the outcome it filled; a person's write at the same moment came after it.
-  const oracle = fields && !fields.includes("outcome") ? undefined : db.items.filter((x) => ids.includes(db.ids[x.key]) && x.drafted_at).map((x) => x.drafted_at!).sort().reverse()[0];
+  // Only the fields it filled; a person's write at the same moment came after it.
+  const oracle = db.items
+    .filter((x) => ids.includes(db.ids[x.key]) && x.drafted_at && (!fields || (x.drafted ?? []).some((f) => fields.includes(f))))
+    .map((x) => x.drafted_at!)
+    .sort()
+    .reverse()[0];
   if (oracle && (!last || oracle > last.at)) {
     return json(409, { detail: { message: `${lead}: changed by Oracle`, current, changed_by: { id: null, name: "Oracle" }, changed_at: oracle } });
   }

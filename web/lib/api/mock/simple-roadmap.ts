@@ -62,6 +62,8 @@ interface SeedItem {
   suggested_depends?: string[];
   /** roadmap-edit-fixes: when Oracle's draft filled a field (a conflict it caused names Oracle). */
   drafted_at?: string;
+  /** roadmap-edit-fixes: the fields Oracle's draft filled (the item_draft job's `filled`). */
+  drafted?: string[];
   status?: Item["status"];
   /** one-feature-panel: the status the tracker gave it, kept once its panel sets one (planned reads it again). */
   tracked?: Item["status"];
@@ -245,6 +247,9 @@ interface SimpleDb {
   feature_codes?: Record<string, string>;
   /** Every Ground Truth feature's key by its id (changes._merge_plan reads its code from it). */
   feature_keys?: Record<string, string>;
+  /** roadmap-edit-fixes: the Ground Truth features Oracle's draft may pick (additions._features: not
+   * rejected), their names by id (server.ts). */
+  feature_titles?: Record<string, string>;
   /** build-milestones-on-roadmap: each roadmap's milestones per goal (./simple-milestones.ts). */
   goal_milestones?: MockMilestone[];
   /** roadmap-keydates review ("roadmap-keydates-uncoded"): a track milestone record's own day
@@ -2295,10 +2300,24 @@ export function settleDrafting(db: SimpleDb): void {
   for (const s of db.items) {
     if (!s.drafting_until || s.drafting_until > now) continue;
     delete s.drafting_until;
-    // roadmap-edit-fixes: Oracle fills only what a person has not.
+    // roadmap-edit-fixes: Oracle fills only what a person has not (additions.run_item_draft): the
+    // outcome, and a feature (simplified: the first by key whose name shares a word with the title).
+    const filled: string[] = [];
     if (s.outcome == null) {
       s.outcome = `Teams get ${s.title.toLowerCase()} without asking support`;
+      filled.push("outcome");
+    }
+    const mine = WORDS(s.title);
+    const feature = Object.keys(db.feature_titles ?? {})
+      .sort((a, b) => (db.feature_keys?.[a] ?? a).localeCompare(db.feature_keys?.[b] ?? b))
+      .find((f) => [...WORDS(db.feature_titles![f])].some((w) => mine.has(w)));
+    if (!s.feature_id && feature) {
+      s.feature_id = feature;
+      filled.push("feature_id");
+    }
+    if (filled.length) {
       s.drafted_at = new Date(now).toISOString();
+      s.drafted = filled;
     }
     s.flow = plainFlow({
       title: s.title,

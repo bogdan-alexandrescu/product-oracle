@@ -8322,6 +8322,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   // lane-gt-ui: an item reads its feature's code (service.load's Entry.code).
   db.simple_roadmap.feature_codes = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature" && /^[A-Z]{1,3}-\d+[a-j]?$/.test(e.key)).map((e) => [e.id, e.key]));
   db.simple_roadmap.feature_keys = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature").map((e) => [e.id, e.key]));
+  db.simple_roadmap.feature_titles = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected").map((e) => [e.id, e.title]));
   // changes.py set_feature: the feature is a baseline feature, not rejected.
   if (p[1] === "simple" && p[2] === "changes" && !p[3] && m === "POST") {
     const c = await req.clone().json().catch(() => null) as { op?: string; after?: { feature_id?: string | null } } | null;
