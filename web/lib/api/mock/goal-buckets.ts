@@ -151,7 +151,9 @@ export type GoalPeople = { id: string; name: string; email: string; role: string
 
 function out(db: GoalBucketsDb, edits: boolean, people: GoalPeople = []): Schemas["GoalBucketsOut"] {
   // goal-order: the goals in the one goal order, as the API lists them (the Ground Truth's, then the rest as they were).
-  const live = db.goals.filter((g) => !g.archived && !g.trashed).sort((a, b) => goalRank(orderKey(a)) - goalRank(orderKey(b)));
+  // goal-delete-r7: a key result only while its parents are live (goal_buckets._goals).
+  const up = (g: Goal) => goalParentKey(itemGoalKey(g) ?? g.key);
+  const live = db.goals.filter((g) => !g.archived && !g.trashed && (!up(g) || isLive(db.goals, up(g)!))).sort((a, b) => goalRank(orderKey(a)) - goalRank(orderKey(b)));
   const ids = new Set(live.map((g) => g.id));
   const archived = db.goals.filter((g) => g.archived && !g.trashed).sort((a, b) => ((a.archived_at ?? "") < (b.archived_at ?? "") ? 1 : -1));
   return {
@@ -208,6 +210,18 @@ function moveOff(db: GoalBucketsDb, g: Goal, to: string | null): Feature[] {
 
 /** A roadmap item's own goals (the API's RoadmapItem.goal_ids): the one it moves most, then the others. */
 type ItemGoals = { key: string; roadmap?: string; goal?: string; goals?: string[] };
+/** goal_buckets.is_live: a goal (by its item goal key) is live when the walk up its parents meets none
+ * archived, in Trash or `gone` (the goal Archive takes away), as the goal buckets list it. */
+function isLive(goals: Goal[], k: string, gone?: string): boolean {
+  const out = (key: string) => goals.some((x) => (itemGoalKey(x) ?? x.key) === key && (x.archived || x.trashed));
+  const seen = new Set<string>();
+  for (let at: string | undefined = k; at; at = goalParentKey(at)) {
+    if (at === gone || out(at) || seen.has(at)) return false;
+    seen.add(at);
+  }
+  return true;
+}
+
 const itemGoals = (s: ItemGoals) => [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])];
 
 /** goal_buckets.move_items_off (Archive, and a delete to Trash with `to`): the items that name the
@@ -217,17 +231,9 @@ const itemGoals = (s: ItemGoals) => [...new Set([...(s.goal ? [s.goal] : []), ..
 function moveItemsOff(items: ItemGoals[], g: Goal, to: Goal | null, goals: Goal[]): NonNullable<TrashEntryRow["item_goals"]> {
   const from = itemGoalKey(g) ?? g.key;
   const toKey = to ? (itemGoalKey(to) ?? to.key) : "";
-  const gone = (k: string) => goals.some((x) => x.id !== g.id && (itemGoalKey(x) ?? x.key) === k && (x.archived || x.trashed));
-  // The goal's key results go with it, at any depth, as do those under an archived goal (move_items_off):
-  // an item on one is not kept there by it.
-  const live = (k: string) => {
-    const seen = new Set<string>();
-    for (let at: string | undefined = k; at; at = goalParentKey(at)) {
-      if (at === from || gone(at) || seen.has(at)) return false;
-      seen.add(at);
-    }
-    return true;
-  };
+  // The goal's key results go with it, at any depth, as do those under an archived goal or one in Trash
+  // (move_items_off): an item on one is not kept there by it.
+  const live = (k: string) => isLive(goals, k, from);
   const was: NonNullable<TrashEntryRow["item_goals"]> = [];
   for (const s of items) {
     const ids = itemGoals(s);
