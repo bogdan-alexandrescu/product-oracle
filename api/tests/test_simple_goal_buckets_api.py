@@ -31,8 +31,9 @@ Test cards (protects / fails_when / no_claim):
   fails_when=the item is left on a key result of the archived goal; no_claim=key results
   of other goals (test_archive_keeps_an_items_other_goal_and_leaves_none_unasked).
 - test_archive_counts_no_nested_key_result_of_the_goal_as_live: protects=a key result
-  of a key result of the archived goal (any depth), or one under an archived goal, keeps no
-  item: the item moves to the goal picked, as the dialog lifts a key result to its top goal;
+  of a key result of the archived goal (any depth), or one under an archived goal or a goal
+  in Trash, keeps no item: the item moves to the goal picked, as the dialog lifts a key
+  result to its top goal;
   fails_when=only direct key results count and the item stays on the nested one;
   no_claim=direct key results (test_archive_counts_no_key_result_of_the_goal_as_live).
 - test_move_feature_and_undo: protects=moving a feature makes the new goal its first
@@ -254,7 +255,7 @@ async def test_archive_counts_no_key_result_of_the_goal_as_live(client, pick):
 
 
 @pytest.mark.parametrize("pick", [False, True])
-@pytest.mark.parametrize("under", ["grow", "archived"])
+@pytest.mark.parametrize("under", ["grow", "archived", "trashed"])
 async def test_archive_counts_no_nested_key_result_of_the_goal_as_live(client, pick, under):
     w = await World().build()
     third = (await client.post(f"{URL}/goals", headers=w.as_("owner"), json=GOAL)).json()["goal"]
@@ -262,9 +263,12 @@ async def test_archive_counts_no_nested_key_result_of_the_goal_as_live(client, p
     async with tenant_session(w.ctx.tenant_id) as s:
         seed = Seed(s)
         top = grow
-        if under == "archived":
+        if under in ("archived", "trashed"):
             gone = await seed.entity("goal", "gone")
-            gone.status = "rejected"
+            if under == "archived":
+                gone.status = "rejected"
+            else:
+                gone.deleted_at = datetime.now(UTC)
             top = gone.id
         kr1 = await seed.entity("goal", "kr-1")
         kr1.parent_id = top
