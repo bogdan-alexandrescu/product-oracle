@@ -9,7 +9,7 @@ import type { Schemas } from "@/lib/api/client";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashedSimple, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
-import { GOALS, goalId, goalParentKey, goalPositionOf, linkOf, goalRank, goalInTrash, keptTarget, roadmapGoal, storedUnit, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
+import { GOALS, goalId, goalParentKey, goalPositionOf, linkOf, goalRank, goalInTrash, keptTarget, roadmapGoal, storedUnit, roadmapGoalKey, roadmapGoalSeed, targetRead, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
 // `key`: the Entity.key the API gives a goal at creation (goal_buckets._slug), named in its Trash entry.
@@ -155,14 +155,28 @@ export function seedGoalBucketsWith(
 }
 
 /**
+ * goal-target-kept: a goal's target from its attrs, as the API's goal_buckets._target reads it (target_text,
+ * else target in its unit), with the unit of a target stored as a number ("" none).
+ */
+function attrsTarget(attrs: Record<string, unknown> | null | undefined): Pick<Goal, "target" | "unit"> {
+  if (attrs?.target_text) return { target: String(attrs.target_text) };
+  const n = attrs?.target;
+  if (n == null) return { target: null };
+  const unit = typeof attrs?.unit === "string" ? attrs.unit : "";
+  if (typeof n === "number") return { target: targetRead(n, unit), unit };
+  return { target: unit === "%" ? `${n}${unit}` : `${n} ${unit}`.trim() };
+}
+
+/**
  * goal-delete-r7: the key results among the goals, as the API lists them (every goal, key results
- * included): each Ground Truth goal with a parent, by its own id and key (`kr`), archived when it is.
+ * included): each Ground Truth goal with a parent, by its own id and key (`kr`), archived when it is;
+ * its target and unit read from its attrs (goal-target-kept).
  */
 export function withKeyResultBuckets(db: GoalBucketsDb, entities: { id: string; key: string; title: string; type: string; status: string; parent_id?: string | null; attrs?: Record<string, unknown> | null }[]): void {
   for (const e of entities) {
     if (e.type !== "goal" || !e.parent_id || db.goals.some((g) => g.id === e.id)) continue;
     const metric = typeof e.attrs?.metric === "string" ? e.attrs.metric : null;
-    db.goals.push({ id: e.id, key: e.key, title: e.title, order: db.goals.filter((x) => !x.archived).length + 1, measure: metric, target: null, due: null, archived: e.status === "rejected", kr: true });
+    db.goals.push({ id: e.id, key: e.key, title: e.title, order: db.goals.filter((x) => !x.archived).length + 1, measure: metric, ...attrsTarget(e.attrs), due: null, archived: e.status === "rejected", kr: true });
   }
 }
 
