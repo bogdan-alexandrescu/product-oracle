@@ -1633,6 +1633,25 @@ function seedGoalBucketsDatedScenario(): Db {
 }
 
 /**
+ * "goal-buckets-short-clash" (goal-features-own-key): "goal-buckets-dated" with two invented roadmap items on Grow
+ * retention whose codes clash: Quiet mode schedule (short code QMS, made from its initials) serves the goal by its
+ * own goal only (its feature links no goal), and Weekly alert email's feature key is qms. Invented data.
+ */
+export const GOAL_BUCKETS_SHORT_CLASH_SCENARIO = "goal-buckets-short-clash";
+
+function seedGoalBucketsShortClashScenario(): Db {
+  const db = seedGoalBucketsDatedScenario();
+  const rm = db.simple_roadmap!;
+  rm.items.push({ key: "quiet-mode", title: "Quiet mode schedule", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention" });
+  rm.items.push({ key: "qms", title: "Weekly alert email", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention" });
+  for (const k of ["quiet-mode", "qms"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
+  withRoadmapGoalBuckets(db);
+  // The item serves the goal, its feature does not (the API's goal buckets list a feature by its own goal links).
+  rm.goal_buckets!.features = rm.goal_buckets!.features.filter((f) => f.key !== "quiet-mode");
+  return db;
+}
+
+/**
  * "goal-buckets-three-goals" (goal-delete-r3): "goal-buckets-dated" with two more drafts that name
  * the archived goal Cut support tickets in half: Team alert digest serves it first, then Grow
  * retention and Faster activation; Snooze for a day serves Grow retention, then it; Alert tone picker
@@ -4372,6 +4391,8 @@ function load(): Db {
                 ? seedGoalBucketsDatedScenario
               : scenario === GOAL_BUCKETS_THREE_GOALS_SCENARIO
                 ? seedGoalBucketsThreeGoalsScenario
+              : scenario === GOAL_BUCKETS_SHORT_CLASH_SCENARIO
+                ? seedGoalBucketsShortClashScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
               : scenario === PRIORITIES_PLAN_MILESTONES_SCENARIO
