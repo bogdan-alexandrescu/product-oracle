@@ -7,15 +7,15 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
-import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
+import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashedSimple, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
-import { GOALS, goalId, goalPositionOf, linkOf, goalRank, goalInTrash, keptTarget, roadmapGoal, storedUnit, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
+import { GOALS, goalId, goalParentKey, goalPositionOf, linkOf, goalRank, goalInTrash, keptTarget, roadmapGoal, storedUnit, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
 // `key`: the Entity.key the API gives a goal at creation (goal_buckets._slug), named in its Trash entry.
 // edit-goals-prds EG1: a goal's owner (a member's id; seeded by email, matched to the member on first read) and when it was archived.
 // goal-order: `position`, the place Move up and Move down store on it (attrs.position, as the API's goals).
-type Goal = { id: string; key: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null; position?: number | null; on_roadmap?: boolean;
+type Goal = { id: string; key: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null; position?: number | null; on_roadmap?: boolean; kr?: boolean;
   /** goal-target-kept: the unit of a target stored as a number (attrs.unit; "" none); unset, a target in words or its reading's. */
   unit?: string };
 /** assumed_goal_ids: the links whose contribution is assumed (an approved order's, api ASSUMED_LINK). */
@@ -154,6 +154,18 @@ export function seedGoalBucketsWith(
   return { goals, features };
 }
 
+/**
+ * goal-delete-r7: the key results among the goals, as the API lists them (every goal, key results
+ * included): each Ground Truth goal with a parent, by its own id and key (`kr`), archived when it is.
+ */
+export function withKeyResultBuckets(db: GoalBucketsDb, entities: { id: string; key: string; title: string; type: string; status: string; parent_id?: string | null; attrs?: Record<string, unknown> | null }[]): void {
+  for (const e of entities) {
+    if (e.type !== "goal" || !e.parent_id || db.goals.some((g) => g.id === e.id)) continue;
+    const metric = typeof e.attrs?.metric === "string" ? e.attrs.metric : null;
+    db.goals.push({ id: e.id, key: e.key, title: e.title, order: db.goals.filter((x) => !x.archived).length + 1, measure: metric, target: null, due: null, archived: e.status === "rejected", kr: true });
+  }
+}
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
@@ -163,7 +175,9 @@ export type GoalPeople = { id: string; name: string; email: string; role: string
 
 function out(db: GoalBucketsDb, edits: boolean, people: GoalPeople = []): Schemas["GoalBucketsOut"] {
   // goal-order: the goals in the one goal order, as the API lists them (the Ground Truth's, then the rest as they were).
-  const live = db.goals.filter((g) => !g.archived && !g.trashed).sort((a, b) => goalRank(orderKey(a)) - goalRank(orderKey(b)));
+  // goal-delete-r7: a key result only while its parents are live (goal_buckets._goals).
+  const up = (g: Goal) => goalParentKey(itemGoalKey(g) ?? g.key);
+  const live = db.goals.filter((g) => !g.archived && !g.trashed && (!up(g) || isLive(db.goals, up(g)!))).sort((a, b) => goalRank(orderKey(a)) - goalRank(orderKey(b)));
   const ids = new Set(live.map((g) => g.id));
   const archived = db.goals.filter((g) => g.archived && !g.trashed).sort((a, b) => ((a.archived_at ?? "") < (b.archived_at ?? "") ? 1 : -1));
   return {
@@ -222,6 +236,18 @@ function moveOff(db: GoalBucketsDb, g: Goal, to: string | null): Feature[] {
 
 /** A roadmap item's own goals (the API's RoadmapItem.goal_ids): the one it moves most, then the others. */
 type ItemGoals = { key: string; roadmap?: string; goal?: string; goals?: string[] };
+/** goal_buckets.is_live: a goal (by its item goal key) is live when the walk up its parents meets none
+ * archived, in Trash or `gone` (the goal Archive takes away), as the goal buckets list it. */
+function isLive(goals: Goal[], k: string, gone?: string): boolean {
+  const out = (key: string) => goals.some((x) => (itemGoalKey(x) ?? x.key) === key && (x.archived || x.trashed));
+  const seen = new Set<string>();
+  for (let at: string | undefined = k; at; at = goalParentKey(at)) {
+    if (at === gone || out(at) || seen.has(at)) return false;
+    seen.add(at);
+  }
+  return true;
+}
+
 const itemGoals = (s: ItemGoals) => [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])];
 
 /** goal_buckets.move_items_off (Archive, and a delete to Trash with `to`): the items that name the
@@ -231,7 +257,9 @@ const itemGoals = (s: ItemGoals) => [...new Set([...(s.goal ? [s.goal] : []), ..
 function moveItemsOff(items: ItemGoals[], g: Goal, to: Goal | null, goals: Goal[]): NonNullable<TrashEntryRow["item_goals"]> {
   const from = itemGoalKey(g) ?? g.key;
   const toKey = to ? (itemGoalKey(to) ?? to.key) : "";
-  const live = (k: string) => !goals.some((x) => x.id !== g.id && (itemGoalKey(x) ?? x.key) === k && (x.archived || x.trashed));
+  // The goal's key results go with it, at any depth, as do those under an archived goal or one in Trash
+  // (move_items_off): an item on one is not kept there by it.
+  const live = (k: string) => isLive(goals, k, from);
   const was: NonNullable<TrashEntryRow["item_goals"]> = [];
   for (const s of items) {
     const ids = itemGoals(s);
@@ -265,8 +293,8 @@ const goalKeyOf = (db: GoalBucketsDb, id: string) => [...Object.keys(GOALS), ...
 
 /** The item goal key of a bucket goal: the roadmap's goal of that name. */
 const itemGoalKey = (g: Goal | undefined) => (g ? Object.keys(GOALS).find((k) => GOALS[k].toLowerCase() === g.title.toLowerCase()) : undefined);
-/** goal-order: a bucket goal's key in the one goal order: the roadmap's goal of that name, else its name. */
-const orderKey = (g: Goal) => itemGoalKey(g) ?? g.title.toLowerCase();
+/** goal-order: a bucket goal's key in the one goal order: the roadmap's goal of that name, else a key result's own key, else its name. */
+const orderKey = (g: Goal) => itemGoalKey(g) ?? (g.kr ? g.key : g.title.toLowerCase());
 
 /**
  * goal-order: the bucket goals the Ground Truth does not hold, each with the place stored on it, so the
@@ -430,7 +458,8 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     }
     const refused = bin.refuseRestore?.(entry) ?? null;
     if (refused) return json(409, { detail: refused });
-    return json(200, restoreFromTrash(bin.trash, entry, bin.now(), { items: [], goal_buckets: db }));
+    // As Trash's Restore (trash_items.after_restore): the roadmap's items get the goals the delete moved back.
+    return json(200, restoreFromTrash(bin.trash, entry, bin.now(), { ...(simple as TrashedSimple), items: (simple as Partial<TrashedSimple>).items ?? [], goal_buckets: db }, bin.id));
   }
   // trash-features-goals: DELETE .../goals/{id}?to_goal_id=: approvers and owners delete it (and
   // restore it); a commenter proposes it to the owners; viewers are refused.

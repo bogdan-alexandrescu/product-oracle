@@ -25,6 +25,23 @@ Test cards (protects / fails_when / no_claim):
   (an item in Trash too, so one restored later does not name it) and Undo puts each
   item's goals back exactly; fails_when=an item's own goal changes unasked, a draft keeps
   the archived goal, or Undo leaves one moved; no_claim=the web.
+- test_archive_counts_no_key_result_of_the_goal_as_live: protects=an item on the goal
+  and one of the goal's own key results moves to the goal picked (or to no goal), as the
+  dialog says: the archived goal's key result is not another live goal it keeps;
+  fails_when=the item is left on a key result of the archived goal; no_claim=key results
+  of other goals (test_archive_keeps_an_items_other_goal_and_leaves_none_unasked).
+- test_archive_counts_no_nested_key_result_of_the_goal_as_live: protects=a key result
+  of a key result of the archived goal (any depth), or one under an archived goal or a goal
+  in Trash, keeps no item: the item moves to the goal picked, as the dialog lifts a key
+  result to its top goal;
+  fails_when=only direct key results count and the item stays on the nested one;
+  no_claim=direct key results (test_archive_counts_no_key_result_of_the_goal_as_live).
+- test_list_leaves_out_a_key_result_under_a_goal_gone: protects=the goal buckets list a
+  key result (at any depth) only while the walk up its parents reaches a top goal, as
+  Archive's move_items_off counts one live: one under an archived goal or a goal in Trash
+  is left out (and no feature lists it), one under a live or proposed goal is listed;
+  fails_when=a key result of a goal in Trash or an archived goal lists as a live goal, so
+  the Archive dialog says an item goes there while Archive moves it; no_claim=the web.
 - test_move_feature_and_undo: protects=moving a feature makes the new goal its first
   link and drops the old one; Undo restores both links; a viewer gets 403;
   fails_when=the old link stays or the new one is not first; no_claim=the web's drag.
@@ -219,6 +236,96 @@ async def test_archive_keeps_an_items_other_goal_and_leaves_none_unasked(client,
     r = await client.post(f"{URL}/undo", headers=w.as_("owner"), json=r.json()["undo"])
     assert r.status_code == 200, r.text
     assert await goals_of() == before
+
+
+@pytest.mark.parametrize("pick", [False, True])
+async def test_archive_counts_no_key_result_of_the_goal_as_live(client, pick):
+    w = await World().build()
+    third = (await client.post(f"{URL}/goals", headers=w.as_("owner"), json=GOAL)).json()["goal"]
+    grow, to = uuid.UUID(w.goals["grow"]), uuid.UUID(third["id"])
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        kr = await seed.entity("goal", "grow-kr")
+        kr.parent_id = grow
+        _, pv, _, rv = await seed.roadmap("shops")
+        item = await seed.item(rv, pv, "recap", draft=True, goal_ids=[grow, kr.id])
+        await s.commit()
+        item_id, kr_id = item.id, kr.id
+
+    r = await client.post(f"{URL}/goals/{grow}/archive", headers=w.as_("owner"),
+                          json={"to_goal_id": str(to) if pick else None})  # fmt: skip
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        goals = list((await s.get(RoadmapItem, item_id)).goal_ids or [])
+    assert goals == ([to, kr_id] if pick else [kr_id])
+
+
+@pytest.mark.parametrize("pick", [False, True])
+@pytest.mark.parametrize("under", ["grow", "archived", "trashed"])
+async def test_archive_counts_no_nested_key_result_of_the_goal_as_live(client, pick, under):
+    w = await World().build()
+    third = (await client.post(f"{URL}/goals", headers=w.as_("owner"), json=GOAL)).json()["goal"]
+    grow, to = uuid.UUID(w.goals["grow"]), uuid.UUID(third["id"])
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        top = grow
+        if under in ("archived", "trashed"):
+            gone = await seed.entity("goal", "gone")
+            if under == "archived":
+                gone.status = "rejected"
+            else:
+                gone.deleted_at = datetime.now(UTC)
+            top = gone.id
+        kr1 = await seed.entity("goal", "kr-1")
+        kr1.parent_id = top
+        kr2 = await seed.entity("goal", "kr-2")
+        kr2.parent_id = kr1.id
+        _, pv, _, rv = await seed.roadmap("shops")
+        item = await seed.item(rv, pv, "recap", draft=True, goal_ids=[grow, kr2.id])
+        await s.commit()
+        item_id, kr_id = item.id, kr2.id
+
+    r = await client.post(f"{URL}/goals/{grow}/archive", headers=w.as_("owner"),
+                          json={"to_goal_id": str(to) if pick else None})  # fmt: skip
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        goals = list((await s.get(RoadmapItem, item_id)).goal_ids or [])
+    assert goals == ([to, kr_id] if pick else [kr_id])
+
+
+@pytest.mark.parametrize("under", ["grow", "proposed", "archived", "trashed"])
+async def test_list_leaves_out_a_key_result_under_a_goal_gone(client, under):
+    w = await World().build()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        top = uuid.UUID(w.goals["grow"])
+        if under != "grow":
+            parent = await seed.entity("goal", "parent")
+            if under == "proposed":
+                parent.status = "proposed"
+            elif under == "archived":
+                parent.status = "rejected"
+            else:
+                parent.deleted_at = datetime.now(UTC)
+            top = parent.id
+        kr1 = await seed.entity("goal", "kr-1")
+        kr1.parent_id = top
+        kr2 = await seed.entity("goal", "kr-2")
+        kr2.parent_id = kr1.id
+        feature = await seed.entity("feature", "on-kr")
+        await seed.supports(feature, kr2)
+        await s.commit()
+        krs = {str(kr1.id), str(kr2.id)}
+
+    out = await w.read(client)
+    listed = {g["id"] for g in out["goals"]}
+    on_kr = next(f for f in out["features"] if f["key"] == "on-kr")
+    if under in ("grow", "proposed"):
+        assert krs <= listed
+        assert on_kr["goal_ids"] == [str(kr2.id)]
+    else:
+        assert not krs & listed
+        assert on_kr["goal_ids"] == []
 
 
 @pytest.mark.asyncio

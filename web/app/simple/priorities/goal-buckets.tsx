@@ -439,7 +439,7 @@ export function FeatureRows({
  * A goal's features as ArchiveDialog counts and lists them: every live feature serving it, in the
  * plan or not (its slices, when the plan has it). `tag` is the code shown, null for none people know.
  */
-export type GoalFeatures = (goal: string) => { code: string; name: string; slices: Plan["slices"]; tag?: string | null; goal_ids?: string[] }[];
+export type GoalFeatures = (goal: string) => { code: string; name: string; slices: Plan["slices"]; tag?: string | null; goal_ids?: string[]; kept_kr?: string }[];
 
 /** The live goal other than `goal` the feature or item keeps as its own (an item's own goals first, a key result as its goal, else the feature's links), if any. */
 export function otherGoal(gb: Buckets, f: ReturnType<GoalFeatures>[number], goal: string): string | undefined {
@@ -505,8 +505,9 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, 
           <div className="mt-3 grid gap-2 text-[15px]">
             {multi.length > 0 && (
               <p>
-                {multi.length} {multi.length === 1 ? "serves" : "serve"} another goal too and {multi.length === 1 ? "goes" : "go"} there:{" "}
-                <span className="text-text2">{multi.map((f) => `${f.name} → ${titleOf(otherGoal(gb, f, goal.id)!)}`).join("; ")}</span>
+                {/* Each one left on a key result keeps that goal: none goes anywhere. */}
+                {multi.length} {multi.every((f) => f.kept_kr) ? (multi.length === 1 ? "keeps another goal" : "keep another goal") : `${multi.length === 1 ? "serves" : "serve"} another goal too and ${multi.length === 1 ? "goes" : "go"} there`}:{" "}
+                <span className="text-text2">{multi.map((f) => (f.kept_kr ? `${[f.tag === null ? "" : (f.tag ?? f.code), f.name].join(" ").trim()} stays on ${f.kept_kr}` : `${f.name} → ${titleOf(otherGoal(gb, f, goal.id)!)}`)).join("; ")}</span>
               </p>
             )}
             {rest > 0 && (
