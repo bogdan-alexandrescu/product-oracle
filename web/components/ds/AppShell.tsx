@@ -474,7 +474,8 @@ function RailLink({ d, pathname, home, badge }: { d: Dest; pathname: string; hom
       className={`relative flex w-[70px] flex-none flex-col items-center gap-0.5 rounded-[10px] pt-[7px] pb-1.5 text-[13px] leading-4 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${RAIL_SELECTED}`}
     >
       <Icon name={d.icon} stroke={1.7} />
-      {d.label}
+      {/* A two-word label ("Ground Truth") wraps in the 70 px item: each line centered under the icon. */}
+      <span className="max-w-full text-center">{d.label}</span>
       {badge !== undefined && <Badge n={badge} testId={`${d.testId}-badge`} />}
     </Link>
   );
