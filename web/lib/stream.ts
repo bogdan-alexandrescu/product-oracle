@@ -49,9 +49,14 @@ export function parseEvents(buffer: string): {
   return { events, rest };
 }
 
+/** A reply's discussion (`/v1/discussions/<id>` of `…/messages/<id>/stream`), by its path as the shared reads key it,
+ * whether the stream URL is relative or absolute. */
+export function discussionPath(url: string): string {
+  return new URL(url, globalThis.location?.href ?? "http://localhost").pathname.replace(/\/messages\/[^/]+\/stream$/, "");
+}
+
 export async function openStream(url: string, h: StreamHandlers): Promise<void> {
-  // The reply's discussion (`/v1/discussions/<id>` of `…/messages/<id>/stream`), by its path as the shared reads key it.
-  const discussion = new URL(url, globalThis.location?.href ?? "http://localhost").pathname.replace(/\/messages\/[^/]+\/stream$/, "");
+  const discussion = discussionPath(url);
   for (let attempt = 0; attempt < 2; attempt++) {
     if (attempt > 0) h.onReset?.();
     let ended = false;
