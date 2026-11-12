@@ -1652,6 +1652,22 @@ function seedGoalBucketsShortClashScenario(): Db {
 }
 
 /**
+ * "goal-buckets-linked-draft": "goal-buckets-short-clash" with two invented drafts on Grow retention: one linked
+ * to Quiet mode schedule's feature (shown on its row, so one feature with it), and one only named Weekly alert email
+ * (shown on its row too, but a feature of its own). Invented data.
+ */
+export const GOAL_BUCKETS_LINKED_DRAFT_SCENARIO = "goal-buckets-linked-draft";
+
+function seedGoalBucketsLinkedDraftScenario(): Db {
+  const db = seedGoalBucketsShortClashScenario();
+  const rm = db.simple_roadmap!;
+  rm.items.push({ key: "quiet-mode-draft", title: "Quiet mode schedule", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", feature: "quiet-mode", draft: true });
+  rm.items.push({ key: "weekly-alert-copy", title: "Weekly alert email", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", draft: true });
+  for (const k of ["quiet-mode-draft", "weekly-alert-copy"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
+  return db;
+}
+
+/**
  * "goal-buckets-three-goals" (goal-delete-r3): "goal-buckets-dated" with two more drafts that name
  * the archived goal Cut support tickets in half: Team alert digest serves it first, then Grow
  * retention and Faster activation; Snooze for a day serves Grow retention, then it; Alert tone picker
@@ -4393,6 +4409,8 @@ function load(): Db {
                 ? seedGoalBucketsThreeGoalsScenario
               : scenario === GOAL_BUCKETS_SHORT_CLASH_SCENARIO
                 ? seedGoalBucketsShortClashScenario
+              : scenario === GOAL_BUCKETS_LINKED_DRAFT_SCENARIO
+                ? seedGoalBucketsLinkedDraftScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
               : scenario === PRIORITIES_PLAN_MILESTONES_SCENARIO
