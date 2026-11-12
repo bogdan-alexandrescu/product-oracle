@@ -541,7 +541,8 @@ async def move_items_off(
         )
     )
     others = {i for r in rows for i in r.goal_ids or [] if i != goal_id}
-    # The goal's key results go with it, at any depth, as do those under an archived goal:
+    # The goal's key results go with it, at any depth, as do those under an archived goal
+    # or one in Trash:
     # an item on one is not kept there by it (the dialog lifts a key result to its top goal).
     goals = {
         r.id: r
@@ -551,13 +552,14 @@ async def move_items_off(
     }
 
     def is_live(i: uuid.UUID) -> bool:
+        # Live only when the walk reaches a top goal; a goal not read (in Trash) is gone.
         seen: set[uuid.UUID] = set()
         while i not in seen:
             g = goals.get(i)
-            if g is None:  # past the top goal (or no goal at all)
-                return bool(seen)
-            if g.id == goal_id or g.status == "rejected":
+            if g is None or g.id == goal_id or g.status == "rejected":
                 return False
+            if g.parent_id is None:
+                return True
             seen.add(i)
             i = g.parent_id
         return False
