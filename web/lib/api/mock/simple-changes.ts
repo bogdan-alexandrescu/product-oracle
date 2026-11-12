@@ -733,6 +733,14 @@ function writesFields(c: Change, ids: string[], fields: string[] | null): boolea
   return wrote.some((f) => fields.includes(f));
 }
 
+/** changes._oracle_filled: Oracle's draft of a new item filled these fields (its outcome) and no
+ * person has written them since; a person who saw them empty keeps their edit. */
+function oracleFilled(db: SimpleDb, id: string, fields: string[]): boolean {
+  const s = db.items.find((x) => db.ids[x.key] === id);
+  if (!s?.drafted_at || !fields.includes("outcome")) return false;
+  return !(db.changes ?? []).some((c) => ["applied", "accepted", "undone"].includes(c.status) && c.op !== "add_item" && writesFields(c, [id], fields));
+}
+
 function conflict(db: SimpleDb, ctx: SimpleChangesCtx, current: Values, ids: string[], lead: string): Response {
   const fields = conflictFields(current);
   const writes = (db.changes ?? [])
@@ -740,8 +748,9 @@ function conflict(db: SimpleDb, ctx: SimpleChangesCtx, current: Values, ids: str
     .map((c) => ({ at: c.status === "accepted" && c.decided_at ? c.decided_at : c.at, who: c.status === "accepted" && c.decided_by ? c.decided_by : c.by }));
   const last = madeOrder(writes, (w) => [w.at], true)[0];
   // roadmap-edit-fixes (changes._last_writer): Oracle's draft filled it last: Oracle changed it.
-  const oracle = db.items.filter((x) => ids.includes(db.ids[x.key]) && x.drafted_at).map((x) => x.drafted_at!).sort().reverse()[0];
-  if (oracle && (!last || oracle >= last.at)) {
+  // Only the outcome it filled; a person's write at the same moment came after it.
+  const oracle = fields && !fields.includes("outcome") ? undefined : db.items.filter((x) => ids.includes(db.ids[x.key]) && x.drafted_at).map((x) => x.drafted_at!).sort().reverse()[0];
+  if (oracle && (!last || oracle > last.at)) {
     return json(409, { detail: { message: `${lead}: changed by Oracle`, current, changed_by: { id: null, name: "Oracle" }, changed_at: oracle } });
   }
   const who = last ? { id: last.who, name: ctx.names[last.who] ?? "someone" } : null;
@@ -1556,7 +1565,9 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       // roadmap-edit-fixes: the read shows a title's code apart from its name.
       const s = seed(seen, key);
       if (!same(seenNow, { title: codedTitle(s.title, prdCode(s.section))[1] })) return conflict(db, ctx, now_, [String(target.item_id)], lead);
-    } else if (!same(seenNow, now_)) return conflict(db, ctx, now_, [String(target.item_id)], lead);
+    } else if (!same(seenNow, now_) && !(Object.values(seenNow).every((v) => v == null) && oracleFilled(db, String(target.item_id), fields)))
+      // roadmap-edit-fixes: Oracle's draft landed after the person saw the field empty.
+      return conflict(db, ctx, now_, [String(target.item_id)], lead);
     const a = body.after ?? {};
     let stored = fields;
     if (body.op === "move_dates") {
