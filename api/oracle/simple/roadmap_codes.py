@@ -150,30 +150,30 @@ def assign(
         into[gm.id] = to
         groups.setdefault(to, []).append(gm)
 
+    # Each milestone's code read once, and the goal milestones and tracks by roadmap and code
+    # (in the read's order), so each join looks up its own instead of walking every one.
+    code_of = {id(g): _gm_code(g) for g in goal_ms}
+    by_code: dict[tuple[uuid.UUID, str | None], list[SimpleGoalMilestone]] = {}
+    for g in goal_ms:
+        by_code.setdefault((g.roadmap_id, code_of[id(g)]), []).append(g)
+    tracks_of: dict[str | None, list[SimpleMilestone]] = {}
+    for tm in tracks:
+        tracks_of.setdefault(split(tm.name)[0], []).append(tm)
+
     # First every join by code; a goal's own that makes none waits for the PRD joins below.
     later: list[tuple[SimpleGoalMilestone, list[SimpleGoalMilestone]]] = []
     for gm in sorted(goal_ms, key=order):
-        code = _gm_code(gm)
+        code = code_of[id(gm)]
         own = gm.prd is None and gm.goal_id is not None
         there = [
-            tm
-            for tm in tracks
-            if code and split(tm.name)[0] == code and gm.roadmap_id in held.get(tm.id, ())
+            tm for tm in tracks_of.get(code, []) if code and gm.roadmap_id in held.get(tm.id, ())
         ]
         if gm.goal_id is None and len(there) == 1:
             join(gm, there[0].id)
             continue
-        plain = [
-            g
-            for g in goal_ms
-            if code and g.goal_id is None and g is not gm
-            and g.roadmap_id == gm.roadmap_id and _gm_code(g) == code
-        ]  # fmt: skip
-        alike = {
-            (g.goal_id, g.prd.id if g.prd else None)
-            for g in goal_ms
-            if g.roadmap_id == gm.roadmap_id and _gm_code(g) == code
-        }
+        same = by_code.get((gm.roadmap_id, code), [])
+        plain = [g for g in same if code and g.goal_id is None and g is not gm]
+        alike = {(g.goal_id, g.prd.id if g.prd else None) for g in same}
         alone = len(alike) == 1 and len(there) == 1
         to = best(gm, there, alone)
         if to is None and gm.goal_id is not None:
@@ -187,13 +187,16 @@ def assign(
     # Goal map's, Nov 10: of the same name, whatever the PRD's code, its plan's), of its goal or
     # none and only if the group holds no other goal's milestone ("Join only within the same
     # goal", the owner, Nov 11), every join by code already in it.
+    prd_ms: dict[uuid.UUID, list[SimpleGoalMilestone]] = {}
+    for g in goal_ms:
+        if g.prd is not None:
+            prd_ms.setdefault(g.roadmap_id, []).append(g)
     for gm, plain in later:
         twins = [
             g
-            for g in goal_ms
-            if g.prd is not None and g is not gm and g.roadmap_id == gm.roadmap_id
-            and g.goal_id in (None, gm.goal_id) and mine(gm, g)
-        ]  # fmt: skip
+            for g in prd_ms.get(gm.roadmap_id, [])
+            if g is not gm and g.goal_id in (None, gm.goal_id) and mine(gm, g)
+        ]
         to = best(gm, [g for g in plain if mine(gm, g)], False) or best(gm, twins, False, near=True)
         # One goal's own milestone per joined group; another stays its own.
         if to is not None:
