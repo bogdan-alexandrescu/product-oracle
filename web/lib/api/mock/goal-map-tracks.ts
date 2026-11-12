@@ -6,7 +6,9 @@
  * Revenue, Account Management), as the map's areas are too. The goals are Baseline goals and goal
  * buckets (one store, the same ids), as goal-ladder's. "goal-map-tracks-hard" (GM_TRACKS_HARD_SCENARIO)
  * gives the first goal 30 long-named features and seven more milestones, and two features with no
- * track (one on a milestone, one on none). Invented company, people and products only.
+ * track (one on a milestone, one on none). "goal-map-tracks-heads" (GM_TRACKS_HEADS_SCENARIO) and its
+ * five-goal twin give the goals every status (On track, At risk, Met, Not measured) and long targets
+ * (money, a number with a long unit), for the goal cards' header row. Invented company, people and products only.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -18,6 +20,8 @@ type Status = GmMilestone["status"];
 
 export const GM_TRACKS_SCENARIO = "goal-map-tracks";
 export const GM_TRACKS_HARD_SCENARIO = "goal-map-tracks-hard";
+export const GM_TRACKS_HEADS_SCENARIO = "goal-map-tracks-heads";
+export const GM_TRACKS_HEADS5_SCENARIO = "goal-map-tracks-heads-five";
 
 /** The roadmap's tracks in their order: Simple's track key and its name (the map's areas are the same five). */
 export const GM_TRACKS: { key: string; area: string; title: string; lever: string }[] = [
@@ -56,6 +60,26 @@ const GOALS: GmGoal[] = [
   },
   goal("gtrevenue", "Revenue per day", 20000, 13400, "$", "on_track", "Key results: 25% pick the annual plan · upgrades at day 20 reach 12%"),
 ];
+
+/** The heads scenarios' goals: the same ids (their milestones and features stay), every status and long targets. */
+const HEADS: Record<string, Partial<GmGoal>> = {
+  gtdemos: { target: 40, current: 42, status: "met" },
+  gtpayments: { name: "Recovered card payments per month", target: 250000, current: 150000, unit: "$", status: "at_risk" },
+  gtactivations: { target: 1200, unit: "shops signed up each week" },
+  gtrevenue: { target: 12000, current: 10200, unit: "$", status: "on_track" },
+};
+const FIFTH_GOAL: GmGoal = goal("gtreferrals", "Referrals from happy customers", 1500, 1200, "referred teams per month", "on_track", "Key results: 1 in 5 new teams comes from a referral");
+
+/** The goals of a scenario: the four, or the heads scenarios' (five with GM_TRACKS_HEADS5_SCENARIO). */
+function goalsOf(scenario: string | null): GmGoal[] {
+  const four = GOALS.map((g) => ({ ...g, history: [...g.history] }));
+  if (scenario !== GM_TRACKS_HEADS_SCENARIO && scenario !== GM_TRACKS_HEADS5_SCENARIO) return four;
+  const heads = four.map((g) => ({ ...g, ...HEADS[g.id] }));
+  return scenario === GM_TRACKS_HEADS5_SCENARIO ? [...heads, { ...FIFTH_GOAL, history: [...FIFTH_GOAL.history] }] : heads;
+}
+
+/** Whether a scenario is one of goal-map-tracks'. */
+export const isTracksScenario = (s: string | null) => s === GM_TRACKS_SCENARIO || s === GM_TRACKS_HARD_SCENARIO || s === GM_TRACKS_HEADS_SCENARIO || s === GM_TRACKS_HEADS5_SCENARIO;
 
 /** A map milestone as the db keeps it (a PRD's own carries `prd` and its plan's code). */
 type Ms = GmMilestone & { prd?: { id: string; slug: string; title: string }; prd_code?: string };
@@ -207,7 +231,7 @@ export const GM_TRACKS_GUARDRAIL = { name: "Failed payments", rule: "under 2% ev
 
 /** The goal map of the goal-map-tracks scenarios (short ids: goal-map.ts gives them the API's ids).
  * A feature on no milestone is no map feature: the map reads it from the roadmap (unplaced). */
-export function tracksMap(hard: boolean): GoalMap {
+export function tracksMap(hard: boolean, scenario: string | null = null): GoalMap {
   const milestones: Ms[] = MILESTONES.map((m) => ({ ...m, days: [...m.days] }));
   if (hard) HARD_MS.forEach(([name, iso, status, t], i) => milestones.push(ms(`gth${i}`, name, "gtdemos", iso, status, t)));
   const features: GmFeature[] = featureRows(hard).flatMap(({ id, row: [name, area, m, state] }) => {
@@ -222,7 +246,7 @@ export function tracksMap(hard: boolean): GoalMap {
     return [{ id, name, code: "", area, milestones: on, lever, expected: links[0].expected, confidence: links[0].confidence, released: state !== "planned", measured: null, lift, links }];
   });
   return {
-    goals: GOALS.map((g) => ({ ...g, history: [...g.history] })),
+    goals: goalsOf(scenario),
     areas: GM_TRACKS.map((t) => ({ id: t.area, name: t.title, lever: t.lever })),
     guardrail: { ...GM_TRACKS_GUARDRAIL, days: [...GM_TRACKS_GUARDRAIL.days] },
     milestones: milestones as GmMilestone[],
@@ -239,9 +263,9 @@ export function tracksMap(hard: boolean): GoalMap {
   };
 }
 
-/** The four goals as Baseline goals (and goal buckets): the map's own ids through `idOf`. */
-export function tracksGoals(idOf: (k: string) => string): { id: string; key: string; title: string; status: "confirmed"; parent_id: null; attrs: Record<string, unknown> }[] {
-  return GOALS.map((g, n) => ({
+/** The scenario's goals as Baseline goals (and goal buckets): the map's own ids through `idOf`. */
+export function tracksGoals(idOf: (k: string) => string, scenario: string | null = null): { id: string; key: string; title: string; status: "confirmed"; parent_id: null; attrs: Record<string, unknown> }[] {
+  return goalsOf(scenario).map((g, n) => ({
     id: idOf(g.id), key: `g.${g.id}`, title: g.name, status: "confirmed" as const, parent_id: null,
     attrs: { metric: g.measure, target: g.target, unit: g.unit, math: g.math, position: n + 1 },
   }));

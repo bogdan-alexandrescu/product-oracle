@@ -221,7 +221,7 @@ import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPr
 import { closed, GOALS, MAP_GOALS, prdFeeds, prdOwnerIdsOf, prdTrackOwnerIds, roadmapKeyOf, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, milestoneGoalInTrash, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, LADDER_TRACK_OWNER_SCENARIO, LADDER_TWINS_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
-import { GM_TRACKS, GM_TRACKS_HARD_SCENARIO, GM_TRACKS_SCENARIO, tracksGoals, tracksItems } from "./goal-map-tracks";
+import { GM_TRACKS, GM_TRACKS_HARD_SCENARIO, isTracksScenario, tracksGoals, tracksItems } from "./goal-map-tracks";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -4660,7 +4660,7 @@ function load(): Db {
                     }
                     return db;
                   }
-              : scenario === GM_TRACKS_SCENARIO || scenario === GM_TRACKS_HARD_SCENARIO
+              : isTracksScenario(scenario)
                 ? () => {
                     // goal-map-tracks: as goal-ladder, the map's goals are Home's (Baseline goals and goal buckets,
                     // the same ids) and each feature is its own Simple roadmap item, here on one of the company's
@@ -4668,7 +4668,7 @@ function load(): Db {
                     const db = seed();
                     const template = db.baseline.entities.find((e) => e.type === "goal")!;
                     for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
-                    const goals = tracksGoals(goalMapIdOf);
+                    const goals = tracksGoals(goalMapIdOf, scenario);
                     for (const g of goals) db.baseline.entities.push({ ...template, ...g, body: null, locked: false, locked_by: null, locked_at: null });
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
                     // Each item names its goal itself (by the goal's id): off its last milestone it is unplaced under it.
