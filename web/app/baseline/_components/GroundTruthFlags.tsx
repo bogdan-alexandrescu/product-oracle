@@ -21,6 +21,7 @@ const KINDS: { kind: Kind; label: string; why: string }[] = [
   { kind: "slice_parent_missing", label: "Slices not in the Ground Truth", why: "Roadmap slices of a PRD feature (one per milestone it spans) whose feature is not in the Ground Truth." },
   { kind: "prd_feature_missing", label: "PRD features not in the Ground Truth", why: "Features of a PRD's approved version that are not in the Ground Truth." },
   { kind: "no_code", label: "No feature code", why: "Ground Truth features without an F-code, so no PRD or roadmap can name them." },
+  { kind: "code_differs", label: "Code differs from its PRD", why: "Ground Truth features keyed by another number than the code their PRD or roadmap item gives them." },
   { kind: "no_goal", label: "Serves no goal", why: "Ground Truth features that serve no goal." },
   { kind: "runs_today_on_roadmap", label: "Runs today, still on the roadmap", why: "Features that run today, with proof, but are still on the roadmap." },
 ];
@@ -233,6 +234,13 @@ export function GroundTruthFlags({
       return { text: `“${name}” is now ${out.code}.`, undo: () => unwrap(api.DELETE("/v1/baseline/entities/{entity_id}/code", path)) };
     });
 
+  /** Use its code: a feature keyed by another number gets the code its PRD or roadmap item gives it. */
+  const takeOwnCode = (flag: Flag, target: string) =>
+    act(async () => {
+      const out = await unwrap(api.POST("/v1/baseline/entities/{entity_id}/own-code", { params: { path: { entity_id: target } } }));
+      return { text: `“${subject(flag).name}” is now ${out.code}.` };
+    });
+
   /** Link a PRD's feature (or a slice's feature) to a Ground Truth feature; a commenter's goes to an approver. */
   const linkPrd = (flag: Flag, code: string, feature: { id: string; title: string }) =>
     act(async () => {
@@ -283,6 +291,8 @@ export function GroundTruthFlags({
           return canWrite || canPropose ? on(() => void giveCode(flag, t)) : [];
         case "confirm_feature":
           return canWrite ? on(() => void confirm(flag, t)) : [];
+        case "use_code":
+          return canWrite ? on(() => void takeOwnCode(flag, t)) : [];
         case "pick_goal":
           return canWrite ? on(() => setPicking({ flag, what: "goal" })) : [];
         case "take_off_roadmap":

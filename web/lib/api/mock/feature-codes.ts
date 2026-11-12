@@ -79,12 +79,37 @@ export function setCode(s: BaselineState, e: Entity, code: string): void {
   e.key = code;
 }
 
+/** check.whole_code: a code as a feature is keyed by it, a slice's letter dropped (f-07a reads F-07). */
+export function wholeCode(raw: unknown): string | null {
+  const m = /^([a-z]{1,3})-(\d+)[a-j]?$/i.exec(String(raw ?? "").trim());
+  return m ? `${m[1].toUpperCase()}-${m[2].padStart(2, "0")}` : null;
+}
+
+/** fixes.wanted_code: its Code attribute, else the one code of the roadmap items tied to it (`tied`). */
+export function wantedCode(e: Entity, tied: string[]): string | null {
+  const own = wholeCode((e.attrs as Record<string, unknown> | null)?.code);
+  if (own) return own;
+  const codes = [...new Set(tied.map(wholeCode).filter((c): c is string => !!c))];
+  return codes.length === 1 ? codes[0] : null;
+}
+
+/** fixes._free: no other feature has `code`, now or as a code it gave back. */
+export function codeFree(s: BaselineState, e: Entity, code: string): boolean {
+  if (s.entities.some((x) => x.type === "feature" && x.id !== e.id && x.key === code)) return false;
+  const former = formerKeys(s).get(code);
+  return !former || former === e.id;
+}
+
 /**
- * fixes.code_on_join: a confirmed feature with no code gets its next code as its key; a code it
+ * fixes.code_on_join: a confirmed feature with no code gets its own code (wantedCode) when free, else its next code as its key; a code it
  * has is kept; a slice whose feature has no code keeps its key. The caller writes the revision.
  */
-export function codeOnJoin(s: BaselineState, e: Entity, seen: string[]): void {
+export function codeOnJoin(s: BaselineState, e: Entity, seen: string[], tied: string[] = []): void {
   if (e.type !== "feature" || e.status !== "confirmed") return;
+  // Its own code first (its Code attribute, else its roadmap item's), when no other feature has it.
+  const parent = e.parent_id ? s.entities.find((x) => x.id === e.parent_id && x.type === "feature") : undefined;
+  const want = !ANY_CODE.test(e.key) && !parent ? wantedCode(e, tied) : null;
+  if (want && codeFree(s, e, want)) return setCode(s, e, want);
   const next = nextFeatureCode(s, e, seen);
   if ("code" in next) setCode(s, e, next.code);
 }

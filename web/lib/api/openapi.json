@@ -17489,6 +17489,59 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/baseline/entities/{entity_id}/own-code": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Use Own Code",
+        "description": "Use its code (the check's ``code_differs``): a feature keyed by the next number as it\nwas confirmed gets its own code (its Code attribute, else its roadmap item's or PRD\nfeature's); the number is given back, never given again. Refused when another feature\nhas that code.",
+        "operationId": "use_own_code",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroundTruthFixOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/baseline/prd-links": {
       "post": {
         "tags": [
@@ -84444,6 +84497,7 @@
               "link_to_feature",
               "confirm_feature",
               "give_code",
+              "use_code",
               "pick_goal",
               "take_off_roadmap"
             ],
@@ -84521,6 +84575,7 @@
               "slice_parent_missing",
               "prd_feature_missing",
               "no_code",
+              "code_differs",
               "no_goal",
               "runs_today_on_roadmap"
             ],
