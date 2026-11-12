@@ -50,8 +50,8 @@ export function parseEvents(buffer: string): {
 }
 
 export async function openStream(url: string, h: StreamHandlers): Promise<void> {
-  // The reply's discussion (`/v1/discussions/<id>` of `…/messages/<id>/stream`).
-  const discussion = url.split("?")[0]!.replace(/\/messages\/[^/]+\/stream$/, "");
+  // The reply's discussion (`/v1/discussions/<id>` of `…/messages/<id>/stream`), by its path as the shared reads key it.
+  const discussion = new URL(url, globalThis.location?.href ?? "http://localhost").pathname.replace(/\/messages\/[^/]+\/stream$/, "");
   for (let attempt = 0; attempt < 2; attempt++) {
     if (attempt > 0) h.onReset?.();
     let ended = false;
