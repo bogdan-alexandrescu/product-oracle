@@ -2771,7 +2771,9 @@ function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan
     const g = gb?.goals.find((x) => sameGoal(x.title, title));
     if (!g) return [];
     // A key result an item serves counts as its goal (otherGoal compares top-level goals): Archive keeps the item on it.
+    // goal-delete-r7: one below this goal through any parent (a proposed one too) goes with it, as move_items_off's walk.
     const liftOne = (id: string) => {
+      if (kr?.under(id, g)) return g.id;
       const p = kr?.top(id);
       return (p && gb?.goals.find((x) => x.id === p.id || sameGoal(x.title, p.title))?.id) || id;
     };

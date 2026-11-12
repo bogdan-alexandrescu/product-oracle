@@ -28,6 +28,11 @@ export type PriorityKeyResults = {
   of: (refs: (string | null | undefined)[], gb?: Buckets) => BucketKeyResult[];
   /** The top-level goal of a key result named by its id, key, title or name; null for a goal. */
   top: (ref: string | null | undefined) => { id: string; key: string; title: string } | null;
+  /**
+   * goal-delete-r7: whether `goal` (by id, else by name) is above the goal `id`, up its parents whatever
+   * their status (goal_buckets.is_live walks so: a proposed goal counts as live, so it is walked through).
+   */
+  under: (id: string, goal: { id: string; title: string }) => boolean;
 };
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -59,7 +64,18 @@ export function usePriorityKeyResults(): PriorityKeyResults {
         return { id: k.id, name: k.code && !OWN_CODE.test(k.name) ? `${k.code} ${k.name}` : k.name, line: target && (measure ? `${measure}: ${target}` : target) };
       });
     const top = (ref: string | null | undefined) => (ref ? (krs.parentOf(ref) ?? krs.parentOf(named(ref))) : null);
-    return { krs, of, top };
+    const byId = new Map(list.map((e) => [e.id, e]));
+    const name = (title: string) => goalLabel(title).name.toLowerCase();
+    const under = (id: string, goal: { id: string; title: string }) => {
+      const seen = new Set<string>();
+      for (let at = byId.get(id); at?.parent_id && !seen.has(at.id); at = byId.get(at.parent_id)) {
+        const up = byId.get(at.parent_id);
+        if (at.parent_id === goal.id || (up && name(up.title) === name(goal.title))) return true;
+        seen.add(at.id);
+      }
+      return false;
+    };
+    return { krs, of, top, under };
   }, [goals.data]);
 }
 
