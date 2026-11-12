@@ -5,7 +5,8 @@ import { expect, test } from "./test";
  * by the discussion's path, so the next read of it fetches, whether the reply's stream URL was given relative
  * (/v1/discussions/<id>/messages/<id>/stream) or absolute (with its origin). Runs the modules in Node with a
  * stand-in window and transport; no page, and no stream opened (in the mock build the stream goes to the in-page
- * mock API, which a Node test has no page for).
+ * mock API, which a Node test has no page for); that openStream drops them is checked through the UI in
+ * ask-reply-discussion-read.spec.ts.
  *
  * fails_when = the path taken from an absolute stream URL keeps its origin or query, so dropping the reads of it
  * leaves the answer shared before the reply in place.
@@ -32,7 +33,7 @@ for (const [name, stream] of [
   ["relative", "/v1/discussions/example-d1/messages/example-m1/stream"],
   ["absolute", `${ORIGIN}/v1/discussions/example-d1/messages/example-m1/stream?from=0`],
 ] as const) {
-  test(`a reply done on a ${name} stream URL drops its discussion's shared reads`, async () => {
+  test(`a reply done on ${name === "absolute" ? "an" : "a"} ${name} stream URL drops its discussion's shared reads`, async () => {
     const { read, forgetReadsOf, discussionPath, calls } = await setup();
     expect(discussionPath(stream)).toBe("/v1/discussions/example-d1");
     const discussion = `${ORIGIN}/v1/discussions/example-d1`;
