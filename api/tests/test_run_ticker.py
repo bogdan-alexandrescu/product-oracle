@@ -830,15 +830,19 @@ async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.01)
     monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 1.0)
     reading = asyncio.Event()
+    started = asyncio.Event()
 
     async def slow_inputs(s, job, ask):
         # Reading the job's inputs outlives the tick: no model call has started.
         if not reading.is_set():
+            started.set()
             await asyncio.sleep(30)
         return await ask("review_comments", {"job": str(job.id)})
 
     monkeypatch.setitem(kinds.RUNNERS, "review_comments", slow_inputs)
     out = (await client.post(PATH, headers=bearer(id_token()))).json()
+    # The job was claimed and cut while reading its inputs, not left unclaimed.
+    assert started.is_set()
     assert out["timed_out"] is True and claude.calls == []
     [job] = await _jobs(tenant_id)
     assert (job.status, job.attempts) == ("queued", 0)
