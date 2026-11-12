@@ -11,7 +11,7 @@
  * - A read that must see what is there now (`cache: "no-store"` or "reload": Publish's check for a
  *   newer version, opening Recent chats) never takes a shared answer, nor a read begun before it: it
  *   fetches, and its answer is shared from then on. A read begun before it that then fails is never the shared
- *   answer: whoever waits on it gets the newer read's answer, or its failure.
+ *   answer: whoever waits on it gets the newest read's answer, or its failure.
  * - Any answer that differs from the one shared before it says so (`onReadChanged`), so what
  *   shows an older answer reads it again.
  * - Any write (a non-GET, or a GET that marks something seen) drops every shared answer, and
@@ -171,14 +171,18 @@ export function sharedReads(base: (req: Request) => Promise<Response>): (req: Re
   };
 }
 
+/** Each read's own answer (orNewer), by the read: a failed read gives way to the newer read's, never its raw try. */
+const answers = new WeakMap<Promise<Response>, Promise<Response>>();
+
 /**
  * A first read's answer, the one shared while it is on its way: if it fails once a newer read of it began (a
- * no-store read), the newer read's answer or its failure instead, so a failed first try never stays the answer.
+ * no-store read), the newer read's answer instead, which in turn gives way to the newest read when it fails
+ * too, so a failed try never stays the answer while a newer one may give it; the newest read's failure else.
  */
 function orNewer(res: Promise<Response>, entry: Entry): Promise<Response> {
   const newer = () => {
     const n = entry.next ?? entry.res;
-    return n && n !== res && n !== shared ? n : null;
+    return n && n !== res && n !== shared ? (answers.get(n) ?? n) : null;
   };
   const shared: Promise<Response> = res.then(
     (r) => (r.ok ? r : (newer() ?? r)),
@@ -199,6 +203,7 @@ function fetchShared(base: (req: Request) => Promise<Response>, req: Request, ke
   const entry: Entry = entries.get(key) ?? { at: mark?.at ?? null, res: null, body: mark?.body ?? null, next: null };
   // What its callers wait on: a failed first try gives way to a newer read of it.
   const answer = orNewer(res, entry);
+  answers.set(res, answer);
   if (!entry.res) entry.res = answer;
   entry.next = res;
   entries.set(key, entry);
