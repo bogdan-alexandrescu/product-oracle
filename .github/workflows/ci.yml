@@ -1,16 +1,18 @@
 name: CI
 
+# CI runs on merges to main only, never on pull requests (BGD, Nov 12, 2026: "no testing in prs,
+# just testing in ci on merges to main"): work lands in large merge trains, each train is tested
+# once by the push run its merge starts, and a deploy waits for that run. workflow_dispatch runs it
+# by hand on any branch when one needs checking before it merges.
 on:
   push:
     branches: [main]
-  pull_request:
+  workflow_dispatch:
 
-# One run per pull request: a new head cancels the PR's older run, so superseded runs
-# stop holding runners (owner, 2026-10-23). Each main push is
-# its own group (by commit), so a merge never drops the run of the merge before it.
+# Each main push is its own group (by commit), so a merge never drops the run of the merge before it.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 
 # Self-hosted runners (BGD, Nov 6, 2026: "Share SwarmCloud's pool"): with the repository variable
 # SELF_HOSTED_CI set to 'on', every job runs on the shared runner dispatcher's VMs (one
@@ -177,11 +179,10 @@ jobs:
           name: e2e-results
           path: web/test-results/
 
-  # BGD, Nov 6, 2026 ("Move it to CI, sharded"): a train's or hotfix's pull request runs the whole
-  # mock-backed Playwright suite here, split 8 ways on the runner pool, instead of on CLD's laptop.
+  # BGD, Nov 6, 2026 ("Move it to CI, sharded"), and Nov 12 (CI on main pushes only): every push to
+  # main runs the whole mock-backed Playwright suite here, split 8 ways on the runner pool.
   # Each shard builds the mock app once, then runs its share with the e2e/ci.env settings.
   mock-e2e:
-    if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'train/') || startsWith(github.head_ref, 'hotfix/'))
     runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
     timeout-minutes: 60
     strategy:
@@ -201,7 +202,10 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: cd web && npm ci && for i in 1 2 3; do npx playwright install --with-deps chromium && break; [ "$i" = 3 ] && exit 1; echo "Playwright install failed (try $i of 3; an Ubuntu mirror is often down for a minute), retrying in 30 s"; sleep 30; done
       - run: cd web && npm run build:mock
+      # The prose guard compares against main before this push (the train's merge base), not main itself.
       - run: cd web && E2E_PREBUILT=1 E2E_WORKERS=4 npm run test:ci -- --shard=${{ matrix.shard }}/8
+        env:
+          PROSE_BASE: ${{ github.event_name == 'push' && github.event.before || 'origin/main' }}
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
