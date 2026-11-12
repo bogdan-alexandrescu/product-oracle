@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, get_args
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -1228,6 +1228,8 @@ async def thread(
                 picked=r.picked if r is not None else None, retry=kind == "failed",
                 source=_talk().source_label(m.citations),
                 links=_talk().links_of(m.citations),
+                live_reads=[x for x in m.citations or []
+                            if isinstance(x, dict) and x.get("kind") == "live"],
             ))  # fmt: skip
     return ChatThreadOut(
         id=d.id if d is not None else None,
@@ -1848,8 +1850,17 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     c.page = read.page
     await c.load()
     payload = await _payload(c, read)
-    answer = await ask(READER_JOB, payload)
-    reply = await _with_calls(c, ask, payload, answer, read)
+    live = await _live_of(s, job.tenant_id, read, msg)
+    try:
+        answer = await (ask(READER_JOB, payload, mcp=live.mcp) if live
+                        else ask(READER_JOB, payload))  # fmt: skip
+        cited = await live.cited(answer) if live else []
+        reply = (_live_answer(answer) if cited else None) or await _with_calls(
+            c, ask, payload, answer, read
+        )
+    finally:
+        if live:
+            await live.end()
     if read.meeting_id is not None and reply.no_change and read.line.rstrip().endswith("?"):
         # As the mock's question branch: only a line the reader saw nothing to change in;
         # a change it could not build keeps its own reply.
@@ -1864,6 +1875,8 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
         if not msg.citations and c.prd is not None:
             # A meeting's answer names where it comes from: the meeting's PRD.
             msg.citations = [{"kind": "simple_source", "label": c.prd.source()}]
+    if cited and reply.kind == "answer":
+        msg.citations = [*(msg.citations or []), *cited]
     if reply.links:
         links = [{"kind": "simple_link", **x} for x in reply.links]
         msg.citations = [*(msg.citations or []), *links]
@@ -1871,6 +1884,86 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     await _attach(s, principal, msg, read.meeting_id, reply)
     await s.flush()
     return {"kind": reply.kind, "cards": len(reply.cards), "choices": len(reply.choices)}
+
+
+@dataclass
+class _LiveRun:
+    """#710 in Simple: an Ask panel line's reader run reads its asker's sources live as Ask's
+    replies do (oracle.discussions.replies: the live plan, its token, prompt and MCP server),
+    only in the person's own Ask chat, never a meeting's chat or one others are in."""
+
+    tenant_id: uuid.UUID
+    message_id: uuid.UUID
+    started: bool = False
+
+    async def mcp(self, system: str) -> tuple[str, Any]:
+        """Claude Code is about to run the line: the reply is ``streaming`` while it may
+        read (as every live call re-checks), then the live decision is taken again and the
+        token minted (replies' own)."""
+        from oracle.discussions import replies
+        from oracle.tenancy import tenant_session
+
+        async with tenant_session(self.tenant_id) as db:
+            await db.execute(update(DiscussionMessage)
+                             .where(DiscussionMessage.id == self.message_id)
+                             .values(status="streaming",
+                                     stream_lease_until=func.now() + replies.LEASE)
+                             .execution_options(synchronize_session=False))  # fmt: skip
+            await db.commit()
+        self.started = True
+        return await replies._for_claude_code(self.tenant_id, self.message_id, system)
+
+    async def cited(self, answer: Any) -> list[dict[str, Any]]:
+        """The live reads the answer cites (``[l:n]``), as Ask's reply keeps them; a marker
+        with no read of this reply is dropped."""
+        from oracle.discussions import replies
+
+        said = answer.get("answer") if isinstance(answer, dict) else None
+        if not self.started or not isinstance(said, str) or "[l:" not in said:
+            return []
+        reads = await replies.live_citations(self.tenant_id, self.message_id)
+        refs = dict.fromkeys(int(n) for n in replies._LIVE_MARKER.findall(said))
+        return [reads[n] for n in refs if n in reads]
+
+    async def end(self) -> None:
+        """The token reads no more; the line is the reader's again (its job sets it done)."""
+        from oracle.discussions import replies
+        from oracle.tenancy import tenant_session
+
+        if not self.started:
+            return
+        await replies._revoke(self.tenant_id, [self.message_id])
+        async with tenant_session(self.tenant_id) as db:
+            await db.execute(update(DiscussionMessage)
+                             .where(DiscussionMessage.id == self.message_id,
+                                    DiscussionMessage.status == "streaming")
+                             .values(status="pending", stream_lease_until=None)
+                             .execution_options(synchronize_session=False))  # fmt: skip
+            await db.commit()
+
+
+async def _live_of(
+    db: AsyncSession, tenant_id: uuid.UUID, read: SimpleChatRead, msg: DiscussionMessage
+) -> _LiveRun | None:
+    """A live run for an Ask panel line whose asker may read live there (replies.live_plan,
+    unminted); None in a meeting's chat, a chat others are in, or with no live source."""
+    from oracle.discussions import replies
+
+    if read.meeting_id is not None:
+        return None
+    d = await db.get(Discussion, read.discussion_id)
+    if d is None or d.subject_key.startswith("meeting_chat:"):
+        return None
+    plan = await replies.live_plan(db, d, msg, mint=False)
+    return _LiveRun(tenant_id, msg.id) if plan.live else None
+
+
+def _live_answer(answer: dict[str, Any]) -> Reply | None:
+    """An answer from the asker's live reads: Oracle's words with no raw ``[l:n]`` (its
+    reads are on the line), when the reader made no change of the plan."""
+    if answer.get("actions") or answer.get("calls") or answer.get("clarify"):
+        return None
+    return Reply("answer", plain(str(answer["answer"]).strip())[:1500])
 
 
 async def _with_calls(c: Ctx, ask: Any, payload: dict, answer: Any, read: SimpleChatRead) -> Reply:

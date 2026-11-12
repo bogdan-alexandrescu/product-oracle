@@ -202,12 +202,20 @@ async def complete(
     transports: Transports | None = None,
     deadline: float | None = None,
     on_call: Callable[[str | None, str], None] | None = None,
+    mcp: Callable[[], Awaitable[tuple[str, McpServer | None]]] | None = None,
 ) -> Completion:
-    """Run one built-in model call for the session's company."""
+    """Run one built-in model call for the session's company. ``mcp``: as :func:`stream`'s."""
     request = _request(system, messages, max_tokens, job, model)
+    with_mcp: LlmRequest | None = None
 
     async def call(transport: Transport, token: str) -> TransportResult:
-        return await transport.complete(token, request)
+        nonlocal with_mcp
+        if mcp is None or not getattr(transport, "takes_mcp", False):
+            return await transport.complete(token, request)
+        if with_mcp is None:
+            mcp_system, server = await mcp()
+            with_mcp = dataclasses.replace(request, system=mcp_system, mcp=server)
+        return await transport.complete(token, with_mcp)
 
     return await _run(session, job, call, transports, deadline, on_call, lambda: False)
 

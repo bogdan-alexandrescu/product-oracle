@@ -2052,6 +2052,16 @@ class ChatLinkOut(BaseModel):
     href: str
 
 
+class ChatLiveReadOut(BaseModel):
+    """A live read of the asker's source an answer used (#710's live citation): its chip."""
+
+    ref: str
+    source: str
+    call: str
+    read_at: dt.datetime
+    item_id: str | None = None
+
+
 class ChatMessageOut(BaseModel):
     id: uuid.UUID
     author_kind: Literal["person", "oracle"]
@@ -2072,6 +2082,8 @@ class ChatMessageOut(BaseModel):
     source: str | None = None
     # ask-length-limit: where a part Oracle cannot change yet is changed (Priorities, Roadmap).
     links: list[ChatLinkOut] = Field(default_factory=list)
+    # #710 in Simple: the live reads an Ask panel answer used (each a live chip).
+    live_reads: list[ChatLiveReadOut] = Field(default_factory=list)
 
 
 class ChatRulesOut(BaseModel):

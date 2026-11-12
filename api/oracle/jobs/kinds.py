@@ -25,6 +25,7 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import body_text
 from oracle.jobs import prompting
 from oracle.jobs.models import CLASSIFICATIONS, LlmJob, LlmSuggestion
+from oracle.llm.transports import McpServer
 from oracle.review.models import Comment, FeedbackItem, SectionReview
 from oracle.review.service import locked_section_keys
 
@@ -72,6 +73,9 @@ MAX_TOKENS = {
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
 Ask = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
+# ask(..., mcp=) (#710 in Simple): given the kind's system prompt, the run's prompt and MCP
+# server, asked only when Claude Code is about to run the call (gateway.complete's ``mcp``).
+Mcp = Callable[[str], Awaitable[tuple[str, McpServer | None]]]
 
 
 class JobInputError(RuntimeError):
