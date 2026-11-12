@@ -206,15 +206,21 @@ async def test_robots_txt_answering_503_blocks_the_page(client, ctx, at, web):
 
 @pytest.mark.timing
 async def test_a_hanging_host_does_not_stall_the_tick(client, ctx, at, web, monkeypatch):
-    """protects=the weekly checks keep inside the tick's budget: no read starts that could
-    not finish before the deadline, each page's result is committed as it completes (a
-    tick cut off later keeps it), and a page that timed out is not due again the next
-    minute; fails_when=six hanging hosts are read one after another past the budget, or
-    the attempt is lost with the tick's rollback so the same pages are due every tick;
-    no_claim=the real 20 s cap (shortened here)."""
+    """protects=the weekly checks keep inside the tick's budget: a hanging host's read is
+    cut off at the fetcher's cap, no read starts that could not finish before the deadline,
+    each page's result is committed as it completes (a tick cut off later keeps it), and a
+    page that timed out is not due again the next minute; fails_when=a hang outlives the
+    cap, six hanging hosts are read one after another past the budget, or the attempt is
+    lost with the tick's rollback so the same pages are due every tick; no_claim=the real
+    20 s cap (shortened here), or how long the tick's own database work takes (the
+    deadline is read on a clock that moves only while a host hangs, so a loaded runner's
+    queries and scheduling never decide how many reads start)."""
+    import asyncio
     import time
+    from types import SimpleNamespace
 
     from oracle.baseline import public_links
+    from oracle.market import watch
 
     cid = (await add_competitor(client, ctx)).json()["id"]
     pages = []
@@ -224,14 +230,18 @@ async def test_a_hanging_host_does_not_stall_the_tick(client, ctx, at, web, monk
         resp = await watch_page(client, ctx, cid, url, label="docs")
         pages.append(resp.json()["id"])
     web.hang.update(f"hang{i}.example" for i in range(6))
-    monkeypatch.setattr(public_links, "TOTAL_TIMEOUT", 0.3)
+    cap = 0.3
+    monkeypatch.setattr(public_links, "TOTAL_TIMEOUT", cap)
+    monkeypatch.setattr(watch, "time", SimpleNamespace(monotonic=lambda: sum(web.hung)))
     at(START + timedelta(days=7))
     robots.clear()
     started = time.monotonic()
-    async with tenant_session(ctx.tenant_id) as db:
-        n = await check_due(db, deadline=started + 1.0)
+    async with asyncio.timeout(60), tenant_session(ctx.tenant_id) as db:
+        n = await check_due(db, deadline=1.0)  # room for one read: robots.txt, then the page
         await db.rollback()  # the tick is cut off after the step: what it wrote stays
-    assert time.monotonic() - started < 1.0
+    assert len(web.hung) == 2
+    assert all(cap - 0.01 <= s < cap + 5 for s in web.hung), web.hung  # cut off at the cap
+    assert time.monotonic() - started < 2 * cap + 10  # the tick ends; the host's hour does not
     assert n == 1
     read = [await _page(ctx.tenant_id, pid) for pid in pages]
     tried = [p for p in read if p.attempts == 1]
@@ -239,8 +249,8 @@ async def test_a_hanging_host_does_not_stall_the_tick(client, ctx, at, web, monk
     assert tried[0].last_error == "The page took too long to respond."
     assert tried[0].last_checked_at == START + timedelta(days=7)
     at(START + timedelta(days=7, minutes=2))
-    async with tenant_session(ctx.tenant_id) as db:
-        assert await check_due(db, deadline=time.monotonic() + 1.0) == 1
+    async with asyncio.timeout(60), tenant_session(ctx.tenant_id) as db:
+        assert await check_due(db, deadline=sum(web.hung) + 1.0) == 1
         await db.rollback()
     again = await _page(ctx.tenant_id, tried[0].id)
     assert again.attempts == 1  # not read again within the week
