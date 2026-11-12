@@ -6,8 +6,8 @@ import { ADMIN } from "./helpers";
  * meet-chat-own-key: a meeting's chat has its own discussion, apart from the Ask panel on the
  * meeting's page. A question asked in the Ask panel shows only there; a line posted in the
  * meeting's chat shows only in the chat. Desktop (1440x900) and phone (390x844). On a phone the
- * meeting screen covers the header's Ask button, so the phone run asks on a desktop-wide
- * window (as from a laptop) and reads and writes the meeting chat on the phone.
+ * meeting screen covers the app's header, so the phone run asks from the meeting header's own
+ * Ask button (#1016).
  *
  * Card: protects = on a review meeting's page, the Ask panel's question (and Oracle's answer)
  * never shows in the meeting chat, and the meeting chat's line never shows in the Ask chat
@@ -41,10 +41,10 @@ async function startReview(page: Page) {
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
-/** Opens Ask Oracle over the meeting screen (it covers the rail): ⌘J, as a person would. */
-async function openAsk(page: Page): Promise<Locator> {
-  await page.setViewportSize(DESKTOP);
-  await page.keyboard.press("ControlOrMeta+j");
+/** Opens Ask Oracle over the meeting screen (it covers the rail): ⌘J on a desktop, the meeting header's Ask on a phone. */
+async function openAsk(page: Page, phone: boolean): Promise<Locator> {
+  if (phone) await tap(page.getByTestId("meeting-screen").locator('header[aria-label="Meeting"]').getByRole("button", { name: "Ask Oracle" }));
+  else await page.keyboard.press("ControlOrMeta+j");
   const ask = page.getByTestId("ask-chat").filter({ visible: true });
   await expect(ask).toBeVisible();
   return ask;
@@ -59,22 +59,18 @@ for (const phone of [false, true]) {
   const where = phone ? "phone" : "desktop";
   test.describe(where, () => {
     test.use({ viewport: phone ? PHONE : DESKTOP });
-    const toChat = async (page: Page) => {
-      if (phone) await page.setViewportSize(PHONE);
-    };
 
     test(`the Ask panel and the meeting chat each keep their own messages (${where})`, async ({ page }) => {
       test.setTimeout(90_000);
       await startReview(page);
 
       // Ask first, before anyone writes in the meeting's chat.
-      const ask = await openAsk(page);
+      const ask = await openAsk(page, phone);
       await ask.getByLabel("Message Oracle").fill(ASK);
       await tap(ask.getByRole("button", { name: "Send" }));
       await expect(ask.getByTestId("chat-message").filter({ hasText: ASK })).toHaveCount(1);
       await expect(ask.getByTestId("ask-answer").last()).toBeVisible();
       await closeAsk(page);
-      await toChat(page);
 
       // The meeting chat starts empty of the Ask question, then holds only its own line.
       const chat = page.getByTestId("meeting-chat");
@@ -86,13 +82,12 @@ for (const phone of [false, true]) {
       await expect(chat).not.toContainText(ASK);
 
       // The Ask chat, reopened from Recent chats, holds the question and not the chat's line.
-      const again = await openAsk(page);
+      const again = await openAsk(page, phone);
       await tap(page.getByTestId("ask-recent").filter({ visible: true }).first());
       await tap(page.getByTestId("ask-recent-row").filter({ hasText: ASK }).first());
       await expect(again.getByTestId("chat-message").filter({ hasText: ASK })).toHaveCount(1);
       await expect(again).not.toContainText(CHAT);
       await closeAsk(page);
-      await toChat(page);
 
       // After a reload each place still shows only its own message.
       await page.reload();
