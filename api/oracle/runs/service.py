@@ -208,6 +208,7 @@ from oracle.runs.schemas import (
     InboxAccessRequest,
     InboxCheckpoint,
     InboxCounts,
+    InboxCountsOut,
     InboxDocument,
     InboxFeedbackCounts,
     InboxFeedbackItem,
@@ -11803,7 +11804,35 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         return await _inbox(db, principal, mark_seen)
 
 
-async def _inbox(db: AsyncSession, principal: Principal, mark_seen: bool) -> InboxOut:
+# Proposals on a PRD question or a one-pager line or number: not the roadmap's.
+_NOT_ROADMAP_OPS = frozenset(("decide_question", "name_decider", "edit_line", "set_section_number"))
+
+
+async def inbox_counts(db: AsyncSession, principal: Principal) -> InboxCountsOut:
+    """inbox-reads: the Inbox's total and its Roadmap part, for the rails' badges; the rows
+    shown only (never counted) are not read."""
+    with batched():
+        out = await _inbox(db, principal, False, counts_only=True)
+    roadmap = (
+        sum(1 for p in out.simple_proposals if p.op not in _NOT_ROADMAP_OPS)
+        + len(out.simple_approvals)
+        + len(out.simple_goal_suggestions)
+        + sum(1 for t in out.simple_track_suggestions if not t.proposed)
+    )
+    return InboxCountsOut(total=out.total, roadmap=roadmap)
+
+
+async def mark_inbox_seen(db: AsyncSession, principal: Principal) -> None:
+    """inbox-reads: records this visit as my last one (what "new" is measured from next
+    time), without reading the Inbox."""
+    await inbox_states.mark_seen(db, principal.id)
+    await db.commit()
+
+
+async def _inbox(
+    db: AsyncSession, principal: Principal, mark_seen: bool, counts_only: bool = False
+) -> InboxOut:
+    """``counts_only`` (inbox-reads): the rows shown only are left unread (empty)."""
     pending = list(
         await db.scalars(
             select(Checkpoint)
@@ -11846,15 +11875,38 @@ async def _inbox(db: AsyncSession, principal: Principal, mark_seen: bool) -> Inb
     staged = await _staged_actions(db, mine)
     asked = await _open_questions(db, staged)
     owner = principal.role == "owner"
+    # inbox-reads: the runs waiting for an owner's approval, those stuck (below) and, for owners,
+    # those whose import failed, in one read; each row says which it is.
+    # Lost submissions past the lookup cap (Retry or Cancel), cancels past NOT_FOUND_TRIES
+    # 404s (Stop cancelling), answer posts past them (Cancel), and searched workflows past
+    # them (shown), by those who manage the run.
+    live = Run.knobs["workflow"]["state"].astext == "live"
+    is_managed = (
+        Run.knobs.has_key("stuck_lookup")
+        | Run.knobs.has_key("post_404")
+        | Run.knobs.has_key("searches")
+        | Run.knobs.has_key("overrun_after_end")
+        # A running run's wait, before any agent of its workflow started: the knob
+        # stays while it runs (later steps' holds), never after it ended.
+        | (
+            Run.knobs.has_key("queue_wait")
+            & (Run.status == "running")
+            & Run.knobs["queue_wait"]["started"].astext.is_distinct_from("true")
+        )
+        | live
+    )
+    is_waiting = Run.status.in_(("awaiting_approval", "paused_overrun"))
+    is_failed = Run.knobs.has_key("import_failed")
+    run_rows = (
+        await db.execute(
+            select(Run, is_managed, is_waiting, is_failed)
+            .where(is_managed | is_waiting | is_failed if owner else is_managed)
+            .order_by(Run.created_at)
+        )
+    ).all()
     waiting_runs: list[Run] = []
     if owner:
-        waiting_runs = list(
-            await db.scalars(
-                select(Run)
-                .where(Run.status.in_(("awaiting_approval", "paused_overrun")))
-                .order_by(Run.created_at)
-            )
-        )
+        waiting_runs = [r for r, _, waits, _ in run_rows if waits]
         hidden_waiting = await _hidden_runs(db, principal, waiting_runs)
         waiting_runs = [r for r in waiting_runs if r.id not in hidden_waiting]
     shown = {c.run_id for c in [*mine, *owed]}
@@ -11909,39 +11961,30 @@ async def _inbox(db: AsyncSession, principal: Principal, mark_seen: bool) -> Inb
         db, principal.id, intake_reads_due(principal), count=_unread_webhook_notices(principal)
     )
     if has_role(principal.role, "approver"):
-        states, counts = await inbox_states.feedback_states(db, seen)
-        staged = await inbox_states.staged_rows(db)
+        # inbox-reads: the open items, their suggestions, documents and latest versions come
+        # from the states' own reads, not read again.
+        kept: dict[str, Any] = {}
+        states, counts = await inbox_states.feedback_states(db, seen, kept)
+        # Shown only (never counted): left unread for the counts alone.
+        staged = [] if counts_only else await inbox_states.staged_rows(db)
         # Open feedback: what still needs a decision (staged, declined and done do not).
         waiting = {i.id for i in states if i.state in ("new", "open")}
-        items = list(
-            await db.scalars(
-                select(FeedbackItem)
-                .where(FeedbackItem.id.in_(waiting))
-                .order_by(FeedbackItem.created_at.desc(), FeedbackItem.id)
-            )
+        # Newest first, then by id (as Postgres orders uuids: by their bytes).
+        items = sorted(
+            sorted((f for f in kept["rows"] if f.id in waiting), key=lambda f: f.id),
+            key=lambda f: f.created_at,
+            reverse=True,
         )
         by_id = {i.id: i for i in states}
         by_doc: dict[uuid.UUID, list[FeedbackItem]] = {}
         for f in items:
             by_doc.setdefault(f.document_id, []).append(f)
-        from oracle.jobs.service import latest_suggestions
-
         suggestion_status = {
-            k: s.status for k, s in (await latest_suggestions(db, [f.id for f in items])).items()
+            f.id: s.status for f in items if (s := kept["suggestions"].get(f.id)) is not None
         }
         if by_doc:
-            docs = {
-                d.id: d for d in await db.scalars(select(Document).where(Document.id.in_(by_doc)))
-            }
-            latest = dict(
-                (
-                    await db.execute(
-                        select(DocumentVersion.document_id, func.max(DocumentVersion.number))
-                        .where(DocumentVersion.document_id.in_(by_doc))
-                        .group_by(DocumentVersion.document_id)
-                    )
-                ).all()
-            )
+            docs = kept["docs"]
+            latest = kept["latest"]
             for doc_id, doc_items in by_doc.items():
                 d = docs[doc_id]
                 waits = InboxFeedbackCounts()
@@ -11984,32 +12027,8 @@ async def _inbox(db: AsyncSession, principal: Principal, mark_seen: bool) -> Inb
 
         row = await drift.inbox_row(db)
         strategy = InboxStrategy.model_validate(row) if row else None
-    # Lost submissions past the lookup cap (Retry or Cancel), cancels past NOT_FOUND_TRIES
-    # 404s (Stop cancelling), answer posts past them (Cancel), and searched workflows past
-    # them (shown), by those who manage the run.
-    live = Run.knobs["workflow"]["state"].astext == "live"
-    managed = [
-        r
-        for r in await db.scalars(
-            select(Run)
-            .where(
-                Run.knobs.has_key("stuck_lookup")
-                | Run.knobs.has_key("post_404")
-                | Run.knobs.has_key("searches")
-                | Run.knobs.has_key("overrun_after_end")
-                # A running run's wait, before any agent of its workflow started: the knob
-                # stays while it runs (later steps' holds), never after it ended.
-                | (
-                    Run.knobs.has_key("queue_wait")
-                    & (Run.status == "running")
-                    & Run.knobs["queue_wait"]["started"].astext.is_distinct_from("true")
-                )
-                | live
-            )
-            .order_by(Run.created_at)
-        )
-        if _manages(principal, r)
-    ]
+    # The stuck runs, from the runs' one read above.
+    managed = [r for r, manages, _, _ in run_rows if manages and _manages(principal, r)]
     stuck_runs = [r for r in managed if _stuck(r)]
     # Submissions given up on, still looked for (shown, nothing to do): from the same read.
     searching_runs = [r for r in managed if "searches" in (r.knobs or {})]
@@ -12019,17 +12038,11 @@ async def _inbox(db: AsyncSession, principal: Principal, mark_seen: bool) -> Inb
     # Owners only: a run's output Oracle stopped trying to import (Retry).
     imports: list[RunSummary] = []
     if owner:
-        failed_runs = [
-            r
-            for r in await db.scalars(
-                select(Run).where(Run.knobs.has_key("import_failed")).order_by(Run.created_at)
-            )
-            if _import_failed(r) is not None
-        ]
+        failed_runs = [r for r, _, _, fails in run_rows if fails and _import_failed(r) is not None]
         failed_refs = await _refs(db, failed_runs)
         imports = [_summary(r, failed_refs, None) for r in failed_runs]
     no_documents = await _no_documents(db) if owner else []
-    revising = await _revising(db, principal)
+    revising = [] if counts_only else await _revising(db, principal)
     from oracle.decisions.service import inbox_rows as decision_rows
     from oracle.reports.service import inbox_rows
 
@@ -12072,37 +12085,44 @@ async def _inbox(db: AsyncSession, principal: Principal, mark_seen: bool) -> Inb
 
     intake_reads = await intake_read_rows(db, principal) if has_intake_reads else []
     counted += len(intake_reads)
-    # Simple S3a: proposals waiting for me, and the decisions on mine.
-    from oracle.simple.changes import inbox_rows as simple_rows
+    # inbox-reads: the Simple rows below share the tables each reads whole (documents, members,
+    # tracks, deciders: oracle.simple.drafts.one_read), read once for them all, not once each.
+    from oracle.simple.drafts import one_read
 
-    with batched():
-        # inbox-perf: each meeting's agenda (oracle.simple.agenda) in one read for them all.
-        simple_proposals, simple_decisions = await simple_rows(db, principal, seen)
-    counted += len(simple_proposals)
-    # Simple S3b: versions from Simple drafts waiting for my approval as a required reviewer;
-    # inbox-meeting-proposals fix: open date and goal suggestions I may decide; tracks-goal:
-    # the PRDs waiting on Oracle's suggested track. The four are read together, in one read.
-    from oracle.simple.additions import inbox_rows as goal_suggestion_rows
-    from oracle.simple.drafts import inbox_rows as simple_approval_rows
-    from oracle.simple.drafts import waiting as simple_waiting
-    from oracle.simple.suggestions import inbox_rows as date_suggestion_rows
+    with one_read():
+        # Simple S3a: proposals waiting for me, and the decisions on mine.
+        from oracle.simple.changes import inbox_rows as simple_rows
 
-    simple_open = await simple_waiting(db)
-    simple_approvals = await simple_approval_rows(db, principal, seen, simple_open.drafts)
-    counted += len(simple_approvals)
-    simple_date_suggestions = await date_suggestion_rows(db, principal, seen, simple_open.dates)
-    simple_goal_suggestions = await goal_suggestion_rows(db, principal, seen, simple_open.goals)
-    counted += len(simple_date_suggestions) + len(simple_goal_suggestions)
-    # tracks-goal: Oracle's suggested track for a newly accepted PRD of mine with none.
-    from oracle.simple.track_suggestions import inbox_rows as track_suggestion_rows
+        with batched():
+            # inbox-perf: each meeting's agenda (oracle.simple.agenda) in one read for them all.
+            simple_proposals, simple_decisions = await simple_rows(db, principal, seen)
+        counted += len(simple_proposals)
+        # Simple S3b: versions from Simple drafts waiting for my approval as a required reviewer;
+        # inbox-meeting-proposals fix: open date and goal suggestions I may decide; tracks-goal:
+        # the PRDs waiting on Oracle's suggested track. The four are read together, in one read.
+        from oracle.simple.additions import inbox_rows as goal_suggestion_rows
+        from oracle.simple.drafts import inbox_rows as simple_approval_rows
+        from oracle.simple.drafts import waiting as simple_waiting
+        from oracle.simple.suggestions import inbox_rows as date_suggestion_rows
 
-    simple_track_suggestions = await track_suggestion_rows(db, principal, seen, simple_open.tracks)
-    # One waiting for its track's decider asks nothing of me: not counted.
-    counted += sum(1 for s in simple_track_suggestions if s.proposed is None)
-    # Simple S8: meeting minutes sent to me as an attendee (nothing to decide: not counted).
-    from oracle.simple.meetings import inbox_rows as simple_minutes_rows
+        simple_open = await simple_waiting(db)
+        simple_approvals = await simple_approval_rows(db, principal, seen, simple_open.drafts)
+        counted += len(simple_approvals)
+        simple_date_suggestions = await date_suggestion_rows(db, principal, seen, simple_open.dates)
+        simple_goal_suggestions = await goal_suggestion_rows(db, principal, seen, simple_open.goals)
+        counted += len(simple_date_suggestions) + len(simple_goal_suggestions)
+        # tracks-goal: Oracle's suggested track for a newly accepted PRD of mine with none.
+        from oracle.simple.track_suggestions import inbox_rows as track_suggestion_rows
 
-    simple_minutes = await simple_minutes_rows(db, principal, seen)
+        simple_track_suggestions = await track_suggestion_rows(
+            db, principal, seen, simple_open.tracks
+        )
+        # One waiting for its track's decider asks nothing of me: not counted.
+        counted += sum(1 for s in simple_track_suggestions if s.proposed is None)
+        # Simple S8: meeting minutes sent to me as an attendee (nothing to decide: not counted).
+        from oracle.simple.meetings import inbox_rows as simple_minutes_rows
+
+        simple_minutes = [] if counts_only else await simple_minutes_rows(db, principal, seen)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()

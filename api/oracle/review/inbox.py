@@ -97,10 +97,11 @@ def _with_staged_change():
 
 
 async def feedback_states(
-    db: AsyncSession, seen: datetime | None
+    db: AsyncSession, seen: datetime | None, keep: dict[str, Any] | None = None
 ) -> tuple[list[InboxFeedbackItem], InboxCounts]:
     """Every live item (open, or with a staged change) and the most recent settled ones,
-    newest first."""
+    newest first. ``keep`` (inbox-reads): given the rows read here, their live suggestions,
+    documents and latest version numbers, so the Inbox reads none of them again."""
     live = list(
         await db.scalars(
             select(FeedbackItem)
@@ -141,6 +142,8 @@ async def feedback_states(
             select(Document).where(Document.id.in_({f.document_id for f in rows}))
         )
     }
+    if keep is not None:
+        keep.update(rows=rows, suggestions=suggestions, docs=docs, latest=latest)
     counts = InboxCounts(
         declined=settled_counts.get("declined", 0),
         done=sum(v for k, v in settled_counts.items() if k != "declined"),

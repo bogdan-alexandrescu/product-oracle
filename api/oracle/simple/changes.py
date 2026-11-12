@@ -450,13 +450,17 @@ def _normal(fields: tuple[str, ...], values: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _company_owners(db: AsyncSession) -> list[uuid.UUID]:
-    return list(
-        await db.scalars(
-            select(User.id)
-            .where(User.role == "owner", User.disabled_at.is_(None))
-            .order_by(User.created_at, User.id)
+    async def load() -> list[uuid.UUID]:
+        return list(
+            await db.scalars(
+                select(User.id)
+                .where(User.role == "owner", User.disabled_at.is_(None))
+                .order_by(User.created_at, User.id)
+            )
         )
-    )
+
+    # inbox-reads: read once within one read (drafts.one_read: the Inbox's Simple rows).
+    return list(await drafts.once("company_owners", load))
 
 
 async def routed_to(db: AsyncSession, entry: service.Entry, read_: service.Read) -> list:
