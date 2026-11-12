@@ -244,21 +244,24 @@ async def roadmap_key_dates(
 ) -> tuple[list[SimpleKeyDate], list[SimpleKeyDateRoadmap]]:
     """The key dates of these roadmaps as the reader reads them (the working draft's when
     they see it), and per roadmap whether their change applies."""
-    pub = await published(db, set(docs))
+    # roadmap-speed: the published key dates and their rows in one read.
+    kept = (
+        list(
+            await db.scalars(
+                select(RoadmapKeyDate).where(RoadmapKeyDate.roadmap_document_id.in_(set(docs)))
+            )
+        )
+        if docs
+        else []
+    )
+    pub: dict[uuid.UUID, dict[str, dict[str, Any]]] = {d: {} for d in docs}
+    for r in kept:
+        pub[r.roadmap_document_id][str(r.id)] = _value(r)
     w = await drafts.who(db, set(docs))
     open_ = {d.document_id: d for d in await drafts.open_drafts(db) if d.document_id in docs}
     # milestone-kinds: a published key date's kind and status (a person's, else on track);
     # one only in a draft reads as a delivery, on track.
-    rows = (
-        {
-            str(r.id): r
-            for r in await db.scalars(
-                select(RoadmapKeyDate).where(RoadmapKeyDate.roadmap_document_id.in_(set(docs)))
-            )
-        }
-        if docs
-        else {}
-    )
+    rows = {str(r.id): r for r in kept}
     out: list[SimpleKeyDate] = []
     for doc_id, doc in docs.items():
         d = open_.get(doc_id)
@@ -369,13 +372,23 @@ def published_copies(
     }
 
 
+async def ranked_prds(db: AsyncSession) -> dict[uuid.UUID, int]:
+    """prd_order.prd_ranks of the PRDs the read has read, once per read (roadmap-speed)."""
+    from oracle.docs.prd_order import prd_ranks
+    from oracle.simple import service
+
+    async def ranks() -> dict[uuid.UUID, int]:
+        return await prd_ranks(db, [d for d in await service.documents(db) if d.kind == "prd"])
+
+    return await drafts.once("prd_ranks", ranks)
+
+
 async def key_date_prds(
     db: AsyncSession, principal: Any, docs: dict[uuid.UUID, Document], entries: list[Any]
 ) -> dict[uuid.UUID, list[Document]]:
     """roadmap-keydates: per roadmap, the PRDs its items come from that the reader may see,
     in the company PRD order (prd-order)."""
     from oracle.docs import visibility
-    from oracle.docs.prd_order import prd_ranks
 
     found: dict[uuid.UUID, dict[uuid.UUID, Document]] = {}
     for e in entries:
@@ -388,7 +401,7 @@ async def key_date_prds(
             found.setdefault(e.roadmap.id, {})[e.prd.id] = e.prd
     if not found:
         return {}
-    rank = await prd_ranks(db)
+    rank = await ranked_prds(db)
     last = len(rank) + 1
     return {r: sorted(of.values(), key=lambda d: rank.get(d.id, last)) for r, of in found.items()}
 

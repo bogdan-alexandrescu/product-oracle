@@ -6,6 +6,7 @@
  */
 import { MOCK_MODE, unwrap, type Schemas } from "./client";
 import { mockFetch } from "./mock/server";
+import { forgetReads } from "./shared-reads";
 
 export type ChangeVerb = "Stage" | "Propose" | "Resolve" | "Use as answer" | "Record" | "Apply" | "Ask";
 export type ChangeStatus = "proposed" | "suggested" | "staged" | "done" | "dismissed" | "superseded";
@@ -92,7 +93,9 @@ async function send(method: "GET" | "POST" | "PATCH", path: string, body?: unkno
     body: body === undefined ? undefined : JSON.stringify(body),
   };
   const req = new Request(new URL(path, window.location.origin), init);
-  const response = MOCK_MODE ? await mockFetch(req) : await fetch(req);
+  // A write skips the API client, so it drops the shared reads itself (lib/api/shared-reads), before and after.
+  if (method !== "GET") forgetReads();
+  const response = await (MOCK_MODE ? mockFetch(req) : fetch(req)).finally(() => method !== "GET" && forgetReads());
   const text = await response.text();
   let parsed: unknown = undefined;
   try {

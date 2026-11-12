@@ -262,25 +262,23 @@ async def test_every_red_flag_with_a_fix_waits_as_a_broken_link(monkeypatch):
     """
     from types import SimpleNamespace as NS
 
-    from oracle.simple import service
-
     def flag(kind: str, fixes: list[str]) -> NS:
         return NS(state="red", fixes=fixes, kind=kind, subject=None, reason="Late")
 
-    item = NS(id=uuid.uuid4(), title="Example item", can_decide=True, suggestion=None,
+    row = NS(id=uuid.uuid4(), title="Example item", feature_id=None, prd_section_key=None,
+             decider_id=None)  # fmt: skip
+    item = NS(row=row, roadmap=NS(id=uuid.uuid4()), track=None, suggestion=None,
               flags=[flag("dependency_order", ["shift_dependents"]),
                      flag("outside_milestone", ["accept_risk"]),
                      flag("draft_without_owner", [])])  # fmt: skip
 
-    async def build(db, principal):
-        return NS(items=[item])
-
     async def today(db):
         return date(2026, 11, 5)
 
-    monkeypatch.setattr(service, "build", build)
     monkeypatch.setattr(company_time, "company_today", today)
-    out = await waiting_list._roadmap(None, None)  # type: ignore[arg-type]
+    # The list's one roadmap read (service.load), as an owner (who decides every item) reads it.
+    read_ = NS(entries=[item], deciders={})
+    out = await waiting_list._roadmap(None, NS(role="owner", user_id=uuid.uuid4()), read_)  # type: ignore[arg-type]
     assert [i.key.split(":")[2] for i in out] == ["dependency_order", "outside_milestone"]
 
 

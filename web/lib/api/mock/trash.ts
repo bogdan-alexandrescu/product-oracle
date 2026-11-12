@@ -48,6 +48,8 @@ export interface TrashEntryRow {
   /** trash-features-goals: a goal deleted with features moved to another goal: their goal_ids
    * as they were (trash_items' `links`), put back on Restore, with the seeded links they had (GoalBucketsDb.lazy_links). */
   goal_links?: { id: string; goal_ids: string[]; left?: string[]; lazy?: string[] }[];
+  /** goal-delete-dated: the items whose own goal it was, their goals as they were (trash_items' `goal_ids`). */
+  item_goals?: { key: string; roadmap?: string; goals: string[]; from: string; to: string; after?: string[] }[];
   /** port-an-decisions: a removed agenda item's meeting, row and place, put back on Restore. */
   agenda?: { meeting_id: string; row: unknown; at: number };
   /** port-an-decisions: a deleted request's row, put back on Restore. */
@@ -264,6 +266,25 @@ export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string,
       const gb = simple!.goal_buckets!;
       if (l.lazy && gb.lazy_links) gb.lazy_links = [...gb.lazy_links.filter((x) => !x.startsWith(linkOf(f.id, ""))), ...l.lazy];
     }
+  }
+  // The goal goes back where it was on each item the delete moved (changed since); the goal it moved them to comes
+  // off only where the delete added it (its own goal, the item's goal_ids in the API).
+  for (const w of entry.item_goals ?? []) {
+    const s = (simple as SimpleDb | undefined)?.items.find((x) => x.key === w.key && x.roadmap === w.roadmap);
+    if (!s) continue;
+    const cur = [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])];
+    // As the delete left it (goal_ids_after): its goals exactly as they were, in their order.
+    if (w.after && cur.length === w.after.length && cur.every((k, i) => k === w.after![i])) {
+      s.goal = w.goals[0];
+      s.goals = w.goals.slice(1);
+      continue;
+    }
+    let now = cur.filter((k) => k !== w.from);
+    if (!w.goals.includes(w.to) && now[0] === w.to) now = now.slice(1);
+    const at = Math.max(0, w.goals.indexOf(w.from));
+    const next = [...now.slice(0, at), w.from, ...now.slice(at)];
+    s.goal = next[0];
+    s.goals = next.slice(1);
   }
   if (root.type === "decision" || root.type === "question") simple?.sheet?.filter((r) => r.id === root.id).forEach((r) => (r.trashed = false));
   if (root.type === "milestone") simple?.goal_map?.milestones.filter((m) => m.id === root.id).forEach((m) => (m.trashed = false));

@@ -16,7 +16,7 @@ import { flowFor } from "./simple-visuals";
 import { madeOrder } from "./made-order";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 import { COMPANY_SLUG, COMPANY_TITLE, OLD_ITEM, OLD_ROADMAP } from "./one-roadmap";
-import { seedGoalBuckets } from "./goal-buckets";
+import { bucketGoalIds, seedGoalBuckets } from "./goal-buckets";
 
 type Row = Schemas["SimplePriorityRow"];
 type Item = Schemas["SimpleRoadmapItem"];
@@ -670,7 +670,7 @@ export function prioritiesOut(
       short_code: "",
       own_key: null,
       title: i.title,
-      goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null,
+      goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, goal_ids: bucketGoalIds(db.goal_buckets, i.goal_ids ?? []),
       milestone: mine ? readable(i.milestone?.name) : null,
       horizon: mine ? i.horizon : null,
       goal_value: e.value,
@@ -792,7 +792,7 @@ export function prioritiesOut(
       const g = group.get(sameName(i.title));
       const row = linked ?? (own || g == null ? undefined : lead.get(groups[g][0].feature_id));
       return {
-        item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, roadmap: i.roadmap, applies: decides(i.id),
+        item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, goal_ids: bucketGoalIds(db.goal_buckets, i.goal_ids ?? []), roadmap: i.roadmap, applies: decides(i.id),
         merge_into: all
           .filter((x) => !x.draft && seen.has(x.id))
           .filter((x) => x.roadmap.id === i.roadmap.id)
@@ -806,7 +806,7 @@ export function prioritiesOut(
   // prio-unranked (priorities.py `_unranked`): the reader's live, non-draft items no row holds.
   const unranked: Schemas["SimplePriorityUnranked"][] = live
     .filter((i) => !i.draft && noFeature(db, i))
-    .map((i) => ({ item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, roadmap: i.roadmap }));
+    .map((i) => ({ item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, goal_ids: bucketGoalIds(db.goal_buckets, i.goal_ids ?? []), roadmap: i.roadmap }));
   const buckets: Schemas["SimpleGoalBucket"][] = [];
   for (const r of kept) {
     const key = r.goal?.key ?? "none";

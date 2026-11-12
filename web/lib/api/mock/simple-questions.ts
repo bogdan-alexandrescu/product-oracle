@@ -95,7 +95,7 @@ export function seedQuestions(ctx: QuestionsCtx): QuestionsDb {
   const q = (n: number, title: string, decider: string | null, due: number, milestone: Q["milestone"], feature: [string, string], recommendation: string | null, alternatives: string[], extra: Partial<Q> = {}): Q => ({
     n, title, decider, due, milestone, feature, recommendation, alternatives, ...extra,
   });
-  return {
+  const db: QuestionsDb = {
     questions: [
       q(1, "Data retention period", owner, -10, "M1", ["F-02", "Team setup"], "Keep 90 days", ["Keep a year"], {
         chosen: "Keep 90 days", decided_by: owner, decided_at: iso(todayStart() - 6 * DAY + 10 * 3_600_000), in_prd: true,
@@ -118,6 +118,10 @@ export function seedQuestions(ctx: QuestionsCtx): QuestionsDb {
     ],
     changes: [],
   };
+  // home-greeting-fit "every-wait-one" (server.ts): one decision waits on the owner, the others on the approver.
+  if (typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === "every-wait-one")
+    db.questions.filter((x) => x.decider === owner && open(x)).slice(1).forEach((x) => (x.decider = approver));
+  return db;
 }
 
 const nameOf = (ctx: QuestionsCtx, id: string | null | undefined) => ctx.members.find((m) => m.id === id)?.name ?? "someone";

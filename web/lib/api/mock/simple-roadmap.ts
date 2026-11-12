@@ -566,6 +566,9 @@ const bucketGoalOf = (db: Pick<SimpleDb, "goal_buckets">, key: string) => db.goa
 /** trash-features-goals: whether the goal of this key is in Trash (left out of every item's goal). */
 export const goalInTrash = (db: Pick<SimpleDb, "goal_buckets">, key: string): boolean =>
   (db.goal_buckets?.goals ?? []).some((g) => g.trashed && (g.key === key || g.title.toLowerCase() === (GOALS[key] ?? PLAN_GOALS[key] ?? "").toLowerCase()));
+/** An archived goal (a goal bucket of its key or name): it stays in an item's goal_ids but is no item's goal. */
+export const goalArchived = (db: Pick<SimpleDb, "goal_buckets">, key: string): boolean =>
+  (db.goal_buckets?.goals ?? []).some((g) => g.archived && (g.key === key || g.title.toLowerCase() === (GOALS[key] ?? PLAN_GOALS[key] ?? "").toLowerCase()));
 /** The seeded fields of a roadmap goal (a goal bucket of its key starts from them). */
 export const roadmapGoalSeed = (key: string): RoadmapGoalFields => ({ title: GOALS[key] ?? PLAN_GOALS[key], metric: METRICS[key] ?? null, target: TARGETS[key]?.[0] ?? null, due: TARGETS[key]?.[1] ?? null });
 /** The goal's fields as read: its goal bucket's (one goal store, as the API's one goal entity), else an edit, else its seed. */
@@ -1813,7 +1816,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   };
   // trash-features-goals: a goal in Trash is left out of every item's goal (service.load's goal_ids).
   const inTrash = (k: string) => goalInTrash(reader.full, k);
-  const linked = (s: SeedItem): string | undefined => [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])].find((k) => !inTrash(k));
+  // An archived goal stays in its goal_ids (for Undo) but is no item's goal.
+  const linked = (s: SeedItem): string | undefined => [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])].find((k) => !inTrash(k) && !goalArchived(reader.full, k));
   // roadmap-edit-fixes: a dependency names an item by its key, else by its code or feature key.
   const depOf = (k: string) => (all.has(k) ? k : dependencyOf(seeds, k)?.key);
   const items: Item[] = seeds.map((s) => {

@@ -369,9 +369,15 @@ async def list_for_roadmaps(
     first_owners = {
         sorted(w.owners[p], key=str)[0] for p in prds_by_id if w.owners.get(p)
     }  # fmt: skip
+    # roadmap-speed: within one read the members are read once.
     names = {
         u.id: display_name(u.email, u.name)
-        for u in (await db.scalars(select(User).where(User.id.in_(first_owners))))
+        for u in (
+            await drafts.all_users(db)
+            if drafts.reading()
+            else await db.scalars(select(User).where(User.id.in_(first_owners)))
+        )
+        if u.id in first_owners
     } if first_owners else {}  # fmt: skip
     look = await _lookups(db, shown)
     out = [

@@ -69,9 +69,14 @@ async def sort_prds(db: AsyncSession, docs: Iterable[Document]) -> list[Document
     return sorted(docs, key=lambda d: sort_key(d, goal))
 
 
-async def prd_ranks(db: AsyncSession) -> dict[uuid.UUID, int]:
-    """Every PRD's place in the company order (1 = first), by id."""
-    prds = await sort_prds(db, await db.scalars(select(Document).where(Document.kind == "prd")))
+async def prd_ranks(
+    db: AsyncSession, every: Iterable[Document] | None = None
+) -> dict[uuid.UUID, int]:
+    """Every PRD's place in the company order (1 = first), by id; ``every``: the company's
+    PRDs when the caller has read them already."""
+    if every is None:
+        every = await db.scalars(select(Document).where(Document.kind == "prd"))
+    prds = await sort_prds(db, every)
     return {d.id: n for n, d in enumerate(prds, 1)}
 
 

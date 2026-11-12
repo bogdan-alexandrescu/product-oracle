@@ -38,13 +38,14 @@ async def test_waiting_counts_every_red_flag_with_a_fix(monkeypatch):
         ),
     ]
 
-    async def reader(db, principal):
-        return SimpleNamespace(overlays={})
+    async def overlays_for(db, principal):
+        return {}
 
-    async def load(db, overlays):
+    async def load(db, overlays, light=False):
         return SimpleNamespace(entries=entries, deciders={})
 
-    monkeypatch.setattr(drafts, "reader", reader)
+    # roadmap-speed: the count reads the reader's overlays alone (drafts.overlays_for).
+    monkeypatch.setattr(drafts, "overlays_for", overlays_for)
     monkeypatch.setattr(service, "load", load)
     links, dates = await service.waiting(None, SimpleNamespace())
     assert (links, dates) == (2, 0)

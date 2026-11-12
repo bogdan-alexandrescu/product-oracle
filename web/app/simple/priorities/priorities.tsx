@@ -10,6 +10,7 @@ import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief, type 
 import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
 import { usePanelOpen } from "@/components/hop/open-state";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { sendCardChanged } from "@/lib/api/simple-chat";
 import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { FeatureMarks, MarkFor, ShowFilter, showsAs, useFeatureMarks, type ShowKind } from "@/components/current-state/CurrentState";
@@ -20,7 +21,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
 import { ITEM_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
-import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
+import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, otherGoal, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { goalKeysOf, KeyResultList, liftedMoves, topGoalBuckets, topGoalPlan, topGoalPriorities, usePriorityKeyResults, type PriorityKeyResults } from "./key-results";
 import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
@@ -391,7 +392,7 @@ export function Priorities() {
           <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} featureOpen={!!rowOpen} />
         </OpenRow.Provider>
       )}
-      {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} reload={q.reload} kr={kr} />}
+      {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} kr={kr} />}
       </div>
     </div>
   );
@@ -2316,10 +2317,10 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
 
 // --------------------------------------------------------------------------- goal buckets
 
-function Buckets({ data, suggestions, reload, kr }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown>; kr: PriorityKeyResults }) {
+function Buckets({ data, suggestions, kr }: { data: Out; suggestions: GoalSuggestionsApi; kr: PriorityKeyResults }) {
   // plan-charts: with a dated plan, where each goal's work lands milestone by milestone.
-  if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} reload={reload} kr={kr} />;
-  return <UndatedBuckets data={data} suggestions={suggestions} reload={reload} kr={kr} />;
+  if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} kr={kr} />;
+  return <UndatedBuckets data={data} suggestions={suggestions} kr={kr} />;
 }
 
 const sameGoal = (a: string, b: string) => goalLabel(a).name.toLowerCase() === goalLabel(b).name.toLowerCase();
@@ -2329,7 +2330,7 @@ const sameGoal = (a: string, b: string) => goalLabel(a).name.toLowerCase() === g
  * you can change as in the dated view: drag one to another goal by its grip (pointer, touch or
  * keys), add one in place, edit or cut one, each with Undo.
  */
-function UndatedBuckets({ data, suggestions, reload, kr }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown>; kr: PriorityKeyResults }) {
+function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: GoalSuggestionsApi; kr: PriorityKeyResults }) {
   const { can } = useMe();
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
   const bucketsQ = useGoalBuckets();
@@ -2338,9 +2339,8 @@ function UndatedBuckets({ data, suggestions, reload, kr }: { data: Out; suggesti
   const gb = useMemo(() => topGoalBuckets(read, kr.krs), [read, kr.krs]);
   const [note, setNote] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const reloadAll = async () => {
-    await Promise.all([bucketsQ.reload(), reload()]);
-  };
+  // A goal write's one refresh: every read on the page (the buckets, Priorities) and an open panel, once.
+  const reloadAll = () => sendCardChanged();
   const writes = useBucketWrites(reloadAll, setNote, setError);
   const rights = useBucketRights(gb);
   const drag = useBucketDrag({ gb, writes: liftedMoves(writes, read) });
@@ -2390,13 +2390,7 @@ function UndatedBuckets({ data, suggestions, reload, kr }: { data: Out; suggesti
   const buckets: Bucket[] = all.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0)).map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
   const percent = sharePercents(buckets.map((b) => b.weeks));
   const weeksOf = (r: Row) => (r.effort == null ? "" : weeksWords(r.effort));
-  // A goal's features as Archive and Delete count them: every live feature serving it, whatever its
-  // dates (a bucket holds only this quarter's work), so none loses its goal unasked.
-  const featuresOf: GoalFeatures = (title) => {
-    const g = gb?.goals.find((x) => sameGoal(x.title, title));
-    return g ? (gb?.features ?? []).filter((f) => f.goal_ids?.includes(g.id)).map((f) => ({ code: f.key, name: rowOf.get(f.key)?.title ?? f.title, slices: [] })) : [];
-  };
-  const acts = useGoalActs({ gb, plan: null, featuresOf, writes, rights });
+  const acts = useGoalActs({ gb, plan: null, featuresOf: goalFeatures(gb, data, null, kr.top), writes, rights });
   // Round 6: no work this quarter is said in words, not as "0 weeks" over an empty chart.
   const planned = data.weeks_total > 0;
   return (
@@ -2609,7 +2603,7 @@ function suggestionGoal(api: GoalSuggestionsApi, goal: string): Schemas["SimpleG
 }
 
 /** plan-charts (the owner's pick B): the plan's header, then a card per goal listing each feature with its milestone chips. */
-function PlanBuckets({ data, plan: read, suggestions, reload, kr }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown>; kr: PriorityKeyResults }) {
+function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi; kr: PriorityKeyResults }) {
   const { can } = useMe();
   const bucketsQ = useGoalBuckets();
   // kr-in-priorities: top-level goals only; a feature linked to a key result is under its goal.
@@ -2624,16 +2618,16 @@ function PlanBuckets({ data, plan: read, suggestions, reload, kr }: { data: Out;
   const [note, setNote] = useState<Note | null>(null);
   const noteSlot = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const writes = useBucketWrites(bucketsQ.reload, setNote, setError);
+  // goal-delete-dated: a goal's Archive or Delete moves its drafts and roadmap items too, so the page's own read comes again with the buckets', once (sendCardChanged).
+  const reloadAll = () => sendCardChanged();
+  const writes = useBucketWrites(reloadAll, setNote, setError);
   const rights = useBucketRights(gb);
   // Tasks in place: add, edit and cut a goal's features on the roadmap, each with Undo.
   const tasks = useBucketTasks({
     rows: data.rows,
     plan: read,
     may: rights.task,
-    reload: async () => {
-      await Promise.all([bucketsQ.reload(), reload()]);
-    },
+    reload: reloadAll,
     setNote,
     setError,
   });
@@ -2717,7 +2711,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload, kr }: { data: Out;
   const acts = useGoalActs({
     gb,
     plan,
-    featuresOf: (t) => planFeatures(plan, t),
+    featuresOf: goalFeatures(gb, data, plan, kr.top),
     writes,
     rights,
     // gb2-a-result: the archived bucket is gone, so on a wider screen the page scrolls back to the
@@ -2945,6 +2939,48 @@ function undoOf(note: Note, writes: ReturnType<typeof useBucketWrites>, tasks?: 
 }
 
 /**
+ * A goal's features as Archive and Delete count and list them: every live feature serving it (its
+ * goal links), the plan's, and the roadmap items and drafts that name it, whatever their dates (a
+ * bucket holds only this quarter's work), so none loses its goal unasked (goal-delete-dated).
+ */
+function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan: Schemas["SimplePlanOut"] | null, top?: PriorityKeyResults["top"]): GoalFeatures {
+  return (title) => {
+    const g = gb?.goals.find((x) => sameGoal(x.title, title));
+    if (!g) return [];
+    // A key result an item serves counts as its goal (otherGoal compares top-level goals): Archive keeps the item on it.
+    const lift = (ids?: string[]) =>
+      ids?.map((id) => {
+        const p = top?.(id);
+        return (p && gb?.goals.find((x) => x.id === p.id || sameGoal(x.title, p.title))?.id) || id;
+      });
+    const rowOf = new Map(data.rows.map((r) => [r.code, r]));
+    const out = new Map<string, ReturnType<GoalFeatures>[number]>();
+    // One entry per item or feature, by its id or code (two items of the same name are two).
+    const seen = new Map<string, ReturnType<GoalFeatures>[number]>();
+    // An item is its feature's slice by its feature's code too (`short`: F-16 for the item plan-f-16), so it counts once.
+    const add = (code: string, name: string, ids: (string | null | undefined)[] = [], goalIds?: string[], short?: string) => {
+      const hit = out.get(code.toLowerCase()) ?? (short ? out.get(short.toLowerCase()) : undefined) ?? ids.map((i) => (i ? seen.get(i) : undefined)).find(Boolean);
+      if (hit) {
+        if (goalIds?.length && !hit.goal_ids?.length) hit.goal_ids = goalIds;
+        for (const i of ids) if (i) seen.set(i, hit);
+        return;
+      }
+      const slices = plan?.slices.filter((s) => s.feature_code.toLowerCase() === code.toLowerCase()) ?? [];
+      const f = { code, name, slices, tag: knownCode(code) ? code : null, ...(goalIds?.length ? { goal_ids: goalIds } : {}) };
+      out.set(code.toLowerCase(), f);
+      for (const i of ids) if (i) seen.set(i, f);
+    };
+    if (plan) for (const f of planFeatures(plan, title)) add(f.code, f.name);
+    for (const f of gb?.features ?? []) if (f.goal_ids?.includes(g.id)) add(f.key, rowOf.get(f.key)?.title ?? f.title, [f.id]);
+    // The items and drafts by every goal they serve, not only their first (an item's own goals).
+    const serves = (r: { goal?: { title: string } | null; goal_ids?: string[] }) => (r.goal_ids?.length ? r.goal_ids.includes(g.id) : !!r.goal && sameGoal(r.goal.title, title));
+    for (const r of data.rows) if (serves(r)) add(r.code, r.title, [r.item_id, r.feature_id], lift(r.goal_ids), r.short_code);
+    for (const r of [...data.unranked, ...data.drafts]) if (serves(r)) add(r.code, r.title, [r.item_id], lift(r.goal_ids));
+    return [...out.values()];
+  };
+}
+
+/**
  * EG1 a, with a dated plan or without: a goal's ⋯ menu (Archive goal, Delete goal, or the asks
  * for who may not), the Archived goals fold (Restore and Delete, or Ask to restore), and the
  * questions each asks first.
@@ -3036,7 +3072,7 @@ const ICON_BTN = "inline-flex h-8 w-8 flex-none items-center justify-center roun
 /** GB2 a's note: "Archived Grow shop partners. 1 feature moved to Faster first ride, 1 to the other goal it serves." */
 function archiveWords(listOf: GoalFeatures, gb: Schemas["GoalBucketsOut"], goal: Schemas["GoalBucketGoal"], to: string | null, verb = "Archived"): string {
   const list = listOf(goal.title);
-  const own = list.filter((f) => (featureOf(gb, f.code, f.name)?.goal_ids ?? []).some((g) => g !== goal.id)).length;
+  const own = list.filter((f) => otherGoal(gb, f, goal.id)).length;
   const rest = list.length - own;
   const toTitle = gb.goals.find((g) => g.id === to)?.title;
   const feats = (n: number) => `${n} ${n === 1 ? "feature" : "features"}`;

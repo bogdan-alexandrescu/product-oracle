@@ -1610,6 +1610,52 @@ function seedGoalBucketsUndatedScenario(): Db {
     Object.assign(s, { start: s.start - 180, end: s.end - 180 });
     if (s.milestone?.day != null) s.milestone.day -= 180;
   }
+  return withRoadmapGoalBuckets(db);
+}
+
+/**
+ * "goal-buckets-dated" (goal-delete-dated): "simple-plan" (dated) with the goal buckets the API
+ * reads, as "goal-buckets-undated" has them, and a draft serving Grow retention: its goal holds
+ * roadmap items and a draft, none in the plan, and a draft serving Faster activation first and
+ * Grow retention too. Invented data.
+ */
+export const GOAL_BUCKETS_DATED_SCENARIO = "goal-buckets-dated";
+
+function seedGoalBucketsDatedScenario(): Db {
+  const db = seedSimplePlanScenario(true);
+  const rm = db.simple_roadmap!;
+  rm.items.push({ key: "alert-recap", title: "Monthly alert recap", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", draft: true });
+  rm.ids["alert-recap"] = stableUuid("simple-item/alert-recap");
+  // A draft that serves Faster activation first and Grow retention too (goal-delete-two-goals).
+  rm.items.push({ key: "alert-summary", title: "Alert summary for leads", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "faster-activation", goals: ["grow-retention"], draft: true });
+  rm.ids["alert-summary"] = stableUuid("simple-item/alert-summary");
+  return withRoadmapGoalBuckets(db);
+}
+
+/**
+ * "goal-buckets-three-goals" (goal-delete-r3): "goal-buckets-dated" with two more drafts that name
+ * the archived goal Cut support tickets in half: Team alert digest serves it first, then Grow
+ * retention and Faster activation; Snooze for a day serves Grow retention, then it; Alert tone picker
+ * serves Grow retention, then a key result of Faster activation. Invented data.
+ */
+export const GOAL_BUCKETS_THREE_GOALS_SCENARIO = "goal-buckets-three-goals";
+
+function seedGoalBucketsThreeGoalsScenario(): Db {
+  const db = seedGoalBucketsDatedScenario();
+  const rm = db.simple_roadmap!;
+  const archived = "cut-support-tickets-in-half";
+  rm.items.push({ key: "alert-team-digest", title: "Team alert digest", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: archived, goals: ["grow-retention", "faster-activation"], draft: true });
+  rm.items.push({ key: "alert-snooze-day", title: "Snooze for a day", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: [archived], draft: true });
+  // An item whose other goal is a key result of Faster activation: Archive keeps it on the key result.
+  const parent = db.baseline.entities.find((e) => e.type === "goal" && e.key === "faster-activation") ?? db.baseline.entities.find((e) => e.type === "goal")!;
+  db.baseline.entities.push({ ...parent, id: stableUuid("simple-goal/kr-quick-alert"), key: "kr-quick-alert", title: "KR 1 Teams get a first alert in a day", parent_id: parent.id, status: "confirmed", attrs: { metric: "teams", weight: 1 } });
+  rm.items.push({ key: "alert-tone", title: "Alert tone picker", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-quick-alert"], draft: true });
+  for (const k of ["alert-team-digest", "alert-snooze-day", "alert-tone"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
+  return db;
+}
+
+function withRoadmapGoalBuckets(db: Db): Db {
+  const rm = db.simple_roadmap!;
   const goalOf = new Map(planSlices().map((x) => [x.feature_code.toLowerCase(), x.goal]));
   for (const s of rm.items) {
     const goal = s.section ? goalOf.get(s.section) : undefined;
@@ -2556,6 +2602,43 @@ function seedSimpleWaits(): Db {
   seeded("sw-eng-dates", () => seedEngDatesRuns(db.runs!, runsContext(db)));
   // Only these three wait on the owner: the default seed's run at its baseline does not.
   db.runs!.runs = db.runs!.runs.filter((r) => !(r.status === "awaiting_checkpoint" && r.waiting_on === "baseline_confirm"));
+  return db;
+}
+
+/**
+ * home-greeting-fit "every-wait": "simple-waits" plus a proposal on the owner's item (by the
+ * commenter) and an open task the owner holds, so every kind Home's greeting names waits at once
+ * (decisions, proposals, broken links, runs, tasks and more in the Inbox). Invented data.
+ */
+function seedEveryWait(): Db {
+  const db = seedSimpleWaits();
+  const rm = (db.simple_roadmap ??= seedSimpleRoadmap());
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
+  seedSimpleProposal(rm, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
+  const me = db.members.find((m) => m.id === db.user_id);
+  (rm.targets ??= {})[stableUuid("every-wait/task")] = {
+    kind: "item_task", title: "Write the digest copy", status: "todo", owner_id: db.user_id, owner_name: me?.name ?? null, due_date: null, item_id: rm.ids["alert-digest"], at: "2026-10-27T09:30:00Z",
+  };
+  return db;
+}
+
+/**
+ * home-greeting-fit "every-wait-one": "every-wait" with one of each kind the greeting names first
+ * (one decision, ./simple-questions.ts; one proposal; one broken link: Weekly alert digest's on
+ * Alert rules engine, the other items' links and milestones left out) and an owner with a
+ * 12-letter first name, so the greeting is its longest form. Invented data.
+ */
+function seedEveryWaitOne(): Db {
+  const db = seedEveryWait();
+  for (const item of db.simple_roadmap!.items) {
+    delete item.milestone;
+    if (item.key !== "alert-digest") delete item.depends;
+  }
+  const me = db.members.find((m) => m.id === db.user_id)!;
+  me.name = "Mohammadreza Vale";
   return db;
 }
 
@@ -4043,6 +4126,10 @@ function load(): Db {
             ? () => seedBaselineReview(scenario === "baseline-review-console")
           : scenario === "simple-waits"
             ? seedSimpleWaits
+          : scenario === "every-wait"
+            ? seedEveryWait
+          : scenario === "every-wait-one"
+            ? seedEveryWaitOne
           : scenario === "scope-review" || scenario === "scope-review-kept" || scenario === "scope-review-questions" || scenario === "scope-review-other-prd"
             ? () => seedScopeReview(scenario === "scope-review-kept", scenario === "scope-review-questions", scenario === "scope-review-other-prd")
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO || scenario === SHARED_DATE_SCENARIO || scenario === NOT_CLAIMS_SCENARIO || scenario === TWO_WAY_DATES_SCENARIO
@@ -4264,6 +4351,10 @@ function load(): Db {
                 ? seedGoalBucketsHardScenario
               : scenario === GOAL_BUCKETS_UNDATED_SCENARIO
                 ? seedGoalBucketsUndatedScenario
+              : scenario === GOAL_BUCKETS_DATED_SCENARIO
+                ? seedGoalBucketsDatedScenario
+              : scenario === GOAL_BUCKETS_THREE_GOALS_SCENARIO
+                ? seedGoalBucketsThreeGoalsScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
               : scenario === PRIORITIES_PLAN_MILESTONES_SCENARIO

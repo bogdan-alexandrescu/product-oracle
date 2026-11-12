@@ -368,14 +368,13 @@ async def trash_goal(
     extra: dict[str, Any] = {"to_goal_id": None, "links": [], "goal_ids": {}}
     if to_goal_id is not None:
         before = await goal_buckets.move_off(db, goal, to_goal_id)
-        goal_ids = {}
-        for row in await db.scalars(
-            select(RoadmapItem).where(RoadmapItem.goal_ids.contains([goal.id])).with_for_update()
-        ):
-            goal_ids[str(row.id)] = [str(i) for i in row.goal_ids]
-            ids = [i for i in row.goal_ids if i != goal.id]
-            row.goal_ids = ids if to_goal_id in ids else [to_goal_id, *ids]
+        after: dict[uuid.UUID, list[uuid.UUID]] = {}
+        goal_ids = {
+            str(snap.item_id): [str(i) for i in snap.goal_ids]
+            for snap in await goal_buckets.move_items_off(db, goal.id, to_goal_id, after)
+        }
         extra = {"to_goal_id": str(to_goal_id), "goal_ids": goal_ids,
+                 "goal_ids_after": {str(k): [str(i) for i in v] for k, v in after.items()},
                  "links": [snap.model_dump(mode="json") for snap in before]}  # fmt: skip
     return await _new_entry(db, principal, goal, [goal], {**extra, "features": served}, reason)
 
@@ -440,9 +439,10 @@ async def after_restore(
 ) -> list[dict[str, Any]]:
     """A feature back on its roadmap's current version (:func:`_onto_current`); a goal's
     features' links as before its delete moved them (a feature whose goals or their order
-    changed since keeps them), and each item's goal back where it was, less the goal the
-    delete added (``links``, ``goal_ids`` and ``to_goal_id`` on the entry; none when nothing was
-    moved): a goal given to the item since stays. Returns what did not come back with it
+    changed since keeps them), and each item's goals as they were when it is as the delete left
+    it (``goal_ids_after``), else its goal back where it was, less the goal the delete added
+    (``links``, ``goal_ids`` and ``to_goal_id`` on the entry; none when nothing was moved): a
+    goal given to the item since stays. Returns what did not come back with it
     (a dependency no longer on the roadmap)."""
     from oracle.simple import goal_buckets
 
@@ -462,6 +462,7 @@ async def after_restore(
         now = [e.dst_id for e in await goal_buckets._links(db, [snap.feature_id])]
         if now == left:
             await goal_buckets._restore_links(db, snap)
+    left = entry.root.get("goal_ids_after") or {}
     for item_id, ids in (entry.root.get("goal_ids") or {}).items():
         row = await db.scalar(
             select(RoadmapItem).where(RoadmapItem.id == uuid.UUID(item_id))
@@ -469,9 +470,13 @@ async def after_restore(
         )  # fmt: skip
         if row is None:
             continue
-        # Only what the delete did: the goal goes back where it was, and the goal it moved
-        # the item to comes off only where the delete added it; later changes stay.
         was = [uuid.UUID(i) for i in ids]
+        # An item as the delete left it gets its goals back exactly, in their order.
+        if item_id in left and list(row.goal_ids or []) == [uuid.UUID(i) for i in left[item_id]]:
+            row.goal_ids = was
+            continue
+        # Changed since: only what the delete did: the goal goes back where it was, and the
+        # goal it moved the item to comes off only where the delete added it; later changes stay.
         now = [g for g in row.goal_ids or [] if g != entry.root_id]
         if to is not None and to not in was and now[:1] == [to]:
             now = now[1:]

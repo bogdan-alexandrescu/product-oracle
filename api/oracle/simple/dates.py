@@ -191,7 +191,10 @@ def resolve_by_dates(
 ) -> tuple[Resolved, str]:
     """board-quarters: an item's dates and the column they put it in; a bar no source dates
     is Later's estimate, a part no source gives is estimated in its own column's window."""
-    wins = board(wins)
+    if not ("next" in wins and "later" in wins):
+        # roadmap-speed: board() keeps given windows, so a caller holding all three (the
+        # roadmap read, per item) skips deriving them.
+        wins = board(wins)
     r = resolve(candidates, wins["later"], effort_weeks)
     if r.undated:
         return r, "later"

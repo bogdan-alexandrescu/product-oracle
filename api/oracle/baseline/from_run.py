@@ -40,6 +40,7 @@ from oracle import confidence
 from oracle.baseline import goals, scoring, service
 from oracle.baseline.models import Conflict, Edge, Entity, EntityRevision, Proposal
 from oracle.baseline.schemas import EntityOut
+from oracle.runs import batch
 from oracle.runs.schemas import (
     FromRunEdges,
     FromRunMerge,
@@ -96,52 +97,151 @@ class Members:
 
 
 async def members(db: AsyncSession, run_id: uuid.UUID) -> Members:
-    """One query each: entities by run, revisions by run, proposals by run, the edges."""
-    out = Members()
-    created = set(await db.scalars(select(Entity.id).where(Entity.run_id == run_id)))
-    revised = (
+    """One query each: entities by run, revisions by run, proposals by run, the edges.
+    Read once per Inbox call (oracle.runs.batch), for every run's stop together."""
+    return (await batch.many("from_run_members", [run_id], lambda ids: _members(db, ids)))[run_id]
+
+
+async def _members(db: AsyncSession, run_ids: list[uuid.UUID]) -> dict[uuid.UUID, Members]:
+    """:func:`members` of each of ``run_ids``, in the same five queries for them all."""
+    out = {r: Members() for r in run_ids}
+    created: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
+    for e, r in (
+        await db.execute(select(Entity.id, Entity.run_id).where(Entity.run_id.in_(run_ids)))
+    ).all():
+        created[r].add(e)
+    revised: dict[uuid.UUID, list[tuple[uuid.UUID | None, uuid.UUID | None]]] = defaultdict(list)
+    for e, g, r in (
         await db.execute(
-            select(EntityRevision.entity_id, EntityRevision.edge_id).where(
-                EntityRevision.run_id == run_id
+            select(EntityRevision.entity_id, EntityRevision.edge_id, EntityRevision.run_id).where(
+                EntityRevision.run_id.in_(run_ids)
             )
         )
-    ).all()
-    changed = {e for e, _ in revised if e is not None}
-    proposals = list(
-        await db.scalars(
-            select(Proposal)
-            .where(
-                Proposal.run_id == run_id,
-                Proposal.status != "withdrawn",
-                Proposal.entity_id.is_not(None),
-            )
-            .order_by(Proposal.created_at)
+    ).all():
+        revised[r].append((e, g))
+    for p in await db.scalars(
+        select(Proposal)
+        .where(
+            Proposal.run_id.in_(run_ids),
+            Proposal.status != "withdrawn",
+            Proposal.entity_id.is_not(None),
         )
-    )
-    for p in proposals:
-        out.proposals[p.entity_id].append(p)  # type: ignore[index]
-    ids = created | changed | set(out.proposals)
-    if not ids:
+        .order_by(Proposal.created_at)
+    ):
+        out[p.run_id].proposals[p.entity_id].append(p)  # type: ignore[index]
+    ids_of = {
+        r: created[r] | {e for e, _ in revised[r] if e is not None} | set(out[r].proposals)
+        for r in run_ids
+    }
+    wanted = {i for ids in ids_of.values() for i in ids}
+    if not wanted:
         return out
-    for e in await db.scalars(select(Entity).where(Entity.id.in_(ids))):
-        out.entities[e.id] = e
-        out.change[e.id] = (
-            "new" if e.id in created else "proposal" if e.id in out.proposals else "changed"
-        )
-    edge_ids = {g for _, g in revised if g is not None}
+    ents = list(await db.scalars(select(Entity).where(Entity.id.in_(wanted))))
+    edge_ids = {r: {g for _, g in revised[r] if g is not None} for r in run_ids}
     edges = list(
-        await db.scalars(select(Edge).where((Edge.run_id == run_id) | Edge.id.in_(edge_ids)))
+        await db.scalars(
+            select(Edge).where(
+                Edge.run_id.in_([r for r in run_ids if ids_of[r]])
+                | Edge.id.in_({g for r in run_ids if ids_of[r] for g in edge_ids[r]})
+            )
+        )
     )
-    for edge in edges:
-        owner = edge.src_id if edge.src_id in out.entities else edge.dst_id
-        if owner not in out.entities:
+    for run_id in run_ids:
+        found = out[run_id]
+        if not ids_of[run_id]:
             continue
-        counts = out.edges.setdefault(owner, FromRunEdges())
-        if edge.run_id == run_id:
-            counts.new += 1
-        else:
-            counts.changed += 1
+        for e in ents:
+            if e.id in ids_of[run_id]:
+                found.entities[e.id] = e
+                found.change[e.id] = (
+                    "new"
+                    if e.id in created[run_id]
+                    else "proposal"
+                    if e.id in found.proposals
+                    else "changed"
+                )
+        for edge in edges:
+            if edge.run_id != run_id and edge.id not in edge_ids[run_id]:
+                continue
+            owner = edge.src_id if edge.src_id in found.entities else edge.dst_id
+            if owner not in found.entities:
+                continue
+            counts = found.edges.setdefault(owner, FromRunEdges())
+            if edge.run_id == run_id:
+                counts.new += 1
+            else:
+                counts.changed += 1
     return out
+
+
+async def _scalars(db: AsyncSession, query: Any) -> list[Any]:
+    return list(await db.scalars(query))
+
+
+async def read_ahead(db: AsyncSession, run_ids: list[uuid.UUID]) -> None:
+    """In one Inbox call (oracle.runs.batch): every run's members, and their entities'
+    evidence, conflicts, goals served and section links, read together for each run's
+    :func:`build` and :func:`gate_reasons` to share."""
+    if not run_ids:
+        return
+    found = await batch.many("from_run_members", run_ids, lambda ids: _members(db, ids))
+    ids = list({i for m in found.values() for i in m.entities})
+    await _evidence(db, ids)
+    await _row_reads(db, ids)
+
+
+async def _evidence(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    return await batch.many(
+        "from_run_evidence", ids, lambda keys: service.evidence_counts(db, entity_ids=keys)
+    )
+
+
+async def _row_reads(
+    db: AsyncSession, ids: list[uuid.UUID]
+) -> tuple[dict[uuid.UUID, list[uuid.UUID]], set[uuid.UUID], set[uuid.UUID]]:
+    """(open material conflicts by entity, entities serving a confirmed goal, entities
+    linked from a PRD section) of ``ids``."""
+
+    async def conflicts_of(keys: list[uuid.UUID]) -> dict[uuid.UUID, list[uuid.UUID]]:
+        out: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)
+        for c in await db.scalars(
+            select(Conflict).where(
+                Conflict.entity_id.in_(keys), Conflict.status == "open", Conflict.material
+            )
+        ):
+            out[c.entity_id].append(c.id)  # type: ignore[index]
+        return out
+
+    async def served_of(keys: list[uuid.UUID]) -> dict[uuid.UUID, bool]:
+        return dict.fromkeys(
+            await db.scalars(
+                select(Edge.src_id)
+                .join(Entity, Entity.id == Edge.dst_id)
+                .where(
+                    Edge.src_id.in_(keys),
+                    Edge.type == "supports",
+                    Edge.status != "rejected",
+                    Entity.type == "goal",
+                    Entity.status == "confirmed",
+                )
+            ),
+            True,
+        )
+
+    async def linked_of(keys: list[uuid.UUID]) -> dict[uuid.UUID, bool]:
+        return dict.fromkeys(
+            await db.scalars(
+                select(DocumentSectionLink.entity_id).where(DocumentSectionLink.entity_id.in_(keys))
+            ),
+            True,
+        )
+
+    if not ids:
+        return defaultdict(list), set(), set()
+    conflicts = await batch.many("from_run_conflicts", ids, conflicts_of)
+    served = await batch.many("from_run_served", ids, served_of)
+    linked = await batch.many("from_run_linked", ids, linked_of)
+    return defaultdict(list, conflicts), set(served), set(linked)
 
 
 def _reason(e: Entity, code: str, severity: str, label: str, text: str, **kw: Any) -> RowReason:
@@ -205,36 +305,10 @@ async def build(db: AsyncSession, run_id: uuid.UUID, actions: list[ReviewAction]
     found = await members(db, run_id)
     ents = found.entities
     ids = list(ents)
-    low = float(confidence.merged(await scoring.company_weights(db))["low"])
-    counts = await service.evidence_counts(db, entity_ids=ids)
-    conflicts: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)
-    served: set[uuid.UUID] = set()
-    linked: set[uuid.UUID] = set()
-    if ids:
-        for c in await db.scalars(
-            select(Conflict).where(
-                Conflict.entity_id.in_(ids), Conflict.status == "open", Conflict.material
-            )
-        ):
-            conflicts[c.entity_id].append(c.id)  # type: ignore[index]
-        served = set(
-            await db.scalars(
-                select(Edge.src_id)
-                .join(Entity, Entity.id == Edge.dst_id)
-                .where(
-                    Edge.src_id.in_(ids),
-                    Edge.type == "supports",
-                    Edge.status != "rejected",
-                    Entity.type == "goal",
-                    Entity.status == "confirmed",
-                )
-            )
-        )
-        linked = set(
-            await db.scalars(
-                select(DocumentSectionLink.entity_id).where(DocumentSectionLink.entity_id.in_(ids))
-            )
-        )
+    weights = await batch.once("company_weights", lambda: scoring.company_weights(db))
+    low = float(confidence.merged(weights)["low"])
+    counts = await _evidence(db, ids)
+    conflicts, served, linked = await _row_reads(db, ids)
     by_key: dict[str, list[ReviewAction]] = defaultdict(list)
     for a in actions:
         by_key[a.item_key].append(a)
@@ -334,14 +408,18 @@ async def build(db: AsyncSession, run_id: uuid.UUID, actions: list[ReviewAction]
                 merge=FromRunMerge(allowed=why_not is None, why_not=why_not),
             )
         )
-    others = list(
-        await db.scalars(
+    # The company's proposed goals, read once per Inbox call (oracle.runs.batch).
+    proposed = await batch.once(
+        "from_run_proposed_goals",
+        lambda: _scalars(
+            db,
             select(Entity)
-            .where(Entity.type == "goal", Entity.status == "proposed", Entity.id.not_in(ids))
-            .order_by(Entity.key)
-        )
+            .where(Entity.type == "goal", Entity.status == "proposed")
+            .order_by(Entity.key),
+        ),
     )
-    other_counts = await service.evidence_counts(db, entity_ids=[e.id for e in others])
+    others = [e for e in proposed if e.id not in ents]
+    other_counts = await _evidence(db, [e.id for e in others])
     summary.other_proposed_goals = len(others)
     return Built(
         rows=rows,

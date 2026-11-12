@@ -1,0 +1,290 @@
+"""GET /v1/simple/decisions/waiting (oracle.simple.waiting_list) answers fast on a company the
+size of a real one, in a fixed number of statements, and says exactly what it said before.
+
+Before: the list built the whole Simple roadmap (service.build) just to keep its broken links
+and dates, read the roadmap again for the proposals (changes.listing) and again for the goal
+suggestions (additions.listing, which also matched every suggestion against every feature
+and read each one's flow, a statement per suggestion): the slowest route in production
+(p50 6.5 s). Against Postgres, with invented example data only (tests/waiting_seed.py).
+
+Test cards (protects / fails_when / no_claim):
+
+- test_waiting_answers_under_budget: protects=on 400 items, 1,500 changes, 200 decisions,
+  150 drafts and 40 goal suggestions the list answers (best of 3, after a warm-up) under
+  BUDGET_S for the roadmap's decider and for an owner; fails_when=a source builds the whole
+  roadmap again or reads per row; no_claim=production hardware (timing mark: CI runs it alone).
+- test_waiting_reads_no_statement_per_row: protects=the read's statements (after a first
+  read, which reads each PRD's questions in once) stay under MAX_STATEMENTS with several
+  hundred waiting items (any per-row read passes it many times
+  over); fails_when=a source reads per item, change or suggestion; no_claim=wall-clock time.
+- test_waiting_reads_first_roadmap_once: protects=with no company roadmap, the list reads the
+  company's first roadmap once for all goals on no roadmap (1 such goal, then 4: the same
+  statement count); fails_when=it is read once per such goal; no_claim=the Inbox's rows.
+- test_waiting_says_what_it_said_before: protects=for every role, a roadmap's decider, its
+  required reviewer, a track owner, an approver track owner deciding a roadmap with no
+  decider, a member's API token, a read-only one and a service token, the response is
+  identical to the one the former list built from the roadmap, changes and suggestions pages'
+  own reads (``former_items`` below, kept verbatim), with working drafts that change and add
+  items, a replaced PRD, goal suggestions that failed their checks and items in Trash, with
+  and without a company roadmap; fails_when=any item, its order, words, link or time differs;
+  no_claim=kinds this seed does not hold (the Inbox's rows, read as before).
+"""
+
+import re
+import time
+import uuid
+from typing import Any
+
+import pytest
+from sqlalchemy import event
+
+from oracle import company_time
+from oracle.auth.service import create_api_token
+from oracle.db import get_engine
+from oracle.simple import waiting_list
+from oracle.simple.schemas import SimpleWaitingItem
+from oracle.tenancy import tenant_session
+from tests.baseline_helpers import make_ctx
+from tests.test_simple_roadmap_api import NOW
+from tests.waiting_seed import big_company
+
+WAITING = "/v1/simple/decisions/waiting"
+# Measured on the CI-sized runner's test Postgres: before, 1.3 s for the decider and 1.4 s for
+# an owner; after, see the commit message.
+BUDGET_S = 0.6
+# Counted on a warm read (the first reads each PRD's questions in once, questions.ensure).
+# Before: 224 statements (sign-in included), the list's sources 142 of them.
+MAX_STATEMENTS = 110
+# Roadmap 1's items in Trash (tests/waiting_seed.py).
+TRASHED = re.compile(r"Item 1-(0|1|60)(?!\d)")
+
+
+@pytest.fixture(autouse=True)
+def clock(monkeypatch):
+    monkeypatch.setattr(company_time, "now", lambda: NOW)
+
+
+@pytest.fixture
+async def company():
+    ctx = await make_ctx()
+    seeded = await big_company(ctx)
+    return ctx, seeded
+
+
+async def read(client, headers) -> tuple[int, float, dict]:
+    statements: list[str] = []
+
+    def count(conn, cursor, statement, *args):
+        if "SAVEPOINT" not in statement:
+            statements.append(statement)
+
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    t0 = time.perf_counter()
+    try:
+        resp = await client.get(WAITING, headers=headers)
+    finally:
+        elapsed = time.perf_counter() - t0
+        event.remove(engine, "before_cursor_execute", count)
+    assert resp.status_code == 200, resp.text
+    return len(statements), elapsed, resp.json()
+
+
+@pytest.mark.timing
+async def test_waiting_answers_under_budget(client, company):
+    ctx, _ = company
+    best = {}
+    for role in ("approver", "owner"):
+        times = []
+        for _ in range(4):
+            _, elapsed, body = await read(client, ctx.as_(role))
+            times.append(elapsed)
+        assert len(body["items"]) > 500, len(body["items"])
+        print(f"{role}: " + ", ".join(f"{t * 1000:.0f}" for t in times) + " ms")
+        best[role] = min(times[1:])
+    assert max(best.values()) < BUDGET_S, best
+
+
+async def test_waiting_reads_no_statement_per_row(client, company):
+    ctx, _ = company
+    await read(client, ctx.as_("owner"))
+    for role in ("approver", "owner"):
+        n, _, body = await read(client, ctx.as_(role))
+        kinds = {i["kind"] for i in body["items"]}
+        assert {"broken_link", "date", "proposal", "goal_suggestion", "draft"} <= kinds, kinds
+        assert len(body["items"]) > 500
+        print(f"{role}: {n} statements, {len(body['items'])} items")
+        assert n <= MAX_STATEMENTS, n
+
+
+async def goals_on_no_roadmap(ctx, n: int) -> None:
+    """``n`` more confirmed goals on no roadmap, each with an open suggestion."""
+    from oracle.baseline.models import Entity
+    from oracle.simple.models import SimpleGoalSuggestion
+
+    async with tenant_session(ctx.tenant_id) as s:
+        for _ in range(n):
+            key = uuid.uuid4().hex[:8]
+            goal = Entity(type="goal", key=f"goal-{key}", title=f"Goal {key}", status="confirmed",
+                          origin="user")  # fmt: skip
+            s.add(goal)
+            await s.flush()
+            s.add(SimpleGoalSuggestion(goal_id=goal.id, title=f"Feature for {key}",
+                                       outcome="Faster setup", evidence=[],
+                                       origin="auto"))  # fmt: skip
+        await s.commit()
+
+
+async def test_waiting_reads_first_roadmap_once(client):
+    """With no company roadmap, the goals on no roadmap file under the company's first
+    roadmap: read once per request, not once per such goal."""
+    from oracle.docs.models import Document
+
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(Document(slug="roadmap-only", title="Example roadmap", kind="roadmap",
+                       status="approved", visibility="company"))  # fmt: skip
+        await s.commit()
+    counts = []
+    for more in (1, 3):
+        await goals_on_no_roadmap(ctx, more)
+        await read(client, ctx.as_("owner"))
+        n, _, body = await read(client, ctx.as_("owner"))
+        assert sum(i["kind"] == "goal_suggestion" for i in body["items"]) == len(counts) * 3 + 1
+        counts.append(n)
+    assert counts[1] == counts[0], counts
+
+
+async def token(ctx, name: str, user: str | None, scope: str | None = None) -> dict:
+    async with tenant_session(ctx.tenant_id) as s:
+        row, raw = await create_api_token(
+            s, name, user_id=ctx.users[user].id if user else None, scope=scope
+        )
+        if user is None:
+            row.role = "owner"
+        await s.commit()
+    return {"Authorization": f"Bearer {raw}"}
+
+
+@pytest.mark.parametrize("company_roadmap", [False, True], ids=["roadmaps", "company_roadmap"])
+async def test_waiting_says_what_it_said_before(client, monkeypatch, company_roadmap):
+    ctx = await make_ctx()
+    seeded = await big_company(ctx, company_roadmap=company_roadmap)
+    people = {role: ctx.as_(role) for role in ("owner", "approver", "commenter", "viewer")}
+    # member-1 decides roadmap 3; member-2 is every roadmap's required reviewer; member-3 owns
+    # tracks 0 and 2; member-5, an approver, owns track 4, whose roadmap has no decider.
+    for name in ("member-1", "member-2", "member-3", "member-5"):
+        ctx.users[name] = seeded["members"][name]
+        people[name] = ctx.as_(name)
+    people["approver's token"] = await token(ctx, "example-bot", "approver")
+    people["owner's read-only token"] = await token(ctx, "example-read", "owner", "oracle:read")
+    people["service token"] = await token(ctx, "example-service", None)
+    now = {}
+    for name, headers in people.items():
+        _, _, now[name] = await read(client, headers)
+    monkeypatch.setattr(waiting_list, "items", former_items)
+    for name, headers in people.items():
+        _, _, before = await read(client, headers)
+        assert now[name] == before, name
+    least = 100 if company_roadmap else 500
+    assert len(now["approver"]["items"]) > least and len(now["owner"]["items"]) > least
+    # The seed's cases are on the list: a working draft's renamed item; not an item in Trash
+    # nor a proposal on one.
+    titles = [i["title"] for i in now["owner"]["items"]]
+    assert any("renamed" in t for t in titles), titles
+    assert company_roadmap or "Item 1-3" in titles, titles
+    assert not any(TRASHED.search(t) for t in titles), titles
+    assert now["approver's token"] == now["approver"]
+    # member-5 decides roadmap 4's proposals (the company roadmap's, when there is one, are
+    # the approver's).
+    assert any(i["kind"] == "proposal" for i in now["member-5"]["items"]) != company_roadmap
+
+
+# --- The former list, verbatim: each source read as its own page reads it. ---------------
+
+
+async def former_items(db, principal, qs) -> list[SimpleWaitingItem]:
+    w = waiting_list
+    if getattr(principal, "user_id", None) is None:
+        return []
+    out = await w._stops(db, principal)
+    out += w._questions(qs)
+    out += await w._calls(db, principal)
+    out += await _former_roadmap(db, principal)
+    out += await w._drafts(db, principal)
+    out += await _former_proposals(db, principal)
+    out += await _former_goal_suggestions(db, principal)
+    out += await w._goals(db, principal)
+    out += await w._inbox(db, principal)
+    return out
+
+
+async def _former_roadmap(db, principal: Any) -> list[SimpleWaitingItem]:
+    from oracle.simple import service
+
+    rm = await service.build(db, principal)
+    today = await company_time.company_today(db)
+    titles = {i.id: i.title for i in rm.items}
+    out = []
+    for i in rm.items:
+        if not i.can_decide:
+            continue
+        for f in i.flags:
+            if f.state != "red" or not f.fixes:
+                continue
+            dep = titles.get(waiting_list._uuid(f.subject)) if f.subject else None
+            out.append(SimpleWaitingItem(
+                kind="broken_link", key=f"broken_link:{i.id}:{f.kind}:{f.subject or ''}",
+                ref_id=str(i.id), title=i.title,
+                detail=f"{f.reason}" + (f" ({dep})" if dep and dep not in f.reason else ""),
+                action="Fix the link", href=f"/simple/roadmap?item={i.id}",
+            ))  # fmt: skip
+        s = i.suggestion
+        if s is not None and s.status == "open" and s.can_decide:
+            out.append(SimpleWaitingItem(
+                kind="date", key=f"date:{s.id}", ref_id=str(s.id), title=i.title,
+                detail=f"Oracle suggests {waiting_list._day(s.start_date, today)} – "
+                f"{waiting_list._day(s.end_date, today)}",
+                action="Confirm the dates", href=f"/simple/roadmap?item={i.id}",
+                at=s.created_at,
+            ))  # fmt: skip
+    return out
+
+
+async def _former_proposals(db, principal: Any) -> list[SimpleWaitingItem]:
+    from oracle.simple import changes
+
+    out = []
+    for c in await changes.listing(db, principal, None, None, "proposed", False):
+        if not c.can_decide:
+            continue
+        item = (c.target or {}).get("item_id")
+        date = c.op == "accept_date_suggestion"
+        out.append(SimpleWaitingItem(
+            kind="date" if date else "proposal", key=f"proposal:{c.id}", ref_id=str(c.id),
+            title=c.words or ("New dates proposed" if date else "A proposed change"),
+            detail=f"Proposed by {c.by_name}", action="Accept",
+            href=f"/simple/roadmap?item={item}" if item else "/simple/roadmap",
+            at=c.at, op=c.op,
+        ))  # fmt: skip
+    return out
+
+
+async def _former_goal_suggestions(db, principal: Any) -> list[SimpleWaitingItem]:
+    from oracle.simple import additions
+
+    got = await additions.listing(db, principal, None, "open")
+    return [
+        SimpleWaitingItem(
+            kind="goal_suggestion",
+            key=f"goal_suggestion:{s.id}",
+            ref_id=str(s.id),
+            title=s.title,
+            detail=f"Suggested for {s.goal.title}",
+            action="Confirm",
+            href="/simple/goals",
+            at=s.created_at,
+        )  # fmt: skip
+        for s in got.suggestions
+        if s.status == "open" and s.can_accept
+    ]

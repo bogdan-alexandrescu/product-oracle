@@ -222,6 +222,13 @@ def _goal(f: RankedFeature, e: service.Entry | None) -> SimplePriorityGoal | Non
     return None
 
 
+def _goal_ids(e: service.Entry | None) -> list[str]:
+    """The item's own goals, as the roadmap reads them (none in Trash)."""
+    if e is None:
+        return []
+    return [str(g) for g in (e.row.goal_ids if e.goal_ids is None else e.goal_ids) or []]
+
+
 def _value(f: RankedFeature, name: str) -> Any:
     v = f.explanation.inputs.get(name)
     return v.get("value") if isinstance(v, dict) else None
@@ -355,6 +362,7 @@ def _drafts(
                 )
                 if e.goal
                 else None,
+                goal_ids=_goal_ids(e),
                 roadmap=service._ref(e.roadmap),  # type: ignore[arg-type]
                 applies=service.can_decide(principal, e, read_.deciders),
                 merge_into=[
@@ -397,6 +405,7 @@ def _unranked(read_: service.Read, ranked: set[str]) -> list[SimplePriorityUnran
                 )
                 if goal
                 else None,
+                goal_ids=_goal_ids(e),
                 roadmap=service._ref(e.roadmap),  # type: ignore[arg-type]
             )
         )
@@ -873,6 +882,7 @@ async def build(
                 code=e.row.item_key if e is not None else f.key,
                 title=e.row.title if e is not None else f.title,
                 goal=_goal(f, e),
+                goal_ids=_goal_ids(e),
                 milestone=_milestone_name(e),
                 horizon=e.horizon if e is not None else None,  # type: ignore[arg-type]
                 goal_value=_value(f, "goal_value"),

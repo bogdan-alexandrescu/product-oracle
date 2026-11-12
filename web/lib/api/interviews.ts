@@ -7,6 +7,7 @@
  */
 import { ApiError, MOCK_MODE } from "./client";
 import { mockFetch } from "./mock/server";
+import { forgetReads } from "./shared-reads";
 
 export type InterviewStatus = "draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked";
 export type JobState = {
@@ -119,7 +120,12 @@ export const INTERVIEW_STATUS_KIND: Record<InterviewStatus, "na" | "now" | "warn
 /** Limits the API enforces (oracle.interviews.schemas). */
 export const LIMITS = { name: 120, company: 120, topic: 300, intro: 300, prompt: 300, questions: 8, message: 2000 } as const;
 
-const send = (req: Request) => (MOCK_MODE ? mockFetch(req) : fetch(req));
+// A write skips the API client, so it drops the shared reads itself (lib/api/shared-reads), before and after.
+const send = (req: Request) => {
+  if (req.method === "GET") return MOCK_MODE ? mockFetch(req) : fetch(req);
+  forgetReads();
+  return (MOCK_MODE ? mockFetch(req) : fetch(req)).finally(forgetReads);
+};
 
 function request(method: string, path: string, body?: unknown, credentials?: RequestCredentials): Request {
   return new Request(new URL(path, window.location.origin), {

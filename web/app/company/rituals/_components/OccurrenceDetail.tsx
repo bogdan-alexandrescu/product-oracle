@@ -9,6 +9,7 @@ import { MarkdownBody } from "@/components/MarkdownBody";
 import { Button, Chip, LinkButton, NotFoundPanel, Panel } from "@/components/ds";
 import { ErrorNote, INPUT, LoadError, Loading } from "@/components/ui";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
+import { forgetReads } from "@/lib/api/shared-reads";
 import { useCompanyZone } from "@/lib/dates";
 import { formatMoney, zoneName } from "@/lib/format";
 import { parseBlocks } from "@/lib/markdown";
@@ -257,7 +258,9 @@ function BlockCard({
                 onClick={async () => {
                   setError(null);
                   try {
-                    const res = await fetch(r.href!, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+                    // A write outside the API client drops the shared reads itself (lib/api/shared-reads).
+                    forgetReads();
+                    const res = await fetch(r.href!, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).finally(forgetReads);
                     if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? "Oracle could not start the run");
                     const run = (await res.json()) as { id?: string };
                     if (run.id) router.push(`/runs/${run.id}`);

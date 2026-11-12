@@ -7,6 +7,7 @@
  */
 import { MOCK_MODE } from "@/lib/api/client";
 import { mockFetch } from "@/lib/api/mock/server";
+import { forgetReads } from "@/lib/api/shared-reads";
 
 export type StreamError = {
   reason: string;
@@ -81,9 +82,13 @@ export async function openStream(url: string, h: StreamHandlers): Promise<void> 
           const data = JSON.parse(e.data);
           if (e.event === "delta") h.onDelta(String(data.text ?? ""));
           else if (e.event === "citations") h.onCitations?.(data);
-          else if (e.event === "changes") h.onChanges?.(data);
-          else if (e.event === "done") {
+          // The reply has changed what the API answers: a read after it (SimpleAsk's loadAsk) fetches.
+          else if (e.event === "changes") {
+            forgetReads();
+            h.onChanges?.(data);
+          } else if (e.event === "done") {
             ended = true;
+            forgetReads();
             h.onDone(data);
           } else if (e.event === "error") {
             ended = true;
