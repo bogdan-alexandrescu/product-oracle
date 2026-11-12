@@ -2965,7 +2965,8 @@ function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan
     const out = new Map<string, ReturnType<GoalFeatures>[number]>();
     // One entry per item or feature, by its id or code (two items of the same name are two).
     const seen = new Map<string, ReturnType<GoalFeatures>[number]>();
-    // An item is its feature's slice by its feature's code too (`short`: F-16 for the item plan-f-16), so it counts once.
+    // An item is its feature's slice by its feature's own code too (`short`: F-16 for the item plan-f-16), so it counts once;
+    // never by a short code made from initials, which may read as another feature's key (goal-features-own-key).
     const add = (code: string, name: string, ids: (string | null | undefined)[] = [], goalIds?: string[], short?: string, kept?: string) => {
       const hit = out.get(code.toLowerCase()) ?? (short ? out.get(short.toLowerCase()) : undefined) ?? ids.map((i) => (i ? seen.get(i) : undefined)).find(Boolean);
       if (hit) {
@@ -2982,7 +2983,7 @@ function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan
     for (const f of gb?.features ?? []) if (f.goal_ids?.includes(g.id)) add(f.key, rowOf.get(f.key)?.title ?? f.title, [f.id]);
     // The items and drafts by every goal they serve, not only their first (an item's own goals).
     const serves = (r: { goal?: { title: string } | null; goal_ids?: string[] }) => (r.goal_ids?.length ? r.goal_ids.includes(g.id) : !!r.goal && sameGoal(r.goal.title, title));
-    for (const r of data.rows) if (serves(r)) add(r.code, r.title, [r.item_id, r.feature_id], lift(r.goal_ids), r.short_code, keptKr(r.goal_ids));
+    for (const r of data.rows) if (serves(r)) add(r.code, r.title, [r.item_id, r.feature_id], lift(r.goal_ids), r.own_key ?? undefined, keptKr(r.goal_ids));
     for (const r of [...data.unranked, ...data.drafts]) if (serves(r)) add(r.code, r.title, [r.item_id], lift(r.goal_ids), undefined, keptKr(r.goal_ids));
     return [...out.values()];
   };
