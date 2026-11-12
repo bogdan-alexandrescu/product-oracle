@@ -15,7 +15,7 @@ import { GOALS, goalId, goalParentKey, goalPositionOf, goalRank, goalInTrash, ro
 // `key`: the Entity.key the API gives a goal at creation (goal_buckets._slug), named in its Trash entry.
 // edit-goals-prds EG1: a goal's owner (a member's id; seeded by email, matched to the member on first read) and when it was archived.
 // goal-order: `position`, the place Move up and Move down store on it (attrs.position, as the API's goals).
-type Goal = { id: string; key: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null; position?: number | null; on_roadmap?: boolean };
+type Goal = { id: string; key: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null; position?: number | null; on_roadmap?: boolean; kr?: boolean };
 /** assumed_goal_ids: the links whose contribution is assumed (an approved order's, api ASSUMED_LINK). */
 type Feature = { id: string; key: string; title: string; goal_ids: string[]; assumed_goal_ids?: string[] };
 /** lazy: the default goals, seeded by the first route that read them rather than by the scenario. */
@@ -128,6 +128,18 @@ export function seedGoalBucketsWith(
     features.push({ id: stableUuid(`feature-bucket/${i.key}`), key: i.key, title: i.title, goal_ids: [...new Set(i.goals.map(goalOf))] });
   }
   return { goals, features };
+}
+
+/**
+ * goal-delete-r7: the key results among the goals, as the API lists them (every goal, key results
+ * included): each Ground Truth goal with a parent, by its own id and key (`kr`), archived when it is.
+ */
+export function withKeyResultBuckets(db: GoalBucketsDb, entities: { id: string; key: string; title: string; type: string; status: string; parent_id?: string | null; attrs?: Record<string, unknown> | null }[]): void {
+  for (const e of entities) {
+    if (e.type !== "goal" || !e.parent_id || db.goals.some((g) => g.id === e.id)) continue;
+    const metric = typeof e.attrs?.metric === "string" ? e.attrs.metric : null;
+    db.goals.push({ id: e.id, key: e.key, title: e.title, order: db.goals.filter((x) => !x.archived).length + 1, measure: metric, target: null, due: null, archived: e.status === "rejected", kr: true });
+  }
 }
 
 function json(status: number, body: unknown): Response {
@@ -249,8 +261,8 @@ const goalKeyOf = (db: GoalBucketsDb, id: string) => [...Object.keys(GOALS), ...
 
 /** The item goal key of a bucket goal: the roadmap's goal of that name. */
 const itemGoalKey = (g: Goal | undefined) => (g ? Object.keys(GOALS).find((k) => GOALS[k].toLowerCase() === g.title.toLowerCase()) : undefined);
-/** goal-order: a bucket goal's key in the one goal order: the roadmap's goal of that name, else its name. */
-const orderKey = (g: Goal) => itemGoalKey(g) ?? g.title.toLowerCase();
+/** goal-order: a bucket goal's key in the one goal order: the roadmap's goal of that name, else a key result's own key, else its name. */
+const orderKey = (g: Goal) => itemGoalKey(g) ?? (g.kr ? g.key : g.title.toLowerCase());
 
 /**
  * goal-order: the bucket goals the Ground Truth does not hold, each with the place stored on it, so the

@@ -170,7 +170,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
+import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith, withKeyResultBuckets } from "./goal-buckets";
 import { proposeGoalDelete, restoreCodeTaken, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import {
@@ -1640,6 +1640,8 @@ function seedGoalBucketsThreeGoalsScenario(): Db {
   db.baseline.entities.push({ ...grow, id: stableUuid("simple-goal/kr-week-two-mute"), key: "kr-week-two-mute", title: "KR 1.1 Teams set quiet hours in week two", parent_id: stableUuid("simple-goal/kr-week-two"), status: "confirmed", attrs: { metric: "teams", weight: 1 } });
   rm.items.push({ key: "alert-quiet-hours", title: "Alert quiet hours", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", goal: "grow-retention", goals: ["kr-week-two-mute"], draft: true });
   for (const k of ["alert-team-digest", "alert-snooze-day", "alert-tone", "alert-history", "alert-quiet-hours"]) rm.ids[k] = stableUuid(`simple-item/${k}`);
+  // goal-delete-r7: the key results above among the goal buckets, as the API lists them.
+  withKeyResultBuckets(rm.goal_buckets!, db.baseline.entities);
   return db;
 }
 
@@ -1662,6 +1664,7 @@ function withRoadmapGoalBuckets(db: Db): Db {
   // goal-order: the company's goal order is the buckets' (each goal's place stored), so Move up and
   // Move down on Priorities read the same order as its buckets and the Roadmap's goal rows.
   placeBucketGoals(rm.goal_buckets, db.baseline.entities);
+  withKeyResultBuckets(rm.goal_buckets, db.baseline.entities);
   return db;
 }
 
