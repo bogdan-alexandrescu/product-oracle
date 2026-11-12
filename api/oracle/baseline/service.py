@@ -1411,7 +1411,7 @@ async def create_entity(
     if type_ == "feature":
         # Its code as a revision of its own, so the key it was added with stays its alias.
         before = entity_snapshot(entity)
-        await fixes.code_on_join(db, entity)
+        await fixes.code_on_join(db, entity, new=True)
         fixes.took(db, entity)
         if entity.key != before["key"]:
             _revision(db, writer, before, entity_snapshot(entity), entity=entity)
@@ -1502,6 +1502,8 @@ async def update_entity(
 
         await fixes.code_on_join(db, entity)
     _revision(db, writer, before, entity_snapshot(entity), entity=entity)
+    if diff.get("status") == "confirmed":
+        await fixes.confirm_goal_links(db, writer, entity)
     if entity.type == "goal" and ("title" in diff or "body" in diff):
         # A goal's name or description changed (the goal panel's Edit): who, from what, to what.
         await audit.record(
@@ -1541,6 +1543,8 @@ async def set_entity_status(
 
             await fixes.code_on_join(db, entity)
         _revision(db, writer, before, entity_snapshot(entity), entity=entity)
+        if status == "confirmed":
+            await fixes.confirm_goal_links(db, writer, entity)
         await scoring.rescore_around(db, [entity.id], include_supporters=True)
         await db.flush()
         await _record_change(db, writer.actor, entity, before, f"entity_{status}")
@@ -1667,7 +1671,10 @@ async def create_edge(
     attrs = dict(attrs or {})
     _check_edge_attrs(type_, attrs)
     _check_status(status)
-    if await find_edge(db, src_id, dst_id, type_) is not None:
+    if (found := await find_edge(db, src_id, dst_id, type_)) is not None:
+        if found.status == "proposed":
+            # Picking a link a run only proposed confirms it (Pick a goal on that goal).
+            return await update_edge(db, writer, found, {"status": "confirmed"})
         raise ConflictError("This link already exists")
     if writer.must_propose(None):
         fields = {"src_id": src_id, "dst_id": dst_id, "type": type_, "attrs": attrs,

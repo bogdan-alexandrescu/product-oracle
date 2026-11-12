@@ -288,15 +288,24 @@ async def _rename_refs(db: AsyncSession, old: str, new: str) -> None:
     )
 
 
-async def code_on_join(db: AsyncSession, feature: Entity) -> None:
+async def code_on_join(db: AsyncSession, feature: Entity, *, new: bool = False) -> None:
     """Every feature has a code, given when it joins the Ground Truth (the owner, Nov 4: "Code
     + name, all"): a confirmed feature with none gets :func:`next_code` as its key, and what
     names it by its key follows (:func:`_rename_refs`; its old key stays an alias). A code it
     has is kept, never renumbered; a slice whose feature has no code waits for Give it a code.
-    The caller writes the revision, so the code is part of the write that confirmed it."""
+    The caller writes the revision, so the code is part of the write that confirmed it.
+    ``new``: a feature just made, which no roadmap item or PRD feature is tied to yet."""
     if feature.type != "feature" or feature.status != "confirmed":
         return
     old = feature.key
+    # Its own code first (its Code attribute, else its roadmap item's or PRD feature's), when
+    # no other feature has it; else the next number, flagged code_differs by the check.
+    if feature.id not in (await _taken(db)).codes and not await _is_slice(db, feature):
+        want = await wanted_code(db, feature, tied=not new)
+        if want and await _free(db, feature, want) and await _set_key(db, feature, want):
+            await _rename_refs(db, old, want)
+            took(db, feature, old)
+            return
     for _ in range(2):
         try:
             code = await next_code(db, feature)
@@ -308,6 +317,83 @@ async def code_on_join(db: AsyncSession, feature: Entity) -> None:
             return
     # Lost the race twice: refused, never a join without its code.
     raise ConflictError("That code is taken; try again.")
+
+
+async def _is_slice(db: AsyncSession, feature: Entity) -> bool:
+    if feature.parent_id is None:
+        return False
+    parent = await db.get(Entity, feature.parent_id)
+    return parent is not None and parent.type == "feature"
+
+
+async def wanted_code(db: AsyncSession, feature: Entity, *, tied: bool = True) -> str | None:
+    """The code ``feature`` is keyed by (``oracle.baseline.check.own_code``): its Code
+    attribute, else the one code of the roadmap items and PRD features tied to it."""
+    from oracle.baseline import check
+
+    if (own := check.whole_code((feature.attrs or {}).get("code"))) or not tied:
+        return own
+    return check.own_code(feature, (await check.tied_codes(db, {feature.id})).get(feature.id))
+
+
+async def _free(db: AsyncSession, feature: Entity, code: str) -> bool:
+    """Whether no other feature has ``code``, now or as a code it gave back."""
+    t = await _taken(db)
+    if any(c == code for i, c in t.codes.items() if i != feature.id):
+        return False
+    return all(
+        i == feature.id or (canonical_code(k) or k) != code
+        for k, i in (await former_keys(db)).items()
+    )
+
+
+async def confirm_goal_links(db: AsyncSession, writer: Writer, feature: Entity) -> None:
+    """A confirmed feature's goal links a run proposed with it are confirmed with it, so it
+    is not flagged Serves no goal for a link it has."""
+    from oracle.baseline.models import Edge
+    from oracle.baseline.service import update_edge
+
+    if feature.type != "feature" or feature.status != "confirmed":
+        return
+    edges = await db.scalars(
+        select(Edge)
+        .join(Entity, Entity.id == Edge.dst_id)
+        .where(
+            Edge.src_id == feature.id,
+            Edge.type == "supports",
+            Edge.status == "proposed",
+            Entity.type == "goal",
+            Entity.status != "rejected",
+        )
+    )
+    for edge in list(edges):
+        await update_edge(db, writer, edge, {"status": "confirmed"})
+
+
+async def use_own_code(db: AsyncSession, writer: Writer, feature: Entity) -> str:
+    """Use its code (the check's ``code_differs``): a feature keyed by the next number as it
+    was confirmed gets its own code as its key; the number it had is given back, an alias
+    never given again (:func:`former_keys`). Its proposed goal links are confirmed too."""
+    if feature.status != "confirmed":
+        raise ConflictError("This feature is not in the Ground Truth yet.")
+    want = await wanted_code(db, feature)
+    if not want or want == canonical_code(feature.key):
+        raise ConflictError("This feature already has its own code.")
+    if not await _free(db, feature, want):
+        raise ConflictError(f"Another feature already has the code {want}.")
+    before = entity_snapshot(feature)
+    old = feature.key
+    if not await _set_key(db, feature, want):
+        raise ConflictError("That code is taken; try again.")
+    await _rename_refs(db, old, want)
+    took(db, feature, old)
+    lock(feature, writer)
+    await db.flush()
+    _revision(db, writer, before, entity_snapshot(feature), entity=feature)
+    await db.flush()
+    await _record_change(db, writer.actor, feature, before, "entity_updated")
+    await confirm_goal_links(db, writer, feature)
+    return want
 
 
 async def give_code(db: AsyncSession, writer: Writer, feature: Entity) -> str:
