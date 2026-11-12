@@ -838,6 +838,20 @@ class _TickAsyncio:
         return self.hard_limit
 
 
+class _GatewayClock:
+    """The gateway's ``time``, its clock moved ``ahead`` so a test can run a job out of time
+    at a chosen moment instead of racing the wall clock."""
+
+    def __init__(self) -> None:
+        self.ahead = 0.0
+
+    def __getattr__(self, name: str):
+        return getattr(time, name)
+
+    def monotonic(self) -> float:
+        return time.monotonic() + self.ahead
+
+
 async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
     client, ticker_on, claude, monkeypatch
 ):
@@ -876,23 +890,29 @@ async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
     assert (job.status, job.attempts) == ("succeeded", 1)
 
 
-@pytest.mark.timing
 async def test_a_job_out_of_time_before_its_call_started_is_put_back_unspent(
     client, ticker_on, claude, monkeypatch
 ):
     tenant_id = await _backlog(client, 1)
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.6)
-    monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 1.5)
+    # The time runs out while the job reads its inputs, not left to a 1 s read against a short
+    # hard limit: under load the read outran the limit and the tick was cut instead (-n 4).
+    gateway_clock = _GatewayClock()
+    monkeypatch.setattr(gateway, "time", gateway_clock)
+    started = asyncio.Event()
     slow = [True]
 
     async def slow_inputs(s, job, ask):
         # Reading the inputs leaves less than a whole call: the gateway starts none.
         if slow[0]:
-            await asyncio.sleep(1.0)
+            started.set()
+            gateway_clock.ahead = 3600.0
         return await ask("review_comments", {"job": str(job.id)})
 
     monkeypatch.setitem(kinds.RUNNERS, "review_comments", slow_inputs)
     out = (await client.post(PATH, headers=bearer(id_token()))).json()
+    # The job was claimed and ran out of time while reading its inputs, not left unclaimed.
+    assert started.is_set()
     assert out["timed_out"] is False and claude.calls == []
     assert out["llm_jobs"] == {"ran": 0, "succeeded": 0, "failed": 0, "retried": 0}
     [job] = await _jobs(tenant_id)
@@ -900,6 +920,7 @@ async def test_a_job_out_of_time_before_its_call_started_is_put_back_unspent(
     assert (job.account_label, job.via, job.input_tokens) == (None, None, None)
     # Its attempt was given back: the next tick runs it, as its first.
     slow[0] = False
+    gateway_clock.ahead = 0.0
     out = (await client.post(PATH, headers=bearer(id_token()))).json()
     assert out["llm_jobs"]["succeeded"] == 1
     [job] = await _jobs(tenant_id)
