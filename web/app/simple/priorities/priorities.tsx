@@ -2725,7 +2725,7 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
   // milestone-rename (the owner, Nov 10): each milestone in place, through the Roadmap's own card and rights (a PRD
   // milestone's name goes straight in for the PRD's owner, else asks them); the roadmap's read gives its milestones.
   const roadmapQ = useQuery<Schemas["SimpleRoadmapOut"]>("simple-priorities-milestones", () => unwrap(api.GET("/v1/simple/roadmap", {})));
-  const ms = useMilestones({ data: roadmapQ.data, phone, canChange: can("create_simple_change"), reload: async () => { await roadmapQ.reload(); await reload(); }, openItem: () => {} });
+  const ms = useMilestones({ data: roadmapQ.data, phone, canChange: can("create_simple_change"), reload: async () => { await roadmapQ.reload(); await reloadAll(); }, openItem: () => {} });
   // The plan's code is the PRD's own (its roadmap-wide code may differ); else its name.
   const milestoneOf = (code: string, name: string) => {
     const mine = ms?.list.filter((m) => m.prd?.slug === read.prd.slug) ?? [];
