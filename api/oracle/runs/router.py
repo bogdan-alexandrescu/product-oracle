@@ -533,7 +533,10 @@ async def get_inbox(
 async def get_inbox_counts(principal: CurrentPrincipal, db: TenantDB) -> InboxCountsOut:
     """The Inbox's counts alone (the rails' badges): ``total`` as GET /v1/inbox's, and the
     part of it the Simple Roadmap tab counts too; the rows shown only are not read."""
-    return await service.inbox_counts(db, principal)
+    from oracle.review.inbox import counting
+
+    with counting():
+        return await service.inbox_counts(db, principal)
 
 
 @router.post(

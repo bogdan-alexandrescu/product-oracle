@@ -2392,18 +2392,25 @@ async def inbox_rows(
     me = getattr(principal, "user_id", None)
     if me is None or principal.run_id is not None or principal.run_token_id is not None:
         return [], []
+    from oracle.review.inbox import counts_only
+
+    # inbox-counts: the Inbox's counts read the proposals waiting for me alone (the decisions
+    # on mine are never counted), as one light roadmap read routes them; no row's detail.
+    counting = counts_only()
     since = company_time.now() - timedelta(days=DONE_DAYS)
+    mine_decided = (
+        (SimpleChange.by == me)
+        & SimpleChange.status.in_(("accepted", "declined"))
+        & (SimpleChange.decided_at >= since)
+    )
     # One read: open proposals (routed to whoever decides now), and decisions on mine.
     rows = list(
         await db.scalars(
             select(SimpleChange)
             .where(
                 (SimpleChange.status == "proposed")
-                | (
-                    (SimpleChange.by == me)
-                    & SimpleChange.status.in_(("accepted", "declined"))
-                    & (SimpleChange.decided_at >= since)
-                )
+                if counting
+                else (SimpleChange.status == "proposed") | mine_decided
             )
             .order_by(
                 SimpleChange.decided_at.desc().nulls_last(),
@@ -2413,8 +2420,16 @@ async def inbox_rows(
         )
     )
     waiting = [c for c in rows if c.status == "proposed"]
+    read_: service.Read | None = None
     if waiting:
-        read_ = await service.load(db)
+        # inbox-counts: the light read routes as the full one does (the items, their tracks'
+        # owners and the roadmaps' deciders); the plain read is read once per read
+        # (drafts.one_read), shared with the drafts pass below when I see no drafts.
+        read_ = (
+            await service.load(db, light=True)
+            if counting
+            else await drafts.once("roadmap_read", lambda: service.load(db))
+        )
         owners = await _company_owners(db)
         by_id = read_.by_id()
         qs = await _questions(db, waiting)
@@ -2437,6 +2452,8 @@ async def inbox_rows(
                 and d.status != "proposed"
             )
         ]
+    if counting:
+        return [_counted(c, seen) for c in waiting], []
     decided = [c for c in rows if c.status != "proposed"]
     if not waiting and not decided:
         return [], []
@@ -2466,7 +2483,13 @@ async def inbox_rows(
 
     asked = await agenda.meetings_of(db, {c.session_id for c in waiting + decided})
     # inbox-meeting-proposals: whether I may accept or decline each waiting one now.
-    v = await _view(db, principal, waiting) if waiting else None
+    v = None
+    if waiting:
+        # The drafts pass: the plain read again when I see no drafts (the same read).
+        overlays = await drafts.overlays_for(db, principal)
+        v = await _view(
+            db, principal, waiting, await service.load(db, overlays) if overlays else read_
+        )
     # inbox-meeting-proposals owner: the waiting ones asked through Ask Oracle (a card
     # applied outside a meeting became the proposal).
     via_ask = (
@@ -2527,3 +2550,14 @@ async def inbox_rows(
             for c in decided
         ],  # fmt: skip
     )
+
+
+def _counted(c: SimpleChange, seen: datetime | None) -> InboxSimpleChange:
+    """inbox-counts: a proposal waiting for me as the Inbox's counts read it, from its own
+    fields alone (its item's title, author's name and meeting are not read)."""
+    return InboxSimpleChange(
+        id=c.id, op=c.op, status=c.status, item_id=None, item_title=None,  # type: ignore[arg-type]
+        document_id=c.document_id, by=c.by, by_name="", at=c.at, decided_by=c.decided_by,
+        decided_at=c.decided_at, reason=c.reason, decision_reason=c.decision_reason,
+        state="new" if seen is None or c.at > seen else "open",
+    )  # fmt: skip
