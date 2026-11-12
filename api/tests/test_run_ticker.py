@@ -823,12 +823,31 @@ async def test_a_job_whose_calls_keep_overrunning_fails_after_its_attempts(
     assert out["llm_jobs"]["ran"] == 0 and len(claude.calls) == llm_jobs.MAX_ATTEMPTS
 
 
+class _TickAsyncio:
+    """The router's ``asyncio``, keeping the tick's hard-limit timeout so a test can fire
+    it at a chosen moment instead of racing the wall clock."""
+
+    def __init__(self) -> None:
+        self.hard_limit: asyncio.Timeout | None = None
+
+    def __getattr__(self, name: str):
+        return getattr(asyncio, name)
+
+    def timeout(self, delay: float | None) -> asyncio.Timeout:
+        self.hard_limit = asyncio.timeout(delay)
+        return self.hard_limit
+
+
 async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
     client, ticker_on, claude, monkeypatch
 ):
     tenant_id = await _backlog(client, 1)
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 0.01)
-    monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 1.0)
+    # The cut is fired while the job reads its inputs, not left to a short hard limit: under
+    # load the tick's earlier work outran 1 s, so the job was cut before it was claimed, or
+    # was not claimed and the tick ended uncut (CI, Nov 11).
+    tick = _TickAsyncio()
+    monkeypatch.setattr(ticker, "asyncio", tick)
     reading = asyncio.Event()
     started = asyncio.Event()
 
@@ -836,6 +855,7 @@ async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
         # Reading the job's inputs outlives the tick: no model call has started.
         if not reading.is_set():
             started.set()
+            tick.hard_limit.reschedule(asyncio.get_running_loop().time())
             await asyncio.sleep(30)
         return await ask("review_comments", {"job": str(job.id)})
 
@@ -850,7 +870,6 @@ async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
     assert (job.account_label, job.input_tokens, job.cost_usd) == (None, None, None)
     # Its claim is released: the next tick runs it.
     reading.set()
-    monkeypatch.setattr(ticker, "HARD_LIMIT_SECONDS", 240.0)
     out = (await client.post(PATH, headers=bearer(id_token()))).json()
     assert out["llm_jobs"]["succeeded"] == 1
     [job] = await _jobs(tenant_id)
