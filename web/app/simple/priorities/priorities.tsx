@@ -2724,8 +2724,9 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   // milestone-rename (the owner, Nov 10): each milestone in place, through the Roadmap's own card and rights (a PRD
   // milestone's name goes straight in for the PRD's owner, else asks them); the roadmap's read gives its milestones.
+  // A change reads it again once, with every other read on the page (reloadAll: each useQuery reads again).
   const roadmapQ = useQuery<Schemas["SimpleRoadmapOut"]>("simple-priorities-milestones", () => unwrap(api.GET("/v1/simple/roadmap", {})));
-  const ms = useMilestones({ data: roadmapQ.data, phone, canChange: can("create_simple_change"), reload: async () => { await roadmapQ.reload(); await reloadAll(); }, openItem: () => {} });
+  const ms = useMilestones({ data: roadmapQ.data, phone, canChange: can("create_simple_change"), reload: reloadAll, openItem: () => {} });
   // The plan's code is the PRD's own (its roadmap-wide code may differ); else its name.
   const milestoneOf = (code: string, name: string) => {
     const mine = ms?.list.filter((m) => m.prd?.slug === read.prd.slug) ?? [];
@@ -2984,7 +2985,15 @@ function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan
     // The items and drafts by every goal they serve, not only their first (an item's own goals).
     const serves = (r: { goal?: { title: string } | null; goal_ids?: string[] }) => (r.goal_ids?.length ? r.goal_ids.includes(g.id) : !!r.goal && sameGoal(r.goal.title, title));
     for (const r of data.rows) if (serves(r)) add(r.code, r.title, [r.item_id, r.feature_id], lift(r.goal_ids), r.own_key ?? undefined, keptKr(r.goal_ids));
-    for (const r of [...data.unranked, ...data.drafts]) if (serves(r)) add(r.code, r.title, [r.item_id], lift(r.goal_ids), undefined, keptKr(r.goal_ids));
+    for (const r of data.unranked) if (serves(r)) add(r.code, r.title, [r.item_id], lift(r.goal_ids), undefined, keptKr(r.goal_ids));
+    // A linked draft (shown on its feature's row) is that feature's slice: it counts once with it, by the row's feature
+    // and own key; never a draft only named as the row (a same-name twin is another feature).
+    const rowById = new Map(data.rows.map((r) => [r.feature_id, r]));
+    for (const r of data.drafts) {
+      if (!serves(r)) continue;
+      const row = r.linked && r.row_feature_id ? rowById.get(r.row_feature_id) : undefined;
+      add(r.code, r.title, [r.item_id, row?.feature_id], lift(r.goal_ids), row?.own_key ?? undefined, keptKr(r.goal_ids));
+    }
     return [...out.values()];
   };
 }
