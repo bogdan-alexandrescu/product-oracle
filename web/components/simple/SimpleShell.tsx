@@ -15,8 +15,8 @@ import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { LINK_KINDS } from "@/lib/roadmap-links";
 import { api, unwrap } from "@/lib/api/client";
-import { loadWaiting } from "@/lib/simple-waiting";
-import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
+import { onReadChanged, onReadFailed, STALE_OK } from "@/lib/api/shared-reads";
+import { onWaitingChanged, railInbox, railQuestions, readAgainLater, retryWait, waitingCount } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
@@ -82,7 +82,8 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   }, []);
   // fresh: a page change or a change to what waits (not a re-read of a failed part): it drops the
   // re-read waiting to run, so no part is read twice at once; the back-off goes on.
-  const read = useCallback((parts: Part[], fresh: boolean) => {
+  // staleOk: false for a part whose read again failed elsewhere, so it is read now and never shown from before.
+  const read = useCallback((parts: Part[], fresh: boolean, staleOk = true) => {
     if (fresh) {
       pending.current?.();
       pending.current = null;
@@ -90,7 +91,7 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
     const { signal } = aborts.current;
     const mine = parts.map((p) => (seq.current[p] = (seq.current[p] ?? 0) + 1));
     inflight.current += 1;
-    void Promise.allSettled(parts.map((p) => PART_READS[p](signal))).then((results) => {
+    void Promise.allSettled(parts.map((p) => PART_READS[p](signal, staleOk))).then((results) => {
       inflight.current -= 1;
       if (signal.aborted) return;
       const next: Got = {};
@@ -114,6 +115,12 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   useEffect(() => {
     if (enabled) read(["waiting", "roadmap", "inbox", "questions", "goals"], true);
   }, [enabled, pathname, changes, read]);
+  // simple-call-budget: a part read since (by the page, or behind the counts shown) answered
+  // something new: that part reads it again (shared, so no call), the rest keep their waits.
+  useEffect(() => onReadChanged((url) => PART_BY_URL.has(url) && read([PART_BY_URL.get(url)!], false)), [read]);
+  // counts-failed-part: a read again of a part's list failed (the page's, or one behind the count shown):
+  // that part reads it now, not stale-ok, so it shows no number rather than the last one.
+  useEffect(() => onReadFailed((url) => PART_BY_URL.has(url) && read([PART_BY_URL.get(url)!], false, false)), [read]);
   const meetingsPath = pathname.startsWith("/simple/meetings") ? pathname : "";
   useEffect(() => {
     if (enabled) read(["meetings"], true);
@@ -124,28 +131,12 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   const failedParts = PARTS.filter((p) => got[p]?.ok === false).join(",");
   useEffect(() => {
     if (!enabled || !failedParts || inflight.current > 0) return;
-    let onShow: (() => void) | null = null;
-    const cancel = () => {
-      clearTimeout(t);
-      if (onShow) document.removeEventListener("visibilitychange", onShow);
-    };
     // The failed parts are read again together, after the wait of the one that failed most.
     const tries = Math.max(...(failedParts.split(",") as Part[]).map((p) => fails.current[p] ?? 1));
-    const again = () => {
+    const cancel = readAgainLater(retryWait(tries - 1), () => {
       pending.current = null;
       read(failedParts.split(",") as Part[], false);
-    };
-    // A hidden tab holds the read back until it is shown again, while the wait keeps counting:
-    // a tab hidden past its wait reads at once when shown.
-    const t = setTimeout(() => {
-      if (!document.hidden) return again();
-      onShow = () => {
-        if (document.hidden) return;
-        document.removeEventListener("visibilitychange", onShow!);
-        again();
-      };
-      document.addEventListener("visibilitychange", onShow);
-    }, retryWait(tries - 1));
+    });
     pending.current = cancel;
     return () => {
       cancel();
@@ -211,27 +202,32 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
 
 /**
  * The parts the rail's counts add up, each read on its own. The rail's own reads stop when it
- * unmounts (`signal`); the reads it shares with the page (the one list, the Inbox and the questions,
- * lib/waiting) run on for the page, and the rail only drops their answers.
+ * unmounts (`signal`); a read it shares with the page (lib/api/shared-reads) runs on for the page.
+ * simple-call-budget: each is stale-ok, so moving between pages shows the counts read a moment
+ * ago at once instead of reading every list again; an answer that changed since reads them again.
  */
+const rail = (staleOk: boolean) => (staleOk ? { headers: { [STALE_OK]: "1" } } : {});
 const PART_READS = {
-  waiting: () => loadWaiting(),
+  waiting: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/decisions/waiting", { ...rail(staleOk), signal })),
   // A failed light count falls back to the one list (never a failed part).
-  roadmap: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/roadmap/waiting", { signal })).catch(() => null),
-  inbox: () => loadInbox(),
-  questions: () => loadMyQuestions(),
-  goals: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } }, signal })),
-  meetings: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/meetings", { signal })),
+  roadmap: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/roadmap/waiting", { ...rail(staleOk), signal })).catch(() => null),
+  inbox: (signal: AbortSignal, staleOk: boolean) => railInbox(signal, staleOk),
+  questions: (signal: AbortSignal, staleOk: boolean) => railQuestions(signal, staleOk),
+  goals: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } }, ...rail(staleOk), signal })),
+  meetings: (signal: AbortSignal, staleOk: boolean) => unwrap(api.GET("/v1/simple/meetings", { ...rail(staleOk), signal })),
 };
+const PART_BY_URL = new Map<string, Part>([
+  ["/v1/simple/decisions/waiting", "waiting"],
+  ["/v1/simple/roadmap/waiting", "roadmap"],
+  ["/v1/inbox", "inbox"],
+  ["/v1/inbox/questions", "questions"],
+  ["/v1/simple/goal-suggestions?status=open", "goals"],
+  ["/v1/simple/meetings", "meetings"],
+]);
 type Part = keyof typeof PART_READS;
 type Reads = { [P in Part]: Awaited<ReturnType<(typeof PART_READS)[P]>> };
 type Got = { [P in Part]?: { ok: true; value: Reads[P] } | { ok: false } };
 const PARTS = Object.keys(PART_READS) as Part[];
-
-/** How long the rail waits to read again a part whose read failed: 15 s, doubling with each failure in a row, at most 5 min. */
-const RETRY_MS = 15_000;
-const RETRY_MAX_MS = 5 * 60_000;
-const retryWait = (tries: number) => Math.min(RETRY_MS * 2 ** tries, RETRY_MAX_MS);
 
 /** A count whose part failed (counts-wait review): its words say so, or alone when no number shows. */
 function failedWords(words: string, n: number): string {

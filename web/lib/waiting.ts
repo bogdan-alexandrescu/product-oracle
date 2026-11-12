@@ -1,6 +1,7 @@
 "use client";
 
 import { api, unwrap } from "@/lib/api/client";
+import { forgetReads, STALE_OK } from "@/lib/api/shared-reads";
 
 /**
  * What waits on the signed-in person: the Inbox's rows and the questions asked of them
@@ -25,6 +26,43 @@ function shared<T>(key: string, load: () => Promise<T>): Promise<T> {
 export const loadInbox = () => shared("inbox", () => unwrap(api.GET("/v1/inbox")));
 
 type Inbox = Awaited<ReturnType<typeof loadInbox>>;
+
+/**
+ * simple-call-budget: the rails' badges read the Inbox and my questions stale-ok
+ * (lib/api/shared-reads), so a move between pages shows the count read a moment ago at once;
+ * RAIL_URLS' answers changing since reads them again (onReadChanged).
+ */
+const rail = (staleOk: boolean) => (staleOk ? { headers: { [STALE_OK]: "1" } } : {});
+export const railInbox = (signal?: AbortSignal, staleOk = true) => unwrap(api.GET("/v1/inbox", { ...rail(staleOk), signal }));
+export const railQuestions = (signal?: AbortSignal, staleOk = true) => unwrap(api.GET("/v1/inbox/questions", { ...rail(staleOk), signal }));
+export const RAIL_URLS = ["/v1/inbox", "/v1/inbox/questions"];
+
+/** How long a rail waits to read again a count whose read failed: 15 s, doubling with each failure in a row, at most 5 min. */
+const RETRY_MS = 15_000;
+const RETRY_MAX_MS = 5 * 60_000;
+export const retryWait = (tries: number) => Math.min(RETRY_MS * 2 ** tries, RETRY_MAX_MS);
+
+/**
+ * counts-failed-part: runs `again` after `wait` ms, never while the tab is hidden: a hidden tab
+ * holds it back until it is shown again, while the wait keeps counting, so a tab hidden past its
+ * wait reads at once when shown. Returns the cancel.
+ */
+export function readAgainLater(wait: number, again: () => void): () => void {
+  let onShow: (() => void) | null = null;
+  const t = setTimeout(() => {
+    if (!document.hidden) return again();
+    onShow = () => {
+      if (document.hidden) return;
+      document.removeEventListener("visibilitychange", onShow!);
+      again();
+    };
+    document.addEventListener("visibilitychange", onShow);
+  }, wait);
+  return () => {
+    clearTimeout(t);
+    if (onShow) document.removeEventListener("visibilitychange", onShow);
+  };
+}
 
 /**
  * What waits on me, as the rail badge, Home and /inbox count it: each new or open item
@@ -102,6 +140,7 @@ export function onWaitingChanged(fn: () => void): () => void {
 /** Forget what is cached without telling anyone: the next read fetches. */
 export function invalidateWaiting() {
   cache.clear();
+  forgetReads();
 }
 
 /**

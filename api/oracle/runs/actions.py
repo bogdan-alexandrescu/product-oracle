@@ -1051,9 +1051,18 @@ async def _actions(db: AsyncSession, checkpoint_ids: list[uuid.UUID]) -> list[Ch
 
 
 async def read_ahead(db: AsyncSession, cps: list[Checkpoint], runs: dict[uuid.UUID, Run]) -> None:
-    """In one Inbox call (oracle.runs.batch): the checkpoints' segments and draft actions in
-    two reads, and their items' traces together (oracle.runs.reasons.read_ahead), for their
-    reviews to share."""
+    """In one Inbox call (oracle.runs.batch): the checkpoints' draft actions and segments in
+    two reads, their items' traces together (oracle.runs.reasons.read_ahead), and the
+    baseline rows of the runs at Confirm the baseline (oracle.baseline.from_run.read_ahead),
+    for their reviews and gates to share."""
+    from oracle.baseline import from_run
+
+    if not cps:
+        return
+    rows = await _actions(db, [c.id for c in cps])
+    for c in cps:
+        batch.put(("actions", c.id), [r for r in rows if r.checkpoint_id == c.id])
+    await from_run.read_ahead(db, [c.run_id for c in cps if c.kind in gate.LIVE_KINDS])
     seqs = {
         (c.run_id, s)
         for c in cps
@@ -1069,9 +1078,6 @@ async def read_ahead(db: AsyncSession, cps: list[Checkpoint], runs: dict[uuid.UU
     }
     for key in seqs:
         batch.put(("segment", *key), found.get(key))
-    rows = await _actions(db, [c.id for c in cps if c.kind in ITEM_FILES])
-    for c in cps:
-        batch.put(("actions", c.id), [r for r in rows if r.checkpoint_id == c.id])
     runs_items = []
     for c in cps:
         name, seq = ITEM_FILES.get(c.kind), (c.payload or {}).get("segment_seq")

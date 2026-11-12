@@ -7,10 +7,16 @@
 import type { BrandingIn, BrandingOut, BrandLogo, LogoVariant } from "./branding-types";
 import { ApiError, MOCK_MODE } from "./client";
 import { mockFetch } from "./mock/server";
+import { forgetReads } from "./shared-reads";
 
 export * from "./branding-types";
 
-const send = (req: Request) => (MOCK_MODE ? mockFetch(req) : fetch(req));
+// A write skips the API client, so it drops the shared reads itself (./shared-reads), before and after.
+const send = (req: Request) => {
+  if (req.method === "GET") return MOCK_MODE ? mockFetch(req) : fetch(req);
+  forgetReads();
+  return (MOCK_MODE ? mockFetch(req) : fetch(req)).finally(forgetReads);
+};
 
 async function call<T>(method: string, path: string, body?: BodyInit, json = false): Promise<T> {
   const res = await send(

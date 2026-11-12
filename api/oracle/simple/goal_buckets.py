@@ -9,7 +9,8 @@ links, the same records Baseline edits.
   With ``seen`` (the name, measure, target and date as the form read them), a goal
   changed since is refused with 409.
 - ``POST .../goals/{id}/archive``: archive a goal; features that serve another goal too
-  keep it (now first), the rest go to ``to_goal_id`` or are left with no goal.
+  keep it (now first), the rest go to ``to_goal_id`` or are left with no goal. With
+  ``to_goal_id`` the roadmap items that name the goal as their own move there too.
 - ``POST .../features/{id}/move``: the feature's first goal link becomes ``to_goal_id``;
   its link to ``from_goal_id`` is dropped.
 - ``POST .../goals/{id}/unarchive``: approver and up; an archived goal (``archived``)
@@ -140,11 +141,20 @@ class GoalSnap(BaseModel):
     on_roadmap: bool = True
 
 
+class ItemGoalsSnap(BaseModel):
+    """A roadmap item's own goals (its ``goal_ids``) as they were."""
+
+    item_id: uuid.UUID
+    goal_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
 class GoalBucketsUndo(BaseModel):
     """What a write changed, as it was before: Undo puts exactly this back."""
 
     goals: list[GoalSnap] = Field(default_factory=list)
     features: list[FeatureSnap] = Field(default_factory=list)
+    # goal-delete-dated: the items whose own goal an Archive moved.
+    items: list[ItemGoalsSnap] = Field(default_factory=list)
     # A goal the write added: Undo archives it again.
     added_goal_id: uuid.UUID | None = None
     # The API's signature over the rest: Undo takes only an undo a write gave.
@@ -511,6 +521,48 @@ async def move_off(db: AsyncSession, g: Entity, to_goal_id: uuid.UUID | None) ->
     return before
 
 
+async def move_items_off(
+    db: AsyncSession,
+    goal_id: uuid.UUID,
+    to_goal_id: uuid.UUID | None,
+    after: dict[uuid.UUID, list[uuid.UUID]] | None = None,
+) -> list[ItemGoalsSnap]:
+    """The roadmap items that name the goal (those in Trash too, so one restored later does
+    not name it) lose it: an item that serves another live goal too keeps that one as its
+    own (now first), as :func:`move_off` keeps a feature's; the rest serve ``to_goal_id``
+    instead, or no goal. Their goals as they were, for Undo (and as they are now in
+    ``after``, so Restore knows an item untouched since)."""
+    rows = list(
+        await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.goal_ids.contains([goal_id]))
+            .execution_options(**{INCLUDE_TRASHED: True})
+            .with_for_update()
+        )
+    )
+    others = {i for r in rows for i in r.goal_ids or [] if i != goal_id}
+    live = set(
+        await db.scalars(
+            select(Entity.id).where(
+                Entity.id.in_(others), Entity.type == "goal", Entity.status != "rejected"
+            )
+        )
+    )
+    before = []
+    for row in rows:
+        before.append(ItemGoalsSnap(item_id=row.id, goal_ids=list(row.goal_ids)))
+        ids = [i for i in row.goal_ids if i != goal_id]
+        if any(i in live for i in ids):
+            row.goal_ids = sorted(ids, key=lambda i: i not in live)
+        elif to_goal_id is None or to_goal_id in ids:
+            row.goal_ids = ids
+        else:
+            row.goal_ids = [to_goal_id, *ids]
+        if after is not None:
+            after[row.id] = list(row.goal_ids)
+    return before
+
+
 def moved_off_links(
     snap: FeatureSnap, goal_id: uuid.UUID, to_goal_id: uuid.UUID | None
 ) -> list[GoalLinkSnap]:
@@ -546,6 +598,8 @@ async def archive(
         if to.id == g.id or to.status == "rejected":
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick another goal")
     undo = GoalBucketsUndo(goals=[_goal_snap(g)], features=await move_off(db, g, to_goal_id))
+    # With no goal picked the items leave it too (they show under No goal); Undo puts them back.
+    undo.items = await move_items_off(db, g.id, to_goal_id)
     g.status = "rejected"
     now = company_time.now()
     g.attrs = {**(g.attrs or {}), "archived_at": now.isoformat()}
@@ -614,6 +668,15 @@ async def undo_goal_buckets(
     for f in body.features:
         await _entity(db, f.feature_id, "feature")
         await _restore_links(db, f)
+    for item in body.items:
+        row = await db.scalar(
+            select(RoadmapItem)
+            .where(RoadmapItem.id == item.item_id)
+            .execution_options(**{INCLUDE_TRASHED: True})
+            .with_for_update()
+        )
+        if row is not None:
+            row.goal_ids = list(item.goal_ids)
     if body.added_goal_id is not None:
         (await _entity(db, body.added_goal_id, "goal")).status = "rejected"
     await db.commit()

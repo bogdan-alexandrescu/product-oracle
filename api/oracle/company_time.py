@@ -21,6 +21,13 @@ DEFAULT_ZONE = "America/Los_Angeles"
 async def company_time_zone(db: AsyncSession) -> str:
     """The Company time zone (read through the alignment report's settings, which carry
     it); the default when it cannot be read."""
+    from oracle.runs import batch
+
+    # Read once per Inbox call (oracle.runs.batch), however many rows tell the day.
+    return await batch.once("company_time_zone", lambda: _time_zone(db))
+
+
+async def _time_zone(db: AsyncSession) -> str:
     from oracle.reports.alignment import load_settings
 
     try:

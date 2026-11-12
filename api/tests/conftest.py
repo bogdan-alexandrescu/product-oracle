@@ -32,6 +32,8 @@ os.environ["ORACLE_LLM_JOBS_WORKER_SECONDS"] = "0"
 os.environ["ORACLE_DRAFT_ROADMAPS_START"] = "0"
 # The test build: users and invites at example.com and other reserved domains are fine.
 os.environ["ORACLE_ALLOW_RESERVED_EMAIL_DOMAINS"] = "1"
+# Simple's unvalidated model builder checks its keywords (oracle.simple.service._built).
+os.environ["ORACLE_CHECK_BUILT"] = "1"
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402

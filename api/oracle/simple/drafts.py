@@ -49,6 +49,9 @@ decider resumes it in a new session (:func:`resume`).
 """
 
 import uuid
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -75,7 +78,7 @@ from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError as ImportRejected
 from oracle.review.models import DocumentReviewPolicy
-from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackPrd
+from oracle.roadmap.models import TRACK_ORDER, ProductTrack, RoadmapItem, TrackPrd
 from oracle.roadmap.tracks import on_prd
 from oracle.simple.models import (
     RoadmapDateSuggestion,
@@ -417,7 +420,82 @@ class Who:
     owners: dict[uuid.UUID, set[uuid.UUID]] = field(default_factory=dict)
 
 
+# roadmap-speed: within one read (:func:`one_read`) each document's deciders, reviewers and
+# owners are read once, however many parts of the read ask (doc id -> its slice of a Who),
+# and so are the tables every part reads whole (:func:`once`).
+_read_memo: ContextVar[dict[Any, Any] | None] = ContextVar("_read_memo", default=None)
+
+
+@contextmanager
+def one_read() -> Iterator[None]:
+    """Within this block (a read that writes nothing) :func:`who` reads each document once
+    and :func:`once` each of its keys once."""
+    token = _read_memo.set({"who": {}})
+    try:
+        yield
+    finally:
+        _read_memo.reset(token)
+
+
+def reading() -> bool:
+    """Within :func:`one_read`."""
+    return _read_memo.get() is not None
+
+
+async def once(key: str, load: Callable[[], Awaitable[Any]]) -> Any:
+    """``load()``, read once within :func:`one_read` (callers copy what they change)."""
+    memo = _read_memo.get()
+    if memo is None:
+        return await load()
+    if key not in memo:
+        memo[key] = await load()
+    return memo[key]
+
+
+async def all_tracks(db: AsyncSession) -> list[ProductTrack]:
+    """Every track in the company's order (track-order), read once per read."""
+
+    async def load() -> list[ProductTrack]:
+        return list(await db.scalars(select(ProductTrack).order_by(*TRACK_ORDER)))
+
+    return await once("tracks", load)
+
+
+async def all_users(db: AsyncSession) -> list[User]:
+    """Every member, disabled or not, read once per read (a company's few dozen)."""
+
+    async def load() -> list[User]:
+        return list(await db.scalars(select(User)))
+
+    return await once("users", load)
+
+
 async def who(db: AsyncSession, doc_ids: set[uuid.UUID]) -> Who:
+    memo = (_read_memo.get() or {}).get("who")
+    if memo is None or not doc_ids:
+        return await _who(db, doc_ids)
+    if missing := set(doc_ids) - set(memo):
+        found = await _who(db, missing)
+        for doc in missing:
+            owners = found.owners.get(doc)
+            memo[doc] = (
+                doc in found.deciders,
+                found.deciders.get(doc),
+                found.reviewers.get(doc, []),
+                set(owners) if owners is not None else None,
+            )
+    out = Who()
+    for doc in doc_ids:
+        has_policy, decider, reviewers, owners = memo[doc]
+        if has_policy:
+            out.deciders[doc] = decider
+            out.reviewers[doc] = list(reviewers)
+        if owners is not None:
+            out.owners[doc] = set(owners)
+    return out
+
+
+async def _who(db: AsyncSession, doc_ids: set[uuid.UUID]) -> Who:
     out = Who()
     if not doc_ids:
         return out
@@ -428,15 +506,31 @@ async def who(db: AsyncSession, doc_ids: set[uuid.UUID]) -> Who:
         out.reviewers[p.document_id] = list(p.mandatory_reviewer_ids or [])
     # A roadmap's owners own its tracks; a PRD's (a one-pager's draft, S5) own the tracks
     # it is the PRD of, as oracle.simple.one_pager.who reads them.
-    for t in await db.scalars(
-        select(ProductTrack).where(
-            or_(
-                ProductTrack.roadmap_document_id.in_(doc_ids),
-                on_prd(doc_ids),
-            ),
-            ProductTrack.owner_id.is_not(None),
+    tracks = (
+        [
+            t
+            for t in await all_tracks(db)
+            if t.owner_id is not None
+            and (
+                t.roadmap_document_id in doc_ids
+                or any(
+                    link.prd_document_id in doc_ids and link.state == "linked"
+                    for link in t.prd_links
+                )
+            )
+        ]
+        if _read_memo.get() is not None
+        else await db.scalars(
+            select(ProductTrack).where(
+                or_(
+                    ProductTrack.roadmap_document_id.in_(doc_ids),
+                    on_prd(doc_ids),
+                ),
+                ProductTrack.owner_id.is_not(None),
+            )
         )
-    ):
+    )
+    for t in tracks:
         for doc in {t.roadmap_document_id, *t.prd_ids} & doc_ids:
             out.owners.setdefault(doc, set()).add(t.owner_id)
     return out
@@ -555,11 +649,16 @@ def can_publish(principal: Any, d: SimpleDraft, w: Who) -> bool:
 
 
 async def open_drafts(db: AsyncSession) -> list[SimpleDraft]:
-    return list(
-        await db.scalars(
-            select(SimpleDraft).where(SimpleDraft.status.in_(OPEN)).order_by(SimpleDraft.created_at)
+    async def load() -> list[SimpleDraft]:
+        return list(
+            await db.scalars(
+                select(SimpleDraft)
+                .where(SimpleDraft.status.in_(OPEN))
+                .order_by(SimpleDraft.created_at)
+            )
         )
-    )
+
+    return list(await once("open_drafts", load))
 
 
 async def counts(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, int]:
@@ -697,7 +796,14 @@ async def session_overlays(db: AsyncSession, session_id: uuid.UUID) -> dict[uuid
 
 
 async def overlays_for(db: AsyncSession, principal: Any) -> dict[uuid.UUID, dict[str, Any]]:
-    return (await reader(db, principal)).overlays
+    """:func:`reader`'s overlays alone (roadmap-speed): the drafts' own roadmaps' deciders,
+    reviewers and owners decide who sees each, not the proposals' or the counts."""
+    from oracle.roadmap import company
+
+    history = await company.history_ids(db)
+    ds = [d for d in await open_drafts(db) if d.document_id not in history]
+    w = await who(db, {d.document_id for d in ds})
+    return {d.document_id: dict(d.overlay or {}) for d in ds if sees(principal, d, w)}
 
 
 def _withdrawn():
@@ -999,12 +1105,19 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
 
 
 async def outs(
-    db: AsyncSession, principal: Any, ds: list[SimpleDraft], blocked: list[str] | None = None
+    db: AsyncSession,
+    principal: Any,
+    ds: list[SimpleDraft],
+    blocked: list[str] | None = None,
+    w: Who | None = None,
 ) -> list[SimpleDraftOut]:
-    w = await who(db, {d.document_id for d in ds})
+    """``w``: who of (at least) the drafts' documents, when the caller read it."""
+    if w is None:
+        w = await who(db, {d.document_id for d in ds})
     docs, numbers = await _refs(db, ds)
-    n = await counts(db, ds)
     logs = await _logs(db, ds)
+    # Each draft's count is its log's length (counts() reads the same changes, not undone).
+    n = {d.id: len(logs.get(d.id, [])) for d in ds}
     from oracle.simple import prd_roadmap
 
     sources = {d.id: await prd_roadmap.sources_out(db, d) for d in ds}
@@ -1115,7 +1228,7 @@ async def listing(
             raise DraftError(404, "No such roadmap")
         ds = [d for d in ds if d.document_id == doc.id]
     w = await who(db, {d.document_id for d in ds})
-    return await outs(db, principal, [d for d in ds if sees(principal, d, w)])
+    return await outs(db, principal, [d for d in ds if sees(principal, d, w)], w=w)
 
 
 async def _get(db: AsyncSession, principal: Any, draft_id: uuid.UUID) -> tuple[SimpleDraft, Who]:

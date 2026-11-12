@@ -1229,6 +1229,8 @@ class SimplePriorityRow(BaseModel):
     own_key: str | None = None
     title: str
     goal: SimplePriorityGoal | None = None
+    # The item's own goals in order (Archive and Delete of a goal list it by any of them).
+    goal_ids: list[str] = []
     milestone: str | None = None
     horizon: Literal["now", "next", "later"] | None = None
     goal_value: float | None = None
@@ -1419,6 +1421,8 @@ class SimplePriorityDraft(BaseModel):
     code: str
     title: str
     goal: SimplePriorityGoal | None = None
+    # The item's own goals in order (Archive and Delete of a goal list it by any of them).
+    goal_ids: list[str] = []
     roadmap: SimpleDocRef
     applies: bool = False
     # Non-draft items of the same roadmap, same goal first (at most 8).
@@ -1433,6 +1437,8 @@ class SimplePriorityUnranked(BaseModel):
     code: str
     title: str
     goal: SimplePriorityGoal | None = None
+    # The item's own goals in order (Archive and Delete of a goal list it by any of them).
+    goal_ids: list[str] = []
     roadmap: SimpleDocRef
 
 

@@ -26673,6 +26673,8 @@ export interface components {
             goals?: components["schemas"]["GoalSnap"][];
             /** Features */
             features?: components["schemas"]["FeatureSnap"][];
+            /** Items */
+            items?: components["schemas"]["ItemGoalsSnap"][];
             /** Added Goal Id */
             added_goal_id?: string | null;
             /** Sig */
@@ -30030,6 +30032,19 @@ export interface components {
             id: string;
             /** Changes */
             changes: components["schemas"]["FieldDiff"][];
+        };
+        /**
+         * ItemGoalsSnap
+         * @description A roadmap item's own goals (its ``goal_ids``) as they were.
+         */
+        ItemGoalsSnap: {
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Goal Ids */
+            goal_ids?: string[];
         };
         /** ItemHistoryOut */
         ItemHistoryOut: {
@@ -43686,6 +43701,11 @@ export interface components {
             /** Title */
             title: string;
             goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            /**
+             * Goal Ids
+             * @default []
+             */
+            goal_ids: string[];
             roadmap: components["schemas"]["SimpleDocRef"];
             /**
              * Applies
@@ -43803,6 +43823,11 @@ export interface components {
             /** Title */
             title: string;
             goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            /**
+             * Goal Ids
+             * @default []
+             */
+            goal_ids: string[];
             /** Milestone */
             milestone?: string | null;
             /** Horizon */
@@ -43893,6 +43918,11 @@ export interface components {
             /** Title */
             title: string;
             goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            /**
+             * Goal Ids
+             * @default []
+             */
+            goal_ids: string[];
             roadmap: components["schemas"]["SimpleDocRef"];
         };
         /** SimpleQuarter */

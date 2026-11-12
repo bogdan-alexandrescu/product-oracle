@@ -83578,6 +83578,13 @@
             "type": "array",
             "title": "Features"
           },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemGoalsSnap"
+            },
+            "type": "array",
+            "title": "Items"
+          },
           "added_goal_id": {
             "anyOf": [
               {
@@ -92255,6 +92262,29 @@
           "changes"
         ],
         "title": "ItemFieldsDiff"
+      },
+      "ItemGoalsSnap": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Goal Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id"
+        ],
+        "title": "ItemGoalsSnap",
+        "description": "A roadmap item's own goals (its ``goal_ids``) as they were."
       },
       "ItemHistoryOut": {
         "properties": {
@@ -129660,6 +129690,14 @@
               }
             ]
           },
+          "goal_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Goal Ids",
+            "default": []
+          },
           "roadmap": {
             "$ref": "#/components/schemas/SimpleDocRef"
           },
@@ -129946,6 +129984,14 @@
               }
             ]
           },
+          "goal_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Goal Ids",
+            "default": []
+          },
           "milestone": {
             "anyOf": [
               {
@@ -130165,6 +130211,14 @@
                 "type": "null"
               }
             ]
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Goal Ids",
+            "default": []
           },
           "roadmap": {
             "$ref": "#/components/schemas/SimpleDocRef"

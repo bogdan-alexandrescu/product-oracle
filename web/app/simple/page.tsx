@@ -7,9 +7,9 @@ import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
 import { Walk } from "@/app/simple/_home/walk";
 import { runStopsOf, StopCard } from "@/app/simple/_home/run-stops";
+import { LEAD } from "@/app/simple/_home/skeleton";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
 import { GtWaitingLine } from "@/app/simple/_home/gt-flags";
-import { LEAD } from "@/app/simple/_home/skeleton";
 import { MarkForItem, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Icon } from "@/components/ds/Icon";
 import { Button } from "@/components/ds/Button";
@@ -448,6 +448,8 @@ export default function SimpleHome() {
     [brokenMine, "broken link", "broken links"],
     [stopCount, "run", "runs"],
     [myTasks.length, "task", "tasks"],
+    // home-greeting-fit: the links I may propose fixes for come last, among the kinds "and more" may hold.
+    [brokenOthers, "fix to propose", "fixes to propose"],
   ];
   // Review: the Inbox's rows (the rail's count) read in a short sentence of their own after the
   // others, with no number as the others ("More waits in your Inbox."); alone, as the others do.
@@ -466,11 +468,9 @@ export default function SimpleHome() {
     ? "Checking what waits on you…"
     : reads
     ? "Here is where the plan stands."
-    : brokenOthers === 0
-      ? waits
-      : brokenMine + decisionCount + stopCount + myTasks.length + inboxCount + (proposalRows === toDecide ? toDecide.length : 0) === 0
-        ? `You can propose fixes for ${brokenWords}.`
-        : `${waits} You can also propose fixes for ${brokenWords}.`;
+    : brokenOthers > 0 && inboxCount === 0 && parts.slice(0, -1).every(([n]) => n === 0)
+      ? `You can propose fixes for ${brokenWords}.`
+      : waits;
   // Nothing waits and no review is due (a new company): no walk to offer. Unknown until its reads answer.
   const counted = [waiting, changes, roadmap, meeting, inbox, asked].every((q) => q.data !== undefined || !!q.error);
   const nothingToWalk = counted && stopCount + decisionCount + toDecide.length + mine.length + broken.length + myTasks.length + inboxCount === 0 && !meeting.data?.next;
@@ -729,7 +729,8 @@ export default function SimpleHome() {
           {/* F-28, the owner's pick (Nov 5): a hidden Set up comes back from Home's menu. */}
           {setupHidden && <HomeMenu onShowSetup={() => void hideSetup(false)} />}
         </div>
-        <p className={LEAD}>
+        {/* home-greeting-fit: while what waits is unknown, the skeleton's lines, so the band stays put. */}
+        <p className={known ? "simple-lead" : LEAD}>
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>

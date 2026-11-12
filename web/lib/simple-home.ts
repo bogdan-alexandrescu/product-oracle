@@ -578,11 +578,15 @@ export function greeting(hour: number): string {
 /**
  * One sentence on what waits, by name: "Decisions and a broken link wait on you." The counts
  * are the summary tiles' alone (qa-simple-home-15), so the sentence does not repeat them.
+ * home-greeting-fit (the owner's "Shorter sentence", Nov 11): `parts` come in order of
+ * importance and the sentence names at most three, then "and more" ("Decisions, proposals,
+ * broken links and more wait on you."), so its longest form fits the lines Home keeps for it.
  */
 export function waitSentence(parts: [number, string, string][]): string {
   const shown = parts.filter(([n]) => n > 0).map(([n, one, many]) => (n === 1 ? `a ${one}` : many));
   if (shown.length === 0) return "Nothing waits on you today.";
-  const list = shown.length === 1 ? shown[0] : `${shown.slice(0, -1).join(", ")} and ${shown.at(-1)}`;
+  const named = shown.length > 3 ? [...shown.slice(0, 3), "more"] : shown;
+  const list = named.length === 1 ? named[0] : `${named.slice(0, -1).join(", ")} and ${named.at(-1)}`;
   const total = parts.reduce((s, [n]) => s + n, 0);
   return `${list[0].toUpperCase()}${list.slice(1)} ${total === 1 ? "waits" : "wait"} on you.`;
 }

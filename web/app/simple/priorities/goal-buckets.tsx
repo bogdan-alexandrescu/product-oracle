@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { storeGoalOrder } from "@/components/simple/GoalOrder";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { GOAL_CHANGED_EVENT, sendCardChanged } from "@/lib/api/simple-chat";
+import { GOAL_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -435,8 +435,17 @@ export function FeatureRows({
 }
 
 /** GB2 a: Archive goal asks first, and says where the goal's features go. */
-/** A goal's features as ArchiveDialog counts them: the plan's, or with no dated plan the bucket's. */
-export type GoalFeatures = (goal: string) => { code: string; name: string; slices: Plan["slices"] }[];
+/**
+ * A goal's features as ArchiveDialog counts and lists them: every live feature serving it, in the
+ * plan or not (its slices, when the plan has it). `tag` is the code shown, null for none people know.
+ */
+export type GoalFeatures = (goal: string) => { code: string; name: string; slices: Plan["slices"]; tag?: string | null; goal_ids?: string[] }[];
+
+/** The live goal other than `goal` the feature or item keeps as its own (an item's own goals first, a key result as its goal, else the feature's links), if any. */
+export function otherGoal(gb: Buckets, f: ReturnType<GoalFeatures>[number], goal: string): string | undefined {
+  const ids = f.goal_ids?.length ? f.goal_ids : (featureOf(gb, f.code, f.name)?.goal_ids ?? []);
+  return ids.find((g) => g !== goal && gb.goals.some((x) => x.id === g));
+}
 
 /**
  * EG1 a: the same question for Delete goal (eg1-a-hard: it goes to Settings > Trash first), and,
@@ -447,15 +456,17 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, 
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const listOf: GoalFeatures = (title) => (plan ? planFeatures(plan, title) : (featuresOf?.(title) ?? []));
+  // goal-delete-dated: every feature serving the goal, the plan's or not, so none loses its goal unasked.
+  const listOf: GoalFeatures = (title) => featuresOf?.(title) ?? (plan ? planFeatures(plan, title) : []);
   const list = listOf(goal.title);
   const others = gb.goals.filter((g) => g.id !== goal.id);
   const titleOf = (id: string) => gb.goals.find((g) => g.id === id)?.title ?? "";
-  const multi = list.filter((f) => (featureOf(gb, f.code, f.name)?.goal_ids ?? []).some((g) => g !== goal.id));
+  const multi = list.filter((f) => otherGoal(gb, f, goal.id));
   const rest = list.length - multi.length;
   const ms = [...new Set(list.flatMap((f) => f.slices.map((s) => s.milestone)))].sort();
   const msLabel = (code: string) => `${code} ${plan?.milestones.find((m) => m.code === code)?.name ?? ""}`.trim();
   const feats = `${list.length} ${list.length === 1 ? "feature" : "features"}`;
+  const inPlan = list.filter((f) => f.slices.length).length;
   const picked = mode === "none" || !!to || rest === 0;
   const holds = to ? listOf(titleOf(to)).length + rest : 0;
   const verb = kind === "delete" ? "Delete" : "Archive";
@@ -474,20 +485,28 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, 
         </h2>
         {kind === "delete" && <p className="mt-1 text-[15px] text-text">It goes to Settings &gt; Trash for 30 days.</p>}
         <p className="mt-1 text-[15px] text-text2">
-          {!plan
-            ? list.length
+          {!list.length
+            ? "It holds no features."
+            : !plan || !ms.length
               ? `It holds ${feats}.`
-              : "It holds no features."
-            : list.length
-              ? `It holds ${feats} with work in ${andList(ms.map(msLabel))}. The milestones stay as planned; their work moves with the features.`
-              : "It holds no features in the plan. The milestones stay as planned."}
+              : `It holds ${feats}${inPlan < list.length ? `, ${inPlan} with work in` : " with work in"} ${andList(ms.map(msLabel))}. The milestones stay as planned; their work moves with the features.`}
         </p>
+        {list.length > 0 && (
+          <ul data-testid="goal-features" className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-line px-3 py-1 text-[15px]">
+            {list.map((f) => (
+              <li key={f.code} data-testid="goal-feature" className="flex items-center gap-2 py-0.5">
+                {f.tag !== null && <CodeTag code={f.tag ?? f.code} title={f.name} />}
+                <span className="min-w-0 truncate">{f.name}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         {list.length > 0 && (
           <div className="mt-3 grid gap-2 text-[15px]">
             {multi.length > 0 && (
               <p>
                 {multi.length} {multi.length === 1 ? "serves" : "serve"} another goal too and {multi.length === 1 ? "goes" : "go"} there:{" "}
-                <span className="text-text2">{multi.map((f) => `${f.name} → ${titleOf(featureOf(gb, f.code, f.name)!.goal_ids.find((g) => g !== goal.id)!)}`).join("; ")}</span>
+                <span className="text-text2">{multi.map((f) => `${f.name} → ${titleOf(otherGoal(gb, f, goal.id)!)}`).join("; ")}</span>
               </p>
             )}
             {rest > 0 && (
@@ -707,10 +726,9 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
     try {
       const out = await go();
       setError(null);
-      // The note shows with the page as the change left it, so its place is checked against that.
+      // The note shows with the page as the change left it, so its place is checked against that
+      // (reload reads the page and an open feature panel again, once: sendCardChanged).
       await reload();
-      // An open feature panel reads its goal again.
-      sendCardChanged();
       setNote({ id: ++noteId, text, undo: out.undo });
       return true;
     } catch (e) {
@@ -812,7 +830,6 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
       try {
         await unwrap(api.POST("/v1/simple/goal-buckets/undo", { body: u }));
         await reload();
-        sendCardChanged();
         setNote({ id: ++noteId, text: <>Undone: every goal and link is back as it was.</> });
       } catch (e) {
         setError(errorMessage(e));

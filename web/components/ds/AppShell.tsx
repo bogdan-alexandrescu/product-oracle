@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { HopPanel } from "@/components/hop/HopPanel";
@@ -14,7 +14,8 @@ import { resetMockData } from "@/lib/api/mock/server";
 import { leave } from "@/lib/leave-guard";
 import { useMe } from "@/lib/me";
 import { useSettingsTabs } from "@/lib/settings-tabs";
-import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
+import { onReadChanged, onReadFailed } from "@/lib/api/shared-reads";
+import { onWaitingChanged, railInbox, railQuestions, readAgainLater, retryWait, waitingCount } from "@/lib/waiting";
 import { ScreenSubjectProvider } from "@/lib/screen-subject";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
@@ -161,21 +162,74 @@ function isActive(pathname: string, d: Dest, home?: string): boolean {
  */
 function useInboxCount(enabled: boolean): number | null {
   const pathname = usePathname();
-  const [n, setN] = useState<number | null>(null);
+  // Each list's last answer, or null when its last read failed (counts-failed-part: a failed part shows no number).
+  const [got, setGot] = useState<{ [P in InboxPart]?: InboxReads[P] | null }>({});
   const [changes, setChanges] = useState(0);
+  // As Simple's rail (SimpleShell's useSimpleCounts): a list's answer older than its latest read is
+  // dropped; fails counts each list's failed reads in a row, which back its re-reads off.
+  const seq = useRef<Partial<Record<InboxPart, number>>>({});
+  const fails = useRef<Partial<Record<InboxPart, number>>>({});
+  const inflight = useRef(0);
+  const pending = useRef<(() => void) | null>(null);
+  const [settled, setSettled] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
+  // fresh: a page change or a change to what waits drops the re-read waiting to run.
+  // staleOk: false for a list whose read again failed elsewhere, so it is read now and never shown from before.
+  const read = useCallback((parts: InboxPart[], fresh: boolean, staleOk = true) => {
+    if (fresh) {
+      pending.current?.();
+      pending.current = null;
+    }
+    const mine = parts.map((p) => (seq.current[p] = (seq.current[p] ?? 0) + 1));
+    inflight.current += 1;
+    void Promise.allSettled(parts.map((p) => INBOX_READS[p](undefined, staleOk))).then((results) => {
+      inflight.current -= 1;
+      const next: { [P in InboxPart]?: InboxReads[P] | null } = {};
+      results.forEach((r, i) => {
+        const p = parts[i]!;
+        if (seq.current[p] !== mine[i]) return;
+        fails.current[p] = r.status === "fulfilled" ? 0 : (fails.current[p] ?? 0) + 1;
+        Object.assign(next, { [p]: r.status === "fulfilled" ? r.value : null });
+      });
+      setGot((g) => ({ ...g, ...next }));
+      setSettled((n) => n + 1);
+    });
+  }, []);
   useEffect(() => {
-    if (!enabled) return;
-    let alive = true;
-    Promise.all([loadInbox(), loadMyQuestions().catch(() => [])])
-      .then(([inbox, questions]) => alive && setN(waitingCount(inbox, questions)))
-      .catch(() => undefined);
+    if (enabled) read(["inbox", "questions"], true);
+  }, [enabled, pathname, changes, read]);
+  // simple-call-budget: read stale-ok, so a read since that answered something new reads that list again (shared, no call).
+  useEffect(() => onReadChanged((url) => enabled && INBOX_PART_BY_URL.has(url) && read([INBOX_PART_BY_URL.get(url)!], false)), [enabled, read]);
+  // A read again of either list that failed: read it now, not stale-ok; a failed list shows no number.
+  useEffect(() => onReadFailed((url) => enabled && INBOX_PART_BY_URL.has(url) && read([INBOX_PART_BY_URL.get(url)!], false, false)), [enabled, read]);
+  // counts-failed-part: a failed list is read again with Simple's rail's back-off (15 s, 30 s, ... up
+  // to 5 min, never while the tab is hidden), so the badge comes back without a page change.
+  const failed = INBOX_PARTS.filter((p) => got[p] === null).join(",");
+  useEffect(() => {
+    if (!enabled || !failed || inflight.current > 0) return;
+    const parts = failed.split(",") as InboxPart[];
+    const cancel = readAgainLater(retryWait(Math.max(...parts.map((p) => fails.current[p] ?? 1)) - 1), () => {
+      pending.current = null;
+      read(parts, false);
+    });
+    pending.current = cancel;
     return () => {
-      alive = false;
+      cancel();
+      if (pending.current === cancel) pending.current = null;
     };
-  }, [enabled, pathname, changes]);
-  return n;
+  }, [enabled, failed, settled, read]);
+  // Either list failing shows no number, never the last one nor a part of it.
+  return got.inbox && got.questions ? waitingCount(got.inbox, got.questions) : null;
 }
+
+const INBOX_READS = { inbox: railInbox, questions: railQuestions };
+type InboxPart = keyof typeof INBOX_READS;
+type InboxReads = { [P in InboxPart]: Awaited<ReturnType<(typeof INBOX_READS)[P]>> };
+const INBOX_PARTS = Object.keys(INBOX_READS) as InboxPart[];
+const INBOX_PART_BY_URL = new Map<string, InboxPart>([
+  ["/v1/inbox", "inbox"],
+  ["/v1/inbox/questions", "questions"],
+]);
 
 /** The link's name with its badge: "Inbox, 11 waiting" (qa-shell-14: a span's aria-label is not read). */
 export const badgedName = (label: string, n: number | null | undefined) => (n ? `${label}, ${n} waiting` : undefined);
@@ -472,7 +526,8 @@ function Navs() {
   // While /v1/me loads, keep the rail so a signed-in page never jumps.
   // qa-docs-59: Present mode covers the screen; no rail or account button under (or over) its controls.
   const shown = (loading || !!me) && !bare(pathname) && !/\/present\/?$/.test(pathname);
-  const inbox = useInboxCount(shown);
+  // Simple's pages count in Simple's rail (its own back-off), so the badge reads only where it shows.
+  const inbox = useInboxCount(shown && modeOf(pathname) !== "simple");
   const documentHome = useDocumentHome(pathname);
   const changeHome = useChangeHome(pathname);
   const home = documentHome ?? changeHome;

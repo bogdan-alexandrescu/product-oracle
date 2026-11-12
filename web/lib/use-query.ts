@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/api/client";
-import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
+import { CARD_CHANGED_EVENT, type CardChangedDetail } from "@/lib/api/simple-chat";
 import { CompanyZoneContext } from "@/lib/me";
 
 export type Query<T> = {
@@ -115,7 +115,10 @@ export function useQuery<T>(key: string, load: () => Promise<T>, { keepPrevious 
   // card, an Undo) is said once (sendCardChanged); every query on the page reads again, so the
   // page behind the panel and its counts show it at once.
   useEffect(() => {
-    const on = () => void run();
+    const on = (e: Event) => {
+      const read = run();
+      (e as CustomEvent<CardChangedDetail | null>).detail?.wait(read);
+    };
     window.addEventListener(CARD_CHANGED_EVENT, on);
     return () => window.removeEventListener(CARD_CHANGED_EVENT, on);
   }, [run]);

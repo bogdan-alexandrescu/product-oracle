@@ -1,6 +1,7 @@
 import createClient from "openapi-fetch";
 
 import { mockFetch } from "./mock/server";
+import { sharedReads } from "./shared-reads";
 import type { components, paths } from "./schema";
 
 /**
@@ -10,10 +11,11 @@ import type { components, paths } from "./schema";
 export const MOCK_MODE = process.env.NEXT_PUBLIC_API_MOCKS === "1";
 
 // Same-origin: next.config.ts proxies /v1/* to the API, so the session cookie
-// set by POST /v1/auth/login is sent on every call.
+// set by POST /v1/auth/login is sent on every call. Reads of the same URL are shared
+// (./shared-reads, simple-call-budget).
 export const api = createClient<paths>({
   baseUrl: "",
-  ...(MOCK_MODE ? { fetch: mockFetch } : {}),
+  fetch: sharedReads(MOCK_MODE ? mockFetch : (req) => globalThis.fetch(req)),
 });
 
 export type Schemas = components["schemas"];

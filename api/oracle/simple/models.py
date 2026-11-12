@@ -143,6 +143,16 @@ class SimpleChange(TenantScoped, Base):
             postgresql_where=text("undoes_id IS NOT NULL"),
         ),
         Index("ix_simple_changes_document_at", "document_id", "at"),
+        # simple-reads-perf: the history newest first, the open proposals every Simple page
+        # counts (oracle.simple.drafts.reader), the changes in drafts, the cuts Trash names.
+        Index("ix_simple_changes_at_seq", "at", "seq"),
+        Index(
+            "ix_simple_changes_proposed",
+            "document_id",
+            postgresql_where=text("status = 'proposed'"),
+        ),
+        Index("ix_simple_changes_draft_ids", "draft_ids", postgresql_using="gin"),
+        Index("ix_simple_changes_op", "op"),
     )
 
     session_id: Mapped[uuid.UUID | None] = mapped_column(

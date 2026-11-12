@@ -42,6 +42,7 @@ suggestions carry ``flow`` and request a visual when made.
 """
 
 import difflib
+import functools
 import logging
 import re
 import uuid
@@ -109,8 +110,14 @@ TEXT_MAX = 1000
 # --------------------------------------------------------------------------- helpers
 
 
+@functools.lru_cache(maxsize=8192)
 def _norm(title: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", (title or "").casefold()))
+
+
+@functools.lru_cache(maxsize=8192)
+def _words(norm: str) -> frozenset[str]:
+    return frozenset(norm.split())
 
 
 def _like(a: str, b: str) -> float:
@@ -118,8 +125,50 @@ def _like(a: str, b: str) -> float:
     na, nb = _norm(a), _norm(b)
     if not na or not nb:
         return 0.0
-    wa, wb = set(na.split()), set(nb.split())
+    wa, wb = _words(na), _words(nb)
     return max(difflib.SequenceMatcher(None, na, nb).ratio(), len(wa & wb) / len(wa | wb))
+
+
+_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789 "
+
+
+@functools.lru_cache(maxsize=8192)
+def _title_info(title: str) -> tuple[str, frozenset[str], tuple[int, ...]]:
+    """A title as the matcher compares it: normalized, its words, how many of each character
+    (_norm leaves only _ALPHABET's)."""
+    norm = _norm(title)
+    return norm, _words(norm), tuple(norm.count(c) for c in _ALPHABET)
+
+
+@functools.lru_cache(maxsize=8192)
+def _matcher(norm: str) -> difflib.SequenceMatcher:
+    """A matcher holding ``norm`` as its second sequence: its index is built once per title,
+    not once per pair (callers set the first sequence and read the ratio at once)."""
+    m = difflib.SequenceMatcher(None)
+    m.set_seq2(norm)
+    return m
+
+
+def _looks_like(a: str, b: str) -> float | None:
+    """:func:`_like` when it reaches LOOKS_LIKE, else None; the same score, but a pair whose
+    character ratio cannot reach it (its upper bounds: the lengths', then the shared
+    characters', SequenceMatcher's real_quick_ratio and quick_ratio) is never matched in
+    full. The matcher runs per suggestion over every item and feature."""
+    na, wa, ca = _title_info(a or "")
+    nb, wb, cb = _title_info(b or "")
+    if not na or not nb:
+        return None
+    words = len(wa & wb) / len(wa | wb)
+    if words < LOOKS_LIKE:
+        size = len(na) + len(nb)
+        if 2.0 * min(len(na), len(nb)) / size < LOOKS_LIKE:
+            return None
+        if 2.0 * sum(map(min, ca, cb)) / size < LOOKS_LIKE:
+            return None
+    m = _matcher(nb)
+    m.set_seq1(na)
+    score = max(m.ratio(), words)
+    return score if score >= LOOKS_LIKE else None
 
 
 def quarter_span(value: str) -> tuple[date, date]:
@@ -518,12 +567,19 @@ async def create(
     if s is not None:
         s.status, s.change_id, s.item_id = "accepted", c.id, uuid.UUID(target["item_id"])
         s.decided_by, s.decided_at = me, now
-    flags = await changes._flags(db, c, await drafts.overlays_for(db, principal)) if applies else []
+    flags, after_read = [], None
+    if applies:
+        # The answer is told on the read the flags were built on (one roadmap build).
+        flags, after_read = await changes._flags_and_read(
+            db, c, await drafts.overlays_for(db, principal)
+        )
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
                        data={"op": c.op, "target": target, "after": after,
                              "document_id": str(doc.id)})  # fmt: skip
     await db.commit()
-    return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=flags)
+    return SimpleChangeResult(
+        change=await changes.one_out(db, principal, c, after_read), flags=flags
+    )
 
 
 async def decide(
@@ -554,11 +610,15 @@ async def decide(
     c.status = "accepted" if action == "accept" else "declined"
     c.decided_by, c.decided_at, c.decision_reason = me, now, reason
     await db.flush()
-    flags = await changes._flags(db, c, await drafts.overlays_for(db, principal))
+    flags, after_read = await changes._flags_and_read(
+        db, c, await drafts.overlays_for(db, principal)
+    )
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
                        data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
     await db.commit()
-    return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=flags)
+    return SimpleChangeResult(
+        change=await changes.one_out(db, principal, c, after_read), flags=flags
+    )
 
 
 async def undo(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChangeResult:
@@ -649,8 +709,8 @@ def reconcile(
             continue
         if roadmap is not None and e.roadmap.id != roadmap:
             continue
-        score = _like(title, e.row.title)
-        if score >= LOOKS_LIKE:
+        score = _looks_like(title, e.row.title)
+        if score is not None:
             # Its display code (F-06) or none, never its key: the name says the rest.
             code = e.code or ""
             items.append((score, SimpleMatch(kind="item", id=str(e.row.id), code=code,
@@ -659,8 +719,8 @@ def reconcile(
     for f in features:
         if f.id in with_item:
             continue
-        score = _like(title, f.title)
-        if score >= LOOKS_LIKE:
+        score = _looks_like(title, f.title)
+        if score is not None:
             code = prd_code(f.key) or ""
             feats.append((score, SimpleMatch(kind="feature", id=str(f.id), code=code,
                                              title=f.title)))  # fmt: skip
@@ -999,29 +1059,52 @@ async def run_goal_suggestions(s: AsyncSession, job: LlmJob, ask) -> dict[str, A
 # --------------------------------------------------------------------------- suggestions
 
 
+_ACTIVE = object()
+
+
 async def _job_document(
-    db: AsyncSession, goal: Entity, read_: service.Read | None = None
+    db: AsyncSession,
+    goal: Entity,
+    read_: service.Read | None = None,
+    active: Any = _ACTIVE,
+    first: dict[str, Document | None] | None = None,
 ) -> Document | None:
     """The roadmap a goal's suggestions job is filed under (and whose decider decides its
     suggestions): the company roadmap while there is one, else one holding its items, else
-    the company's first roadmap."""
-    if (found := await company.active(db)) is not None:
-        return found
+    the company's first roadmap. ``active``: company.active, when the caller read it;
+    ``first``: where a caller asking for several goals keeps the first roadmap, read once."""
+    if active is _ACTIVE:
+        active = await company.active(db)
+    if active is not None:
+        return active
     read_ = read_ or await service.load(db)
     for e in read_.entries:
         if e.goal is not None and e.goal.id == goal.id:
             return e.roadmap
-    return await db.scalar(
+    if first is not None and "doc" in first:
+        return first["doc"]
+    doc = await db.scalar(
         select(Document).where(Document.kind == "roadmap").order_by(Document.created_at).limit(1)
     )
+    if first is not None:
+        first["doc"] = doc
+    return doc
 
 
 async def _enqueue_suggestions(
-    db: AsyncSession, goal: Entity, origin: str, principal: Any
+    db: AsyncSession,
+    goal: Entity,
+    origin: str,
+    principal: Any,
+    read_: service.Read | None = None,
+    active: Any = _ACTIVE,
+    first: dict[str, Document | None] | None = None,
 ) -> LlmJob:
+    """``read_``, ``active``, ``first``: as :func:`_job_document`, for a caller queueing
+    several goals."""
     from oracle.jobs import service as jobs
 
-    doc = await _job_document(db, goal)
+    doc = await _job_document(db, goal, read_, active, first)
     if doc is None:
         raise ChangeError(409, "There is no roadmap yet")
     try:
@@ -1066,12 +1149,14 @@ async def suggest_for_empty_goals(db: AsyncSession) -> int:
     ):
         live.update(ids or [])
     done = set(await db.scalars(select(SimpleGoalAuto.goal_id)))
+    goals = [g for g in await _goals(db) if g.id not in live and g.id not in done]
+    # The company roadmap and the first roadmap, read once for every goal.
+    active = await company.active(db) if goals else None
+    first: dict[str, Document | None] = {}
     n = 0
-    for g in await _goals(db):
-        if g.id in live or g.id in done:
-            continue
+    for g in goals:
         try:
-            job = await _enqueue_suggestions(db, g, "auto", None)
+            job = await _enqueue_suggestions(db, g, "auto", None, read_, active, first)
         except ChangeError as e:
             log.info("S7: no automatic suggestions for goal %s: %s", g.key, e.detail)
             continue
@@ -1096,14 +1181,16 @@ def _brief(g: Entity) -> SimpleGoalBrief:
     return SimpleGoalBrief(id=str(g.id), key=g.key, title=g.title, position=goal_position(g.attrs))
 
 
-async def listing(
+async def readable(
     db: AsyncSession, principal: Any, goal_id: uuid.UUID | None, status: str | None
-) -> SimpleGoalSuggestionsOut:
+) -> tuple[list[Entity], list[SimpleGoalSuggestion], bool]:
+    """The confirmed goals (one, with ``goal_id``) and their suggestions the reader reads, oldest
+    first, as listing lists them (also the waiting list's, waiting_reads.goal_suggestions), and
+    whether the reader is an owner."""
     goals = await _goals(db)
     if goal_id is not None:
         goals = [g for g in goals if g.id == goal_id]
-    by_id = {g.id: g for g in goals}
-    q = select(SimpleGoalSuggestion).where(SimpleGoalSuggestion.goal_id.in_(list(by_id)))
+    q = select(SimpleGoalSuggestion).where(SimpleGoalSuggestion.goal_id.in_([g.id for g in goals]))
     if status:
         q = q.where(SimpleGoalSuggestion.status == status)
     rows = list(
@@ -1111,7 +1198,14 @@ async def listing(
     )
     # oracle.simple.quality: a suggestion that failed its checks twice is the owners' to look at.
     owner = has_role(principal.role, "owner")
-    rows = [r for r in rows if owner or not r.checks]
+    return goals, [r for r in rows if owner or not r.checks], owner
+
+
+async def listing(
+    db: AsyncSession, principal: Any, goal_id: uuid.UUID | None, status: str | None
+) -> SimpleGoalSuggestionsOut:
+    goals, rows, owner = await readable(db, principal, goal_id, status)
+    by_id = {g.id: g for g in goals}
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     live = _live_goals(read_)
     pending = set(
@@ -1122,6 +1216,7 @@ async def listing(
         )
     )
     features = await _features(db) if any(r.status == "open" for r in rows) else []
+    flows = await visuals.flows_for(db, "suggestion", [r.id for r in rows]) if visuals else {}
     names = await changes._names(db, {r.decided_by for r in rows if r.decided_by})
     rule = await deciding(db, principal, goals, read_)
     people = await _display_names(
@@ -1148,7 +1243,7 @@ async def listing(
                 looks_like=reconcile(r.title, read_.entries, features)
                 if r.status == "open"
                 else [],
-                flow=await _flow(db, "suggestion", r.id),
+                flow=flows.get(r.id),
                 can_accept=rule[r.goal_id][0] and r.status == "open",
                 can_reject=rule[r.goal_id][0] and r.status == "open",
                 proposed_by_name=people.get(r.proposed_by) if r.proposed_by else None,
@@ -1249,14 +1344,25 @@ async def _display_names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUI
 
 
 async def deciding(
-    db: AsyncSession, principal: Any, goals: list[Entity], read_: service.Read
+    db: AsyncSession,
+    principal: Any,
+    goals: list[Entity],
+    read_: service.Read,
+    who: bool = True,
+    docs: dict[uuid.UUID, Document | None] | None = None,
 ) -> dict[uuid.UUID, tuple[bool, uuid.UUID | None]]:
     """Per goal: whether the caller decides its suggestions (drafts.can_edit on the goal's
     roadmap: an owner, its decider, with none its owners who are approvers) and who decides
     them (the first of _route: the decider, else its approving owners, else the company's
-    owners)."""
-    docs = {g.id: await _job_document(db, g, read_) for g in goals}
-    w = await drafts.who(db, {d.id for d in docs.values() if d is not None})
+    owners; None without ``who``, for a caller that never names them: the waiting list).
+    ``docs``: filled with each goal's roadmap (:func:`_job_document`), for a caller that
+    needs them too."""
+    active = await company.active(db) if goals else None
+    first: dict[str, Document | None] = {}
+    docs = {} if docs is None else docs
+    for g in goals:
+        docs[g.id] = await _job_document(db, g, read_, active, first)
+    w = await drafts.who(db, {d.id for d in (docs[g.id] for g in goals) if d is not None})
     routes: dict[uuid.UUID, uuid.UUID | None] = {}
     out: dict[uuid.UUID, tuple[bool, uuid.UUID | None]] = {}
     for g in goals:
@@ -1266,7 +1372,7 @@ async def deciding(
                          None)  # fmt: skip
             continue
         if d.id not in routes:
-            routes[d.id] = next(iter(await _route(db, d.id, w)), None)
+            routes[d.id] = next(iter(await _route(db, d.id, w)), None) if who else None
         out[g.id] = (drafts.can_edit(principal, d.id, w), routes[d.id])
     return out
 
@@ -1297,8 +1403,8 @@ async def inbox_rows(
     goals = [g for g in await _goals(db) if g.id in {r.goal_id for r in rows}]
     by_id = {g.id: g for g in goals}
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
-    rule = await deciding(db, principal, goals, read_)
-    docs = {g.id: await _job_document(db, g, read_) for g in goals if rule[g.id][0]}
+    docs: dict[uuid.UUID, Document | None] = {}
+    rule = await deciding(db, principal, goals, read_, docs=docs)
     people = await _display_names(db, {r.proposed_by for r in rows if r.proposed_by})
     return [
         InboxSimpleGoalSuggestion(
@@ -1327,9 +1433,10 @@ async def _decide(db: AsyncSession, principal: Any, s: SimpleGoalSuggestion) -> 
     if goal is None:
         raise ChangeError(404, "No such suggestion")
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
-    if not (await deciding(db, principal, [goal], read_))[goal.id][0]:
+    docs: dict[uuid.UUID, Document | None] = {}
+    if not (await deciding(db, principal, [goal], read_, docs=docs))[goal.id][0]:
         raise ChangeError(403, DECIDER_ONLY)
-    return await _job_document(db, goal, read_)
+    return docs[goal.id]
 
 
 async def file_suggestion(

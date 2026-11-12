@@ -30,7 +30,8 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import company_time
@@ -1022,13 +1023,26 @@ async def views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, Vi
             select(SimplePrdPlan).where(SimplePrdPlan.document_id.in_(prd_ids))
         )
     }
-    latest: dict[uuid.UUID, DocumentVersion] = {}
-    for v in await db.scalars(
-        select(DocumentVersion)
-        .where(DocumentVersion.document_id.in_(prd_ids), DocumentVersion.approved_at.is_not(None))
-        .order_by(DocumentVersion.number)
-    ):
-        latest[v.document_id] = v
+    # roadmap-speed: each PRD's latest approved version alone, not every one's markdown; in
+    # the order of each PRD's first approved version number, PRDs that share one in
+    # document_id order (the query's, kept by the stable sort), so plan.current() picks
+    # the same first of equal spans every read.
+    approved = DocumentVersion.approved_at.is_not(None)
+    first = func.min(DocumentVersion.number).over(partition_by=DocumentVersion.document_id)
+    latest: dict[uuid.UUID, DocumentVersion] = {
+        v.document_id: v
+        for v, _ in sorted(
+            (
+                await db.execute(
+                    select(DocumentVersion, first)
+                    .where(DocumentVersion.document_id.in_(prd_ids), approved)
+                    .order_by(DocumentVersion.document_id, DocumentVersion.number.desc())
+                    .ext(distinct_on(DocumentVersion.document_id))
+                )
+            ).all(),
+            key=lambda row: row[1],
+        )
+    }
     accepted = await accepted_dates_of(db, set(latest))
     out: dict[uuid.UUID, View] = {}
     for pid, v in latest.items():

@@ -17,12 +17,14 @@
 import asyncio
 import io
 import re
+import threading
 import time
 
 import pytest
 from pypdf import PdfReader
 
 from oracle import safe_yaml
+from oracle.docs import parser
 from oracle.docs.parser import DraftError, parse_draft
 from oracle.export import pptx, render
 from oracle.export.pdf import pdf_available
@@ -156,23 +158,49 @@ async def test_slow_posts_do_not_make_a_small_honest_import_fail(client, monkeyp
     # Nested brackets (depth 10, closed): slow for markdown-it (seconds each), under every
     # linear cap. Four people post two each (one person has at most two parses at once).
     slow = FRONT + "\n".join(["[[[[[[[[[[a]]]]]]]]]] " * 800] * 10) + "\n"
+    # The slow parses wait on `release` before they start (no CPU used, so their budget is
+    # whole): the test, not the runner's speed, says when the pool is full.
+    real_parse = parser.parse_draft
+    release, holding, held = threading.Event(), threading.Lock(), []
+
+    def parse_draft(markdown: str):
+        if markdown.startswith(FRONT):
+            with holding:
+                held.append(threading.current_thread())
+            assert release.wait(60), "the slow parses were never released"
+        return real_parse(markdown)
+
+    monkeypatch.setattr(parser, "parse_draft", parse_draft)
     posters = [{"Authorization": f"Bearer {await api_token(ctx.tenant_id)}"} for _ in range(4)]
     posts = [
         asyncio.create_task(import_md(client, posters[i % 4], slow, doc=f"slow-{i}"))
         for i in range(8)
     ]
-    # The slow posts hold every worker of the parse pool and more wait for one. A busy
-    # machine takes a while to bring them to the parse stage: wait on that, not on a clock.
     pool = safe_yaml._EXECUTOR
-    deadline = time.monotonic() + 30
-    while not (len(pool._threads) == pool._max_workers and pool._work_queue.qsize()):
-        if time.monotonic() > deadline:
-            pytest.fail("the slow posts never filled the parse pool")
-        await asyncio.sleep(0.01)
-    resp = await import_md(client, owner, SMALL, doc="small")
+    try:
+        # The slow posts hold every worker of the parse pool and the other four wait for one.
+        await _until(lambda: len(held) == pool._max_workers and pool._work_queue.qsize() == 4)
+        small = asyncio.create_task(import_md(client, owner, SMALL, doc="small"))
+        # The small import waits behind them, longer than a parse may run: a queue wait
+        # that counted against its cap would refuse it.
+        await _until(lambda: pool._work_queue.qsize() == 5)
+        assert len(held) == pool._max_workers
+        await asyncio.sleep(safe_yaml.PARSE_SECONDS * safe_yaml.WALL_FACTOR + 0.3)
+    finally:
+        release.set()
+    resp = await small
     assert resp.status_code == 201, resp.text[:300]
     for done in await asyncio.gather(*posts):
         assert done.status_code == 422 and "too_slow" in done.text, done.text[:300]
+
+
+async def _until(condition, seconds: float = 60) -> None:
+    """Wait for ``condition`` (a state the test holds still, so it can not pass unseen)."""
+    deadline = time.monotonic() + seconds
+    while not condition():
+        if time.monotonic() > deadline:
+            pytest.fail("the parse pool never reached the expected state")
+        await asyncio.sleep(0.01)
 
 
 # --------------------------------------------------------------------------- script URLs
