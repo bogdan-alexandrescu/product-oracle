@@ -30,7 +30,7 @@ async function settled<T>(read: () => Promise<T>): Promise<T> {
 
 async function goalMap(page: Page) {
   await page.goto("/simple/goals");
-  await expect(page.getByTestId("gm-guardrail")).toBeVisible();
+  await expect(page.getByTestId("gm-legend-guardrail")).toBeVisible();
 }
 
 async function counts(page: Page): Promise<Counts> {

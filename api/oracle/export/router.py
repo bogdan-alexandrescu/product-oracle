@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import has_role, require_role
 from oracle.docs.schemas import Audience
-from oracle.export import offload, present
+from oracle.export import offload, present, render
 from oracle.export.deck import build_deck, render_deck_html, theme_class, unlink_code
 from oracle.export.pdf import PdfUnavailable, html_to_pdf, overflow_headers
 from oracle.export.render import (
@@ -189,7 +189,11 @@ async def export_version(
         )
     try:
         with offload.place(principal) as held:
-            ev = detached(await _load(db, doc, n, layer, audience))
+            ev = await _load(db, doc, n, layer, audience)
+            if fmt == "md" and ev.document.kind == "roadmap":
+                # Only the markdown export names the PRDs that feed a roadmap.
+                ev.prds = await render.feeding_prds(db, ev.version)
+            ev = detached(ev)
             await db.commit()  # no connection held while it waits for the pool
             content = await offload.run(held, render_export, ev, layer, fmt)
     except offload.Refused as e:

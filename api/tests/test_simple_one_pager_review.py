@@ -78,10 +78,11 @@ def test_plan_strip_cases(case):
             (i.get("record") or {}).get("id"),
             (i.get("record") or {}).get("name"),
             date.fromisoformat(i["milestoneStart"]) if i.get("milestoneStart") else None,
+            roadmap_code=i.get("roadmapCode"),
         )
         for i in case["items"]
     ]
-    got = plan_strip.strip(items, date.fromisoformat(case["today"]))
+    got = plan_strip.strip(items, date.fromisoformat(case["today"]), coded=case.get("coded", False))
     # The rules shared with the web's mirror; which items a row holds and its roadmap code are
     # the one-pager's.
     dumped = (

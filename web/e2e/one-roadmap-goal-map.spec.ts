@@ -22,31 +22,17 @@ async function open(page: Page) {
 test.describe("desktop", () => {
   test.use(DESKTOP);
 
-  test("the Goal map shows only the company roadmap's milestones and a new one joins them", async ({ page }) => {
-    // protects=the map reads the company roadmap's goal milestones alone and a proposed milestone shows
-    // among them; fails_when=the older roadmap's milestones show or the proposal is not on the map;
-    // no_claim=the API's roadmap pick (test_simple_goal_map_api).
+  test("the Goal map shows only the company roadmap's milestones", async ({ page }) => {
+    // protects=the map reads the company roadmap's goal milestones alone, in the milestone strip;
+    // fails_when=the older roadmap's milestones show; no_claim=the API's roadmap pick
+    // (test_simple_goal_map_api).
     await open(page);
     await page.goto("/simple/home");
     await page.getByTestId("simple-nav-goals").first().click();
     const map = page.getByTestId("gm-page");
     await expect(map).toBeVisible();
-    await expect(page.getByTestId("ld-milestone").filter({ hasText: "25 sign-ups per rep" })).toHaveCount(1);
+    await expect(page.getByTestId("gm-strip-milestone").filter({ hasText: "25 sign-ups per rep" })).toHaveCount(1);
     await expect(map).not.toContainText("15 sign-ups per rep");
     await expect(map).not.toContainText("$8k revenue per day");
-
-    await page.getByTestId("ld-edit").click();
-    await page.getByTestId("ld-column").nth(0).getByTestId("ld-add-milestone").click();
-    const ed = page.getByTestId("gm-editor");
-    await ed.getByLabel("Name").fill("40 sign-ups per rep");
-    await ed.getByLabel("Met when the reading is at least").fill("40");
-    await ed.locator("label", { hasText: "Scale per rep" }).click();
-    // A new milestone starts with nothing before it (gm1-a-open); its place is picked.
-    await expect(ed.getByLabel("Comes after").locator("option:checked")).toHaveText("Nothing: it can start now");
-    await ed.getByLabel("Comes after").selectOption({ label: "25 sign-ups per rep" });
-    await ed.getByTestId("gm-save").click();
-    await expect(page.getByTestId("gm-flash")).toContainText("Proposed: 40 sign-ups per rep.");
-    await expect(page.getByTestId("ld-milestone").filter({ hasText: "40 sign-ups per rep" })).toContainText("Proposed");
-    await expect(map).not.toContainText("15 sign-ups per rep");
   });
 });

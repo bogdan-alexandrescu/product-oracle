@@ -19,12 +19,43 @@ Test cards (protects / fails_when / no_claim):
   of the old code keeps them split.
 - test_a_goal_milestone_joins_a_prd_milestone_whose_name_it_leads: protects=a goal's and a
   PRD's milestone of one code and matching names are one.
+- test_a_goal_milestone_joins_its_twin_prd_milestone_of_another_code (goal map twins,
+  Nov 10): protects=a goal's own "M4 Agents onboarded" and a PRD's undated milestone of the
+  same name (the PRD's own code, its goal set) are one milestone with one code; a PRD
+  milestone with no goal joins too; fails_when=the twin keeps a code of its own.
+- test_a_goal_milestone_does_not_join_another_goals_prd_milestone ("Join only within the same
+  goal", the owner, Nov 11): protects=Goal 1's "Beta" (Nov 1) and Goal 2's PRD "Beta launch"
+  (Mar 2027) keep two codes, so Goal 2's "Pilot" (Dec 1) reads between them; fails_when=the
+  join dates "Beta" by the PRD's later date and "Pilot" reads M1.
+- test_a_joined_group_is_dated_by_the_goals_own_milestone: protects=a goal's "Beta" (Nov 1)
+  joined to its own PRD's "Beta launch" (Mar 2027) still reads before a Dec 1 milestone;
+  fails_when=the group goes by the PRD's date.
+- test_two_goals_own_milestones_do_not_share_one_prd_twin: protects=two goals' own "Beta"
+  and a PRD's "Beta" of no goal: at most one joins it, so two codes; fails_when=both read one.
+- test_a_goal_milestone_does_not_join_a_group_holding_another_goals_milestone (review of
+  797e41166, "Join only within the same goal", the owner, Nov 11): protects=a PRD's "M2 Beta"
+  of no goal (Dec 1) that Goal 1's PRD "M2 Beta" (Nov 1) and Goal 1's own "Beta" (Nov 1) joined
+  is Goal 1's: Goal 2's own "Beta" (Dec 1) keeps a code of its own; fails_when=all four read M1.
+- test_a_goal_milestone_joins_a_group_of_its_own_goal: protects=the same three without Goal
+  2's still read one code (same-goal joins still join); fails_when=Goal 1's own splits off.
+- test_a_twin_join_sees_every_join_by_code_in_either_goal_order (re-review of 7f200f5cf):
+  protects=a track "M1 Beta" (Dec 1) that a PRD's "M1 Beta" of no goal and Goal 2's own "M1
+  Beta" (Nov 15) joined by code is not Goal 1's: Goal 1's own "M3 Beta" (Nov 1) keeps M1 and
+  the rest read M2, whichever goal comes first; fails_when=with Goal 1 first all four read M1.
+- test_codes_do_not_depend_on_goal_or_list_order: protects=over a handful of fixed cases, every
+  goal order and every order of the list give the same codes (a joined group goes by its
+  earliest goal's own milestone, round-3 review); fails_when=any one differs; no_claim=two goals'
+  own milestones contending for one PRD milestone (the first goal in goal order takes it).
+- test_of_two_matching_prd_milestones_the_closest_date_joins: protects=a goal's "Beta" joins
+  the matching PRD milestone closest in date, then the one of its exact name, not the first by
+  id; fails_when=the exact name wins over the closer date.
 - test_no_name_is_hidden_by_a_join: protects=a name that matches neither keeps its own code.
 - test_roadmap_read_codes_and_renumber_on_move: protects=``GET /v1/simple/roadmap`` gives each
   goal milestone its roadmap code across goals, and moving one earlier renumbers the later
   ones; fails_when=codes stay per goal or do not follow a move; no_claim=the web.
 """
 
+import itertools
 import uuid
 from datetime import date
 from types import SimpleNamespace
@@ -134,6 +165,150 @@ def test_a_goal_milestone_joins_a_prd_milestone_whose_name_it_leads():
     own = gm("M1", "Measured", "2026-11-25")
     assign([own, prd], [], [], RANK)
     assert own.roadmap_code == prd.roadmap_code == "M1"
+
+
+@pytest.mark.parametrize("prd_goal", [G1, None])
+def test_a_goal_milestone_joins_its_twin_prd_milestone_of_another_code(prd_goal):
+    """Join whenever names match (the owner, Nov 9): the PRD's code (its plan's "M1") is not
+    the goal's ("M4"), and the PRD's milestone carries a goal of its own; still one."""
+    own = gm("M4", "Agents onboarded", "2026-12-31")
+    twin = gm("M1", "Agents onboarded", None, goal=prd_goal, prd=True)
+    other = gm("M2", "Pilot live", "2026-11-30", goal=G2)
+    assign([twin, own, other], [], [], RANK)
+    assert own.roadmap_code == twin.roadmap_code == "M2"
+    assert other.roadmap_code == "M1"
+
+
+def test_a_goal_milestone_does_not_join_another_goals_prd_milestone():
+    """Join only within the same goal (the owner, Nov 11)."""
+    beta = gm("M1", "Beta", "2026-11-01")
+    launch = gm("M1", "Beta launch", "2027-03-01", goal=G2, prd=True)
+    pilot = gm("M2", "Pilot", "2026-12-01", goal=G2)
+    assign([beta, launch, pilot], [], [], RANK)
+    assert [m.roadmap_code for m in (beta, pilot, launch)] == ["M1", "M2", "M3"]
+
+
+def test_a_joined_group_is_dated_by_the_goals_own_milestone():
+    beta = gm("M1", "Beta", "2026-11-01")
+    launch = gm("M1", "Beta launch", "2027-03-01", prd=True)
+    pilot = gm("M2", "Pilot", "2026-12-01", goal=G2)
+    assign([launch, beta, pilot], [], [], RANK)
+    assert beta.roadmap_code == launch.roadmap_code == "M1"
+    assert pilot.roadmap_code == "M2"
+
+
+def test_two_goals_own_milestones_do_not_share_one_prd_twin():
+    """At most one goal's own milestone joins a given PRD milestone; the other keeps its code."""
+    a = gm("M1", "Beta", "2026-11-01")
+    b = gm("M1", "Beta", "2026-11-01", goal=G2)
+    twin = gm("M3", "Beta", None, goal=None, prd=True)
+    assign([twin, b, a], [], [], RANK)
+    assert a.roadmap_code != b.roadmap_code
+    assert twin.roadmap_code == a.roadmap_code  # Goal 1 comes first in goal order
+
+
+def test_a_goal_milestone_does_not_join_a_group_holding_another_goals_milestone():
+    """Join only within the same goal, by the group a PRD milestone joined (review of 797e41166)."""
+    plain = gm("M2", "Beta", "2026-12-01", goal=None, prd=True)
+    prd1 = gm("M2", "Beta", "2026-11-01", prd=True)
+    own1 = gm("M1", "Beta", "2026-11-01")
+    own2 = gm("M1", "Beta", "2026-12-01", goal=G2)
+    assign([plain, prd1, own1, own2], [], [], RANK)
+    assert plain.roadmap_code == prd1.roadmap_code == own1.roadmap_code == "M1"
+    assert own2.roadmap_code == "M2"
+
+
+def test_a_goal_milestone_joins_a_group_of_its_own_goal():
+    plain = gm("M2", "Beta", "2026-12-01", goal=None, prd=True)
+    prd1 = gm("M2", "Beta", "2026-11-01", prd=True)
+    own1 = gm("M1", "Beta", "2026-11-01")
+    pilot = gm("M3", "Pilot", "2026-11-15", goal=G2)
+    assign([plain, prd1, own1, pilot], [], [], RANK)
+    assert plain.roadmap_code == prd1.roadmap_code == own1.roadmap_code == "M1"
+    assert pilot.roadmap_code == "M2"
+
+
+@pytest.mark.parametrize("rank", [RANK, {G1: 1, G2: 0}], ids=["goal 1 first", "goal 2 first"])
+def test_a_twin_join_sees_every_join_by_code_in_either_goal_order(rank):
+    """Join only within the same goal (re-review of 7f200f5cf): the joins by code come first, so
+    a twin join sees Goal 2's milestone in the track's group whatever the goal order."""
+    track = tm("M1 Beta", "2026-12-01", [])
+    plain = gm("M1", "Beta", "2026-12-01", goal=None, prd=True)
+    own1 = gm("M3", "Beta", "2026-11-01")
+    own2 = gm("M1", "Beta", "2026-11-15", goal=G2)
+    assign([plain, own1, own2], [track], [item(track.id)], rank)
+    assert own1.roadmap_code == "M1"
+    assert track.roadmap_code == plain.roadmap_code == own2.roadmap_code == "M2"
+
+
+def _order_cases():
+    """Fixed cases of distinct dates (no tie for the goal order to break)."""
+    track = tm("M1 Beta", "2026-12-01", [])
+    yield (
+        [gm("M1", "Beta", "2026-12-01", goal=None, prd=True), gm("M3", "Beta", "2026-11-01"),
+         gm("M1", "Beta", "2026-11-15", goal=G2)],
+        [track], [item(track.id)],
+    )  # fmt: skip
+    yield (
+        [gm("M2", "Beta", "2026-12-01", goal=None), gm("M2", "Beta", "2026-11-20", prd=True),
+         gm("M2", "Beta", "2026-11-15", goal=G2), gm("M3", "Beta", "2026-11-01")],
+        [], [],
+    )  # fmt: skip
+    yield (
+        [gm("M2", "Beta", "2026-12-01", goal=None, prd=True),
+         gm("M2", "Beta", "2026-11-01", prd=True), gm("M1", "Beta", "2026-11-01"),
+         gm("M1", "Beta", "2026-12-01", goal=G2)],
+        [], [],
+    )  # fmt: skip
+    track = tm("M1 Measured and mapped", "2026-11-27", [])
+    yield (
+        [gm("M1", "Measured", "2026-11-25"), gm("M1", "measured and MAPPED", None, goal=G2),
+         gm("M1", "Mapped", "2026-11-20", goal=G2)],
+        [track], [item(track.id)],
+    )  # fmt: skip
+    yield (
+        [gm("M1", "Beta", "2026-11-01"), gm("M1", "Beta launch", "2027-03-01", goal=G2, prd=True),
+         gm("M2", "Pilot", "2026-12-01", goal=G2)],
+        [], [],
+    )  # fmt: skip
+    # Round-3 review: a group the roadmap's own "M2 Beta" holds goes by its earliest goal's own
+    # milestone (Goal 1's, Nov 1), not the first goal's, so Goal 1's "M1 Pilot" reads M2 either way.
+    yield (
+        [gm("M2", "Beta", "2026-12-01", goal=None), gm("M2", "Beta", "2026-11-01"),
+         gm("M2", "Beta", "2026-11-20", goal=G2), gm("M1", "Pilot", "2026-11-10")],
+        [], [],
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize("case", list(_order_cases()))
+def test_codes_do_not_depend_on_goal_or_list_order(case):
+    """With no two dates alike, every goal order and list order give the same codes. The one
+    documented exception, not exercised here: when two goals' own milestones contend for one PRD
+    milestone, the first goal in goal order takes it."""
+    goal_ms, track_ms, items = case
+    seen = set()
+    for rank in (RANK, {G1: 1, G2: 0}):
+        for listed in itertools.permutations(goal_ms):
+            assign(list(listed), track_ms, items, rank)
+            seen.add(tuple(m.roadmap_code for m in [*goal_ms, *track_ms]))
+    assert len(seen) == 1, seen
+
+
+def test_of_two_matching_prd_milestones_the_closest_date_joins():
+    own = gm("M1", "Beta", "2026-11-01")
+    exact = gm("M2", "Beta", "2027-03-01", prd=True)
+    near = gm("M3", "Beta launch", "2026-11-05", prd=True)
+    assign([exact, near, own], [], [], RANK)
+    assert own.roadmap_code == near.roadmap_code == "M1"
+    assert exact.roadmap_code == "M2"
+
+
+def test_two_prd_milestones_of_one_name_are_not_joined_to_each_other():
+    """Only a goal's own milestone joins a PRD's: two PRDs' milestones keep their codes."""
+    a = gm("M1", "Beta", "2026-11-20", prd=True)
+    b = gm("M1", "Beta", "2026-11-25", goal=G2, prd=True)
+    assign([a, b], [], [], RANK)
+    assert {a.roadmap_code, b.roadmap_code} == {"M1", "M2"}
 
 
 def test_no_name_is_hidden_by_a_join():

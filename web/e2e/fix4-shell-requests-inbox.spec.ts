@@ -29,14 +29,14 @@ async function openRequests(page: Page) {
 
 const actions = (page: Page) => page.getByTestId("requests-actions");
 
-test("qa-shell-19: a viewer's Inbox has no source to fix; the owner's has it with Edit", async ({ page }) => {
+test("qa-shell-19: a viewer's Inbox lists the sources to fix with no Edit (owner 2026-11-10); the owner's has Edit", async ({ page }) => {
   await login(page, "viewer@example.com");
   await page.getByTestId("nav-inbox").filter({ visible: true }).first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
   await expect(page.getByTestId("inbox-needs")).toBeVisible();
-  await expect(page.getByText("Sources that need attention")).toHaveCount(0);
+  await expect(page.getByTestId("inbox-sources")).toContainText("Legacy all-hands chat");
+  await expect(page.getByTestId("inbox-sources").getByRole("link")).toHaveCount(0);
   await expect(page.getByText(/edit this source/)).toHaveCount(0);
-  await expect(page.getByTestId("need-by-role").filter({ hasText: "View only" })).toHaveCount(0);
 
   await signOut(page);
   await login(page);

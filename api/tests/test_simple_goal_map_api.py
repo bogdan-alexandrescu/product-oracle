@@ -35,6 +35,11 @@ Test cards (protects / fails_when / no_claim):
 - test_deleted_and_ungated_milestones, test_a_threshold_must_be_above_zero: protects=a
   deleted milestone is off the map, one with no threshold reads no gate, a threshold of
   0 or less is refused; fails_when='Met' or '31 of 0' for no gate; no_claim=the roadmap.
+- test_a_prd_milestone_out_of_its_plan_is_off_the_map (goal map codes, Nov 10):
+  protects=a PRD's milestone row the PRD's plan no longer holds (its code gone from the
+  plan, or the PRD in Trash) is off the map, as it is off the roadmap, so every milestone
+  the map shows has its roadmap code; fails_when=the map draws a milestone the roadmap read
+  gives no code (a dated one with no M code).
 - test_edits_need_approver: protects=commenters and viewers are refused every edit (403)
   and read can_edit false; fails_when=a commenter edits; no_claim=run tokens.
 - test_only_the_company_roadmap_feeds_the_map (train review): protects=while the company
@@ -502,6 +507,25 @@ async def test_each_link_keeps_its_own_expected_lift(client):
     assert links[ids["m1"]]["expected"] == "+6 a day" and links[ids["m1"]]["confidence"] == "High"
     assert links[ids["m2"]]["expected"] == "+2 a day" and links[ids["m2"]]["confidence"] == "Low"
     assert links[ids["m2"]]["measured"] is None and links[ids["m2"]]["lift"] == "not_measured"
+
+
+@pytest.mark.parametrize("trashed", [False, True])
+async def test_a_prd_milestone_out_of_its_plan_is_off_the_map(client, trashed):
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == "growth-prd"))
+        if trashed:
+            prd.deleted_at = NOW
+        s.add(TrackMilestone(roadmap_id=uuid.UUID(ids["roadmap"]), code="M7",
+                             name="12 conversions per rep per day", goal_id=uuid.UUID(ids["conv"]),
+                             origin_prd_id=prd.id, target_date=date(2027, 1, 29)))  # fmt: skip
+        await s.commit()
+    ms = (await read(client, ctx))["milestones"]
+    assert "12 conversions per rep per day" not in [m["name"] for m in ms]
+    r = await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    coded = {m["id"]: m["roadmap_code"] for m in r.json()["goal_milestones"]}
+    assert all(coded.get(m["id"]) for m in ms), (ms, coded)
 
 
 @pytest.mark.parametrize("role", ["commenter", "viewer"])

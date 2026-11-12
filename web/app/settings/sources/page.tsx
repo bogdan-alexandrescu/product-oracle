@@ -565,7 +565,9 @@ function SourceRow({
   const { can } = useMe();
   const mayEdit = can("update_source");
   // Rows mount once the list has loaded, after the hash is read: open from the start.
-  const [editing, setEditing] = useState(targeted && source.status === "needs_attention");
+  const [editOpen, setEditing] = useState(targeted && source.status === "needs_attention");
+  // A role that cannot edit sources (a commenter, a viewer) reads the row with no editor open.
+  const editing = editOpen && mayEdit;
   const rowRef = useRef<HTMLLIElement>(null);
   useEffect(() => {
     if (targeted) rowRef.current?.scrollIntoView({ block: "center" });

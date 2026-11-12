@@ -95,6 +95,8 @@ export const formatMoneyOf = (spent: number, budget: number) => `${formatMoney(s
 /** "12,345". */
 export const formatCount = (n: number) => n.toLocaleString("en-US");
 
+export { CURRENCY_SIGNS, goalFigure } from "@/lib/goal-figure";
+
 /** "1 item", "2 items", "1,234 runs"; an irregular plural as the third argument: plural(2, "person", "people"). */
 export const plural = (n: number, one: string, many = `${one}s`) => `${formatCount(n)} ${n === 1 ? one : many}`;
 

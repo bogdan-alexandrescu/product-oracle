@@ -99,6 +99,9 @@ class ExportVersion:
     all_sections: list[Section] = field(default_factory=list)
     # Provenance (O4b): the document version this one was built from.
     source: VersionSource | None = None
+    # A roadmap's markdown export: the titles of the PRDs that feed it, in the company's PRD
+    # order (:func:`feeding_prds`, read for that format only), named under its title.
+    prds: list[str] = field(default_factory=list)
     # v2 (§7, §16.9): each section's internal claim-to-source links, for the appendix
     # only ({"key", "links": [{"claim", "label", "kind", "confidence"}]}).
     evidence_links: list[dict] = field(default_factory=list)
@@ -549,6 +552,40 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
         await _label_spec(db, ev)
     await _resolve_theme(db, ev)
     return ev
+
+
+async def feeding_prds(db: AsyncSession, version: DocumentVersion) -> list[str]:
+    """The titles of the PRDs that feed a roadmap version, in the company's PRD order
+    (oracle.docs.prd_order): the PRD it was built from and those its items come from,
+    none in Trash."""
+    from oracle.docs.prd_order import sort_prds
+    from oracle.roadmap.models import RoadmapItem
+
+    ids = set(
+        await db.scalars(
+            select(RoadmapItem.prd_document_id).where(
+                RoadmapItem.roadmap_version_id == version.id,
+                RoadmapItem.prd_document_id.is_not(None),
+                RoadmapItem.deleted_at.is_(None),
+            )
+        )
+    )
+    if version.source_version_id is not None:
+        ids |= set(
+            await db.scalars(
+                select(DocumentVersion.document_id).where(
+                    DocumentVersion.id == version.source_version_id
+                )
+            )
+        )
+    if not ids:
+        return []
+    prds = await db.scalars(
+        select(Document).where(
+            Document.id.in_(ids), Document.kind == "prd", Document.deleted_at.is_(None)
+        )
+    )
+    return [d.title for d in await sort_prds(db, prds)]
 
 
 async def _label_spec(db: AsyncSession, ev: ExportVersion) -> None:
@@ -1535,6 +1572,10 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
     Its ``[c:id]`` citations are Markdown footnotes (``[^1]``, defined at the end), never
     raw markers; one that points to no citation of the version is dropped
     (raw-tokens-everywhere).
+
+    A roadmap's names the PRDs that feed it in one plain line under its title (owner,
+    Nov 10): "From the PRDs: Scale, User Safety" (:func:`prds_line`), which a roadmap's
+    import drops (oracle.docs.parser ``without_prds_line``).
     """
     from oracle.roadmap import doc_dates
 
@@ -1555,7 +1596,22 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
             head, rest = markdown[: m.end()], markdown[m.end() :]
             if not head.endswith("\n"):
                 head += "\n"
-    return head + _days_in_plain_words(rest)
+    return head + prds_line(_days_in_plain_words(rest), ev.prds)
+
+
+def prds_line(body: str, prds: list[str]) -> str:
+    """``body`` with "From the PRDs: <titles>" in a paragraph of its own under its first
+    level-1 heading (the title), or at its top when it has none; unchanged with no PRDs.
+    Commas part the titles, so a title holding one is quoted ('"Scale, phase 2"')."""
+    if not prds:
+        return body
+    titles = (" ".join(t.split()) for t in prds)
+    line = "From the PRDs: " + ", ".join(f'"{t}"' if "," in t else t for t in titles)
+    m = re.search(r"^# [^\n]*\n?", body, re.M)
+    if m is None:
+        return f"{line}\n\n{body.lstrip()}"
+    title, rest = m.group(0).rstrip("\n"), body[m.end() :].lstrip("\n")
+    return f"{body[: m.start()]}{title}\n\n{line}\n\n{rest}"
 
 
 def _days_in_plain_words(text: str) -> str:

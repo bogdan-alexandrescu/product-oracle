@@ -119,6 +119,32 @@ for (const [size, device] of [
         await expect(label(page, "M1 Alerts live for 60 teams")).toBeVisible();
       });
 
+      test("an approver who is not its owner proposes removing it; it waits for the owner and the milestone stays", async ({ page }) => {
+        await open(page, scheme, APPROVER);
+        await openM1(page);
+        await card(page).getByTestId("ms-propose-remove").click();
+        await expect(toast(page)).toContainText("Proposed removing M1 Alerts live for 50 teams");
+        await expect(card(page)).toHaveCount(0);
+        await expect(label(page, M1)).toBeVisible();
+
+        await page.goto("/home");
+        await signOut(page);
+        await login(page);
+        await roadmap(page);
+        await page.getByTestId("needs-decision").click();
+        const tray = page.getByTestId("decision-tray");
+        await expect(tray.getByTestId("tray-proposal").filter({ hasText: "Milestone 'M1 Alerts live for 50 teams': remove it" })).toBeVisible();
+        await tray.getByRole("button", { name: "Close" }).click();
+        await expect(label(page, M1)).toBeVisible();
+      });
+
+      test("an approver who is not its owner opens its card from its diamond, to propose", async ({ page }) => {
+        await open(page, scheme, APPROVER);
+        await page.getByTestId("ms-diamond").and(page.getByRole("button", { name: new RegExp(`^${M1}, `) })).click();
+        await expect(card(page)).toHaveAttribute("data-rights", "propose");
+        await expect(card(page).getByLabel("Name")).toHaveValue("Alerts live for 50 teams");
+      });
+
       test("a viewer reads it with no controls", async ({ page }) => {
         await open(page, scheme, VIEWER);
         await openM1(page);

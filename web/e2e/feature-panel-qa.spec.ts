@@ -4,10 +4,11 @@ import { expect, test, type Locator, type Page } from "./test";
 /*
  * Pre-demo QA of Simple's one feature panel (the panel every page opens for a feature).
  * S-4: 'Needed by' is edited as 'Depends on' is: remove a feature that needs this one, add one,
- * with the same loop words and Undo. P-6 / L-2: a feature the Goal map draws under a goal reads
- * that goal and its measure in the panel. P-8: on a 390 phone every tap target in the sheet is at
- * least 44 px. P-10: in dark the selected Details / Talk to Oracle tab stands out. Mock default
- * scenario (invented data); owner and viewer; light and dark; 1440 and 390.
+ * with the same loop words and Undo. P-6 / L-2: a feature the Goal map draws under a goal (its
+ * chip on the goals by tracks grid) reads that goal and its measure in the panel. P-8: on a 390
+ * phone every tap target in the sheet is at least 44 px. P-10: in dark the selected Details / Talk
+ * to Oracle tab stands out. Mock default scenario (invented data); owner and viewer; light and
+ * dark; 1440 and 390.
  */
 
 const SIZES = [
@@ -129,10 +130,10 @@ for (const size of SIZES) {
         test(`P-6: a feature on the Goal map reads its goal and measure (${email ?? "owner"})`, async ({ page }) => {
           await login(page, email);
           await page.goto("/simple/goals");
-          await expect(page.getByTestId("gm-page")).toBeVisible();
-          const card = page.getByTestId("ld-feature").filter({ hasText: "One-tap sign-up link" }).first();
-          await tap(card);
-          if (!size.phone) await card.getByTestId("ld-open").click();
+          await expect(page.getByTestId("gm-grid")).toBeVisible();
+          // The feature's chip on the goals by tracks grid: a tap opens the one feature panel.
+          const chip = page.getByTestId("gm-chip").filter({ hasText: "One-tap sign-up link" }).first();
+          await tap(chip.getByRole("button").first());
           await expect(page.getByTestId("gm-feature-panel")).toBeVisible();
           await expect(panel(page).getByTestId("card-goal")).toHaveText("Sign-ups per rep per day");
           await expect(panel(page).getByTestId("card-goal-measure")).toHaveText("sign-ups per rep per day");

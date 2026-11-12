@@ -92,6 +92,13 @@ DATE_MARK_COMMENT_RE = re.compile(
 # The banner line a markdown export writes after the front matter
 # (oracle.export.render.render_markdown), dropped on import with the markers above.
 EXPORT_BANNER_RE = re.compile(r"^<!-- Product Oracle export: [^\n]*? -->\n", re.M)
+# The line a roadmap's markdown export writes under its first level-1 heading, or at the top
+# of a body with none (oracle.export.render.prds_line): the PRDs that feed it. Only a
+# roadmap's import through the import route drops it (:func:`without_prds_line`); a person's
+# own paragraph that starts the same way stays everywhere else.
+_FRONT_MATTER_RE = re.compile(r"\A---[ \t]*\n.*?\n(?:---|\.\.\.)[ \t]*\n", re.S)
+_FIRST_TITLE_RE = re.compile(r"^# [^\n]*\n", re.M)
+_PRDS_PARAGRAPH_RE = re.compile(r"From the PRDs: [^\n]*(?:\n\n|\n?\Z)")
 
 # Every parse of a draft is of untrusted text: guarded (oracle.parse_budget), so a parse
 # stops at its CPU budget. The sections come from the block structure alone (headings and
@@ -702,6 +709,22 @@ def prepared(markdown: str) -> str:
     """A draft's text as :func:`parse_draft` reads it: an export's banner and date marker
     comments dropped, then :func:`normalize`."""
     return normalize(EXPORT_BANNER_RE.sub("", DATE_MARK_COMMENT_RE.sub("", markdown)))
+
+
+def without_prds_line(markdown: str) -> str:
+    """A roadmap export's text (:func:`prepared`) without the "From the PRDs: ..." paragraph
+    its export writes (oracle.export.render.prds_line): only a one-line paragraph directly
+    under the body's first level-1 heading, or at the top of a body with none. Linear."""
+    text = prepared(markdown)
+    head = _FRONT_MATTER_RE.match(text)
+    at = head.end() if head else 0
+    title = _FIRST_TITLE_RE.search(text, at)
+    if title is not None:
+        if text[title.end() : title.end() + 1] != "\n":
+            return text
+        at = title.end() + 1
+    line = _PRDS_PARAGRAPH_RE.match(text, at)
+    return text if line is None else text[:at] + text[line.end() :]
 
 
 def body_problems(text: str) -> list[ImportProblem]:

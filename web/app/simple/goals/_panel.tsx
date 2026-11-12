@@ -35,6 +35,8 @@ function usePhone(): boolean {
 export interface Placement {
   goal: { id: string; title: string; metric: string | null; target: string | null; position: number };
   milestone: string;
+  /** Every milestone of the goal it serves, each with its expected lift there ("" for none). */
+  served?: { milestone: string; expected: string }[];
 }
 
 export function FeaturePanel({ id, code, name, placed, onClose }: { id: string; code?: string; name: string; placed?: Placement | null; onClose: () => void }) {
@@ -116,7 +118,18 @@ export function FeaturePanel({ id, code, name, placed, onClose }: { id: string; 
         />
         {own && (
           <p data-testid="gm-panel-milestone" className="simple-small mt-1 w-fit rounded-xl border border-line bg-surface px-3 py-1 shadow">
-            Serves {placed!.milestone}
+            Serves{" "}
+            {(placed!.served ?? [{ milestone: placed!.milestone, expected: "" }]).map((x, i) => (
+              <span key={x.milestone}>
+                {i > 0 && " · "}
+                {x.milestone}
+                {x.expected && (
+                  <>
+                    {" "}(<span data-user-content>{x.expected}</span>)
+                  </>
+                )}
+              </span>
+            ))}
           </p>
         )}
       </div>

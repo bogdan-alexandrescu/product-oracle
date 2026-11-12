@@ -7,7 +7,7 @@ import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
 import { sortGoals } from "@/lib/goal-order";
-import { citationHref, formatDate, formatDay } from "@/lib/format";
+import { citationHref, formatDate, formatDay, goalFigure } from "@/lib/format";
 import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
 
@@ -176,6 +176,10 @@ import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./curr
 import {
   featureKeyOf,
   PRIORITIES_GOAL_NO_VALUE_SCENARIO,
+  PRIORITIES_TWINS_SCENARIO,
+  PRIORITIES_TWINS_TRACE_SCENARIO,
+  PRIORITIES_TWINS_OLD_SCENARIO,
+  PRIORITIES_TWINS_LOCKED_SCENARIO,
   PRIORITIES_PLAN_GOAL_CODES_SCENARIO,
   PRIORITIES_PLAN_GOAL_NAMES_SCENARIO,
   PRIORITIES_PLAN_GOAL_TWINS_SCENARIO,
@@ -183,6 +187,10 @@ import {
   PRIORITIES_PLAN_ONE_WEEK_SCENARIO,
   prioritiesOut,
   seedGoalNoValue,
+  seedPrioritiesTwins,
+  seedPrioritiesTwinsTrace,
+  seedPrioritiesTwinsOld,
+  seedPrioritiesTwinsLocked,
   seedPlanGoalCodes,
   seedPlanGoalNames,
   seedPlanGoalTwins,
@@ -196,7 +204,7 @@ import { runGroupsOut } from "./simple-runs";
 import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
 import { rebuildsOut } from "./rebuilds";
-import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedHeadingCountOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedTwoCountsOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedBetAddedOnePager, seedHeadingCountOnePager, seedMilestoneNamesOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedTwoCountsOnePager, seedVqaOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -205,20 +213,21 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { codesSeen, groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
-import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
+import { ONE_PAGER_MILESTONE_RENAME_SCENARIO, PICKED_MILESTONE, PRIORITIES_PLAN_MILESTONES_SCENARIO, seedOldMilestones, seedOwnMilestones, seedPlanPrdMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
-import { codedTitle, openDraft } from "./simple-roadmap";
+import { codedTitle, openDraft, targetRead } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrdSlug, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdFeeds, prdOwnerIdsOf, prdTrackOwnerIds, roadmapKeyOf, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, milestoneGoalInTrash, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
-import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
+import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, LADDER_TRACK_OWNER_SCENARIO, LADDER_TWINS_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
+import { GM_TRACKS, GM_TRACKS_HARD_SCENARIO, GM_TRACKS_SCENARIO, tracksGoals, tracksItems } from "./goal-map-tracks";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { waitingItems } from "./waiting-list";
-import { HOME_MILESTONE_BARE_TRACK_SCENARIO, HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_LEAD_GOALS_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneBareTrack, seedHomeMilestoneFold, seedHomeMilestoneGoals, seedHomeMilestoneGoalsFold, seedHomeMilestoneLeadGoals, seedHomeMilestonePrdFold, seedHomeMilestonePlainFold, seedHomeMilestonePrdGoalFold, seedHomeMilestonePrdsFold, seedHomeMilestones, seedHomeMilestoneTracks, seedHomeMilestoneTwinTracks, seedHomeMilestoneTwoRoadmaps } from "./home-milestones";
+import { HOME_MILESTONE_BARE_TRACK_SCENARIO, HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOAL_GROUPS_SCENARIO, HOME_MILESTONE_GOAL_GROUPS_TRACK_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_LEAD_GOALS_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneBareTrack, seedHomeMilestoneFold, seedHomeMilestoneGoalGroups, seedHomeMilestoneGoalGroupsTrack, seedHomeMilestoneGoals, seedHomeMilestoneGoalsFold, seedHomeMilestoneLeadGoals, seedHomeMilestonePrdFold, seedHomeMilestonePlainFold, seedHomeMilestonePrdGoalFold, seedHomeMilestonePrdsFold, seedHomeMilestones, seedHomeMilestoneTracks, seedHomeMilestoneTwinTracks, seedHomeMilestoneTwoRoadmaps } from "./home-milestones";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
@@ -1339,6 +1348,9 @@ function seedSimpleWalkScenario(): Db {
  */
 const UNDATED_PLAN_FEATURE = "F-11";
 
+/** "simple-plan" with one roadmap item of the PRD that no plan milestone holds (the When card's "No milestone" group). */
+export const ONE_PAGER_PLAN_LOOSE_SCENARIO = "one-pager-plan-loose";
+
 function seedSimplePlanScenario(datedAll = false): Db {
   const db = seedSimpleHomeOnePrdScenario();
   const rm = db.simple_roadmap!;
@@ -1589,7 +1601,15 @@ export const GOAL_BUCKETS_UNDATED_SCENARIO = "goal-buckets-undated";
 
 function seedGoalBucketsUndatedScenario(): Db {
   const db = seedSimplePlanScenario(true);
-  db.simple_roadmap!.plan_undated = true;
+  const rm = db.simple_roadmap!;
+  rm.plan_undated = true;
+  // Grow retention's work is this quarter's again (the one-PRD seed puts it 180 days on): with no
+  // dated plan a bucket holds its Now features, and a column follows the dates (board-quarters).
+  for (const s of rm.items) {
+    if (s.roadmap !== "alerts-roadmap" || s.horizon !== "now" || s.start == null || s.end == null) continue;
+    Object.assign(s, { start: s.start - 180, end: s.end - 180 });
+    if (s.milestone?.day != null) s.milestone.day -= 180;
+  }
   return withRoadmapGoalBuckets(db);
 }
 
@@ -1653,6 +1673,9 @@ function withRoadmapGoalBuckets(db: Db): Db {
   // goal-order: the company's goal order is the buckets' (each goal's place stored), so Move up and
   // Move down on Priorities read the same order as its buckets and the Roadmap's goal rows.
   placeBucketGoals(rm.goal_buckets, db.baseline.entities);
+  // goal-target-kept: Revenue's target is stored as a number in usd (a measured goal).
+  const revenue = rm.goal_buckets.goals.find((g) => g.key === "revenue");
+  if (revenue) Object.assign(revenue, { unit: "usd", target: targetRead(20000, "usd") });
   return db;
 }
 
@@ -4249,6 +4272,13 @@ function load(): Db {
                     db.simple_roadmap = seedPrdCalmPage();
                     return db;
                   }
+              : scenario === "roadmap-md-prds-comma"
+                ? () => {
+                    // roadmap-md-prds: a PRD whose title holds a comma (invented).
+                    const db = seed();
+                    db.documents.find((d) => d.slug === "usage-alerts")!.title = "Usage alerts, phase 2";
+                    return db;
+                  }
               : scenario === "simple-unapproved-roadmap"
                 ? () => {
                     // walkb-roadmap review 5a: the Alerts roadmap was built from its PRD and has no approved version yet.
@@ -4256,17 +4286,26 @@ function load(): Db {
                     (db.simple_roadmap = seedSimpleRoadmap()).unapproved = ["alerts-roadmap"];
                     return db;
                   }
-              : scenario === "simple-milestones" || scenario === "simple-prd-milestones"
+              : scenario === ONE_PAGER_MILESTONE_RENAME_SCENARIO
+                ? () => {
+                    const db = seed();
+                    const rm = (db.simple_roadmap = seedSimpleRoadmap());
+                    rm.goal_milestones = seedOwnMilestones();
+                    rm.items = rm.items.map((s) => (s.key === PICKED_MILESTONE.item ? { ...s, milestone: { name: null, day: null, id: PICKED_MILESTONE.id } } : s));
+                    return db;
+                  }
+              : scenario === "simple-milestones" || scenario === "simple-prd-milestones" || scenario === "simple-milestones-track-owner"
                 ? () => {
                     // build-milestones-on-roadmap: the roadmaps' own milestones per goal; with a PRD's (Usage alerts).
                     const db = seed();
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
-                    rm.goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
-                    if (scenario === "simple-prd-milestones") {
+                    rm.goal_milestones = scenario === "simple-prd-milestones" ? seedPrdMilestones() : seedOwnMilestones();
+                    if (scenario !== "simple-milestones") {
                       // Usage alerts' owner (drafts.who: its track's owner) is Nora Vance, an invented approver.
                       const nora = { email: "nora.vance@example.com", name: "Nora Vance", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid("member/nora.vance@example.com"), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
                       db.members.push(nora);
-                      rm.track_owners = { alerts: nora.id };
+                      // milestone-routes ("simple-milestones-track-owner"): she owns the Guided setup track too, and no roadmap has a decider.
+                      rm.track_owners = scenario === "simple-prd-milestones" ? { alerts: nora.id } : { alerts: nora.id, onboarding: nora.id };
                     }
                     return db;
                   }
@@ -4318,6 +4357,23 @@ function load(): Db {
                 ? seedGoalBucketsThreeGoalsScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
+              : scenario === PRIORITIES_PLAN_MILESTONES_SCENARIO
+                ? () => {
+                    // milestone-rename on Priorities: the plan's PRD's milestones on its roadmap.
+                    const db = seedSimplePlanScenario();
+                    db.simple_roadmap!.goal_milestones = seedPlanPrdMilestones();
+                    return db;
+                  }
+              : scenario === ONE_PAGER_PLAN_LOOSE_SCENARIO
+                ? () => {
+                    // Owner, Nov 10 ('Add rows to the plan card'): one of the PRD's roadmap items has no plan milestone.
+                    const db = seedSimplePlanScenario();
+                    const rm = db.simple_roadmap!;
+                    rm.items.push({ key: "plan-loose", title: "Calendar invite sync", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "low", start: 0, end: 25, source: "typed" });
+                    rm.ids["plan-loose"] = stableUuid("simple-item/plan-loose");
+                    db.simple_one_pager!.slice!.push({ id: rm.ids["plan-loose"], title: "Calendar invite sync", horizon: "later", start: "2027-01-04", end: "2027-01-29", estimated: true, milestone: null });
+                    return db;
+                  }
               : scenario === PRIORITIES_PLAN_GOAL_NAMES_SCENARIO
                 ? () => {
                     const db = seedSimplePlanScenario();
@@ -4506,23 +4562,55 @@ function load(): Db {
                     if (churn) churn.status = "confirmed";
                     return db;
                   }
-              : scenario === LADDER_SCENARIO || scenario === LADDER_KR_SCENARIO || scenario === LADDER_KR_CODES_SCENARIO
+              : scenario === LADDER_SCENARIO || scenario === LADDER_KR_SCENARIO || scenario === LADDER_KR_CODES_SCENARIO || scenario === LADDER_TWINS_SCENARIO || scenario === LADDER_TRACK_OWNER_SCENARIO
                 ? () => {
                     // goal-ladder: the ladder's goals are Home's (one store, the same ids); each
                     // feature is its own Simple roadmap item, with its status, dates and what it waits on.
                     const db = seed();
                     const template = db.baseline.entities.find((e) => e.type === "goal")!;
                     for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
-                    for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) db.baseline.entities.push({ ...template, ...g, body: null, locked: false, locked_by: null, locked_at: null });
+                    for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO && scenario !== LADDER_TWINS_SCENARIO && scenario !== LADDER_TRACK_OWNER_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) db.baseline.entities.push({ ...template, ...g, body: null, locked: false, locked_by: null, locked_at: null });
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
                     // goal-map-editing: a feature on no milestone names its goal itself (by the goal's id).
                     rm.items = ladderItems(scenario === LADDER_KR_CODES_SCENARIO).map(({ goal, ...x }) => ({ ...x, heading: `${x.section.toUpperCase()} ${codedTitle(x.title, null)[1]}`, horizon: "next" as const, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium" as const, ...(goal ? { map_goal: goalMapIdOf(goal) } : {}) }));
                     // goal-map-editing: one goal store, so a ladder goal goes to Trash as any goal does; every goal not
                     // rejected is a bucket, proposed ones too (GET /v1/simple/goal-buckets).
                     const gb = (rm.goal_buckets = seedGoalBuckets());
-                    for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
+                    for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO && scenario !== LADDER_TWINS_SCENARIO && scenario !== LADDER_TRACK_OWNER_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
                     rm.ids = Object.fromEntries(rm.items.map((x) => [x.key, stableUuid(`simple-item/${x.key}`)]));
                     // roadmap-milestone-codes: the ladder's milestones are this roadmap's goal milestones (route copies them).
+                    rm.map_milestones = { roadmap: "onboarding-roadmap", milestones: [] };
+                    if (scenario === LADDER_TRACK_OWNER_SCENARIO) {
+                      // milestone-routes: Nora Vance, an invented approver, owns the onboarding track; no decider.
+                      const nora = { email: "nora.vance@example.com", name: "Nora Vance", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid("member/nora.vance@example.com"), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                      db.members.push(nora);
+                      rm.track_owners = { onboarding: nora.id };
+                    }
+                    return db;
+                  }
+              : scenario === GM_TRACKS_SCENARIO || scenario === GM_TRACKS_HARD_SCENARIO
+                ? () => {
+                    // goal-map-tracks: as goal-ladder, the map's goals are Home's (Baseline goals and goal buckets,
+                    // the same ids) and each feature is its own Simple roadmap item, here on one of the company's
+                    // five tracks (the map's rows), which are its only tracks.
+                    const db = seed();
+                    const template = db.baseline.entities.find((e) => e.type === "goal")!;
+                    for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
+                    const goals = tracksGoals(goalMapIdOf);
+                    for (const g of goals) db.baseline.entities.push({ ...template, ...g, body: null, locked: false, locked_by: null, locked_at: null });
+                    const rm = (db.simple_roadmap = seedSimpleRoadmap());
+                    // Each item names its goal itself (by the goal's id): off its last milestone it is unplaced under it.
+                    rm.items = tracksItems(scenario === GM_TRACKS_HARD_SCENARIO).map(({ goal, ...x }) => ({ ...x, heading: `${x.section.toUpperCase()} ${x.title}`, horizon: "next" as const, roadmap: "onboarding-roadmap", confidence: "medium" as const, map_goal: goalMapIdOf(goal) }));
+                    rm.ids = Object.fromEntries(rm.items.map((x) => [x.key, stableUuid(`simple-item/${x.key}`)]));
+                    const gb = (rm.goal_buckets = seedGoalBuckets());
+                    for (const g of goals) {
+                      const t = Number(g.attrs.target);
+                      gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: goalFigure(t, String(g.attrs.unit ?? "")), due: null, archived: false });
+                    }
+                    rm.extra_tracks = Object.fromEntries(GM_TRACKS.map((t) => [t.key, t.title]));
+                    rm.track_order = GM_TRACKS.map((t) => t.key);
+                    rm.tracks_only = true;
+                    // roadmap-milestone-codes: the map's milestones are this roadmap's goal milestones (route copies them).
                     rm.map_milestones = { roadmap: "onboarding-roadmap", milestones: [] };
                     return db;
                   }
@@ -4534,6 +4622,30 @@ function load(): Db {
                 ? () => seedApprovedRoadmapScenario(false, true)
               : scenario === ONE_ROADMAP_SCENARIO
                 ? seedOneRoadmapScenario
+              : scenario === PRIORITIES_TWINS_SCENARIO
+                ? () => {
+                    const db = seedOneRoadmapScenario();
+                    seedPrioritiesTwins(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_TWINS_LOCKED_SCENARIO
+                ? () => {
+                    const db = seedOneRoadmapScenario();
+                    seedPrioritiesTwinsLocked(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_TWINS_OLD_SCENARIO
+                ? () => {
+                    const db = seedOneRoadmapScenario();
+                    seedPrioritiesTwinsOld(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_TWINS_TRACE_SCENARIO
+                ? () => {
+                    const db = seedOneRoadmapScenario();
+                    seedPrioritiesTwinsTrace(db.simple_roadmap!);
+                    return db;
+                  }
               : scenario === REPLACED_PRD_TRASH_SCENARIO
                 ? seedReplacedPrdTrashScenario
               : scenario === HOME_MILESTONES_SCENARIO
@@ -4563,6 +4675,10 @@ function load(): Db {
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestonePlainFold() })
               : scenario === HOME_MILESTONE_GOALS_FOLD_SCENARIO
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneGoalsFold() })
+              : scenario === HOME_MILESTONE_GOAL_GROUPS_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneGoalGroups() })
+              : scenario === HOME_MILESTONE_GOAL_GROUPS_TRACK_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneGoalGroupsTrack() })
               : scenario === HOME_MILESTONE_BARE_TRACK_SCENARIO
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneBareTrack() })
               : scenario === HOME_MILESTONE_LEAD_GOALS_SCENARIO
@@ -5930,13 +6046,45 @@ function inProse(text: string, rewrite: (s: string) => string): string {
  * The full layer's markdown export, as the API's export/render.py render_markdown (X-17): no banner
  * comment, `[c:id]` citations as Markdown footnotes, and the days after the front matter month
  * first ("Oct 31, 2026"); the front matter and each heading's `{#id}` stay so it imports again.
+ * A roadmap's names the PRDs that feed it under its title (owner, Nov 10; prdsLine).
  */
-function exportMarkdown(doc: DocumentRow, v: VersionRow): string {
+function exportMarkdown(db: Db, doc: DocumentRow, v: VersionRow): string {
   const markdown = markdownFootnotes(versionMarkdown(doc, v), v.citations);
+  const prds = doc.kind === "roadmap" ? feedingPrds(db, doc, v) : [];
   const m = /^---[ \t]*\r?\n[\s\S]*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|$(?![\s\S]))/m.exec(markdown);
-  if (!markdown.startsWith("---") || !m || m.index !== 0) return inProse(markdown, daysInWords);
+  if (!markdown.startsWith("---") || !m || m.index !== 0) return prdsLine(inProse(markdown, daysInWords), prds);
   const head = markdown.slice(0, m[0].length);
-  return (head.endsWith("\n") ? head : `${head}\n`) + inProse(markdown.slice(m[0].length), daysInWords);
+  return (head.endsWith("\n") ? head : `${head}\n`) + prdsLine(inProse(markdown.slice(m[0].length), daysInWords), prds);
+}
+
+/**
+ * The titles of the PRDs that feed a roadmap version, in the company's PRD order (prdOrder), as the
+ * API's export/render.py feeding_prds: the PRD it was built from and those its items come from
+ * (its Simple items too, by the roadmap's slug), none in Trash.
+ */
+function feedingPrds(db: Db, doc: DocumentRow, v: VersionRow): string[] {
+  const ids = new Set<string>();
+  if (v.source?.document_id) ids.add(v.source.document_id);
+  for (const i of db.roadmap?.items[v.id] ?? []) if (i.prd.document?.id) ids.add(i.prd.document.id);
+  for (const s of db.simple_roadmap?.items ?? []) if (s.roadmap === doc.slug && s.prd_doc && !s.trashed && !s.draft && !s.draft_roadmap) ids.add(s.prd_doc.id);
+  const rank = prdOrder(db);
+  return db.documents
+    .filter((d) => ids.has(d.id) && (d.kind ?? "prd") === "prd")
+    .sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER))
+    .map((d) => d.title);
+}
+
+/** As the API's export/render.py prds_line: "From the PRDs: <titles>" in a paragraph of its own under the first
+ * level-1 heading (the title), or at the top when there is none; unchanged with no PRDs. Commas part the titles,
+ * so a title holding one is quoted. */
+function prdsLine(body: string, prds: string[]): string {
+  if (!prds.length) return body;
+  const titles = prds.map((t) => t.split(/\s+/).filter(Boolean).join(" "));
+  const line = `From the PRDs: ${titles.map((t) => (t.includes(",") ? `"${t}"` : t)).join(", ")}`;
+  const m = /^# [^\n]*\n?/m.exec(body);
+  if (!m) return `${line}\n\n${body.trimStart()}`;
+  const rest = body.slice(m.index + m[0].length).replace(/^\n+/, "");
+  return `${body.slice(0, m.index)}${m[0].replace(/\n$/, "")}\n\n${line}\n\n${rest}`;
 }
 
 function escapeHtml(s: string) {
@@ -7094,7 +7242,6 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
     if (!d) return undefined;
     // C-13, vqa B-13: every PRD but the seed reads its own sections (one_pager.extract), never a copy
     // of Guided setup's; a PRD with no version yet reads none of them (every block "missing").
-    const cites = Object.fromEntries((read?.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]));
     // As the API, whose drafts, changes and decisions are rows of their own: a rebuilt page keeps
     // its draft (working or submitted, with its reviewers) and its notes, never only what the
     // version holds. Only the approval of the version a draft was submitted as settles it
@@ -7105,7 +7252,7 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
       draft: settled ? null : known.draft, approval: settled ? null : known.approval, decisions: known.decisions,
       changes: settled ? known.changes.filter((c) => c.status === "proposed") : known.changes,
     } : {};
-    return (others[d.id] = { ...prdOnePager({ id: d.id, slug: d.slug, title: d.title }, read?.sections ?? [], cites), visuals: db.simple_visuals, roadmap: db.simple_roadmap, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}), ...kept });
+    return (others[d.id] = { ...prdOnePager({ id: d.id, slug: d.slug, title: d.title }, read?.sections ?? []), visuals: db.simple_visuals, roadmap: db.simple_roadmap, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}), ...kept });
   };
   if (p[1] !== "simple") return seeded;
   if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;
@@ -8059,6 +8206,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   // "one-pager-run-prd": a run's Goal-traced PRD, its lines cited, while Oracle writes the page.
   // "one-pager-quick-read": the same PRD, its one_pager job failed: the quick read stays.
   // "one-pager-run-prd-walk": a run's approved PRD as Oracle's job wrote its page (CLD's walk B).
+  // "one-pager-bet-added": the PRD's next version gained a new first bet; the flows drawn before stay on their bets.
+  // "one-pager-milestone-names": a milestone record named only by its code beside an item that names it.
   db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd"
     ? seedRunPrdOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd-walk"
@@ -8073,6 +8222,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     ? seedHeadingCountOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-two-counts"
     ? seedTwoCountsOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-bet-added"
+    ? seedBetAddedOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-milestone-names"
+    ? seedMilestoneNamesOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-vqa"
+    ? seedVqaOnePager()
     : seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
@@ -8121,7 +8276,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   // Running today: every Simple feature's mark and proof; the approver role (confirm_entity) moves and answers.
   if (p[1] === "feature-states") {
-    const rows = prioritiesOut(db.simple_roadmap, { id: me.id, role: me.role, owners: simpleOwners, names: {} }, () => [], () => false).rows;
+    // qa-prio-twins: a feature Oracle only proposed ranks, but has no mark (feature-states lists confirmed ones).
+    const proposed = new Set(db.simple_roadmap.proposed_features ?? []);
+    const rows = prioritiesOut(db.simple_roadmap, { id: me.id, role: me.role, owners: simpleOwners, names: {} }, () => [], () => false).rows.filter((r) => !proposed.has(r.code));
     db.current_state ??= seedCurrentState(rows, Date.now());
     const mayMove = me.role === "approver" || me.role === "owner";
     // Every confirmed feature, as the API lists them: the Detailed Plan's traced features too
@@ -8274,7 +8431,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p, bin);
     if (bucketsRes) return bucketsRes;
     // goal-ladder: add_item (and goal-map-editing: set_goal) may name any confirmed goal by its id (additions._where), as Home's goals are the map's.
-    if (db.goal_map) for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") MAP_GOALS[e.id] = e.title;
+    // goal-map-tracks: one goal store, so a goal bucket of the same id (renamed in Simple) names it.
+    const bucketTitle = (e: { id: string; title: string }) => db.simple_roadmap?.goal_buckets?.goals.find((g) => g.id === e.id)?.title || e.title;
+    if (db.goal_map) for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") MAP_GOALS[e.id] = bucketTitle(e);
     // goal-map-editing: the map's milestones are Simple Roadmap's own (edit, Trash, restore).
     const ladderMsRes = await routeLadderMilestone(db, { id: me.id, role: me.role, name: simpleNames[me.id] ?? me.email }, r, p, bin.trash, bin.now);
     if (ladderMsRes) return ladderMsRes;
@@ -8286,7 +8445,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       const read = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, new Request("http://mock/v1/simple/roadmap"), ["v1", "simple", "roadmap"], new URLSearchParams());
       const body = read && read.ok ? ((await read.json()) as { items: { id: string; title: string; status: string; goal?: { id: string } | null }[] }) : { items: [] };
       return body.items;
-    }, () => db.baseline.entities.filter((e) => e.type === "goal"), (goalId) => !!db.simple_roadmap?.goal_buckets?.goals.some((g) => g.id === goalId && g.trashed));
+    }, () => db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ ...e, title: bucketTitle(e) })), (goalId) => !!db.simple_roadmap?.goal_buckets?.goals.some((g) => g.id === goalId && g.trashed));
     // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
     if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
     // pre-demo QA P-6: the panel reads the goal each feature serves on the map (one link, service._ladder_goals).
@@ -9152,7 +9311,7 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
       return new Response(exportHtml(doc, brief, db.branding, badge), { headers: { "content-type": "text/html" } });
     }
     if (format === "md") {
-      return new Response(exportMarkdown(doc, v), {
+      return new Response(exportMarkdown(db, doc, v), {
         headers: { "content-type": "text/markdown" },
       });
     }

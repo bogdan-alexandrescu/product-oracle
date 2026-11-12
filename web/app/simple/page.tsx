@@ -26,6 +26,7 @@ import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { DecisionSheetHost, SheetHandle, showOutdated, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
 import { Named } from "./roadmap/_fields";
 import { FeaturePanel, useItemChanged } from "./roadmap/_panel";
+import { MsCard, MsProvider, MsToast, renameOf, useMilestones } from "./roadmap/_milestones";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -374,6 +375,19 @@ export default function SimpleHome() {
     () => (roadmap.data ? planByMonth(homePlanInputs(roadmap.data), roadmap.data.today, roadmap.data.windows.now.end) : null),
     [roadmap.data],
   );
+  // home-milestone-rename: a plan row's milestone is renamed in place with the Roadmap's own card
+  // (its rights, the PRD owner's ask, the proposal to the roadmap's decider, Undo).
+  const ms = useMilestones({
+    data: roadmap.data,
+    phone,
+    canChange: false,
+    reload: async () => {
+      reloadAll();
+      await roadmap.reload();
+    },
+    openItem: (id) => setOpened(roadmap.data?.items.find((i) => i.id === id) ?? null),
+  });
+  const renameMs = renameOf(ms);
   const planNames = useMemo(() => new Map((roadmap.data?.items ?? []).map((i) => [i.id, i.title])), [roadmap.data]);
   // qa4-simple-home-12: every working draft of mine, each with its own count (one roadmap's draft never hides another's).
   // home-draft-in-review: a draft sent for review shows to whoever approves it (its can_approve) and
@@ -686,6 +700,12 @@ export default function SimpleHome() {
             void roadmap.reload();
           }}
         />
+      )}
+      {ms && (
+        <MsProvider value={ms}>
+          <MsCard />
+          <MsToast />
+        </MsProvider>
       )}
       {newPrd && <NewPrdSheet onClose={closeNewPrd} onStarted={() => void started.reload()} />}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
@@ -1251,7 +1271,7 @@ export default function SimpleHome() {
                 </p>
               )}
               {plan ? (
-                <PlanByMonth plan={plan} testId="home-strip" named names={planNames} />
+                <PlanByMonth plan={plan} testId="home-strip" named names={planNames} rename={renameMs} />
               ) : (
                 <p className="simple-small" data-testid="home-plan-empty">
                   Nothing planned this quarter yet.

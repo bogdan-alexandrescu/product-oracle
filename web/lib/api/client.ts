@@ -82,9 +82,28 @@ export class ApiError extends Error {
     readonly code?: string,
     /** Seconds to wait before trying again, from a 429's Retry-After. */
     readonly retryAfter?: number,
+    /** vqa-one-pager (e): a refused draft's fixes, one per problem that has one (ImportProblem.fix). */
+    readonly fixes: ImportFix[] = [],
   ) {
     super(message);
   }
+}
+
+export type ImportFix = { action: "add_date_source"; prd_document_id?: string | null; days?: string[] };
+
+/** A refused draft's fixes ({detail, errors: [{fix}]}, the API's ImportErrorResponse). */
+function importFixes(error: unknown): ImportFix[] {
+  const errors = error && typeof error === "object" && "errors" in error && Array.isArray(error.errors) ? error.errors : [];
+  return errors.map((p: { fix?: ImportFix | null }) => p?.fix).filter((f): f is ImportFix => !!f && f.action === "add_date_source");
+}
+
+/** Where a fix is made: Plan › Dates for the PRD, filtered to the days that need a date source. */
+export function fixHref(fix: ImportFix): string {
+  const q = new URLSearchParams();
+  if (fix.prd_document_id) q.set("prd", fix.prd_document_id);
+  if (fix.days?.length) q.set("dates", fix.days.join(","));
+  const query = q.toString();
+  return query ? `/plan/dates?${query}` : "/plan/dates";
 }
 
 /** Retry-After in seconds (as seconds or an HTTP date); undefined when absent or unreadable. */
@@ -119,7 +138,7 @@ export async function unwrap<T>(call: Promise<Result<T>>): Promise<T> {
     error && typeof error === "object" && "detail" in error && typeof error.detail === "string"
       ? error.detail
       : (said ?? "");
-  throw new ApiError(response.status, describeStatus(response.status, detail), undefined, retryAfter(response));
+  throw new ApiError(response.status, describeStatus(response.status, detail), undefined, retryAfter(response), importFixes(error));
 }
 
 /** Who holds each role or a higher one, in the API's role ladder (viewer < commenter < approver < owner). */

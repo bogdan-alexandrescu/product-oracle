@@ -206,6 +206,22 @@ def _revision(
     )
 
 
+def revise(
+    db: AsyncSession,
+    actor: str,
+    entity: Entity,
+    before: dict[str, Any] | None,
+    reason: str | None = None,
+) -> None:
+    """goal-target-kept: a write made outside :func:`update_entity` (Simple's goal edits)
+    still leaves its revision, ``before`` being :func:`entity_snapshot` taken before it
+    (None: it was created); nothing when it changed nothing."""
+    after = entity_snapshot(entity)
+    if after != before:
+        db.add(EntityRevision(entity_id=entity.id, before=before, after=after, actor=actor,
+                              reason=reason))  # fmt: skip
+
+
 def merge_attrs(current: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     """``patch`` merged into ``current``; a None value removes the key."""
     out = dict(current or {})
@@ -1444,6 +1460,15 @@ async def update_entity(
         if isinstance(changes.get("body"), str):
             changes = {**changes, "body": goals.without_placeholders(changes["body"])}
     if entity.type == "goal" and isinstance(changes.get("attrs"), dict):
+        target = changes["attrs"].get("target")
+        if (
+            isinstance(target, int | float)
+            and not isinstance(target, bool)
+            and "target_text" not in changes["attrs"]
+            and (entity.attrs or {}).get("target_text")
+        ):
+            # A numeric target replaces an older typed one, so the goal never reads stale text.
+            changes = {**changes, "attrs": {**changes["attrs"], "target_text": None}}
         merged = merge_attrs(entity.attrs, changes["attrs"])
         if merged != (entity.attrs or {}):
             checked, kept = await _goal_attrs(db, writer, merged, dict(entity.attrs or {}))
@@ -1731,19 +1756,25 @@ async def delete_edge(db: AsyncSession, writer: Writer, edge: Edge) -> WriteResu
 
 
 async def merge_entity(
-    db: AsyncSession, principal: Principal, source: Entity, into: Entity, reason: str | None
+    db: AsyncSession,
+    principal: Principal,
+    source: Entity,
+    into: Entity,
+    reason: str | None,
+    any_run: bool = False,
 ) -> Entity:
     """Merge a duplicate a run created into ``into`` (B2 Merge into…): its evidence and
     edges move to the target (an edge the target already has, or one that would link the
     target to itself, is dropped), its open proposals are rejected "Merged into <title>",
     and it is deleted. A person's write: revisions on both and an audit row. Refused (409,
     nothing changed) unless both have the same type, a run created the source, nobody
-    locked it and no PRD section links it."""
+    locked it and no PRD section links it. ``any_run``: a source a person made too (Simple
+    Priorities' Same name merge, oracle.simple.priorities.merge_twin)."""
     from oracle.baseline.from_run import LINKED, LOCKED, NOT_SAME_TYPE, NOT_THIS_RUN
 
     if source.id == into.id or source.type != into.type:
         raise ConflictError(NOT_SAME_TYPE)
-    if source.run_id is None:
+    if source.run_id is None and not any_run:
         raise ConflictError(NOT_THIS_RUN)
     if source.locked:
         raise ConflictError(LOCKED)
@@ -1785,6 +1816,10 @@ async def merge_entity(
         await audit.record(
             db, principal, "baseline.proposal.rejected", "proposal", p.id, {"note": note}
         )
+    from oracle.simple import twin_merges
+
+    # A commenter's waiting proposal to merge it (Priorities' Propose a merge…) is closed too.
+    await twin_merges.close_open(db, principal, source.id, note)
     snapshot = entity_snapshot(into)
     _revision(
         db, writer, snapshot, {**snapshot, "merged_from": f"{source.type}:{source.key}"},

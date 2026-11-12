@@ -24,8 +24,11 @@ Test cards (protects / fails_when / no_claim):
   while Oracle drafts a new item stay; Oracle's dependency ideas are suggestions
   (``suggested_depends``), never written; fails_when=Oracle's draft resets the goal, writes
   its outcome over the person's, or adds a dependency on its own.
-- test_conflict_after_oracle_names_oracle: protects=a person's save refused because Oracle's
-  draft filled the field since names Oracle; fails_when=it names the person who added it.
+- test_a_person_edit_over_oracles_draft_stays: protects=a person who opened the outcome
+  while Oracle drafted (it read empty) keeps what they typed when Oracle's draft lands before
+  their save: Oracle fills only what a person leaves empty; a later person's write still
+  conflicts, by that person; fails_when=the save is refused as changed by Oracle and Oracle's
+  outcome stays.
 """
 
 import asyncio
@@ -212,7 +215,7 @@ async def test_oracle_draft_never_overwrites_a_person(client):
     assert items[other]["key"] not in items[iid]["suggested_depends"]
 
 
-async def test_conflict_after_oracle_names_oracle(client):
+async def test_a_person_edit_over_oracles_draft_stays(client):
     w = await World().build()
     c = (await w.add(client, "owner", "Import from files"))["change"]
     iid = c["target"]["item_id"]
@@ -227,12 +230,17 @@ async def test_conflict_after_oracle_names_oracle(client):
         job.output = await additions.run_item_draft(s, job, ask)
         job.status = "succeeded"
         await s.commit()
-    # The person saw the item before Oracle's outcome came in.
+    # The person opened the outcome before Oracle's came in, and saves after it did.
     r = await client.post(CHANGES, headers=w.as_("owner"), json={
         "op": "edit_outcome", "target": {"item_id": iid}, "before": {"outcome": None},
         "after": {"outcome": "Mine"}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert (await w.items(client))[iid]["outcome"] == "Mine"
+    # A person's write since is still theirs: one who saw it empty is told who changed it.
+    r = await client.post(CHANGES, headers=w.as_("owner"), json={
+        "op": "edit_outcome", "target": {"item_id": iid}, "before": {"outcome": None},
+        "after": {"outcome": "Theirs"}})  # fmt: skip
     assert r.status_code == 409, r.text
-    detail = r.json()["detail"]
-    assert detail["message"] == "Changed since you saw it: changed by Oracle"
-    assert detail["changed_by"]["name"] == "Oracle"
+    assert r.json()["detail"]["changed_by"]["name"] != "Oracle"
+    assert (await w.items(client))[iid]["outcome"] == "Mine"
     _ = date

@@ -93,6 +93,16 @@ class VersionWarning(BaseModel):
         return self
 
 
+class ImportFix(BaseModel):
+    """The action that resolves a refused draft's problem (vqa-one-pager (e)):
+    ``add_date_source`` opens Plan › Dates for the PRD (``prd_document_id``, none when the
+    roadmap has no known PRD) filtered to the ``days`` (YYYY-MM-DD) that need a source."""
+
+    action: Literal["add_date_source"]
+    prd_document_id: uuid.UUID | None = None
+    days: list[str] = []
+
+
 class ImportProblem(BaseModel):
     code: Literal["missing_section_id", "duplicate_section_id", "unknown_citation"] | str
     message: str
@@ -101,10 +111,25 @@ class ImportProblem(BaseModel):
     line: int | None = None
     # The ids agents and the API need (#396), when the message is one a person reads.
     refs: dict[str, str | list[str]] = {}
+    fix: ImportFix | None = None
+
+
+# How many problems a refusal's detail names before it counts the rest.
+NAMED_PROBLEMS = 3
+
+
+def rejected_detail(problems: list[ImportProblem]) -> str:
+    """A refused draft's detail (vqa-one-pager (e)): its problems in their own words, never
+    only how many there are ("draft rejected: 1 problem(s)" told no one what to change)."""
+    said = list(dict.fromkeys(p.message for p in problems))
+    named = "; ".join(said[:NAMED_PROBLEMS])
+    more = len(said) - NAMED_PROBLEMS
+    return f"draft rejected: {named}" + (f" (and {more} more)" if more > 0 else "")
 
 
 class ImportErrorResponse(BaseModel):
-    """422 body when a draft cannot be imported. Lists every problem, not just the first."""
+    """422 body when a draft cannot be imported. Lists every problem, not just the first;
+    the detail names them (:func:`rejected_detail`)."""
 
     detail: str
     errors: list[ImportProblem]

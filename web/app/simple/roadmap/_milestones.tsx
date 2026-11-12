@@ -95,7 +95,8 @@ const forKind = (k: KindFields): KindFields => {
   };
 };
 
-type Draft = { id: string | null; code: string; name: string; date: string; goal_id: string | null; item_ids: string[]; counts_when: string; second: boolean; prd: boolean; k: KindFields | null };
+/** `only` "name" (home-milestone-rename): the card renames it alone, as a goal's own milestone's does. */
+type Draft = { id: string | null; code: string; name: string; date: string; goal_id: string | null; item_ids: string[]; counts_when: string; second: boolean; prd: boolean; k: KindFields | null; only?: "name" };
 type Toast = { words: string; undo: (() => Promise<unknown>) | null };
 
 export interface MsCtl {
@@ -122,6 +123,8 @@ export interface MsCtl {
   overLane: (goal: string | null) => void;
   begin: (date: string, goal: string | null) => void;
   edit: (m: GoalMilestone) => void;
+  /** home-milestone-rename: its card for its name alone (Home's plan rows). */
+  rename: (m: GoalMilestone) => void;
   /** An item it waits on, opened in the item's own panel (the milestone's card closes). */
   openItem: (itemId: string) => void;
   /** A bar tapped while the card is open: an item it waits on (again: no longer). */
@@ -143,6 +146,24 @@ export interface MsCtl {
 const Ctx = createContext<MsCtl | null>(null);
 export const MsProvider = ({ value, children }: { value: MsCtl; children: ReactNode }) => <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 export const useMsCtl = () => useContext(Ctx);
+
+/** home-milestone-rename: a milestone's rename in place (the card, its name alone), by its id; null where the
+ * reader may neither change nor propose it. Home's plan rows and the one-pager's Timeline strip rows. */
+export const renameOf = (ms: MsCtl | null) => (id: string) => {
+  const m = ms?.list.find((x) => x.id === id);
+  return ms && m && (m.can_change || m.can_propose) ? () => ms.rename(m) : null;
+};
+
+/** one-pager-milestone-rename: the roadmap milestone a PRD's Timeline strip row draws, by the row's roadmap code
+ * (one_pager.roadmap_codes_of): the one of that code holding the row's items, else the PRD's own of that code,
+ * else the only one of it. A row with no code is no roadmap milestone (the PRD's written one). Goal milestones
+ * only, as Home's rows. */
+export function stripMilestone(ms: MsCtl | null, row: { milestone: boolean; code?: string | null; item_ids?: string[] }, prdId: string): string | undefined {
+  if (!ms || !row.milestone || !row.code) return undefined;
+  const ids = new Set(row.item_ids ?? []);
+  const coded = ms.list.filter((m) => !m.goal_target && msCode(m) === row.code);
+  return (coded.find((m) => m.item_ids.some((i) => ids.has(i))) ?? coded.find((m) => m.prd?.id === prdId) ?? (coded.length === 1 ? coded[0] : undefined))?.id;
+}
 
 /** The milestones' state and their changes for one read of the roadmap (`reload` reads it again). */
 export function useMilestones({
@@ -187,6 +208,7 @@ export function useMilestones({
     await reload();
     setToast(t);
   };
+  const draftOf = (m: GoalMilestone): Draft => ({ id: m.id, code: msCode(m), name: m.name, date: m.pending?.date ?? m.date ?? data.today, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, second: false, prd: !!m.prd, k: kindFields(m) });
   const patch = (id: string, body: Schemas["SimpleGoalMilestonePatch"]) => unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: id } }, body }));
   return {
     asking,
@@ -232,7 +254,11 @@ export function useMilestones({
     },
     edit: (m) => {
       setToast(null);
-      setDraft({ id: m.id, code: msCode(m), name: m.name, date: m.pending?.date ?? m.date ?? data.today, goal_id: m.goal_id ?? null, item_ids: m.item_ids, counts_when: m.counts_when, second: false, prd: !!m.prd, k: kindFields(m) });
+      setDraft(draftOf(m));
+    },
+    rename: (m) => {
+      setToast(null);
+      setDraft({ ...draftOf(m), only: "name" });
     },
     pick: (itemId) => {
       if (!draft || draft.prd) return false;
@@ -257,8 +283,9 @@ export function useMilestones({
       }
       if (d.id) {
         const was = list.find((x) => x.id === d.id)!;
-        // milestone-rename: a goal's own milestone takes a name alone (the goal keeps its title).
-        if (was.goal_target) {
+        // milestone-rename: a goal's own milestone takes a name alone (the goal keeps its title);
+        // home-milestone-rename: so does one renamed from Home.
+        if (was.goal_target || d.only === "name") {
           await patch(d.id, { name: d.name.trim() || was.name });
           setDraft(null);
           await done({ words: `${words({ code: d.code, name: d.name.trim() || was.name })} saved`, undo: () => patch(was.id, { name: was.name }) });
@@ -288,7 +315,7 @@ export function useMilestones({
     propose: async (remove) => {
       const m = draft?.id ? list.find((x) => x.id === draft.id) : null;
       if (!draft || !m) return;
-      if (m.goal_target) {
+      if (m.goal_target || draft.only === "name") {
         await unwrap(api.POST("/v1/simple/changes", { body: { op: "edit_goal_milestone", target: { milestone_id: m.id }, before: { milestone: { name: m.name } }, after: { milestone: { name: draft.name.trim() || m.name } } } }));
         setDraft(null);
         await done({ words: `Proposed a change to ${words(m)} · it waits in Needs a decision`, undo: null });
@@ -1231,8 +1258,9 @@ export function MsCard() {
   const reads = rights === "read";
   const head = !d.id ? (d.second ? "Next milestone" : "New milestone") : reads ? `${d.code} ${d.name}` : `Edit ${d.code}`;
   const late = (id: string) => (ms.items.get(id)?.end.date ?? "") > d.date;
-  // milestone-rename: a goal's own milestone: its name, in place (its date and measure are the goal's).
-  if (own?.goal_target)
+  // milestone-rename: a goal's own milestone: its name, in place (its date and measure are the goal's);
+  // home-milestone-rename: any milestone renamed from Home, the same card.
+  if (own?.goal_target || (own && d.only === "name"))
     return (
       <div data-testid="ms-card" data-rights={rights} role="dialog" aria-label={head} className={`${cls} flex flex-col gap-2.5 bg-surface p-4 shadow-xl`}>
         {phone && <i aria-hidden className="mx-auto mb-1 block h-1 w-10 rounded-full bg-line-strong" />}
@@ -1240,7 +1268,7 @@ export function MsCard() {
           <h2 className="text-[15px] font-semibold">{head}</h2>
           <span className="text-xs text-text2">{`${goalTitle} · ${day(d.date)}`}</span>
         </div>
-        <NameField code={d.code} value={d.name} reads={reads} onChange={(name) => set({ name })} tip="The goal keeps its own name; its date and measure change on the goal." />
+        <NameField code={d.code} value={d.name} reads={reads} onChange={(name) => set({ name })} tip={own.goal_target ? "The goal keeps its own name; its date and measure change on the goal." : undefined} />
         <Asked m={own} />
         {error}
         <div className="flex flex-wrap items-center gap-2 pt-1">

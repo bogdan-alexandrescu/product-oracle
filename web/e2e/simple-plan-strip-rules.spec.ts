@@ -15,14 +15,17 @@ import { expect, test } from "./test";
  * drawing (simple-plan-strip.spec.ts drives it). No page: pure rules.
  */
 
-type Case = { name: string; today: string; items: PlanInput[]; expected: unknown };
+type Case = { name: string; today: string; coded?: boolean; items: PlanInput[]; expected: unknown };
 const CASES: Case[] = JSON.parse(readFileSync(path.join(__dirname, "../../api/tests/fixtures/plan_strip_cases.json"), "utf8"));
 
 for (const c of CASES) {
   test(`the plan strip as the API draws it: ${c.name}`, () => {
     // The shared rules; which items a row holds is the one-pager's (its own spec).
-    const got = planByMonth(c.items, c.today);
-    for (const r of got?.rows ?? []) delete (r as { item_ids?: string[] }).item_ids;
+    const got = planByMonth(c.items, c.today, null, c.coded ?? false);
+    for (const r of got?.rows ?? []) {
+      delete (r as { item_ids?: string[] }).item_ids;
+      delete (r as { code?: string | null }).code;
+    }
     expect(got).toEqual(c.expected);
   });
 }

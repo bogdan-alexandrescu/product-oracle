@@ -13,9 +13,9 @@ const TREND_REVISIONS = 24;
 /**
  * The company's goals as Home's goals panel shows them (tagged G1, G2… in baseline order),
  * with a trend for each goal shown that has a current value. Home and Plan read the same,
- * so a goal tag means the same thing on both.
+ * so a goal tag means the same thing on both; `short` (Home only) writes money short ("$50k").
  */
-export function useGoals(scope: string): {
+export function useGoals(scope: string, { short = false }: { short?: boolean } = {}): {
   goals: GoalView[] | undefined;
   history: Map<string, Point[]>;
   /** The trends are loading: a goal with a current value and no history yet keeps its trend's room meanwhile. */
@@ -24,7 +24,7 @@ export function useGoals(scope: string): {
   loading: boolean;
 } {
   const goalsQ = useQuery(`${scope}|goals`, () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
-  const goals = useMemo(() => (goalsQ.data ? goalViews(goalsQ.data) : undefined), [goalsQ.data]);
+  const goals = useMemo(() => (goalsQ.data ? goalViews(goalsQ.data, undefined, { short }) : undefined), [goalsQ.data, short]);
   // A trend for each goal shown that has a current value, from its newest revisions only.
   const shown = (goals ? shownGoals(goals) : []).filter((g) => g.currentText);
   const tracked = shown.map((g) => g.id);

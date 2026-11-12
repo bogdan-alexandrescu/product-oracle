@@ -17,6 +17,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * - protects = a new item's dependency ideas from Oracle are suggestions a person adds, and a
  *   person's outcome typed while Oracle drafts stays; fails_when = Oracle's draft adds a
  *   dependency on its own, or overwrites the person's outcome.
+ * - protects = a person who opened the outcome while Oracle drafted keeps what they typed when
+ *   Oracle's draft lands before they save (a slow machine); fails_when = the save is refused as
+ *   changed by Oracle and Oracle's outcome shows.
  */
 
 const ROADMAP = "/simple/roadmap";
@@ -154,6 +157,33 @@ for (const phone of [false, true]) {
       await tap(idea.getByRole("button", { name: /^Add / }));
       await expect(card.getByTestId("card-depends-row")).toHaveCount(1);
       await expect(card.getByTestId("card-depends-idea")).toHaveCount(0);
+    });
+
+    test(`a person's outcome stays when Oracle's draft lands before they save (${where})`, async ({ page }) => {
+      await login(page);
+      await page.goto(ROADMAP);
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      if (phone) {
+        await page.getByTestId("quick-add-open").click();
+        const sheet = page.getByRole("dialog", { name: "Add an item" });
+        await sheet.getByLabel("Title").fill("Snooze an alert");
+        await sheet.getByLabel("Roadmap").selectOption({ label: "Alerts roadmap" });
+        await sheet.getByRole("button", { name: "Add", exact: true }).click();
+        await expect(sheet).toBeHidden();
+      } else {
+        await page.getByLabel("Add an item").fill("Snooze an alert");
+        await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
+        await page.getByLabel("Add an item").press("Enter");
+      }
+      const card = panel(page);
+      await expect(card.getByTestId("item-drafting")).toHaveText("Oracle is drafting…");
+      await tap(card.getByRole("button", { name: "Change the outcome" }));
+      await card.getByTestId("card-outcome-edit").getByLabel("Outcome").fill("Admins pause one noisy alert for a day");
+      // Oracle's draft is done before the person saves, and the page has not read it yet.
+      await page.clock.setSystemTime((await page.evaluate(() => Date.now())) + 5_000);
+      await tap(card.getByTestId("card-outcome-edit").getByRole("button", { name: "Save" }));
+      await expect(card.getByTestId("item-drafting")).toHaveCount(0, { timeout: 10_000 });
+      await expect(card.getByTestId("card-outcome")).toContainText("Admins pause one noisy alert for a day");
     });
   });
 }

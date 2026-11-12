@@ -10,7 +10,7 @@
  * and Home leave it out without knowing about Trash.
  */
 import type { Schemas } from "@/lib/api/client";
-import { reopenDraftOnly, type SimpleDb } from "./simple-roadmap";
+import { linkOf, reopenDraftOnly, type SimpleDb } from "./simple-roadmap";
 
 type Role = Schemas["Me"]["role"];
 type TrashItem = Schemas["TrashItem"];
@@ -46,8 +46,8 @@ export interface TrashEntryRow {
   /** trash-features-goals: a feature's roadmap (slug), so Restore and the purge touch only its rows. */
   roadmap?: string;
   /** trash-features-goals: a goal deleted with features moved to another goal: their goal_ids
-   * as they were (trash_items' `links`), put back on Restore. */
-  goal_links?: { id: string; goal_ids: string[]; left?: string[] }[];
+   * as they were (trash_items' `links`), put back on Restore, with the seeded links they had (GoalBucketsDb.lazy_links). */
+  goal_links?: { id: string; goal_ids: string[]; left?: string[]; lazy?: string[] }[];
   /** goal-delete-dated: the items whose own goal it was, their goals as they were (trash_items' `goal_ids`). */
   item_goals?: { key: string; roadmap?: string; goals: string[]; from: string; to: string; after?: string[] }[];
   /** port-an-decisions: a removed agenda item's meeting, row and place, put back on Restore. */
@@ -212,7 +212,7 @@ export function mayRestore(entry: TrashEntryRow, me: { id: string; role: string 
  * db is kept as JSON, so Restore finds them by the entry's root, never through a closure. */
 export type TrashedSimple = {
   items: { key: string; roadmap?: string; depends?: string[]; trashed?: boolean }[];
-  goal_buckets?: { goals: { id: string; trashed?: boolean }[]; features?: { id: string; goal_ids: string[] }[] };
+  goal_buckets?: { goals: { id: string; trashed?: boolean }[]; features?: { id: string; goal_ids: string[] }[]; lazy_links?: string[] };
   /** build-milestones-on-roadmap: each roadmap's goal milestones, their gates the item keys they wait on. */
   goal_milestones?: { roadmap: string; gates: string[] }[];
   /** trash-features-goals review 4: the roadmaps' versions, each with the features it was made without. */
@@ -261,7 +261,11 @@ export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string,
   for (const l of entry.goal_links ?? []) {
     const f = simple?.goal_buckets?.features?.find((x) => x.id === l.id);
     const left = new Set(l.left ?? f?.goal_ids ?? []);
-    if (f && f.goal_ids.length === left.size && f.goal_ids.every((g) => left.has(g))) f.goal_ids = [...l.goal_ids];
+    if (f && f.goal_ids.length === left.size && f.goal_ids.every((g) => left.has(g))) {
+      f.goal_ids = [...l.goal_ids];
+      const gb = simple!.goal_buckets!;
+      if (l.lazy && gb.lazy_links) gb.lazy_links = [...gb.lazy_links.filter((x) => !x.startsWith(linkOf(f.id, ""))), ...l.lazy];
+    }
   }
   // The goal goes back where it was on each item the delete moved (changed since); the goal it moved them to comes
   // off only where the delete added it (its own goal, the item's goal_ids in the API).

@@ -686,6 +686,7 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "mark_request_reply_sent",
         "merge_entity",
         "merge_request",
+        "merge_simple_priority_twin",
         "monitor_track",
         "move_bucket_feature",
         "open_oracle_action",

@@ -1,4 +1,4 @@
-import { HOME_MILESTONE_BARE_TRACK_SCENARIO, HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_LEAD_GOALS_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
+import { HOME_MILESTONE_BARE_TRACK_SCENARIO, HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOAL_GROUPS_SCENARIO, HOME_MILESTONE_GOAL_GROUPS_TRACK_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_LEAD_GOALS_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -430,6 +430,41 @@ test("a goal milestone joins the track's of a matching name beside another goal'
   const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: mapped }) });
   await line.getByTestId("home-strip-items-tip").click();
   await expect(line.getByRole("tooltip").getByText(/^Also: /)).toHaveText(`Also: ${mapped.split(" · ")[0]} Measured`);
+});
+
+/*
+ * Card home-milestone-goal-groups, on "home-milestones-goal-groups" (review of 797e41166, "Join
+ * only within the same goal", the owner, Nov 11): protects = a PRD's "Early access" of no goal that
+ * Faster activation's PRD "Early access" and its own joined is Faster activation's, so Grow
+ * retention's own "Early access" keeps a row and code of its own; fails_when = one row holds all
+ * four items (two goals share a code and Grow retention's milestone has no row).
+ */
+test("a goal's milestone never joins a milestone another goal's already joined", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_GOAL_GROUPS_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(labels.filter((l) => /^M\d+ · Early access · /.test(l))).toHaveLength(2);
+  const faster = oneLabel(labels, /^M\d+ · Early access · 3 items$/);
+  const retention = oneLabel(labels, /^M\d+ · Early access · 1 item$/);
+  expect(faster.split(" · ")[0]).not.toBe(retention.split(" · ")[0]);
+  expect(await itemsOf(page, faster)).toEqual([["Health log", "Sample data import", "Setup checklist"]]);
+  expect(await itemsOf(page, retention)).toEqual([["Welcome video"]]);
+});
+
+/*
+ * Card home-milestone-goal-groups-track, on "home-milestones-goal-groups-track" (re-review of
+ * 7f200f5cf): protects = Grow retention's own "Early access" joins the track's by code first, so
+ * Faster activation's own "Early access" never joins the PRD's milestone that track holds, whatever
+ * the goal order; fails_when = one row holds all four items (two goals share a code).
+ */
+test("a goal's milestone never joins a PRD milestone whose track another goal's joined by code", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_GOAL_GROUPS_TRACK_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(labels.filter((l) => /^M\d+ · Early access · /.test(l))).toHaveLength(2);
+  const faster = oneLabel(labels, /^M\d+ · Early access · 1 item$/);
+  const track = oneLabel(labels, /^M\d+ · Early access · 3 items$/);
+  expect(faster.split(" · ")[0]).not.toBe(track.split(" · ")[0]);
+  expect(await itemsOf(page, faster)).toEqual([["Sample data import"]]);
+  expect(await itemsOf(page, track)).toEqual([["Health log", "Setup checklist", "Welcome video"]]);
 });
 
 /*

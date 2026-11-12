@@ -20,6 +20,7 @@ from oracle import company_time
 from oracle.baseline import figures
 from oracle.baseline.figures import Figure
 from oracle.baseline.goal_order import sort_goals
+from oracle.baseline.goals import figure_words
 from oracle.baseline.models import Edge, Entity, GoalMeasurement, Proposal
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
@@ -82,8 +83,9 @@ def _typed(value: Any, unit: Any) -> Figure | None:
     if isinstance(value, bool) or not isinstance(value, int | float):
         return figures.parse_figure(value)
     unit = unit if isinstance(unit, str) else ""
-    if unit in CURRENCY:
-        return Figure(value=float(value), currency=CURRENCY[unit])
+    # A currency stored in any case ("usd", as the goal form stores it, is "USD").
+    if unit.strip().upper() in CURRENCY:
+        return Figure(value=float(value), currency=CURRENCY[unit.strip().upper()])
     return Figure(value=float(value), unit=unit)
 
 
@@ -105,22 +107,17 @@ def day_text(d: date | str) -> str:
     return f"{MONTHS[d.month - 1]} {d.day}, {d.year}"
 
 
-def _number(v: float) -> str:
-    return str(int(v)) if float(v).is_integer() else f"{round(float(v), 10):g}"
-
-
 def figure_text(attrs: dict[str, Any], key: str) -> str | None:
-    """A goal's current or target as Home writes it (web/app/home/_goals.ts typedText):
-    a typed number with its unit ("9.4%", "$4M", "400 teams"), else the text as written."""
+    """A goal's current or target as the web writes it (web/app/home/_goals.ts typedText): a
+    typed number with its unit ("9.4%", "$4,000,000", "400 teams"; goal-money-full: money in
+    full, short on Home only), else the text as written."""
     v, unit = attrs.get(key), attrs.get("unit")
     typed = isinstance(v, int | float) and not isinstance(v, bool) and isinstance(unit, str)
     # Home types the target only when it says which way it is met.
     if key == "target" and attrs.get("comparison") not in ("at_least", "above", "at_most", "below"):
         typed = False
     if typed and unit:
-        if unit in CURRENCY:
-            return f"{CURRENCY[unit]}{_amount(float(v), abs(float(v)) >= 1e3)}"
-        return f"{_number(v)}%" if unit == "%" else f"{_number(v)} {unit}"
+        return figure_words(round(float(v), 10), unit)
     raw = _first(attrs, key)
     return None if raw is None or raw == "" else str(raw)
 
@@ -191,8 +188,13 @@ def distance_text(attrs: dict[str, Any]) -> str:
     distance = left / MS.get(t.unit, 1)
     shown_unit = "pts" if t.unit == "%" else t.unit
     cur = t.currency or c.currency
-    shown = f"{cur}{_amount(distance, t.compact or c.compact)}"
-    if float(shown.lstrip("$€£").rstrip("kMB") or 0) == 0:
+    compact = t.compact or c.compact
+    # goal-money-full: money in full ("$20,000") unless written short ("$4M" reads "$900k").
+    if cur and not compact:
+        shown = figure_words(_round1(distance), cur)
+    else:
+        shown = f"{cur}{_amount(distance, compact)}"
+    if float(shown.lstrip("$€£").rstrip("kMB").replace(",", "") or 0) == 0:
         shown = f"{cur}{float(f'{distance:.1g}'):g}"
     return f"{shown}{' ' + shown_unit if shown_unit else ''} to go"
 

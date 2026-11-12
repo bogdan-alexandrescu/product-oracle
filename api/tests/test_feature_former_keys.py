@@ -28,19 +28,22 @@ and pass now; not red-first):
 - test_a_roadmap_dependency_on_a_features_old_key_shows_its_name: protects=an item that
   depends on the feature's old key reads its name; fails_when=with_dependency_names reads
   features by their key now only; no_claim=the web's own fallback.
-- test_a_strategy_naming_a_features_old_key_finds_it: protects=a stop choice naming the old
-  key is no unknown_feature and approving it sets its affects edge on the feature;
-  fails_when=frontmatter._missing or sync._keyed read by the key now only.
-- test_an_engineering_brief_for_a_features_old_key_reads_its_requirements: protects=a brief
-  keyed by the old key is registered against the feature and its requirements;
-  fails_when=engineering.store._feature reads by the key now only; no_claim=the run flow.
+- test_a_strategy_naming_a_features_old_key_is_no_unknown_feature: protects=a stop choice
+  naming the old key raises no unknown_feature at import; fails_when=frontmatter._missing
+  reads by the key now only.
+- test_an_approved_strategy_naming_a_features_old_key_sets_its_edge: protects=approving it
+  sets its affects edge on the feature; fails_when=sync._keyed reads by the key now only.
+- test_an_engineering_brief_for_a_features_old_key_reads_its_requirements: protects=a lead
+  gives a feature its code after the run's order is approved, and the brief the PRD draft
+  registers, keyed by the old key, reads as the feature's with its requirements (the brief
+  read route and its row); fails_when=engineering.store._feature reads by the key now only;
+  no_claim=a feature set or order naming an old key (they read the key now only).
 - test_an_approved_check_sets_the_size_on_a_feature_by_its_old_key: protects=the size a
-  lead set at the check is written to the feature; fails_when=check.on_approved reads by
-  the key now only; no_claim=the run flow.
+  lead set at the check is written to the feature (real run, checkpoint and staged action
+  rows); fails_when=check.on_approved reads by the key now only; no_claim=the run flow.
 """
 
 import uuid
-from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -50,12 +53,14 @@ from oracle.auth.deps import Principal
 from oracle.baseline import fixes
 from oracle.baseline.models import Edge, Entity
 from oracle.engineering import check as eng_check
-from oracle.engineering import store as eng_store
 from oracle.launches import tiers
 from oracle.models import AuditEvent
 from oracle.roadmap import items as roadmap_items
 from oracle.roadmap.models import RoadmapItem
+from oracle.runs import flows
+from oracle.runs.models import Checkpoint, CheckpointAction, Run
 from oracle.simple import changes
+from oracle.swarm import Outcome, set_runtime
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import entity, make_ctx
 from tests.coverage_helpers import count_statements
@@ -191,29 +196,54 @@ async def test_a_roadmap_dependency_on_a_features_old_key_shows_its_name(client)
     assert item["depends_titles"] == {"trip-planner": "Trip planner"}, item
 
 
-async def test_a_strategy_naming_a_features_old_key_finds_it(client):
-    ctx, planner = await _planner(client)
+async def test_a_strategy_naming_a_features_old_key_is_no_unknown_feature(client):
+    ctx, _ = await _planner(client)
     md = strategy_md([choice("one", goals=[]), choice("trips", "stop", features=["trip-planner"])])
     v = await imported(client, ctx.as_("owner"), STRATEGY, md)
     assert "unknown_feature" not in {w["code"] for w in v["warnings"]}, v["warnings"]
+
+
+async def test_an_approved_strategy_naming_a_features_old_key_sets_its_edge(client):
+    ctx, planner = await _planner(client)
+    md = strategy_md([choice("one", goals=[]), choice("trips", "stop", features=["trip-planner"])])
+    await imported(client, ctx.as_("owner"), STRATEGY, md)
     await approved(client, ctx.as_("owner"), STRATEGY, 1)
     affects = await edges(ctx.tenant_id, "affects")
     assert [e.dst_id for e in affects] == [uuid.UUID(planner["id"])], affects
 
 
-async def test_an_engineering_brief_for_a_features_old_key_reads_its_requirements(client):
-    ctx, planner = await _planner(client)
+async def test_an_engineering_brief_for_a_features_old_key_reads_its_requirements(
+    client, monkeypatch
+):
+    from tests.tech_brief_helpers import NO_MAP, BriefsRuntime, flow_with_eng_check, seed_features
+    from tests.test_tech_briefs import advance_to, brief_rows, decide, start
+
+    monkeypatch.setitem(flows.FLOWS, "baseline_to_prd", flow_with_eng_check())
+    set_runtime(BriefsRuntime({"eng_check": [Outcome(artifacts={flows.BRIEFS_FILE: NO_MAP})]}))
+    try:
+        ctx = await make_ctx()
+        ids = await seed_features(ctx.tenant_id)
+        owner = ctx.as_("owner")
+        run = await start(client, owner, "trip-briefs")
+        # The order approved, a lead gives feature-a its code before the PRD draft
+        # registers the briefs: they still name the key it had before.
+        await decide(client, owner, await advance_to(client, owner, run["id"], "priority_order"))
+        r = await client.post(f"{B}/entities/{ids['feature-a']}/code", headers=ctx.as_("approver"))
+        assert r.status_code == 200, r.text
+        await advance_to(client, owner, run["id"], "prd_review")
+    finally:
+        set_runtime(None)
     async with tenant_session(ctx.tenant_id) as s:
-        req = Entity(type="requirement", key="trip-dates", title="Pick trip dates", attrs={},
-                     status="confirmed", origin="user", locked=False)  # fmt: skip
-        s.add(req)
-        await s.flush()
-        s.add(Edge(src_id=req.id, dst_id=uuid.UUID(planner["id"]), type="part_of",
-                   attrs={}, status="confirmed", origin="user", locked=False))  # fmt: skip
-        await s.commit()
-        feature = await eng_store._feature(s, "trip-planner")
-        assert feature is not None and feature.id == uuid.UUID(planner["id"])
-        assert await eng_store._requirements(s, feature.id) == [req.id]
+        assert (await s.get(Entity, ids["feature-a"])).key == "F-01"
+    r = await client.get(
+        "/v1/tech-briefs", params={"prd": "trip-briefs", "feature": "feature-a"},
+        headers=ctx.as_("viewer"),
+    )  # fmt: skip
+    assert r.status_code == 200, r.text
+    (brief,) = r.json()
+    assert brief["feature"]["entity_id"] == str(ids["feature-a"]), brief
+    by_key = {q.params["feature_key"]: q for q, _ in await brief_rows(ctx.tenant_id)}
+    assert set(by_key["feature-a"].requirement_ids) == {ids["req-a1"], ids["req-a2"]}, by_key
 
 
 async def test_an_approved_check_sets_the_size_on_a_feature_by_its_old_key(client):
@@ -221,14 +251,19 @@ async def test_an_approved_check_sets_the_size_on_a_feature_by_its_old_key(clien
     lead = ctx.users["approver"]
     principal = Principal(tenant_id=ctx.tenant_id, kind="user", role="approver",
                           user_id=lead.id)  # fmt: skip
-    cp = SimpleNamespace(
-        id=uuid.uuid4(),
-        payload={eng_check.PAYLOAD_KEY: {"features": [{"key": "trip-planner", "size": "s"}]}},
-    )
-    size = SimpleNamespace(item_key="trip-planner", field="size", state="staged", kind="edit",
-                           value="l")  # fmt: skip
+    payload = {eng_check.PAYLOAD_KEY: {"features": [{"key": "trip-planner", "size": "s"}]}}
     async with tenant_session(ctx.tenant_id) as s:
-        await eng_check.on_approved(s, principal, SimpleNamespace(id=uuid.uuid4()), cp, [size])
+        run = Run(flow="baseline_to_prd", status="running")
+        s.add(run)
+        await s.flush()
+        cp = Checkpoint(run_id=run.id, kind=eng_check.KIND, status="pending", payload=payload)
+        s.add(cp)
+        await s.flush()
+        size = CheckpointAction(checkpoint_id=cp.id, item_key="trip-planner", kind="edit",
+                                field="size", state="staged", value="l")  # fmt: skip
+        s.add(size)
+        await s.flush()
+        await eng_check.on_approved(s, principal, run, cp, [size])
         await s.commit()
     async with tenant_session(ctx.tenant_id) as s:
         feature = await s.get(Entity, uuid.UUID(planner["id"]))

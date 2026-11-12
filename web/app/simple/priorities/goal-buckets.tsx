@@ -722,14 +722,14 @@ export const nextNoteId = () => ++noteId;
 
 /** The writes, each answering with the note to show and what Undo puts back. */
 export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note | null) => void, setError: (e: string | null) => void) {
-  async function run(go: () => Promise<{ undo: Undo }>, text: ReactNode, refused?: (line: string) => void): Promise<boolean> {
+  async function run<T extends { undo: Undo }>(go: () => Promise<T>, text: ReactNode | ((out: T) => ReactNode), refused?: (line: string) => void): Promise<boolean> {
     try {
       const out = await go();
       setError(null);
       // The note shows with the page as the change left it, so its place is checked against that
       // (reload reads the page and an open feature panel again, once: sendCardChanged).
       await reload();
-      setNote({ id: ++noteId, text, undo: out.undo });
+      setNote({ id: ++noteId, text: typeof text === "function" ? text(out) : text, undo: out.undo });
       return true;
     } catch (e) {
       // A goal changed since its form opened: the goals read again, the form says so and refreshes.
@@ -755,9 +755,12 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
               body: { title: f.title, measure: f.measure, target: f.target, due: f.day, ...(f.owner !== undefined ? { owner_id: f.owner } : {}), ...(f.on_roadmap !== undefined ? { on_roadmap: f.on_roadmap } : {}), seen: { title: seen.title, measure: seen.measure ?? null, target: seen.target ?? null, due: seen.due ?? null } },
             }),
           ),
-        <>
-          Saved {f.title.trim()}: {lower(f.target.trim())} by {dayOf(f.day, year)}.
-        </>,
+        // goal-target-kept: the target as saved (a bare number reads in the goal's unit).
+        (out) => (
+          <>
+            Saved {f.title.trim()}: {lower((out.goal?.target ?? f.target).trim())} by {dayOf(f.day, year)}.
+          </>
+        ),
         refused,
       ),
     archive: (g: Goal, to: string | null, text: ReactNode) => run(() => unwrap(api.POST("/v1/simple/goal-buckets/goals/{goal_id}/archive", { params: { path: { goal_id: g.id } }, body: { to_goal_id: to } })), text),

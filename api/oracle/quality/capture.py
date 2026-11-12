@@ -64,10 +64,9 @@ def direction_of(attrs: dict[str, Any], target: float | None, current: float | N
 def figure_text(value: float | None, unit: str | None) -> str | None:
     if value is None:
         return None
-    shown = f"{value:g}"
-    if not unit:
-        return shown
-    return f"{shown}{unit}" if unit == "%" else f"{shown} {unit}"
+    from oracle.baseline.goals import figure_words
+
+    return figure_words(value, unit)
 
 
 async def _goal_for(db: AsyncSession, feature_id: uuid.UUID) -> Entity | None:

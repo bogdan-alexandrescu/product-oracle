@@ -22,9 +22,8 @@ const tap = async (l: Locator) => {
 async function goalInPanel(page: Page): Promise<string> {
   await page.goto("/simple/goals");
   await expect(page.getByTestId("gm-page")).toBeVisible();
-  const card = page.getByTestId("ld-feature").filter({ hasText: FEATURE }).first();
-  await tap(card);
-  await card.getByTestId("ld-open").click();
+  const chip = page.getByTestId("gm-chip").filter({ hasText: FEATURE }).first();
+  await tap(chip.getByRole("button", { name: new RegExp(FEATURE) }).first());
   const panel = page.getByTestId("gm-feature-panel").getByTestId("floating-card");
   await expect(panel).toBeVisible();
   const goal = (await panel.getByTestId("card-goal").innerText()).trim();

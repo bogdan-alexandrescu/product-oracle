@@ -15,7 +15,8 @@ and the features serving them.
   on track at three quarters of the threshold or more, at risk below. A gate nobody has
   confirmed yet is only proposed. A goal milestone with no threshold has no gate yet.
 - The milestones are the goal milestones of Simple Roadmap (``roadmap_id`` and ``goal_id``
-  set, not deleted), in the order of what each comes after (``after_id``, picked by people).
+  set, not deleted; a PRD's only while its plan holds it, as the roadmap reads it), in the
+  order of what each comes after (``after_id``, picked by people).
 - The scoreboard (owner, Nov 5): each goal names the metric that gives it its readings (a
   live metric whose ``goal_id`` is the goal: its weekly values become the goal's
   measurements) and what is missing (``metric``: none and no reading; ``values``: a metric
@@ -47,7 +48,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from oracle import company_time
 from oracle.auth.models import User
 from oracle.baseline.goal_order import sort_goals
-from oracle.baseline.goals import COMPARISONS, goal_name, meets
+from oracle.baseline.goals import COMPARISONS, CURRENCY_SIGNS, figure_words, goal_name, meets
 from oracle.baseline.models import Entity, GoalMeasurement
 from oracle.docs.models import Document
 from oracle.launches.models import Launch
@@ -309,10 +310,10 @@ def _f(v: Decimal | float | int | None) -> float | None:
 
 
 def amount(v: float, unit: str) -> str:
-    """A number as people read it: $20k, $900, 5.6, 12."""
-    if unit == "$":
-        return f"${round(v / 100) / 10:g}k" if v >= 1000 else f"${v:g}"
-    return f"{round(v * 10) / 10:g}"
+    """A number in its unit as people read it (goal-figure-words): $20,000, €900, 5.6,
+    1,200 shops; a count to one decimal."""
+    money = (unit or "").strip().lower() in CURRENCY_SIGNS
+    return figure_words(v if money else round(v * 10) / 10, unit)
 
 
 def _short(d: date | None) -> str | None:
@@ -419,6 +420,21 @@ async def _on_map(db: AsyncSession) -> list[TrackMilestone]:
     ).all()
     feeding = set(await company.feeding_ids(db, list({m.roadmap_id for m in rows})))
     rows = [m for m in rows if m.roadmap_id in feeding]
+    # Goal map codes (Nov 10): a PRD's milestone is on the map while its PRD's plan holds it
+    # (by its code, the PRD not in Trash), as the roadmap reads it (goal_milestones
+    # .list_for_roadmaps): one the plan dropped has no roadmap code, so it is not drawn.
+    if prd_ids := {m.origin_prd_id for m in rows if m.origin_prd_id is not None}:
+        from oracle.simple import plan as plans
+
+        live = {
+            d.id
+            for d in await db.scalars(
+                select(Document).where(Document.id.in_(prd_ids), Document.deleted_at.is_(None))
+            )
+        }
+        views = await plans.views(db, live)
+        held = {(p, pm.code) for p, v in views.items() for pm in v.milestones}
+        rows = [m for m in rows if m.origin_prd_id is None or (m.origin_prd_id, m.code) in held]
     by = {m.id: m for m in rows}
     depth: dict[uuid.UUID, int] = {}
 
@@ -833,10 +849,16 @@ async def order_areas(db: AsyncSession, ids: list[uuid.UUID]) -> None:
         areas[aid].position = i
 
 
-async def edit_goal(db: AsyncSession, goal_id: uuid.UUID, target: float, who: str) -> None:
+async def edit_goal(
+    db: AsyncSession, goal_id: uuid.UUID, target: float, who: str, actor: str = "system"
+) -> None:
+    """The goal's new target, in its target history and its revision (``actor``'s)."""
+    from oracle.baseline import service as baseline
+
     goal = next((g for g in await _goals(db) if g.id == goal_id), None)
     if goal is None:
         raise GoalMapError(404, "No such goal")
+    before = baseline.entity_snapshot(goal)
     a = dict(goal.attrs or {})
     unit = a.get("unit") or ""
     today = company_time.today(await company_time.company_time_zone(db))
@@ -847,8 +869,11 @@ async def edit_goal(db: AsyncSession, goal_id: uuid.UUID, target: float, who: st
     }
     a["target_history"] = [entry, *(a.get("target_history") or [])]
     a["target"] = int(target) if float(target).is_integer() else target
+    # goal-target-kept: a typed target text would read apart from the new number.
+    a.pop("target_text", None)
     goal.attrs = a
     flag_modified(goal, "attrs")
+    baseline.revise(db, actor, goal, before, "Target changed on the Goal map")
 
 
 async def _check_after(

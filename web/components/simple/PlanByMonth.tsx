@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { InfoTip } from "@/components/ds";
+import { Icon, InfoTip } from "@/components/ds";
 import { MarkFor } from "@/components/current-state/CurrentState";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
 import { calendarDay } from "@/lib/dates";
@@ -78,6 +78,7 @@ export function PlanByMonth({
   items,
   fold = false,
   names,
+  rename,
 }: {
   plan: PlanStrip;
   /** The PRD the strip draws; none: the company roadmap, every PRD's items (Home). */
@@ -94,6 +95,9 @@ export function PlanByMonth({
   fold?: boolean;
   /** Home (home-milestones-current): the roadmap's item names by id; a row's (i) lists its items (on hover, tap or focus). */
   names?: ReadonlyMap<string, string>;
+  /** Home (home-milestone-rename): a milestone row's rename (the Roadmap's milestone card, its name alone), by its
+   * milestone's id; null where the reader may neither change nor propose it. */
+  rename?: (ms: string) => (() => void) | null;
 }) {
   const open = useOpenFeature();
   const from = ms(plan.start);
@@ -165,6 +169,7 @@ export function PlanByMonth({
       {tipCol ? (
         <div className="flex items-end gap-1">
           {axis}
+          {rename && <span aria-hidden className="w-6 flex-none" />}
           <span aria-hidden className="w-6 flex-none" />
         </div>
       ) : (
@@ -184,9 +189,11 @@ export function PlanByMonth({
           // Whose it is; with none known (a goal no loaded item names) or one a twin shares, its first item.
           const whose = r.of && !twins.some((o) => o.of === r.of) ? r.of : (rowNames[0] ?? r.of);
           const heard = twins.length && whose ? `${label}, ${whose}` : label;
+          // home-milestone-rename / one-pager-milestone-rename: the row's milestone renamed in place.
+          const go = rename && r.ms ? rename(r.ms) : null;
           const rowLabel = `${heard}${when ? ` · ${when}` : ""}: open the roadmap${prd ? ` filtered to ${prd.title}` : ""}`;
           const words = (
-            <span className={`flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2 ${named ? "" : "pointer-events-none relative"}`}>
+            <span className={`flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2 ${named ? "" : "pointer-events-none relative"} ${!named && go ? "pr-7" : ""}`}>
               {/* pre-demo QA S-11 (Home, named): the whole label, wrapped between words as the frame shows it, never
                   cut; vqa B-14 (the one-pager): one line, the whole label behind an (i) when cut. */}
               {named ? (
@@ -195,6 +202,12 @@ export function PlanByMonth({
                 </span>
               ) : (
                 <RowLabel name={rowName(r, named)} count={n} testId={testId} />
+              )}
+              {/* one-pager-milestone-rename: the row's rename sits above the row's link, as its (i) does. */}
+              {!named && go && (
+                <button type="button" aria-label={`Rename ${rowName(r, named)}`} data-testid={`${testId}-rename`} onClick={go} className="pointer-events-auto absolute top-0 right-0 grid size-6 place-items-center rounded text-text2 hover:bg-surface2 hover:text-text">
+                  <Icon name="pencil" size={16} />
+                </button>
               )}
               {when && <span className="simple-small tnum">{when}{r.past_edge ? `, after ${calendarDay(plan.end, { month: "short" })}` : ""}</span>}
               {/* qa4-simple-prd-15: a row with no milestone date that runs past the edge says when it ends;
@@ -245,6 +258,15 @@ export function PlanByMonth({
                     {words}
                     {bars}
                   </Link>
+                  {tipCol && rename && (
+                    <span className="w-6 flex-none">
+                      {go && (
+                        <button type="button" aria-label={`Rename ${rowName(r, named)}`} data-testid={`${testId}-rename`} onClick={go} className="grid size-6 place-items-center rounded text-text2 hover:bg-surface2 hover:text-text">
+                          <Icon name="pencil" size={16} />
+                        </button>
+                      )}
+                    </span>
+                  )}
                   {tipCol && (
                     <span className="w-6 flex-none">
                       {rowNames.length > 0 && (

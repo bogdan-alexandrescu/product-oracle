@@ -361,15 +361,64 @@ function SliceMark({ s }: { s: Slice }) {
  * desktop (D1 with B1's When strip), the vertical timeline and the milestone's card on a phone
  * (D2). Picking a milestone in the timeline switches the card.
  */
-export function PrdPlan({ plan, title, onPlan, prd }: { plan: Plan; title: string; onPlan: (p: Plan) => void; prd?: string }) {
+export function PrdPlan({ plan, title, onPlan, prd, loose = [] }: { plan: Plan; title: string; onPlan: (p: Plan) => void; prd?: string; loose?: Loose[] }) {
   return (
     <PlanMarks prd={prd}>
-      <PrdPlanBody plan={plan} title={title} onPlan={onPlan} />
+      <PrdPlanBody plan={plan} title={title} onPlan={onPlan} loose={loose} />
     </PlanMarks>
   );
 }
 
-function PrdPlanBody({ plan, title, onPlan }: { plan: Plan; title: string; onPlan: (p: Plan) => void }) {
+/** A roadmap item of the PRD with no plan milestone (the one-pager's "No milestone" strip row). */
+export type Loose = { id: string; title: string; code?: string | null };
+
+/**
+ * Owner, Nov 10: the PRD's roadmap items with no plan milestone (the strip's "No milestone" row),
+ * for the When card on the page and on the Present slide alike.
+ */
+export function looseItems(v: Pick<Schemas["OnePagerOut"], "plan" | "timeline">, codes: Map<string, string | null>): Loose[] {
+  const timelineById = new Map(v.timeline.map((t) => [t.id, t]));
+  return (v.plan?.rows ?? [])
+    .filter((r) => !r.milestone)
+    .flatMap((r) => r.item_ids ?? [])
+    .flatMap((id) => {
+      const t = timelineById.get(id);
+      return t ? [{ id, title: t.title, code: codes.get(id) ?? null }] : [];
+    });
+}
+
+/**
+ * Owner, Nov 10 ('Add rows to the plan card'): the PRD's roadmap items with no plan milestone, in
+ * one group at the end of the When card, each row as the card's others; its name opens the feature's panel.
+ */
+function NoMilestone({ loose }: { loose: Loose[] }) {
+  const open = useOpenFeature();
+  if (!loose.length) return null;
+  return (
+    <div data-testid="timeline-no-milestone" className="flex flex-col gap-2.5">
+      <h3 className={`${SEC_H} mt-1.5`}>No milestone</h3>
+      <ul aria-label="No milestone" className="flex flex-col gap-2.5">
+        {loose.map((x) => (
+          <li key={x.id} data-testid="timeline-no-milestone-item" className="list-none border-l-4 border-[var(--simple-rule)] pl-3">
+            <span className="flex items-center gap-2">
+              {x.code && <span className="simple-code">{x.code}</span>}
+              {open ? (
+                <button type="button" data-testid="timeline-no-milestone-open" onClick={() => open({ id: x.id, code: x.code ?? "", name: x.title })} className="text-left text-[15px] leading-5 font-bold hover:underline">
+                  {x.title}
+                </button>
+              ) : (
+                <b className="text-[15px] leading-5 font-bold">{x.title}</b>
+              )}
+              <MarkFor itemId={x.id} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function PrdPlanBody({ plan, title, onPlan, loose }: { plan: Plan; title: string; onPlan: (p: Plan) => void; loose: Loose[] }) {
   const phone = usePhone();
   const zone = useCompanyZone();
   // Today in the company's time zone.
@@ -380,7 +429,7 @@ function PrdPlanBody({ plan, title, onPlan }: { plan: Plan; title: string; onPla
   const pick = picked ?? currentOf(plan, today);
   const m = plan.milestones.find((x) => x.code === pick) ?? null;
   return phone ? (
-    <PhonePlan plan={plan} title={title} today={today} pick={pick} onPick={setPicked} onPlan={onPlan} m={m} />
+    <PhonePlan plan={plan} title={title} today={today} pick={pick} onPick={setPicked} onPlan={onPlan} m={m} loose={loose} />
   ) : (
     <>
       <TimelineCard
@@ -394,6 +443,7 @@ function PrdPlanBody({ plan, title, onPlan }: { plan: Plan; title: string; onPla
           showPart();
         }}
         onPlan={onPlan}
+        loose={loose}
       />
       {m && <MilestoneCard plan={plan} m={m} today={today} phone={false} marked={marked} />}
     </>
@@ -525,7 +575,7 @@ function UndatedList({ plan, today }: { plan: Plan; today: string }) {
   );
 }
 
-function TimelineCard({ plan, today, pick, onShow, onPlan }: { plan: Plan; today: string; pick: string | null; onPick: (c: string) => void; onShow: (c: string, codes?: string[]) => void; onPlan: (p: Plan) => void }) {
+function TimelineCard({ plan, today, pick, onShow, onPlan, loose }: { plan: Plan; today: string; pick: string | null; onPick: (c: string) => void; onShow: (c: string, codes?: string[]) => void; onPlan: (p: Plan) => void; loose: Loose[] }) {
   const lanes = lanesOf(plan);
   const anyDated = plan.milestones.some(dated);
   const undatedDecisions = plan.milestones.reduce((n, x) => n + x.decisions.filter((d) => !d.due_on).length, 0);
@@ -568,6 +618,7 @@ function TimelineCard({ plan, today, pick, onShow, onPlan }: { plan: Plan; today
           );
         })}
       </div>
+      <NoMilestone loose={loose} />
     </section>
   );
 }
@@ -820,7 +871,7 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
 
 // ---------------------------------------------------------------- the phone (D2)
 
-function PhonePlan({ plan, title, today, pick, onPick, onPlan, m }: { plan: Plan; title: string; today: string; pick: string | null; onPick: (c: string) => void; onPlan: (p: Plan) => void; m: Milestone | null }) {
+function PhonePlan({ plan, title, today, pick, onPick, onPlan, m, loose }: { plan: Plan; title: string; today: string; pick: string | null; onPick: (c: string) => void; onPlan: (p: Plan) => void; m: Milestone | null; loose: Loose[] }) {
   // D2: past the PRD's header a bar keeps its title and where the reader is.
   const top = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
@@ -907,6 +958,7 @@ function PhonePlan({ plan, title, today, pick, onPick, onPlan, m }: { plan: Plan
         {/* qa-simple-prd-p3-13: the note first, as on a desktop (it says why they are not on the line). */}
         {plan.milestones.some((x) => !dated(x)) && <NoDates plan={plan} onPlan={onPlan} />}
         {undated}
+        <NoMilestone loose={loose} />
       </section>
       <div ref={card}>{m && <MilestoneCard plan={plan} m={m} today={today} phone />}</div>
     </>

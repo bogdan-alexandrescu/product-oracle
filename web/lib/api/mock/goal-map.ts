@@ -19,13 +19,15 @@
  * routeLadderMilestone). Invented people, products and numbers only.
  */
 import type { Schemas } from "@/lib/api/client";
+import { CURRENCY_SIGNS, goalFigure } from "@/lib/goal-figure";
 import { goalName } from "@/lib/placeholders";
 
 import type { LadderMilestones } from "./simple-changes";
 import type { TrashDb, TrashEntryRow } from "./trash";
 
 import { FIT_COMPANY_SCENARIO } from "./fit-date";
-import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderMap } from "./goal-ladder";
+import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, LADDER_TRACK_OWNER_SCENARIO, LADDER_TWINS_SCENARIO, ladderMap } from "./goal-ladder";
+import { GM_TRACKS_HARD_SCENARIO, GM_TRACKS_SCENARIO, tracksMap } from "./goal-map-tracks";
 import { stableUuid } from "./ids";
 import { codedTitle, shownCode, shownTitle } from "./item-code";
 import { COMPANY_SLUG } from "./one-roadmap";
@@ -445,7 +447,7 @@ function seedReadings(map: GoalMap): void {
 
 export function seedGoalMap(scenario: string | null): GoalMap {
   const map =
-    scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : scenario === "goal-map-guardrail-goal" ? guardrailGoal() : scenario === FIT_COMPANY_SCENARIO ? companyRoadmap() : scenario === SCOREBOARD_SCENARIO ? scoreboard() : scenario === LADDER_SCENARIO ? ladderMap() : scenario === LADDER_KR_SCENARIO ? ladderMap(true) : scenario === LADDER_KR_CODES_SCENARIO ? ladderMap(true, true) : plain();
+    scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : scenario === "goal-map-guardrail-goal" ? guardrailGoal() : scenario === FIT_COMPANY_SCENARIO ? companyRoadmap() : scenario === SCOREBOARD_SCENARIO ? scoreboard() : scenario === LADDER_SCENARIO || scenario === LADDER_TRACK_OWNER_SCENARIO ? ladderMap() : scenario === LADDER_KR_SCENARIO ? ladderMap(true) : scenario === LADDER_KR_CODES_SCENARIO ? ladderMap(true, true) : scenario === LADDER_TWINS_SCENARIO ? ladderMap(false, false, true) : scenario === GM_TRACKS_SCENARIO || scenario === GM_TRACKS_HARD_SCENARIO ? tracksMap(scenario === GM_TRACKS_HARD_SCENARIO) : plain();
   seedReadings(map);
   return withIds(map);
 }
@@ -553,9 +555,9 @@ function json(status: number, body: unknown): Response {
 
 const DAY_WORDS = "Nov 3, 2026";
 
+/** As the API's goal_map.amount (goal-figure-words): "$20,000", "1,200 shops"; a count to one decimal. */
 function amount(v: number, unit: string): string {
-  if (unit === "$") return v >= 1000 ? `$${Math.round(v / 100) / 10}k` : `$${v}`;
-  return `${Math.round(v * 10) / 10}`;
+  return goalFigure(CURRENCY_SIGNS[unit.trim().toLowerCase()] ? v : Math.round(v * 10) / 10, unit);
 }
 
 /**
@@ -605,9 +607,10 @@ export async function routeGoalMap(
   // so is a goal in Trash, a milestone in Trash or of such a goal, and a link to one of them.
   const live = () => {
     const goals = map.goals.filter((g) => !goalTrashed(g.id));
-    const milestones = map.milestones.filter((m) => !(m as Held).trashed && goals.some((g) => g.id === m.goal)).map((m) => {
-        const { trashed, ...rest } = m as Held;
-        void trashed;
+    // goal_map._on_map: a PRD's milestone only while its plan holds it, as the roadmap reads it.
+    const milestones = map.milestones.filter((m) => !(m as Held).trashed && !(m as Held).out_of_plan && goals.some((g) => g.id === m.goal)).map((m) => {
+        const { trashed, prd, prd_code, out_of_plan, ...rest } = m as Held;
+        void [trashed, prd, prd_code, out_of_plan];
         return { ...rest, can_change: mapCanChange(db, me) };
       });
     const on = new Set(milestones.map((m) => m.id));
@@ -797,8 +800,12 @@ export function moveMapLink(map: GoalMap, body: { feature?: unknown; from_milest
   return null;
 }
 
-/** A map milestone as the db keeps it: `trashed` while it is in Settings › Trash. */
-type Held = GmMilestone & { trashed?: boolean };
+/**
+ * A map milestone as the db keeps it: `trashed` while it is in Settings › Trash; a PRD's own (`prd`,
+ * its plan's code `prd_code`; `out_of_plan` once the PRD's plan no longer holds it: the roadmap
+ * read leaves it out, goal_milestones.list_for_roadmaps).
+ */
+type Held = GmMilestone & { trashed?: boolean; prd?: { id: string; slug: string; title: string }; prd_code?: string; out_of_plan?: boolean };
 
 /** goal_milestones.put_back (trash.goal_in_trash): a milestone whose goal is in Trash is not restored,
  * by its own restore or Trash's (409); the words say which goal to restore first. Null: it may come back. */
@@ -853,6 +860,7 @@ export async function routeLadderMilestone(
     return out();
   }
   if (m.trashed || p[5]) return json(404, { detail: "No such milestone" });
+  if (req.method === "DELETE" && m.prd) return json(409, { detail: "A PRD's milestone is not deleted here" });
   if (req.method === "DELETE") {
     trashMapMilestone(m, me, trash, now());
     return new Response(null, { status: 204 });
@@ -876,9 +884,11 @@ export async function routeLadderMilestone(
  * edit_goal_milestone proposal names one, as goal_milestones._value; the decider accepts it).
  */
 /** roadmap-milestone-codes: the map's live milestones as its roadmap's goal milestones (the API's are one record), each with its goal's place in the map's order. */
-export function goalMapMilestones(map: GoalMap): { id: string; name: string; date: string | null; goal_id: string; rank: number }[] {
+export function goalMapMilestones(map: GoalMap): { id: string; name: string; date: string | null; goal_id: string; rank: number; code?: string; prd?: { id: string; slug: string; title: string } }[] {
   const rank = new Map(map.goals.map((g, n) => [g.id, n]));
-  return (map.milestones as Held[]).filter((m) => !m.trashed).map((m) => ({ id: m.id, name: m.name, date: m.due_on ?? null, goal_id: m.goal, rank: rank.get(m.goal) ?? map.goals.length }));
+  return (map.milestones as Held[])
+    .filter((m) => !m.trashed && !m.out_of_plan)
+    .map((m) => ({ id: m.id, name: m.name, date: m.due_on ?? null, goal_id: m.goal, rank: rank.get(m.goal) ?? map.goals.length, ...(m.prd ? { code: m.prd_code ?? "", prd: m.prd } : {}) }));
 }
 
 export function ladderMilestones(db: { goal_map?: GoalMap } & MapRightsDb, me: { id: string; role: string; name?: string }, trash?: TrashDb, at?: () => string): LadderMilestones {

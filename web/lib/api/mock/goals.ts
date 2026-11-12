@@ -7,17 +7,17 @@ import { direction, parseFigure } from "@/app/home/_goals";
 import type { Schemas } from "@/lib/api/client";
 
 import { mockSettingValue } from "./connections";
+import { unitOk } from "./goal-units";
+
+export { unitOk };
 
 type Attrs = Record<string, unknown>;
 export type GoalProblem = { code: string; message: string; where: string };
 export type GoalCheck = Schemas["GoalCheck"];
 
-const CURRENCIES = ["USD", "EUR", "GBP"];
-const UNITS = ["%", ...CURRENCIES, "ms", "s", "min", "h", "days"];
 const COMPARISONS = ["at_least", "above", "at_most", "below"];
 const HORIZONS = ["short", "medium", "long"];
 const MEASURABLE = ["metric", "unit", "comparison", "target", "horizon", "owner"] as const;
-const NOUN = /^[a-z][a-z -]{0,23}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STALE_DAYS = 45;
 
@@ -42,7 +42,6 @@ export const MESSAGES: Record<string, string> = {
 const set = (a: Attrs, k: string) => a[k] != null;
 const isNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isDate = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
-export const unitOk = (v: unknown) => typeof v === "string" && (UNITS.includes(v) || NOUN.test(v));
 
 /** The browser's day, YYYY-MM-DD (the company's day in the API). */
 export function todayIso(d = new Date()): string {

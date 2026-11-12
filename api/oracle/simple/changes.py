@@ -627,6 +627,23 @@ def _writes(c: SimpleChange, item_ids: set[str], fields: set[str] | None) -> boo
     return bool(fields & set(c.after))
 
 
+async def _oracle_filled(db: AsyncSession, item_id: str, fields: tuple[str, ...]) -> bool:
+    """roadmap-edit-fixes: whether Oracle's draft of a new item filled these fields and no
+    person has written them since. A person who saw them empty (the panel opened while Oracle
+    drafted) keeps their edit: Oracle fills only what a person leaves empty."""
+    from oracle.jobs.models import LlmJob
+
+    outs = await db.scalars(
+        select(LlmJob.output).where(
+            LlmJob.kind == "item_draft", LlmJob.input["item_id"].astext == item_id
+        )
+    )
+    if not any(set(fields) & set((o or {}).get("filled") or ()) for o in outs):
+        return False
+    rows = await db.scalars(select(SimpleChange).where(SimpleChange.status.in_(WRITTEN)))
+    return not any(c.op != "add_item" and _writes(c, {item_id}, set(fields)) for c in rows)
+
+
 async def _last_writer(
     db: AsyncSession, item_ids: set[str], fields: set[str] | None = None
 ) -> tuple[Any, Any]:
@@ -643,6 +660,7 @@ async def _last_writer(
         .limit(500)
     )
     best: tuple[datetime, int, uuid.UUID] | None = None
+    added = False
     for c in rows:
         if not _writes(c, item_ids, fields):
             continue
@@ -650,8 +668,10 @@ async def _last_writer(
         who = c.decided_by if c.status == "accepted" and c.decided_by else c.by
         if best is None or (at, c.seq) > best[:2]:
             best = (at, c.seq, who)
+            added = c.op == "add_item"
     # roadmap-edit-fixes: Oracle's draft of a new item (oracle.simple.additions) fills its
     # empty fields after the add: when that came last, Oracle changed it, not the person.
+    # Only the fields it filled; a person's write at the same moment came after it.
     from oracle.jobs.models import LlmJob
 
     for out in await db.scalars(
@@ -660,9 +680,10 @@ async def _last_writer(
         )
     ):
         at = (out or {}).get("at")
-        if (out or {}).get("filled") and isinstance(at, str):
+        filled = set((out or {}).get("filled") or ())
+        if filled and (fields is None or filled & fields) and isinstance(at, str):
             when = datetime.fromisoformat(at)
-            if best is None or when >= best[0]:
+            if best is None or when > best[0] or (when == best[0] and added):
                 return {"id": None, "name": ORACLE}, when
     if best is None:
         return None, None
@@ -847,7 +868,10 @@ async def _plan(
         # one-feature-panel: ``before`` is what the read shows (a track or goal may come
         # from the item's PRD or feature, not its own row).
         shown = SHOWN[op](entry)
-        if {f: body.before[f] for f in fields} != shown:
+        seen = {f: body.before[f] for f in fields}
+        if seen != shown and not (
+            all(v is None for v in seen.values()) and await _oracle_filled(db, str(row.id), fields)
+        ):
             raise await _conflict(db, shown, {str(row.id)}, "Changed since you saw it")
     if op == "set_status":
         status = body.after.get("status")
@@ -889,7 +913,10 @@ async def _plan(
         # date): the date engine's own fields (date_source, basis_ids...) are not seen.
         if _seen_milestone(seen_["milestone"]) != _seen_milestone(current["milestone"]):
             raise await _conflict(db, current, {str(row.id)}, lead)
-    elif seen_ != current:
+    elif seen_ != current and not (
+        # roadmap-edit-fixes: Oracle's draft landed after the person saw the field empty.
+        all(v is None for v in seen_.values()) and await _oracle_filled(db, str(row.id), fields)
+    ):
         raise await _conflict(db, current, {str(row.id)}, lead)
     a = body.after
     after: dict[str, Any]
@@ -1567,6 +1594,7 @@ async def create(
         questions,
         targets,
         trash_items,
+        twin_merges,
     )
 
     ag = await agenda.for_session(db, body.session_id) or await agenda.for_meeting(db, meeting_id)
@@ -1592,6 +1620,8 @@ async def create(
         return await plan_changes.create_change(db, principal, body)
     if body.op in decision_sheet.OPS:
         return await decision_sheet.create(db, principal, body)
+    if body.op in twin_merges.OPS:
+        return await twin_merges.create_change(db, principal, body)
     me, now = _me(principal), company_time.now()
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
@@ -1743,6 +1773,10 @@ async def decide(
 
     if c.op in decision_sheet.OPS:
         return await decision_sheet.decide(db, principal, c, action, reason)
+    from oracle.simple import twin_merges
+
+    if c.op in twin_merges.OPS:
+        return await twin_merges.decide(db, principal, c, action, reason)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
@@ -2020,6 +2054,7 @@ class _View:
             plan_changes,
             questions,
             targets,
+            twin_merges,
         )
 
         if c.op in decision_sheet.OPS:
@@ -2042,6 +2077,8 @@ class _View:
             return trash_items.may_decide_goal(self.principal)
         if c.op in goal_asks.OPS:
             return goal_asks.may_decide(self.principal)
+        if c.op in twin_merges.OPS:
+            return twin_merges.may_decide(self.principal)
         if c.op in goal_map_asks.OPS:
             return goal_map_asks.may_decide(self.principal, c, self)
         if c.op in PLAN_OPS:

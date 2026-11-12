@@ -6,7 +6,7 @@ import { expect, test, type Page } from "./test";
 /*
  * milestone-rename (the owner, Nov 10: "make all milestones editable in place"): a goal's measured
  * milestone is renamed in place with its code fixed before the name: M2 of the Goal map on the
- * Roadmap (its card) and on the Goal map (its ladder card), and a goal's own milestone (M5 here,
+ * Roadmap (its card) and on the Goal map (its milestone strip), and a goal's own milestone (M5 here,
  * dated by the goal) on the Roadmap. Who decides the roadmap saves it, with Undo;
  * an approver who does not proposes it, the milestone reads "Proposed · waits for <name>", and
  * the owner accepts it in the Inbox; a viewer gets no field. Mock scenarios "simple-milestones"
@@ -14,12 +14,13 @@ import { expect, test, type Page } from "./test";
  *
  * Card rename-goal-target: protects = a goal's own milestone (M5) and a Goal map one (M2) on the
  * Roadmap open "Edit M5" / "Edit M2" with a Name field; Save renames it there, the code stays; fails_when = its card reads only.
- * Card rename-ladder: protects = a Goal map milestone's name is a field in place; fails_when = the
- * ladder card has no way to rename it.
+ * Card rename-ladder: protects = a Goal map milestone's name is a field in place (its ⋯ menu's
+ * Rename in the strip), its code kept; fails_when = the strip has no way to rename it.
  * Card rename-propose: protects = an approver who does not decide the roadmap proposes the name,
  * it shows as waiting, and the owner's Accept in the Inbox renames it; fails_when = the field is
  * missing for them, or the proposal does not reach the owner's Inbox.
- * Card rename-viewer: protects = a viewer sees no name field; fails_when = a viewer gets one.
+ * Card rename-viewer: protects = a viewer sees no name field, nor a milestone menu on the Goal map;
+ * fails_when = a viewer gets one.
  */
 
 const APPROVER = "approver@example.com";
@@ -37,7 +38,8 @@ const label = (page: Page, code: string) => page.getByTestId("ms-label").filter(
 // "simple-milestones": the goal Faster activation's own milestone (its date, its measure) is M5.
 const m2 = (page: Page) => label(page, "M5");
 const card = (page: Page) => page.getByTestId("ms-card");
-const ladderM2 = (page: Page) => page.getByTestId("ld-milestone").filter({ has: page.locator(".simple-code", { hasText: /^M2$/ }) });
+// The Goal map's milestone strip: M2 by its roadmap code.
+const stripM2 = (page: Page) => page.getByTestId("gm-strip-milestone").filter({ has: page.locator("b", { hasText: /^M2$/ }) });
 
 async function roadmap(page: Page, code = "M5") {
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
@@ -75,14 +77,15 @@ test("the roadmap's owner renames a goal's own milestone on the Roadmap; the goa
 
 test("the roadmap's owner renames M2 in place on the Goal map", async ({ page }) => {
   await open(page, LADDER_SCENARIO, "/simple/goals");
-  await expect(page.getByTestId("ld-goal").first()).toBeVisible();
-  await ladderM2(page).getByTestId("ld-ms-name").click();
-  const field = ladderM2(page).getByTestId("ld-ms-naming");
-  await expect(field.locator(".simple-code")).toHaveText("M2");
-  await field.getByLabel("Name").fill("Setup in a day");
-  await field.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "M2 Setup in a day saved" })).toBeVisible();
-  await expect(ladderM2(page).getByTestId("ld-ms-name")).toHaveText("M2Setup in a day");
+  await expect(page.getByTestId("gm-grid")).toBeVisible();
+  await stripM2(page).hover();
+  await stripM2(page).getByRole("button", { name: /^More for M2 / }).click();
+  await page.getByRole("menuitem", { name: "Rename" }).click();
+  const field = stripM2(page).getByTestId("gm-rename");
+  await field.fill("Setup in a day");
+  await field.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: /Renamed .+ to Setup in a day/ })).toBeVisible();
+  await expect(stripM2(page)).toContainText(/^M2\s*Setup in a day/);
 });
 
 test("an approver proposes a new name for a goal's own milestone; it waits for the owner, who accepts it in the Inbox", async ({ page }) => {
@@ -124,7 +127,7 @@ test("a viewer sees no name field on the Roadmap or the Goal map", async ({ page
   await expect(card(page).getByLabel("Name", { exact: true })).toBeDisabled();
   for (const id of ["ms-save", "ms-propose"]) await expect(card(page).getByTestId(id)).toHaveCount(0);
   await page.goto("/simple/goals");
-  await expect(page.getByTestId("gm-page")).toBeVisible();
-  await expect(page.getByTestId("ld-ms-name")).toHaveCount(0);
-  await expect(page.getByTestId("ld-milestone").getByLabel("Name")).toHaveCount(0);
+  await expect(page.getByTestId("gm-strip-milestone").first()).toBeVisible();
+  await expect(page.locator('[data-testid^="gm-menu-m-"]')).toHaveCount(0);
+  await expect(page.getByTestId("gm-rename")).toHaveCount(0);
 });

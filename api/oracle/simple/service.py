@@ -25,6 +25,9 @@ import os
 import re
 import uuid
 from collections import defaultdict, deque
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from types import SimpleNamespace
@@ -325,6 +328,21 @@ def _versions(
     return out
 
 
+# qa-prio-twins (re-review of #1503): inside every_roadmap(), load reads every roadmap, the
+# older ones beside the company roadmap included, so a write that must reach a feature's items
+# wherever they are (a twin's Merge into…, priorities.merge_twin) finds and changes them.
+_EVERY_ROADMAP: ContextVar[bool] = ContextVar("simple_every_roadmap", default=False)
+
+
+@contextmanager
+def every_roadmap() -> Iterator[None]:
+    token = _EVERY_ROADMAP.set(True)
+    try:
+        yield
+    finally:
+        _EVERY_ROADMAP.reset(token)
+
+
 def _any_of(column: Any, values: Any) -> Any:
     """``column = ANY($1)``, the values one array parameter (roadmap-speed): a long list neither
     expands into a parameter each on every read nor makes a new statement per length."""
@@ -351,7 +369,8 @@ async def load(
     db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | None = None, light: bool = False
 ) -> Read:
     """Everything the read needs, as the session's principal may see it; ``overlays``
-    (roadmap document id -> {item id -> fields}): the working drafts the reader sees.
+    (roadmap document id -> {item id -> fields}): the working drafts the reader sees. Inside
+    every_roadmap(), every roadmap's items, not only the company roadmap's.
     ``light`` (roadmap-speed): what the flags, dates and deciders need alone; the entries'
     goals, PRD headings and owner names are left unread (:func:`waiting`)."""
     from oracle.simple import drafts
@@ -360,9 +379,9 @@ async def load(
     windows = dates.windows(await company_horizons(db), today)
     docs = {d.id: d for d in await documents(db)}
     # one-roadmap-many-prds: the company roadmap alone while there is one.
-    roadmap_ids = await company.feeding_ids(
-        db, [d.id for d in docs.values() if d.kind == "roadmap"]
-    )
+    roadmap_ids = [d.id for d in docs.values() if d.kind == "roadmap"]
+    if not _EVERY_ROADMAP.get():
+        roadmap_ids = await company.feeding_ids(db, roadmap_ids)
     entries: list[Entry] = []
     if not roadmap_ids:
         return Read(today, windows, entries, [], {})

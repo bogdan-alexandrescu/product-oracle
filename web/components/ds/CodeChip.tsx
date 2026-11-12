@@ -5,6 +5,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } f
 import { createPortal } from "react-dom";
 
 import { splitCodes, type CodeEntry, type CodeIndex } from "@/lib/code-index";
+import { goalFigure } from "@/lib/format";
 import { named, useCompanyCodes, useNames, type Named, type Names } from "@/lib/codes";
 import { treeCodes } from "@/lib/goal-tree";
 import { sectionHash } from "@/lib/section-link";
@@ -19,6 +20,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 function targetFigure(target: unknown, unit: unknown): string {
   const t = String(target);
   if (typeof unit !== "string" || !unit) return t;
+  if (typeof target === "number") return goalFigure(target, unit);
   if (unit === "%") return `${t}%`;
   const sym = ({ USD: "$", EUR: "€", GBP: "£" } as Record<string, string>)[unit];
   return sym ? `${sym}${t}` : `${t} ${unit}`;

@@ -19,11 +19,13 @@ import { topGoalSuggestions } from "@/lib/key-results";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
+import { ITEM_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, otherGoal, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { goalKeysOf, KeyResultList, liftedMoves, topGoalBuckets, topGoalPlan, topGoalPriorities, usePriorityKeyResults, type PriorityKeyResults } from "./key-results";
 import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
+import { MsCard, MsProvider, MsToast, useMilestones } from "../roadmap/_milestones";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan, weeksWords } from "./plan-buckets";
 import { CrowdMark, CrowdSheet, MARK_R, markLayout, type Box, type Crowd } from "./mark-counts";
 
@@ -31,6 +33,7 @@ type Out = Schemas["SimplePrioritiesOut"];
 type Row = Schemas["SimplePriorityRow"];
 type Proposal = Schemas["SimplePriorityProposal"];
 type Draft = Schemas["SimplePriorityDraft"];
+type Twin = Schemas["SimplePriorityTwin"];
 type Bucket = Schemas["SimpleGoalBucket"];
 type Line = Schemas["SimpleLine"];
 type ChangeIn = Schemas["SimpleChangeIn"];
@@ -78,6 +81,15 @@ function OwnKey({ r }: { r: { own_key?: string | null } }) {
 
 /** qa-simple-plan-3: what the score is, in words (the API's formula: Σ goal weight × contribution × confidence ÷ effort). */
 const SCORE_WORDS = "Score = goal value × Oracle's confidence in it (0 to 1) ÷ effort in engineer-weeks.";
+/** qa-prio-twins (the owner's rule: explanations behind a tooltip): how the score is worked out, behind an (i) by the list's heading. */
+function ScoreTip({ id = "prio-score-text" }: { id?: string }) {
+  // The caption's and the "Makes" heading's can show at once (a goal's list split at a dated line): one id each.
+  return (
+    <InfoTip label="the score" align="start" testId="prio-score-help" id={id}>
+      {SCORE_WORDS}
+    </InfoTip>
+  );
+}
 
 /** Each tab's own line under the heading; only the Ranked list is a ranking. */
 const SUBTITLE: Record<Tab, string> = {
@@ -196,6 +208,9 @@ export function Priorities() {
     }
     return c;
   }, [data, marks]);
+  // The All chip counts each line the full list shows: a row, each same-name line folded into it and each item with
+  // no ranked feature (a goal's list leaves those out), never only the rows they are grouped in.
+  const allCount = data ? data.rows.reduce((n, r) => n + 1 + (r.twins?.length ?? 0), 0) + (params.get("goal") ? 0 : data.unranked.length) : 0;
   const shownData = data && show && marks ? { ...data, rows: data.rows.filter((r) => { const f = marks.get(r.feature_id); return !!f && showsAs(f.mark) === show; }), unranked: [] } : null;
   // Roles through can() and the rows' own fields: the API says who applies and who proposes.
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
@@ -345,7 +360,7 @@ export function Priorities() {
       )}
       {data && !blank && tab === "ranked" && marks && (
         <div className="mb-3" data-testid="cs-prio-bar">
-          <ShowFilter counts={showCounts} pick={show} onPick={setShow} />
+          <ShowFilter counts={showCounts} total={allCount} pick={show} onPick={setShow} />
           {show && (
             <p className="mt-2 text-[length:var(--simple-small)] text-text2">
               {SHOW_NOTE[show](showCounts[show])} <InfoTip label="ranks shown">Ranks stay as in the full list.</InfoTip>
@@ -505,7 +520,8 @@ function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: {
         list
       )}
       {data.unranked.length > 0 && !goalOn && <Unranked items={data.unranked} />}
-      {data.drafts.length > 0 && !goalOn && <Drafts drafts={data.drafts} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
+      {/* qa-prio-twins: a draft of a ranked feature shows on that feature's row, not here too. */}
+      {ownDrafts(data).length > 0 && !goalOn && <Drafts drafts={ownDrafts(data)} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
       {move && (
         <MoveDialog
           move={move}
@@ -618,9 +634,6 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
     )}
     {/* Split at a dated line, the two parts' headings say what the caption said; a goal's list keeps it (qp4=b), counting only its features. */}
     {goal ? rows.length > 0 && <LineCaption data={{ ...data, rows }} /> : !apart && <LineCaption data={data} />}
-    <p className="mb-2 text-[length:var(--simple-small)] text-text2" data-testid="prio-score-help">
-      {SCORE_WORDS}
-    </p>
     <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
       {rows.flatMap((r, i) => {
         // Split at a dated line: "Makes ..." over the first part, "Misses ..." over the rest, each in rank order.
@@ -739,11 +752,14 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                 Not on {data.company_roadmap.title} yet: moving it adds it there, under Later.
               </p>
             )}
+            {/* qa-prio-twins: the feature's drafts on the roadmap and its unlinked twins, on its one row. */}
+            <RowDrafts drafts={data.drafts.filter((d) => d.row_feature_id === r.feature_id)} proposals={data.proposals} mayChange={mayChange} changed={changed} />
+            {(r.twins ?? []).length > 0 && <Twins r={r} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
             {mayChange && !r.can_reorder && (
               <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-locked">
                 {/* prio-company: never the owner's (an owner moves every row); someone who truly lacks the right. A feature not
                     on the company roadmap waits for the owner to add it, which no access changes. */}
-                {!r.on_roadmap && data.company_roadmap ? "Only the owner can add this to the roadmap." : "Only people with access to this feature's roadmap can move it. Ask the owner for access."}
+                {(!r.on_roadmap || r.draft_item_id) && data.company_roadmap ? "Only the owner can add this to the roadmap." : "Only people with access to this feature's roadmap can move it. Ask the owner for access."}
               </p>
             )}
             {r.after && (
@@ -1053,7 +1069,7 @@ function proposalWords(p: Proposal): string {
   }
   if (p.op === "confirm_item") return `${p.by_name} proposes confirming it`;
   // S7: a Merge is a merge_item change (train T's was a cut with this note).
-  if (p.op === "cut" || p.op === "merge_item") return `${p.by_name} proposes merging it: “${p.reason ?? ""}”`;
+  if (p.op === "cut" || p.op === "merge_item" || p.op === "merge_twin") return `${p.by_name} proposes merging it: “${p.reason ?? ""}”`;
   const parts = [a.goal_value != null ? `goal value ${a.goal_value}` : null, a.effort != null ? `effort ${weeksWords(Number(a.effort))}` : null].filter(Boolean);
   return `${p.by_name} proposes ${parts.join(" and ")}`;
 }
@@ -1121,110 +1137,254 @@ function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Ch
   );
 }
 
+/** qa-prio-twins: a merge's toast; one name merged into the same name says by code which record was kept. */
+const sameName = (t: string): string => t.split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+const mergedWords = (from: { title: string; code: string }, kept: { title: string; code: string }): string =>
+  sameName(from.title) === sameName(kept.title) ? `Merged ${from.title} (${from.code}) into ${kept.title} (${kept.code}), which is kept` : `Merged ${from.title} into ${kept.title}`;
+
+/** qa-prio-twins: the drafts no ranked row holds (one of a ranked feature shows on its row). */
+const ownDrafts = (data: Out): Draft[] => data.drafts.filter((d) => !d.row_feature_id);
+
 function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
-  const [merging, setMerging] = useState<string | null>(null);
-  const [into, setInto] = useState("");
-  const show = useSearchParams().get("show");
-  // A draft's name opens the one feature panel (the roadmap's), as a ranked row's does.
-  const [opened, setOpened] = useState<Draft | null>(null);
-  const phone = usePhone();
-  const { can } = useMe();
   return (
     <section aria-label="Not ranked yet" className="mt-6">
       <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Not ranked yet</h2>
       <ul className="flex flex-col gap-[var(--simple-gap)]">
-        {drafts.map((d) => {
-          // qa-simple-plan-29: a Confirm or Merge waiting for the decider; none more until it is decided.
-          const pending = proposals.filter((p) => p.item_id === d.item_id && (p.op === "confirm_item" || p.op === "cut" || p.op === "merge_item"));
-          return (
-          <li key={d.item_id} data-testid="prio-draft" data-code={d.code} data-shown={show === d.item_id ? "true" : undefined} className={`rounded-[var(--simple-card-radius)] border border-dashed bg-surface p-3 ${show === d.item_id ? "border-accent ring-2 ring-accent" : "border-line-strong"}`}>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na">Draft</span>
-              {/* build-feature-panel review 7: a draft's name opens the one feature panel too. */}
-              <span className="flex-1 font-medium">
-                <button type="button" data-feature={d.item_id} title={`Open ${d.title}`} className="text-left hover:underline" onClick={() => setOpened(d)}>
-                  {d.title}
-                </button>
+        {drafts.map((d) => (
+          <DraftItem key={d.item_id} d={d} proposals={proposals} mayChange={mayChange} changed={changed} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** qa-prio-twins: a ranked feature's drafts on its row: its own (Confirm, Merge into…) and one only named as it (Merge into…). */
+function RowDrafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
+  if (!drafts.length) return null;
+  return (
+    <ul className="mt-2 flex flex-col gap-2 sm:pl-12" aria-label="Drafts of this feature">
+      {drafts.map((d) => (
+        <DraftItem key={d.item_id} d={d} proposals={proposals} mayChange={mayChange} changed={changed} onRow />
+      ))}
+    </ul>
+  );
+}
+
+/** A draft with its Confirm and Merge into…; on a ranked row (`onRow`) a draft only named as the row's feature merges only. */
+function DraftItem({ d, proposals, mayChange, changed, onRow = false }: { d: Draft; proposals: Proposal[]; mayChange: boolean; changed: Changed; onRow?: boolean }) {
+  const [merging, setMerging] = useState(false);
+  // On its row, the row's item is first: the one it repeats.
+  const [into, setInto] = useState(onRow && !d.linked ? (d.merge_into[0]?.item_id ?? "") : "");
+  const show = useSearchParams().get("show");
+  // A draft's name opens the one feature panel (the roadmap's), as a ranked row's does.
+  const [opened, setOpened] = useState(false);
+  const phone = usePhone();
+  const { can } = useMe();
+  // qa-simple-plan-29: a Confirm or Merge waiting for the decider; none more until it is decided.
+  const pending = proposals.filter((p) => p.item_id === d.item_id && (p.op === "confirm_item" || p.op === "cut" || p.op === "merge_item"));
+  const confirms = !onRow || d.linked;
+  return (
+    <li
+      data-testid={onRow ? "prio-row-draft" : "prio-draft"}
+      data-code={d.code}
+      data-shown={show === d.item_id ? "true" : undefined}
+      className={onRow ? "rounded-lg border border-dashed border-line-strong px-2 py-1.5" : `rounded-[var(--simple-card-radius)] border border-dashed bg-surface p-3 ${show === d.item_id ? "border-accent ring-2 ring-accent" : "border-line-strong"}`}
+    >
+      <div className={`flex flex-wrap items-center ${onRow ? "gap-2 text-[length:var(--simple-small)]" : "gap-3"}`}>
+        <span
+          className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na"
+          title={onRow ? (d.linked ? `On ${d.roadmap.title}, not confirmed yet: moving the feature confirms it there` : "A draft with this feature's name, not linked to it") : undefined}
+        >
+          Draft
+        </span>
+        {/* build-feature-panel review 7: a draft's name opens the one feature panel too. */}
+        <span className="flex-1 font-medium">
+          <button type="button" data-feature={d.item_id} title={`Open ${d.title}`} className="text-left hover:underline" onClick={() => setOpened(true)}>
+            {d.title}
+          </button>
+        </span>
+        {!onRow && <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>}
+        {mayChange && (
+          <span className="flex gap-2">
+            {/* qa-plan-14: who only proposes (the draft's own `applies`) is offered Propose, not Confirm. */}
+            {confirms && (
+              <Button
+                disabled={pending.length > 0}
+                title={pending.length ? "A proposal for it is waiting for a decision" : d.applies ? undefined : "Propose confirming it: the decider decides"}
+                onClick={async () =>
+                  changed(
+                    await send({ op: "confirm_item", target: { item_id: d.item_id }, before: { draft: true }, after: { draft: false } }),
+                    d.applies ? (onRow ? `Confirmed ${d.title} on ${d.roadmap.title}` : `Added ${d.title} to the ranking`) : `Proposed adding ${d.title}`,
+                  )
+                }
+              >
+                {onRow ? (d.applies ? "Confirm" : "Propose confirming") : d.applies ? "Add to the ranking" : "Propose adding"}
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              disabled={pending.length > 0}
+              title={pending.length ? "A proposal for it is waiting for a decision" : undefined}
+              aria-expanded={merging}
+              onClick={() => setMerging(!merging)}
+            >
+              {d.applies ? "Merge into…" : "Propose a merge…"}
+            </Button>
+          </span>
+        )}
+      </div>
+      {merging && (
+        <form
+          className="mt-2 flex flex-wrap items-center gap-2"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const target = d.merge_into.find((m) => m.item_id === into);
+            if (!target) return;
+            setMerging(false);
+            await changed(
+              await send({ op: "merge_item", target: { item_id: d.item_id, into_id: target.item_id }, before: {}, after: {}, reason: `Merged into ${target.title}` }),
+              mergedWords(d, target),
+            );
+          }}
+        >
+          <label htmlFor={`merge-${d.item_id}`} className="text-[length:var(--simple-small)]">
+            Merge into
+          </label>
+          <select id={`merge-${d.item_id}`} value={into} onChange={(e) => setInto(e.target.value)} className="rounded-lg border border-line bg-bg px-2 py-1 text-[length:var(--simple-small)]">
+            <option value="">Choose a feature…</option>
+            {d.merge_into.map((m) => (
+              <option key={m.item_id} value={m.item_id}>
+                {m.title}
+              </option>
+            ))}
+          </select>
+          <Button type="submit" disabled={!into}>
+            {d.applies ? "Merge" : "Propose"}
+          </Button>
+          <p className="w-full text-[length:var(--simple-small)] text-text2" data-testid="merge-hint">
+            {into ? "" : "Choose the feature it repeats. "}Only features on {d.roadmap?.title ? `the ${d.roadmap.title} roadmap` : "its own roadmap"}, the same as the draft&apos;s, are listed.
+          </p>
+        </form>
+      )}
+      {/* A Confirm or Merge waiting for the decider. */}
+      {pending.map((p) => (
+        <ProposalCard key={p.change_id} p={p} changed={changed} />
+      ))}
+      {opened && (
+        <FeaturePanel key={d.item_id} feature={{ id: d.item_id, code: d.code, name: d.title }} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(false)} />
+      )}
+    </li>
+  );
+}
+
+/**
+ * qa-prio-twins: the feature's other ranked records with its name, not linked to it (a second baseline entry, a
+ * second item), on its one row: each named with its goal, and Merge into… this one (merge_item for an item of the
+ * same roadmap, else the Ground Truth's Merge into…, which first links the twin's items to this feature). Oracle never
+ * merges them.
+ */
+function Twins({ r, proposals, mayChange, changed }: { r: Row; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
+  const [merging, setMerging] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function merge(t: Twin) {
+    setMerging(null);
+    if (t.merge === "item" && t.item_id && t.into_id) {
+      await changed(
+        await send({ op: "merge_item", target: { item_id: t.item_id, into_id: t.into_id }, before: {}, after: {}, reason: `Merged into ${r.title}` }),
+        mergedWords(t, r),
+      );
+      return;
+    }
+    if (t.merge !== "entity" || !t.feature_id) return;
+    // prio-twin-propose: who may not merge Ground Truth features proposes it (twin_merges); the decider's
+    // approval runs the same merge.
+    if (!t.applies) {
+      await changed(await send({ op: "merge_twin", target: { feature_id: t.feature_id, into_id: r.feature_id }, before: {}, after: {}, reason: `Merged into ${r.title}` }), mergedWords(t, r));
+      return;
+    }
+    setBusy(true);
+    try {
+      // Its roadmap items are linked to the kept feature first (priorities.merge_twin), never left with none.
+      const out = await unwrap(api.POST("/v1/simple/priorities/twins/{feature_id}/merge", { params: { path: { feature_id: t.feature_id } }, body: { into: r.feature_id } }));
+      window.dispatchEvent(new Event(ITEM_CHANGED_EVENT));
+      const n = out.relinked?.length ?? 0;
+      toast({ message: mergedWords(t, r) + (n === 0 ? "" : n === 1 ? ", and its roadmap item now serves it" : `, and its ${n} roadmap items now serve it`) });
+    } catch (e) {
+      toast({ message: errorMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <ul className="mt-2 flex flex-col gap-2 sm:pl-12" aria-label="Also listed as">
+      {(r.twins ?? []).map((t) => {
+        const id = t.feature_id ?? t.code;
+        // A merge the caller may start: merge_item (applied or proposed), or the Ground Truth's for who may approve, else
+        // proposed (prio-twin-propose) unless an approver is told why it cannot be merged.
+        const may = mayChange && (t.merge === "item" || (t.merge === "entity" && (t.applies || !t.blocked)));
+        // Its own waiting proposals (a move, an estimate, a merge of its item or of its feature): they show here, its row being folded into this one;
+        // none more until they are decided (as a draft's).
+        const pending = proposals.filter(
+          (p) =>
+            (p.feature_id != null && p.feature_id === t.feature_id && (p.op === "override_priority" || p.op === "estimate_feature" || p.op === "merge_twin")) ||
+            (p.op === "merge_item" && p.item_id === t.item_id),
+        );
+        return (
+          <li key={id} data-testid="prio-twin" data-code={t.code} className="rounded-lg border border-dashed border-line-strong px-2 py-1.5 text-[length:var(--simple-small)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-na-bg px-2 text-na" title="Another record with this feature's name, not linked to it">
+                Same name
               </span>
-              <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>
-              {mayChange && (
-                <span className="flex gap-2">
-                  {/* qa-plan-14: who only proposes (the draft's own `applies`) is offered Propose, not Confirm. */}
-                  <Button
-                    disabled={pending.length > 0}
-                    title={pending.length ? "A proposal for it is waiting for a decision" : d.applies ? undefined : "Propose confirming it: the decider decides"}
-                    onClick={async () =>
-                      changed(
-                        await send({ op: "confirm_item", target: { item_id: d.item_id }, before: { draft: true }, after: { draft: false } }),
-                        d.applies ? `Added ${d.title} to the ranking` : `Proposed adding ${d.title}`,
-                      )
-                    }
-                  >
-                    {d.applies ? "Add to the ranking" : "Propose adding"}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    disabled={pending.length > 0}
-                    title={pending.length ? "A proposal for it is waiting for a decision" : undefined}
-                    aria-expanded={merging === d.item_id}
-                    onClick={() => setMerging(merging === d.item_id ? null : d.item_id)}
-                  >
-                    {d.applies ? "Merge into…" : "Propose a merge…"}
-                  </Button>
+              <span className="flex-1 font-medium">{t.title}</span>
+              {/* The folding by name stays visible: the twin's own rank and goal. */}
+              {t.rank != null && (
+                <span className="tabular-nums text-text2" data-testid="prio-twin-rank" title="Its own rank">
+                  #{t.rank}
                 </span>
               )}
+              <span className="text-text2" data-testid="prio-twin-goal">{t.goal?.title ?? "No goal"}</span>
+              {may && (
+                <Button
+                  variant="secondary"
+                  disabled={busy || pending.length > 0}
+                  title={pending.length ? "A proposal for it is waiting for a decision" : undefined}
+                  aria-expanded={merging === id}
+                  onClick={() => setMerging(merging === id ? null : id)}
+                >
+                  {t.applies ? "Merge into…" : "Propose a merge…"}
+                </Button>
+              )}
             </div>
-            {merging === d.item_id && (
+            {/* Why an approver's Merge into… is not offered: whose roadmap it needs, or the item to merge first. */}
+            {mayChange && t.blocked && (
+              <p className="mt-1 text-text2" data-testid="prio-twin-blocked">
+                {t.blocked}
+              </p>
+            )}
+            {merging === id && (
               <form
                 className="mt-2 flex flex-wrap items-center gap-2"
-                onSubmit={async (e) => {
+                onSubmit={(e) => {
                   e.preventDefault();
-                  const target = d.merge_into.find((m) => m.item_id === into);
-                  if (!target) return;
-                  setMerging(null);
-                  await changed(
-                    await send({ op: "merge_item", target: { item_id: d.item_id, into_id: target.item_id }, before: {}, after: {}, reason: `Merged into ${target.title}` }),
-                    `Merged ${d.title} into ${target.title}`,
-                  );
+                  void merge(t);
                 }}
               >
-                <label htmlFor={`merge-${d.item_id}`} className="text-[length:var(--simple-small)]">
-                  Merge into
-                </label>
-                <select id={`merge-${d.item_id}`} value={into} onChange={(e) => setInto(e.target.value)} className="rounded-lg border border-line bg-bg px-2 py-1 text-[length:var(--simple-small)]">
-                  <option value="">Choose a feature…</option>
-                  {d.merge_into.map((m) => (
-                    <option key={m.item_id} value={m.item_id}>
-                      {m.title}
-                    </option>
-                  ))}
+                <label htmlFor={`twin-${id}`}>Merge into</label>
+                <select id={`twin-${id}`} value={r.feature_id} disabled className="rounded-lg border border-line bg-bg px-2 py-1">
+                  <option value={r.feature_id}>
+                    {r.title} ({r.code})
+                  </option>
                 </select>
-                <Button type="submit" disabled={!into}>
-                  {d.applies ? "Merge" : "Propose"}
-                </Button>
-                <p className="w-full text-[length:var(--simple-small)] text-text2" data-testid="merge-hint">
-                  {into ? "" : "Choose the feature it repeats. "}Only features on {d.roadmap?.title ? `the ${d.roadmap.title} roadmap` : "its own roadmap"}, the same as the draft&apos;s, are listed.
-                </p>
+                <Button type="submit">{t.applies ? "Merge" : "Propose"}</Button>
               </form>
             )}
-            {/* A Confirm or Merge waiting for the decider. */}
             {pending.map((p) => (
-              <ProposalCard key={p.change_id} p={p} changed={changed} />
+              <ProposalCard key={p.change_id} p={p} row={r} changed={changed} />
             ))}
           </li>
-          );
-        })}
-      </ul>
-      {opened && (
-        <FeaturePanel
-          key={opened.item_id}
-          feature={{ id: opened.item_id, code: opened.code, name: opened.title }}
-          phone={phone}
-          canChange={can("create_simple_change")}
-          onClose={() => setOpened(null)}
-        />
-      )}
-    </section>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -1975,6 +2135,7 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
         <span className="font-medium text-accent-ink">
           {misses.length} of {data.rows.length} miss {lineLabel(data)}
         </span>
+        <ScoreTip />
         {misses.length > 0 && (
           <button type="button" data-testid="line-caption-more" aria-expanded={open} aria-controls="line-misses" onClick={() => setOpen(!open)} className="font-semibold text-accent-ink underline">
             {open ? "Hide them" : "Show them"}
@@ -2029,6 +2190,7 @@ function PartHead({ data, makes, n }: { data: Out; makes: boolean; n: number }) 
       <span className="text-[length:var(--simple-small)] text-text2" data-testid="prio-part-count">
         {n} {n === 1 ? "feature" : "features"}, in rank order
       </span>
+      {makes && <ScoreTip id="prio-score-text-makes" />}
     </li>
   );
 }
@@ -2560,9 +2722,24 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
     },
   });
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
+  // milestone-rename (the owner, Nov 10): each milestone in place, through the Roadmap's own card and rights (a PRD
+  // milestone's name goes straight in for the PRD's owner, else asks them); the roadmap's read gives its milestones.
+  const roadmapQ = useQuery<Schemas["SimpleRoadmapOut"]>("simple-priorities-milestones", () => unwrap(api.GET("/v1/simple/roadmap", {})));
+  const ms = useMilestones({ data: roadmapQ.data, phone, canChange: can("create_simple_change"), reload: async () => { await roadmapQ.reload(); await reloadAll(); }, openItem: () => {} });
+  // The plan's code is the PRD's own (its roadmap-wide code may differ); else its name.
+  const milestoneOf = (code: string, name: string) => {
+    const mine = ms?.list.filter((m) => m.prd?.slug === read.prd.slug) ?? [];
+    return mine.find((m) => m.code === code) ?? mine.find((m) => m.name === name) ?? null;
+  };
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
-      <PlanBucketsHead plan={plan} codeOf={codeOf} />
+      {ms && (
+        <MsProvider value={ms}>
+          <MsCard />
+          <MsToast />
+        </MsProvider>
+      )}
+      <PlanBucketsHead plan={plan} codeOf={codeOf} milestoneOf={milestoneOf} onMilestone={(m) => ms?.edit(m)} />
       <div ref={noteSlot} className="scroll-mt-4" />
       {note && <UndoNote id={note.id} clear='[data-testid="plan-goal"] h3' onUndo={undoOf(note, writes, tasks)}>{note.text}</UndoNote>}
       {error && (

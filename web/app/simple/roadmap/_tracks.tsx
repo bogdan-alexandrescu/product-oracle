@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -33,12 +33,21 @@ export async function withdraw(id: string): Promise<void> {
   if (error) throw new ChangeFailed(typeof detail === "string" ? detail : "Oracle could not withdraw it", 409);
 }
 
+/** The nearest box that scrolls the element (the sheet's body). */
+function scroller(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) if (/(auto|scroll)/.test(getComputedStyle(p).overflowY)) return p;
+  return null;
+}
+
 const features = (n: number) => `${n} ${n === 1 ? "feature" : "features"}`;
-/** The Move to Trash confirm: its live features, then the cut or merged ones it moves too. */
-const movesLine = (live: number, moves: number) => {
-  const closed = moves - live;
+/** The Move to Trash confirm: its live features, then the cut or merged ones it moves too, then
+ * those the reader's draft moved off that are still on it in the published Roadmap. */
+const movesLine = (live: number, moves: number, off: number) => {
+  const closed = moves - live - off;
+  const elsewhere = `${features(off)} still on it in the published Roadmap`;
+  if (!live && !closed) return `${elsewhere} ${off === 1 ? "moves" : "move"} to No track.`;
   const what = !closed ? features(live) : live ? `${features(live)} and ${closed} cut or merged` : `${closed} cut or merged ${closed === 1 ? "feature" : "features"}`;
-  return `Its ${what} ${moves === 1 ? "moves" : "move"} to No track.`;
+  return off ? `Its ${what}, and ${elsewhere}, move to No track.` : `Its ${what} ${moves === 1 ? "moves" : "move"} to No track.`;
 };
 
 /** A short stamp of the roadmap's items: the sheet reads its tracks again when the roadmap reloads. */
@@ -64,8 +73,32 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
   const [trashing, setTrashing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [moving, setMoving] = useState(false);
+  // Roadmap Nov 10: the pressed Move up or Move down stays under the pointer, focused, as its
+  // track moves: the sheet scrolls by the shift, and a blank above the list takes what it
+  // cannot scroll, till the pointer or focus leaves the buttons.
+  const list = useRef<HTMLUListElement>(null);
+  const held = useRef<{ id: string; to: "up" | "down"; top: number } | null>(null);
+  const [lift, setLift] = useState(0);
+  const settle = () => {
+    held.current = null;
+    setLift(0);
+  };
   const data = q.data;
   const tracks = data?.tracks ?? [];
+  useLayoutEffect(() => {
+    const h = held.current;
+    const btn = h && list.current?.querySelector<HTMLButtonElement>(`[data-move="${h.id}:${h.to}"]`);
+    if (!h || !btn) return;
+    let shift = btn.getBoundingClientRect().top - h.top;
+    const box = Math.abs(shift) >= 1 ? scroller(btn) : null;
+    if (box) {
+      const was = box.scrollTop;
+      box.scrollTop += shift;
+      shift -= box.scrollTop - was;
+    }
+    if (Math.abs(shift) >= 1) setLift((x) => Math.max(0, x - shift));
+    if (document.activeElement !== btn && !btn.disabled) btn.focus({ preventScroll: true });
+  }, [data, lift]);
   const refresh = async () => {
     setN((x) => x + 1);
     await onChanged();
@@ -97,7 +130,9 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
   const edit = (t: Track, after: Record<string, string | string[] | null>, done: string) =>
     send({ op: "edit_track", target: { track_id: t.id }, before: {}, after } as Schemas["SimpleChangeIn"], done, t.decider_name ?? null, asking(after), t.title);
   // track-order: one step up or down the company's track order per press, as the One-pagers rows' PRD order.
-  const move = (t: Track, to: "up" | "down") => {
+  const move = (t: Track, to: "up" | "down", el: HTMLElement) => {
+    if (moving) return;
+    held.current = { id: t.id, to, top: el.getBoundingClientRect().top };
     setMoving(true);
     void send({ op: "move_track", target: { track_id: t.id }, before: {}, after: { to } } as Schemas["SimpleChangeIn"], `Moved ${t.title} ${to}.`, t.decider_name ?? null, "Move", t.title).finally(() => setMoving(false));
   };
@@ -109,7 +144,7 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
   };
   return (
     <>
-      <Button className="!h-8" data-testid="tracks-open" aria-haspopup="dialog" onClick={() => setOpen(true)}>
+      <Button className="!h-8" data-testid="tracks-open" aria-haspopup="dialog" onClick={() => (settle(), setOpen(true))}>
         {/* at-followups: no count until the tracks are read (never "Tracks · 0" while they load). */}
         {data ? `Tracks · ${tracks.length}` : "Tracks"}
       </Button>
@@ -123,7 +158,7 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
             </div>
           )}
           {adding && data && <AddTrack data={data} onCancel={() => setAdding(false)} onAdd={async (after) => (await send({ op: "add_track", target: {}, before: {}, after } as Schemas["SimpleChangeIn"], `Added ${after.title}`, data.add_decider_name ?? null, "New track", after.title)) && setAdding(false)} />}
-          <ul className="flex flex-col">
+          <ul ref={list} className="flex flex-col" style={lift ? { paddingTop: lift } : undefined}>
             {tracks.map((t, n) => {
               const expanded = opened === t.id;
               const count = t.feature_count ?? 0;
@@ -138,37 +173,42 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
                         {t.status !== "active" ? ` · ${STATE[t.status]}` : ""}
                       </p>
                     </div>
-                    <button type="button" aria-expanded={expanded} aria-label={`${expanded ? "Hide" : canChange ? "Change" : "Open"} ${t.title}`} onClick={() => (setOpened(expanded ? null : t.id), setTrashing(null))} className="h-8 rounded px-2 text-sm text-accent-ink hover:bg-surface">
+                    <button type="button" aria-expanded={expanded} aria-label={`${expanded ? "Hide" : canChange ? "Change" : "Open"} ${t.title}`} onClick={() => (settle(), setOpened(expanded ? null : t.id), setTrashing(null))} className="h-8 rounded px-2 text-sm text-accent-ink hover:bg-surface">
                       {expanded ? "Hide" : canChange ? "Change" : "Open"}
                     </button>
                   </div>
                   {expanded && (
                     <div className="mt-1">
                       <TrackFields t={t} may={canChange} people={data?.people ?? []} prds={data?.prds ?? []} goals={data?.goals ?? []} onEdit={(after, done) => edit(t, after, done)} />
-                      {canChange && tracks.length > 1 && (
-                        <div className="mt-1 flex gap-1.5">
-                          <Button className="!h-8" disabled={moving || n === 0} onClick={() => move(t, "up")}>
-                            Move up
-                          </Button>
-                          <Button className="!h-8" disabled={moving || n === tracks.length - 1} onClick={() => move(t, "down")}>
-                            Move down
-                          </Button>
+                      {canChange && (tracks.length > 1 || (t.can_decide && trashing !== t.id)) && (
+                        // Move to Trash at the line's far end, away from the move buttons.
+                        <div className="mt-1 flex items-center gap-1.5">
+                          {tracks.length > 1 && (
+                            <span className="flex gap-1.5" onPointerLeave={settle} onBlur={(e) => e.relatedTarget && !e.currentTarget.contains(e.relatedTarget as Node) && settle()}>
+                              <Button className="!h-8" data-move={`${t.id}:up`} aria-disabled={moving || undefined} disabled={n === 0} onClick={(e) => move(t, "up", e.currentTarget)}>
+                                Move up
+                              </Button>
+                              <Button className="!h-8" data-move={`${t.id}:down`} aria-disabled={moving || undefined} disabled={n === tracks.length - 1} onClick={(e) => move(t, "down", e.currentTarget)}>
+                                Move down
+                              </Button>
+                            </span>
+                          )}
+                          {t.can_decide && trashing !== t.id && (
+                            <button
+                              type="button"
+                              className="ml-auto text-sm font-medium text-crit hover:underline"
+                              // A track with features asks once, saying where they go; an empty one moves at once.
+                              onClick={() => (moves ? setTrashing(t.id) : toTrash(t))}
+                            >
+                              Move to Trash
+                            </button>
+                          )}
                         </div>
-                      )}
-                      {canChange && t.can_decide && trashing !== t.id && (
-                        <button
-                          type="button"
-                          className="mt-1 text-sm font-medium text-crit hover:underline"
-                          // A track with features asks once, saying where they go; an empty one moves at once.
-                          onClick={() => (moves ? setTrashing(t.id) : toTrash(t))}
-                        >
-                          Move to Trash
-                        </button>
                       )}
                       {canChange && t.can_decide && trashing === t.id && (
                         <div className="mt-1 grid gap-1.5" data-testid="track-trash-confirm">
                           <p className="text-sm">
-                            {movesLine(count, moves)}
+                            {movesLine(count, moves, t.draft_off_count ?? 0)}
                           </p>
                           <div className="flex gap-1.5">
                             <Button variant="danger" onClick={() => toTrash(t)}>

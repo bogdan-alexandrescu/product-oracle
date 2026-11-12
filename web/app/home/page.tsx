@@ -129,7 +129,7 @@ export default function HomePage() {
     }
   }
 
-  const { goals, history, historyPending, error: goalsError, loading: goalsLoading } = useGoals("home");
+  const { goals, history, historyPending, error: goalsError, loading: goalsLoading } = useGoals("home", { short: true });
   const goalIndex: GoalIndex = useMemo(
     () => new Map((goals ?? []).map((g) => [g.id, { id: g.id, tag: g.tag, title: g.title, proposed: g.proposed }])),
     [goals],

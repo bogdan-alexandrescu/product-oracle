@@ -176,9 +176,9 @@ function Inbox() {
         />
       )}
       {asked.sheet}
-      {/* qa-shell-19: only someone who can edit a source is asked to fix one. */}
+      {/* Owner 2026-11-10: every role sees its sources that need attention; only one that can edit a source gets Edit. */}
       {/* Sources to fix are no kind of Home's: hidden under ?kind= until Show all. */}
-      {!kind && sourcesQ.data && perms.can("update_source") && <SourcesNeedingAttention sources={sourcesQ.data} mayEdit />}
+      {!kind && sourcesQ.data && perms.ready && <SourcesNeedingAttention sources={sourcesQ.data} mayEdit={perms.can("update_source")} />}
     </Page>
   );
 }

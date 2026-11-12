@@ -232,29 +232,27 @@ test.describe("Goal map", () => {
   test.use(SIZES[0].use);
 
   test("every Goal map feature opens its own panel, its code before its name", async ({ page }) => {
-    // protects=every feature card on the ladder opens the roadmap's item panel for it, the code
-    // chip before the name; fails_when=a card opens nothing or the wrong item; no_claim=the panel's
-    // own edits (the roadmap specs).
+    // protects=every feature chip on the goals by tracks grid opens the roadmap's item panel for
+    // it, the code before the name; fails_when=a chip opens nothing or the wrong item;
+    // no_claim=the panel's own edits (the roadmap specs).
     await login(page);
     await page.goto("/simple/goals");
-    await expect(page.getByTestId("gm-page")).toBeVisible();
-    const cards = page.getByTestId("ld-feature");
-    // Each card's code chip, from its roadmap item.
-    await expect(cards.first().locator(".simple-code")).toHaveText(/^F-\d+$/);
-    const n = await cards.count();
+    await expect(page.getByTestId("gm-grid")).toBeVisible();
+    const chips = page.getByTestId("gm-chip");
+    // Each chip's code, from its roadmap item, before its name.
+    await expect(chips.first()).toContainText(/F-\d+/);
+    const n = await chips.count();
     expect(n).toBeGreaterThan(5);
     for (let i = 0; i < n; i++) {
-      const card = cards.nth(i);
-      const words = (await card.locator("span.font-semibold").first().innerText()).trim();
-      // goal-map-editing (PR 1379): every roadmap feature is on the ladder; one whose item has no
-      // code yet (the API's item.code is null) shows its name alone, and its panel opens on it.
-      const chip = card.locator(".simple-code");
-      const code = (await chip.count()) ? (await chip.innerText()).trim() : "";
-      if (code) expect(code, words).toMatch(/^F-\d+$/);
+      const chip = chips.nth(i);
+      // The chip's first line carries its code and name whole (its title), even when cut short.
+      const words = ((await chip.locator("button > span").first().getAttribute("title")) ?? "").trim();
+      // A feature whose item has no code yet (the API's item.code is null) shows its name alone,
+      // and its panel opens on it.
+      const code = words.match(/^F-\d+/)?.[0] ?? "";
       const name = code ? words.replace(/^F-\d+\s*/, "") : words;
-      // On the ladder, a click only selects the card: Open (or Enter) opens its panel.
-      await tap(card);
-      await card.getByTestId("ld-open").click();
+      // A click on the chip opens its panel.
+      await tap(chip.getByRole("button").first());
       await expect(panel(page).getByTestId("card-name")).toHaveText(new RegExp(`^${code}\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
       await page.getByRole("button", { name: "Close the feature" }).click({ position: { x: 5, y: 5 } });
       await expect(panel(page)).toHaveCount(0);

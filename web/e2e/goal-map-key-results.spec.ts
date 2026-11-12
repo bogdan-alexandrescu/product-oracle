@@ -1,19 +1,19 @@
 import { LADDER_KR_SCENARIO, LADDER_KRS } from "../lib/api/mock/goal-ladder";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Page } from "./test";
 
 /*
  * kr-in-goal-map, on the mock's "goal-ladder-key-results" scenario (invented: the ladder's four
  * goals, each with one or two key results, which the API also lists as goals of the map; the
  * milestone "Mobile check-ins weekly for half of teams" is a key result's).
  *
- * Card kr-columns: protects = the Goal map draws the four goals only, Goal 1 to Goal 4, each key
- * result as a line (name and target) in its own goal's card; fails_when = a key result is a goal
- * column ("Goal 5 · ...") or missing from its goal's card.
+ * Card kr-columns: protects = the Goal map draws the four goals only as columns, in order, each
+ * key result named behind its own goal's (i); fails_when = a key result is a goal column of its
+ * own or missing from its goal's (i).
  * Card kr-milestone: protects = a key result's milestone and its work sit under its goal;
  * fails_when = they show in a column of their own or are lost.
- * Card kr-move: protects = Move to… on that milestone lists the four goals and moves it;
+ * Card kr-move: protects = Move to… on that work lists the four goals only and moves it;
  * fails_when = a key result is offered as a goal or the move does not land.
  */
 
@@ -23,53 +23,53 @@ async function open(page: Page) {
   await page.goto("/simple");
   await page.getByTestId("simple-nav-goals").first().click();
   await expect(page).toHaveURL(/\/simple\/goals$/);
-  await expect(page.getByTestId("ld-goal").first()).toBeVisible();
+  await expect(page.getByTestId("gm-grid")).toBeVisible();
 }
 
-const column = (page: Page, goal: string) => page.getByTestId("ld-column").filter({ has: page.getByTestId("ld-goal").filter({ hasText: goal }) });
-async function menu(page: Page, on: Locator, item: string) {
-  await on.getByTestId("ld-more").first().click();
-  await page.getByRole("menuitem", { name: item, exact: true }).click();
-}
+const goal = (page: Page, name: string) => page.getByTestId("gm-goal").filter({ hasText: name });
+/** The cells of a goal's column (every track row). */
+const cells = (page: Page, goalId: string) => page.locator(`[data-testid="gm-cell"][data-goal="${goalId}"]`);
+/** A key result's work: "Mobile daily check-in with one tap status for each task" is on its milestone. */
+const WORK = "Mobile daily check-in with one tap status for each task";
 
 test.describe("Goal map: key results sit inside their goal", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("four goal columns, each key result in its own goal's card", async ({ page }) => {
+  test("four goal columns, each key result behind its own goal's (i)", async ({ page }) => {
     await open(page);
-    await expect(page.getByTestId("ld-column")).toHaveCount(4);
-    const cards = page.getByTestId("ld-goal");
-    await expect(cards).toHaveCount(4);
-    for (const [i, goal] of LADDER_KRS.goals.entries()) {
-      const card = cards.nth(i);
-      await expect(card).toContainText(`Goal ${i + 1}`);
-      await expect(card).toContainText(goal);
-      const krs = card.getByTestId("ld-goal-kr");
-      await expect(krs).toHaveCount(LADDER_KRS.of(goal).length);
-      for (const kr of LADDER_KRS.of(goal)) await expect(krs.filter({ hasText: kr })).toContainText(/ of /);
+    const columns = page.getByTestId("gm-goal");
+    await expect(columns).toHaveCount(4);
+    for (const [i, name] of LADDER_KRS.goals.entries()) {
+      await expect(columns.nth(i)).toContainText(name);
+      await goal(page, name).getByRole("button", { name: `About ${name}` }).hover();
+      const tip = goal(page, name).getByRole("tooltip");
+      for (const kr of LADDER_KRS.of(name)) await expect(tip).toContainText(kr);
     }
-    // No key result is a goal card of its own.
-    for (const kr of LADDER_KRS.goals.flatMap((g) => LADDER_KRS.of(g))) await expect(cards.filter({ hasText: kr })).toHaveCount(1);
-    await expect(page.getByText("Goal 5")).toHaveCount(0);
+    // No key result is a goal column of its own.
+    for (const kr of LADDER_KRS.goals.flatMap((g) => LADDER_KRS.of(g))) await expect(columns.getByTitle(kr, { exact: true })).toHaveCount(0);
   });
 
   test("a key result's milestone and its work show under its goal, and Move to… still moves it", async ({ page }) => {
     await open(page);
     const [first, second] = LADDER_KRS.goals;
-    const goal1 = column(page, first);
-    const milestone = goal1.getByTestId("ld-milestone").filter({ hasText: LADDER_KRS.milestone });
-    await expect(milestone).toHaveCount(1);
-    await expect(goal1.locator("[data-ld-group]").filter({ hasText: LADDER_KRS.milestone }).getByTestId("ld-feature").first()).toBeVisible();
+    const g1 = (await goal(page, first).getAttribute("data-goal"))!;
+    const g2 = (await goal(page, second).getAttribute("data-goal"))!;
+    // The milestone sits on Goal 1's part of the strip; its work in Goal 1's cells.
+    await expect(page.getByTestId("gm-strip").locator(":scope > div").nth(0).getByTestId("gm-strip-milestone").filter({ hasText: LADDER_KRS.milestone })).toHaveCount(1);
+    const onIt = page.getByTestId("gm-chip").filter({ hasText: LADDER_KRS.milestone });
+    await expect(onIt.first()).toBeVisible();
+    await expect(cells(page, g1).getByTestId("gm-chip").filter({ hasText: LADDER_KRS.milestone })).toHaveCount(await onIt.count());
 
-    await page.getByTestId("ld-edit").click();
-    await menu(page, milestone, "Move to…");
-    const sheet = page.getByTestId("ld-ms-move-sheet");
-    await expect(sheet.getByRole("radio")).toHaveCount(4);
-    for (const kr of LADDER_KRS.of(first)) await expect(sheet).not.toContainText(kr);
-    await sheet.getByText(second).click();
-    await page.getByTestId("ld-move-go").click();
-    await expect(page.getByRole("status").filter({ hasText: "Moved" })).toContainText(LADDER_KRS.milestone);
-    await expect(column(page, second).getByTestId("ld-milestone").filter({ hasText: LADDER_KRS.milestone })).toHaveCount(1);
-    await expect(goal1.getByTestId("ld-milestone").filter({ hasText: LADDER_KRS.milestone })).toHaveCount(0);
+    const c = cells(page, g1).getByTestId("gm-chip").filter({ hasText: WORK });
+    await c.hover();
+    await c.getByRole("button", { name: new RegExp(`More for .*${WORK}`) }).click();
+    await page.getByRole("menuitem", { name: "Move to…" }).click();
+    const mover = page.getByRole("dialog", { name: new RegExp(`Move .*${WORK}`) });
+    for (const name of LADDER_KRS.goals) await expect(mover).toContainText(name);
+    for (const kr of LADDER_KRS.of(first)) await expect(mover).not.toContainText(kr);
+    await mover.getByRole("button", { name: /Setup time under two days/ }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Moved" })).toContainText(WORK);
+    await expect(cells(page, g2).getByTestId("gm-chip").filter({ hasText: WORK })).toHaveCount(1);
+    await expect(cells(page, g1).getByTestId("gm-chip").filter({ hasText: WORK })).toHaveCount(0);
   });
 });

@@ -47,11 +47,11 @@ test("ST-1: a viewer's Sources page says View only and has no write controls", a
   await expect(page.getByRole("menuitem", { name: /^Edit / })).toHaveCount(0);
 });
 
-test("ST-1: a commenter, who may change sources, keeps them and no View only", async ({ page }) => {
+test("ST-1: a commenter adds a source but changes none (owner 2026-11-10), and no View only", async ({ page }) => {
   await login(page, COMMENTER);
   await openSources(page);
   await expect(page.getByRole("button", { name: "Add a source" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sync now" }).first()).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Sync now" })).toHaveCount(0);
   await expect(page.locator('[data-testid="view-only"]:visible')).toHaveCount(0);
 });
 
@@ -93,9 +93,9 @@ test("ST-7: a viewer reads the role that can fix a source over the channel cap, 
   await login(page, VIEWER);
   await openSources(page);
   const row = page.getByRole("listitem", { name: "Legacy all-hands chat" });
-  // Review r2 of PR 1286: a viewer edits no source, its own either; editing needs commenter or above.
+  // Review r2 of PR 1286: a viewer edits no source, its own either; editing needs an approver or owner (owner 2026-11-10).
   await expect(row.getByTestId("last-error")).toHaveText(
-    "Over 100 channels: your role cannot edit sources; a commenter or above can. Ask an owner to raise your role.",
+    "Over 100 channels: your role cannot edit sources; an approver or owner can. Ask an owner to raise your role.",
   );
   await expect(row.getByRole("button", { name: "Edit Legacy all-hands chat" })).toHaveCount(0);
 });

@@ -509,7 +509,9 @@ async def delete_track(
 ) -> TrashEntry:
     """removed-tracks: a track deleted in Simple goes to Trash on its own. Its features go to
     no track (their PRD stays); the entry keeps which they were, and a restore puts back
-    the ones still on no track."""
+    the ones still on no track. The open drafts' features on it go to no track there too
+    (Tracks sheet review, Nov 11: what Move to Trash moves is what its count asks about), and
+    a restore puts back those still on no track in a draft still open."""
     from oracle.roadmap.models import RoadmapItem
 
     at = now()
@@ -518,10 +520,11 @@ async def delete_track(
             select(RoadmapItem.id).where(RoadmapItem.track_id == track.id).execution_options(**ALL)
         )
     )
+    in_drafts = await _drafts_off_track(db, track.id)
     entry = TrashEntry(
         root_type="track",
         root_id=track.id,
-        root={**describe(track), "item_ids": [str(i) for i in held]},
+        root={**describe(track), "item_ids": [str(i) for i in held], "draft_items": in_drafts},
         items=[],
         deleted_by=principal.id,
         deleted_by_name=await _actor_name(db, principal),
@@ -546,6 +549,46 @@ async def delete_track(
                         "reason": reason})  # fmt: skip
     await db.flush()
     return entry
+
+
+async def _drafts_off_track(db: AsyncSession, track_id: uuid.UUID) -> dict[str, list[str]]:
+    """Each open draft's items on ``track_id`` (``overlay`` fields) moved to no track there:
+    draft id -> their item ids."""
+    from oracle.simple.drafts import OPEN
+    from oracle.simple.models import SimpleDraft
+
+    out: dict[str, list[str]] = {}
+    for d in await db.scalars(select(SimpleDraft).where(SimpleDraft.status.in_(OPEN))):
+        ov = dict(d.overlay or {})
+        on = [
+            k for k, v in ov.items() if isinstance(v, dict) and v.get("track_id") == str(track_id)
+        ]
+        if on:
+            d.overlay = {**ov, **{k: {**ov[k], "track_id": None} for k in on}}
+            out[str(d.id)] = on
+    return out
+
+
+async def _drafts_back_on_track(db: AsyncSession, entry: TrashEntry) -> None:
+    """A restored track's draft items still on no track in their open draft go back on it."""
+    from oracle.simple.drafts import OPEN
+    from oracle.simple.models import SimpleDraft
+
+    held = entry.root.get("draft_items") or {}
+    if not held:
+        return
+    stmt = select(SimpleDraft).where(
+        SimpleDraft.id.in_([uuid.UUID(i) for i in held]), SimpleDraft.status.in_(OPEN)
+    )
+    for d in await db.scalars(stmt):
+        ov = dict(d.overlay or {})
+        back = [
+            k
+            for k in held[str(d.id)]
+            if isinstance(ov.get(k), dict) and ov[k].get("track_id") is None
+        ]
+        if back:
+            d.overlay = {**ov, **{k: {**ov[k], "track_id": str(entry.root_id)} for k in back}}
 
 
 async def delete_milestone(db: AsyncSession, principal: Any, row: Any) -> TrashEntry:
@@ -722,8 +765,11 @@ async def _track_items_back(db: AsyncSession, entry: TrashEntry) -> None:
     """A restored track takes back its features that are still on no track."""
     from oracle.roadmap.models import RoadmapItem
 
+    if entry.root_type != "track":
+        return
+    await _drafts_back_on_track(db, entry)
     ids = [uuid.UUID(i) for i in entry.root.get("item_ids") or []]
-    if entry.root_type != "track" or not ids:
+    if not ids:
         return
     await db.execute(
         update(RoadmapItem)

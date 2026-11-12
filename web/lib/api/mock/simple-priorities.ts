@@ -11,11 +11,11 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
-import { closed, codedTitle, companyToday, goalRank, prdCode, roadmapOut, trackPrdTitles, TRACKS, type SeedItem, type SimpleDb } from "./simple-roadmap";
+import { canDecideItem, closed, codedTitle, ROADMAPS, companyToday, goalRank, prdCode, roadmapOut, trackPrdTitles, TRACKS, type SeedItem, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
 import { madeOrder } from "./made-order";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
-import { COMPANY_TITLE } from "./one-roadmap";
+import { COMPANY_SLUG, COMPANY_TITLE, OLD_ITEM, OLD_ROADMAP } from "./one-roadmap";
 import { bucketGoalIds, seedGoalBuckets } from "./goal-buckets";
 
 type Row = Schemas["SimplePriorityRow"];
@@ -63,6 +63,63 @@ export function seedGoalNoValue(db: SimpleDb): void {
   db.items.push({ ...GOAL_NO_VALUE });
   db.ids[GOAL_NO_VALUE.key] = stableUuid(`simple-item/${GOAL_NO_VALUE.key}`);
 }
+
+/**
+ * qa-prio-twins ("priorities-twins", on "one-roadmap"): one feature known to more than one record. Trusted seller
+ * badge (only an older roadmap holds it) has a draft on the company roadmap linked to it; a second Block list draft
+ * links to nothing; a second Queue backpressure item is its own feature, and so is a second, confirmed Trusted seller
+ * badge item. Invented data.
+ */
+export const PRIORITIES_TWINS_SCENARIO = "priorities-twins";
+/** "priorities-twins-trace": the same, Trusted seller badge's draft linked only by its trace (no feature_id). */
+export const PRIORITIES_TWINS_TRACE_SCENARIO = "priorities-twins-trace";
+export const TWINS = { draft: OLD_ITEM, unlinked: "Block list", item: "Queue backpressure" } as const;
+export function seedPrioritiesTwins(db: SimpleDb): void {
+  const add = (s: SeedItem) => {
+    db.items.push(s);
+    db.ids[s.key] = stableUuid(`simple-item/${s.key}`);
+  };
+  add({ key: "trusted-badge-draft", title: TWINS.draft, horizon: "later", roadmap: COMPANY_SLUG, feature: "trusted-badge", draft: true, confidence: "high", source: "engineering" });
+  add({ key: "block-list-copy", title: TWINS.unlinked, horizon: "later", roadmap: COMPANY_SLUG, draft: true, confidence: "medium", source: "engineering" });
+  add({ key: "queue-backpressure-2", title: TWINS.item, horizon: "later", roadmap: COMPANY_SLUG, confidence: "low", source: "engineering" });
+  // A confirmed Trusted seller badge item that is its own feature: a twin with an item of a row with only a draft.
+  // Its title differs only by a trailing space: same name, ranked after the row (the mock orders unscored rows by title).
+  add({ key: "trusted-badge-2", title: `${TWINS.draft} `, horizon: "later", roadmap: COMPANY_SLUG, confidence: "high", source: "engineering" });
+  // Oracle only proposed these two: they rank, but have no mark (Show's All still counts them).
+  db.proposed_features = ["block-list", "queue-backpressure"];
+}
+
+/**
+ * "priorities-twins-old" (re-review of #1503): "priorities-twins" plus a Block list item on the older Trust plan
+ * roadmap that is its own feature: a twin of the company roadmap's Block list whose only item Simple does not read.
+ * Someone else decides Trust plan roadmap, so the approver may not merge it. Invented data.
+ */
+export const PRIORITIES_TWINS_OLD_SCENARIO = "priorities-twins-old";
+export const OLD_TWIN = { key: "block-list-old", decider: stableUuid("member/old-decider@example.com") } as const;
+export function seedPrioritiesTwinsOld(db: SimpleDb): void {
+  seedPrioritiesTwins(db);
+  db.items.push({ key: OLD_TWIN.key, title: TWINS.unlinked, horizon: "later", roadmap: OLD_ROADMAP[0], confidence: "medium", source: "engineering" });
+  db.ids[OLD_TWIN.key] = stableUuid(`simple-item/${OLD_TWIN.key}`);
+  db.deciders = { ...db.deciders, [OLD_ROADMAP[0]]: OLD_TWIN.decider };
+}
+
+/** "priorities-twins-locked": "priorities-twins" with the second Trusted seller badge's feature locked (a person edited
+ * it), so its Merge into… is refused (baseline.merge_entity's 409) and nothing changes. */
+export const PRIORITIES_TWINS_LOCKED_SCENARIO = "priorities-twins-locked";
+export function seedPrioritiesTwinsLocked(db: SimpleDb): void {
+  seedPrioritiesTwins(db);
+  db.items.find((s) => s.key === "trusted-badge-2")!.gt_lock = "locked";
+}
+
+export function seedPrioritiesTwinsTrace(db: SimpleDb): void {
+  seedPrioritiesTwins(db);
+  const d = db.items.find((s) => s.key === "trusted-badge-draft")!;
+  d.trace_feature = d.feature;
+  d.feature = undefined;
+}
+
+/** qa-prio-twins (priorities.same_name): two names are the same, case and spacing aside. */
+export const sameName = (t: string | null | undefined): string => (t ?? "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
 
 /**
  * The "priorities-plan-goal-names" scenario (the owner, Nov 8: a plan goal and a goal record with one name are two
@@ -161,13 +218,51 @@ const CONFIDENCE: Record<string, number> = { high: 0.8, medium: 0.5, low: 0.3 };
 const round = (n: number): number => Math.round(n * 1000) / 1000;
 const featureId = (itemId: string): string => `feature-${itemId}`;
 /** The key of the item standing for `key`'s feature: its own, or the one it was added for (SeedItem.feature). */
-const featureOf = (db: SimpleDb, key: string): string => db.items.find((s) => s.key === key)?.feature ?? key;
+// qa-prio-twins (priorities.link): else its trace's source feature.
+const featureOf = (db: SimpleDb, key: string): string => {
+  const s = db.items.find((x) => x.key === key);
+  return s?.feature ?? s?.trace_feature ?? key;
+};
 /** An item's feature id: one per feature, whichever roadmap's item stands for it. */
 const featureOfItem = (db: SimpleDb, i: { key: string; id: string }): string => featureId(db.ids[featureOf(db, i.key)] ?? i.id);
 
+/** qa-prio-twins (priorities._items_of over every roadmap): the open items of the feature `key` stands for, on every
+ * roadmap, the older ones beside the company roadmap too. */
+export const itemsOfFeature = (db: SimpleDb, key: string): SeedItem[] => db.items.filter((x) => !closed(x) && !x.trashed && featureOf(db, x.key) === key);
+
+/**
+ * priorities._twin_block: why the caller (`may`: whether they decide an item) may not merge the twin feature `source`
+ * into `kept` (keys of the items standing for them), its items re-linked first, else null: an item on a roadmap they
+ * do not decide, or a confirmed item where the kept feature has a confirmed item of its own (merge those first).
+ */
+export function twinBlock(db: SimpleDb, may: (s: SeedItem) => boolean, source: string, kept: string, keptTitle: string): string | null {
+  const theirs = itemsOfFeature(db, source);
+  const title = (x: SeedItem) => ROADMAPS[x.roadmap]?.title ?? x.roadmap;
+  const no = theirs.find((x) => !may(x));
+  if (no) return `Only the decider of ${title(no)} links ${no.title} (${no.key}) to another feature: ask them to merge it`;
+  for (const x of theirs.filter((y) => !y.draft)) {
+    const d = itemsOfFeature(db, kept).find((y) => y.roadmap === x.roadmap && !y.draft);
+    if (d) return `${keptTitle} already has ${d.title} (${d.key}) on ${title(x)}: merge ${x.title} (${x.key}) into it first`;
+  }
+  return null;
+}
+
 /** The key of the item standing for the feature `fid`, undefined for no such feature. */
 export function featureItem(db: SimpleDb, fid: string): string | undefined {
-  return Object.keys(db.ids).find((k) => featureId(db.ids[k]) === fid && !db.items.find((s) => s.key === k)?.feature);
+  return featureItems(db).get(fid);
+}
+
+/** featureItem for every feature at once, read in one pass (a read asks it per row: 500 items, dod-perf). */
+function featureItems(db: SimpleDb): Map<string, string> {
+  const item = new Map<string, SeedItem>();
+  for (const x of db.items) if (!item.has(x.key)) item.set(x.key, x);
+  const out = new Map<string, string>();
+  for (const k of Object.keys(db.ids)) {
+    const s = item.get(k);
+    const fid = featureId(db.ids[k]);
+    if (!out.has(fid) && !s?.feature && !s?.trace_feature) out.set(fid, k);
+  }
+  return out;
 }
 
 /**
@@ -181,10 +276,14 @@ export function addToCompany(db: SimpleDb, fid: string, seen: SimpleDb = db): st
   if (!base || !src) return undefined;
   const slug = db.company_roadmap;
   if (!slug) return base;
-  const there = db.items.filter((s) => s.roadmap === slug && featureOf(db, s.key) === base && !closed(s) && s.status !== "cut");
+  // Its first item there by key (a confirmed one first), as targets.add_to_company.
+  const there = db.items.filter((s) => s.roadmap === slug && featureOf(db, s.key) === base && !closed(s) && s.status !== "cut").sort((a, b) => a.key.localeCompare(b.key));
   const kept = there.find((s) => !s.draft) ?? there[0];
   if (kept) {
+    // A draft linked by its trace is confirmed and linked to the feature (its feature_id).
+    if (kept.draft && kept.key !== base) kept.feature = base;
     kept.draft = false;
+    kept.trace_feature = undefined;
     return kept.key;
   }
   // every-field (targets.add_to_company): its code is no other item's own, a title's (its slices share it), in set_code's words.
@@ -460,6 +559,43 @@ function pickLine(key: string | null, offered: Line[], same?: Map<string, Line>)
  */
 export const PRIORITIES_BUCKET_ONLY_SCENARIO = "priorities-bucket-only";
 
+/**
+ * The items that rank, one per feature, whoever reads (priorities.py `_items`): every roadmap's open items, the
+ * company roadmap's first. A draft item is never ranked: it sits under "Not ranked yet", with no row and no bucket
+ * weeks (here each item stands for its own feature, so a draft has no row at all). prio-unranked: an item linked to no
+ * feature (its seed's feature_id null, as the Ground Truth scenario's Export to sheets) has no ranked feature: no row,
+ * listed in `unranked` instead.
+ */
+export function rankedItems(db: SimpleDb, all: Item[] = openItems(db)): Item[] {
+  return all.filter((i) => !i.draft && !noFeature(db, i));
+}
+
+const noFeature = (db: SimpleDb, i: Item): boolean => db.items.find((s) => s.key === i.key)?.feature_id === null;
+
+/** Every roadmap's open items as an owner reads them, the company roadmap's first. */
+function openItems(db: SimpleDb): Item[] {
+  const cut = new Set(db.items.filter((s) => closed(s)).map((s) => s.key));
+  const on = roadmapOut(db, "owner", new URLSearchParams())!.items.filter((i) => i.status !== "cut" && !cut.has(i.key));
+  return [...on, ...offCompany(db, on).filter((i) => i.status !== "cut" && !cut.has(i.key))];
+}
+
+/**
+ * Each feature's short code (priorities._short_codes) by its feature key (featureKeyOf), as Priorities shows it. In
+ * the mock each item's key is its feature's key (its own code when it has one); FEATURES is in creation order, a
+ * feature outside it after them by key. With a plan, a feature the plan names is keyed by the plan's code (F-06), so
+ * one feature reads one code on every tab.
+ */
+export function featureShortCodes(db: SimpleDb, ranked: Item[] = rankedItems(db)): Map<string, string> {
+  const featureKey = (k: string): string => featureKeyOf(db, k);
+  const created = [...Object.keys(FEATURES), ...ranked.map((i) => i.key).filter((k) => !FEATURES[k]).sort()].map(featureKey);
+  const prdCodes = Object.fromEntries(ranked.filter((i) => i.code).map((i) => [featureKey(i.key), i.code!]));
+  // Each feature's shown name (priorities.py `_shown_names`): its item's title as every reader
+  // sees it, else its seed item's.
+  const names = Object.fromEntries([...db.items.map((i) => [featureKey(i.key), i.title]), ...ranked.map((i) => [featureKey(i.key), i.title])]);
+  const shorts = shortCodes(created, prdCodes, names);
+  return new Map(created.map((k, n) => [k, shorts[n]]));
+}
+
 export function prioritiesOut(
   db: SimpleDb,
   ctx: PrioritiesCtx,
@@ -483,14 +619,8 @@ export function prioritiesOut(
   // Every feature ranks (the baseline is company-wide); one whose item the reader may not see
   // is a row with no item, never reorderable (priorities.py).
   const seen = new Set(read.items.map((i) => i.id));
-  const on = roadmapOut(db, "owner", new URLSearchParams())!.items.filter((i) => i.status !== "cut" && !cut.has(i.key));
-  const all = [...on, ...offCompany(db, on).filter((i) => i.status !== "cut" && !cut.has(i.key))];
-  // A draft item is never ranked (priorities.py `_items`): it sits under "Not ranked yet", with no
-  // row and no bucket weeks. Here each item stands for its own feature, so a draft has no row at all.
-  // prio-unranked: an item linked to no feature (its seed's feature_id null, as the Ground Truth
-  // scenario's Export to sheets) has no ranked feature: no row, listed in `unranked` instead.
-  const noFeature = (i: Item) => db.items.find((s) => s.key === i.key)?.feature_id === null;
-  const ranked = all.filter((i) => !i.draft && !noFeature(i));
+  const all = openItems(db);
+  const ranked = rankedItems(db, all);
   const byId = new Map(ranked.map((i) => [i.id, i]));
   const keyOf = (i: Item) => i.key;
   const score = new Map<string, number>();
@@ -517,6 +647,9 @@ export function prioritiesOut(
   }
   yours = dependencyOrder(yours, byId);
   const can = ctx.role !== "viewer";
+  // qa-prio-twins (priorities._held): a feature's live draft on the roadmap the reader sees, by its link.
+  // Only the company roadmap's while there is one.
+  const draftOf = (i: Item) => live.find((d) => d.draft && d.key !== i.key && (!db.company_roadmap || d.roadmap.slug === db.company_roadmap) && featureOfItem(db, d) === featureOfItem(db, i));
   const rows: Row[] = yours.map((i, n) => {
     const e = estimates(db, keyOf(i), i.id);
     const above = yours.slice(0, n);
@@ -556,7 +689,9 @@ export function prioritiesOut(
       in_plan: false,
       // prio-company: an owner moves every row (a move adds a feature to the company roadmap).
       can_reorder: can && (mine || ctx.role === "owner"),
-      on_roadmap: mine,
+      on_roadmap: mine || !!draftOf(i),
+      draft_item_id: mine ? null : (draftOf(i)?.id ?? null),
+      twins: [],
       applies: mine ? decides(i.id) : ctx.role === "owner",
       // feature-parts: the feature it is part of, as the roadmap reads it.
       part_of: mine ? (i.part_of ?? null) : null,
@@ -565,51 +700,115 @@ export function prioritiesOut(
       before_override: (stored(db, i.id).override as Record<string, unknown> | undefined) ?? null,
     };
   });
-  // In the mock each item's key is its feature's key (its own code when it has one); FEATURES
-  // is in creation order, a feature outside it after them by key.
-  // With a plan, a feature the plan names is keyed by the plan's code (F-06), so one feature reads one code on every tab.
-  const featureKey = (k: string): string => featureKeyOf(db, k);
-  const created = [...Object.keys(FEATURES), ...yours.map((i) => i.key).filter((k) => !FEATURES[k]).sort()].map(featureKey);
-  const prdCodes = Object.fromEntries(yours.filter((i) => i.code).map((i) => [featureKey(i.key), i.code!]));
-  // Each feature's shown name (priorities.py `_shown_names`): its item's title as every reader
-  // sees it, else its seed item's.
-  const names = Object.fromEntries([...db.items.map((i) => [featureKey(i.key), i.title]), ...ranked.map((i) => [featureKey(i.key), i.title])]);
-  const shorts = shortCodes(created, prdCodes, names);
-  const short = new Map(created.map((k, n) => [k, shorts[n]]));
-  yours.forEach((i, n) => (rows[n].short_code = short.get(featureKey(i.key))!));
+  const short = featureShortCodes(db, ranked);
+  yours.forEach((i, n) => (rows[n].short_code = short.get(featureKeyOf(db, i.key))!));
   // prio-company: the feature's own code beside its name (priorities.FEATURE_CODE), never letters made up.
   rows.forEach((r) => (r.own_key = /^[A-Z]{1,3}-\d+$/.test(r.short_code) ? r.short_code : null));
+  // plan-charts: with a plan, its PRD's items are in it (Goal buckets lists the rest outside it).
+  const plan = planOf(db, read, ctx.role);
+  if (plan) {
+    const prdOf = new Map(read.items.map((i) => [i.id, i.prd?.slug]));
+    yours.forEach((i, n) => (rows[n].in_plan = prdOf.get(i.id) === PLAN_PRD_SLUG));
+  }
+  // qa-prio-twins (priorities._fold_twins): rows of one name are one row, the best-ranked on the roadmap; the
+  // others its twins, each with how it merges into it. Nothing is merged.
+  // A row's names: its title and its feature's own (the item standing for the feature), as priorities.py folds by either.
+  const itemOf = featureItems(db);
+  const titleOf = new Map<string, string>();
+  for (const x of db.items) if (!titleOf.has(x.key)) titleOf.set(x.key, x.title);
+  const namesOf = (r: Row) => {
+    const k = itemOf.get(r.feature_id);
+    return new Set([sameName(r.title), sameName(k === undefined ? undefined : titleOf.get(k))].filter(Boolean));
+  };
+  const groups: Row[][] = [];
+  const group = new Map<string, number>();
+  for (const r of rows) {
+    const ns = [...namesOf(r)];
+    const found = [...new Set(ns.filter((n) => group.has(n)).map((n) => group.get(n)!))].sort((a, b) => a - b);
+    const g = found.length ? found[0] : groups.push([]) - 1;
+    for (const o of found.slice(1)) {
+      groups[g].push(...groups[o]);
+      groups[o] = [];
+      for (const [n, x] of group) if (x === o) group.set(n, g);
+    }
+    groups[g].push(r);
+    for (const n of ns) group.set(n, g);
+  }
+  const lead = new Map<string, Row>();
+  for (const members of groups.filter((m) => m.length)) {
+    members.sort((a, b) => a.rank - b.rank);
+    const l = members.find((x) => x.on_roadmap) ?? members[0];
+    for (const r of members) {
+      lead.set(r.feature_id, l);
+      if (l === r) continue;
+      const mine = !!r.item_id && !!l.item_id && readItems.get(r.item_id)!.roadmap.id === readItems.get(l.item_id)!.roadmap.id;
+      // No item, an item on another roadmap, or a lead with only a draft: the Ground Truth's Merge into….
+      const merge = !can ? null : mine ? ("item" as const) : ("entity" as const);
+      // priorities.merge_twin re-links each of its items first, on every roadmap: an approver who decides every one,
+      // none beside a confirmed item of the kept feature; else why not (blocked).
+      const approver = ctx.role === "owner" || ctx.role === "approver";
+      const source = itemOf.get(r.feature_id);
+      const keptKey = itemOf.get(l.feature_id);
+      const blocked = merge === "entity" && approver && source && keptKey ? twinBlock(db, (x) => canDecideItem(db, x, ctx), source, keptKey, l.title) : null;
+      (l.twins ??= []).push({
+        feature_id: r.feature_id, item_id: r.item_id, code: r.code, title: r.title, goal: r.goal, rank: r.rank, merge,
+        into_id: merge === "item" ? l.item_id : null, applies: merge === "item" ? decides(r.item_id!) : merge === "entity" && approver && !blocked, blocked,
+      });
+    }
+  }
+  const kept = rows.filter((r) => lead.get(r.feature_id) === r);
+  const twinItems = new Set(kept.flatMap((r) => (r.twins ?? []).map((t) => t.item_id).filter((x): x is string => !!x)));
+  // prio-twin-propose: a twin's waiting merge_twin, by its feature (it has no item_id).
+  const twins = new Map(kept.flatMap((r) => (r.twins ?? []).filter((t) => !!t.feature_id).map((t) => [t.feature_id!, t])));
   const codes = new Map(read.items.map((i) => [i.id, i]));
   // As priorities.py lists them: by at, a tie in the order made.
   const proposals: Schemas["SimplePriorityProposal"][] = madeOrder(db.changes ?? [], (c) => [c.at])
-    // Ranking proposals, and a draft's Confirm or Merge (S7: a merge_item), as priorities.py.
-    .filter((c) => c.status === "proposed" && codes.has(String(c.target.item_id)))
-    .filter((c) => c.op === "override_priority" || c.op === "estimate_feature" || ((c.op === "confirm_item" || c.op === "cut" || c.op === "merge_item") && codes.get(String(c.target.item_id))!.draft))
+    // Ranking proposals, and a draft's Confirm or Merge (S7: a merge_item), as priorities.py; qa-prio-twins: a twin's Merge too.
+    .filter((c) => c.status === "proposed" && (codes.has(String(c.target.item_id)) || (c.op === "merge_twin" && twins.has(String(c.target.feature_id)))))
+    .filter((c) => c.op === "override_priority" || c.op === "estimate_feature" || c.op === "merge_twin" || ((c.op === "confirm_item" || c.op === "cut" || c.op === "merge_item") && (codes.get(String(c.target.item_id))!.draft || (c.op === "merge_item" && twinItems.has(String(c.target.item_id))))))
     .filter((c) => ctx.role === "owner" || c.by === ctx.id || route(c).includes(ctx.id))
-    .map((c) => {
+    .map((c): Schemas["SimplePriorityProposal"] => {
+      const t = c.op === "merge_twin" ? twins.get(String(c.target.feature_id)) : undefined;
+      if (t)
+        return {
+          change_id: c.id, op: "merge_twin", item_id: t.item_id ?? null, feature_id: t.feature_id, code: t.code, title: t.title, by_name: c.by_name, at: c.at, reason: c.reason,
+          after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: ctx.role === "owner" || ctx.role === "approver", can_withdraw: c.by === ctx.id,
+          flow: flowFor(db.visuals, "change", c.id) ?? (t.item_id ? flowFor(db.visuals, "feature", t.item_id) : null),
+        };
       const i = codes.get(String(c.target.item_id))!;
       return {
         change_id: c.id, op: c.op as Schemas["SimplePriorityProposal"]["op"], item_id: i.id, feature_id: featureOfItem(db, i), code: i.key, title: i.title, by_name: c.by_name, at: c.at, reason: c.reason,
         after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), can_withdraw: c.by === ctx.id, flow: flowFor(db.visuals, "change", c.id) ?? flowFor(db.visuals, "feature", i.id),
       };
     });
+
+  const byFeature = new Map(kept.map((r) => [r.feature_id, r]));
   const drafts: Schemas["SimplePriorityDraft"][] = live
     .filter((i) => i.draft)
-    .map((i) => ({
-      item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, goal_ids: bucketGoalIds(db.goal_buckets, i.goal_ids ?? []), roadmap: i.roadmap, applies: decides(i.id),
-      merge_into: all
-        .filter((x) => !x.draft && seen.has(x.id))
-        .filter((x) => x.roadmap.id === i.roadmap.id)
-        .sort((a, b) => Number(a.goal?.key !== i.goal?.key) - Number(b.goal?.key !== i.goal?.key) || a.key.localeCompare(b.key))
-        .slice(0, 8)
-        .map((x) => ({ item_id: x.id, code: x.key, title: x.title })),
-    }));
+    .map((i) => {
+      // qa-prio-twins: the row it shows on, by its link (a draft added for a feature), else by name.
+      const own = featureOf(db, i.key) !== i.key;
+      const linked = own ? byFeature.get(featureOfItem(db, i)) : undefined;
+      const g = group.get(sameName(i.title));
+      const row = linked ?? (own || g == null ? undefined : lead.get(groups[g][0].feature_id));
+      return {
+        item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, goal_ids: bucketGoalIds(db.goal_buckets, i.goal_ids ?? []), roadmap: i.roadmap, applies: decides(i.id),
+        merge_into: all
+          .filter((x) => !x.draft && seen.has(x.id))
+          .filter((x) => x.roadmap.id === i.roadmap.id)
+          .sort((a, b) => Number(a.id !== row?.item_id) - Number(b.id !== row?.item_id) || Number(a.goal?.key !== i.goal?.key) - Number(b.goal?.key !== i.goal?.key) || a.key.localeCompare(b.key))
+          .slice(0, 8)
+          .map((x) => ({ item_id: x.id, code: x.key, title: x.title })),
+        row_feature_id: row?.feature_id ?? null,
+        linked: !!linked,
+      };
+    });
   // prio-unranked (priorities.py `_unranked`): the reader's live, non-draft items no row holds.
   const unranked: Schemas["SimplePriorityUnranked"][] = live
-    .filter((i) => !i.draft && noFeature(i))
+    .filter((i) => !i.draft && noFeature(db, i))
     .map((i) => ({ item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, goal_ids: bucketGoalIds(db.goal_buckets, i.goal_ids ?? []), roadmap: i.roadmap }));
   const buckets: Schemas["SimpleGoalBucket"][] = [];
-  for (const r of rows) {
+  for (const r of kept) {
     const key = r.goal?.key ?? "none";
     let b = buckets.find((x) => x.key === key);
     if (!b) buckets.push((b = { key, title: r.goal?.title ?? "No goal", weeks: 0, share: 0, codes: [], no_goal: !r.goal, position: r.goal?.position ?? null }));
@@ -622,18 +821,12 @@ export function prioritiesOut(
   buckets.sort((a, b) => Number(a.no_goal) - Number(b.no_goal) || goalRank(a.key) - goalRank(b.key));
   const total = round(buckets.reduce((s, b) => s + b.weeks, 0));
   for (const b of buckets) b.share = total ? round(b.weeks / total) : 0;
-  // plan-charts: with a plan, its PRD's items are in it (Goal buckets lists the rest outside it).
-  const plan = planOf(db, read, ctx.role);
-  if (plan) {
-    const prdOf = new Map(read.items.map((i) => [i.id, i.prd?.slug]));
-    yours.forEach((i, n) => (rows[n].in_plan = prdOf.get(i.id) === PLAN_PRD_SLUG));
-  }
   const bucketOnly = typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === PRIORITIES_BUCKET_ONLY_SCENARIO ? buckets.find((b) => !b.no_goal)?.codes[0] : undefined;
   return {
     // The plan-model lane: with a plan, its span ("Nov 2 - Feb 12"), else the calendar quarter.
     today, quarter: read.span ?? quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
-    rows: bucketOnly ? rows.filter((r) => r.code !== bucketOnly) : rows, proposals, drafts, unranked, buckets, weeks_total: total, can_change: can, line, lines,
+    rows: bucketOnly ? kept.filter((r) => r.code !== bucketOnly) : kept, proposals, drafts, unranked, buckets, weeks_total: total, can_change: can, line, lines,
     company_roadmap: db.company_roadmap ? { id: stableUuid(`simple-doc/${db.company_roadmap}`), slug: db.company_roadmap, title: COMPANY_TITLE } : null,
     // plan-charts: the plan this quarter is, when the reader sees its PRD's items.
     plan,

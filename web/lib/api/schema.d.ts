@@ -14597,6 +14597,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/priorities/twins/{feature_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Simple Priority Twin
+         * @description A Same name record's Merge into… the row's feature (qa-prio-twins): its roadmap items
+         *     are linked to the kept feature first, on every roadmap, then its feature is merged into it.
+         *     403 unless the caller is an approver; 409, naming why, when they do not decide one of those
+         *     items' roadmaps or the kept feature has its own item there; nothing is written.
+         */
+        post: operations["merge_simple_priority_twin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/priorities": {
         parameters: {
             query?: never;
@@ -19462,7 +19485,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question" | "merge_twin") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -19580,7 +19603,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question" | "merge_twin";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -27454,13 +27477,34 @@ export interface components {
         };
         /**
          * ImportErrorResponse
-         * @description 422 body when a draft cannot be imported. Lists every problem, not just the first.
+         * @description 422 body when a draft cannot be imported. Lists every problem, not just the first;
+         *     the detail names them (:func:`rejected_detail`).
          */
         ImportErrorResponse: {
             /** Detail */
             detail: string;
             /** Errors */
             errors: components["schemas"]["ImportProblem"][];
+        };
+        /**
+         * ImportFix
+         * @description The action that resolves a refused draft's problem (vqa-one-pager (e)):
+         *     ``add_date_source`` opens Plan › Dates for the PRD (``prd_document_id``, none when the
+         *     roadmap has no known PRD) filtered to the ``days`` (YYYY-MM-DD) that need a source.
+         */
+        ImportFix: {
+            /**
+             * Action
+             * @constant
+             */
+            action: "add_date_source";
+            /** Prd Document Id */
+            prd_document_id?: string | null;
+            /**
+             * Days
+             * @default []
+             */
+            days: string[];
         };
         /** ImportIssue */
         ImportIssue: {
@@ -27504,6 +27548,7 @@ export interface components {
             refs: {
                 [key: string]: string | string[];
             };
+            fix?: components["schemas"]["ImportFix"] | null;
         };
         /** ImportSkipped */
         ImportSkipped: {
@@ -28677,7 +28722,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question" | "merge_twin";
             /**
              * Status
              * @enum {string}
@@ -41359,7 +41404,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question" | "merge_twin";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -41408,7 +41453,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_code" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "link_goal_map" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "move_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question" | "merge_twin";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -43717,6 +43762,13 @@ export interface components {
              * @default []
              */
             merge_into: components["schemas"]["SimplePriorityMerge"][];
+            /** Row Feature Id */
+            row_feature_id?: string | null;
+            /**
+             * Linked
+             * @default false
+             */
+            linked: boolean;
         };
         /** SimplePriorityGoal */
         SimplePriorityGoal: {
@@ -43762,12 +43814,9 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "override_priority" | "estimate_feature" | "confirm_item" | "cut" | "merge_item";
-            /**
-             * Item Id
-             * Format: uuid
-             */
-            item_id: string;
+            op: "override_priority" | "estimate_feature" | "confirm_item" | "cut" | "merge_item" | "merge_twin";
+            /** Item Id */
+            item_id: string | null;
             /** Feature Id */
             feature_id?: string | null;
             /** Code */
@@ -43901,6 +43950,40 @@ export interface components {
             before_override?: {
                 [key: string]: unknown;
             } | null;
+            /** Draft Item Id */
+            draft_item_id?: string | null;
+            /** Twins */
+            twins?: components["schemas"]["SimplePriorityTwin"][];
+        };
+        /**
+         * SimplePriorityTwin
+         * @description qa-prio-twins: another ranked record of a row's feature, not linked to it (a Ground Truth
+         *     feature of the same name), shown on that row, never as a row of its own: a person merges it
+         *     into the row's record (``merge``) or keeps both; Oracle never merges it.
+         */
+        SimplePriorityTwin: {
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Item Id */
+            item_id?: string | null;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            /** Rank */
+            rank?: number | null;
+            /** Merge */
+            merge?: ("item" | "entity") | null;
+            /** Into Id */
+            into_id?: string | null;
+            /**
+             * Applies
+             * @default false
+             */
+            applies: boolean;
+            /** Blocked */
+            blocked?: string | null;
         };
         /**
          * SimplePriorityUnranked
@@ -44893,6 +44976,11 @@ export interface components {
              * @default 0
              */
             moves_count: number;
+            /**
+             * Draft Off Count
+             * @default 0
+             */
+            draft_off_count: number;
             /** Order */
             order?: number | null;
         };
@@ -44916,6 +45004,30 @@ export interface components {
              * @default []
              */
             goals: components["schemas"]["SimpleTrackGoal"][];
+        };
+        /**
+         * SimpleTwinMergeIn
+         * @description qa-prio-twins: a Same name record's Merge into… ``into`` (the row's feature).
+         */
+        SimpleTwinMergeIn: {
+            /**
+             * Into
+             * Format: uuid
+             */
+            into: string;
+        };
+        /**
+         * SimpleTwinMergeOut
+         * @description The kept feature, and the item keys of the twin's items now linked to it.
+         */
+        SimpleTwinMergeOut: {
+            /** Feature Id */
+            feature_id: string;
+            /**
+             * Relinked
+             * @default []
+             */
+            relinked: string[];
         };
         /**
          * SimpleUpcomingMeeting
@@ -78297,6 +78409,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimpleDecisionsWaitingOut"];
+                };
+            };
+        };
+    };
+    merge_simple_priority_twin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feature_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleTwinMergeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleTwinMergeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

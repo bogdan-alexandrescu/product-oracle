@@ -187,7 +187,7 @@ test.describe("typed goals: comparison gives the direction, typed beats text", (
     ["at most 8% at 8", { unit: "%", comparison: "at_most", target: 8, current: 8, ...asOf }, "Target met"],
     ["at most 2 min", { unit: "min", comparison: "at_most", target: 2, current: 3.5, ...asOf }, "1.5 min to go"],
     ["above 400 teams", { unit: "teams", comparison: "above", target: 400, current: 380, ...asOf }, "20 teams to go"],
-    ["at least $4M", { unit: "USD", comparison: "at_least", target: 4_000_000, current: 3_100_000, ...asOf }, "$900k to go"],
+    ["at least $4M", { unit: "USD", comparison: "at_least", target: 4_000_000, current: 3_100_000, ...asOf }, "$900,000 to go"],
     // The title says "Raise" and the text says "at least 50%": the typed comparison wins.
     ["typed beats text", { unit: "%", comparison: "at_most", target: 45, current: 40, target_text: "at least 50%", ...asOf }, "Target met"],
     ["no current yet", { unit: "%", comparison: "at_least", target: 45 }, "No current value yet"],
@@ -205,8 +205,15 @@ test.describe("typed goals: comparison gives the direction, typed beats text", (
     const [g] = goalViews([goal({ unit: "%", comparison: "at_least", target: 45, current: 38, ...asOf })]);
     expect(formatFigure(g.current!)).toBe("38%");
     expect(g.targetText).toBe("45%");
-    const [m] = goalViews([goal({ unit: "USD", comparison: "at_least", target: 4_000_000, current: 3_100_000, ...asOf })]);
-    expect(formatFigure(m.current!)).toBe("$3.1M");
+    // goal-money-full: money in full on every page; Home's goals alone ask for the short form.
+    const money = goal({ unit: "USD", comparison: "at_least", target: 4_000_000, current: 3_100_000, ...asOf });
+    const [m] = goalViews([money]);
+    expect(formatFigure(m.current!)).toBe("$3,100,000");
+    expect(m.targetText).toBe("$4,000,000");
+    const [h] = goalViews([money], undefined, { short: true });
+    expect(formatFigure(h.current!)).toBe("$3.1M");
+    expect(h.targetText).toBe("$4M");
+    expect(assess(h).text).toBe("$900k to go");
   });
 
   // Decided 2026-10-21, B5 "Vague goals": a confirmed goal with no typed target says No target.

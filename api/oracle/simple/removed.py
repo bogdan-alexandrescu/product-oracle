@@ -14,7 +14,7 @@
 """
 
 import uuid
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -29,7 +29,7 @@ from oracle.baseline.models import Entity
 from oracle.docs.models import Document
 from oracle.members.names import display_name
 from oracle.roadmap import company
-from oracle.roadmap.models import TRACK_ORDER, ProductTrack, TrackMilestone
+from oracle.roadmap.models import TRACK_ORDER, ProductTrack, RoadmapItem, TrackMilestone
 from oracle.simple import drafts, goal_asks, goal_buckets, plan_changes, service
 from oracle.simple.models import SimpleChange
 from oracle.simple.router import Reader
@@ -186,14 +186,29 @@ async def list_simple_tracks(principal: Reader, db: TenantDB) -> SimpleTracks:
         if prd_ids
         else {}
     )
-    read = await service.load(db)
+    # Tracks sheet counts (owner, Nov 10): what the reader's roadmap shows, its working draft.
+    read = await service.load(db, await drafts.overlays_for(db, principal))
     features = Counter(
         e.track.id for e in read.entries if e.track and e.status not in ("cut", "merged")
     )
-    # What Move to Trash moves: the features Simple's roadmap shows, cut and merged ones too. It
-    # leaves out the rows trash.delete_track also clears that a person no longer sees (trashed,
-    # shipped, moved on, older versions).
-    moves = Counter(e.track.id for e in read.entries if e.track)
+    # What Move to Trash moves: the features Simple's roadmap shows, cut and merged ones too,
+    # and those of them still on the track in the published version that the reader's draft
+    # moved off (trash.delete_track clears both; each counts once). It leaves out the rows it
+    # also clears that a person no longer sees (trashed, shipped, moved on, older versions).
+    on: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
+    for e in read.entries:
+        if e.track:
+            on[e.track.id].add(e.row.id)
+    off: Counter[uuid.UUID] = Counter()
+    if shown := {e.row.id for e in read.entries}:
+        stored = await db.execute(
+            select(RoadmapItem.id, RoadmapItem.track_id).where(
+                RoadmapItem.id.in_(shown), RoadmapItem.track_id.is_not(None)
+            )
+        )
+        for item_id, track_id in stored.all():
+            if item_id not in on[track_id]:
+                off[track_id] += 1
     out = []
     for t in rows:
         decides = plan_changes.decides_track(principal, t)
@@ -207,7 +222,8 @@ async def list_simple_tracks(principal: Reader, db: TenantDB) -> SimpleTracks:
             goal_id=t.goal_id if t.goal_id in goal_names else None,
             goal_name=goal_names.get(t.goal_id) if t.goal_id else None, can_decide=decides,
             decider_name=names.get(route[0]) if route else None,
-            feature_count=features[t.id], moves_count=moves[t.id], order=t.position,
+            feature_count=features[t.id], moves_count=len(on[t.id]) + off[t.id],
+            draft_off_count=off[t.id], order=t.position,
         ))  # fmt: skip
     people = sorted(
         (

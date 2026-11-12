@@ -25,6 +25,7 @@ from oracle.docs.schemas import (
     VersionOut,
     VersionSummary,
     VisibilityIn,
+    rejected_detail,
 )
 from oracle.http import read_capped_body
 from oracle.jobs import service as jobs_service
@@ -44,9 +45,7 @@ def _not_found(exc: service.NotFoundError) -> HTTPException:
 
 
 def _draft_rejected(exc: DraftError) -> JSONResponse:
-    body = ImportErrorResponse(
-        detail=f"draft rejected: {len(exc.problems)} problem(s)", errors=exc.problems
-    )
+    body = ImportErrorResponse(detail=rejected_detail(exc.problems), errors=exc.problems)
     return JSONResponse(body.model_dump(mode="json"), 422)
 
 
@@ -174,7 +173,9 @@ async def import_version(
             DraftError([ImportProblem(code="invalid_encoding", message="body must be UTF-8")])
         )
     try:
-        result = await service.import_draft(db, doc, markdown, principal, base_version=base_version)
+        result = await service.import_draft(
+            db, doc, markdown, principal, base_version=base_version, exported=True
+        )
     except DraftError as exc:
         return _draft_rejected(exc)
     except service.NotFoundError as exc:

@@ -64,6 +64,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline import service as baseline
 from oracle.baseline.models import Entity
 from oracle.docs.models import DocumentVersion
 from oracle.launches import service as launches
@@ -401,6 +402,14 @@ async def _plan(
         if seen != current:
             raise await _conflict(db, SimpleChange(op=op, target=target, after=after), current,
                                   "Changed since you saw it")  # fmt: skip
+        # goal-target-kept: the target as it will read once written (a measured goal keeps
+        # its number and unit; clearing it here is refused).
+        from oracle.simple.goal_buckets import TargetKept, _target, typed_target
+
+        try:
+            after["target"] = _target(typed_target(dict(g.attrs or {}), after["target"]))
+        except TargetKept as e:
+            raise ChangeError(422, str(e)) from e
         return target, current, after
 
     if kind == "override":
@@ -628,6 +637,7 @@ async def _apply(
         g = await _feature(db, t["goal_id"])
         if g is None:
             raise ChangeError(409, "The goal is gone")
+        before = baseline.entity_snapshot(g)
         attrs = dict(g.attrs or {})
         if undo:
             # The attrs as they were (a key that was absent is removed).
@@ -637,19 +647,21 @@ async def _apply(
                 else:
                     attrs[k] = v
         else:
-            from oracle.simple.goal_buckets import _target
+            from oracle.simple.goal_buckets import TargetKept, typed_target
 
             c.target = {**t, "raw": {k: attrs.get(k) for k in GOAL_ATTRS}}
-            if values["target"] != _target(attrs):
-                # A new target is kept as typed; one left as it was keeps its number and unit.
-                attrs.pop("target", None)
-                attrs.pop("unit", None)
-                attrs["target_text"] = values["target"]
+            try:
+                # goal-target-kept: a measured goal never loses its number or unit here.
+                attrs = typed_target(attrs, values["target"])
+            except TargetKept as e:
+                raise ChangeError(422, str(e)) from e
             attrs["metric"] = values["measure"]
             attrs["due"] = values["due"]
             attrs = {k: v for k, v in attrs.items() if not (k in GOAL_ATTRS and v is None)}
         g.attrs = attrs
         await db.flush()
+        why = "Undone in Simple" if undo else "Goal measure changed in Simple"
+        baseline.revise(db, principal.actor, g, before, why)
         return
     if kind == "override":
         if not undo and values["override"] is None:
@@ -784,6 +796,7 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
     feature alone). The caller commits."""
     from oracle.simple import drafts
     from oracle.simple.additions import _shown_version
+    from oracle.simple.priorities import link
 
     fid = changes._uuid(feature_id, "feature_id")
     f = await _feature(db, fid)
@@ -793,15 +806,19 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
     if doc is None:
         return None
     read_ = await service.load(db)
-    there = [e for e in read_.entries
-             if e.roadmap.id == doc.id and e.row.feature_id == fid and e.status != "cut"
-             and not e.row.merged_into]  # fmt: skip
+    # qa-prio-twins: its draft by the link Priorities shows it by (priorities._held): its
+    # feature_id, else its trace's source feature; the lowest key first.
+    there = sorted((e for e in read_.entries
+                    if e.roadmap.id == doc.id and e.status != "cut" and not e.row.merged_into
+                    and (e.row.feature_id == fid or (e.row.draft and link(e.row) == str(fid)))),
+                   key=lambda e: e.row.item_key)  # fmt: skip
     for e in there:
         if not e.row.draft:
             return e
     if there:
         row = there[0].row
         row.draft = False
+        row.feature_id = fid
         await db.flush()
         data = {"feature_id": str(fid), "roadmap_id": str(doc.id), "from": "priorities"}
         await audit.record(db, principal, "roadmap.item_confirmed", "roadmap_item", row.id, data)

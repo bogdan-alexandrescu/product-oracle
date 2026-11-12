@@ -94,7 +94,7 @@ async def _live(tenant_id, source_id) -> set[str]:
 
 async def _people(tenant_id):
     owner = (await make_person(tenant_id, "pat@example.com", "owner")).user
-    member = (await make_person(tenant_id, "sam@example.com", "commenter")).user
+    member = (await make_person(tenant_id, "sam@example.com", "approver")).user
     return owner, member
 
 

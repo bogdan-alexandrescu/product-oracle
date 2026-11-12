@@ -31,12 +31,14 @@ from oracle.docs.parser import (
     parse_draft,
     parse_draft_async,
     section_revision,
+    without_prds_line,
 )
 from oracle.docs.schemas import (
     CitationOut,
     DiffOut,
     DocumentOut,
     DocumentSummary,
+    ImportFix,
     ImportProblem,
     SectionOut,
     SectionVerdict,
@@ -771,9 +773,11 @@ def date_problems(
     headings: dict[str, str],
     *,
     update: bool,
+    prd_id: uuid.UUID | None = None,
 ) -> list[ImportProblem]:
     """One ``unverified_date`` problem per distinct date and item a roadmap writes without
-    a basis (date-warnings-honest: not one per mention)."""
+    a basis (date-warnings-honest: not one per mention), each with its fix: a date source
+    on Plan › Dates for the PRD (``prd_id``), filtered to the date's days (vqa-one-pager)."""
     from oracle.roadmap import doc_dates
 
     out = []
@@ -781,6 +785,7 @@ def date_problems(
         refs = doc_dates.problem_refs(m, prd_slug)
         if times > 1:
             refs["mentions"] = str(times)
+        days = [d.isoformat() for d in (m.days or (m.day,))]
         out.append(
             ImportProblem(
                 code="unverified_date",
@@ -789,6 +794,7 @@ def date_problems(
                 ),
                 section_key=m.section_key or None,
                 refs=refs,
+                fix=ImportFix(action="add_date_source", prd_document_id=prd_id, days=days),
             )
         )
     return out
@@ -978,7 +984,9 @@ async def _check_document_dates(
     )
     prd_slug, prd_title = prd or (None, None)
     headings = {sec.section_key: sec.heading for sec in draft.sections}
-    problems += date_problems(bad, prd_slug, prd_title, headings, update=document.kind == "update")
+    problems += date_problems(
+        bad, prd_slug, prd_title, headings, update=document.kind == "update", prd_id=prd_id
+    )
     if refuse:
         await db.rollback()
         raise DraftError(problems)
@@ -1070,6 +1078,47 @@ async def _citation_items(
             )
         )
     return {key: item for key, item in ids.items() if item in found}, warnings
+
+
+async def _carried_citations(
+    db: AsyncSession, document: Document | None, draft: ParsedDraft, refused: list[ImportProblem]
+) -> tuple[list[ImportProblem], list[VersionWarning]]:
+    """``refused`` (``_oracle_ref_problems``) less the citations the document's latest version
+    already carries as the draft writes them (key, source and ref), whose item was rejected or
+    trashed since: each a ``citation_not_in_ground_truth`` warning on the sections citing it.
+    Every re-import (a one-pager draft's submit, a person's next version) carries the front
+    matter no one in Simple edits, so refusing those refused every draft of the PRD; a
+    citation the draft adds or changes is still refused (docs/ground-truth.md: flagged)."""
+    if not refused or document is None:
+        return refused, []
+    latest = (
+        select(DocumentVersion.id)
+        .where(DocumentVersion.document_id == document.id)
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    before = {
+        (c.cite_key, c.source, c.ref)
+        for c in await db.scalars(select(Citation).where(Citation.version_id == latest))
+    }
+    cited = {c.id: c for c in draft.citations}
+    kept, gone = [], []
+    for p in refused:
+        c = cited.get(p.cite_key or "")
+        if c is None or (c.id, c.source, c.ref) not in before:
+            kept.append(p)
+            continue
+        citing = [s for s in draft.sections if c.id in s.citation_keys]
+        gone.append(
+            VersionWarning(
+                code="citation_not_in_ground_truth",
+                message=wording.citation_not_in_ground_truth(c.title, [s.heading for s in citing]),
+                section_keys=[s.section_key for s in citing],
+                refs={"cite_key": c.id, "ref": c.ref},
+            )
+        )
+    return kept, gone
 
 
 def unknown_feedback_item(fid: uuid.UUID) -> ImportProblem:
@@ -1211,6 +1260,7 @@ async def import_draft(
     commit: bool = True,
     template_only: bool = False,
     run_creates: bool = False,
+    exported: bool = False,
 ) -> ImportResult:
     """Import a draft as the next version of ``doc``.
 
@@ -1249,6 +1299,10 @@ async def import_draft(
     run's versions is in (a member created it meanwhile), the import is a
     :class:`SlugTakenError`, never a version of that document.
 
+    ``exported``: the draft is a file a person imports (the import route). A roadmap's
+    loses the "From the PRDs: ..." line its markdown export writes under its title
+    (oracle.docs.parser.without_prds_line); no other import or edit drops it.
+
     ``commit=False`` flushes the version and leaves the commit to the caller, which writes
     more in the same transaction (a roadmap change set's proposal, oracle.roadmap.changeset).
 
@@ -1275,6 +1329,8 @@ async def import_draft(
             )
         except safe_yaml.ParseTimeout as exc:
             raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
+    if exported and (found.kind if found is not None else kind) == "roadmap":
+        markdown = without_prds_line(markdown)
     # Off the event loop, time-capped: the draft is untrusted text (oracle.safe_yaml).
     try:
         draft = await parse_draft_async(markdown)
@@ -1284,8 +1340,18 @@ async def import_draft(
         if refused := await _oracle_ref_problems(db, exc.citations):
             raise DraftError([*exc.problems, *refused], citations=exc.citations) from exc
         raise
-    if refused := await _oracle_ref_problems(db, draft.citations):
+    # One PRD's one-pager drafts were always refused: a citation its latest version carries
+    # whose Ground Truth item was since rejected or trashed is kept and flagged, not refused.
+    refused, gone = await _carried_citations(
+        db, found, draft, await _oracle_ref_problems(db, draft.citations)
+    )
+    if refused:
         raise DraftError(refused)
+    if exported and found is None and kind is None and await _draft_kind(db, draft) == "roadmap":
+        # A new document that is a roadmap by its front matter (or template).
+        if (stripped := without_prds_line(markdown)) != draft.markdown:
+            markdown = stripped
+            draft = await parse_draft_async(markdown)
     if draft.template is None and template is not None:
         draft.template, draft.template_version = template
     if run_id is not None:
@@ -1557,7 +1623,7 @@ async def import_draft(
                 )
 
     items, item_warnings = await _citation_items(db, draft)
-    warnings += item_warnings
+    warnings += item_warnings + gone
 
     version = DocumentVersion(
         document_id=document.id,
