@@ -24,9 +24,8 @@ const box = async (l: Locator) => (await l.boundingBox())!;
 
 test("qa-work-4: a run paused over budget names its estimate and limit together, in the banner and the panel", async ({ page }) => {
   await openRun(page, "team-workspaces");
-  await expect(page.getByTestId("run-overrun-held")).toHaveText(
-    "Paused: over budget. Resume or cancel it.",
-  );
+  // detailed-b 20: who may resume reads it from the pill and Resume; no line says it again.
+  await expect(page.getByTestId("run-overrun-held")).toHaveCount(0);
   // F-39: what Resume allows sits behind the Overrun (i).
   await expect(page.getByTestId("run-resume-allows")).toHaveText("Resuming lets it spend up to $18.70 in total, $4.50 more.");
   const section = inspector(page).getByTestId("run-cost-section");

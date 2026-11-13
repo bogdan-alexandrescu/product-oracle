@@ -126,7 +126,7 @@ test("Accept on the proposal row applies it and the row shows ✓ Accepted", asy
   await page.goto(`/ground-truth?run=${RUN}`);
   await row(page, "Guided setup").getByRole("button", { name: "Accept" }).click();
   await page.getByRole("button", { name: /All from this run/ }).click();
-  await expect(row(page, "Guided setup").getByTestId("row-result")).toContainText("✓ Accepted");
+  await expect(row(page, "Guided setup").getByTestId("row-result")).toContainText("Accepted");
   await expect(row(page, "Guided setup").getByRole("button", { name: "Accept" })).toHaveCount(0);
 });
 
@@ -183,7 +183,7 @@ test("reload keeps every decision and staged action", async ({ page }) => {
   await lookAgain(page, "Gift notes", "check the interviews");
   await page.reload();
   await page.getByRole("button", { name: /All from this run/ }).click();
-  await expect(row(page, "Activate new stores in their first week").getByTestId("row-result")).toContainText("✓ Rejected");
+  await expect(row(page, "Activate new stores in their first week").getByTestId("row-result")).toContainText("Rejected");
   await expect(row(page, "Bring buyers back").getByTestId("row-result")).toContainText("Left proposed: After the board meeting");
   await expect(row(page, "Gift notes").getByTestId("look-again-chip")).toBeVisible();
   await expect(bar(page).getByRole("button", { name: "Approve the Ground Truth" })).toBeEnabled();

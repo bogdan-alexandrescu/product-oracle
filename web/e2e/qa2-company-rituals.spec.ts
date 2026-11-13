@@ -79,7 +79,7 @@ test("qa-company-2/3: after Prepare now the paused ritual's Last pre-read is Nov
   await expect(block).not.toContainText("Oracle starts the build");
   await expect(block).not.toContainText("No Ground Truth build yet");
 
-  await page.getByRole("link", { name: "← Rituals" }).click();
+  await page.getByTestId("occurrence-heading").getByRole("link", { name: "Rituals", exact: true }).click();
   const last = ritualRow(page, "Ground Truth rebuild").getByTestId("last-pre-read");
   await expect(last).toHaveText("Nov 2, 2026");
   await last.click();

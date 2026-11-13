@@ -44,7 +44,7 @@ test.describe("desktop", () => {
     await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
     const occurrence = new URL(page.url()).pathname;
 
-    await page.getByRole("link", { name: "← Rituals" }).click();
+    await page.getByTestId("occurrence-heading").getByRole("link", { name: "Rituals", exact: true }).click();
     await expect(page).toHaveURL(/\/company\/rituals$/);
     const row = ritualRow(page, "Weekly goals check-in");
     await expect(row.getByTestId("next-pre-read")).toHaveText("Pre-read ready");
@@ -95,7 +95,7 @@ test.describe("desktop", () => {
     const title = page.getByRole("heading", { level: 2, name: "Monthly roadmap refresh" });
     await expect(title).toBeVisible();
     const tabs = (await nav(page).boundingBox())!;
-    const back = (await page.getByRole("link", { name: "← Rituals" }).boundingBox())!;
+    const back = (await page.getByTestId("occurrence-heading").getByRole("link", { name: "Rituals", exact: true }).boundingBox())!;
     const h = (await title.boundingBox())!;
     expect(back.y).toBeGreaterThanOrEqual(tabs.y + tabs.height);
     expect(h.y).toBeGreaterThan(back.y);

@@ -69,7 +69,7 @@ test("qa-company-7: Prepare now keeps Mon Nov 2 as Next with its pre-read ready,
   await inspector(page).getByRole("button", { name: "Prepare now" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
   await expect(page.getByTestId("occurrence-meta")).toContainText("Mon, Nov 2, 9:00 AM");
-  await page.getByRole("link", { name: "← Rituals" }).click();
+  await page.getByTestId("occurrence-heading").getByRole("link", { name: "Rituals", exact: true }).click();
   await expect(row.locator('[data-col="next"]')).toHaveText("Mon, Nov 2, 9:00 AM");
   await expect(row.getByTestId("next-pre-read")).toHaveText("Pre-read ready");
   // qa3 qa-company-2: the column is "Latest pre-read" and names the one just prepared, as the

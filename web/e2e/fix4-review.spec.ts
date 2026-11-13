@@ -39,7 +39,7 @@ test.describe("desktop", () => {
     await seeded(page);
     await openReview(page);
     await row(page, "Saved addresses").getByRole("button", { name: "Include", exact: true }).click();
-    await expect(row(page, "Saved addresses").getByTestId("row-done")).toContainText("✓ Included");
+    await expect(row(page, "Saved addresses").getByTestId("row-done")).toContainText("Included");
     await row(page, "Bulk address edit").getByRole("button", { name: "Include dependency" }).click();
     await expect(bar(page).getByTestId("staged-chip")).toHaveCount(2);
 
@@ -84,7 +84,7 @@ test.describe("desktop", () => {
     for (const name of ["Include", "Leave out", "Defer to a later PRD"]) await expect(decision.getByRole("button", { name, exact: true })).toBeVisible();
     await expect(inspector(page).getByRole("button", { name: "Keep", exact: true })).toHaveCount(0);
     await decision.getByRole("button", { name: "Include", exact: true }).click();
-    await expect(row(page, "Saved addresses").getByTestId("row-done")).toContainText("✓ Included");
+    await expect(row(page, "Saved addresses").getByTestId("row-done")).toContainText("Included");
     await expect(bar(page).getByTestId("staged-chip").filter({ hasText: "Saved addresses: included" })).toBeVisible();
     await expect(decision.getByRole("button", { name: "Include", exact: true })).toHaveAttribute("aria-pressed", "true");
   });
@@ -125,13 +125,13 @@ test.describe("desktop", () => {
     const group = page.getByRole("rowgroup", { name: "A goal not in the Ground Truth" });
     await expect(group.getByTestId("feature-title").filter({ hasText: /^Saved addresses$/ })).toBeVisible();
     await row(page, "Saved addresses").getByRole("button", { name: "Include", exact: true }).click();
-    await expect(group.getByTestId("row-done")).toContainText("✓ Included");
+    await expect(group.getByTestId("row-done")).toContainText("Included");
     await expect(page.getByRole("rowgroup", { name: /^Nothing/ })).toHaveCount(0);
 
     await page.getByRole("group", { name: "Group by" }).getByRole("button", { name: "Reason" }).click();
     const byReason = page.getByRole("rowgroup", { name: "New, not in the Ground Truth" });
     await expect(byReason.getByTestId("feature-title").filter({ hasText: /^Saved addresses$/ })).toBeVisible();
-    await expect(byReason.getByTestId("row-done")).toContainText("✓ Included");
+    await expect(byReason.getByTestId("row-done")).toContainText("Included");
     await expect(page.getByRole("rowgroup", { name: /^Nothing/ })).toHaveCount(0);
   });
 

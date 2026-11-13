@@ -30,7 +30,7 @@ async function waive(page: Page, key: string, title: string, reason: string) {
   await page.getByRole("menuitem", { name: "Waive…" }).click();
   await page.getByTestId("roadmap-items-table").getByLabel("Why waive it").fill(reason);
   await page.getByTestId("roadmap-items-table").getByRole("button", { name: "Waive", exact: true }).click();
-  await expect(row(page, key).getByTestId("row-done")).toHaveText(/✓ Waived/);
+  await expect(row(page, key).getByTestId("row-done")).toHaveText(/Waived/);
 }
 
 // Card gate-list: protects = Approve is disabled while blocking reasons are open, and a waiver

@@ -29,7 +29,7 @@ test("a feature that needs another PRD's feature reads so in plain words, to con
   // Only Bulk edit's left-out dependency blocks.
   await expect(page.getByTestId("decision-bar").getByTestId("approve-blocked")).toHaveText("1 blocking problem left");
   await lookup.getByRole("button", { name: "Include", exact: true }).click();
-  await expect(lookup.getByTestId("row-done")).toContainText("✓");
+  await expect(lookup.getByTestId("row-done").locator("svg").first()).toBeVisible();
   await expect(page.getByTestId("decision-bar").getByTestId("approve-blocked")).toHaveText("1 blocking problem left");
 });
 

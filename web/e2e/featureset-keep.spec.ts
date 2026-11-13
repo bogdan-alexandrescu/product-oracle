@@ -50,7 +50,7 @@ test("keeping both reasons of a feature keeps both, and the tally and tray follo
       .filter({ hasText: `${PICK}: included · low confidence` }),
   ).toBeVisible();
   await pick.getByRole("button", { name: "Include", exact: true }).click();
-  await expect(pick.getByTestId("row-done")).toContainText("✓ Included");
+  await expect(pick.getByTestId("row-done")).toContainText("Included");
   await expect(needsYou(page)).toContainText("2");
   await expect(bar(page).getByTestId("decision-tally")).toContainText("6 of 8 handled");
   const chips = bar(page).getByTestId("staged-chip").filter({ hasText: PICK });
@@ -75,13 +75,13 @@ test("the side panel's Include answers what is left and shows as chosen", async 
   await expect(include).toHaveAttribute("aria-pressed", "false");
   await include.click();
   await expect(include).toHaveAttribute("aria-pressed", "true");
-  await expect(inspector.getByTestId("reason-low_confidence")).toContainText("✓ Included");
-  await expect(inspector.getByTestId("reason-new_feature")).toContainText("✓ Included");
+  await expect(inspector.getByTestId("reason-low_confidence")).toContainText("Included");
+  await expect(inspector.getByTestId("reason-new_feature")).toContainText("Included");
   await expect(bar(page).getByTestId("decision-tally")).toContainText("6 of 8 handled");
 
   await inspector.getByTestId("reason-new_feature").getByRole("button", { name: "Undo" }).click();
-  await expect(inspector.getByTestId("reason-new_feature")).not.toContainText("✓ Included");
-  await expect(inspector.getByTestId("reason-low_confidence")).toContainText("✓ Included");
+  await expect(inspector.getByTestId("reason-new_feature")).not.toContainText("Included");
+  await expect(inspector.getByTestId("reason-low_confidence")).toContainText("Included");
   await expect(bar(page).getByTestId("decision-tally")).toContainText("5 of 8 handled");
 });
 
@@ -95,7 +95,7 @@ test("on a phone both calls are kept and the Decide sheet lists each", async ({ 
   await pick.getByRole("button", { name: "Include", exact: true }).click();
   await expect(pick.getByTestId("row-reasons")).not.toContainText("Low confidence");
   await pick.getByRole("button", { name: "Include", exact: true }).click();
-  await expect(pick.getByTestId("row-done")).toContainText("✓ Included");
+  await expect(pick.getByTestId("row-done")).toContainText("Included");
   await bar(page).getByRole("button").click();
   const sheet = page.getByTestId("sheet-decide");
   await expect(sheet).toBeVisible();
@@ -113,8 +113,8 @@ test("a feature kept for every reason to confirm shows Include chosen while it i
   await row(page, "Bulk edit").getByTestId("feature-title").click();
   const inspector = page.getByTestId("scope-inspector");
   await expect(inspector).toContainText("Bulk edit");
-  await expect(inspector.getByTestId("reason-new_feature")).toContainText("✓ Included");
-  await expect(inspector.getByTestId("reason-duplicate_of_existing")).toContainText("✓ Included");
+  await expect(inspector.getByTestId("reason-new_feature")).toContainText("Included");
+  await expect(inspector.getByTestId("reason-duplicate_of_existing")).toContainText("Included");
   await expect(inspector.getByText("Blocking", { exact: true })).toBeVisible();
   const include = inspector.getByRole("group", { name: "Decision" }).getByRole("button", { name: "Include" });
   await expect(include).toHaveAttribute("aria-pressed", "true");
@@ -130,7 +130,7 @@ test("the row's Undo takes back both calls of a feature", async ({ page }) => {
   await pick.getByRole("button", { name: "Include", exact: true }).click();
   await expect(pick.getByTestId("row-reasons")).not.toContainText("Low confidence");
   await pick.getByRole("button", { name: "Include", exact: true }).click();
-  await expect(pick.getByTestId("row-done")).toContainText("✓ Included");
+  await expect(pick.getByTestId("row-done")).toContainText("Included");
   await expect(bar(page).getByTestId("staged-chip").filter({ hasText: PICK })).toHaveCount(2);
 
   await pick.getByTestId("row-done").getByRole("button", { name: "Undo" }).click();
@@ -159,10 +159,10 @@ test("Undo of one reason kept by an older call for two keeps the other", async (
   await openReview(page, SCOPE_CONSOLE_RUN);
   await row(page, "Bulk edit").getByTestId("feature-title").click();
   const inspector = page.getByTestId("scope-inspector");
-  await expect(inspector.getByTestId("reason-new_feature")).toContainText("✓ Included");
+  await expect(inspector.getByTestId("reason-new_feature")).toContainText("Included");
   await inspector.getByTestId("reason-new_feature").getByRole("button", { name: "Undo" }).click();
-  await expect(inspector.getByTestId("reason-new_feature")).not.toContainText("✓ Included");
-  await expect(inspector.getByTestId("reason-duplicate_of_existing")).toContainText("✓ Included");
+  await expect(inspector.getByTestId("reason-new_feature")).not.toContainText("Included");
+  await expect(inspector.getByTestId("reason-duplicate_of_existing")).toContainText("Included");
   const chips = bar(page).getByTestId("staged-chip").filter({ hasText: "Bulk edit" });
   await expect(chips).toHaveCount(1);
   await expect(chips).toContainText("included · duplicate");

@@ -61,7 +61,7 @@ const item = (page: Page, key: string) => page.locator(`[data-testid="roadmap-it
 async function stage(page: Page, key: string, fix: string, done: string) {
   const row = item(page, key);
   await row.getByRole("button", { name: fix, exact: true }).click();
-  await expect(row.getByTestId("row-done")).toHaveText(new RegExp(`✓ ${done}`));
+  await expect(row.getByTestId("row-done")).toHaveText(new RegExp(done));
 }
 
 /**
@@ -85,7 +85,7 @@ async function waiveSection(page: Page) {
   await page.getByRole("menuitem", { name: "Waive…" }).click();
   await page.getByTestId("roadmap-items-table").getByLabel("Why waive it").fill("Section lands in the next PRD version");
   await page.getByTestId("roadmap-items-table").getByRole("button", { name: "Waive", exact: true }).click();
-  await expect(row.getByTestId("row-done")).toHaveText(/✓ Waived/);
+  await expect(row.getByTestId("row-done")).toHaveText(/Waived/);
 }
 
 /**

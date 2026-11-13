@@ -28,14 +28,14 @@ test("an approver's × on a dependency keeps the dependency the item's edit adds
   await row(page, "webhooks").locator('[data-phone="title"]').click();
   const card = inspector(page).getByTestId("reason-card").filter({ hasText: CHANGED });
   await card.getByRole("button", { name: "Revert", exact: true }).click();
-  await expect(card).toContainText("✓ Depends on Budget caps");
+  await expect(card).toContainText("Depends on Budget caps");
   const depends = inspector(page).getByTestId("item-depends");
   await expect(depends.getByRole("button", { name: "Remove dependency Usage export" })).toHaveCount(0);
 
   await depends.getByRole("button", { name: "Remove dependency Slack alerts" }).click();
   await expect(depends.getByRole("button", { name: /^Remove dependency / })).toHaveCount(0);
   // The joined edit still adds Budget caps back.
-  await expect(card).toContainText("✓ Depends on Budget caps");
+  await expect(card).toContainText("Depends on Budget caps");
   await inspector(page).getByRole("group", { name: "Inspector tab" }).getByRole("button", { name: "History" }).click();
   await expect(inspector(page).getByTestId("item-history")).toContainText("staged: Depends on Budget caps");
 });

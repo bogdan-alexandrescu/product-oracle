@@ -51,7 +51,7 @@ function sheet(page: Page) {
  */
 async function pinAt(page: Page, key: string, title: string, rank: number) {
   const s = sheet(page);
-  const menu = page.getByRole("menu", { name: `Change ${title}` });
+  const menu = page.getByRole("menu", { name: `Change ${key} ${title}` });
   await expect(async () => {
     if (!(await s.isVisible())) {
       if (!(await menu.isVisible())) await rowAction(page, key, "More actions");
@@ -69,7 +69,7 @@ test("move up with a reason: the row moves, shows who moved it and Oracle's rank
   await rowAction(page, "F-1", "Move up");
   const s = sheet(page);
   await expect(s).toBeVisible();
-  await expect(s).toContainText("Move above Shipping cost shown in the cart");
+  await expect(s).toContainText("Move above F-2 Shipping cost shown in the cart");
   const save = s.getByRole("button", { name: "Save", exact: true });
   await expect(save).toBeDisabled();
   await s.getByLabel("Why?").fill("A launch partner needs it in the first release");
@@ -182,11 +182,11 @@ test("a dependency holds a pin below its prerequisite and offers to move it too"
   await sheet(page).getByLabel("Why?").fill("Cart abandonment spikes on shipping surprises");
   await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
   const held = page.getByTestId("priority-row-F-2");
-  await expect(held.getByTestId("held-chip")).toHaveText("Held below Address lookup service");
+  await expect(held.getByTestId("held-chip")).toHaveText("Held below F-5 Address lookup service");
   await held.getByRole("button", { name: "Shipping cost shown in the cart" }).click();
   const change = page.getByTestId("your-change");
-  await expect(change).toContainText("Held below Address lookup service: it depends on it");
-  await change.getByRole("button", { name: "Move Address lookup service too" }).click();
+  await expect(change).toContainText("Held below F-5 Address lookup service: it depends on it");
+  await change.getByRole("button", { name: "Move F-5 Address lookup service too" }).click();
   await expect(sheet(page).getByLabel("Why?")).toHaveValue("Cart abandonment spikes on shipping surprises");
 });
 
