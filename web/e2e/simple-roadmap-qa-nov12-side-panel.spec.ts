@@ -50,10 +50,14 @@ test.describe("desktop", () => {
         const sw = (await page.getByTestId(`format-${f}`).boundingBox())!;
         expect(overlaps(box, sw), `it leaves the ${f} switch clear`).toBe(false);
       }
-      const clicked = (await it.boundingBox())!;
-      expect(overlaps(box, clicked), "it leaves the clicked item clear").toBe(false);
       const chart = (await page.getByTestId(format === "board" ? "board-column" : "simple-chart").last().boundingBox())!;
       expect(chart.x + chart.width, "the chart ends where the panel starts").toBeLessThanOrEqual(box.x + 1);
+      // The clicked item as far as it shows (a long bar runs on past the chart's scrolled edge).
+      const c = (await it.boundingBox())!;
+      const right = Math.min(c.x + c.width, chart.x + chart.width);
+      const clicked = { ...c, width: Math.max(0, right - c.x) };
+      expect(clicked.width, "the clicked item shows").toBeGreaterThan(0);
+      expect(overlaps(box, clicked), "it leaves the clicked item clear").toBe(false);
     });
   }
 });

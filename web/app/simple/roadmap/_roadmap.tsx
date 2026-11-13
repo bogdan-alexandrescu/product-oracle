@@ -1578,6 +1578,8 @@ export function SimpleRoadmap() {
   if (!data) return <Loading />;
 
   const cardItem = card ? byId.get(card.id) : undefined;
+  // QA Nov 12 #11: on a desktop every format opens an item in the side panel beside its chart.
+  const side = !phone && format !== "timeline" && !!cardItem && !!card;
   const popItem = pop ? byId.get(pop.id) : undefined;
   // A feature ask on no roadmap is decided in its Inbox row only (it is filed in Requests, on no
   // roadmap): no roadmap's Needs a decision lists or counts it.
@@ -2080,136 +2082,169 @@ export function SimpleRoadmap() {
             }}
           />
         )}
-        {linked.length ? (
-          <div data-testid="filters-gone" className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-3">
-            <p className="text-[15px] font-semibold">
-              {linked.length > 1 ? "That PRD and goal are no longer on this roadmap" : linked[0] === "prd" ? "That PRD is no longer on this roadmap" : "That goal is no longer on this roadmap"}
-            </p>
-            <Button onClick={clearLinked}>Clear</Button>
+        {/* QA Nov 12 #11: Gantt, Now / Next / Later and the Waterfall open an item in the side panel
+            beside the chart, as the Timeline does (a phone keeps the bottom sheet). */}
+        <div className={side ? "flex items-start gap-3" : undefined}>
+          <div className={side ? "min-w-0 flex-1" : undefined}>
+            {linked.length ? (
+              <div data-testid="filters-gone" className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-3">
+                <p className="text-[15px] font-semibold">
+                  {linked.length > 1 ? "That PRD and goal are no longer on this roadmap" : linked[0] === "prd" ? "That PRD is no longer on this roadmap" : "That goal is no longer on this roadmap"}
+                </p>
+                <Button onClick={clearLinked}>Clear</Button>
+              </div>
+            ) : filtered && !data.items.length ? (
+              // fix4 qa-simple-roadmap-12: no bare axis when the filters leave nothing: say so, and a way back.
+              <div data-testid="filters-empty" className="flex flex-col items-start gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-6">
+                <p className="text-[15px] font-semibold">Nothing matches these filters</p>
+                <Button onClick={clearFilters}>Clear filters</Button>
+              </div>
+            ) : format === "board" ? (
+              <Board
+                data={laned ?? data}
+                phone={phone}
+                canDrag={canChange}
+                proposals={allProposals}
+                open={card?.id ?? null}
+                onOpen={(item) => {
+                  setPop(null);
+                  if (ms?.pick(item.id)) return;
+                  setCard({ id: item.id, ...anchorOf(item.id) });
+                }}
+                onMove={onHorizon}
+                pending={horizons.pending}
+                onKeyMove={onKeyHorizon}
+                onKeyEnd={(item) => horizons.flush(item.id)}
+                onKeyCancel={onKeyCancel(horizons)}
+                dropTargets={canChange}
+                goalSuggestions={goalCounts}
+                onGoal={openGoal}
+              />
+            ) : format === "timeline" ? (
+              // mk-qa4-roadmap QR1 A..QR4 A: three months from just before today, the key and the broken links
+              // above, an open item in a panel at the right (a sheet on a phone).
+              <ZoomTimeline
+                data={goalLaned ?? data}
+                all={allLinks}
+                onAll={showAllLinks}
+                phone={phone}
+                act={act}
+                canChange={canChange}
+                byId={byId}
+                moved={moved}
+                onMove={onMove}
+                onKeyMove={onKeyMove}
+                onKeyEnd={(item) => dates.flush(item.id)}
+                onKeyCancel={onKeyCancel(dates)}
+                openKey={cardItem?.key ?? null}
+                onOpen={(k) => {
+                  const it = k ? data.items.find((x) => x.key === k) : undefined;
+                  if (it && ms?.pick(it.id)) return;
+                  setPop(null);
+                  setCard(it ? { id: it.id, left: 0, top: 0 } : null);
+                }}
+                card={(it, style, sheet, onClose) => (
+                  <FloatingCard
+                    key={it.id}
+                    item={it}
+                    items={byId}
+                    proposals={allProposals.filter((c) => c.target.item_id === it.id)}
+                    phone={sheet}
+                    style={style}
+                    act={act}
+                    canChange={canChange}
+                    onDecide={(c, how) => void onDecide(c, how)}
+                    onClose={onClose}
+                    near={nearWords(it, data.key_dates ?? [])}
+                    onOpen={(id) => setCard({ id, left: 0, top: 0 })}
+                    onSuggestion={(how, d) => void onSuggestion(it, how, d)}
+                    focus={it.id === linkedItem}
+                    milestones={data.goal_milestones}
+                    planned={data.milestones}
+                  />
+                )}
+              />
+            ) : (
+              <>
+              {/* mk-qa4-roadmap QR3 A: the broken links sit in the panel above the chart, never over a bar. */}
+              <ConflictPanel
+                data={laned ?? data}
+                all={allLinks}
+                onAll={showAllLinks}
+                phone={phone}
+                act={act}
+                canChange={canChange}
+                byId={byId}
+                onShow={(k) => {
+                  const it = data.items.find((x) => x.key === k);
+                  if (!it) return;
+                  setPop(null);
+                  setCard({ id: it.id, ...anchorOf(it.id) });
+                }}
+              />
+              <Chart
+                data={laned ?? data}
+                lane={f.group}
+                trackBands={f.group === "track"}
+                noWork={noWork}
+                format={format}
+                unit={unit}
+                compact={phone}
+                canDrag={canChange}
+                moved={moved}
+                open={card?.id ?? null}
+                chartRef={(el) => {
+                  svg.current = el;
+                }}
+                dropTargets={canChange}
+                onOffscreen={setOffscreen}
+                pulled={pulledIn}
+                onOpen={(item) => {
+                  if (ms?.pick(item.id)) return;
+                  setPop(null);
+                  setCard({ id: item.id, ...anchorOf(item.id) });
+                }}
+                onMove={onMove}
+                onKeyMove={onKeyMove}
+                onKeyEnd={(item) => dates.flush(item.id)}
+                onKeyCancel={onKeyCancel(dates)}
+                onSuggestion={(item) => {
+                  setCard(null);
+                  setPop({ id: item.id, ...anchorOf(item.id) });
+                }}
+                overlay={(l, sc, keepOff) => <GanttMilestones l={l} sc={sc} data={laned ?? data} phone={phone} keepOff={keepOff} />}
+              />
+              </>
+            )}
           </div>
-        ) : filtered && !data.items.length ? (
-          // fix4 qa-simple-roadmap-12: no bare axis when the filters leave nothing: say so, and a way back.
-          <div data-testid="filters-empty" className="flex flex-col items-start gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-6">
-            <p className="text-[15px] font-semibold">Nothing matches these filters</p>
-            <Button onClick={clearFilters}>Clear filters</Button>
-          </div>
-        ) : format === "board" ? (
-          <Board
-            data={laned ?? data}
-            phone={phone}
-            canDrag={canChange}
-            proposals={allProposals}
-            open={card?.id ?? null}
-            onOpen={(item) => {
-              setPop(null);
-              if (ms?.pick(item.id)) return;
-              setCard({ id: item.id, ...anchorOf(item.id) });
-            }}
-            onMove={onHorizon}
-            pending={horizons.pending}
-            onKeyMove={onKeyHorizon}
-            onKeyEnd={(item) => horizons.flush(item.id)}
-            onKeyCancel={onKeyCancel(horizons)}
-            dropTargets={canChange}
-            goalSuggestions={goalCounts}
-            onGoal={openGoal}
-          />
-        ) : format === "timeline" ? (
-          // mk-qa4-roadmap QR1 A..QR4 A: three months from just before today, the key and the broken links
-          // above, an open item in a panel at the right (a sheet on a phone).
-          <ZoomTimeline
-            data={goalLaned ?? data}
-            all={allLinks}
-            onAll={showAllLinks}
-            phone={phone}
-            act={act}
-            canChange={canChange}
-            byId={byId}
-            moved={moved}
-            onMove={onMove}
-            onKeyMove={onKeyMove}
-            onKeyEnd={(item) => dates.flush(item.id)}
-            onKeyCancel={onKeyCancel(dates)}
-            openKey={cardItem?.key ?? null}
-            onOpen={(k) => {
-              const it = k ? data.items.find((x) => x.key === k) : undefined;
-              if (it && ms?.pick(it.id)) return;
-              setPop(null);
-              setCard(it ? { id: it.id, left: 0, top: 0 } : null);
-            }}
-            card={(it, style, sheet, onClose) => (
+          {side && cardItem && card && (
+            <aside
+              data-testid="item-panel"
+              aria-label={itemName(cardItem)}
+              className="sticky top-3 z-30 max-h-[calc(100dvh-24px)] w-[400px] flex-none overflow-y-auto rounded-xl border border-line bg-surface shadow-tip"
+            >
               <FloatingCard
-                key={it.id}
-                item={it}
+                key={cardItem.id}
+                item={cardItem}
                 items={byId}
-                proposals={allProposals.filter((c) => c.target.item_id === it.id)}
-                phone={sheet}
-                style={style}
+                proposals={allProposals.filter((c) => c.target.item_id === cardItem.id)}
+                phone={phone}
+                style={{ position: "relative", left: 0, top: 0, width: "100%", border: 0, boxShadow: "none" }}
                 act={act}
                 canChange={canChange}
                 onDecide={(c, how) => void onDecide(c, how)}
-                onClose={onClose}
-                near={nearWords(it, data.key_dates ?? [])}
-                onOpen={(id) => setCard({ id, left: 0, top: 0 })}
-                onSuggestion={(how, d) => void onSuggestion(it, how, d)}
-                focus={it.id === linkedItem}
+                onClose={() => setCard(null)}
+                near={nearWords(cardItem, data.key_dates ?? [])}
+                onOpen={(id) => setCard({ id, ...anchorOf(id) })}
+                onSuggestion={(how, d) => void onSuggestion(cardItem, how, d)}
+                focus={cardItem.id === linkedItem}
                 milestones={data.goal_milestones}
                 planned={data.milestones}
+                onHorizon={format === "board" && canChange && !closedItem(cardItem) ? (h) => onHorizon(cardItem, h) : undefined}
               />
-            )}
-          />
-        ) : (
-          <>
-          {/* mk-qa4-roadmap QR3 A: the broken links sit in the panel above the chart, never over a bar. */}
-          <ConflictPanel
-            data={laned ?? data}
-            all={allLinks}
-            onAll={showAllLinks}
-            phone={phone}
-            act={act}
-            canChange={canChange}
-            byId={byId}
-            onShow={(k) => {
-              const it = data.items.find((x) => x.key === k);
-              if (!it) return;
-              setPop(null);
-              setCard({ id: it.id, ...anchorOf(it.id) });
-            }}
-          />
-          <Chart
-            data={laned ?? data}
-            lane={f.group}
-            trackBands={f.group === "track"}
-            noWork={noWork}
-            format={format}
-            unit={unit}
-            compact={phone}
-            canDrag={canChange}
-            moved={moved}
-            open={card?.id ?? null}
-            chartRef={(el) => {
-              svg.current = el;
-            }}
-            dropTargets={canChange}
-            onOffscreen={setOffscreen}
-            pulled={pulledIn}
-            onOpen={(item) => {
-              if (ms?.pick(item.id)) return;
-              setPop(null);
-              setCard({ id: item.id, ...anchorOf(item.id) });
-            }}
-            onMove={onMove}
-            onKeyMove={onKeyMove}
-            onKeyEnd={(item) => dates.flush(item.id)}
-            onKeyCancel={onKeyCancel(dates)}
-            onSuggestion={(item) => {
-              setCard(null);
-              setPop({ id: item.id, ...anchorOf(item.id) });
-            }}
-            overlay={(l, sc, keepOff) => <GanttMilestones l={l} sc={sc} data={laned ?? data} phone={phone} keepOff={keepOff} />}
-          />
-          </>
-        )}
+            </aside>
+          )}
+        </div>
         {/* The Timeline's export draws its picture from the goal lanes, laid out off screen while it
             saves, with a row naming each quarter over its months. Off screen, not hidden: the names
             column is read as text (a hidden element has none). */}
@@ -2247,7 +2282,7 @@ export function SimpleRoadmap() {
           }}
         />
         {/* The Timeline opens its own items in its panel; a done item, off it, opens here. */}
-        {(format !== "timeline" || cardItem?.status === "done") && cardItem && card && (
+        {(format !== "timeline" || cardItem?.status === "done") && cardItem && card && !side && (
           <FloatingCard
             key={cardItem.id}
             item={cardItem}
