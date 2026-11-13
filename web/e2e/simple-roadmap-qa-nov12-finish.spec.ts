@@ -62,3 +62,17 @@ test("#8: at All 3 years a milestone's label reads its code and name whole, and 
   });
   expect(hits).toEqual([]);
 });
+
+test("#5: the Gantt's and the Waterfall's bar names the milestone with its code", async ({ page }) => {
+  // protects: Weekly alert digest's bar on the Gantt and the Waterfall is named "… after its milestone ‘M1 Beta’ …", as Needs a decision says it
+  // fails_when: the bar's name says "after its milestone ‘Beta’"
+  await login(page);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
+  for (const format of ["gantt", "waterfall"]) {
+    await page.getByTestId(`format-${format}`).click();
+    await expect(page.getByTestId(`format-${format}`)).toHaveAttribute("aria-pressed", "true");
+    const bar = page.locator(`[data-testid="bar"][data-item="${KEY}"]`).first();
+    await expect(bar, format).toHaveAttribute("aria-label", /after its milestone ‘M\d+ Beta’/);
+  }
+});
