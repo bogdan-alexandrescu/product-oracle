@@ -57,9 +57,9 @@ function Meetings() {
     if (o) setSheet(o.occurrence_id ? { occurrence: o.occurrence_id } : { ritual: o });
   }
   if (!SIMPLE_MODE) notFound();
-  // qa-simple-decide-50: the zone is said once, in the lead; the rows show the day and time.
   // qa-simple-decide-31: the one day-and-time format of Meetings, a meeting and Decisions.
-  const when = (at: string) => momentWords(at, zone);
+  // simple-home-13: with the zone's short name, as Home writes it ("Mon Oct 26, 9:00 AM PDT").
+  const when = (at: string) => momentWords(at, zone, false, true);
   // qa-simple-decide-8: Start review only for who may start one (an owner, or a review's own owner).
   // A PRD's own decider may start its review too, so the PRDs' can_start counts as well.
   const mayStart = can("start_simple_meeting", !!q.data?.upcoming.some((o) => o.can_start) || !!opts.data?.prds.some((p) => p.can_start));

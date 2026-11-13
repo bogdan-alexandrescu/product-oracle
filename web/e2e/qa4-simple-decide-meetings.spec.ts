@@ -9,13 +9,13 @@ import { expect, test, type Locator, type Page } from "./test";
  * -5: "Everyone except viewers" says what it does: owners and each item's decider apply, others
  * propose. -7: a past meeting's time is labelled "started …", as Decisions dates it by its start.
  * -13: a greyed-out Start says what is missing beside it. -19: the sheet's review time reads
- * "Mon Nov 2, 9:00 AM", no zone letters. -21: a past meeting says its count once. -34: on a
+ * "Mon Nov 2, 9:00 AM PDT", the short zone as Home writes it (simple-home-13). -21: a past meeting says its count once. -34: on a
  * phone the times and "Pre-read" never break across lines. -39: each row's Start review is named
  * for its review.
  */
 
 const sheet = (page: Page) => page.getByRole("dialog", { name: "Start a review" });
-const MOMENT = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{1,2}:\d{2} [AP]M$/;
+const MOMENT = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{1,2}:\d{2} [AP]M P[DS]T$/;
 
 async function tap(l: Locator) {
   await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -68,21 +68,21 @@ for (const phone of [false, true]) {
       await expect(start).toBeEnabled();
     });
 
-    test("qa4-simple-decide-19: the start sheet's review time reads month first with no zone letters", async ({ page }) => {
+    test("qa4-simple-decide-19: the start sheet's review time reads month first with the short zone", async ({ page }) => {
       await meetings(page);
       await tap(page.getByRole("button", { name: "Start review: Weekly goals check-in" }));
       const occ = sheet(page).getByTestId("start-occurrence");
       await expect(occ).toContainText("Weekly goals check-in");
       const text = (await occ.innerText()).split(" · ").pop()!.trim();
       expect(text).toMatch(MOMENT);
-      await expect(occ).not.toContainText(/\b(PST|PDT|PT|GMT)\b/);
+      await expect(occ).not.toContainText("Pacific Time");
     });
 
     test("qa4-simple-decide-7 and -21: a past meeting is dated by its start, labelled, and says its count once", async ({ page }) => {
       await meetings(page);
       const past = page.getByRole("region", { name: "Past" });
       const row = past.getByTestId("meetings-past-row").filter({ hasText: "Review: Usage alerts" });
-      await expect(row).toContainText(/ · started (Mon|Tue|Wed|Thu|Fri|Sat|Sun) [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M$/);
+      await expect(row).toContainText(/ · started (Mon|Tue|Wed|Thu|Fri|Sat|Sun) [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M P[DS]T$/);
       await expect(past).toContainText("1 decision taken.");
       await expect(row).not.toContainText("decision");
     });
