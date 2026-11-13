@@ -28,8 +28,12 @@ no_claim=<what green does not prove>.
   13: the app's import took 13.9 s of a 20 s start); no_claim=they still load when used.
 - test_app_import_within_budget: protects=the app's import in a clean interpreter, gc off
   as oracle.startup does, stays under IMPORT_BUDGET_S; fails_when=the import goes back to
-  building every pydantic schema and loading every library at import (6.0 s on the lane's
-  machine, 4.6 s after); no_claim=Cloud Run's own time (about 2.3 times this machine's).
+  building every pydantic schema and loading every library at import (5.8-6.1 s on the
+  lane's machine, 4.2-4.7 s after); no_claim=Cloud Run's own time (about 2.3 times this
+  machine's).
+- test_a_failed_check_stops_the_start: protects=the head check, run beside the app's
+  import, still decides before anything is served; fails_when=its error is lost in its
+  thread and the server starts on a database it could not read.
 - test_script_head_is_alembics_head: protects=the head read from the scripts' text is the
   one Alembic computes; fails_when=the cheap parse drifts from Alembic (a stale head would
   skip a migration).
@@ -238,8 +242,8 @@ def test_app_import_leaves_heavy_libraries_unloaded():
     assert out.stdout.strip() == "[]", out.stdout + out.stderr
 
 
-# The lane's machine: 6.0 s before (every schema built, every library loaded at import),
-# 4.6 s after; the budget leaves headroom over the after.
+# The lane's machine: 5.8-6.1 s before (every schema built, every library loaded at
+# import), 4.2-4.7 s after; the budget leaves headroom over the after.
 IMPORT_BUDGET_S = 5.4
 
 
@@ -256,6 +260,18 @@ def test_app_import_within_budget():
         )
         took.append(float(out.stdout.strip().splitlines()[-1]))
     assert min(took) < IMPORT_BUDGET_S, took
+
+
+def test_a_failed_check_stops_the_start(served, monkeypatch):
+    def unreachable(connect_args):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(startup, "at_head", unreachable)
+
+    with pytest.raises(OSError, match="connection refused"):
+        startup.main()
+
+    assert served == []
 
 
 def test_script_head_is_alembics_head():

@@ -7,7 +7,9 @@ and compared with ``alembic_version``. Only when they differ (or either can not 
 Alembic run, with every script, exactly as ``alembic upgrade head`` would.
 
 Cloud Run, Nov 12: an added instance took about 34 s before serving (9 s to Alembic's first
-log line, 24 s more to uvicorn's), so requests routed to it waited that long.
+log line, 24 s more to uvicorn's), so requests routed to it waited that long. Nov 13: about
+20 s (3.9 s to check the head, then 13.9 s to import the app); the check now runs while the
+app imports, as one statement.
 """
 
 import asyncio
@@ -15,6 +17,7 @@ import gc
 import logging
 import os
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -56,18 +59,12 @@ def script_head(versions: Path = VERSIONS) -> str | None:
     return heads.pop() if len(heads) == 1 and parents <= revisions else None
 
 
-async def _stored_revisions(url: str) -> set[str] | None:
-    """The revisions ``alembic_version`` holds; None when there is no such table yet.
-
-    One statement on one plain asyncpg connection: an engine's dialect set-up would send
-    four more first (version, schema, isolation level, string quoting), each a round trip
-    to Cloud SQL on a new instance."""
-    import asyncpg
+def _connect_args(url: str) -> tuple[list, dict]:
+    """asyncpg's connect arguments for ``url``: the engine's own reading of it (host, port,
+    socket, ssl, ...), less the options that are SQLAlchemy's and not asyncpg's."""
     from sqlalchemy.dialects.postgresql.asyncpg import PGDialect_asyncpg
     from sqlalchemy.engine import make_url
 
-    # The engine's own reading of the URL (host, port, socket, ssl, ...), less its options
-    # that are SQLAlchemy's and not asyncpg's.
     args, kwargs = PGDialect_asyncpg().create_connect_args(make_url(url))
     for option in (
         "async_creator_fn",
@@ -75,6 +72,18 @@ async def _stored_revisions(url: str) -> set[str] | None:
         "prepared_statement_name_func",
     ):
         kwargs.pop(option, None)
+    return args, kwargs
+
+
+async def _stored_revisions(connect_args: tuple[list, dict]) -> set[str] | None:
+    """The revisions ``alembic_version`` holds; None when there is no such table yet.
+
+    One statement on one plain asyncpg connection: an engine's dialect set-up would send
+    four more first (version, schema, isolation level, string quoting), each a round trip
+    to Cloud SQL on a new instance."""
+    import asyncpg
+
+    args, kwargs = connect_args
     conn = await asyncpg.connect(*args, **kwargs)
     try:
         rows = await conn.fetch("SELECT version_num FROM alembic_version")
@@ -85,13 +94,17 @@ async def _stored_revisions(url: str) -> set[str] | None:
     return {r[0] for r in rows}
 
 
-def migrate(url: str) -> bool:
-    """Bring the database at ``url`` to head; True when Alembic ran, False when the database
-    was already at the scripts' head."""
+def at_head(connect_args: tuple[list, dict]) -> bool:
+    """True when the database is at the scripts' head (no Alembic needed)."""
     head = script_head()
-    if head is not None and asyncio.run(_stored_revisions(url)) == {head}:
+    if head is not None and asyncio.run(_stored_revisions(connect_args)) == {head}:
         log.info("database at head %s: no migration to run", head)
-        return False
+        return True
+    return False
+
+
+def upgrade(url: str) -> None:
+    """``alembic upgrade head``, in this process."""
     from alembic import command
     from alembic.config import Config
 
@@ -101,6 +114,14 @@ def migrate(url: str) -> bool:
     # imported by env.py); Alembic's own lines go through the handler set up in main().
     cfg.attributes["configure_logger"] = False
     command.upgrade(cfg, "head")
+
+
+def migrate(url: str) -> bool:
+    """Bring the database at ``url`` to head; True when Alembic ran, False when the database
+    was already at the scripts' head."""
+    if at_head(_connect_args(url)):
+        return False
+    upgrade(url)
     return True
 
 
@@ -123,8 +144,25 @@ def _log_to_stderr(*names: str) -> None:
 def main() -> None:
     _log_to_stderr(log.name, "alembic")
     started = time.perf_counter()
-    ran = migrate(database_url())
-    migrated = time.perf_counter()
+    url = database_url()
+    # The head check waits on the database (on a new Cloud Run instance, mostly its first
+    # connection) while the app's modules load: it runs in a thread, and nothing is served
+    # until it has answered and, if the database is behind, Alembic has brought it to head.
+    connect_args = _connect_args(url)
+    # Loaded here, so the check's thread imports nothing beside the app's imports.
+    import asyncpg  # noqa: F401
+
+    check: dict = {}
+
+    def run_check() -> None:
+        try:
+            check["at_head"] = at_head(connect_args)
+        except BaseException as e:  # raised again below, before anything is served
+            check["error"] = e
+        check["took"] = time.perf_counter() - started
+
+    checker = threading.Thread(target=run_check, name="oracle.startup.check")
+    checker.start()
     # No cyclic garbage collection while the app's modules load: they make a few hundred
     # thousand long-lived objects, and each collection on the way walks them all again (a
     # fifth of the import's time on one CPU). They are frozen out of later collections,
@@ -139,11 +177,19 @@ def main() -> None:
     finally:
         gc.enable()
     imported = time.perf_counter()
+    checker.join()
+    if "error" in check:
+        raise check["error"]
+    ran = not check["at_head"]
+    migrated = check["took"]
+    if ran:
+        upgrade(url)
+        migrated += time.perf_counter() - imported
     log.info(
         "migrations %s in %.1f s, app imported in %.1f s",
         "ran" if ran else "checked",
-        migrated - started,
-        imported - migrated,
+        migrated,
+        imported - started,
     )
     uvicorn.run(app, host=HOST, port=PORT)
 
