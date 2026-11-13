@@ -127,7 +127,7 @@ for (const phone of [false, true]) {
         await expect(page.getByLabel("Summary")).not.toHaveValue(/;|Comment:/);
         await expect(page.getByRole("list", { name: "Decisions taken" })).toHaveCount(0);
         // qa-simple-decide-31: the one day-and-time format, the zone once.
-        await expect(page.getByTestId("meeting-ended-at")).toContainText(/Ended \w{3} \w{3} \d+, \d+:\d{2} [AP]M Pacific Time · /);
+        await expect(page.getByTestId("meeting-ended-at")).toContainText(/Ended \w{3} \w{3} \d+, \d+:\d{2} [AP]M P[DS]T · /);
         await page.goto("/simple/meetings");
         await expect(page.getByRole("region", { name: "Past" })).not.toContainText("Comment:");
         // qa-simple-decide-33: 44 px taps on a phone.

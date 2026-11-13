@@ -20,10 +20,10 @@ type Origin = Schemas["SimpleMeetingIn"]["origin"] & string;
 
 const LENGTHS = [15, 30, 45, 60, 90, 120];
 
-/** qa4-simple-decide-19: the Meetings page's day and time ("Mon Nov 2, 9:00 AM", as its momentWords),
- * no zone letters: the page lead names the zone. Local, so the sheet does not pull in a page's module. */
+/** The Meetings page's day and time with the zone's short name ("Mon Nov 2, 9:00 AM PDT", as its
+ * momentWords; simple-home-13). Local, so the sheet does not pull in a page's module. */
 const moment = (at: string, zone: string) =>
-  `${formatInZone(at, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "")}, ${formatInZone(at, zone, { hour: "numeric", minute: "2-digit" }).replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`;
+  `${formatInZone(at, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "")}, ${formatInZone(at, zone, { hour: "numeric", minute: "2-digit" })}`;
 
 /** The design system's form controls (qa-simple-prd-46, qa-simple-decide): a box or dot in the
  * accent (CHECK) and Simple's select (SimpleSelect), never the browser's bare ones. */
@@ -181,7 +181,7 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, roadma
     <div className="space-y-4">
       {occ && (
         <p data-testid="start-occurrence">
-          {/* qa4-simple-decide-19: the one day-and-time format of Meetings ("Mon Nov 2, 9:00 AM"), no zone letters: the page lead names the zone. */}
+          {/* The one day-and-time format of Meetings ("Mon Nov 2, 9:00 AM PDT"). */}
           <strong>{occ.ritual_title}</strong> · {moment(occ.due_at, zone)}
         </p>
       )}

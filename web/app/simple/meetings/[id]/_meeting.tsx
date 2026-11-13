@@ -14,7 +14,6 @@ import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { MeetingNote } from "@/lib/api/simple-chat";
 import { calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
-import { zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -824,8 +823,8 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
         <h1 className="text-2xl font-semibold">{m.title}</h1>
         {/* qa-simple-decide-31: the one day-and-time format; the zone said once. */}
         <span className="text-base text-text-faint" data-testid="meeting-ended-at">
-          {/* qa4-simple-decide-20: "Ended Sat Oct 24, 12:02 AM Pacific Time", no brackets in brackets. */}
-          Ended {m.ended_at ? `${momentWords(m.ended_at, zone)} ${zoneName(zone).replace(/\s*\(.*\)$/, "")}` : ""} · {m.attendees.map((a) => a.name).join(", ")}
+          {/* simple-home-13: "Ended Sat Oct 24, 12:02 AM PDT", the short zone as Home and Meetings write it. */}
+          Ended {m.ended_at ? momentWords(m.ended_at, zone, false, true) : ""} · {m.attendees.map((a) => a.name).join(", ")}
         </span>
       </header>
       {error && <ErrorNote>{error}</ErrorNote>}
