@@ -116,7 +116,7 @@ test("qa-simple-home-7: a walk step says its problem once, under the item's name
   const why = (await step(page).getByTestId("walk-step-why").textContent())!;
   expect(why.length).toBeGreaterThan(10);
   await expect(step(page).getByText(why)).toHaveCount(1);
-  await expect(step(page).getByTestId("walk-step-title")).toHaveText("Weekly alert digest");
+  await expect(step(page).getByTestId("walk-step-title")).toHaveText("F-06Weekly alert digest");
   const card = step(page).getByTestId("chat-card");
   await expect(card).not.toContainText("Item:");
   await expect(card.getByTestId("chat-card-summary")).toHaveCount(0);

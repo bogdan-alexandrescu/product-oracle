@@ -79,8 +79,9 @@ for (const scheme of ["light", "dark"] as const) {
       await decisions(page, "board");
       await expect(page.getByTestId("board-decided")).toHaveAttribute("aria-label", "Decided questions");
       const foot = page.getByTestId("decisions-approvals");
-      await expect(foot).toContainText("They are not product decisions, so they are not listed or counted here.");
-      await expect(foot.getByRole("link", { name: "Open the Inbox in Detailed" })).toBeVisible();
+      // simple-home-qa-nov12 #14: one short line to Simple's Inbox, the why behind its (i).
+      await expect(foot).toContainText("not product decisions, so they are not listed or counted here.");
+      await expect(foot.getByRole("link", { name: "1 approval waits in your Inbox" })).toHaveAttribute("href", "/simple/inbox");
     });
   });
 }

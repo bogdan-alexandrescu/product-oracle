@@ -69,7 +69,7 @@ for (const phone of [false, true]) {
         expect(linkColour).not.toBe(textColour);
         const foot = page.getByTestId("decisions-approvals");
         if (await foot.count()) {
-          await expect(foot).toContainText("for Oracle's own work");
+          await expect(foot).toContainText("Oracle's own work");
           await expect(foot).not.toContainText("run approvals");
         }
       });

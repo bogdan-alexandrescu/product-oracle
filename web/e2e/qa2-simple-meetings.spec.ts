@@ -152,7 +152,8 @@ test.describe("desktop · the live meeting", () => {
     await expect(page.getByRole("button", { name: /^Approve( one-pager|$)/ })).toHaveCount(0);
     await expect(page.getByRole("combobox", { name: "Who changes things" })).toHaveCount(1);
     await expect(chat(page)).not.toContainText("Change who may apply");
-    await expect(chat(page).getByTestId("chat-rules")).toContainText("Who changes things: Everyone");
+    // simple-home-qa-nov12 #11: the header's select says who changes things; the chat card does not repeat it.
+    await expect(chat(page).getByTestId("chat-rules")).toHaveCount(0);
     await expect(chat(page).getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", "Ask for a change, or type “note: …”");
     await expect(page.getByTestId("meeting-notes")).toContainText("then press Apply");
     // A question is kept for the minutes and pointed to Ask Oracle, not refused.
