@@ -15,6 +15,21 @@ no_claim=<what green does not prove>.
   migration, or the server starts first; no_claim=data migrations' contents.
 - test_empty_database_is_migrated: protects=a database with no alembic_version table is
   brought to head; fails_when=the missing table is read as "nothing to do".
+- test_at_head_check_is_one_read_without_alembic: protects=at head, the check is one
+  statement (SELECT version_num FROM alembic_version) and builds no Alembic environment;
+  fails_when=the check reads the catalog first, or goes through an engine whose dialect
+  set-up runs its own statements (each a round trip to Cloud SQL on a new instance);
+  no_claim=the time it takes.
+- test_empty_database_check_is_one_read: protects=a database with no alembic_version table
+  costs the check one statement too, then a full upgrade.
+- test_app_import_leaves_heavy_libraries_unloaded: protects=importing the app (a clean
+  interpreter, as a new instance does) loads no MCP SDK, PDF reader, SQL parser or
+  template engine; fails_when=a route module imports one at its top again (Cloud Run, Nov
+  13: the app's import took 13.9 s of a 20 s start); no_claim=they still load when used.
+- test_app_import_within_budget: protects=the app's import in a clean interpreter, gc off
+  as oracle.startup does, stays under IMPORT_BUDGET_S; fails_when=the import goes back to
+  building every pydantic schema and loading every library at import (6.0 s on the lane's
+  machine, 4.6 s after); no_claim=Cloud Run's own time (about 2.3 times this machine's).
 - test_script_head_is_alembics_head: protects=the head read from the scripts' text is the
   one Alembic computes; fails_when=the cheap parse drifts from Alembic (a stale head would
   skip a migration).
@@ -157,6 +172,90 @@ def test_empty_database_is_migrated(at_head, served):
 
     assert len(served) == 1
     assert served[0][1] == {_head()}
+
+
+@pytest.fixture
+def statements(monkeypatch):
+    """Every statement sent to Postgres through asyncpg (prepared or simple), and a guard
+    that fails if an Alembic migration environment is built."""
+    import asyncpg.connection
+    from alembic.runtime.environment import EnvironmentContext
+
+    sent: list[str] = []
+    get_statement = asyncpg.connection.Connection._get_statement
+    execute = asyncpg.connection.Connection.execute
+
+    async def spy_get_statement(self, query, *args, **kwargs):
+        sent.append(query)
+        return await get_statement(self, query, *args, **kwargs)
+
+    async def spy_execute(self, query, *args, **kwargs):
+        if not args:
+            sent.append(query)
+        return await execute(self, query, *args, **kwargs)
+
+    def no_environment(*args, **kwargs):
+        raise AssertionError("an Alembic environment was built")
+
+    monkeypatch.setattr(asyncpg.connection.Connection, "_get_statement", spy_get_statement)
+    monkeypatch.setattr(asyncpg.connection.Connection, "execute", spy_execute)
+    monkeypatch.setattr(EnvironmentContext, "__init__", no_environment)
+    return sent
+
+
+def test_at_head_check_is_one_read_without_alembic(at_head, statements):
+    assert startup.migrate(SCRATCH_URL) is False
+
+    assert statements == ["SELECT version_num FROM alembic_version"]
+
+
+def test_empty_database_check_is_one_read(at_head, monkeypatch, statements):
+    asyncio.run(_reset_schema(SCRATCH_URL))
+    statements.clear()
+    upgrades: list[str] = []
+    monkeypatch.setattr(command, "upgrade", lambda cfg, rev: upgrades.append(rev))
+
+    try:
+        assert startup.migrate(SCRATCH_URL) is True
+
+        assert statements == ["SELECT version_num FROM alembic_version"]
+        assert upgrades == ["head"]
+    finally:
+        monkeypatch.undo()
+        command.upgrade(_cfg(), "head")
+
+
+HEAVY = ("mcp", "mcp_types", "pypdf", "sqlglot", "jinja2")
+
+
+def test_app_import_leaves_heavy_libraries_unloaded():
+    code = (
+        f"import sys; import oracle.main; print(sorted(m for m in {HEAVY!r} if m in sys.modules))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "[]", out.stdout + out.stderr
+
+
+# The lane's machine: 6.0 s before (every schema built, every library loaded at import),
+# 4.6 s after; the budget leaves headroom over the after.
+IMPORT_BUDGET_S = 5.4
+
+
+@pytest.mark.timing
+def test_app_import_within_budget():
+    code = (
+        "import gc, time; gc.disable(); t = time.perf_counter(); import oracle.main; "
+        "print(time.perf_counter() - t)"
+    )
+    took = []
+    for _ in range(2):
+        out = subprocess.run(
+            [sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True, check=True
+        )
+        took.append(float(out.stdout.strip().splitlines()[-1]))
+    assert min(took) < IMPORT_BUDGET_S, took
 
 
 def test_script_head_is_alembics_head():
