@@ -8318,8 +8318,6 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_roadmap ??= seedSimpleRoadmap();
   // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
   if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
-  // GM6: the default company's Goal map milestones sit on its roadmap from the seed, as the API's (goal_map._on_map).
-  if (db.goal_map && !localStorage.getItem(MOCK_SCENARIO_KEY)) db.simple_roadmap.map_milestones ??= { roadmap: db.simple_roadmap.company_roadmap ?? "onboarding-roadmap", milestones: [] };
   // roadmap-milestone-codes: the Goal map's milestones as they are now (moved, renamed, in Trash).
   if (db.goal_map && db.simple_roadmap.map_milestones) db.simple_roadmap.map_milestones.milestones = goalMapMilestones(db.goal_map);
   // simple-replaced-prds: the PRDs marked replaced, whose items no longer feed Simple (service.load).
