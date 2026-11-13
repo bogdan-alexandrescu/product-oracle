@@ -57,20 +57,32 @@ def script_head(versions: Path = VERSIONS) -> str | None:
 
 
 async def _stored_revisions(url: str) -> set[str] | None:
-    """The revisions ``alembic_version`` holds; None when there is no such table yet."""
-    from sqlalchemy import text
-    from sqlalchemy.ext.asyncio import create_async_engine
-    from sqlalchemy.pool import NullPool
+    """The revisions ``alembic_version`` holds; None when there is no such table yet.
 
-    engine = create_async_engine(url, poolclass=NullPool)
+    One statement on one plain asyncpg connection: an engine's dialect set-up would send
+    four more first (version, schema, isolation level, string quoting), each a round trip
+    to Cloud SQL on a new instance."""
+    import asyncpg
+    from sqlalchemy.dialects.postgresql.asyncpg import PGDialect_asyncpg
+    from sqlalchemy.engine import make_url
+
+    # The engine's own reading of the URL (host, port, socket, ssl, ...), less its options
+    # that are SQLAlchemy's and not asyncpg's.
+    args, kwargs = PGDialect_asyncpg().create_connect_args(make_url(url))
+    for option in (
+        "async_creator_fn",
+        "prepared_statement_cache_size",
+        "prepared_statement_name_func",
+    ):
+        kwargs.pop(option, None)
+    conn = await asyncpg.connect(*args, **kwargs)
     try:
-        async with engine.connect() as conn:
-            if (await conn.scalar(text("SELECT to_regclass('alembic_version')"))) is None:
-                return None
-            rows = await conn.execute(text("SELECT version_num FROM alembic_version"))
-            return {r[0] for r in rows}
+        rows = await conn.fetch("SELECT version_num FROM alembic_version")
+    except asyncpg.UndefinedTableError:
+        return None
     finally:
-        await engine.dispose()
+        await conn.close()
+    return {r[0] for r in rows}
 
 
 def migrate(url: str) -> bool:
