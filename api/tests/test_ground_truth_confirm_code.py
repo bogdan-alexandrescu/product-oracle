@@ -9,9 +9,13 @@ Test cards (protects / fails_when / no_claim):
 - test_confirm_keys_by_its_items_code: protects=a proposed feature with no Code attribute,
   confirmed through its roadmap slice item f-07a, is keyed F-07 (the letter dropped);
   fails_when=it takes the next free number.
-- test_a_taken_code_falls_back_and_is_flagged: protects=when another feature has F-07 the
-  confirmed feature takes the next number and is flagged ``code_differs``; fails_when=the
-  confirm is refused, or the clash goes unflagged.
+- test_a_taken_code_falls_back_unflagged: protects=when another feature has its Code
+  attribute F-07 the confirmed feature takes the next number and is not flagged
+  ``code_differs`` (Use its code could only be refused); fails_when=the confirm is refused,
+  or a flag whose one fix is refused.
+- test_a_held_code_from_its_prd_feature_is_not_flagged: protects=a code its linked PRD
+  feature gives it, held by another feature, with no item to link, raises no flag;
+  fails_when=a flag whose one fix (Use its code) is refused.
 - test_confirm_confirms_its_proposed_goal_links: protects=confirming a feature confirms the
   goal links a run proposed with it: no ``no_goal``; fails_when=a false Serves no goal.
 - test_picking_an_already_proposed_goal_confirms_it: protects=Pick a goal on a goal whose
@@ -107,13 +111,14 @@ async def test_confirm_keys_by_its_items_code(client):
     assert (await _confirm(client, ctx, fid))["key"] == "F-07"
 
 
-async def test_a_taken_code_falls_back_and_is_flagged(client):
+async def test_a_taken_code_falls_back_unflagged(client):
     ctx, fid, _, _ = await world(taken=True)
     key = (await _confirm(client, ctx, fid))["key"]
     assert key not in ("F-07", "usage-sync") and key.startswith("F-")
-    flags = _of(await _check(client, ctx), "code_differs")
-    assert [f["feature"]["id"] for f in flags] == [fid]
-    assert [(x["action"], x["target"]) for x in flags[0]["fixes"]] == [("use_code", fid)]
+    assert fid not in [f["feature"]["id"] for f in _of(await _check(client, ctx), "code_differs")]
+    # Use its code could only be refused: F-07 is Bulk import's.
+    r = await client.post(f"/v1/baseline/entities/{fid}/own-code", headers=ctx.as_("approver"))
+    assert r.status_code == 409, r.text
 
 
 async def test_confirm_confirms_its_proposed_goal_links(client):
@@ -281,3 +286,15 @@ async def test_a_duplicate_holding_the_code_offers_link_to_a_feature(client):
     assert [f["feature"]["id"] for f in flags] == [fid]
     assert [(x["action"], x["target"]) for x in flags[0]["fixes"]] == [("link_to_feature", item)]
     assert flags[0]["item"]["id"] == item and flags[0]["item"]["name"] == "Usage sync"
+
+
+async def test_a_held_code_from_its_prd_feature_is_not_flagged(client):
+    """Its PRD feature F-07 is linked to it while Bulk import has F-07, and no item of it
+    reads F-07: no flag, as Use its code could only be refused."""
+    ctx, fid, _, _ = await world(code=None, section=None, taken=True)
+    async with tenant_session(ctx.tenant_id) as s:
+        plan = await s.scalar(select(SimplePrdPlan))
+        plan.data = {**PLAN, "links": {"F-07": fid}}
+        await s.commit()
+    await _confirm(client, ctx, fid)
+    assert fid not in [f["feature"]["id"] for f in _of(await _check(client, ctx), "code_differs")]

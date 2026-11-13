@@ -103,7 +103,7 @@ const SOUNDS_ITEM = "gt-alert-sounds";
 
 /** The ground-truth-confirm scenario on top of ground-truth-flags: Usage sync, a run's proposal with its own
  * Code and its proposed link to the goal, on a roadmap item; Alert rules, keyed F-30 as it was confirmed
- * while its Code is F-17. */
+ * while its Code is F-17; Alert volume, keyed F-32 while its Code F-11 is Sheets export's. */
 export function seedGroundTruthConfirm(baseline: BaselineState, simple: SimpleDb): void {
   seedGroundTruth(baseline, simple);
   const template = baseline.entities.find((e) => e.type === "feature")!;
@@ -120,6 +120,10 @@ export function seedGroundTruthConfirm(baseline: BaselineState, simple: SimpleDb
   const sounds = featureId("alert-sounds");
   baseline.entities.push({ ...template, ...fresh, id: sounds, key: "F-31", title: "Alert sounds", attrs: {}, status: "confirmed" });
   baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-sounds"), src_id: sounds, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
+  // Alert volume: confirmed as F-32 while its Code, F-11, is Sheets export's.
+  const volume = featureId("alert-volume");
+  baseline.entities.push({ ...template, ...fresh, id: volume, key: "F-32", title: "Alert volume", attrs: { code: "F-11" }, status: "confirmed" });
+  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-volume"), src_id: volume, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
   (baseline.revisions ??= []).push({
     id: stableUuid("ground-truth/revision/alert-rules"),
     entity_id: rules,
@@ -139,6 +143,16 @@ export function seedGroundTruthConfirm(baseline: BaselineState, simple: SimpleDb
     actor: "user:approver",
     reason: null,
     created_at: "2026-11-12T10:05:00Z",
+  });
+  baseline.revisions.push({
+    id: stableUuid("ground-truth/revision/alert-volume"),
+    entity_id: volume,
+    edge_id: null,
+    before: { type: "feature", key: "alert-volume", title: "Alert volume", body: null, attrs: { code: "F-11" }, status: "proposed" },
+    after: { type: "feature", key: "F-32", title: "Alert volume", body: null, attrs: { code: "F-11" }, status: "confirmed" },
+    actor: "user:approver",
+    reason: null,
+    created_at: "2026-11-12T10:10:00Z",
   });
   simple.items.push({ key: SOUNDS_ITEM, title: "Alert sounds", horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft: true, feature_id: sounds, section: "f-11" });
   simple.ids[SOUNDS_ITEM] = stableUuid(`simple-item/${SOUNDS_ITEM}`);
