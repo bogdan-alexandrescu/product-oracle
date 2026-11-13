@@ -55,11 +55,11 @@ test("the Inbox shows a draft Oracle sent back as Revising, not a decision, and 
   await seedSentBack(page);
   await page.goto("/inbox");
   const tabs = page.getByTestId("inbox-state-tabs");
-  // The seed's 11 waiting (the pending access request among them, A5), unchanged: nothing of
+  // The seed's 28 waiting (Oracle's 17 dates and the pending access request among them, A5), unchanged: nothing of
   // this run asks for a decision.
-  await expect(page.getByText("11 waiting").filter({ visible: true })).toBeVisible();
-  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("11");
-  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New11");
+  await expect(page.getByText("28 waiting").filter({ visible: true })).toBeVisible();
+  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("28");
+  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New28");
   await expect(page.getByTestId("inbox-checkpoints")).not.toContainText("Guest checkout");
   await expect(page.getByTestId("inbox-revising")).toHaveCount(0);
 
@@ -100,7 +100,7 @@ test("a clean revision clears Revising: the draft is imported and the review wai
 
   // The Inbox: the review is a decision now, counted; the Revising row is gone.
   await page.goto("/inbox");
-  await expect(page.getByText("12 waiting").filter({ visible: true })).toBeVisible();
+  await expect(page.getByText("29 waiting").filter({ visible: true })).toBeVisible();
   // qa-company-17: the row names the imported draft by its own title, as its page does.
   await expect(page.getByTestId("inbox-checkpoints")).toContainText("Example product PRD");
   await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();

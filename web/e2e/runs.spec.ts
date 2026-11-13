@@ -568,9 +568,9 @@ test("a decision SwarmCloud has not taken yet: recorded, shown as delivering, fi
     "Approved by admin@example.com, delivering to the run… (1 try, last: SwarmCloud HTTP 503 unavailable)",
   );
   await expect(page.getByRole("alert").filter({ hasText: "did not confirm" })).toHaveCount(0);
-  // Decided: one fewer waiting on me (11 in the seeded company, the pending access request
+  // Decided: one fewer waiting on me (28 in the seeded company, Oracle's 17 dates and the pending access request
   // among them, A5); the delivery is not counted.
-  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("10");
+  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("27");
   await expect(segment.getByTestId("checkpoint-baseline_confirm")).toContainText("Approved");
   await expect(segment.getByRole("button", { name: "Approve and continue" })).toHaveCount(0);
 
