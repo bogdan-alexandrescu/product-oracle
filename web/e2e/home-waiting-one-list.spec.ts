@@ -381,7 +381,8 @@ for (const phone of [false, true]) {
       await nav(page, "Decisions").click();
       const rows = page.getByTestId("questions-mine").getByTestId("waiting-item");
       await expect(rows.first()).toBeVisible();
-      const kinds = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")));
+      // simple-home-qa-nov12 #3: an item's broken links are one row, which counts each of its breaks.
+      const kinds = await rows.evaluateAll((els) => els.flatMap((e) => Array<string | null>(Number(e.getAttribute("data-breaks") ?? 1)).fill(e.getAttribute("data-kind"))));
       const named = ALL_WORDS.flatMap(([kind, one, many]) => {
         const n = kinds.filter((k) => k === kind).length;
         return n ? [`${n} ${n === 1 ? one : many}`] : [];
