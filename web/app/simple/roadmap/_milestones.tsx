@@ -755,7 +755,8 @@ export function MsLayer(props: MsLayerProps) {
     const many = byDay.get(date) ?? 1;
     if (n === 0) {
       // Their count, a small badge on the diamond's top-right corner: it sits wholly above the
-      // diamonds' own boxes, so it never covers the next one at any zoom (its names in its tooltip).
+      // diamonds' own boxes, so it never covers the next one at any zoom (its names in its tooltip),
+      // and above the Today pill's top too (QA Nov 12 #8: touching it, it found no place off a month's name).
       if (many > 1)
         out.push(
           <button
@@ -771,7 +772,7 @@ export function MsLayer(props: MsLayerProps) {
             onClick={() => setDayList((d) => (d === date ? null : date))}
             // A 12 px count, its tap area 24 px on a phone (an invisible pad round it).
             className="absolute z-[25] h-3 min-w-3 cursor-pointer before:absolute before:inset-0 before:content-[''] max-[600px]:before:-inset-1.5 rounded-full bg-text px-1 text-center text-[10px] leading-3 font-bold text-surface focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
-            style={{ left: mx + 3, top: axisY - 22 }}
+            style={{ left: mx + 3, top: axisY - 24 }}
           >
             {many}
             <span className="sr-only"> on {day(date)}</span>
