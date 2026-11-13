@@ -167,14 +167,31 @@ export const WAITING_KIND: Record<WaitingItem["kind"], string> = {
 };
 
 /**
+ * simple-home-qa-nov12 #3: the list as rows, an item's broken links folded into one row (its
+ * first link's place), as Home's broken-links card groups them; every other item is its own row.
+ */
+export function foldWaiting(items: WaitingItem[]): { key: string; item: WaitingItem; links?: WaitingItem[] }[] {
+  const links = new Map<string, WaitingItem[]>();
+  for (const i of items) if (i.kind === "broken_link") links.set(i.ref_id, [...(links.get(i.ref_id) ?? []), i]);
+  return items.flatMap((i) => {
+    if (i.kind !== "broken_link") return [{ key: i.key, item: i }];
+    const all = links.get(i.ref_id)!;
+    return all[0] === i ? [{ key: `broken_link:${i.ref_id}`, item: i, links: all }] : [];
+  });
+}
+
+/**
  * One thing waiting on me, with its action in place (Accept / Decline, Confirm / Not this,
  * Approve, a decision-log call's Decide) or, for a run stop or a broken link, a link to where it
  * is done. Acting takes the row away at once and tells every page and the rail, which read the
  * list again, so it leaves everywhere at once.
  */
-export function WaitingRow({ item }: { item: WaitingItem }) {
+export function WaitingRow({ item, links }: { item: WaitingItem; links?: WaitingItem[] }) {
   const [busy, setBusy] = useState(false);
   const [gone, setGone] = useState(false);
+  // A broken-link row's breaks (one item's, folded); one fixed leaves the row with the others.
+  const [fixed, setFixed] = useState<ReadonlySet<string>>(new Set());
+  const breaks = item.kind === "broken_link" ? (links ?? [item]).filter((b) => !fixed.has(b.key)) : [];
   // A decision-log call decides in place with its options (GET /v1/decisions/{number}).
   const [call, setCall] = useState<Schemas["DecisionOut"] | null>(null);
   useEffect(() => {
@@ -192,11 +209,14 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
   const [fixing, setFixing] = useState(false);
   const code = useItemCode(itemOf(item));
   const acts = item.kind === "decision" ? (call ? decideActs(call) : []) : actionsOf(item);
-  const act = async (run: () => Promise<unknown>, done: string) => {
+  const act = async (run: () => Promise<unknown>, done: string, key?: string) => {
     setBusy(true);
     try {
       await run();
-      setGone(true);
+      if (key && breaks.length > 1) {
+        setFixed((f) => new Set(f).add(key));
+        setBusy(false);
+      } else setGone(true);
       invalidateWaiting();
       waitingChanged();
       toast({ message: done });
@@ -206,21 +226,23 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
     }
   };
   if (gone) return null;
-  // A broken link names its flag too: one item with two broken links is two rows.
-  const name = `${WAITING_KIND[item.kind]}: ${item.title}${item.kind === "broken_link" && item.detail ? `, ${item.detail}` : ""}`;
+  // A broken link names its flags too; one item's broken links are one row that names each.
+  const details = item.kind === "broken_link" ? breaks.map((b) => b.detail).filter(Boolean) : [];
+  const name = `${WAITING_KIND[item.kind]}: ${item.title}${details.length ? `, ${details.join("; ")}` : ""}`;
+  const detail = item.kind === "broken_link" ? details.join(" · ") : item.detail;
   return (
-    <li className="flex flex-wrap items-center gap-3 border-t border-line py-3 first:border-t-0" data-testid="waiting-item" data-kind={item.kind} aria-label={name}>
+    <li className="flex flex-wrap items-center gap-3 border-t border-line py-3 first:border-t-0" data-testid="waiting-item" data-kind={item.kind} data-breaks={item.kind === "broken_link" ? breaks.length : undefined} aria-label={name}>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="break-words">
           <span className="text-text2">{WAITING_KIND[item.kind]} · </span>
           {code && <code className="simple-code mr-1">{code}</code>}
           {item.title}
           {/* port-AN 5: the row's why sits in its (i), so the one list stays one line a row. */}
-          {item.detail && (
+          {detail && (
             <>
               {" "}
               <InfoTip label={item.title} testId="waiting-detail" align="start">
-                {item.detail}
+                {detail}
               </InfoTip>
             </>
           )}
@@ -251,7 +273,11 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
           </Link>
         )}
       </div>
-      {fixing && <BrokenFixes item={item} busy={busy} onFix={(run, done) => void act(run, done)} />}
+      {fixing &&
+        breaks.map((b) => (
+          // Each break with its own fixes; with two, each says which it is (its start or its end).
+          <BrokenFixes key={b.key} item={b} named={breaks.length > 1} busy={busy} onFix={(run, done) => void act(run, done, b.key)} />
+        ))}
     </li>
   );
 }
@@ -264,7 +290,7 @@ const FIX_DONE: Record<FixOp, string> = { shift_dependents: "Dependents moved", 
  * (with why, in one line), each a change through the engine, applied for its decider and
  * proposed ("Propose: …") for the others; and where it is on the Roadmap.
  */
-function BrokenFixes({ item, busy, onFix }: { item: WaitingItem; busy: boolean; onFix: (run: () => Promise<unknown>, done: string) => void }) {
+function BrokenFixes({ item, named, busy, onFix }: { item: WaitingItem; named: boolean; busy: boolean; onFix: (run: () => Promise<unknown>, done: string) => void }) {
   const [link, setLink] = useState<BrokenLink | null | undefined>(undefined);
   const [noting, setNoting] = useState(false);
   const [note, setNote] = useState("");
@@ -300,6 +326,7 @@ function BrokenFixes({ item, busy, onFix }: { item: WaitingItem; busy: boolean; 
     );
   return (
     <div className="flex basis-full flex-col gap-2" data-testid="waiting-fixes">
+      {named && item.detail && <span className="simple-small">{item.detail}</span>}
       <span className="flex flex-wrap items-center gap-2">
         {link.flag.fixes.includes("shift_dependents") && (
           <button type="button" className="simple-button" disabled={busy} onClick={() => run("shift_dependents")}>
