@@ -211,7 +211,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { codesSeen, groundTruthCheck, GROUND_TRUTH_CONFIRM_SCENARIO, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth, seedGroundTruthConfirm, tiedCodes } from "./ground-truth";
+import { codesRead, codesSeen, groundTruthCheck, GROUND_TRUTH_CONFIRM_SCENARIO, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth, seedGroundTruthConfirm, tiedCodes } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { ONE_PAGER_MILESTONE_RENAME_SCENARIO, PICKED_MILESTONE, PRIORITIES_PLAN_MILESTONES_SCENARIO, seedOldMilestones, seedOwnMilestones, seedPlanPrdMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
@@ -5380,7 +5380,7 @@ function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] 
   const hidden = member ? hiddenDecisionEntities(db, member) : new Set<string>();
   return routeBaseline(
     db.baseline,
-    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id), codesSeen: () => codesSeen(db.simple_roadmap), codesOf: (id) => tiedCodes(db.simple_roadmap, id) },
+    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id), codesSeen: () => codesSeen(db.simple_roadmap), codesOf: (id) => tiedCodes(db.simple_roadmap, id, db.baseline), codesRead: () => codesRead(db.simple_roadmap, db.baseline) },
     req,
     p.slice(2),
     q,
