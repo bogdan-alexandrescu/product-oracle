@@ -269,7 +269,7 @@ def test_the_intake_spec_names_the_current_prompt():
     from oracle.jobs import prompting
 
     spec = Path(__file__).parents[2] / "docs/product-oracle-v2/specs/spec-INT2.md"
-    current = prompting.current("intake_analysis")[0]
+    current = prompting.CURRENT["intake_analysis"]
     named = set(re.findall(r"intake_analysis\.v\d+", spec.read_text()))
     assert named == {current}
 

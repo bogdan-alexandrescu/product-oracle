@@ -1156,7 +1156,7 @@ def test_every_kind_has_a_versioned_prompt():
     for kind in ("review_comments", "reporting", "refinement"):
         name, text = prompting.current(kind)
         assert name.startswith(f"{kind}.v") and len(text) > 500
-        assert (prompting.PROMPTS / f"{name}.md").exists()
+        assert (prompting.PROMPTS / f"{name.split('+')[0]}.md").exists()
     # O1c and O1e are in the instructions of every kind that writes section text.
     for kind in ("review_comments", "refinement"):
         text = prompting.current(kind)[1]

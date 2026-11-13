@@ -64,6 +64,9 @@ DATES = (
     "time zone; never day first or ISO (2026-11-12), even when a source writes them so. A "
     "JSON field this prompt asks for as YYYY-MM-DD stays YYYY-MM-DD."
 )
+#: DATES' version, in the prompt name a job records ("chat_reader.v7+dates.v1"), so a job
+#: stays traceable to its exact text. Bump it whenever DATES changes.
+DATES_NAME = "dates.v1"
 
 #: The kinds whose output people read. Not public_text (it writes no date at all) nor
 #: discussion_reply_goal (it follows discussion_reply's prompt, which carries the rule).
@@ -80,7 +83,7 @@ def current(kind: str) -> tuple[str, str]:
     name = CURRENT[kind]
     text = load(name)
     if kind in DATED:
-        text = f"{text.rstrip()}\n\n{DATES}\n"
+        name, text = f"{name}+{DATES_NAME}", f"{text.rstrip()}\n\n{DATES}\n"
     return name, text
 
 
