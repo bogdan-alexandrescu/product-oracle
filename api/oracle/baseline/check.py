@@ -453,7 +453,7 @@ async def run(db: AsyncSession) -> GroundTruthOut:
         ).all()
     }
     tied = _tied(items, feature_of, plans, truth_ids)
-    held: dict[str, uuid.UUID] | None = None
+    held: dict[str, set[uuid.UUID]] | None = None
     for f in truth:
         if (f.id, f.key) not in joined or f.id not in code_of:
             continue
@@ -464,15 +464,14 @@ async def run(db: AsyncSession) -> GroundTruthOut:
         if not want or want == whole_code(code_of[f.id]):
             continue
         if held is None:
-            from oracle.baseline.fixes import canonical_code, former_keys
+            from oracle.baseline.fixes import held_codes
 
-            held = {(canonical_code(k) or k): i for k, i in (await former_keys(db)).items()}
-            held |= {(_code(c) or c): i for i, c in code_of.items()}
+            held = await held_codes(db, code_of)
         # Its item's code is another feature's (a duplicate): link the item to that feature.
         # Held with no item to link (its Code attribute, a PRD feature's code): Use its code
         # could only be refused, so it keeps the number it has, unflagged.
         mine = whole_code((f.attrs or {}).get("code")) is None
-        dup = held.get(want) not in (None, f.id)
+        dup = bool(held.get(want, set()) - {f.id})
         on = None
         if mine and dup:
             on = next(

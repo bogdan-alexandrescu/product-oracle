@@ -336,15 +336,27 @@ async def wanted_code(db: AsyncSession, feature: Entity, *, tied: bool = True) -
     return check.own_code(feature, (await check.tied_codes(db, {feature.id})).get(feature.id))
 
 
+async def held_codes(
+    db: AsyncSession, codes: dict[uuid.UUID, str] | None = None
+) -> dict[str, set[uuid.UUID]]:
+    """{a code read one way: every feature that has it now (``codes``, else the codes the check
+    reads) or as a code it gave back (:func:`former_keys`)}. One reading for the check's
+    Code differs and Use its code (:func:`_free`), so they never disagree."""
+    from oracle.baseline.check import _code
+
+    if codes is None:
+        codes = (await _taken(db)).codes
+    out: dict[str, set[uuid.UUID]] = {}
+    for k, i in (await former_keys(db)).items():
+        out.setdefault(canonical_code(k) or k, set()).add(i)
+    for i, c in codes.items():
+        out.setdefault(_code(c) or c, set()).add(i)
+    return out
+
+
 async def _free(db: AsyncSession, feature: Entity, code: str) -> bool:
     """Whether no other feature has ``code``, now or as a code it gave back."""
-    t = await _taken(db)
-    if any(c == code for i, c in t.codes.items() if i != feature.id):
-        return False
-    return all(
-        i == feature.id or (canonical_code(k) or k) != code
-        for k, i in (await former_keys(db)).items()
-    )
+    return not (await held_codes(db)).get(code, set()) - {feature.id}
 
 
 async def confirm_goal_links(db: AsyncSession, writer: Writer, feature: Entity) -> None:
