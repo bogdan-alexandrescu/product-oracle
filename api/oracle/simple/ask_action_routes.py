@@ -402,6 +402,7 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "delete_goal_milestone",
         "delete_intake",
         "delete_metric_value",
+        "delete_outcome",
         "delete_ritual",
         "delete_run",
         "delete_scope_item",
