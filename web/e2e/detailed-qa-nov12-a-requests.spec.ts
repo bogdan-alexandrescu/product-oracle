@@ -83,3 +83,20 @@ test("#5: the Feature row and Oracle's suggestion read the feature's code before
     `Feature: ${CODED}`,
   );
 });
+
+test("#5: a no's Basis reads the feature's code before its name", async ({
+  page,
+}) => {
+  await login(page);
+  await openRequest(page, "Keep the delivery address between orders");
+  await inspector(page)
+    .getByRole("button", { name: "Disqualify", exact: true })
+    .click();
+  const form = inspector(page)
+    .locator("form")
+    .filter({ has: page.getByRole("button", { name: "Disqualify request" }) });
+  await form.getByLabel("Reason").selectOption({ label: "Already possible" });
+  await form.getByLabel("Feature").selectOption({ label: CODED });
+  await form.getByRole("button", { name: "Disqualify request" }).click();
+  await expect(inspector(page)).toContainText(`Basis: ${CODED}`);
+});
