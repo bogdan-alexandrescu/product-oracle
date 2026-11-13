@@ -6,7 +6,8 @@ import { login } from "./helpers";
 
 /*
  * G5 Agents read discussions, on the mock layer ("run-discussions" scenario): the link a run's
- * agents are given (`/runs/<run id>?discussion=<id>`) opens the thread sheet on the run page for
+ * agents are given (`/runs/<run id>?discussion=<id>`) opens the thread in the Ask panel (on desktop;
+ * a phone's sheet: br-linked-discussion-panel.spec.ts) on the run page for
  * someone who may read it, and says "This discussion is private" to someone not in a private
  * one. The scenario seeds, on the feature-set run's waiting checkpoint, an open discussion the
  * approver started and a private one the approver started with the owner.
@@ -20,12 +21,13 @@ const RUN = "7a11c0de-0000-4000-8000-0000000000f5";
 const COMMENTER = "commenter@example.com";
 
 const withScenario = (page: Page) => page.addInitScript((key) => localStorage.setItem(key, "run-discussions"), MOCK_SCENARIO_KEY);
-const sheet = (page: Page) => page.getByRole("dialog", { name: "Discussion" });
+// ask-phone-12: on desktop a linked discussion opens in the right Ask panel.
+const sheet = (page: Page) => page.getByTestId("hop-drawer").getByTestId("hop-panel");
 
 // protects=criterion 10: a discussion link from the agents opens the thread on the run page for
 // a commenter, with its title and messages, and closing it leaves the run page; fails_when=the
 // link is ignored, the sheet is empty or shows the private notice; no_claim=the API's access rules.
-test("a discussion link opens the open thread in a sheet on the run page", async ({ page }) => {
+test("a discussion link opens the open thread in the Ask panel on the run page", async ({ page }) => {
   await withScenario(page);
   await login(page, COMMENTER);
   await page.goto(`/runs/${RUN}?discussion=${RUN_DISCUSSION_OPEN}`);
@@ -33,7 +35,7 @@ test("a discussion link opens the open thread in a sheet on the run page", async
   const thread = sheet(page).getByTestId("discussion-thread");
   await expect(thread).toContainText("Bulk edit: keep it without the export?");
   await expect(thread).toContainText("Can bulk edit ship before the export does?");
-  await sheet(page).getByRole("button", { name: "Close Discussion" }).click();
+  await sheet(page).getByRole("button", { name: "Close Ask Oracle" }).click();
   await expect(sheet(page)).toBeHidden();
   await expect(page).toHaveURL(new RegExp(`/runs/${RUN}$`));
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
