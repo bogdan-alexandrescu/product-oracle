@@ -36,6 +36,8 @@ const rail = (staleOk: boolean) => (staleOk ? { headers: { [STALE_OK]: "1" } } :
 export const railInbox = (signal?: AbortSignal, staleOk = true) => unwrap(api.GET("/v1/inbox", { ...rail(staleOk), signal }));
 export const railQuestions = (signal?: AbortSignal, staleOk = true) => unwrap(api.GET("/v1/inbox/questions", { ...rail(staleOk), signal }));
 export const RAIL_URLS = ["/v1/inbox", "/v1/inbox/questions"];
+/** inbox-reads: the Inbox's counts alone (its total and Roadmap part), for a rail on a page that does not read the Inbox. */
+export const railInboxCounts = (signal?: AbortSignal, staleOk = true) => unwrap(api.GET("/v1/inbox/counts", { ...rail(staleOk), signal }));
 
 /** How long a rail waits to read again a count whose read failed: 15 s, doubling with each failure in a row, at most 5 min. */
 const RETRY_MS = 15_000;
@@ -71,7 +73,7 @@ export function readAgainLater(wait: number, again: () => void): () => void {
  * (staged, declined and done never), and never access requests (A5: no Inbox screen shows
  * them yet); the questions asked of me are added here.
  */
-export function waitingCount(inbox: Inbox, questions: readonly unknown[]): number {
+export function waitingCount(inbox: Pick<Inbox, "total">, questions: readonly unknown[]): number {
   return inbox.total + questions.length;
 }
 
@@ -107,12 +109,12 @@ export function drawnOnHome(inbox: Inbox, questions: readonly unknown[], here: D
 /**
  * Records this Inbox visit as my last one (C1e: what "new" is measured from next time). A
  * shared read from before the mark is dropped, so coming back within FRESH_MS (Home and back,
- * qa-company-17) measures "new" from this visit, not the one before.
+ * qa-company-17) measures "new" from this visit, not the one before. inbox-reads: it reads
+ * nothing (POST /v1/inbox/seen), so the Inbox page reads the Inbox once.
  */
 export const markInboxSeen = () =>
-  unwrap(api.GET("/v1/inbox", { params: { query: { mark_seen: true } } })).then((d) => {
+  unwrap(api.POST("/v1/inbox/seen")).then(() => {
     cache.delete("inbox");
-    return d;
   });
 
 /**

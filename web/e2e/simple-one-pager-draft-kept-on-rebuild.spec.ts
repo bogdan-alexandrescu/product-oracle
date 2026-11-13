@@ -20,6 +20,9 @@ import { expect, test } from "./test";
 const EDIT = "An example alert digest sent once a day";
 
 test("a working draft's note stays when the page is built again from a newer version", async ({ page }) => {
+  // protects: after an owner edits a line on the Usage alerts one-pager and then approves version 2 in the run's review, the reloaded page shows Approved, Version 2, the edited line and "1 change" in its Working draft bar
+  // fails_when: the rebuilt page drops the working draft, so the line reads as published and the note and the Working draft status are gone
+  // no_claim: a draft sent for approval, a version newer than 2, and any page besides the Usage alerts one-pager in the run-review mock scenario
   await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "run-review"] as const);
   await login(page);
   await page.goto("/simple/one-pagers");
@@ -56,6 +59,9 @@ test("a working draft's note stays when the page is built again from a newer ver
 });
 
 test("a draft sent for approval stays in review: the run's older version can't be approved, a newer one leaves it waiting", async ({ page }) => {
+  // protects: a Usage alerts draft sent for approval stays waiting on the same reviewers when the run's version 2 is refused, and still does after a newer version 4 is published, with its edited line and "1 change"
+  // fails_when: approving the run's older version goes through (not "v3 exists: only the latest version can be published"), or the draft, its reviewers or its note are dropped on reload or after version 4
+  // no_claim: the real API's publish rules (the mock stands in for them), other PRDs, and what the reviewers see
   await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "run-review"] as const);
   await login(page);
   await page.goto("/simple/one-pagers");

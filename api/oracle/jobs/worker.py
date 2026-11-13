@@ -37,7 +37,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import Any
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -333,7 +333,9 @@ async def _run_job(
         if job is None or job.status != "running":
             return Outcome("cancelled")
 
-        async def ask(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
+        async def ask(
+            kind: str, payload: dict[str, Any], *, mcp: kinds.Mcp | None = None
+        ) -> dict[str, Any]:
             name, system = prompting.current(kind)
             call.prompt = name
             completion = await gateway.complete(
@@ -345,6 +347,7 @@ async def _run_job(
                 transports=transports,
                 deadline=deadline,
                 on_call=call.call_started,
+                mcp=None if mcp is None else partial(mcp, system),
             )
             call.calls += 1
             call.account_label = completion.account_label

@@ -256,10 +256,11 @@ test("the rail: a count read again behind the one shown, that fails, shows no nu
   await expect(inbox).toHaveText(/^\d+$/, { timeout: 15_000 });
   // Past 10 s the rail shows the count it read at once and reads it again behind it.
   await page.waitForTimeout(10_500);
-  await page.evaluate(([key, p]) => localStorage.setItem(key, p), [MOCK_FAIL_KEY, "/v1/inbox"] as const);
-  const before = await calls(page, "/v1/inbox");
+  // inbox-reads: off the Inbox and Home the rail reads the Inbox's counts alone.
+  await page.evaluate(([key, p]) => localStorage.setItem(key, p), [MOCK_FAIL_KEY, "/v1/inbox/counts"] as const);
+  const before = await calls(page, "/v1/inbox/counts");
   await page.getByTestId("simple-nav-priorities").click();
-  await expect.poll(() => calls(page, "/v1/inbox"), { timeout: 15_000 }).toBeGreaterThan(before);
+  await expect.poll(() => calls(page, "/v1/inbox/counts"), { timeout: 15_000 }).toBeGreaterThan(before);
   await expect(inbox).toHaveAttribute("title", "Could not load", { timeout: 3_000 });
   await expect(inbox).not.toHaveText(/\d/);
 });

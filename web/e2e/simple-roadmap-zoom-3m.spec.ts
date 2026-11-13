@@ -75,6 +75,9 @@ async function slide(page: Page, dx: number) {
 /** Each check, in light and in dark, at 1440 wide. */
 function readsWhole(scheme: "light" | "dark") {
   test(`${scheme}: at 3 months each month's first week mark names its month, and no mark touches a month`, async ({ page }) => {
+    // protects: with today at Oct 22, 2026 and 3 months picked, the week marks in view include Oct 26, Nov 9, 16, 23, Dec 7 and 14, the first reads month and day, and no week mark comes within 2 px of a month name
+    // fails_when: a mark is missing or reads differently, the first is a bare day, or a week mark touches a month's name
+    // no_claim: marks beyond the six listed; other zoom levels; this runs in light and dark at 1440 wide
     await open(page, scheme);
     await page.getByTestId("zoom-3m").click();
     // Today is Oct 22: the marks run Oct 26, then Nov 9 (Nov 2 gives way to "Nov"), 16, 23, then
@@ -90,6 +93,9 @@ function readsWhole(scheme: "light" | "dark") {
   });
 
   test(`${scheme}: a month that starts on a Monday draws only its month line`, async ({ page }) => {
+    // protects: at 3 months, after sliding to February, Feb 1 and Mar 1, 2027 (both Mondays) each have a month line and no week line, while Feb 8 and Mar 8 keep their week line
+    // fails_when: a Monday that starts a month also draws a week line or no month line, or another Monday loses its week line
+    // no_claim: other months or zoom levels; how the lines look; this runs in light and dark
     await open(page, scheme);
     await page.getByTestId("zoom-3m").click();
     // Feb 1 and Mar 1, 2027 are Mondays: slide the chart along to them.
@@ -110,6 +116,9 @@ function readsWhole(scheme: "light" | "dark") {
   });
 
   test(`${scheme}: a milestone's label stays clear of the names column at every zoom`, async ({ page }) => {
+    // protects: the "◆ M1 Beta · Nov 30" label, at 3 months, 6 months, 1 year and All, and after sliding the chart till its line is left of the names column, starts at or right of the names column, ends inside the chart, reads whole, and is not covered by the + Milestone hint
+    // fails_when: the label sits over the names column, runs past the chart's right edge, reads differently, or the hint covers it
+    // no_claim: other milestones or two close ones (the next test); this runs in light and dark at 1440 wide
     await open(page, scheme);
     const head = page.getByTestId("timeline-names-head");
     const label = page.getByTestId("timeline-milestone").filter({ hasText: "Beta · Nov 30" });
@@ -148,6 +157,9 @@ function readsWhole(scheme: "light" | "dark") {
 /** The approved-roadmap scenario's milestones, at every zoom, scrolled and not. */
 function milestonesApart(scheme: "light" | "dark") {
   test(`${scheme}: two milestones two weeks apart never overlap, and keep off the names column`, async ({ page }) => {
+    // protects: after Example trails is approved, its Trail beta and Trail launch milestones, at every zoom unscrolled and slid along, have no label over the names column or over another label, no milestone line inside the names column, and the + Milestone hint stays inside the chart and off every label
+    // fails_when: a label is over the names column, two labels overlap, a line shows in the names column, or the hint runs past the chart or covers a label
+    // no_claim: that labels fold into +N chips (not checked here); the slide steps are capped, so not every scroll position is tried
     await open(page, scheme, "approved-roadmap");
     await expect(page.getByTestId("timeline-milestone").filter({ hasText: "Trail launch · Jan 29" })).toBeVisible();
     const box = async (l: Locator) => (await l.isVisible()) ? await l.boundingBox() : null;
@@ -199,6 +211,9 @@ test.describe("desktop, dark", () => {
   milestonesApart("dark");
 
   test("dark: 3 months shows Oct to Jan with weeks marked", async ({ page }) => {
+    // protects: in the dark theme at 1440 wide, picking 3 months presses its button, the months in view read Oct 2026, Nov, Dec, Jan 2027, and week marks show
+    // fails_when: the button is not pressed, the months in view differ, or no week mark shows
+    // no_claim: colours or contrast; other zoom levels
     await open(page, "dark");
     await page.getByRole("button", { name: "3 months", exact: true }).click();
     await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "true");
@@ -212,6 +227,9 @@ test.describe("phone", () => {
 
   for (const scheme of ["light", "dark"] as const)
     test(`${scheme}: a phone keeps the list by quarter, with no Show control`, async ({ page }) => {
+      // protects: at 390 px wide, in light and dark, the Roadmap shows the list by quarter and has no Show group, no 3 months button and no sideways chart
+      // fails_when: no quarter shows, or the Show group, the 3 months button or the chart scroll area appears on a phone
+      // no_claim: what the quarters list; tapping anything
       await open(page, scheme);
       await expect(page.getByTestId("timeline-quarter").first()).toBeVisible();
       await expect(page.getByRole("group", { name: "Show" })).toHaveCount(0);
@@ -237,6 +255,9 @@ test.describe("desktop", () => {
   test.use(DESKTOP);
 
   test("3 months leads the Show buttons and is the default", async ({ page }) => {
+    // protects: on a fresh load at 1440 wide the Show buttons read 3 months, 6 months, 1 year, All 3 years in that order, with 3 months pressed and 6 months not
+    // fails_when: the order or names differ, 3 months is not first, or 6 months is the pressed one
+    // no_claim: what the chart shows for the default; a saved pick from an earlier visit
     await open(page);
     const show = page.getByRole("group", { name: "Show" });
     await expect(show.getByRole("button")).toHaveText(["3 months", "6 months", "1 year", "All 3 years"]);
@@ -245,6 +266,9 @@ test.describe("desktop", () => {
   });
 
   test("3 months shows Oct to Jan with weeks marked, and an item starting soon in sight", async ({ page }) => {
+    // protects: 6 months reaches March; 3 months shows Oct 2026, Nov, Dec, Jan 2027, week marks over 60 px apart, today in view, and the Weekly alert digest bar in view right of today with a "Back to today" button; page scroll does not move the chart sideways
+    // fails_when: 6 months stops short of March, the months differ, week marks are crowded, today or the bar is out of view or left of today, or the page scroll moves the chart sideways
+    // no_claim: the exact bar length; dark and phone (other tests)
     await open(page);
     await page.getByTestId("zoom-6m").click();
     // 6 months reaches well past January.
@@ -288,6 +312,9 @@ test.describe("desktop", () => {
   });
 
   test("switching through all four keeps the pick and brings today back in sight", async ({ page }) => {
+    // protects: going through 3 months, 6 months, 1 year, All and back to 3 months presses only the picked button each time and keeps today's line inside the chart's view; at 6 months no week marks show
+    // fails_when: two or no buttons are pressed, today's line leaves the view after a switch, or week marks show at 6 months
+    // no_claim: week marks at 1 year or All (only 6 months is checked); what else the chart shows
     await open(page);
     const scroll = page.getByTestId("timeline-scroll");
     for (const z of ["3m", "6m", "1y", "all", "3m"]) {

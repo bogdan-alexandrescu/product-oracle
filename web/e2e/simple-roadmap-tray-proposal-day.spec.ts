@@ -33,6 +33,9 @@ async function propose(page: Page, name: string) {
 }
 
 test("two proposals on one milestone each show the day they were made, month first", async ({ page }) => {
+  // protects: in the roadmap owner's Needs a decision panel at 1440 px, two proposals to change the Alerts live for 50 teams milestone made on different days each show their own day, month first (Oct 22 and Nov 4)
+  // fails_when: the two rows read the same, so a person cannot tell the older one from the newer, or a day is missing or not month first
+  // no_claim: proposals on other items, the year in the day (the next test), and the owner's way of approving or rejecting them
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-milestones"] as const);
   await login(page, APPROVER);
   await roadmap(page);
@@ -62,6 +65,9 @@ test("two proposals on one milestone each show the day they were made, month fir
  * the year when it is not this one ("Oct 22, 2026" read in January 2027).
  */
 test("only a milestone's proposal says its day, with the year once it is not this one", async ({ page }) => {
+  // protects: read in January 2027 in the owner's Needs a decision panel at 1440 px, a milestone proposal made on Oct 22 shows "Oct 22, 2026" with its year, and a key date proposal (Product launch) shows no day at all
+  // fails_when: the milestone's day has no year, or the key date's row shows a day, including Oct 22
+  // no_claim: a day read in the same year (the first test), other kinds of proposal, and how a person approves them
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-milestones"] as const);
   await login(page, APPROVER);
   await roadmap(page);

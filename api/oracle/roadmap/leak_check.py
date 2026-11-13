@@ -332,26 +332,36 @@ def _ambiguous_sets() -> list[frozenset[str]]:
     return list(found)
 
 
-# A word in a text's mixed form (:func:`_mixed`): letters, digits and the stand-ins below.
+# A word in a text's mixed form (:func:`_mixed`): letters, digits and the stand-ins
+# (:func:`_stand_ins`).
 _TOKEN = re.compile("[\\w\U000f0000-\U000ffffd]+")
-# A written character with more than one reading stands for all of them in the mixed form,
-# as one stand-in character (Supplementary Private Use Area-A) per set of readings; a name's
-# letter matches every stand-in holding one of its own readings.
-_STAND_INS = {forms: chr(0xF0000 + i) for i, forms in enumerate(_ambiguous_sets())}
-_STAND_INS_FOR: dict[str, str] = {}
-for _forms_set, _stand_in in _STAND_INS.items():
-    for _form in _forms_set:
-        _STAND_INS_FOR[_form] = _STAND_INS_FOR.get(_form, "") + _stand_in
+
+
+@functools.cache
+def _stand_ins() -> tuple[dict[frozenset[str], str], dict[str, str]]:
+    """A written character with more than one reading stands for all of them in the mixed
+    form, as one stand-in character (Supplementary Private Use Area-A) per set of readings;
+    a name's letter matches every stand-in holding one of its own readings. Returns the
+    stand-in of each set of readings and the stand-ins holding each reading. Built on first
+    use, not at import: the scan of every code point costs every new API instance about
+    0.4 s before it serves (tests/test_import_work.py)."""
+    stand_ins = {forms: chr(0xF0000 + i) for i, forms in enumerate(_ambiguous_sets())}
+    stand_ins_for: dict[str, str] = {}
+    for forms, stand_in in stand_ins.items():
+        for form in forms:
+            stand_ins_for[form] = stand_ins_for.get(form, "") + stand_in
+    return stand_ins, stand_ins_for
 
 
 def _mixed(read: str) -> str:
     """``read`` (a :func:`_read` text) letter by letter: each character's one reading, or
     the stand-in for its readings when it has several, so a capital I written for an "i"
     and another for an "l" both match within one name."""
+    stand_ins = _stand_ins()[0]
     out = []
     for char in read:
         forms = _char_forms_cached(char)
-        stand_in = _STAND_INS.get(forms) if len(forms) > 1 else None
+        stand_in = stand_ins.get(forms) if len(forms) > 1 else None
         out.append(stand_in or min(forms))
     return "".join(out)
 
@@ -474,7 +484,7 @@ def _letter(char: str) -> str | None:
     words = {"".join(_TOKEN.findall(f)) for f in forms} - {""}
     if not words:
         return None
-    stand_ins = "".join(dict.fromkeys(c for f in forms for c in _STAND_INS_FOR.get(f, "")))
+    stand_ins = "".join(dict.fromkeys(c for f in forms for c in _stand_ins()[1].get(f, "")))
     alts = [re.escape(w) for w in sorted(words, key=lambda w: (-len(w), w))]
     if stand_ins:
         alts.append(f"[{stand_ins}]")
@@ -709,7 +719,7 @@ def _ends(char: str) -> tuple[str, str, int, int]:
     reading."""
     forms = _char_forms_cached(char)
     words = sorted({"".join(_TOKEN.findall(f)) for f in forms} - {""})
-    stand_ins = [c for f in forms for c in _STAND_INS_FOR.get(f, "")]
+    stand_ins = [c for f in forms for c in _stand_ins()[1].get(f, "")]
     lengths = [len(w) for w in words] + [1] * bool(stand_ins)
     return (
         "".join(dict.fromkeys([w[0] for w in words] + stand_ins)),

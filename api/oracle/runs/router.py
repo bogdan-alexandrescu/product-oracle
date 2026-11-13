@@ -36,6 +36,7 @@ from oracle.runs.schemas import (
     DraftNoteIn,
     EstimateOut,
     FlowCatalog,
+    InboxCountsOut,
     InboxOut,
     McpServerRegistration,
     PrdScopeOut,
@@ -526,6 +527,27 @@ async def get_inbox(
     or overrun decision, and feedback on documents I can approve, by state (new, open,
     staged for the next draft, declined, done) with the staged rows per document."""
     return await service.inbox(db, principal, mark_seen)
+
+
+@router.get("/inbox/counts", response_model=InboxCountsOut)
+async def get_inbox_counts(principal: CurrentPrincipal, db: TenantDB) -> InboxCountsOut:
+    """The Inbox's counts alone (the rails' badges): ``total`` as GET /v1/inbox's, and the
+    part of it the Simple Roadmap tab counts too; the rows shown only are not read."""
+    from oracle.review.inbox import counting
+
+    with counting():
+        return await service.inbox_counts(db, principal)
+
+
+@router.post(
+    "/inbox/seen",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(same_origin)],
+)
+async def mark_inbox_seen(principal: CurrentPrincipal, db: TenantDB) -> None:
+    """Record this visit as my last one (what 'new' is measured from next time), as GET
+    /v1/inbox?mark_seen=true does, without reading the Inbox."""
+    await service.mark_inbox_seen(db, principal)
 
 
 @router.post("/internal/tick", response_model=TickOut)

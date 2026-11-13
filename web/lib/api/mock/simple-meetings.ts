@@ -46,7 +46,7 @@ import type { Schemas } from "@/lib/api/client";
 import { agendaOut, decidedOutsideRows, findQuestion, questionsCounts, questionsOfMeeting, questionsOut, questionsPrdReplaced, routeQuestionChanges, seedQuestions, trashQuestion, waitingOut, type QuestionsDb } from "./simple-questions";
 import type { DecisionLogRow } from "./decisions";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
-import { plainFlow } from "./simple-visuals";
+import { bundleFlow, plainFlow } from "./simple-visuals";
 import { proposeOffAgenda, seedSimpleProposal } from "./simple-changes";
 import { changeSentence } from "./simple-change-words";
 import { mockNowMs } from "./clock";
@@ -831,7 +831,7 @@ function decidedFlow(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecidedFlow"
   const item = items(ctx).find((i) => i.draft && (d.item_ids ?? []).includes(i.id));
   if (!item) return null;
   const flow = flags().includes("flow") && item.key === "setup-ideas" ? INVITE_FLOW : (FLOWS[item.key] ?? null);
-  return { kind: "draft_item", id: item.id, title: item.title, flow };
+  return { kind: "draft_item", id: item.id, title: item.title, flow: bundleFlow(ctx.roadmap.visuals, "draft_item", item.id, flow) };
 }
 
 /** How many items this meeting's Approve these N dates put on the roadmap, or null: its newest such decision on the PRD, by its chosen option (meeting_draft._approved_here). */

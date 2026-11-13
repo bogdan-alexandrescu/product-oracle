@@ -21,6 +21,7 @@ const KINDS: { kind: Kind; label: string; why: string }[] = [
   { kind: "slice_parent_missing", label: "Slices not in the Ground Truth", why: "Roadmap slices of a PRD feature (one per milestone it spans) whose feature is not in the Ground Truth." },
   { kind: "prd_feature_missing", label: "PRD features not in the Ground Truth", why: "Features of a PRD's approved version that are not in the Ground Truth." },
   { kind: "no_code", label: "No feature code", why: "Ground Truth features without an F-code, so no PRD or roadmap can name them." },
+  { kind: "code_differs", label: "Code differs from its PRD", why: "Ground Truth features keyed by another number than the code their PRD or roadmap item gives them." },
   { kind: "no_goal", label: "Serves no goal", why: "Ground Truth features that serve no goal." },
   { kind: "runs_today_on_roadmap", label: "Runs today, still on the roadmap", why: "Features that run today, with proof, but are still on the roadmap." },
 ];
@@ -31,7 +32,7 @@ const shown = (r: Schemas["GroundTruthRef"]) => (r.code ? `${r.code} ${r.name}` 
 /** A row's own key, to mark it waiting for approval once a fix was sent. */
 const rowKey = (f: Flag) => `${f.kind}:${subject(f).id ?? subject(f).code ?? subject(f).name}`;
 /** The roadmap item a flag's Add or Link sets the feature of (unlinked items and slices). */
-const itemOf = (f: Flag) => (f.kind === "unlinked_item" || f.kind === "slice_parent_missing" ? (f.item?.id ?? null) : null);
+const itemOf = (f: Flag) => (f.kind === "unlinked_item" || f.kind === "slice_parent_missing" || f.kind === "code_differs" ? (f.item?.id ?? null) : null);
 /** The code a PRD's feature or slice is added with (F-09, or F-15 for the slice F-15a). */
 const codeOf = (f: Flag) => f.fixes.find((x) => x.action === "add_to_ground_truth" && f.kind !== "unlinked_item")?.target ?? null;
 
@@ -233,6 +234,13 @@ export function GroundTruthFlags({
       return { text: `“${name}” is now ${out.code}.`, undo: () => unwrap(api.DELETE("/v1/baseline/entities/{entity_id}/code", path)) };
     });
 
+  /** Use its code: a feature keyed by another number gets the code its PRD or roadmap item gives it. */
+  const takeOwnCode = (flag: Flag, target: string) =>
+    act(async () => {
+      const out = await unwrap(api.POST("/v1/baseline/entities/{entity_id}/own-code", { params: { path: { entity_id: target } } }));
+      return { text: `“${subject(flag).name}” is now ${out.code}.` };
+    });
+
   /** Link a PRD's feature (or a slice's feature) to a Ground Truth feature; a commenter's goes to an approver. */
   const linkPrd = (flag: Flag, code: string, feature: { id: string; title: string }) =>
     act(async () => {
@@ -283,6 +291,8 @@ export function GroundTruthFlags({
           return canWrite || canPropose ? on(() => void giveCode(flag, t)) : [];
         case "confirm_feature":
           return canWrite ? on(() => void confirm(flag, t)) : [];
+        case "use_code":
+          return canWrite ? on(() => void takeOwnCode(flag, t)) : [];
         case "pick_goal":
           return canWrite ? on(() => setPicking({ flag, what: "goal" })) : [];
         case "take_off_roadmap":
@@ -349,6 +359,8 @@ export function GroundTruthFlags({
               // One short line; the flag's sentence is behind the (i). A feature a run proposed
               // waits for its yes: the status a chip, the feature its name with its code (D-12).
               const unconfirmed = !waiting && f.item && f.feature && f.fixes.some((x) => x.action === "confirm_feature") ? f.feature : null;
+              // An item whose code another feature holds: the feature it is on, by the number it is keyed by.
+              const keyed = !waiting && f.kind === "code_differs" && f.item && f.feature?.code ? f.feature : null;
               const line = waiting || unconfirmed
                 ? null
                 : f.where.prd && !f.item?.id
@@ -369,6 +381,11 @@ export function GroundTruthFlags({
                       <span className="mt-1 flex flex-wrap items-center gap-1.5" data-testid="gt-unconfirmed">
                         <Chip kind="warn">Waiting to be confirmed</Chip>
                         <CodeChip kind="feature" entityId={unconfirmed.id} entityKey={unconfirmed.code} title={unconfirmed.name} />
+                      </span>
+                    ) : keyed ? (
+                      <span className="mt-1 flex flex-wrap items-center gap-1.5" data-testid="gt-keyed">
+                        <CodeChip kind="feature" entityId={keyed.id} entityKey={keyed.code!} title={keyed.name} />
+                        {line && <span className="text-[13px] text-text2">{line}</span>}
                       </span>
                     ) : (
                       line && <span className="block text-[13px] text-text2">{line}</span>

@@ -9,6 +9,9 @@ every open item is new.
 """
 
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
@@ -36,6 +39,25 @@ LAST_SEEN = "inbox_last_seen_at"
 SETTLED_LIMIT = 100
 #: An Inbox row shows this much of a suggestion's text and rationale; the document has the rest.
 EXCERPT = 280
+
+
+# inbox-counts: within counting() (GET /v1/inbox/counts), the Inbox's parts count what they
+# count and leave unread the rows that are shown only.
+_COUNTING: ContextVar[bool] = ContextVar("inbox_counting", default=False)
+
+
+@contextmanager
+def counting() -> Iterator[None]:
+    token = _COUNTING.set(True)
+    try:
+        yield
+    finally:
+        _COUNTING.reset(token)
+
+
+def counts_only() -> bool:
+    """Within :func:`counting`: the Inbox's counts alone are read."""
+    return _COUNTING.get()
 
 
 def _excerpt(text: str | None) -> str | None:
@@ -97,10 +119,11 @@ def _with_staged_change():
 
 
 async def feedback_states(
-    db: AsyncSession, seen: datetime | None
+    db: AsyncSession, seen: datetime | None, keep: dict[str, Any] | None = None
 ) -> tuple[list[InboxFeedbackItem], InboxCounts]:
     """Every live item (open, or with a staged change) and the most recent settled ones,
-    newest first."""
+    newest first. ``keep`` (inbox-reads): given the rows read here, their live suggestions,
+    documents and latest version numbers, so the Inbox reads none of them again."""
     live = list(
         await db.scalars(
             select(FeedbackItem)
@@ -113,27 +136,38 @@ async def feedback_states(
         FeedbackItem.status != "open",
         FeedbackItem.id.not_in(_with_staged_change()),
     )
-    settled = list(
-        await db.scalars(
-            select(FeedbackItem)
-            .where(*settled_only)
-            .order_by(FeedbackItem.updated_at.desc(), FeedbackItem.id)
-            .limit(SETTLED_LIMIT * 2)
+    # inbox-counts: the settled items (declined and done) are never in the Inbox's total, and
+    # a note is shown only: left unread for the counts alone.
+    counting = counts_only()
+    settled = (
+        []
+        if counting
+        else list(
+            await db.scalars(
+                select(FeedbackItem)
+                .where(*settled_only)
+                .order_by(FeedbackItem.updated_at.desc(), FeedbackItem.id)
+                .limit(SETTLED_LIMIT * 2)
+            )
         )
     )
-    settled_counts = dict(
-        (
-            await db.execute(
-                select(FeedbackItem.status, func.count())
-                .where(*settled_only)
-                .group_by(FeedbackItem.status)
-            )
-        ).all()
+    settled_counts = (
+        {}
+        if counting
+        else dict(
+            (
+                await db.execute(
+                    select(FeedbackItem.status, func.count())
+                    .where(*settled_only)
+                    .group_by(FeedbackItem.status)
+                )
+            ).all()
+        )
     )
     rows = [*live, *settled]
     suggestions = await latest_suggestions(db, [f.id for f in rows])
     staged = await staged_suggestions(db, [f.id for f in live])
-    notes = await oracle_notes(db, rows)
+    notes = {} if counting else await oracle_notes(db, rows)
     latest = await latest_numbers(db, {f.document_id for f in rows})
     docs = {
         d.id: d
@@ -141,6 +175,8 @@ async def feedback_states(
             select(Document).where(Document.id.in_({f.document_id for f in rows}))
         )
     }
+    if keep is not None:
+        keep.update(rows=rows, suggestions=suggestions, docs=docs, latest=latest)
     counts = InboxCounts(
         declined=settled_counts.get("declined", 0),
         done=sum(v for k, v in settled_counts.items() if k != "declined"),

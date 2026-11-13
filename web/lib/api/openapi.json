@@ -17489,6 +17489,59 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/baseline/entities/{entity_id}/own-code": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Use Own Code",
+        "description": "Use its code (the check's ``code_differs``): a feature keyed by the next number as it\nwas confirmed gets its own code (its Code attribute, else its roadmap item's or PRD\nfeature's); the number is given back, never given again. Refused when another feature\nhas that code.",
+        "operationId": "use_own_code",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroundTruthFixOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/baseline/prd-links": {
       "post": {
         "tags": [
@@ -23196,6 +23249,61 @@
             }
           }
         },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/inbox/counts": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Inbox Counts",
+        "description": "The Inbox's counts alone (the rails' badges): ``total`` as GET /v1/inbox's, and the\npart of it the Simple Roadmap tab counts too; the rows shown only are not read.",
+        "operationId": "get_inbox_counts",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxCountsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/inbox/seen": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Mark Inbox Seen",
+        "description": "Record this visit as my last one (what 'new' is measured from next time), as GET\n/v1/inbox?mark_seen=true does, without reading the Inbox.",
+        "operationId": "mark_inbox_seen",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "x-min-role": "viewer"
       }
     },
@@ -64303,6 +64411,47 @@
         ],
         "title": "ChatListOut"
       },
+      "ChatLiveReadOut": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "call": {
+            "type": "string",
+            "title": "Call"
+          },
+          "read_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Read At"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "source",
+          "call",
+          "read_at"
+        ],
+        "title": "ChatLiveReadOut",
+        "description": "A live read of the asker's source an answer used (#710's live citation): its chip."
+      },
       "ChatMessageOut": {
         "properties": {
           "id": {
@@ -64416,6 +64565,13 @@
             },
             "type": "array",
             "title": "Links"
+          },
+          "live_reads": {
+            "items": {
+              "$ref": "#/components/schemas/ChatLiveReadOut"
+            },
+            "type": "array",
+            "title": "Live Reads"
           }
         },
         "type": "object",
@@ -84444,6 +84600,7 @@
               "link_to_feature",
               "confirm_feature",
               "give_code",
+              "use_code",
               "pick_goal",
               "take_off_roadmap"
             ],
@@ -84521,6 +84678,7 @@
               "slice_parent_missing",
               "prd_feature_missing",
               "no_code",
+              "code_differs",
               "no_goal",
               "runs_today_on_roadmap"
             ],
@@ -86525,6 +86683,25 @@
         },
         "type": "object",
         "title": "InboxCounts"
+      },
+      "InboxCountsOut": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "roadmap": {
+            "type": "integer",
+            "title": "Roadmap"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "roadmap"
+        ],
+        "title": "InboxCountsOut",
+        "description": "The Inbox's counts alone (inbox-reads), for the rails' badges."
       },
       "InboxDateBasis": {
         "properties": {

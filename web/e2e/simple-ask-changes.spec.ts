@@ -82,7 +82,7 @@ for (const phone of [false, true]) {
     });
 
     test(`a commenter's cards propose, with the flow or "No flow yet" (${where})`, async ({ page }) => {
-      // protects: under a commenter's own permissions a roadmap card's button is Propose and the result says to whom; a feature ask (theirs to file) says Apply and shows its flow thumbnail that widens to the flow, a task "No flow yet"; a move that breaks a link shows the red reason and a one-click fix
+      // protects: under a commenter's own permissions a roadmap card's button is Propose and the result says to whom; a feature ask (theirs to file) says Apply and shows its flow thumbnail that opens the flow, a task "No flow yet"; a move that breaks a link shows the red reason and a one-click fix
       // fails_when: a commenter applies directly, the flow is missing, or the broken link has no reason in red
       // no_claim: the deciders' routing beyond the default company (simple-deciders.spec.ts)
       await signIn(page, EMAILS.commenter, "/simple");
@@ -94,8 +94,10 @@ for (const phone of [false, true]) {
 
       await say(ask, "feature ask from Rosa Imani: Snooze alerts for a day");
       const askCard = ask.getByTestId("chat-card").filter({ hasText: "New feature ask from Rosa Imani: Snooze alerts for a day" });
-      await tap(askCard.getByTestId("flow-thumb"));
-      await expect(askCard.getByTestId("flow-detail")).toContainText("User flow: Snooze alerts for a day");
+      await tap(askCard.getByRole("button", { name: "Open the flow for Snooze alerts for a day" }));
+      await expect(page.getByTestId("flow-detail")).toContainText("Snooze alerts for a day · flow");
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("flow-detail")).toHaveCount(0);
       // Filing a feature ask is every commenter's right: it applies, not proposes.
       await expect(askCard.getByRole("button", { name: "Apply" })).toBeEnabled();
 

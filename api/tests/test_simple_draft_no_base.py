@@ -1,6 +1,19 @@
 """A Simple working draft with no base version (opened on an item added in Simple, which sits
 on no version yet) is sent and approved on the version readers see (hotfix 2, Nov 6: the
-company roadmap's draft, never approved, answered 409 to Approve and publish)."""
+company roadmap's draft, never approved, answered 409 to Approve and publish).
+
+Test cards (protects / fails_when / no_claim):
+
+- test_a_never_approved_roadmap_publishes_a_draft_with_no_base: protects=on a roadmap whose
+  versions were never approved, a draft with no base version is approved (200, "approved")
+  and becomes exactly one new version, numbered after the highest; fails_when=Approve
+  answers 409 or another error, or adds no version or more than one; no_claim=the new
+  version's text or its items.
+- test_an_approved_roadmap_publishes_a_draft_with_no_base: protects=on a roadmap whose
+  versions are approved, a draft with no base version is approved (200, "approved");
+  fails_when=Approve is refused for the missing base; no_claim=version numbering (the test
+  above) or the new version's contents.
+"""
 
 import uuid
 

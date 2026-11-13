@@ -21,6 +21,9 @@ const button = (page: Page) => page.getByTestId("needs-decision");
 const badge = (page: Page) => page.getByTestId("simple-nav-roadmap-count").first();
 
 test("Needs a decision shows one number: none until the suggested features are read", async ({ page }) => {
+  // protects: on the Roadmap at 1440 px with the goals' suggested features slowed by 2.5 s, the Needs a decision button says no number until they are read, then shows one number that the side menu's Roadmap badge repeats (no badge at 0)
+  // fails_when: the button shows a number early and then jumps to another, or the side menu shows a different number than the button or a 0 badge
+  // no_claim: that the number is the right count, the phone layout, and what each counted item is
   await page.addInitScript(
     ([slow, msKey]) => {
       localStorage.setItem(slow, "/v1/simple/goal-suggestions");
@@ -53,6 +56,9 @@ test("Needs a decision shows one number: none until the suggested features are r
 });
 
 test("at 0 the side menu shows no Roadmap badge, never a 0", async ({ page }) => {
+  // protects: in the empty mock scenario (a new company with nothing waiting) at 1440 px, the side menu's Roadmap entry shows no count badge, has no description, and no "0" text shows in the menu, even 3 seconds after load
+  // fails_when: a 0 badge or a count description appears on the Roadmap entry, or a lone "0" shows anywhere in the side menu
+  // no_claim: how the badge looks when something does wait, the button on the Roadmap page, and the phone's tabs
   // A new company: nothing waits on the roadmap.
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "empty"] as const);
   await login(page);
@@ -66,6 +72,9 @@ test("at 0 the side menu shows no Roadmap badge, never a 0", async ({ page }) =>
 });
 
 test("a working draft with 0 changes shows no banner and no Approve", async ({ page }) => {
+  // protects: on the Roadmap at 1440 px, once the only change in a working draft (Move the dependents for the alert digest) is undone, the draft banner, its publish button and any Approve button are gone, and stay gone after a reload
+  // fails_when: a draft with 0 changes still shows its banner, its publish button or Approve
+  // no_claim: drafts with changes, the dates the move would have set, and publishing
   await login(page);
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();

@@ -28,16 +28,18 @@ reverses that decision. The presenter changes the mode through S8's ``set_rules`
 flow or feature carries the stored flow and requests a visual when it has none.
 """
 
+import asyncio
 import difflib
 import importlib
+import logging
 import re
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, get_args
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -120,6 +122,9 @@ SAY_AGAIN = "Say it another way."
 MEETING_ASK = "Kept as a question for the minutes. For an answer now, use Ask Oracle."
 QUOTE = r"[\"'“‘](.+?)[\"'”’]"
 DAY = r"(\d{4}-\d{2}-\d{2}|[a-z]+ \d{1,2})"
+
+
+log = logging.getLogger(__name__)
 
 
 class ChatError(Exception):
@@ -1228,6 +1233,8 @@ async def thread(
                 picked=r.picked if r is not None else None, retry=kind == "failed",
                 source=_talk().source_label(m.citations),
                 links=_talk().links_of(m.citations),
+                live_reads=[x for x in m.citations or []
+                            if isinstance(x, dict) and x.get("kind") == "live"],
             ))  # fmt: skip
     return ChatThreadOut(
         id=d.id if d is not None else None,
@@ -1848,8 +1855,17 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     c.page = read.page
     await c.load()
     payload = await _payload(c, read)
-    answer = await ask(READER_JOB, payload)
-    reply = await _with_calls(c, ask, payload, answer, read)
+    live = await _live_of(s, job.tenant_id, read, msg)
+    try:
+        answer = await (ask(READER_JOB, payload, mcp=live.mcp) if live
+                        else ask(READER_JOB, payload))  # fmt: skip
+    finally:
+        if live:
+            # The token reads no more once the run has answered (a second call, wording
+            # the API's results, never reads live).
+            await live.end()
+    reply, cited = await live.answer(answer) if live else (None, [])
+    reply = reply or await _with_calls(c, ask, payload, answer, read)
     if read.meeting_id is not None and reply.no_change and read.line.rstrip().endswith("?"):
         # As the mock's question branch: only a line the reader saw nothing to change in;
         # a change it could not build keeps its own reply.
@@ -1864,6 +1880,8 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
         if not msg.citations and c.prd is not None:
             # A meeting's answer names where it comes from: the meeting's PRD.
             msg.citations = [{"kind": "simple_source", "label": c.prd.source()}]
+    if cited and reply.kind == "answer":
+        msg.citations = [*(msg.citations or []), *cited]
     if reply.links:
         links = [{"kind": "simple_link", **x} for x in reply.links]
         msg.citations = [*(msg.citations or []), *links]
@@ -1871,6 +1889,122 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     await _attach(s, principal, msg, read.meeting_id, reply)
     await s.flush()
     return {"kind": reply.kind, "cards": len(reply.cards), "choices": len(reply.choices)}
+
+
+@dataclass
+class _LiveRun:
+    """#710 in Simple: an Ask panel line's reader run reads its asker's sources live as Ask's
+    replies do (oracle.discussions.replies: the live plan, its token, prompt and MCP server),
+    only in the person's own Ask chat, never a meeting's chat or one others are in."""
+
+    tenant_id: uuid.UUID
+    message_id: uuid.UUID
+    started: bool = False
+    beat: asyncio.Task | None = field(default=None, repr=False)
+
+    async def mcp(self, system: str) -> tuple[str, Any]:
+        """Claude Code is about to run the line: the reply is ``streaming`` while it may
+        read (as every live call re-checks), its lease renewed until :meth:`end` (the
+        lease sweep fails a lapsed one), then the live decision is taken again and the
+        token minted (replies' own)."""
+        from oracle.discussions import replies
+
+        await self._lease(status="streaming")
+        self.started = True
+        if self.beat is None:
+            self.beat = asyncio.ensure_future(self._renew())
+        return await replies.for_claude_code(self.tenant_id, self.message_id, system)
+
+    async def _lease(self, **values: Any) -> None:
+        from oracle.discussions import replies
+        from oracle.tenancy import tenant_session
+
+        async with tenant_session(self.tenant_id) as db:
+            await db.execute(update(DiscussionMessage)
+                             .where(DiscussionMessage.id == self.message_id,
+                                    *([] if values else
+                                      [DiscussionMessage.status == "streaming"]))
+                             .values(stream_lease_until=func.now() + replies.LEASE, **values)
+                             .execution_options(synchronize_session=False))  # fmt: skip
+            await db.commit()
+
+    async def _renew(self) -> None:
+        """The lease, renewed at a third of its length while Claude Code runs."""
+        from oracle.discussions import replies
+
+        while True:
+            await asyncio.sleep(replies.LEASE.total_seconds() / 3)
+            try:
+                await self._lease()
+            except Exception:
+                log.exception("could not renew the lease of chat line %s", self.message_id)
+
+    async def answer(self, answer: Any) -> tuple["Reply | None", list[dict[str, Any]]]:
+        """Oracle's answer from the asker's live reads, and the reads it cites (``[l:n]``;
+        a marker with no read of this line is dropped): when a live read happened and the
+        reader made no change of the plan, its words are the answer as they are (a refused
+        read's sentence says what to do; it is never handed on to Ask, a second run), a
+        source's raw failure said plainly as Ask's replies do."""
+        from oracle.discussions import plan as plan_ctx
+        from oracle.discussions import replies
+
+        if not self.started or not isinstance(answer, dict):
+            return None, []
+        said = answer.get("answer")
+        if (not isinstance(said, str) or not said.strip() or answer.get("actions")
+                or answer.get("calls") or answer.get("clarify")):  # fmt: skip
+            return None, []
+        if not await replies.live_read(self.tenant_id, self.message_id):
+            return None, []
+        cited: list[dict[str, Any]] = []
+        if "[l:" in said:
+            reads = await replies.live_citations(self.tenant_id, self.message_id)
+            refs = dict.fromkeys(int(n) for n in replies.LIVE_MARKER.findall(said))
+            cited = [reads[n] for n in refs if n in reads]
+        if await replies.live_failed(self.tenant_id, self.message_id):
+            said = plan_ctx.plain_failures(said)
+        return Reply("answer", plain(said.strip())[:1500]), cited
+
+    async def end(self) -> None:
+        """The token reads no more; the line is the reader's again (its job sets it done)."""
+        from oracle.discussions import replies
+        from oracle.tenancy import tenant_session
+
+        if self.beat is not None:
+            self.beat.cancel()
+            # Waits for the renewal to stop without taking its cancel as the job's own.
+            await asyncio.wait([self.beat])
+            self.beat = None
+        if not self.started:
+            return
+        await replies.revoke(self.tenant_id, [self.message_id])
+        async with tenant_session(self.tenant_id) as db:
+            await db.execute(update(DiscussionMessage)
+                             .where(DiscussionMessage.id == self.message_id,
+                                    DiscussionMessage.status == "streaming")
+                             .values(status="pending", stream_lease_until=None)
+                             .execution_options(synchronize_session=False))  # fmt: skip
+            await db.commit()
+
+
+async def _live_of(
+    db: AsyncSession, tenant_id: uuid.UUID, read: SimpleChatRead, msg: DiscussionMessage
+) -> _LiveRun | None:
+    """A live run for an Ask panel line whose asker may read live there (replies.live_plan,
+    unminted); None in a meeting's chat, a chat others are in, with no live source, or on a
+    retry of a line that already had its live run (one token, one read cap per question)."""
+    from oracle.discussions import replies
+    from oracle.live.tokens import LiveToken
+
+    if read.meeting_id is not None:
+        return None
+    if await db.scalar(select(LiveToken.id).where(LiveToken.message_id == msg.id).limit(1)):
+        return None
+    d = await db.get(Discussion, read.discussion_id)
+    if d is None or d.subject_key.startswith("meeting_chat:"):
+        return None
+    plan = await replies.live_plan(db, d, msg, mint=False)
+    return _LiveRun(tenant_id, msg.id) if plan.live else None
 
 
 async def _with_calls(c: Ctx, ask: Any, payload: dict, answer: Any, read: SimpleChatRead) -> Reply:

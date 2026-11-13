@@ -52,6 +52,9 @@ for (const [where, use] of [
     test.use(use);
 
     test("saved filters that are no longer on the roadmap are dropped and saved back", async ({ page }) => {
+      // protects: on desktop and on a phone, saved PRD and goal filters that are no longer on the roadmap are dropped: the Board still shows its cards, the PRD, Goal and Track pickers read All, empty filters are saved back with no toast, and a return visit still shows the items
+      // fails_when: the stale filters hide every item or show "Nothing matches these filters", a picker keeps its old pick, a toast shows, or the saved filters are not the empty ones
+      // no_claim: links with a PRD or goal in the address, the picks of a live roadmap, or the real server's storage (the mock holds it)
       await page.addInitScript(([key, scenario]) => localStorage.setItem(key, scenario), [MOCK_SCENARIO_KEY, STALE_SIMPLE_FILTERS_SCENARIO] as const);
       await login(page);
       await openBoard(page);
@@ -74,6 +77,9 @@ for (const [where, use] of [
     });
 
     test("a link to a PRD no longer on the roadmap says so, with Clear", async ({ page }) => {
+      // protects: on desktop and on a phone, a link to a PRD not on the roadmap shows the note "That PRD is no longer on this roadmap" and the PRD picker reads "Not on this roadmap"; Clear removes the note, resets the picker to All, takes the PRD out of the address, and the note stays gone after a reload
+      // fails_when: the page is empty with "Nothing matches these filters", the picker reads All first, Clear leaves the note or the PRD in the address, or the note returns after a reload
+      // no_claim: goal links, saved filters, or that the retired PRD is truly in Trash
       await login(page);
       await page.goto(`${ROADMAP}?prd=retired-example-prd`);
       await expect(page.getByTestId("simple-roadmap")).toBeVisible();
@@ -102,6 +108,9 @@ for (const [where, use] of [
     });
 
     test("a link to a goal no longer on the roadmap says so, with Clear", async ({ page }) => {
+      // protects: on desktop and on a phone, a link to a goal not on the roadmap shows the note "That goal is no longer on this roadmap"; Clear removes the note and the goal from the address, and the Board shows its cards
+      // fails_when: the note is missing or wrong, the page shows "Nothing matches these filters", Clear leaves the note or the goal in the address, or the cards are gone
+      // no_claim: the goal picker's text, a reload after Clear, or PRD links
       await login(page);
       await page.goto(`${ROADMAP}?goal=retired-example-goal`);
       await expect(page.getByTestId("simple-roadmap")).toBeVisible();
@@ -116,6 +125,9 @@ for (const [where, use] of [
     });
 
     test("a link to a PRD and a goal no longer on the roadmap names both", async ({ page }) => {
+      // protects: on desktop and on a phone, a link with both a missing PRD and a missing goal shows one note "That PRD and goal are no longer on this roadmap"; Clear removes the note and both from the address, the Board shows its cards, and the note stays gone after a reload
+      // fails_when: the note names only one, Clear leaves the note or either item in the address, the cards are gone, or the note returns after a reload
+      // no_claim: the pickers' text, saved filters, or a link with only one missing item
       await login(page);
       await page.goto(`${ROADMAP}?prd=retired-example-prd&goal=retired-example-goal`);
       await expect(page.getByTestId("simple-roadmap")).toBeVisible();
@@ -133,6 +145,9 @@ for (const [where, use] of [
     });
 
     test("a saved goal that leaves nothing next to a linked PRD is dropped and saved back", async ({ page }) => {
+      // protects: on desktop and on a phone, a saved goal that leaves nothing next to a linked PRD is dropped: the Board keeps its card, no note or "Nothing matches these filters" shows, the Goal picker reads All, the PRD picker keeps the linked PRD, and the saved goal becomes empty
+      // fails_when: the Board is emptied, a note shows, the Goal picker keeps the saved goal, the PRD pick is lost, or the saved goal is not cleared
+      // no_claim: a PRD that is gone, the track filter, or filters picked by hand while the page is open
       // The roadmap is first read with the link's PRD, so the saved goal is checked only once
       // it leaves nothing (the same path as a pick that goes stale while the page is open).
       await page.addInitScript(([key, scenario]) => localStorage.setItem(key, scenario), [MOCK_SCENARIO_KEY, STALE_SIMPLE_FILTERS_SCENARIO] as const);

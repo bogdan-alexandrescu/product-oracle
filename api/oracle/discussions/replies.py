@@ -101,7 +101,7 @@ FINAL = ("complete", "failed", "cancelled")
 
 _ORACLE = re.compile(r"(?<![\w@])@oracle\b", re.I)
 _MARKER = re.compile(r"\[c:(\d{1,4})\]")
-_LIVE_MARKER = re.compile(r"\[l:(\d{1,4})\]")
+LIVE_MARKER = re.compile(r"\[l:(\d{1,4})\]")
 
 # #710: the providers with live tools, and their names.
 LIVE_PROVIDERS = {"fireflies": "Fireflies"}
@@ -290,9 +290,12 @@ def live_block(sources: list[Any]) -> str:
         ),
         "Every tool result carries cite.ref (l:1, l:2, ...). Cite every fact you take from "
         "a tool result with its ref as [l:n], for example [l:1]. Never state a count, a "
-        "meeting or any detail of one that did not come from a tool result in this answer; "
-        f'when a tool answers with an error, say only "{plan_ctx.SOURCE_DOWN}", never its '
-        "code or the source's name.",
+        "meeting or any detail of one that did not come from a tool result in this answer. "
+        # The errors table (#710): a refused read says what to do (reconnect, ask a
+        # narrower question); only a source that is down is the plain line (2026-10-27).
+        "When a tool answers with an error, give the asker its detail sentence as written, "
+        "since it says what to do, never its HTTP code; when it answers "
+        f'"{plan_ctx.SOURCE_DOWN}", say only that.',
     ]
     return "\n".join(lines)
 
@@ -330,7 +333,7 @@ async def live_plan(
     return LivePlan(live=True, token=raw, block=block)
 
 
-async def _for_claude_code(
+async def for_claude_code(
     tenant_id: uuid.UUID, reply_id: uuid.UUID, system: str
 ) -> tuple[str, McpServer | None]:
     """A Claude Code run's system prompt and MCP server: the live decision taken again,
@@ -385,7 +388,17 @@ async def live_failed(tenant_id: uuid.UUID, reply_id: uuid.UUID) -> bool:
         )
 
 
-async def _revoke(tenant_id: uuid.UUID, reply_ids: list[uuid.UUID]) -> None:
+async def live_read(tenant_id: uuid.UUID, reply_id: uuid.UUID) -> bool:
+    """Whether the reply made a live read at all (read, cached or failed)."""
+    async with tenant_session(tenant_id) as db:
+        return bool(
+            await db.scalar(
+                select(func.count()).select_from(LiveRead).where(LiveRead.message_id == reply_id)
+            )
+        )
+
+
+async def revoke(tenant_id: uuid.UUID, reply_ids: list[uuid.UUID]) -> None:
     try:
         async with tenant_session(tenant_id) as db:
             for reply_id in reply_ids:
@@ -489,7 +502,7 @@ def citations_of(
         read.setdefault(n, live[n])
         return m.group(0)
 
-    cleaned = _LIVE_MARKER.sub(keep_live, _MARKER.sub(keep, body))
+    cleaned = LIVE_MARKER.sub(keep_live, _MARKER.sub(keep, body))
     return cleaned, [used[n] for n in sorted(used)] + [read[n] for n in sorted(read)]
 
 
@@ -537,7 +550,7 @@ async def produce(
         return await _produce(tenant_id, reply_id, live, transports, timeout)
     finally:
         # Complete, failed or cancelled: the reply's live token reads no more (#710).
-        await _revoke(tenant_id, [reply_id])
+        await revoke(tenant_id, [reply_id])
         live.publish(("end", ""))
         _live.pop(reply_id, None)
 
@@ -581,7 +594,7 @@ async def _produce(
     mcp = None
     if plan.live or plan.mcp_line:
         # Only a run on Claude Code asks: its token is minted then (2.1).
-        mcp = partial(_for_claude_code, tenant_id, reply_id, system)
+        mcp = partial(for_claude_code, tenant_id, reply_id, system)
     if plan.line:
         system = f"{system.rstrip()}\n\n{plan.line}"
     asked = "Open the interview." if ctx.opening else "Reply to the last person's message."
@@ -1014,7 +1027,7 @@ async def run_pending(
         )
         await db.commit()
     if gone:
-        await _revoke(tenant_id, gone)
+        await revoke(tenant_id, gone)
     for reply_id in due:
         if deadline is not None and deadline - time.monotonic() < reply_seconds():
             break

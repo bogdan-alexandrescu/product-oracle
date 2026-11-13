@@ -18,6 +18,12 @@ here, each flag with one plain sentence and the fixes a person can make in the U
   code only (a feature with no code is flagged too; one with the name of a Ground Truth
   feature carries it as a hint, "Same name as F-05 Bulk import.");
 - ``no_code``: a Ground Truth feature with no F-code;
+- ``code_differs``: a feature keyed by the next number as it was confirmed while its own code
+  (its Code attribute, else its roadmap item's or PRD feature's) is another, fixed by Use its
+  code (``oracle.baseline.fixes.use_own_code``); when that code is a roadmap item's and another
+  feature has it, by Link to a feature on that item instead; another feature's code with no
+  item of its own reading it is not flagged (Use its code would be refused); a slice (F-35a)
+  is never flagged;
 - ``no_goal``: a Ground Truth feature serving no confirmed goal by a confirmed link;
 - ``runs_today_on_roadmap``: a feature running today (Current state) still on the roadmap,
   its own feature or the one it matches by code (F-03, F-03a), fixed by taking it off the
@@ -39,7 +45,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle.baseline.models import Edge, Entity
+from oracle.baseline.models import Edge, Entity, EntityRevision
 from oracle.baseline.schemas import (
     CHECK_KINDS,
     GroundTruthDoc,
@@ -72,6 +78,7 @@ WORDS = {
     "slice_parent_missing": "This slice's feature is not in the Ground Truth.",
     "prd_feature_missing": "This PRD's feature is not in the Ground Truth.",
     "no_code": "This feature has no feature code yet.",
+    "code_differs": "This feature's code is not the one its item or PRD gives it.",
     "no_goal": "This feature serves no goal.",
     "runs_today_on_roadmap": "This feature runs today but is still on the roadmap.",
 }
@@ -81,6 +88,7 @@ FIX_WORDS = {
     "link_to_feature": "Link to a feature",
     "confirm_feature": "Confirm it",
     "give_code": "Give it a code",
+    "use_code": "Use its code",
     "pick_goal": "Pick a goal",
     "take_off_roadmap": "Take it off the roadmap",
 }
@@ -104,6 +112,52 @@ def _plan_code(raw: Any) -> str:
     if not any(c.isalpha() for c in code):
         return ""
     return _code(code) or code
+
+
+def whole_code(raw: Any) -> str | None:
+    """A code as a feature is keyed by it: a slice's letter dropped (f-07a reads F-07), None
+    for no code."""
+    if m := SLICE_SECTION.fullmatch(str(raw or "").strip()):
+        return f"{m.group(1).upper()}-{int(m.group(2)):02d}"
+    code = _plan_code(raw) if raw is not None else ""
+    return code if re.fullmatch(r"[A-Z]{1,3}-\d+", code) else None
+
+
+def own_code(feature: Entity, tied: set[str] | None) -> str | None:
+    """The code ``feature`` is keyed by when no other feature has it: its own Code attribute,
+    else the one code of the roadmap items and PRD features tied to it (``tied``)."""
+    if own := whole_code((feature.attrs or {}).get("code")):
+        return own
+    return next(iter(tied)) if tied and len(tied) == 1 else None
+
+
+def _tied(
+    items: list[RoadmapItem],
+    feature_of: dict[uuid.UUID, uuid.UUID | None],
+    plans: list[tuple[Document, dict[str, Any]]],
+    ids: set[uuid.UUID],
+) -> dict[uuid.UUID, set[str]]:
+    """{feature id: the codes of the roadmap items linked to it and the PRD features linked to
+    it}, a slice's letter dropped."""
+    out: dict[uuid.UUID, set[str]] = {}
+    for i in items:
+        if (fid := feature_of.get(i.id)) in ids and (c := whole_code(i.prd_section_key)):
+            out.setdefault(fid, set()).add(c)  # type: ignore[arg-type]
+    for _, data in plans:
+        for raw, to in (data.get("links") or {}).items():
+            if (fid := _uuid(to)) in ids and (c := whole_code(raw)):
+                out.setdefault(fid, set()).add(c)  # type: ignore[arg-type]
+    return out
+
+
+async def tied_codes(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, set[str]]:
+    """:func:`_tied` read from the roadmap every reader is shown and the PRDs' plans."""
+    from oracle.simple import drafts
+
+    items, _ = await _roadmap_items(db)
+    effective = await drafts.effective(db, items)
+    feature_of = {i.id: effective[str(i.id)].feature_id for i in items}
+    return _tied(items, feature_of, await _prd_plans(db), ids)
 
 
 def _uuid(raw: Any) -> uuid.UUID | None:
@@ -382,6 +436,56 @@ async def run(db: AsyncSession) -> GroundTruthOut:
     for f in truth:
         if f.id not in code_of:
             flag("no_code", [("give_code", str(f.id))], feature=ref(f), where=GroundTruthWhere())
+
+    # Keyed by the next number as it was confirmed (its confirm changed its key), while its own
+    # code is another: Use its code re-keys it.
+    joined = {
+        (i, k)
+        for i, k in (
+            await db.execute(
+                select(EntityRevision.entity_id, EntityRevision.after["key"].astext).where(
+                    EntityRevision.entity_id.in_(truth_ids),
+                    EntityRevision.before["status"].astext == "proposed",
+                    EntityRevision.after["status"].astext == "confirmed",
+                    EntityRevision.before["key"].astext != EntityRevision.after["key"].astext,
+                )
+            )
+        ).all()
+    }
+    tied = _tied(items, feature_of, plans, truth_ids)
+    held: dict[str, set[uuid.UUID]] | None = None
+    for f in truth:
+        if (f.id, f.key) not in joined or f.id not in code_of:
+            continue
+        # A slice reads its feature's code with its letter (F-35a): no code of its own.
+        if (up := by_id.get(f.parent_id)) is not None and up.type == "feature":  # type: ignore[arg-type]
+            continue
+        want = own_code(f, tied.get(f.id))
+        if not want or want == whole_code(code_of[f.id]):
+            continue
+        if held is None:
+            from oracle.baseline.fixes import held_codes
+
+            held = await held_codes(db, code_of)
+        # Its item's code is another feature's (a duplicate): link the item to that feature.
+        # Held with no item to link (its Code attribute, a PRD feature's code): Use its code
+        # could only be refused, so it keeps the number it has, unflagged.
+        mine = whole_code((f.attrs or {}).get("code")) is None
+        dup = bool(held.get(want, set()) - {f.id})
+        on = None
+        if mine and dup:
+            on = next(
+                (i for i in items
+                 if feature_of[i.id] == f.id and whole_code(i.prd_section_key) == want),
+                None,
+            )  # fmt: skip
+        if on is not None:
+            flag("code_differs", [("link_to_feature", str(on.id))], item=item_ref(on),
+                 feature=ref(f), where=where_of(on))  # fmt: skip
+        elif not dup:
+            flag(
+                "code_differs", [("use_code", str(f.id))], feature=ref(f), where=GroundTruthWhere()
+            )
 
     goals = set(
         await db.scalars(

@@ -5,9 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import { Button, InfoTip, Sheet, toast } from "@/components/ds";
-import { FlowThumb } from "@/components/simple/Flow";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
+import { FlowDiagram } from "@/components/simple/FlowViews";
 import { usePanelOpen } from "@/components/hop/open-state";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { sendCardChanged } from "@/lib/api/simple-chat";
@@ -1104,8 +1104,8 @@ function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Ch
     >
       <div className="flex flex-wrap items-center gap-3">
         {p.flow ? (
-          <button aria-label={`Open the flow for ${p.title}`} onClick={() => setOpen(!open)} className="rounded-md border border-line bg-surface p-1" data-testid="flow-thumb">
-            <FlowThumb flow={p.flow} />
+          <button aria-label={`Open the flow for ${p.title}`} onClick={() => setOpen(!open)} className="flex-none rounded-lg border border-line bg-surface p-1.5 hover:border-line-strong" data-testid="flow-thumb">
+            <FlowDiagram flow={p.flow} layout="mini" />
           </button>
         ) : null}
         <span className="flex-1" data-testid="prio-proposal-words">

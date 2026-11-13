@@ -16,15 +16,18 @@
  * in the Ground Truth by code and not flagged unlinked, though it is flagged if that feature runs
  * today; no_code and no_goal read every confirmed feature (the base mock's have a code and a goal
  * here), a goal served by a confirmed link to a confirmed goal. Every other scenario reads no
- * flags. Invented data only.
+ * flags. The "ground-truth-confirm" scenario adds Usage sync (a run's proposal with its Code F-16 and
+ * its proposed goal link, on the roadmap item Usage sync) and Alert rules (confirmed before codes
+ * kept their own: keyed F-30, its Code F-17), flagged code_differs. Invented data only.
  */
 import type { Schemas } from "@/lib/api/client";
-import type { BaselineState } from "./baseline";
+import { confirmGoalLinks, type BaselineState } from "./baseline";
 import { stableUuid } from "./ids";
-import { ANY_CODE as CODE_RE, nextFeatureCode, setCode } from "./feature-codes";
+import { ANY_CODE as CODE_RE, codeFree, formerKeys, nextFeatureCode, setCode, wantedCode, wholeCode } from "./feature-codes";
 import { closed, roadmapId, type SimpleDb } from "./simple-roadmap";
 
 export const GROUND_TRUTH_FLAGS_SCENARIO = "ground-truth-flags";
+export const GROUND_TRUTH_CONFIRM_SCENARIO = "ground-truth-confirm";
 
 type Kind = Schemas["GroundTruthFlag"]["kind"];
 type Action = Schemas["GroundTruthFix"]["action"];
@@ -32,13 +35,14 @@ type Flag = Schemas["GroundTruthFlag"];
 type Entity = BaselineState["entities"][number];
 
 /** In the API's order (CHECK_KINDS). */
-export const CHECK_KINDS: Kind[] = ["unlinked_item", "slice_parent_missing", "prd_feature_missing", "no_code", "no_goal", "runs_today_on_roadmap"];
+export const CHECK_KINDS: Kind[] = ["unlinked_item", "slice_parent_missing", "prd_feature_missing", "no_code", "code_differs", "no_goal", "runs_today_on_roadmap"];
 
 const WORDS: Record<Kind, string> = {
   unlinked_item: "This roadmap item is not a feature in the Ground Truth.",
   slice_parent_missing: "This slice's feature is not in the Ground Truth.",
   prd_feature_missing: "This PRD's feature is not in the Ground Truth.",
   no_code: "This feature has no feature code yet.",
+  code_differs: "This feature's code is not the one its item or PRD gives it.",
   no_goal: "This feature serves no goal.",
   runs_today_on_roadmap: "This feature runs today but is still on the roadmap.",
 };
@@ -49,6 +53,7 @@ const FIX_WORDS: Record<Action, string> = {
   link_to_feature: "Link to a feature",
   confirm_feature: "Confirm it",
   give_code: "Give it a code",
+  use_code: "Use its code",
   pick_goal: "Pick a goal",
   take_off_roadmap: "Take it off the roadmap",
 };
@@ -90,6 +95,108 @@ const ITEMS: [string, string, string | null, boolean, string?][] = [
 const PRD_FEATURES = [{ code: "F-09", name: "Guest seats", milestones: ["Beta", "Launch"] }];
 /** The codes the base mock's confirmed features take here, so each of the scenario's kinds has its one flag. */
 const BASE_CODES = ["F-04", "F-05", "F-06", "F-07", "F-08"];
+
+/** The ground-truth-confirm scenario's roadmap item, on the proposed Usage sync. */
+const CONFIRM_ITEM = "gt-usage-sync";
+/** The ground-truth-confirm scenario's roadmap item on Alert sounds, from the PRD section of Sheets export's code. */
+const SOUNDS_ITEM = "gt-alert-sounds";
+
+/** The ground-truth-confirm scenario on top of ground-truth-flags: Usage sync, a run's proposal with its own
+ * Code and its proposed link to the goal, on a roadmap item; Alert rules, keyed F-30 as it was confirmed
+ * while its Code is F-17; Alert volume, keyed F-32 while its Code F-11 is Sheets export's; Alert digest, keyed
+ * F-33 while its Code is F-18, which only the slice F-18a reads. */
+export function seedGroundTruthConfirm(baseline: BaselineState, simple: SimpleDb): void {
+  seedGroundTruth(baseline, simple);
+  const template = baseline.entities.find((e) => e.type === "feature")!;
+  const goal = prdGoal(baseline)!;
+  const edge = baseline.edges.find((e) => e.type === "supports")!;
+  const fresh = { body: null, parent_id: null, locked: false, locked_by: null, locked_at: null };
+  const sync = featureId("usage-sync");
+  baseline.entities.push({ ...template, ...fresh, id: sync, key: "usage-sync", title: "Usage sync", attrs: { code: "F-16" }, status: "proposed", origin: "agent" });
+  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/usage-sync"), src_id: sync, dst_id: goal.id, status: "proposed", origin: "agent" });
+  const rules = featureId("alert-rules");
+  baseline.entities.push({ ...template, ...fresh, id: rules, key: "F-30", title: "Alert rules", attrs: { code: "F-17" }, status: "confirmed" });
+  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-rules"), src_id: rules, dst_id: goal.id, attrs: { contribution: 1 }, status: "proposed", origin: "agent" });
+  // Alert sounds: confirmed as F-31 while its roadmap item's code, F-11, is Sheets export's.
+  const sounds = featureId("alert-sounds");
+  baseline.entities.push({ ...template, ...fresh, id: sounds, key: "F-31", title: "Alert sounds", attrs: {}, status: "confirmed" });
+  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-sounds"), src_id: sounds, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
+  // Alert volume: confirmed as F-32 while its Code, F-11, is Sheets export's.
+  const volume = featureId("alert-volume");
+  baseline.entities.push({ ...template, ...fresh, id: volume, key: "F-32", title: "Alert volume", attrs: { code: "F-11" }, status: "confirmed" });
+  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-volume"), src_id: volume, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
+  // Alert digest: confirmed as F-33 while its Code is F-18, which only the slice F-18a Alert digest by text reads.
+  const digest = featureId("alert-digest");
+  baseline.entities.push({ ...template, ...fresh, id: digest, key: "F-33", title: "Alert digest", attrs: { code: "F-18" }, status: "confirmed" });
+  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-digest"), src_id: digest, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
+  const byText = featureId("alert-digest-text");
+  baseline.entities.push({ ...template, ...fresh, id: byText, key: "F-18a", title: "Alert digest by text", attrs: {}, status: "confirmed" });
+  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-digest-text"), src_id: byText, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
+  (baseline.revisions ??= []).push({
+    id: stableUuid("ground-truth/revision/alert-rules"),
+    entity_id: rules,
+    edge_id: null,
+    before: { type: "feature", key: "alert-rules", title: "Alert rules", body: null, attrs: { code: "F-17" }, status: "proposed" },
+    after: { type: "feature", key: "F-30", title: "Alert rules", body: null, attrs: { code: "F-17" }, status: "confirmed" },
+    actor: "user:approver",
+    reason: null,
+    created_at: "2026-11-12T10:00:00Z",
+  });
+  baseline.revisions.push({
+    id: stableUuid("ground-truth/revision/alert-sounds"),
+    entity_id: sounds,
+    edge_id: null,
+    before: { type: "feature", key: "alert-sounds", title: "Alert sounds", body: null, attrs: {}, status: "proposed" },
+    after: { type: "feature", key: "F-31", title: "Alert sounds", body: null, attrs: {}, status: "confirmed" },
+    actor: "user:approver",
+    reason: null,
+    created_at: "2026-11-12T10:05:00Z",
+  });
+  baseline.revisions.push({
+    id: stableUuid("ground-truth/revision/alert-volume"),
+    entity_id: volume,
+    edge_id: null,
+    before: { type: "feature", key: "alert-volume", title: "Alert volume", body: null, attrs: { code: "F-11" }, status: "proposed" },
+    after: { type: "feature", key: "F-32", title: "Alert volume", body: null, attrs: { code: "F-11" }, status: "confirmed" },
+    actor: "user:approver",
+    reason: null,
+    created_at: "2026-11-12T10:10:00Z",
+  });
+  baseline.revisions.push({
+    id: stableUuid("ground-truth/revision/alert-digest"),
+    entity_id: digest,
+    edge_id: null,
+    before: { type: "feature", key: "alert-digest", title: "Alert digest", body: null, attrs: { code: "F-18" }, status: "proposed" },
+    after: { type: "feature", key: "F-33", title: "Alert digest", body: null, attrs: { code: "F-18" }, status: "confirmed" },
+    actor: "user:approver",
+    reason: null,
+    created_at: "2026-11-12T10:15:00Z",
+  });
+  simple.items.push({ key: SOUNDS_ITEM, title: "Alert sounds", horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft: true, feature_id: sounds, section: "f-11" });
+  simple.ids[SOUNDS_ITEM] = stableUuid(`simple-item/${SOUNDS_ITEM}`);
+  simple.items.push({ key: CONFIRM_ITEM, title: "Usage sync", horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft: true, feature_id: sync });
+  simple.ids[CONFIRM_ITEM] = stableUuid(`simple-item/${CONFIRM_ITEM}`);
+}
+
+/** check.tied_codes: the codes of the scenario's roadmap items and the PRD features (Link to a feature) linked to a feature (a slice's letter dropped). */
+export function tiedCodes(simple: SimpleDb | undefined, feature: string, baseline?: BaselineState): string[] {
+  const items = (simple?.items ?? []).filter((x) => (x.linked_feature ?? x.feature_id) === feature && !closed(x) && !x.trashed).flatMap((x) => wholeCode(x.section) ?? []);
+  const prd = Object.values(baseline?.prdLinks ?? {}).flatMap((links) => Object.entries(links).flatMap(([code, to]) => (to === feature ? (wholeCode(code) ?? []) : [])));
+  return [...items, ...prd];
+}
+
+/** fixes._codes: {feature id: the code it reads through its first published roadmap item's PRD section}, for a feature whose key is no code. */
+export function codesRead(simple: SimpleDb | undefined, baseline?: BaselineState): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const x of simple?.items ?? []) {
+    const f = x.linked_feature ?? x.feature_id;
+    const m = /^([a-z]{1,3})-(\d+)([a-j])?$/i.exec((x.section ?? "").trim());
+    const keyed = baseline?.entities.find((e) => e.id === f)?.key ?? "";
+    if (x.draft || x.trashed || !f || !m || out.has(f) || F_CODE.test(keyed)) continue;
+    out.set(f, `${m[1].toUpperCase()}-${m[2].padStart(2, "0")}${(m[3] ?? "").toLowerCase()}`);
+  }
+  return out;
+}
 
 /** Adds the scenario's features (to the baseline) and items (to the Alerts roadmap). */
 export function seedGroundTruth(baseline: BaselineState, simple: SimpleDb): void {
@@ -142,7 +249,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   const ref = (e: Entity) => ({ id: e.id, code: F_CODE.test(e.key) ? e.key : null, name: e.title });
   const both = { roadmap: ROADMAP, prd: PRD };
   const out: Flag[] = [];
-  const items = ITEMS.map(([key]) => simple.items.find((x) => x.key === key)).filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
+  const items = [...ITEMS.map(([key]) => key), CONFIRM_ITEM, SOUNDS_ITEM].map((key) => simple.items.find((x) => x.key === key)).filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
   // The Ground Truth by code (F-12, a slice F-12a), as check.py's truth_of.
   const truthOf = new Map(truth.filter((e) => F_CODE.test(e.key)).map((e) => [e.key, e]));
   // Link to a feature: a PRD feature linked to a Ground Truth feature is that feature.
@@ -206,6 +313,33 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   }
   // Every confirmed feature, as the API: a goal is served by a confirmed link to a confirmed goal.
   for (const e of truth) if (!F_CODE.test(e.key)) out.push(flag("no_code", [["give_code", e.id]], { feature: ref(e) }));
+  // Keyed by the next number as it was confirmed, while its own code is another (check.py's code_differs).
+  const joined = new Set(
+    (baseline.revisions ?? [])
+      .filter((r) => (r.before as { status?: string; key?: string } | null)?.status === "proposed" && (r.after as { status?: string } | null)?.status === "confirmed")
+      .filter((r) => (r.before as { key?: string }).key !== (r.after as { key?: string }).key)
+      .map((r) => `${r.entity_id}:${(r.after as { key?: string }).key}`),
+  );
+  // Who holds each code (its key, a code it reads through its published item, a code it gave back), as check.py's held.
+  const read = codesRead(simple, baseline);
+  // A slice keeps its letter (F-12a holds no F-12), as check.py's held.
+  const held = new Map<string, string>(formerKeys(baseline));
+  for (const e of byId.values()) if (F_CODE.test(e.key)) held.set(e.key, e.id);
+  for (const [id, c] of read) held.set(c, id);
+  for (const e of truth) {
+    if (!F_CODE.test(e.key) || !joined.has(`${e.id}:${e.key}`)) continue;
+    // A slice reads its feature's code with its letter (F-35a): no code of its own.
+    if (e.parent_id && byId.has(e.parent_id)) continue;
+    const want = wantedCode(e, tiedCodes(simple, e.id, baseline));
+    if (!want || want === wholeCode(e.key)) continue;
+    // Its item's code is another feature's (a duplicate): link the item to that feature.
+    const mine = !wholeCode((e.attrs as Record<string, unknown> | null)?.code);
+    const dup = ![undefined, e.id].includes(held.get(want));
+    const on = mine && dup ? items.find((s) => (s.linked_feature ?? s.feature_id) === e.id && wholeCode(s.section) === want) : undefined;
+    if (on) out.push(flag("code_differs", [["link_to_feature", simple.ids[on.key]]], { item: { id: simple.ids[on.key], code: codeOf(on)[0], name: on.title }, feature: ref(e), where: both }));
+    // Held with no item to link: Use its code could only be refused, so it is not flagged.
+    else if (!dup) out.push(flag("code_differs", [["use_code", e.id]], { feature: ref(e) }));
+  }
   const goals = new Set(baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => e.id));
   const serving = new Set(baseline.edges.filter((e) => e.type === "supports" && e.status === "confirmed" && goals.has(e.dst_id)).map((e) => e.src_id));
   for (const e of truth) if (!serving.has(e.id)) out.push(flag("no_goal", [["pick_goal", e.id]], { feature: ref(e) }));
@@ -219,7 +353,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
 
 /** GroundTruthOut for the scenario: its flags in CHECK_KINDS' order, their counts per kind (zero included) and the total. */
 export function groundTruthCheck(scenario: string | null, baseline: BaselineState, simple: SimpleDb | undefined): Schemas["GroundTruthOut"] {
-  const found = scenario === GROUND_TRUTH_FLAGS_SCENARIO && simple ? flagsOf(baseline, simple) : [];
+  const found = (scenario === GROUND_TRUTH_FLAGS_SCENARIO || scenario === GROUND_TRUTH_CONFIRM_SCENARIO) && simple ? flagsOf(baseline, simple) : [];
   const flags = CHECK_KINDS.flatMap((k) => found.filter((f) => f.kind === k));
   const counts = Object.fromEntries(CHECK_KINDS.map((k) => [k, flags.filter((f) => f.kind === k).length]));
   return { flags, counts, total: flags.length };
@@ -338,6 +472,24 @@ export async function routeGroundTruthFixes(baseline: BaselineState, simple: Sim
     if (!atLeast(me.role, "approver")) return out(e, { status: "proposed", proposal_id: propose(baseline, me.id, e, { action: "give_code" }).id });
     giveCode(baseline, simple, e, me.id);
     return out(e, { status: "done", code });
+  }
+  if (p[2] === "entities" && p[3] && p[4] === "own-code" && !p[5] && m === "POST") {
+    // fixes.use_own_code: its own code as its key; the number it had is given back, never given again.
+    if (!atLeast(me.role, "approver")) return fail(403, "Your role cannot do this");
+    const e = baseline.entities.find((x) => x.id === p[3] && x.type === "feature");
+    if (!e) return fail(404, "No such feature");
+    if (e.status !== "confirmed") return fail(409, "This feature is not in the Ground Truth yet.");
+    // A slice reads its feature's code with its letter (F-35a), never a code of its own.
+    if (e.parent_id && baseline.entities.some((x) => x.id === e.parent_id && x.type === "feature")) return fail(409, "This feature already has its own code.");
+    const want = wantedCode(e, tiedCodes(simple, e.id, baseline));
+    if (!want || want === wholeCode(e.key)) return fail(409, "This feature already has its own code.");
+    if (!codeFree(baseline, e, want, codesRead(simple, baseline))) return fail(409, `Another feature already has the code ${want}.`);
+    const before = snapshot(e);
+    e.key = want;
+    (baseline.codesGiven ??= []).push(want);
+    revise(baseline, e, before, me.id);
+    confirmGoalLinks(baseline, e, me.id);
+    return out(e, { status: "done", code: want });
   }
   if (p[2] === "prd-links" && !p[3] && (m === "POST" || m === "DELETE")) {
     if (!atLeast(me.role, m === "POST" ? "commenter" : "approver")) return fail(403, "Your role cannot do this");

@@ -13,8 +13,9 @@ import { stableUuid } from "./ids";
  * (MOCK_VISUAL_JOB_MS_KEY, ms in localStorage): until then every read still answers
  * "drawing", as the API does while the simple_visual job runs.
  *
- * Who: everyone reads; commenters and up comment on a drawn visual; owners (who change
- * the subject directly) ask for a drawing and revise.
+ * Who: everyone reads, but a chat card's or goal suggestion's visual only who reads the card or
+ * suggestion (`Ctx.reads`) and the owners (as the API's may_read); commenters and up comment on a
+ * drawn visual; owners (who change the subject directly) ask for a drawing and revise.
  */
 
 type Flow = Schemas["SimpleFlow"];
@@ -59,6 +60,8 @@ interface Ctx {
   itemName?: (id: string) => string | null;
   /** As visuals.may_revise of a one-pager line: who changes the PRD directly (an owner, its decider, its track owner while an approver). */
   edits?: (documentId: string) => boolean;
+  /** As visuals._reads_loose: whether the caller reads the chat card or goal suggestion; null: no such one. */
+  reads?: (kind: string, id: string) => boolean | null;
 }
 
 /** Subjects drawn with their proposal, never asked for by id (the API's UNASKABLE_KINDS);
@@ -286,6 +289,43 @@ export function flowFor(db: VisualsDb | undefined, kind: string, id: string): Fl
   return cleanFlow(v?.versions.at(-1) ?? null);
 }
 
+/** Each bundle's visual as Oracle drew it with its subject, until a comment or Revise stores it
+ * (kept here, not in the store: a GET writes nothing). */
+const BUNDLES = new Map<string, { brief: string; first: Flow }>();
+
+/** "Reset mock data": the bundles go with the store. */
+export const forgetBundles = (): void => BUNDLES.clear();
+
+/** A flow another mock writes as a plain bundle (a chat card's, a goal suggestion's, a meeting's
+ * decided draft item's): Oracle drew it with its subject (request_visual), so its visual holds the
+ * bundle as version 1, with numbered notes; the newest drawing as the API's flow_for serves it.
+ * Reading writes nothing to the store: the visual is stored once someone comments or revises. */
+export function bundleFlow(db: VisualsDb | undefined, kind: string, id: string, f: Flow | null): Flow | null {
+  if (!f) return null;
+  if (!db) return { ...f, subject_kind: kind, subject_id: id };
+  const key = `${kind}:${id}`;
+  if (db.visuals[key]) return flowFor(db, kind, id);
+  const steps = f.steps.map((label, i) => step(`s${i + 1}`, label, null, i === 0 ? "same" : "new"));
+  const first = flowOf(kind, id, 1, 1, {
+    title: f.title,
+    goal: f.goal ?? f.title,
+    steps,
+    screen: f.screen,
+    notes: [
+      { n: 1, target: steps[1]?.id ?? "s1", note: "The new step it adds", section_key: null, requirement: null },
+      { n: 2, target: "r2", note: "Where it shows on the screen", section_key: null, requirement: null },
+    ],
+  });
+  BUNDLES.set(key, { brief: f.title, first });
+  return cleanFlow(first);
+}
+
+/** A bundle's visual as read (not stored); null when no bundle names it. */
+function bundled(kind: string, id: string): MockVisual | undefined {
+  const b = BUNDLES.get(`${kind}:${id}`);
+  return b ? { kind, id, brief: b.brief, versions: [b.first], comments: [], made_by: [null] } : undefined;
+}
+
 /** The one-pager's shape of a flow. */
 export function onePagerFlow(f: Flow | null): Schemas["OnePagerFlow"] | null {
   return f ? { title: f.title, steps: f.steps, screen: f.touches_screen ? f.screen.title : null, subject_kind: f.subject_kind, subject_id: f.subject_id, version: f.version } : null;
@@ -337,8 +377,17 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
   if (p[1] !== "simple" || p[2] !== "visuals" || p.length < 5) return null;
   const [kind, id] = [p[3], p[4]];
   const key = `${kind}:${id}`;
-  const v = db.visuals[key];
+  const stored = db.visuals[key];
+  const v = stored ?? bundled(kind, id);
   const m = req.method;
+  // As visuals.may_read: a chat card's or goal suggestion's visual is read by who reads the card
+  // or suggestion, and the owners; a card or suggestion the mock does not hold, by the owners.
+  // Nothing drawn or asked for yet reads as an empty visual, as the API's read.
+  if (v && p[5] !== "request" && UNASKABLE.includes(kind) && (RANK[ctx.role] ?? 0) < RANK.owner && !ctx.reads?.(kind, id)) return json(404, { detail: "No such visual" });
+  /** A comment or Revise writes the visual: a bundle's is stored then. */
+  const kept = () => {
+    if (!stored && v) db.visuals[key] = v;
+  };
   if (m === "GET" && p.length === 5) {
     if (v?.pending && Date.now() - (v.queued_at ?? 0) >= jobMs()) {
       v.pending = false;
@@ -366,6 +415,7 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
     if (!v?.versions.length) return json(409, { detail: "Oracle has not drawn this visual yet" });
     const body = String(b.body ?? "").trim();
     if (!body) return json(422, { detail: "Say what should change" });
+    kept();
     v.comments.push({ id: stableUuid(`simple-visual-comment/${key}/${v.comments.length}`), version: v.versions.at(-1)!.version, annotation: (b.annotation as number | null) ?? null, body, by_name: ctx.names[ctx.id] ?? "someone", at, addressed_in: null });
     return json(201, out(v, kind, id, ctx));
   }
@@ -376,6 +426,7 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
     const note = String(b.note ?? "").trim();
     // As the API: a note (Retry after a failed redraw) revises with no open comment.
     if (!open.length && !note) return json(409, { detail: "Nothing to revise from: comment first" });
+    kept();
     v.failure = null;
     const cur = v.versions.at(-1)!;
     const n = cur.version + 1;

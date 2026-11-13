@@ -1059,6 +1059,28 @@ async def give_code(
         raise _fail(exc) from exc
 
 
+@router.post("/entities/{entity_id}/own-code", response_model=GroundTruthFixOut)
+async def use_own_code(
+    entity_id: uuid.UUID, principal: ApproverNow, db: TenantDB
+) -> GroundTruthFixOut:
+    """Use its code (the check's ``code_differs``): a feature keyed by the next number as it
+    was confirmed gets its own code (its Code attribute, else its roadmap item's or PRD
+    feature's); the number is given back, never given again. Refused when another feature
+    has that code."""
+    writer = service.Writer(principal, "user", reason="Ground Truth fix: use_code")
+    try:
+        feature = await fixes._feature(db, entity_id)
+        code = await fixes.use_own_code(db, writer, feature)
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    out = GroundTruthFixOut(
+        status="done", feature=GroundTruthRef(id=feature.id, code=code, name=feature.title),
+        code=code,
+    )  # fmt: skip
+    await db.commit()
+    return out
+
+
 @router.delete("/entities/{entity_id}/code", response_model=GroundTruthFixOut)
 async def take_code_back(
     entity_id: uuid.UUID, principal: ApproverNow, db: TenantDB

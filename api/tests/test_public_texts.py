@@ -1387,7 +1387,7 @@ def test_every_letter_with_several_readings_has_a_stand_in():
         for char in read:
             forms = leak_check._char_forms(char, cached=False)
             words = [f for f in forms if leak_check._TOKEN.search(f)]
-            if len(forms) > 1 and words and forms not in leak_check._STAND_INS:
+            if len(forms) > 1 and words and forms not in leak_check._stand_ins()[0]:
                 missing.append(char)
     assert missing == [], ascii("".join(missing[:20]))
 

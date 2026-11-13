@@ -1133,10 +1133,12 @@ async def briefs(db: AsyncSession, ms: list[SimpleMeeting]) -> list[SimpleMeetin
         ).all()
     ) if ms else {}  # fmt: skip
     names = await _names(db, {i for m in ms for i in [m.presenter_id, *m.attendee_ids]})
+    # read-speed: every meeting's PRD's decider, reviewers and owners in two reads.
+    whos = await prd_whos(db, list(docs.values()))
     out = []
     for m in ms:
         doc = docs[m.prd_document_id]
-        w = await prd_who(db, doc)
+        w = whos[doc.id]
         out.append(
             SimpleMeetingBrief(
                 id=m.id,
@@ -2817,7 +2819,6 @@ async def decisions_page(
     """Direction B "By meeting": each meeting's decisions under it, beside its minutes,
     newest first; then the decisions taken outside meetings. Filters: a PRD (slug or id),
     a goal (key or id), a meeting."""
-    from oracle.simple import service
 
     ms = list(await db.scalars(select(SimpleMeeting).order_by(SimpleMeeting.started_at.desc())))
     docs = {d.id: d for d in await db.scalars(
@@ -2832,9 +2833,32 @@ async def decisions_page(
     await _settle(db, ms)
     from oracle.simple import questions as prd_questions
 
-    # The PRDs' questions read first: a decided one belongs with the decisions below.
-    for i in readable:
-        await prd_questions.ensure(db, docs[i])
+    # The PRDs' questions read first: a decided one belongs with the decisions below
+    # (read-speed: all PRDs' in three statements, not three each).
+    await prd_questions.ensure_all(db, [docs[i] for i in readable])
+    from oracle.simple import drafts
+
+    # read-speed: the rest writes nothing, so the members, documents and tracks its parts
+    # read are read once (drafts.one_read), as the roadmap read does.
+    with drafts.one_read():
+        return await _decisions_page(
+            db, principal, prd, goal, meeting, ms, docs, readable, replaced
+        )
+
+
+async def _decisions_page(
+    db: AsyncSession,
+    principal: Any,
+    prd: str | None,
+    goal: str | None,
+    meeting: uuid.UUID | None,
+    ms: list[SimpleMeeting],
+    docs: dict[uuid.UUID, Document],
+    readable: set[uuid.UUID],
+    replaced: set[uuid.UUID],
+) -> SimpleDecisionsOut:
+    from oracle.simple import service
+
     read = await service.load(db)
     goals = {e.goal.id: e.goal for e in read.entries if e.goal is not None}
     prd_doc = None

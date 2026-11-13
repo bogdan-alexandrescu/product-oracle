@@ -50,7 +50,7 @@ const PARTIAL_MARKER = /\[([cl](:\d{0,4})?)?$/;
  * A live read (#710): "Fireflies Archive · list_meetings · read 7:42 AM PDT", in the Company
  * time zone, with no link (what was read is not in Oracle).
  */
-function LiveChip({ c }: { c: Cite }) {
+export function LiveChip({ c }: { c: Cite }) {
   const zone = useCompanyZone();
   const at = c.read_at ? formatInZone(c.read_at, zone, { hour: "numeric", minute: "2-digit" }) : null;
   return (

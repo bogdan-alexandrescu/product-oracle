@@ -15,6 +15,9 @@ import { expect, test } from "./test";
  */
 
 test("a run's PRD review names the version under review on every line", async ({ page }) => {
+  // protects: in the run's PRD review of Usage alerts, the title line names Version 2 (never Version 1) while it waits, after Approve review, after Approve the PRD, and after a reload, ending on "Approved"
+  // fails_when: the title line shows the last published version (Version 1) during the review or after approving it, or the approved line is gone after reload
+  // no_claim: the run's later steps, what the note says to the run, and any PRD besides Usage alerts in the run-review mock scenario
   await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "run-review"] as const);
   await login(page);
   await page.goto("/simple/one-pagers");

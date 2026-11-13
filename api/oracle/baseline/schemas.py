@@ -653,6 +653,7 @@ CheckKind = Literal[
     "slice_parent_missing",
     "prd_feature_missing",
     "no_code",
+    "code_differs",
     "no_goal",
     "runs_today_on_roadmap",
 ]
@@ -662,6 +663,7 @@ CheckAction = Literal[
     "link_to_feature",
     "confirm_feature",
     "give_code",
+    "use_code",
     "pick_goal",
     "take_off_roadmap",
 ]

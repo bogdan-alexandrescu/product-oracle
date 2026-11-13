@@ -18,6 +18,7 @@ import {
   type ChatMessage,
   type ChatThread as Thread,
 } from "@/lib/api/simple-chat";
+import { LiveChip } from "@/components/discuss/cited";
 import { useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
@@ -437,6 +438,13 @@ export function ChatLine({
           // qa-simple-home-29: a long unbroken word wraps inside the bubble (never a sideways scroll).
           <p className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]" data-testid="chat-message-body">
             {m.body}
+          </p>
+        )}
+        {!!m.live_reads?.length && (
+          <p className="mt-1 flex flex-wrap gap-1.5" data-testid="chat-live-reads">
+            {m.live_reads.map((c) => (
+              <LiveChip key={c.ref} c={{ ...c, kind: "live", title: c.source }} />
+            ))}
           </p>
         )}
         {!!m.links?.length && (

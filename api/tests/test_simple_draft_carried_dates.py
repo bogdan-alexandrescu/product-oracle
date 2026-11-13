@@ -1,7 +1,16 @@
 """A Simple working draft changes the roadmap's items, not its text: dates in the sections it
 carries over from the base version (its summary, its items by quarter) are not checked again
 when it becomes the next version (hotfix 3, Nov 6: the company roadmap's Approve and publish
-answered 422 for five dates in the old version's summary)."""
+answered 422 for five dates in the old version's summary).
+
+Test card (protects / fails_when / no_claim):
+
+- test_a_draft_publishes_over_a_summary_date_with_no_schedule_basis: protects=a draft whose
+  base version's summary names a date with no schedule basis is approved (200, status
+  "approved") and published; fails_when=Approve answers 422 (or anything but 200) because of
+  that carried-over date; no_claim=the version's text after approval, or how dates the draft
+  itself writes are checked.
+"""
 
 import hashlib
 import uuid

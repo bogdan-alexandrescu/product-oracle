@@ -1015,9 +1015,17 @@ def _parsed(v: DocumentVersion) -> dict[str, Any] | None:
 
 async def views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, View]:
     """The plans of these PRDs as their latest approved versions have them, reading
-    nothing into the database: a stored plan of that version, else the version's tables."""
+    nothing into the database: a stored plan of that version, else the version's tables.
+    read-speed: within one read (drafts.one_read) the same PRDs' plans are read once."""
+    from oracle.simple import drafts
+
     if not prd_ids:
         return {}
+    key = "plan_views:" + ",".join(sorted(str(i) for i in prd_ids))
+    return dict(await drafts.once(key, lambda: _views(db, prd_ids)))
+
+
+async def _views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, View]:
     rows = {
         r.document_id: r
         for r in await db.scalars(

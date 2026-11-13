@@ -2,7 +2,24 @@
 plan table of every item with its own dates, so Simple's line says it matches that version
 (hotfix 4, Nov 6: the company roadmap's version 8 carried the base version's old plan table,
 and Simple said 58 items were added after version 8 and two had other dates). A person's own
-dates stay theirs; the banner names the number the draft becomes."""
+dates stay theirs; the banner names the number the draft becomes.
+
+Test cards (protects / fails_when / no_claim):
+
+- test_the_approved_draft_matches_its_version: protects=after approving a draft over a base
+  whose plan table is stale, Simple's applied-version line has no differences and says it
+  matches, the version's text lists every item with its current dates (not the old plan),
+  its item rows carry the draft's dates, and a person's own dates stay "typed";
+  fails_when=the old plan table is carried over, a row has other dates, or the line reports
+  differences; no_claim=the banner, or items cut in the draft.
+- test_the_banner_names_the_number_the_draft_becomes: protects=when a run's later version
+  exists, the working draft shows its base version's number and a next version one past the
+  latest; fails_when=the next number is the base's plus one; no_claim=approval itself.
+- test_a_cut_item_is_no_difference: protects=an item cut in the draft is left out of the
+  version's plan and Simple's plan, so the applied-version line still has no differences and
+  matches; fails_when=the cut item shows as a difference; no_claim=the dates of the items
+  that stay (first test).
+"""
 
 import hashlib
 import uuid

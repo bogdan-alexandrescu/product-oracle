@@ -6,6 +6,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
+import { inboxCounts } from "@/lib/inbox-counts";
 import { sortGoals } from "@/lib/goal-order";
 import { citationHref, formatDate, formatDay, goalFigure } from "@/lib/format";
 import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
@@ -199,7 +200,7 @@ import {
 } from "./simple-priorities";
 import { restoreTrack, routeRemoved, syncTracks, trackSuggestionRows } from "./simple-removed";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, restoreAgendaItem, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
-import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
+import { goalSuggestionInboxRows, readsGoalSuggestion, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
 import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
@@ -207,10 +208,10 @@ import { rebuildsOut } from "./rebuilds";
 import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedBetAddedOnePager, seedHeadingCountOnePager, seedMilestoneNamesOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedTwoCountsOnePager, seedVqaOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
-import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
+import { forgetBundles, routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { codesSeen, groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
+import { codesRead, codesSeen, groundTruthCheck, GROUND_TRUTH_CONFIRM_SCENARIO, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth, seedGroundTruthConfirm, tiedCodes } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { ONE_PAGER_MILESTONE_RENAME_SCENARIO, PICKED_MILESTONE, PRIORITIES_PLAN_MILESTONES_SCENARIO, seedOldMilestones, seedOwnMilestones, seedPlanPrdMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
@@ -221,7 +222,7 @@ import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPr
 import { closed, GOALS, MAP_GOALS, prdFeeds, prdOwnerIdsOf, prdTrackOwnerIds, roadmapKeyOf, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, goalMapMilestones, ladderMilestones, milestoneGoalInTrash, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, LADDER_TRACK_OWNER_SCENARIO, LADDER_TWINS_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
-import { GM_TRACKS, GM_TRACKS_HARD_SCENARIO, GM_TRACKS_SCENARIO, tracksGoals, tracksItems } from "./goal-map-tracks";
+import { GM_TRACKS, GM_TRACKS_HARD_SCENARIO, isTracksScenario, tracksGoals, tracksItems } from "./goal-map-tracks";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -4660,7 +4661,7 @@ function load(): Db {
                     }
                     return db;
                   }
-              : scenario === GM_TRACKS_SCENARIO || scenario === GM_TRACKS_HARD_SCENARIO
+              : isTracksScenario(scenario)
                 ? () => {
                     // goal-map-tracks: as goal-ladder, the map's goals are Home's (Baseline goals and goal buckets,
                     // the same ids) and each feature is its own Simple roadmap item, here on one of the company's
@@ -4668,7 +4669,7 @@ function load(): Db {
                     const db = seed();
                     const template = db.baseline.entities.find((e) => e.type === "goal")!;
                     for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
-                    const goals = tracksGoals(goalMapIdOf);
+                    const goals = tracksGoals(goalMapIdOf, scenario);
                     for (const g of goals) db.baseline.entities.push({ ...template, ...g, body: null, locked: false, locked_by: null, locked_at: null });
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
                     // Each item names its goal itself (by the goal's id): off its last milestone it is unplaced under it.
@@ -4782,6 +4783,14 @@ function load(): Db {
                 ? seedTracksClosedScenario
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
+              : scenario === GROUND_TRUTH_CONFIRM_SCENARIO
+                ? () => {
+                    // The Ground Truth check, with a proposed feature carrying its own code and a mis-keyed one.
+                    const db = seed();
+                    db.simple_roadmap = seedSimpleRoadmap();
+                    seedGroundTruthConfirm(db.baseline, db.simple_roadmap);
+                    return db;
+                  }
               : scenario === GROUND_TRUTH_FLAGS_SCENARIO
                 ? () => {
                     // The Ground Truth check: its features in the baseline, its items on the Alerts roadmap.
@@ -5371,7 +5380,7 @@ function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] 
   const hidden = member ? hiddenDecisionEntities(db, member) : new Set<string>();
   return routeBaseline(
     db.baseline,
-    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id), codesSeen: () => codesSeen(db.simple_roadmap) },
+    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id), codesSeen: () => codesSeen(db.simple_roadmap), codesOf: (id) => tiedCodes(db.simple_roadmap, id, db.baseline), codesRead: () => codesRead(db.simple_roadmap, db.baseline) },
     req,
     p.slice(2),
     q,
@@ -5388,6 +5397,7 @@ function save(db: Db) {
 /** Drops all mock state (used by the "Reset mock data" control). */
 export function resetMockData() {
   cached = null;
+  forgetBundles();
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(SOURCES_STORAGE_KEY);
 }
@@ -8325,6 +8335,24 @@ async function route(db: Db, req: Request): Promise<Response> {
         if (decider) return me.id === decider;
         return mockApproverOwnsTrack() && me.email === "approver@example.com";
       },
+      // As visuals._reads_loose: a meeting's card its presenter and attendees, an Ask panel's card its
+      // person; a goal's suggestion its readers (a held one the owners'). null: the mock holds no such one.
+      reads: (kind, id) => {
+        if (kind === "chat_card") {
+          const c = db.simple_chat?.cards[id];
+          if (!c) return null;
+          // An S8 review meeting's own rules, else the chat's meeting (chat.rules_of).
+          const m = c.meeting_id ? (db.simple_meetings?.meetings.find((x) => x.id === c.meeting_id) ?? db.simple_chat!.meetings[c.meeting_id]) : null;
+          if (c.meeting_id) return !!m && (m.presenter_id === me.id || m.attendee_ids.includes(me.id));
+          const owner = db.simple_chat!.threads[c.thread]?.owner_id;
+          return !owner || owner === me.id;
+        }
+        if (kind === "suggestion") {
+          const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
+          return readsGoalSuggestion(roadmapItems, { id: me.id, role: me.role, names: {}, companyGoals }, id);
+        }
+        return null;
+      },
     },
     req,
     p,
@@ -9497,7 +9525,15 @@ export async function mockFetch(req: Request): Promise<Response> {
       req.method === "GET" && (url.pathname === "/v1/simple/roadmap" || url.pathname === "/v1/simple/roadmap/waiting" || url.pathname === "/v1/simple/decisions/waiting");
     if (req.method !== "GET") forgetRoadmapReads();
     roadmapReadsAt(roadmapRead);
-    let res = await route(db, req);
+    // inbox-reads: the Inbox's counts alone (as the API's GET /v1/inbox/counts) and a visit
+    // recorded without the Inbox's answer (POST /v1/inbox/seen), from the Inbox's own route.
+    const inboxCall = (search = "") => route(db, new Request(new URL(`/v1/inbox${search}`, url), { headers: req.headers }));
+    let res =
+      req.method === "GET" && url.pathname === "/v1/inbox/counts"
+        ? await inboxCall().then(async (r) => (r.ok ? json(200, inboxCounts((await r.json()) as Schemas["InboxOut"])) : r))
+        : req.method === "POST" && url.pathname === "/v1/inbox/seen"
+          ? await inboxCall("?mark_seen=true").then((r) => (r.ok ? new Response(null, { status: 204 }) : r))
+          : await route(db, req);
     // home-waiting-one-list: the waiting list's items, read from the routes each kind lives on.
     if (req.method === "GET" && url.pathname === "/v1/simple/decisions/waiting" && res.ok) res = await withWaitingItems(db, req, res);
     // I1: the runs' changes this call made, as webhook events (./webhooks.ts).

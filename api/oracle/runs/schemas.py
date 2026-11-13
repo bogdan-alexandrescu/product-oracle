@@ -1568,6 +1568,16 @@ class InboxShareRevocation(BaseModel):
     links: list[InboxSharedLink]
 
 
+class InboxCountsOut(BaseModel):
+    """The Inbox's counts alone (inbox-reads), for the rails' badges."""
+
+    # As InboxOut's: every new or open item.
+    total: int
+    # Of ``total``, what the Simple Roadmap tab counts too: proposals on the roadmap, drafts
+    # sent for my approval, goal suggestions and the suggested tracks waiting on me.
+    roadmap: int
+
+
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
     # Those with the checkpoint's approver role: decisions recorded and not delivered to

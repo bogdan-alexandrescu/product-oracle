@@ -32,6 +32,12 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY . .
 RUN uv sync --frozen --no-dev
+# UV_COMPILE_BYTECODE compiles the installed packages only; the app itself is an editable
+# install and .dockerignore drops __pycache__, so without this every new instance compiled
+# all of oracle/ (and the migration scripts) before it could serve.
+RUN python -m compileall -q oracle migrations
 
 EXPOSE 8000
-CMD ["sh", "-c", "alembic upgrade head && uvicorn oracle.main:app --host 0.0.0.0 --port 8000"]
+# oracle.startup: brings the database to head (Alembic only when it is not there), then
+# serves on 8000 in the same process.
+CMD ["python", "-m", "oracle.startup"]

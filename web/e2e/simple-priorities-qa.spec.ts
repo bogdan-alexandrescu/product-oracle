@@ -52,6 +52,9 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
 
       for (const email of [OWNER, VIEWER]) {
         test(`S-2, Demo 9: ${email}'s ranked title opens the feature panel; the explanation is behind an (i)`, async ({ page }) => {
+          // protects: on Priorities (owner and viewer, light and dark, 1440 and 390 wide), the explanation sentence is hidden until the (i) is pressed, and the first ranked title opens the feature panel with its name, plus "You can read this feature" for the viewer
+          // fails_when: the explanation shows without the (i), the (i) shows nothing, the title does not open the panel, or the viewer's panel lacks the read-only note
+          // no_claim: that the viewer cannot edit (only the read note is checked), or any title but the first
           await open(page, email, theme);
           const title = page.getByTestId("prio-title").first();
           await expect(title).toBeVisible();
@@ -69,6 +72,9 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
         });
 
         test(`S-3: ${email}'s Goal bucket features each open the feature panel`, async ({ page }) => {
+          // protects: on Priorities' Goal buckets tab (owner and viewer, light and dark, 1440 and 390 wide), the intro is hidden until the (i) is pressed, every feature row has an open link, and the last one opens the feature panel with its name
+          // fails_when: the intro shows without the (i), a feature row has no open link, or the opened panel shows a different feature
+          // no_claim: that each row's panel is opened (only the last is clicked), or that the panel's details are right
           await open(page, email, theme, "buckets");
           const rows = page.getByTestId("plan-feature");
           await expect(rows.first()).toBeVisible();
@@ -87,6 +93,9 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
         });
 
         test(`S-3: ${email}'s Goal bucket feature with no ranked row opens the feature panel`, async ({ page }) => {
+          // protects: in the mock's bucket-only plan (owner and viewer, light and dark, 1440 and 390 wide), the first Goal bucket feature, which has no ranked row, still opens a panel with "Depends on" and "Goal" and not "not on a roadmap you can see", and the viewer sees "You can read this feature"
+          // fails_when: the row has no open link, or the panel says the feature is not on a roadmap you can see, or lacks its dependencies or goal
+          // no_claim: other bucket features, or that the shown dependencies and goal are the right ones
           await open(page, email, theme, "buckets", PRIORITIES_BUCKET_ONLY_SCENARIO);
           await expect(page.getByTestId("plan-feature").first()).toBeVisible();
           // The first goal's first feature is not among the ranked rows: its row still opens it.
@@ -103,6 +112,9 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
         });
 
         test(`P-3, V-4: ${email}'s Value / effort marks name their feature and keep apart; bottom names sit off the zero line`, async ({ page }) => {
+          // protects: on Priorities' Value / effort tab (owner and viewer, light and dark, 1440 and 390 wide), the Setup checklist mark has its name as its accessible name and shows "#1 SC · Setup checklist" on hover (desktop) or tap (phone), no two marks or counts touch (4 px gap), the Fill-ins and Later labels sit above the zero line, and the how-to-read text is hidden
+          // fails_when: the mark has no name or tag, two marks touch, Fill-ins or Later sits on the zero line, or the how-to-read text shows without the (i)
+          // no_claim: that the (i) shows that text, how the marks look, or any mark but Setup checklist's name
           await open(page, email, theme, "value-effort");
           // PV-1: Setup checklist is its own mark at both widths (Alert history export's is in the count of 15).
           const mark = page.locator('[data-testid="vxe-point"][data-code="setup-checklist"]');
@@ -139,6 +151,9 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
 
       if (size === "390")
         test("P-3: a selected mark's name stays on the phone's screen; the page never scrolls sideways", async ({ page }) => {
+          // protects: on a phone (390 wide, light and dark, as the owner), tapping each Value / effort mark in turn shows its name tag fully inside the screen's left and right edges and leaves the page at 390 px wide
+          // fails_when: any mark's name runs off the left or right of the screen, or a name makes the page scroll sideways
+          // no_claim: the tag's top and foot, desktop, or that the name is the right text
           await open(page, OWNER, theme, "value-effort");
           const marks = page.getByTestId("vxe-point");
           await expect(marks.first()).toBeVisible();
@@ -160,6 +175,9 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
 
       if (size === "1440")
         test("P-3: every mark's name tag stays inside the plot and the page is no wider than the window", async ({ page }) => {
+          // protects: at 1440 wide (light and dark, as the owner), hovering each Value / effort mark shows its name tag inside the plot's left and right edges (half a pixel of slack) and the page is no wider than the window
+          // fails_when: a name tag does not show on hover, runs off the plot's left or right, or widens the page past 1440 px
+          // no_claim: the tag's top and foot, phone width, or that the name is the right text
           await open(page, OWNER, theme, "value-effort");
           const marks = page.getByTestId("vxe-point");
           await expect(marks.first()).toBeVisible();
@@ -181,6 +199,9 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
 
       if (size === "1440")
         test("P-3: every mark's name tag stays inside the plot's top and foot", async ({ page }) => {
+          // protects: at 1440 wide (light and dark, as the owner), hovering each Value / effort mark shows its name tag inside the plot's top and foot, including the mark on the zero line, whose name flips above it
+          // fails_when: a name tag hangs above the plot's top or below its foot
+          // no_claim: the tag's left and right edges (the test above), phone width, or that the name is the right text
           // Alert history export's mark sits on the zero line: its name flips above the mark instead of hanging below the plot.
           await open(page, OWNER, theme, "value-effort");
           const marks = page.getByTestId("vxe-point");
@@ -200,6 +221,9 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
 
       if (size === "390")
         test("P-3: a mark with a very long title shows its name cut with an ellipsis, still inside the plot", async ({ page }) => {
+          // protects: on a phone (390 wide, light and dark, as the owner), after Setup checklist is renamed to a very long name in its panel, its Value / effort mark's tag shows the full name cut with an ellipsis, stays inside the plot's left and right edges, and the page stays 390 px wide
+          // fails_when: the long name wraps or is not cut with an ellipsis, runs off the plot, or widens the page
+          // no_claim: that the rename is kept after a reload (the mock holds it), desktop, or short names
           const long = "Setup checklist for every workspace, every team and every project, in every file format, with a copy sent to each admin by email every week";
           await open(page, OWNER, theme);
           // Rename the feature through its panel (More actions, Rename, Save), then read the chart.
@@ -234,6 +258,9 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
         });
 
       test("V-3: the Compare switch's off knob stands out from its track", async ({ page }) => {
+        // protects: on Priorities (owner, light and dark, 1440 and 390 wide), the "Compare with Oracle" switch starts off, and its knob has a colour contrast of at least 3 to the track both when off and after it is turned on
+        // fails_when: the knob is too close in colour to the track (contrast under 3) in either state, or the switch does not turn on
+        // no_claim: what Compare shows once on, or contrast of anything but the knob and track
         await open(page, OWNER, theme);
         const sw = page.getByRole("switch", { name: "Compare with Oracle" });
         await expect(sw).toHaveAttribute("aria-checked", "false");
@@ -247,6 +274,9 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
 
       if (size === "1440")
         test("V-5: the share bar's neighbouring goals have different fills", async ({ page }) => {
+          // protects: at 1440 wide (light and dark, as the owner), on the Goal buckets tab each segment of the share bar has a background colour different from the segment before it
+          // fails_when: two neighbouring goals in the share bar have the same fill
+          // no_claim: that non-neighbouring segments differ, that segment sizes are right, or phone width
           await open(page, OWNER, theme, "buckets");
           const segs = page.getByTestId("bucket-segment");
           await expect(segs.nth(1)).toBeVisible();

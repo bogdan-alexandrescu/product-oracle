@@ -73,6 +73,9 @@ test.describe("R1: a phone's exported chart keeps every quarter label whole", ()
       test.use({ viewport: { width, height: 844 }, hasTouch: true });
 
       test("the exported Waterfall names every quarter, each at its own line", async ({ page }) => {
+        // protects: on a 390 and a 320 wide phone, the PNG and the PDF of the Waterfall draw one whole quarter label (like "Q4 2026") for every quarter, each placed just after its own line
+        // fails_when: a quarter has no label, a label is cut short or off its pattern, or a label is not at its quarter's line
+        // no_claim: how the labels look on the page, other formats, other widths, or that the file opens right in every viewer
         await open(page, { format: "waterfall" });
         const chart = page.locator('[data-testid="simple-chart"][data-format="waterfall"]');
         await expect(chart.getByTestId("axis-tick").first()).toBeVisible();
@@ -111,6 +114,9 @@ test.describe("A phone's Timeline export names every quarter and every track ban
       test.use({ viewport: { width, height: 844 }, hasTouch: true });
 
       test("the PNG and the PDF carry each quarter the page lists, its months, and each band's lane by name", async ({ page }) => {
+        // protects: on a 390 and a 320 wide phone, the Timeline PNG and PDF carry each quarter and its months the page lists, month-first month ticks, and each track lane by name (and Below the line when shown); the PDF is Letter landscape with page numbers, the PNG is a PNG
+        // fails_when: a quarter or its months is missing from the file, a month tick is not month first, a track lane is not named whole, or the file type or page size is wrong
+        // no_claim: how the picture looks beyond these texts, the order of lanes, or other formats and widths
         await open(page, { format: "timeline" });
         await expect(page.getByTestId("timeline-quarter").first()).toBeVisible();
         // What the phone shows: each quarter ("Q4 2026", "Oct – Dec 2026") and the band each row sits in
@@ -164,6 +170,9 @@ test.describe("A phone's Gantt export names each goal lane whole", () => {
   test.use({ viewport: { width: 320, height: 844 }, hasTouch: true });
 
   test("each lane's goal and metric read whole in the PNG and the PDF", async ({ page }) => {
+    // protects: on a 320 wide phone, with the Gantt grouped by goal, every goal lane the page shows (its goal, then its metric) is named whole in the PNG and in the PDF
+    // fails_when: a goal lane's name or metric is cut short or missing in either file
+    // no_claim: the Track grouping, the bars themselves, or other widths
     await open(page, { format: "gantt" });
     // tb-mk: the Gantt groups by Track first; a person picks Group by Goal to get the goal lanes.
     await page.getByTestId("group-goal").click();
@@ -187,6 +196,9 @@ test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test("E-1: the Timeline's export is the zoom shown: its months, window, track bands and dated milestones", async ({ page }) => {
+    // protects: on desktop, the Timeline PNG at 3 months and at 1 year has month-first month ticks (the first with its year), every track band named, milestones that say their day, bar words clear of their bars and header words above Today's line; the two zooms differ
+    // fails_when: month ticks are too few or not month first, a track band is unnamed, a milestone has no day, words sit over a bar or past Today's line, or both zooms export the same picture
+    // no_claim: exact pixel positions, the PDF, or other formats
     await open(page, { format: "timeline" });
     await expect(page.getByTestId("timeline-row").first()).toBeVisible();
     // tb-mk: the bands are tracks (then No track, Below the line): a band's name is its track's
@@ -243,6 +255,9 @@ test.describe("desktop", () => {
   });
 
   test("E-10: an export from a dark page is drawn in the light palette", async ({ page }) => {
+    // protects: with the page in the dark theme, the Gantt PNG's own picture starts on a white page and uses none of four named dark-theme colours
+    // fails_when: the export's first fill is not white, or it carries any of those four dark colours
+    // no_claim: that every colour in the file is right, the PDF, or the light theme page itself
     await open(page, { theme: "dark", format: "gantt" });
     await expect(page.getByTestId("chart-svg")).toBeVisible();
     const { svg } = await exported(page, "PNG");
@@ -256,6 +271,9 @@ test.describe("desktop", () => {
   });
 
   test("E-5: a cut row's export keeps its name and its note", async ({ page }) => {
+    // protects: on desktop, a Gantt row shown with a place in the return queue exports in the PNG as one text of its title, then " · ", then its note
+    // fails_when: the exported picture drops the row's note or its name, or joins them another way
+    // no_claim: the Board's cards, the PDF, or rows with no note
     await open(page, { format: "gantt" });
     const row = page.locator('[data-testid="chart-labels"] > *').filter({ has: page.getByTestId("return-place") }).first();
     await expect(row).toBeVisible();
@@ -267,6 +285,9 @@ test.describe("desktop", () => {
   });
 
   test("a cut card in the Now / Next / Later export keeps its place in the return queue", async ({ page }) => {
+    // protects: on desktop, a cut card the Gantt shows with a return place is exported from the Board as its title text followed at once by a text ending in " · " and that place
+    // fails_when: the card is missing from the Board's PNG, or the text after its title does not end with its place
+    // no_claim: the Gantt export of the same row, the PDF, or the card's column
     await open(page, { format: "gantt" });
     const row = page.locator('[data-testid="chart-labels"] > *').filter({ has: page.getByTestId("return-place") }).first();
     await expect(row).toBeVisible();
@@ -282,6 +303,9 @@ test.describe("desktop", () => {
   });
 
   test("the Board's and the Gantt's PDF keep their words as text, to select and search", async ({ page }) => {
+    // protects: on desktop, the Board's PDF and the Gantt's PDF carry each shown card, column and row name (plain letters only) as a set word in the file (the first 12 letters), with the invisible text mode on
+    // fails_when: a name the page shows is only pixels in the file, or the invisible text layer is missing
+    // no_claim: names with symbols, the words past their first 12 letters, or the PNG
     // The PDF is the page's picture with its words laid over it as invisible text (3 Tr): each
     // card's or row's name is a word set in the file, not only pixels.
     const ascii = (names: string[]) => names.map((t) => t.trim()).filter((t) => /^[ -~]+$/.test(t) && !/[()\\]/.test(t));
@@ -305,6 +329,9 @@ test.describe("desktop", () => {
   });
 
   test("E-3: the Gantt's week axis names the year on its first tick and each January, page and export", async ({ page }) => {
+    // protects: on desktop, with the Gantt on its week unit, the year is named on the axis's first tick and on the first tick of each new year, both on the page and in the exported PNG
+    // fails_when: a year label is missing, extra, or on the wrong tick, on the page or in the file, or the span does not cross a year
+    // no_claim: other units, the label's look, or the PDF
     await open(page, { format: "gantt" });
     await page.getByTestId("unit-week").click();
     const chart = page.getByTestId("chart-svg");
@@ -327,6 +354,9 @@ test.describe("desktop", () => {
   });
 
   test("E-4: the Gantt's day scale names the month over its first column and each 1st", async ({ page }) => {
+    // protects: on desktop, with the Gantt on its day unit, the page's axis names the month over its first column and over each 1st, with the year on the first and on each January
+    // fails_when: a month label is missing, extra, or on the wrong column, or the year is missing where it belongs
+    // no_claim: the export file, other units, or the label's look
     await open(page, { format: "gantt" });
     await page.getByTestId("unit-day").click();
     const chart = page.getByTestId("chart-svg");
@@ -342,6 +372,9 @@ test.describe("desktop", () => {
   });
 
   test("E-17: the Waterfall's quarters read one way: the year in full on the first and each Q1", async ({ page }) => {
+    // protects: on desktop, the Waterfall's quarter ticks on the page read the year in full on the first tick and on each Q1, and a short year (like "Q2 '27") on the others
+    // fails_when: a tick shows the year in the wrong form, or there are 4 ticks or fewer
+    // no_claim: the export file, the phone view, or that the quarters are the right ones
     await open(page, { format: "waterfall" });
     const ticks = await page.getByTestId("chart-svg").getByTestId("axis-tick").allTextContents();
     expect(ticks.length).toBeGreaterThan(4);
@@ -349,6 +382,9 @@ test.describe("desktop", () => {
   });
 
   test("E-16: a feature that runs reads Exists, with the day it was checked, never 'proof old'", async ({ page }) => {
+    // protects: on desktop, a Gantt row marked as a feature that runs reads "Exists", optionally with "checked" and a month-first day, and the labels never say "proof old"
+    // fails_when: the mark has another text, the day is not month first, or "proof old" shows
+    // no_claim: marks of other states, the export file, or that the check day is the right one
     await open(page, { format: "gantt" });
     const old = page.locator('[data-testid="chart-labels"] [data-testid="cs-mark"][data-mark="exists_old"]').first();
     await expect(old).toBeVisible();
@@ -362,6 +398,9 @@ test.describe("500 items", () => {
   test.setTimeout(180_000);
 
   test("E-2 / E-7: the PDF is Letter pages with page numbers, Flate not JPEG; the PNG says it is busy and saves", async ({ page }) => {
+    // protects: with 500 items on desktop, the Gantt PNG shows Exporting while it draws and saves as roadmap-gantt.png; the PDF has several Letter pages, Flate not JPEG, "Page 1 of N" to "Page N of N" with the footer at the right margin; the day scale says it would take over 200 pages and to filter
+    // fails_when: no busy state, a wrong file name, one page, wrong page size or image coding, a wrong page count or footer place, or the day scale tries to export or shows no message
+    // no_claim: how fast it runs, the picture's look, or sizes with fewer items
     await open(page, { scenario: "simple-500", format: "gantt" });
     await expect(page.getByTestId("chart-svg")).toBeVisible();
     const png = page.getByRole("button", { name: "Export PNG" });

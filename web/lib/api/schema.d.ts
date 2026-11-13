@@ -5127,6 +5127,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/entities/{entity_id}/own-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Use Own Code
+         * @description Use its code (the check's ``code_differs``): a feature keyed by the next number as it
+         *     was confirmed gets its own code (its Code attribute, else its roadmap item's or PRD
+         *     feature's); the number is given back, never given again. Refused when another feature
+         *     has that code.
+         */
+        post: operations["use_own_code"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/prd-links": {
         parameters: {
             query?: never;
@@ -6763,6 +6786,48 @@ export interface paths {
         get: operations["get_inbox"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/inbox/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Inbox Counts
+         * @description The Inbox's counts alone (the rails' badges): ``total`` as GET /v1/inbox's, and the
+         *     part of it the Simple Roadmap tab counts too; the rows shown only are not read.
+         */
+        get: operations["get_inbox_counts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/inbox/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Inbox Seen
+         * @description Record this visit as my last one (what 'new' is measured from next time), as GET
+         *     /v1/inbox?mark_seen=true does, without reading the Inbox.
+         */
+        post: operations["mark_inbox_seen"];
         delete?: never;
         options?: never;
         head?: never;
@@ -19653,6 +19718,25 @@ export interface components {
             /** Items */
             items: components["schemas"]["ChatSummaryOut"][];
         };
+        /**
+         * ChatLiveReadOut
+         * @description A live read of the asker's source an answer used (#710's live citation): its chip.
+         */
+        ChatLiveReadOut: {
+            /** Ref */
+            ref: string;
+            /** Source */
+            source: string;
+            /** Call */
+            call: string;
+            /**
+             * Read At
+             * Format: date-time
+             */
+            read_at: string;
+            /** Item Id */
+            item_id?: string | null;
+        };
         /** ChatMessageOut */
         ChatMessageOut: {
             /**
@@ -19698,6 +19782,8 @@ export interface components {
             source?: string | null;
             /** Links */
             links?: components["schemas"]["ChatLinkOut"][];
+            /** Live Reads */
+            live_reads?: components["schemas"]["ChatLiveReadOut"][];
         };
         /** ChatModeIn */
         ChatModeIn: {
@@ -26985,7 +27071,7 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "add_to_ground_truth" | "link_to_feature" | "confirm_feature" | "give_code" | "pick_goal" | "take_off_roadmap";
+            action: "add_to_ground_truth" | "link_to_feature" | "confirm_feature" | "give_code" | "use_code" | "pick_goal" | "take_off_roadmap";
             /** Target */
             target: string;
             /** Words */
@@ -27017,7 +27103,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "unlinked_item" | "slice_parent_missing" | "prd_feature_missing" | "no_code" | "no_goal" | "runs_today_on_roadmap";
+            kind: "unlinked_item" | "slice_parent_missing" | "prd_feature_missing" | "no_code" | "code_differs" | "no_goal" | "runs_today_on_roadmap";
             item?: components["schemas"]["GroundTruthRef"] | null;
             feature?: components["schemas"]["GroundTruthRef"] | null;
             goal?: components["schemas"]["GroundTruthRef"] | null;
@@ -27772,6 +27858,16 @@ export interface components {
              * @default 0
              */
             done: number;
+        };
+        /**
+         * InboxCountsOut
+         * @description The Inbox's counts alone (inbox-reads), for the rails' badges.
+         */
+        InboxCountsOut: {
+            /** Total */
+            total: number;
+            /** Roadmap */
+            roadmap: number;
         };
         /**
          * InboxDateBasis
@@ -61038,6 +61134,37 @@ export interface operations {
             };
         };
     };
+    use_own_code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroundTruthFixOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     link_prd_feature: {
         parameters: {
             query?: never;
@@ -64609,6 +64736,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_inbox_counts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxCountsOut"];
+                };
+            };
+        };
+    };
+    mark_inbox_seen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

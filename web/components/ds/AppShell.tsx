@@ -474,7 +474,8 @@ function RailLink({ d, pathname, home, badge }: { d: Dest; pathname: string; hom
       className={`relative flex w-[70px] flex-none flex-col items-center gap-0.5 rounded-[10px] pt-[7px] pb-1.5 text-[13px] leading-4 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${RAIL_SELECTED}`}
     >
       <Icon name={d.icon} stroke={1.7} />
-      {d.label}
+      {/* A two-word label ("Ground Truth") wraps in the 70 px item: each line centered under the icon. */}
+      <span className="max-w-full text-center">{d.label}</span>
       {badge !== undefined && <Badge n={badge} testId={`${d.testId}-badge`} />}
     </Link>
   );
@@ -828,33 +829,8 @@ function PhoneHeader() {
   const home = documentHome ?? changeHome;
   const where = drawn ? ([...DESTINATIONS, SETTINGS].find((d) => isActive(pathname, d, home))?.label ?? null) : null;
   const info = usePageInfo();
-  const [ask, setAsk] = useState(false);
-  // A goal's "Suggest from the chat" opens the Ask sheet with its words typed in.
-  const typedIn = useAskDraft();
-  useEffect(() => {
-    // The words arrive from outside React (the drawer's link); a phone opens its sheet for them.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (typedIn && window.matchMedia("(max-width: 600px)").matches) setAsk(true);
-  }, [typedIn]);
-  const [askPath, setAskPath] = useState(pathname);
-  if (askPath !== pathname) {
-    setAskPath(pathname);
-    setAsk(false);
-  }
+  const [askButton, askSheet] = usePhoneAsk();
   if (bare(pathname)) return null;
-  // Simple's Ask sheet (the owner's pick C): the whole screen over the header and the tab bar,
-  // with the panel's own head (Ask Oracle, New chat, close). Both modes' sheets sit outside the
-  // sticky header, whose stacking would put them under the tab bar (qa4-shell-1).
-  const simple = pathname.startsWith("/simple");
-  const sheet = simple ? (
-    <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} bare>
-      <HopPanel onClose={() => setAsk(false)} mark={false} />
-    </Sheet>
-  ) : (
-    <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} full>
-      <HopPanel showHeader={false} />
-    </Sheet>
-  );
   return (
     <>
     <header
@@ -879,24 +855,62 @@ function PhoneHeader() {
           </span>
         )}
       </span>
-      {me && !panelHidden(pathname) && (
-        <button
-          type="button"
-          data-testid="phone-ask"
-          aria-label="Ask Oracle"
-          aria-expanded={ask}
-          onClick={() => setAsk(true)}
-          className="flex h-9 flex-none items-center gap-1 rounded-lg px-2 text-[15px] font-semibold text-rail-active-text hover:bg-rail-hover"
-        >
-          <Icon name="ask" size={20} />
-          Ask
-        </button>
-      )}
+      {me && !panelHidden(pathname) && askButton}
       {me && <UserMenu placement="header" />}
     </header>
-    {sheet}
+    {askSheet}
     </>
   );
+}
+
+/**
+ * The phone header's Ask button and the Ask sheet it opens, placed apart (the sheet outside the
+ * header). `meeting`: the same button in a meeting screen's header, which covers the app's header
+ * on a phone (#1016): shown on a phone only, and it leaves a goal's typed-in words to the
+ * header's own button.
+ */
+export function usePhoneAsk(meeting = false): [button: ReactNode, sheet: ReactNode] {
+  const pathname = usePathname();
+  const [ask, setAsk] = useState(false);
+  // A goal's "Suggest from the chat" opens the Ask sheet with its words typed in.
+  const typedIn = useAskDraft();
+  useEffect(() => {
+    // The words arrive from outside React (the drawer's link); a phone opens its sheet for them.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!meeting && typedIn && window.matchMedia("(max-width: 600px)").matches) setAsk(true);
+  }, [typedIn, meeting]);
+  const [askPath, setAskPath] = useState(pathname);
+  if (askPath !== pathname) {
+    setAskPath(pathname);
+    setAsk(false);
+  }
+  // Simple's Ask sheet (the owner's pick C): the whole screen over the header and the tab bar,
+  // with the panel's own head (Ask Oracle, New chat, close). Both modes' sheets sit outside the
+  // sticky header, whose stacking would put them under the tab bar (qa4-shell-1).
+  const simple = pathname.startsWith("/simple");
+  const sheet = simple ? (
+    <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} bare>
+      <HopPanel onClose={() => setAsk(false)} mark={false} />
+    </Sheet>
+  ) : (
+    <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} full>
+      <HopPanel showHeader={false} />
+    </Sheet>
+  );
+  const button = (
+    <button
+      type="button"
+      data-testid={meeting ? "meeting-phone-ask" : "phone-ask"}
+      aria-label="Ask Oracle"
+      aria-expanded={ask}
+      onClick={() => setAsk(true)}
+      className={`${meeting ? "hidden max-[600px]:flex" : "flex"} h-9 flex-none items-center gap-1 rounded-lg px-2 text-[15px] font-semibold text-rail-active-text hover:bg-rail-hover`}
+    >
+      <Icon name="ask" size={20} />
+      Ask
+    </button>
+  );
+  return [button, sheet];
 }
 
 /** Where the head-of-product panel never shows (G7 3.2): sign-in, consent, present mode, the design page. */
