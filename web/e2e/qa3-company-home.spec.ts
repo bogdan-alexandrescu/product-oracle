@@ -148,7 +148,7 @@ test.describe("on a phone", () => {
     await openHome(page);
     const footer = page.getByTestId("home-needs-footer");
     const link = footer.getByTestId("home-needs-more");
-    await expect(link).toHaveText("+22 more in Inbox");
+    await expect(link).toHaveText("+5 more in Inbox");
     await expect(footer).not.toContainText("More");
     const [icon, text] = await footer.evaluate((el) =>
       [el.querySelector("svg")!, el.querySelector("a")!].map((n) => {

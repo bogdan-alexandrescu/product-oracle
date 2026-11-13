@@ -156,15 +156,15 @@ test("Questions asked of me: rail badge, Home and the Inbox count the same", asy
   await openHome(page);
   const badge = page.getByTestId("nav-inbox-badge");
   await expect(page.getByTestId("home-needs").getByText("Questions 2")).toBeVisible();
-  // 28: the seed's 10, Oracle's 17 dates (made with the seed) and the pending access request (A5, #203 part 3).
-  await expect(page.getByText("28 waiting")).toBeVisible();
-  await expect(badge).toHaveText("28");
-  await expect(page.getByTestId("home-needs").getByTestId("panel-count")).toHaveText("28");
+  // 11: the seed's 10 and the pending access request (A5, #203 part 3).
+  await expect(page.getByText("11 waiting")).toBeVisible();
+  await expect(badge).toHaveText("11");
+  await expect(page.getByTestId("home-needs").getByTestId("panel-count")).toHaveText("11");
 
   await page.getByTestId("nav-inbox").click();
   await expect(page).toHaveURL(/\/inbox$/);
   // Next keeps Home mounted but hidden: only the visible page counts.
-  await expect(page.getByText("28 waiting").filter({ visible: true })).toBeVisible();
+  await expect(page.getByText("11 waiting").filter({ visible: true })).toBeVisible();
   const questions = page.getByTestId("inbox-questions");
   // The seed asks me two: a v2 question and the deposits PRD's blocker question.
   await expect(questions.locator("tr[data-row]")).toHaveCount(2);
@@ -174,9 +174,9 @@ test("Questions asked of me: rail badge, Home and the Inbox count the same", asy
   await expect(row).toContainText("Oracle asks");
   await expect(row.getByRole("link", { name: "Open PRD in review · Checkout redesign PRD" })).toHaveAttribute("href", /^\/intakes\/[0-9a-f-]+$/);
   // A first visit: all eleven under New, the questions with them.
-  await expect(page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^New/ })).toHaveText("New28");
+  await expect(page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^New/ })).toHaveText("New11");
   await expect(page.getByTestId("inbox-tab-new").getByTestId("inbox-questions")).toBeVisible();
-  await expect(badge).toHaveText("28");
+  await expect(badge).toHaveText("11");
 });
 
 test("A Simple proposal waiting on me: rail badge, Home and the Inbox count the same", async ({ page }) => {
@@ -184,7 +184,7 @@ test("A Simple proposal waiting on me: rail badge, Home and the Inbox count the 
   await openHome(page, "inbox-reviewer");
   const badge = page.getByTestId("nav-inbox-badge");
   const needs = page.getByTestId("home-needs");
-  await expect(needs.getByTestId("home-count-proposals")).toHaveText(/Proposals\s*19/);
+  await expect(needs.getByTestId("home-count-proposals")).toHaveText(/Proposals\s*2/);
   await expect(badge).toHaveText(/^\d+$/);
   const waiting = (await badge.textContent())!.trim();
   await expect(page.getByText(`${waiting} waiting`)).toBeVisible();
@@ -207,13 +207,13 @@ test("A Simple proposal waiting on me: rail badge, Home and the Inbox count the 
 test("the Proposals chip opens the Inbox on proposals only", async ({ page }) => {
   await openHome(page, "inbox-reviewer");
   const proposals = page.getByTestId("home-needs").getByTestId("home-count-proposals");
-  await expect(proposals).toHaveText(/Proposals\s*19/);
+  await expect(proposals).toHaveText(/Proposals\s*2/);
   await proposals.click();
   await expect(page).toHaveURL(/\/inbox\?kind=proposals$/);
   await expect(page.getByTestId("inbox-kind")).toContainText("Proposals");
   await expect(page.getByRole("row").filter({ hasText: "Bulk export" }).filter({ hasText: "asked for by" })).toHaveCount(1);
   await expect(page.getByTestId("inbox-checkpoints")).toHaveCount(0);
-  await expect(page.getByText(/^\d+ waiting$/).filter({ visible: true })).toHaveText("19 waiting");
+  await expect(page.getByText(/^\d+ waiting$/).filter({ visible: true })).toHaveText("2 waiting");
 });
 
 test("Questions asked of me: Home shows one with 7 or more inbox items, and only mine", async ({ page }) => {
@@ -239,14 +239,14 @@ test("Questions asked of me: Home shows one with 7 or more inbox items, and only
 test("Questions asked of me: the badge re-reads after an action on Home", async ({ page }) => {
   await openHome(page);
   const badge = page.getByTestId("nav-inbox-badge");
-  // The seed's 10, Oracle's 17 dates (made with the seed) and the pending access request (A5).
-  await expect(badge).toHaveText("28");
+  // The seed's 10 and the pending access request (A5).
+  await expect(badge).toHaveText("11");
   const rows = page.getByTestId("home-needs-table").locator("tr[data-row]");
   await rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Approve $53.00" }).click();
   // No navigation: the badge follows Home.
-  await expect(page.getByText("27 waiting")).toBeVisible();
-  await expect(badge).toHaveText("27");
+  await expect(page.getByText("10 waiting")).toBeVisible();
+  await expect(badge).toHaveText("10");
   await expect(page).toHaveURL(/\/home$/);
 });
 
@@ -262,11 +262,11 @@ test("Home reloads the questions asked of me after an action", async ({ page }) 
   const rows = page.getByTestId("home-needs-table").locator("tr[data-row]");
   await rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Approve $53.00" }).click();
-  // 28 items (Oracle's 17 dates and the pending access request among them, A5): six lines show one question; the
+  // 11 items (the pending access request among them, A5): six lines show one question; the
   // count chips and the badge read the new one.
   await expect(page.getByTestId("home-needs").getByText("Questions 3")).toBeVisible();
-  await expect(page.getByTestId("home-needs").getByTestId("panel-count")).toHaveText("28");
-  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("28");
+  await expect(page.getByTestId("home-needs").getByTestId("panel-count")).toHaveText("11");
+  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("11");
   await page.goto("/inbox");
   await expect(page.getByTestId("inbox-questions").locator("tr[data-row]").filter({ hasText: "Which plan do pilots get?" })).toHaveCount(1);
 });
@@ -276,10 +276,10 @@ test("Questions asked of me: a failing call shows the block's error, never an em
   await openHome(page);
   const needs = page.getByTestId("home-needs");
   await expect(needs.getByTestId("home-questions-error")).toContainText("Mock failure");
-  // The inbox rows still show: 26 items (Oracle's 17 dates and the pending access request among them, A5), six
+  // The inbox rows still show: 9 items (the pending access request among them, A5), six
   // lines and '+3 more in Inbox' under them.
   await expect(needs.getByTestId("home-needs-table").locator("tr[data-row]")).toHaveCount(6);
-  await expect(needs.getByTestId("home-needs-more")).toHaveText("+20 more in Inbox");
+  await expect(needs.getByTestId("home-needs-more")).toHaveText("+3 more in Inbox");
   await page.goto("/inbox");
   await expect(page.getByTestId("inbox-questions-error")).toContainText("Mock failure");
 });
