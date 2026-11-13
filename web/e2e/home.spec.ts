@@ -36,10 +36,10 @@ test("Home: needs you lists the inbox and the questions asked of me, one action 
   await openHome(page);
   const needs = page.getByTestId("home-needs");
   const rows = needs.getByTestId("home-needs-table").locator("tr[data-row]");
-  // 11 items (the pending access request among them, A5): six lines (one a question) and
-  // '+5 more in Inbox' under them (qa-company-12: a footer, not a line).
+  // 28 items (Oracle's 17 dates, made with the seed, and the pending access request among them, A5): six
+  // lines (one a question) and '+22 more in Inbox' under them (qa-company-12: a footer, not a line).
   await expect(rows).toHaveCount(6);
-  await expect(needs.getByTestId("home-needs-more")).toHaveText("+5 more in Inbox");
+  await expect(needs.getByTestId("home-needs-more")).toHaveText("+22 more in Inbox");
   // B2: a Ground Truth checkpoint is reviewed in the Ground Truth, filtered to its run.
   await expect(rows.filter({ hasText: "Confirm the Ground Truth" }).getByRole("link", { name: "Review" })).toHaveAttribute("href", /^\/ground-truth\?run=/);
   await expect(rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" })).toBeVisible();
@@ -50,15 +50,15 @@ test("Home: needs you lists the inbox and the questions asked of me, one action 
   await expect(needs.getByText("Reviews 5")).toBeVisible();
   await expect(needs.getByText("Questions 2")).toBeVisible();
   await expect(needs.getByText("Access 1")).toBeVisible();
-  await expect(page.getByText("11 waiting")).toBeVisible();
+  await expect(page.getByText("28 waiting")).toBeVisible();
 
   // Approving from Home starts the run: the line leaves the list (the next item moves up).
   await rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Approve $53.00" }).click();
   await expect(rows.filter({ hasText: "$53.00 est." })).toHaveCount(0);
-  await expect(needs.getByTestId("home-needs-more")).toHaveText("+4 more in Inbox");
+  await expect(needs.getByTestId("home-needs-more")).toHaveText("+21 more in Inbox");
   await expect(rows).toHaveCount(6);
-  await expect(page.getByText("10 waiting")).toBeVisible();
+  await expect(page.getByText("27 waiting")).toBeVisible();
 
   await needs.getByTestId("home-inbox-link").click();
   await expect(page).toHaveURL(/\/inbox$/);

@@ -126,8 +126,8 @@ test("inbox: a decision not delivered yet shows under its own heading, uncounted
   await page.addInitScript((key) => localStorage.setItem(key, "undelivered"), MOCK_SCENARIO_KEY);
   await login(page);
   const badge = page.getByTestId("nav-inbox-badge");
-  // The seed's 10 and the pending access request (A5, #203 part 3).
-  await expect(badge).toHaveText("11");
+  // The seed's 10, Oracle's 17 dates (made with the seed) and the pending access request (A5, #203 part 3).
+  await expect(badge).toHaveText("28");
   await page.goto("/runs");
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
@@ -136,8 +136,8 @@ test("inbox: a decision not delivered yet shows under its own heading, uncounted
 
   await page.goto("/inbox");
   // The checkpoint is decided (one fewer to do); the delivery is not counted.
-  await expect(badge).toHaveText("10");
-  await expect(page.getByText("10 waiting").filter({ visible: true })).toBeVisible();
+  await expect(badge).toHaveText("27");
+  await expect(page.getByText("27 waiting").filter({ visible: true })).toBeVisible();
   await expect(page.getByTestId("inbox-checkpoints")).toHaveCount(0);
   // Shown only, under Open, with a heading saying what it is.
   await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();
