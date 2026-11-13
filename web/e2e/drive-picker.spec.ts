@@ -242,6 +242,7 @@ test("connections › Google: a drive.readonly grant needs no reconnect; a drive
   await page.goto("/settings/connections");
   await disconnectAll(page, "google");
   const google = page.getByTestId("connection-card-google");
+  await google.getByRole("button", { name: "Connect", exact: true }).click();
   await google.getByRole("button", { name: "Paste a token" }).click();
   await google.getByLabel("Token", { exact: true }).fill("legacy-google-token");
   await google.getByRole("button", { name: "Connect", exact: true }).click();

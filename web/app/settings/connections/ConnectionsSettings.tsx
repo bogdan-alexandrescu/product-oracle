@@ -136,7 +136,9 @@ function ProviderCard({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [pasting, setPasting] = useState(false);
+  // Adding an account: a provider with sign-in first offers the choice of signing in or a
+  // token; a token-only provider opens the token form at once (detailed-b 9).
+  const [adding, setAdding] = useState<"choice" | "token" | null>(null);
 
   async function signIn() {
     setPending(true);
@@ -180,21 +182,31 @@ function ProviderCard({
           ))}
         </ul>
       )}
-      {pasting && <TokenForm provider={provider} reload={reload} close={() => setPasting(false)} />}
-      <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5">
-        {provider.oauth_configured && (
+      {adding === "token" && <TokenForm provider={provider} reload={reload} close={() => setAdding(null)} />}
+      {adding === "choice" && (
+        <div
+          role="group"
+          aria-label={`Add a ${provider.name} account`}
+          className="flex flex-wrap items-center gap-2 border-t border-line bg-surface2 px-4 py-3 max-[600px]:px-3"
+        >
           <Button variant="solid" icon="link" onClick={signIn} disabled={pending}>
-            Connect with {provider.name}
+            Sign in with {provider.name}
           </Button>
-        )}
-        {!pasting && (
-          // With an account already here, its row's Reconnect is the one way to renew it;
-          // this adds another account (qa-onboarding-22).
-          <Button onClick={() => setPasting(true)}>
-            {connections.length ? "Add another account" : "Paste a token"}
+          <Button onClick={() => setAdding("token")}>Paste a token</Button>
+          <Button variant="ghost" onClick={() => setAdding(null)}>
+            Cancel
           </Button>
-        )}
-      </div>
+        </div>
+      )}
+      {!adding && (
+        // One entry per provider: with an account already here, its row's Reconnect is the one
+        // way to renew it; this adds another account (qa-onboarding-22).
+        <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5">
+          <Button onClick={() => setAdding(provider.oauth_configured ? "choice" : "token")}>
+            {connections.length ? "Add another account" : provider.oauth_configured ? "Connect" : "Paste a token"}
+          </Button>
+        </div>
+      )}
       {error && (
         <div className="px-4 pb-3">
           <Notice tone="error">{error}</Notice>

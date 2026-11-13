@@ -18,9 +18,12 @@ test("connections: a card per data provider, and Claude is not one of them", asy
   await expect(page.getByTestId("connection-card-claude")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Claude accounts" }).first()).toBeVisible();
 
-  // OAuth only where a client is configured (GitHub and Google in mock mode).
-  await expect(page.getByTestId("connection-card-github").getByRole("button", { name: "Connect with GitHub" })).toBeVisible();
-  await expect(page.getByTestId("connection-card-slack").getByRole("button", { name: /^Connect with/ })).toHaveCount(0);
+  // OAuth only where a client is configured (GitHub and Google in mock mode): one entry per card,
+  // offering sign-in beside a token only there (detailed-b 9).
+  await page.getByTestId("connection-card-github").getByRole("button", { name: "Add another account" }).click();
+  await expect(page.getByTestId("connection-card-github").getByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
+  await page.getByTestId("connection-card-slack").getByRole("button", { name: "Add another account" }).click();
+  await expect(page.getByTestId("connection-card-slack").getByRole("button", { name: /^Sign in with/ })).toHaveCount(0);
   await expect(page.getByTestId("connection-card-slack")).toContainText("never direct messages");
 });
 
@@ -40,7 +43,8 @@ test("connections: paste a token, reconnect, and sign in with OAuth", async ({ p
   await slack.getByRole("button", { name: "Reconnect" }).click();
   await expect(slack.getByText("Connected")).toBeVisible();
 
-  await page.getByTestId("connection-card-github").getByRole("button", { name: "Connect with GitHub" }).click();
+  await page.getByTestId("connection-card-github").getByRole("button", { name: "Add another account" }).click();
+  await page.getByTestId("connection-card-github").getByRole("button", { name: "Sign in with GitHub" }).click();
   await expect(page).toHaveURL(/connected=github/);
   await expect(page.getByRole("status")).toContainText("GitHub is connected.");
   const github = page.getByTestId("connection-card-github");
