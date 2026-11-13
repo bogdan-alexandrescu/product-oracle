@@ -146,7 +146,7 @@ test.describe("desktop", () => {
   test("qa-21: a proposal names its decider and where it shows", async ({ page }) => {
     await open(page, "commenter@example.com");
     await nudge(page, "alert-export");
-    const t = toastWith(page, /Moved 'F-88 Alert history export'.*proposed/);
+    const t = toastWith(page, /Moved 'Alert history export'.*proposed/);
     await expect(t).toBeVisible();
     await expect(t).toContainText("in Needs a decision");
     await expect(t).not.toContainText("the decider");

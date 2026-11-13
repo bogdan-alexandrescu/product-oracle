@@ -73,8 +73,8 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
     await expect(toast(page, "Moved Sample data import (F-12) to rank 2")).toBeVisible();
     await expect(row(page, "setup-import").getByTestId("prio-rank")).toHaveText("2");
 
-    await dragRow(page, "Alert routing by team (F-89)", 5);
-    const refused = page.getByRole("dialog", { name: "Why move Alert routing by team (F-89)" });
+    await dragRow(page, "Alert routing by team", 5);
+    const refused = page.getByRole("dialog", { name: "Why move Alert routing by team" });
     await expect(refused).toContainText("Can't go above Alert history export, which it needs.");
     await expect(refused.getByRole("button", { name: "Move", exact: true })).toHaveCount(0);
     await refused.getByRole("button", { name: "Close" }).click();
@@ -178,7 +178,7 @@ test.describe("QA pass 2: simple-plan, Value / effort", () => {
     await setUp(page);
     await open(page, "?tab=value-effort");
     const am = page.locator('[data-testid="vxe-point"][data-code="alert-mobile"]');
-    await expect(am).toHaveAttribute("aria-label", /^#\d+ Mobile alert push \(F-87\): goal value/);
+    await expect(am).toHaveAttribute("aria-label", /^#\d+ Mobile alert push: goal value/);
     await expect(page.getByRole("list", { name: "Legend" })).not.toContainText("PRD");
     // QA pass 3 (qa-simple-plan-13): marks sit at their real effort, even on a median line; the legend says how they count.
     await expect(page.locator("#prio-about-text")).toContainText("A mark on a middle line counts on the side its rank puts it.");
@@ -187,7 +187,7 @@ test.describe("QA pass 2: simple-plan, Value / effort", () => {
     await page.mouse.down();
     await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2, { steps: 8 });
     await page.mouse.up();
-    await expect(toast(page, /^Re-estimated Mobile alert push \(F-87\): effort/)).toBeVisible();
+    await expect(toast(page, /^Re-estimated Mobile alert push: effort/)).toBeVisible();
     const side = page.locator('[data-testid="side-row"][data-code="alert-mobile"]');
     await expect(side.getByTestId("moved")).toHaveText(/^now #\d+ \(effort [\d.]+ weeks?\)$/);
     await expect(side.getByTestId("prio-title")).toHaveText("Mobile alert push");
