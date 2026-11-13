@@ -89,7 +89,7 @@ for (const [where, use] of [
       await card(page, "alert-sso").scrollIntoViewIfNeeded();
       await card(page, "alert-sso").focus();
       await page.keyboard.press("ArrowLeft");
-      await expect(page.getByText("Moved 'Alert routing by team' to Next in your working draft")).toBeVisible();
+      await expect(page.getByText("Moved 'F-89 Alert routing by team' to Next in your working draft")).toBeVisible();
       await expect(column(page, "next").locator('[data-item="alert-sso"]')).toBeVisible();
       await expect(column(page, "next").locator("header")).toContainText("Jan 1 – Mar 31");
       await expect(card(page, "alert-sso").getByTestId("board-dates")).toContainText("Jan");

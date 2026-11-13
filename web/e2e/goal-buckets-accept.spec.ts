@@ -93,7 +93,7 @@ test("with no dated plan, a bucket for one of the roadmap's own goals takes new 
   await expect(note).toContainText("Added Saved wishlists to Grow retention.");
   await expect(retention.getByTestId("plan-feature").filter({ hasText: "Saved wishlists" })).toContainText("Draft");
 
-  const row = retention.locator('[data-code="ARE"]');
+  const row = retention.locator('[data-code="F-86"]');
   const grip = row.getByTestId("feature-grip");
   const name = ((await grip.getAttribute("aria-label")) ?? "").replace(/^Move (.*) to another goal$/, "$1");
   expect(name).not.toBe("");
@@ -110,8 +110,8 @@ test("with no dated plan, a bucket for one of the roadmap's own goals takes new 
   await expect(card("Growth")).toHaveAttribute("data-drop", "");
   await page.keyboard.press("Enter");
   await expect(note).toContainText(`Moved ${name} to Growth.`);
-  await expect(card("Growth").locator('[data-code="ARE"]')).toBeVisible();
-  await expect(retention.locator('[data-code="ARE"]')).toHaveCount(0);
+  await expect(card("Growth").locator('[data-code="F-86"]')).toBeVisible();
+  await expect(retention.locator('[data-code="F-86"]')).toHaveCount(0);
   await note.getByRole("button", { name: "Undo" }).click();
-  await expect(retention.locator('[data-code="ARE"]')).toBeVisible();
+  await expect(retention.locator('[data-code="F-86"]')).toBeVisible();
 });
