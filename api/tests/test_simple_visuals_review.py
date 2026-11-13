@@ -20,6 +20,11 @@ Test cards (protects / fails_when / no_claim):
   meeting's attendees; the Ask panel's person) or the suggestion (whoever reads the goal's
   suggestions), and owners; Revise stays the owners'; fails_when=a non-owner attendee or a
   commenter on a goal's suggestions is told "No such visual"; no_claim=S8/S9's own screens.
+- test_item_visuals_follow_who_reads_the_roadmap: protects=a roadmap card's draft item's and
+  a Priorities row's feature visual (drawn with its roadmap) is read and commented on by
+  whoever reads the roadmap, not only owners; Revise stays who changes the roadmap
+  directly; fails_when=a commenter or viewer who reads the roadmap is told "No such
+  visual"; no_claim=the roadmap's own read rules.
 - test_request_refuses_subjects_simple_cannot_look_up: protects=``/request`` draws only
   subjects Simple can look up (a change, a roadmap feature or draft item): a suggestion,
   a chat card or a one-pager line is drawn with its proposal, so asking for any uuid is
@@ -183,6 +188,30 @@ async def test_card_and_suggestion_visuals_follow_who_reads_them(client):
                 assert r.status_code == 403, (who, kind, key, r.text)
     got = await client.get(f"{URL}/suggestion/{ids['sug']}", headers=ctx.as_("owner"))
     assert got.status_code == 200 and got.json()["can_revise"] is True, got.text
+
+
+async def test_item_visuals_follow_who_reads_the_roadmap(client):
+    ctx = await world(client)
+    _, item = await roadmap_world(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        await visuals.request_visual(s, None, "draft_item", item.id, "A setup checklist")
+        await visuals.request_visual(s, None, "feature", item.id, "A setup checklist")
+        await s.commit()
+    await run_visual_jobs(ctx)
+    for kind in ("draft_item", "feature"):
+        path = f"{URL}/{kind}/{item.id}"
+        for who in ("commenter", "viewer", "owner"):
+            got = await client.get(path, headers=ctx.as_(who))
+            assert got.status_code == 200, (who, kind, got.text)
+            assert got.json()["flow"]["version"] == 1, (who, kind, got.text)
+            assert got.json()["can_revise"] is (who == "owner"), (who, kind)
+            got = await client.get(f"{path}/versions/1", headers=ctx.as_(who))
+            assert got.status_code == 200, (who, kind, got.text)
+        r = await client.post(f"{path}/comments", json={"body": "Show the skip path"},
+                              headers=ctx.as_("commenter"))  # fmt: skip
+        assert r.status_code == 201, (kind, r.text)
+        r = await client.post(f"{path}/revise", json={}, headers=ctx.as_("commenter"))
+        assert r.status_code == 403, (kind, r.text)
 
 
 async def test_request_refuses_subjects_simple_cannot_look_up(client):
