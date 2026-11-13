@@ -60,9 +60,8 @@ test.describe("desktop", () => {
     await expect(digest.getByTestId("tray-item")).toHaveText("F-06 Weekly alert digest");
     await expect(digest.getByTestId("not-in-gt")).toHaveCount(0);
     await expect(digest.getByTestId("flag-reason").filter({ hasText: "after its milestone" })).toContainText(/after its milestone ‘M\d+ Beta’/);
-    // An item with no code is flagged beside its name (now that every broken link's item has
-    // its own code, the uncoded one sits under Other flags instead).
-    const uncoded = tray.locator('[data-testid="tray-broken"], [data-testid="tray-flag"]').filter({ hasNot: page.getByTestId("tray-item").filter({ hasText: /^F-\d+ / }) }).first();
+    // A broken item with no code is flagged beside its name.
+    const uncoded = tray.getByTestId("tray-broken").filter({ hasNot: page.getByTestId("tray-item").filter({ hasText: /^F-\d+ / }) }).first();
     await expect(uncoded.getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
   });
 
@@ -74,7 +73,7 @@ test.describe("desktop", () => {
     await page.getByTestId("format-gantt").click();
     await expect(bar(page, "alert-export")).toBeVisible();
     await drag(page, "alert-export", 90);
-    await expect(toast(page)).toContainText("Moved 'F-88 Alert history export'");
+    await expect(toast(page)).toContainText("Moved 'Alert history export'");
     await inCorner(page);
     await toast(page).getByRole("button", { name: "Undo" }).click();
     await expect(toast(page)).toContainText("Undone");
@@ -89,7 +88,7 @@ test.describe("desktop", () => {
     await page.getByTestId("format-gantt").click();
     await expect(bar(page, "alert-export")).toBeVisible();
     await drag(page, "alert-export", 90);
-    await expect(toast(page)).toContainText("Moved 'F-88 Alert history export'");
+    await expect(toast(page)).toContainText("Moved 'Alert history export'");
     await toast(page).getByRole("button", { name: "Dismiss" }).click();
     await page.getByTestId("draft-banner").getByRole("button", { name: "Undo" }).click();
     await expect(toast(page)).toContainText("Undone");

@@ -6,8 +6,7 @@ import { expect, test, type Page } from "./test";
 /*
  * Visual QA of Simple's Roadmap, Nov 12, 2026: the feature panel (#2, #5, #9, #10) and the Goal
  * map's panel (GM2). Mock data, clock pinned to Oct 22, 2026: Weekly alert digest (F-06) sits under
- * the roadmap's milestone M1 Beta; Alert rules engine has its own code, F-86, from its PRD's section
- * (every feature shows its code with its name, per the Ground Truth rule).
+ * the roadmap's milestone M1 Beta; Alert rules engine has no code.
  */
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
@@ -26,12 +25,12 @@ async function openItem(page: Page, key: string) {
 test.describe("desktop", () => {
   test.use(DESKTOP);
 
-  test("#2: an item's code shows with its name; its tooltip says it comes from its PRD", async ({ page }) => {
+  test("#2: an item with no code reads None · Not in the Ground Truth, with an (i)", async ({ page }) => {
     await openItem(page, "alert-rules");
     const code = panel(page).getByTestId("card-code");
-    await expect(code).toContainText("F-86");
-    await panel(page).getByRole("button", { name: "About this code" }).hover();
-    await expect(page.getByRole("tooltip").filter({ hasText: "It comes from its PRD's section" })).toBeVisible();
+    await expect(code).toContainText("None · Not in the Ground Truth");
+    await panel(page).getByRole("button", { name: "About Not in the Ground Truth" }).hover();
+    await expect(page.getByRole("tooltip").filter({ hasText: "no feature of the Ground Truth" })).toBeVisible();
   });
 
   test("#5: the Milestone field and its picker name the milestone with its code", async ({ page }) => {

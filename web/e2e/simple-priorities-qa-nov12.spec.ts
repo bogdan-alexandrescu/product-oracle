@@ -37,17 +37,15 @@ test.describe("1440 light", () => {
     const coded = row(page, "setup-import");
     await expect(coded.getByTestId("prio-own-key")).toHaveText("F-12");
     await expect(coded.getByTestId("not-in-gt")).toHaveCount(0);
-    // Alert routing by team (alert-sso) is in the Ground Truth now too (F-89): every feature
-    // shows its code with its name, so this row is coded and carries no flag either.
-    const alsoCoded = row(page, "alert-sso");
-    await expect(alsoCoded.getByTestId("prio-own-key")).toHaveText("F-89");
-    await expect(alsoCoded.getByTestId("not-in-gt")).toHaveCount(0);
+    const uncoded = row(page, "alert-sso");
+    await expect(uncoded.getByTestId("prio-own-key")).toHaveCount(0);
+    await expect(uncoded.getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
     await expect(page.getByTestId("prio-row").getByTestId("prio-code")).toHaveCount(0);
   });
 
   test("PR1: Value / effort marks and the side list never show made-up letters", async ({ page }) => {
-    // protects: on Value / effort each mark (or its row in a count) shows only a real code, the side list too
-    // fails_when: a mark, a count's row or a side row shows initials (ARB, SC…)
+    // protects: on Value / effort each mark (or its row in a count) shows only a real code, the side list too, and a feature with no code is flagged in the side list and its mark's name tag
+    // fails_when: a mark, a count's row or a side row shows initials (ARB, SC…), or the uncoded feature has no flag
     // no_claim: where the marks sit
     await open(page, "light", "value-effort");
     await expect(page.getByTestId("vxe-point").first()).toBeVisible();
@@ -55,9 +53,10 @@ test.describe("1440 light", () => {
     expect(codes["setup-import"]).toBe("F-12");
     for (const [key, c] of Object.entries(codes)) expect(c === null || REAL_CODE.test(c), `${key} shows ${c}`).toBe(true);
     await expect(side(page, "setup-import").getByTestId("side-code")).toHaveText("F-12");
-    // Alert routing by team (alert-sso) is in the Ground Truth now too: its code shows with its
-    // name (F-89), so it carries no "Not in the Ground Truth" flag.
-    await expect(side(page, "alert-sso").getByTestId("side-code")).toHaveText("F-89");
+    await expect(side(page, "alert-sso").getByTestId("side-code")).toHaveCount(0);
+    // The side row has no room for the flag: it shows under the row once the row is selected.
+    await side(page, "alert-sso").getByRole("button").first().click();
+    await expect(side(page, "alert-sso").getByTestId("not-in-gt")).toBeVisible();
     for (const t of await page.getByTestId("side-code").allTextContents()) expect(t.trim()).toMatch(REAL_CODE);
   });
 
