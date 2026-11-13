@@ -219,7 +219,7 @@ for (const [where, use] of [
 test("an owner drags a board card to another horizon, with Undo", async ({ page }) => {
   await open(page, "board");
   await dragTo(page, "alert-export", "now");
-  await expect(page.getByText("Moved 'F-88 Alert history export' to Now in your working draft")).toBeVisible();
+  await expect(page.getByText("Moved 'Alert history export' to Now in your working draft")).toBeVisible();
   await expect(column(page, "now").locator('[data-item="alert-export"]')).toBeVisible();
   await expect(page.getByTestId("draft-count")).toHaveText("1");
   await page.getByTestId("draft-banner").getByRole("button", { name: "See changes" }).click();
@@ -239,7 +239,7 @@ test("a commenter's board move is a proposal the owner accepts", async ({ page }
   await page.context().addInitScript((key) => localStorage.setItem(key, "default"), MOCK_SCENARIO_KEY);
   await open(page, "board", "commenter@example.com");
   await dragTo(page, "alert-export", "now");
-  await expect(page.getByText(/^Moved 'F-88 Alert history export' to Now proposed: it waits for .+ in Needs a decision$/)).toBeVisible();
+  await expect(page.getByText(/^Moved 'Alert history export' to Now proposed: it waits for .+ in Needs a decision$/)).toBeVisible();
   await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
   await expect(card(page, "alert-export").getByTestId("board-pending")).toContainText("Proposed by Theo Brandt: move to Now");
   await page.goto("/home");
@@ -276,7 +276,7 @@ test("the keyboard moves a board card between horizons", async ({ page }) => {
   await open(page, "board");
   await card(page, "alert-export").focus();
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByText("Moved 'F-88 Alert history export' to Later in your working draft")).toBeVisible();
+  await expect(page.getByText("Moved 'Alert history export' to Later in your working draft")).toBeVisible();
   await expect(column(page, "later").locator('[data-item="alert-export"]')).toBeVisible();
 });
 
@@ -370,14 +370,14 @@ test.describe("phone", () => {
     const target = (await column(page, "now").locator("header").boundingBox())!;
     await card(page, "setup-video").dispatchEvent("pointermove", { ...ev, clientX: x, clientY: target.y + target.height / 2 });
     await card(page, "setup-video").dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: x, clientY: target.y + target.height / 2 });
-    await expect(page.getByText("Moved 'F-93 Welcome video' to Now in your working draft")).toBeVisible();
+    await expect(page.getByText("Moved 'Welcome video' to Now in your working draft")).toBeVisible();
     await expect(column(page, "now").locator('[data-item="setup-video"]')).toBeVisible();
 
     await card(page, "alert-export").tap();
     const sheet = page.getByTestId("floating-card");
     await expect(sheet.getByTestId("card-horizon")).toBeVisible();
     await sheet.getByTestId("card-horizon").getByRole("button", { name: "Later" }).tap();
-    await expect(page.getByText("Moved 'F-88 Alert history export' to Later in your working draft")).toBeVisible();
+    await expect(page.getByText("Moved 'Alert history export' to Later in your working draft")).toBeVisible();
     await expect(column(page, "later").locator('[data-item="alert-export"]')).toBeVisible();
     await noSidewaysScroll(page);
   });
@@ -410,7 +410,7 @@ test.describe("phone", () => {
   test("a long press drags a board card on a phone", async ({ page }) => {
     await open(page, "board");
     await longPressTo(page, "alert-export", "now");
-    await expect(page.getByText("Moved 'F-88 Alert history export' to Now in your working draft")).toBeVisible();
+    await expect(page.getByText("Moved 'Alert history export' to Now in your working draft")).toBeVisible();
     await expect(column(page, "now").locator('[data-item="alert-export"]')).toBeVisible();
     await noSidewaysScroll(page);
   });
