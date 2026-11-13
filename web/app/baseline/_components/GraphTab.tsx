@@ -928,6 +928,7 @@ function FeatureRow({
           <TitleButton
             entity={feature}
             onOpen={onOpen}
+            name={namedText(named(shownTitle(feature), feature.key))}
             className="line-clamp-2 max-w-full break-words whitespace-normal max-[600px]:font-medium"
           />
           <LockMark entity={feature} meId={meId} />

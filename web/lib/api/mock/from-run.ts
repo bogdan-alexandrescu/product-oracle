@@ -178,7 +178,7 @@ export function baselineReviewOf(s: BaselineState, runId: string, actions: Schem
 export function seedFromRun(s: BaselineState, runId: string, uuid: () => string, ownerId: string) {
   const at = "2026-10-20T16:30:00Z";
   const goal = s.entities.find((e) => e.type === "goal" && e.status === "confirmed")!;
-  const guided = s.entities.find((e) => e.key === "f.guided-setup")!;
+  const guided = s.entities.find((e) => e.key === "F-82")!;
   const cited = s.evidence.find((x) => x.entity_id)!;
   const entity = (type: EntityRow["type"], key: string, title: string, attrs: Record<string, unknown>, extra: Partial<EntityRow> = {}): EntityRow => {
     const row: EntityRow = {

@@ -9,6 +9,7 @@ import { Button, Chip, Inspector, InspectorSection, LinkButton } from "@/compone
 import { free, startPrdHref } from "@/components/RequestsBehind";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { named, namedText } from "@/lib/codes";
 import { formatDate, formatDay, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -112,7 +113,10 @@ export function RequestInspector({
   const offered = request.state === "new" && s && !s.declined_at && suggestedParts(s).length > 0;
   const declined = s?.declined_at ? s : null;
   const features = useQuery("request-features", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "feature" } } })));
-  const featureTitle = (id: string) => (features.data ?? []).find((f) => f.id === id)?.title;
+  const featureTitle = (id: string) => {
+    const f = (features.data ?? []).find((x) => x.id === id);
+    return f ? namedText(named(f.title, f.key)) : undefined;
+  };
   const canEdit = request.origin !== "interview" && !!me?.user_id && request.filed_by === me.user_id;
   // H10: Oracle's decline suggestion; Use this opens the Disqualify form prefilled.
   const decline = request.state === "new" && s && !s.declined_at ? s.decline : null;
@@ -405,7 +409,8 @@ function Links({
   const [themeId, setThemeId] = useState(request.theme?.id ?? "");
   const [featureId, setFeatureId] = useState(request.feature_id ?? "");
   const [documentId, setDocumentId] = useState(request.document?.id ?? "");
-  const featureTitle = features.find((f) => f.id === request.feature_id)?.title;
+  const linked = features.find((f) => f.id === request.feature_id);
+  const featureTitle = linked ? namedText(named(linked.title, linked.key)) : undefined;
 
   if (!canLink) {
     return (
@@ -474,7 +479,7 @@ function Links({
           <option value="">None</option>
           {features.map((f) => (
             <option key={f.id} value={f.id}>
-              {f.title}
+              {namedText(named(f.title, f.key))}
             </option>
           ))}
         </select>
@@ -732,7 +737,7 @@ function Decision({
                     <option value="">{picker.kind === "feature" ? "Pick the feature" : "Pick the stop choice"}</option>
                     {options.map((o) => (
                       <option key={o.id} value={o.id}>
-                        {o.title}
+                        {picker.kind === "feature" ? namedText(named(o.title, o.key)) : o.title}
                       </option>
                     ))}
                   </select>

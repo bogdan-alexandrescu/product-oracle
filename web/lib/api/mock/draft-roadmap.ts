@@ -8,6 +8,7 @@
 import type { Schemas } from "@/lib/api/client";
 import type { DraftRoadmapCheck, DraftRoadmapOut, DraftRoadmapStatus, DraftRoadmapSummary } from "@/lib/api/draft-roadmap";
 
+import { stableUuid } from "./ids";
 import { readableRefusal } from "./refusal";
 import { finishDraftItemsRun, startDraftItemsRun, type RunsDb } from "./runs";
 
@@ -78,6 +79,8 @@ type ItemSeed = {
   confidence: string;
   milestone?: Record<string, unknown> | null;
   depends_on?: string[];
+  /** The Ground Truth feature it is (by code); none: flagged "Not in the Ground Truth". */
+  feature?: { key: string; title: string };
 };
 
 function item(ctx: DraftRoadmapContext, doc: Doc, v: Version, s: ItemSeed, position: number): Item {
@@ -103,7 +106,7 @@ function item(ctx: DraftRoadmapContext, doc: Doc, v: Version, s: ItemSeed, posit
       reconciled_section_hash: null,
     } as Item["prd"],
     track_id: null,
-    feature: null,
+    feature: s.feature ? { id: stableUuid(`draft-feature/${s.feature.key}`), type: "feature", key: s.feature.key, title: s.feature.title, status: "confirmed" } : null,
     requirements: [],
     blockers: [],
     trace: [],
@@ -123,7 +126,7 @@ function checkOf(items: Item[], problems: DraftRoadmapCheck["problems"] = []): D
   return { items: items.length, by_horizon: { now: n("now"), next: n("next"), later: n("later") }, problems };
 }
 
-const CART: ItemSeed = { key: "cart-review", title: "Cart review shows the full price", outcome: "Buyers see the whole price before they start checkout", horizon: "now", section: "s-5-1", rank: 1, confidence: "high", milestone: { name: "Beta" } };
+const CART: ItemSeed = { key: "cart-review", title: "Cart review shows the full price", outcome: "Buyers see the whole price before they start checkout", horizon: "now", section: "s-5-1", rank: 1, confidence: "high", milestone: { name: "Beta" }, feature: { key: "F-41", title: "Cart review shows the full price" } };
 const GUEST: ItemSeed = { key: "guest-checkout", title: "Guest checkout", outcome: "First-time buyers check out without an account", horizon: "next", section: "scope", rank: 3, confidence: "medium" };
 
 /** checkout-redesign v1: four items, no problems. */

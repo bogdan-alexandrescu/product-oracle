@@ -386,28 +386,28 @@ export function seedBaseline(uuid: () => string): BaselineState {
   const console_ = entity("product", "p.admin-console", "Admin console", { body: "Settings, members and billing." });
 
   // Features.
-  const guided = entity("feature", "f.guided-setup", "Guided setup", {
+  const guided = entity("feature", "F-82", "Guided setup", {
     body: "A short checklist that walks a new account through its first product, payment method and test order.",
     attrs: { status: "in_progress", effort: "M" },
     confidence: 0.71,
     locked: true,
   });
-  const sample = entity("feature", "f.sample-data", "Sample data", {
+  const sample = entity("feature", "F-83", "Sample data", {
     body: "Prefill a new store with example products so the first preview is not empty.",
     attrs: { status: "planned", effort: "S" },
     confidence: 0.71,
   });
-  const carts = entity("feature", "f.saved-carts", "Saved carts", {
+  const carts = entity("feature", "F-84", "Saved carts", {
     body: "Shoppers can keep a cart and come back to it on another device.",
     attrs: { status: "planned", effort: "L", milestone: "Beta" },
     confidence: 0.3,
   });
-  const invites = entity("feature", "f.team-invites", "Team invites", {
+  const invites = entity("feature", "F-85", "Team invites", {
     body: "Invite teammates during setup.",
     attrs: { status: "shipped", effort: "S" },
     confidence: 0.68,
   });
-  const dark = entity("feature", "f.dark-mode", "Dark mode", {
+  const dark = entity("feature", "F-81", "Dark mode", {
     body: "A dark theme for the admin console.",
     attrs: { status: "idea", effort: "M" },
     confidence: 0.52,
@@ -417,6 +417,13 @@ export function seedBaseline(uuid: () => string): BaselineState {
     attrs: { status: "idea" },
     status: "proposed",
   });
+  // Each got its code when it joined the Ground Truth (fixes.code_on_join): the slug it was
+  // proposed under stays its alias, so a run's briefs that name it by that slug still find it.
+  const joined: [EntityRow, string][] = [[dark, "f.dark-mode"], [guided, "f.guided-setup"], [sample, "f.sample-data"], [carts, "f.saved-carts"], [invites, "f.team-invites"]];
+  for (const [e, slug] of joined) {
+    const shot = { type: e.type, key: e.key, title: e.title, body: e.body, attrs: e.attrs, status: e.status };
+    s.revisions!.push({ id: uuid(), entity_id: e.id, edge_id: null, before: { ...shot, key: slug }, after: shot, actor: "system", reason: null, created_at: "2026-09-01T09:00:00Z" });
+  }
 
   edge(guided, "part_of", storefront);
   edge(sample, "part_of", storefront);
@@ -1963,11 +1970,11 @@ export function addDuplicateProposals(s: BaselineState, uuid: () => string) {
     markDuplicate(s, p);
   };
   const update = (fields: Attrs, reason: string, role?: string) => ({ op: "update", kind: "entity", fields, reason, ...(role ? { role } : {}) });
-  push(by("f.dark-mode"), update({ attrs: { status: "proposed" } }, "Not committed to yet.", "critic"), "2026-10-16T08:40:00Z");
+  push(by("F-81"), update({ attrs: { status: "proposed" } }, "Not committed to yet.", "critic"), "2026-10-16T08:40:00Z");
   const feature = (key: string, title: string, role: string) => ({ op: "create", kind: "entity", fields: { type: "feature", key, title }, reason: "Asked for in the planning call.", role });
   push(null, feature("f.saved-addresses", "Saved addresses", "writer"), "2026-10-16T08:41:00Z");
   push(null, feature("f.saved-address", "Add saved address", "critic"), "2026-10-16T08:42:00Z");
-  const link = { src_id: by("f.saved-carts").id, dst_id: by("f.team-invites").id, type: "depends_on" };
+  const link = { src_id: by("F-84").id, dst_id: by("F-85").id, type: "depends_on" };
   push(null, { op: "create", kind: "edge", fields: link, reason: "Shared carts need invites.", role: "writer" }, "2026-10-16T08:43:00Z");
   push(null, { op: "create", kind: "edge", fields: link, reason: "Invites come first.", role: "critic" }, "2026-10-16T08:44:00Z");
   const goal = by("g.activation");
@@ -1978,7 +1985,7 @@ export function addDuplicateProposals(s: BaselineState, uuid: () => string) {
   push(null, { ...feature("f.search", "Search", "writer"), reason: "A search box." }, "2026-10-16T08:49:00Z");
   push(null, { ...feature("f.search-v2", "Search v2", "critic"), reason: "A second search with filters." }, "2026-10-16T08:50:00Z");
   // Team invites' milestone, set by a proposal accepted days ago, that an older one would undo.
-  const invites = by("f.team-invites");
+  const invites = by("F-85");
   const was = invites.attrs?.milestone ?? null;
   invites.attrs = { ...invites.attrs, milestone: "M3" };
   push(invites, update({ attrs: { milestone: "M1" } }, "Invites in M1."), "2026-10-16T08:51:00Z", false);
@@ -1995,7 +2002,7 @@ export function addDuplicateProposals(s: BaselineState, uuid: () => string) {
  * milestone, written before either was accepted.
  */
 export function addOverlappingProposals(s: BaselineState, uuid: () => string) {
-  const carts = s.entities.find((e) => e.key === "f.saved-carts")!;
+  const carts = s.entities.find((e) => e.key === "F-84")!;
   const propose = (fields: Attrs, reason: string, created_at: string) =>
     s.proposals.push({
       id: uuid(),
@@ -2019,7 +2026,7 @@ export function addOverlappingProposals(s: BaselineState, uuid: () => string) {
  * overlap warning must name the field fully ("delivery status"), not bare "status".
  */
 export function addStatusOverlapProposals(s: BaselineState, uuid: () => string) {
-  const invites = s.entities.find((e) => e.key === "f.team-invites")!;
+  const invites = s.entities.find((e) => e.key === "F-85")!;
   const propose = (fields: Attrs, reason: string, created_at: string) =>
     s.proposals.push({
       id: uuid(),
@@ -2046,7 +2053,7 @@ export function addStatusOverlapProposals(s: BaselineState, uuid: () => string) 
  * ranked second would point at the wrong claim.
  */
 export function addThreeWayConflict(s: BaselineState, uuid: () => string) {
-  const dark = s.entities.find((e) => e.key === "f.dark-mode")!;
+  const dark = s.entities.find((e) => e.key === "F-81")!;
   s.conflicts.push({
     id: uuid(),
     entity_id: dark.id,

@@ -126,14 +126,16 @@ export function flightColumns(phoneHeader: ReactNode, docs?: DocumentSummary[]):
       header: "Next",
       width: "19%",
       phone: "hide",
+      // QA Nov 12 #12: a long next step ("Confirm the Ground Truth") wraps to a second line, not cut.
+      wrap: true,
       cell: (f) =>
         // qa-company-31, -9: one style for every row: what comes after the current step, in plain words.
         f.kind === "prd" ? (
-          <span className="truncate" title={AFTER_REVIEW}>
+          <span data-testid="flight-next" className="line-clamp-2 break-words" title={AFTER_REVIEW}>
             {AFTER_REVIEW}
           </span>
         ) : (
-          <span className="truncate" title={runNext(f.run)}>
+          <span data-testid="flight-next" className="line-clamp-2 break-words" title={runNext(f.run)}>
             {runNext(f.run)}
           </span>
         ),

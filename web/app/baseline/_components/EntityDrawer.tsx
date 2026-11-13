@@ -514,7 +514,7 @@ export function EntityDrawer({
                 }
               >
                 <p className="flex items-center gap-2">
-                  <span className="min-w-0 truncate" data-testid="lock-note">
+                  <span className="min-w-0 break-words" data-testid="lock-note">
                     Locked by {d.locked_by && d.locked_by === meId ? "you" : (lockerName ?? "a person")}
                     {d.locked_at && <span className="tnum text-text2"> · {formatDateTime(d.locked_at)}</span>}
                     <span className="sr-only">. Agents can only propose changes.</span>

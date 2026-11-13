@@ -113,7 +113,7 @@ const CHECKOUT_V1: SectionSeed[] = [
     key: "goal-trace",
     level: 2,
     heading: "1. Goal trace",
-    body: "Serves **G1 (activation)**: raise first-order completion from 61% to 70% by the end of Q4 [c:c3]. Every change below is expected to move completion between the cart and the confirmation page.",
+    body: "Serves **Raise activation**: raise first-order completion from 61% to 70% by the end of Q4 [c:c3]. Every change below is expected to move completion between the cart and the confirmation page.",
   },
   {
     key: "problem",

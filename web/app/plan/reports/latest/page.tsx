@@ -3,12 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { Button, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
+import { InfoTip, Page, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
+import { NoReportYet } from "../_empty";
 import { GenerateDialog } from "../_generate";
 
 /**
@@ -44,21 +45,9 @@ export default function LatestReportPage() {
           </InfoTip>
         }
       />
+      {/* QA Nov 12 #14: the Reports tab's empty state, word for word. */}
       <Panel testId="no-report-yet">
-        <div className="flex flex-col items-center gap-1 px-4 py-10 text-center text-[15px] text-text2">
-          <p className="font-display text-lg font-bold text-text">No report yet</p>
-          <p>
-            Oracle makes one every week for the week that ended.
-            {canGenerate ? " You can generate one now for the week so far." : " An owner can generate one now."}
-          </p>
-          {canGenerate && (
-            <div className="mt-3">
-              <Button variant="primary" icon="plus" onClick={() => setOpen(true)}>
-                Generate now
-              </Button>
-            </div>
-          )}
-        </div>
+        <NoReportYet canGenerate={canGenerate} onGenerate={() => setOpen(true)} />
       </Panel>
       {open && <GenerateDialog onClose={() => setOpen(false)} />}
     </Page>

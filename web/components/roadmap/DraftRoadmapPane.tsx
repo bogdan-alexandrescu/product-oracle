@@ -9,7 +9,8 @@ import { usePolling } from "@/components/JobsPanel";
 import { ItemInspector } from "@/components/review/ItemInspector";
 import { ItemsTable } from "@/components/review/ItemsTable";
 import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { named, namedText } from "@/lib/codes";
 import {
   deriveDraftRoadmap,
   getDraftRoadmap,
@@ -43,6 +44,19 @@ const PROBLEM_LABEL: Record<string, string> = {
   unknown_prd_section: "No PRD section",
 };
 export const problemLabel = (code: string) => PROBLEM_LABEL[code] ?? "Check problem";
+
+/** An item's feature code: written before its title, else its feature's (F-31), else none. */
+function itemCode(i: Schemas["RoadmapItemOut"]): string | null {
+  const f = i.feature;
+  return named(i.title, f?.key).code ?? (f ? named(f.title, f.key).code : null);
+}
+
+/**
+ * docs/ground-truth.md: an item is a Ground Truth feature by code. One with no code, no feature
+ * or a feature only proposed (or rejected) is flagged "Not in the Ground Truth", never refused.
+ */
+const outsideGroundTruth = (i: Schemas["RoadmapItemOut"]) =>
+  !itemCode(i) || !i.feature || i.feature.status === "proposed" || i.feature.status === "rejected";
 
 
 function ago(iso: string | null): string {
@@ -99,7 +113,17 @@ export function DraftRoadmapPane({
 
   const headings = useMemo(() => new Map(sections.map((s) => [s.section_key, s.heading])), [sections]);
   const items = useMemo(() => data?.items ?? [], [data]);
-  const rows = useMemo(() => items.map((i) => toItemRow(i, headings)), [items, headings]);
+  // Each item reads its feature code before its name ("F-31 Alert routing by team").
+  const rows = useMemo(
+    () =>
+      items.map((i) => {
+        const row = toItemRow(i, headings);
+        const code = itemCode(i);
+        return code ? { ...row, title: namedText({ code, name: named(i.title).name }) } : row;
+      }),
+    [items, headings],
+  );
+  const outside = useMemo(() => new Set(items.filter(outsideGroundTruth).map((i) => i.item_key)), [items]);
   const problems = useMemo(() => data?.check?.problems ?? [], [data]);
   const byItem = useMemo(() => {
     const m = new Map<string, DraftRoadmapProblem[]>();
@@ -175,7 +199,9 @@ export function DraftRoadmapPane({
         ? (r: ItemRow) => CHANGED.has(byKey.get(r.key)?.change ?? "unchanged")
         : undefined;
   // qa4-docs-5: a filter shows some items: say how many, and that # is each one's place in the whole list.
-  const showing = filterFn ? rows.filter((r) => filterFn(r)).length : rows.length;
+  // Detailed QA Nov 12 #17: the rows the table shows of all it can show, a dropped (struck) one
+  // included both times, as the Changed chip counts it.
+  const showing = filterFn ? shownRows.filter((r) => filterFn(r)).length : shownRows.length;
   const decorate = (r: ItemRow) =>
     r.ghost ? { "data-testid": "roadmap-item-ghost", "data-change": "dropped" } : { "data-change": byKey.get(r.key)?.change };
   const columns: Column<ItemRow>[] = [
@@ -189,15 +215,25 @@ export function DraftRoadmapPane({
       phone: "meta",
       cell: (r) => {
         const own = byItem.get(r.key) ?? [];
+        const flagged = !r.ghost && outside.has(r.key);
         // qa4-docs-48: on a phone an unlabelled "—" reads as a second dash after Depends on.
-        if (!own.length) return <span className="text-text2 max-[600px]:hidden">—</span>;
+        if (!own.length && !flagged) return <span className="text-text2 max-[600px]:hidden">—</span>;
         return (
-          <span data-testid="draft-roadmap-chips" className="inline-flex min-w-0 flex-wrap items-center gap-1">
-            {[...new Set(own.map((p) => problemLabel(p.code)))].map((label) => (
-              <Chip key={label} kind="warn">
-                {label}
+          <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+            {flagged && (
+              <Chip kind="warn" data-testid="not-in-ground-truth">
+                Not in the Ground Truth
               </Chip>
-            ))}
+            )}
+            {own.length > 0 && (
+              <span data-testid="draft-roadmap-chips" className="inline-flex min-w-0 flex-wrap items-center gap-1">
+                {[...new Set(own.map((p) => problemLabel(p.code)))].map((label) => (
+                  <Chip key={label} kind="warn">
+                    {label}
+                  </Chip>
+                ))}
+              </span>
+            )}
           </span>
         );
       },
@@ -307,9 +343,9 @@ export function DraftRoadmapPane({
               { value: "attention", label: "Needs attention", count: attention },
             ]}
           />
-          {showing < rows.length && (
+          {showing < shownRows.length && (
             <p data-testid="items-filter-note" className="tnum text-sm text-text2">
-              Showing {showing} of {rows.length} items · # is each item&apos;s place in the full list
+              Showing {showing} of {shownRows.length} items · # is each item&apos;s place in the full list
             </p>
           )}
           <Panel>
