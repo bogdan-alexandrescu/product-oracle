@@ -13,6 +13,8 @@ type Status = Track["status"];
 
 const STATE: Record<Status, string> = { active: "Active", paused: "Paused", closed: "Closed" };
 const FIELD = "h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-[15px] outline-none focus:border-accent";
+/** A field's name over it (the new-track form). */
+const LABELLED = "flex min-w-0 flex-col gap-0.5 text-xs font-semibold text-text2";
 const PRIMARY = "inline-flex h-8 items-center gap-1 rounded-lg bg-accent px-3 text-sm font-medium text-on-accent hover:brightness-110 disabled:opacity-50";
 const ROW = "grid grid-cols-[84px_minmax(0,1fr)] items-center gap-2 py-1";
 
@@ -352,9 +354,9 @@ function TrackFields({ t, may, people, prds, goals, onEdit }: { t: Track; may: b
 }
 
 /** tracks-goal: "No goal" and the company's goals by their names. */
-function GoalSelect({ label, value, goals, onChange }: { label: string; value: string; goals: Schemas["SimpleTrackGoal"][]; onChange: (v: string) => void }) {
+function GoalSelect({ label, value, goals, onChange, className = "" }: { label: string; value: string; goals: Schemas["SimpleTrackGoal"][]; onChange: (v: string) => void; className?: string }) {
   return (
-    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={FIELD}>
+    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={`${FIELD} ${className}`}>
       <option value="">No goal</option>
       {goals.map((g) => (
         <option key={g.id} value={g.id}>
@@ -375,23 +377,33 @@ function AddTrack({ data, onAdd, onCancel }: { data: Schemas["SimpleTracks"]; on
   return (
     <div className="mb-2 grid gap-1.5 rounded-lg border border-line p-2" data-testid="track-new">
       <input aria-label="New track name" autoFocus placeholder="Track name" value={title} onChange={(e) => setTitle(e.target.value)} className={FIELD} />
-      <select aria-label="New track PRD" value={prd} onChange={(e) => setPrd(e.target.value)} className={FIELD}>
-        <option value="">No PRD</option>
-        {data.prds.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.track_title ? `${p.title} · move from ${p.track_title}` : p.title}
-          </option>
-        ))}
-      </select>
-      <GoalSelect label="New track goal" value={goal} goals={data.goals ?? []} onChange={setGoal} />
-      <select aria-label="New track owner" value={owner} onChange={(e) => setOwner(e.target.value)} className={FIELD}>
-        <option value="">No owner</option>
-        {data.people.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+      {/* QA Nov 12 #16: each choice has its name in view, as the Change form's rows do (PRDs, Goal, Owner). */}
+      <label className={LABELLED}>
+        PRD
+        <select aria-label="New track PRD" value={prd} onChange={(e) => setPrd(e.target.value)} className={`${FIELD} font-normal text-text`}>
+          <option value="">No PRD</option>
+          {data.prds.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.track_title ? `${p.title} · move from ${p.track_title}` : p.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={LABELLED}>
+        Goal
+        <GoalSelect label="New track goal" value={goal} goals={data.goals ?? []} onChange={setGoal} className="font-normal text-text" />
+      </label>
+      <label className={LABELLED}>
+        Owner
+        <select aria-label="New track owner" value={owner} onChange={(e) => setOwner(e.target.value)} className={`${FIELD} font-normal text-text`}>
+          <option value="">No owner</option>
+          {data.people.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="flex gap-1.5">
         <button type="button" className={PRIMARY} disabled={!!why} title={why} onClick={() => void onAdd({ title: title.trim(), prd_ids: prd ? [prd] : [], owner_id: owner || null, goal_id: goal || null })}>
           {data.can_add ? "Add" : "Propose"}

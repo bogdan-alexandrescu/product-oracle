@@ -115,9 +115,11 @@ export function FeaturePanel({ id, code, name, placed, onClose }: { id: string; 
           onClose={onClose}
           onOpen={setOpened}
           milestones={roadmap.data.goal_milestones}
-        />
-        {own && (
-          <p data-testid="gm-panel-milestone" className="simple-small mt-1 w-fit rounded-xl border border-line bg-surface px-3 py-1 shadow">
+          planned={roadmap.data.milestones}
+          // GM2: the milestone the map shows the chip under, and its Serves line inside the card's scroll.
+          served={own ? placed!.milestone : null}
+          after={own && (
+          <p data-testid="gm-panel-milestone" className="simple-small mt-3 w-fit rounded-xl border border-line bg-surface px-3 py-1">
             Serves{" "}
             {(placed!.served ?? [{ milestone: placed!.milestone, expected: "" }]).map((x, i) => (
               <span key={x.milestone}>
@@ -131,7 +133,8 @@ export function FeaturePanel({ id, code, name, placed, onClose }: { id: string; 
               </span>
             ))}
           </p>
-        )}
+          )}
+        />
       </div>
     </div>
   );

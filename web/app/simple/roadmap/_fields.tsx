@@ -27,7 +27,9 @@ import {
   yearSpan,
   type GoalMilestone,
   type Item,
+  type Milestone,
 } from "./_lib";
+import { NOT_IN_GT } from "./_gtflag";
 
 /** pre-demo QA P-8: on a phone (the sheet), a 44 px hit area; the desktop look is unchanged. */
 const TAP = "max-sm:min-h-11 max-sm:min-w-11 max-sm:inline-flex max-sm:items-center max-sm:justify-center";
@@ -202,13 +204,19 @@ function datesKind(item: Item): string {
 }
 
 /** item-milestone: the milestone a feature reads: the goal milestone picked for it, else its
- * PRD plan's (its slices'), else its own; "" with none. */
-function milestoneShown(item: Item, milestones: readonly GoalMilestone[]): string {
+ * PRD plan's (its slices'), else its own (with its roadmap code, as the Timeline names it: QA
+ * Nov 12 #5), else the one a page shows it under (the Goal map's, GM2); "" with none. */
+function milestoneShown(item: Item, milestones: readonly GoalMilestone[], planned: readonly Milestone[], served?: string | null): string {
   const picked = item.milestone?.id ? milestones.find((m) => m.id === item.milestone!.id) : undefined;
   if (picked) return goalMilestoneWords(picked, milestones);
   if (!item.milestone?.id && item.slices.length)
     return [...new Map(item.slices.map((x) => [x.milestone, `${x.milestone} ${x.milestone_name}`])).values()].join(", ");
-  return item.milestone?.name ? milestoneWords(item.milestone.name) : "";
+  const name = item.milestone?.name;
+  if (name) {
+    const own = planned.find((m) => m.item_ids.includes(item.id) && m.name === name) ?? planned.find((m) => m.name === name);
+    return milestoneWords(own?.roadmap_code && !name.startsWith(own.roadmap_code) ? `${own.roadmap_code} ${name}` : name);
+  }
+  return served ?? "";
 }
 
 export function PanelFields({
@@ -218,6 +226,8 @@ export function PanelFields({
   canChange,
   onOpen,
   milestones = [],
+  planned = [],
+  served,
   noHorizon,
 }: {
   item: Item;
@@ -228,14 +238,17 @@ export function PanelFields({
   onOpen?: (id: string) => void;
   /** item-milestone: the roadmap read's goal milestones (the item's roadmap's are offered). */
   milestones?: readonly GoalMilestone[];
+  /** The roadmap's own milestones, for their codes (M1 Beta). */
+  planned?: readonly Milestone[];
+  /** GM2: the milestone the page shows the feature under when it reads none of its own. */
+  served?: string | null;
   /** The board shows its own horizon control under the fields. */
   noHorizon?: boolean;
 }) {
-  const [why, setWhy] = useState(false);
   // The track just picked, shown while its change is made.
   const [picking, setPicking] = useState<{ title: string | null } | null>(null);
   const prdOrderOf = usePrdOrder();
-  const shownMilestone = milestoneShown(item, milestones);
+  const shownMilestone = milestoneShown(item, milestones, planned, served);
   const goal = item.goal;
   const people = useQuery(`people:panel:${canChange}`, () =>
     canChange
@@ -307,7 +320,8 @@ export function PanelFields({
 
   return (
     <dl
-      className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5"
+      // QA Nov 12 #9: a label on its value's line (a phone's 44 px Change centred only the value).
+      className="mt-2.5 grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1.5"
       data-testid="panel-fields"
     >
       {/* every-field-editable: the feature code (F-31), so a feature with none can be given one. */}
@@ -327,7 +341,15 @@ export function PanelFields({
               </InfoTip>
             </span>
           ) : (
-            (item.code ?? <span className="text-text2">None</span>)
+            (item.code ?? (
+              // QA Nov 12 #2: no code, so no Ground Truth feature: flagged, never hidden.
+              <span className="inline-flex flex-wrap items-center gap-x-1" data-testid="card-code-flag">
+                <span className="text-text2">None</span> · <span className="text-warn">{NOT_IN_GT}</span>
+                <InfoTip label={NOT_IN_GT} align="start" testId="card-code-gt-why">
+                  Roadmap items that are no feature of the Ground Truth, or one only proposed so far.
+                </InfoTip>
+              </span>
+            ))
           )
         }
         editor={(done) => (
@@ -396,23 +418,10 @@ export function PanelFields({
           <>
             {yearSpan(item.start.date, item.end.date)} ·{" "}
             <span data-testid="card-dates-kind">{datesKind(item)}</span>{" "}
-            <button
-              type="button"
-              aria-label="Why these dates"
-              aria-expanded={why}
-              className={`text-text2 hover:text-text ${TAP}`}
-              onClick={() => setWhy(!why)}
-            >
-              (i)
-            </button>
-            {why && (
-              <span
-                className="mt-1 block text-sm text-text2"
-                data-testid="card-dates-why"
-              >
-                {datesReason(item)}
-              </span>
-            )}
+            {/* QA Nov 12 #10: the circled (i) every other why on the page uses. */}
+            <InfoTip label="these dates" align="start" testId="card-dates-why">
+              {datesReason(item)}
+            </InfoTip>
           </>
         }
         editor={(done) => (

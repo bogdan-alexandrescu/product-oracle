@@ -188,6 +188,7 @@ export function FeaturePanel({
       onOpen={setOpened}
       onSuggestion={(how, dates) => void onSuggestion(how, dates)}
       milestones={data.goal_milestones}
+      planned={data.milestones}
     />
   );
   if (phone && item && !draft) return <div data-testid="item-panel" aria-label={item.title} className="contents">{body}</div>;

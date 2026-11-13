@@ -29,6 +29,7 @@ import {
   type Flag,
   type GoalMilestone,
   type Item,
+  type Milestone,
   yearSpan,
 } from "./_lib";
 
@@ -834,11 +835,20 @@ export function FloatingCard({
   onSuggestion,
   focus,
   milestones,
+  planned,
+  served,
+  after,
 }: {
   /** one-feature-panel: opens another feature's own panel (what it depends on, what needs it). */
   onOpen?: (id: string) => void;
   /** item-milestone: the roadmap read's goal milestones, offered by the panel's Milestone field. */
   milestones?: readonly GoalMilestone[];
+  /** The roadmap's own milestones: the Milestone field names one with its code (M1 Beta). */
+  planned?: readonly Milestone[];
+  /** GM2: the milestone the page shows the feature under (the Goal map's chip), when it reads none. */
+  served?: string | null;
+  /** GM2: what the page adds about the feature, at the end of the details (inside their scroll). */
+  after?: React.ReactNode;
   /** Roadmap-plus: the key dates the item ends within 2 weeks of, in words (none: no line). */
   near?: string | null;
   /** home-waiting-one-list: Oracle's open dates for the item, acted on in the panel. */
@@ -1167,7 +1177,7 @@ export function FloatingCard({
               </button>
             </p>
           )}
-          <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} milestones={milestones} noHorizon={!!onHorizon} />
+          <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} milestones={milestones} planned={planned} served={served} noHorizon={!!onHorizon} />
           <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
           {item.slices.length > 0 && (
             <>
@@ -1415,6 +1425,7 @@ export function FloatingCard({
           </button>
         )}
       </div>
+      {after}
     </>
   );
 

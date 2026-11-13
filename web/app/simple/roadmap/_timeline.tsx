@@ -9,6 +9,7 @@ import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState
 import { FeatureMarks, pillWord, type FeatureState } from "@/components/current-state/CurrentState";
 import { calendarDay } from "@/lib/dates";
 import { useMsBand } from "./_milestones";
+import { itemName, NOT_IN_GT, NotInGt } from "./_gtflag";
 import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
 import { joinedNames, joinedWords } from "@/lib/milestone-code";
 
@@ -135,10 +136,17 @@ export function layout(
     const it = r.item;
     // The name's group: the row less its padding, or its 60% when other chips share the row.
     const w = (labelW - padX) * (r.place != null || it.draft || it.estimate_pending ? 0.6 : 1);
-    const tail = tails?.get(it.id) ?? 0;
-    const n = wordLines(it.title, size, 400, w);
-    const beside = !tail || (n === 1 && textWidth(it.title, size, 400) + tail <= w);
-    const h = padY + n * lineH + (beside ? 0 : 18 + gapY);
+    // QA Nov 12 #1/#2: the name reads with its code (F-06 Weekly alert digest); an item with no
+    // code has its "Not in the Ground Truth" mark after it, measured as the pill is.
+    const words = itemName(it);
+    const pill = tails?.get(it.id) ?? 0;
+    const gt = it.code ? 0 : gtMarkW(compact);
+    const tail = pill + gt;
+    const n = wordLines(words, size, 400, w);
+    const beside = !tail || (n === 1 && textWidth(words, size, 400) + tail <= w);
+    // Under the name, the pill and the mark share a line where both fit, else take one each.
+    const under = beside ? 0 : pill && gt && tail > w ? 2 : 1;
+    const h = padY + n * lineH + under * (18 + gapY);
     if (h > rowH) nameH.set(it.id, h);
   }
   const hs = rows.map((r) => {
@@ -171,6 +179,9 @@ export function layout(
   const total = hs.reduce((a, b) => a + b, 0);
   return { rows, rowH, labelW, top, height: top + total + 8, y, under: wrap ? under : undefined, nameH, hs, ys };
 }
+
+/** QA Nov 12 #2: the row's "Not in the Ground Truth" mark's width (its 12 px words, padding, the gap before it). */
+const gtMarkW = (compact: boolean) => Math.ceil(textWidth(NOT_IN_GT, 12, 600) * 1.05) + 16 + (compact ? 4 : 8);
 
 /** How many lines `s` takes at width `w`, broken between words as the browser breaks it. */
 function wordLines(s: string, size: number, weight: number, w: number): number {
@@ -417,6 +428,20 @@ function drawnSpan(i: Item, span?: [string, string]): [string, string] {
 }
 /** fix4 qa-simple-roadmap-3: a place in the return queue in words ("1st", "2nd"), not "#1". */
 export const ordinal = (n: number): string => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+/** QA Nov 12 #5: grouped by Milestone, a track milestone's lane reads its roadmap code with its
+ * name ("M1 Beta (Nov 30)"), as the Timeline and the board name it, not its name alone. */
+function codedMilestoneLanes(data: Roadmap): Roadmap {
+  const joined = joinedNames(data.goal_milestones ?? [], data.milestones);
+  const byId = new Map(data.milestones.map((m) => [m.id, m]));
+  return {
+    ...data,
+    groups: data.groups.map((g) => {
+      const m = g.key.startsWith("track-milestone:") ? byId.get(g.key.slice("track-milestone:".length)) : undefined;
+      return m?.date ? { ...g, title: `${joinedWords(m, joined)} (${shortDay(m.date)})` } : g;
+    }),
+  };
+}
+
 /** A milestone's code from its name ("M2 · Scale volume": "M2"). */
 const codeOf = (name: string): string => name.split(/[\s·]/)[0];
 
@@ -451,7 +476,8 @@ declare global {
   }
 }
 
-export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, lane = data.group, laneWord, trackBands = false, noWork = [], onOffscreen, pulled }: ChartProps) {
+export function Chart({ data: given, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, lane = given.group, laneWord, trackBands = false, noWork = [], onOffscreen, pulled }: ChartProps) {
+  const data = useMemo(() => (lane === "milestone" ? codedMilestoneLanes(given) : given), [given, lane]);
   const box = useRef<HTMLDivElement>(null);
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
@@ -822,9 +848,10 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               onClick={() => onOpen(r.item, { x: sc.x((moved[r.item.id] ?? barSpan(r.item))[0]), y: (l.y.get(r.item.id) ?? 0) + l.rowH })}
               className={`flex w-full min-w-0 items-center text-left hover:bg-surface2 ${compact ? "gap-1 px-2 text-[13px]" : "gap-2 px-3 text-[15px]"} ${open === r.item.id ? "bg-accent-soft" : ""}`}
             >
-              {/* fix4 qa-simple-roadmap-3: no "#1" or "F-06" on a row: the place in the return
-                  queue in words ("1st"), the name alone (the code is in the item's card). The
-                  name gets the row's space first; the chips after it shrink (finding 7). */}
+              {/* fix4 qa-simple-roadmap-3: no "#1" on a row: the place in the return queue in words
+                  ("1st"). QA Nov 12 #1: the name reads with its code first ("F-06 Weekly alert
+                  digest"), as its card does. The name gets the row's space first; the chips after
+                  it shrink (finding 7). */}
               {r.place != null && (
                 <span className="tnum flex-none text-xs text-text2" data-testid="return-place" title={`${ordinal(r.place)} to come back if room opens`}>
                   {/* qa4-simple-roadmap-23: the number says what it is. */}
@@ -843,13 +870,15 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               <span className={`flex min-w-[60%] flex-1 flex-wrap items-center ${compact ? "gap-x-1 gap-y-0.5" : "gap-x-2 gap-y-1"}`}>
                 <span
                   data-testid="label-title"
-                  title={r.item.title}
+                  title={itemName(r.item)}
                   // fix4 qa-simple-roadmap-6: a name wraps whole instead of being cut mid-word.
                   className={`min-w-0 max-w-full break-words ${compact ? "text-[12.5px] leading-[14px]" : "leading-[18px]"} ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
                 >
-                  {r.item.title}
+                  {itemName(r.item)}
                 </span>
                 <ItemMark f={states?.get(`item:${r.item.id}`)} compact={compact} today={data.today} />
+                {/* QA Nov 12 #2: an item with no Ground Truth code is flagged on its row. */}
+                <NotInGt item={r.item} className="h-5! px-2! text-xs!" />
               </span>
               {r.item.draft && !closedItem(r.item) && (
                 <span className="max-w-[48px] min-w-0 shrink truncate rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag" title="Draft">
@@ -1003,8 +1032,9 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 return (
                   <g key={m.id} data-testid="track-milestone" data-row={mk.row} transform={`translate(${mk.x}, ${cy})`}>
                     <rect x={-5} y={-5} width={10} height={10} transform="rotate(45)" fill="var(--warn)" />
-                    <text x={mk.side === "after" ? 9 : -9} y={4} fontSize={11} fontWeight={700} fill="var(--text2)" textAnchor={mk.side === "after" ? "start" : "end"}>
-                      {m.name}
+                    {/* QA Nov 12 #5: named by its roadmap code, as the Timeline and the board name it ("M1 Beta"). */}
+                    <text data-testid="track-milestone-label" x={mk.side === "after" ? 9 : -9} y={4} fontSize={11} fontWeight={700} fill="var(--text2)" textAnchor={mk.side === "after" ? "start" : "end"}>
+                      {mk.words}
                     </text>
                   </g>
                 );
@@ -1064,7 +1094,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   type="button"
                   data-testid="row-offscreen"
                   data-item={r.item.key}
-                  title={`${r.item.title}: ${spanWords(a, b, data.today, true)}`}
+                  title={`${itemName(r.item)}: ${spanWords(a, b, data.today, true)}`}
                   onClick={() => box.current?.scrollTo({ left: Math.max(0, x0 - 24), behavior: "smooth" })}
                   style={{ top: y + 5, height: l.rowH - 10, ...(right ? { left: view[1] - 6, transform: "translateX(-100%)" } : { left: view[0] + 6 }) }}
                   className="absolute z-[5] flex items-center rounded-full border border-line bg-surface px-2 text-xs whitespace-nowrap text-text2 hover:bg-surface2"
@@ -1313,7 +1343,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
   const sliced = !phased && planned(item);
   const fixed = closedItem(item) || planned(item);
   // qa4-simple-roadmap-30: each red flag in its own words ("ends Jun 8, after its milestone 'Beta'"), as Now / Next / Later says it.
-  const label = `${item.title}: ${yearSpan(start, end, " to ")}, ${item.estimated ? "Estimated by Oracle" : datesFrom(item)}${item.estimate_pending ? ", estimate pending" : ""}${phaseWords}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
+  const label = `${itemName(item)}: ${yearSpan(start, end, " to ")}, ${item.estimated ? "Estimated by Oracle" : datesFrom(item)}${item.estimate_pending ? ", estimate pending" : ""}${phaseWords}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
   // finding 49: the suggestion's dashed outline is clamped to the chart's own width (its dates
   // can run past the chart's span); a small arrow says it continues past the edge.
   const sx = sc.x(s?.start_date ?? start);
@@ -1438,7 +1468,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
             data-item={item.key}
             role="button"
             tabIndex={0}
-            aria-label={`Oracle suggests dates for ${item.title}: ${yearSpan(s.start_date, s.end_date, " to ")}`}
+            aria-label={`Oracle suggests dates for ${itemName(item)}: ${yearSpan(s.start_date, s.end_date, " to ")}`}
             className="cursor-pointer"
             transform={`translate(${mark}, ${y + h / 2})`}
             onClick={() => onSuggestion(item, { x: sc.x(s.start_date), y: y + h })}
@@ -1446,7 +1476,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
               if (e.key === "Enter" || e.key === " ") onSuggestion(item, { x: sc.x(s.start_date), y: y + h });
             }}
           >
-            <title>{`Oracle suggests dates for ${item.title}`}</title>
+            <title>{`Oracle suggests dates for ${itemName(item)}`}</title>
             <circle r={9} fill="var(--surface)" stroke="var(--accent-ink)" strokeDasharray="2 2" />
             <text textAnchor="middle" y={4} fontSize={11} fontWeight={700} fill="var(--accent-ink)">
               ?

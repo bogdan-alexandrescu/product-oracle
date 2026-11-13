@@ -9,12 +9,20 @@ import { formatDay } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
 import { ChangeFailed, propose, undo, type Item } from "./_lib";
+import { itemName } from "./_gtflag";
 import { withdraw } from "./_tracks";
 
 type Removed = Schemas["SimpleRemovedItem"];
 
 const KIND: Record<Removed["kind"], string> = { feature: "Feature", goal: "Goal", milestone: "Milestone" };
 const HOW: Record<Removed["kind"], string> = { feature: "Cut", goal: "Archived", milestone: "Removed" };
+
+/** QA Nov 12 #15: where it was, unless that only says its kind again (an archived goal's "Goals"). */
+function whereOf(r: Removed): string | null {
+  const w = r.where.trim().toLowerCase();
+  const kind = KIND[r.kind].toLowerCase();
+  return w && w !== kind && w !== `${kind}s` ? r.where : null;
+}
 
 /** "Cut on Oct 21 by Priya Raman": who and when, never split inside a name. */
 function byline(r: Removed): string {
@@ -52,6 +60,10 @@ export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: 
   const removed = useQuery(removedKey(`${n}:${cut}`), readRemoved, { keepPrevious: true });
   const rows = removed.data?.items ?? [];
   const box = useRef<HTMLDivElement>(null);
+  const nameOf = (r: Removed) => {
+    const i = r.kind === "feature" ? items.find((x) => x.id === r.id) : undefined;
+    return i ? itemName(i) : r.title;
+  };
   // BGD (Nov 10): the list's height is capped to the viewport, its rows scrolling under the heading.
   const list = useRef<HTMLDivElement>(null);
   const fit = useFitViewport(list, { on: open });
@@ -75,7 +87,7 @@ export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: 
       // at-followups: a proposal is taken back from its toast, as the Tracks sheet's are.
       if (res.change.status !== "applied")
         toast({
-          message: `Restoring ${r.title} proposed · waits for ${r.decider_name ?? "an owner"}`,
+          message: `Restoring ${nameOf(r)} proposed · waits for ${r.decider_name ?? "an owner"}`,
           action: {
             label: "Withdraw",
             onClick: () =>
@@ -88,15 +100,15 @@ export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: 
       // Undo where the API allows it (a goal put back is archived again from its own menu).
       else if (res.change.can_undo)
         toast({
-          message: `Restored ${r.title}`,
+          message: `Restored ${nameOf(r)}`,
           action: {
             label: "Undo",
             onClick: () => void undo(res.change.id).then(refresh, (e) => toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" })),
           },
         });
-      else toast({ message: `Restored ${r.title}` });
+      else toast({ message: `Restored ${nameOf(r)}` });
     } catch (e) {
-      toast({ message: e instanceof ChangeFailed ? e.message : `${r.title} could not be restored` });
+      toast({ message: e instanceof ChangeFailed ? e.message : `${nameOf(r)} could not be restored` });
     }
   };
   return (
@@ -114,13 +126,15 @@ export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: 
                 <span className="min-w-0 flex-1">
                   {r.kind === "feature" ? (
                     <button type="button" className="text-left font-semibold [overflow-wrap:anywhere] hover:underline" onClick={() => (setOpen(false), onOpen(r.id))}>
-                      {r.title}
+                      {/* QA Nov 12 #1: a cut feature by its code and name, as the roadmap reads it. */}
+                      {nameOf(r)}
                     </button>
                   ) : (
                     <span className="font-semibold [overflow-wrap:anywhere]">{r.title}</span>
                   )}
                   <span className="block text-[13px] text-text2">
-                    {KIND[r.kind]} · {r.where} · <span className="inline-block">{byline(r)}</span>
+                    {KIND[r.kind]} · {whereOf(r) && `${whereOf(r)} · `}
+                    <span className="inline-block">{byline(r)}</span>
                   </span>
                 </span>
                 {canChange && (

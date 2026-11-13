@@ -2,8 +2,10 @@
 
 import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
+import { InfoTip } from "@/components/ds";
 import { LINK_KINDS } from "@/lib/roadmap-links";
 
+import { itemName, NotInGt } from "./_gtflag";
 import { MsBoardRow } from "./_milestones";
 import { barKind, broken, brokenLinks, closedItem, mergedName, partsTree, shortDay, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
 
@@ -56,7 +58,20 @@ export const MARK_WORDS = {
 export function boardLegend(data: Roadmap, phone: boolean, canDrag: boolean): LegendEntry[] {
   const open = data.items.filter((i) => !closedItem(i));
   const out: LegendEntry[] = [];
-  if (canDrag) out.push({ key: "drag", swatch: null, words: `Drag a card to another column${phone ? " (press and hold first)" : ""} to move its dates there` });
+  // QA Nov 12 #14: how to move a card is no visible prose: one word, the sentence behind its (i).
+  if (canDrag)
+    out.push({
+      key: "drag",
+      swatch: null,
+      words: (
+        <span className="inline-flex items-center gap-1">
+          Moving cards
+          <InfoTip label="moving a card" align="start" testId="board-drag-tip">
+            Drag a card to another column{phone ? " (press and hold first)" : ""} to move its dates there
+          </InfoTip>
+        </span>
+      ),
+    });
   if (open.some((i) => barKind(i) === "estimated"))
     out.push({ key: "estimated", swatch: <i aria-hidden className="inline-block h-3 w-[18px] flex-none rounded border border-dashed border-accent-mid" />, words: MARK_WORDS.estimated });
   if (open.some((i) => barKind(i) === "draft")) out.push({ key: "draft", swatch: <i aria-hidden className={`${LEGEND_SWATCH} border-dashed border-line-strong`} />, words: "Draft" });
@@ -381,7 +396,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           data-kind={kind}
           data-broken={red ? "true" : "false"}
           data-open={open === item.id ? "true" : undefined}
-          aria-label={`${item.title}, ${item.horizon}${held[item.id] ? ", not sent yet" : ""}${movable ? ". Arrows move it to another column, sent when you pause; Escape cancels" : ""}`}
+          aria-label={`${itemName(item)}, ${item.horizon}${held[item.id] ? ", not sent yet" : ""}${movable ? ". Arrows move it to another column, sent when you pause; Escape cancels" : ""}`}
           style={{ touchAction: movable ? "pan-y" : "auto" }}
           onPointerDown={(e) => onDown(e, item)}
           onPointerMove={onPointerMove}
@@ -393,7 +408,9 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
             red ? "border-crit" : kind === "draft" ? "border-dashed border-line-strong" : "border-line"
           } ${movable ? "cursor-grab" : "cursor-pointer"} ${kind === "cut" ? "opacity-70" : ""}`}
         >
-          <p className={`text-[16px] leading-snug font-medium ${kind === "cut" ? "text-text2 line-through" : ""}`}>{item.title}</p>
+          {/* QA Nov 12 #1: the code before the name ("F-06 Weekly alert digest"); #2: no code, flagged. */}
+          <p data-testid="board-card-name" className={`text-[16px] leading-snug font-medium ${kind === "cut" ? "text-text2 line-through" : ""}`}>{itemName(item)}</p>
+          <NotInGt item={item} className="mt-1 h-5! px-2! text-xs!" />
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
             <span
               data-testid="board-dates"
@@ -429,8 +446,8 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           )}
           {item.looks_like.length > 0 && (
             <p className="mt-1 text-sm text-warn" data-testid="board-looks-like">
-              {/* qa4-simple-roadmap-32: the name only, no feature code. */}
-              Looks like {item.looks_like[0].title}
+              {/* QA Nov 12 #1: its code with its name, when it has one (qa4-simple-roadmap-32 had the name only). */}
+              Looks like {itemName(item.looks_like[0])}
             </p>
           )}
           {red && (
