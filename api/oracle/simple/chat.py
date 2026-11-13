@@ -29,7 +29,6 @@ flow or feature carries the stored flow and requests a visual when it has none.
 """
 
 import asyncio
-import contextlib
 import difflib
 import importlib
 import logging
@@ -1973,8 +1972,8 @@ class _LiveRun:
 
         if self.beat is not None:
             self.beat.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self.beat
+            # Waits for the renewal to stop without taking its cancel as the job's own.
+            await asyncio.wait([self.beat])
             self.beat = None
         if not self.started:
             return
