@@ -33,6 +33,9 @@ Cards (protects / fails_when / no_claim):
   read and is retried by the worker runs its second attempt without live reads: one token
   for the question, one 8-read cap; fails_when=the retry mints a second token (16 reads);
   no_claim=the model's own wording.
+- test_ending_a_live_run_keeps_its_jobs_own_cancel: protects=a job cancelled while its live
+  run's lease renewal winds down stays cancelled; fails_when=end() swallows the job's own
+  cancel; no_claim=a database.
 - test_a_long_live_run_keeps_its_lease: protects=a run longer than replies.LEASE keeps its
   line ``streaming`` and its token through the minute tick's lease sweep; fails_when=the
   sweep fails the line and revokes the token mid-answer; no_claim=the real 150 s.
@@ -305,3 +308,23 @@ async def test_a_retried_live_run_mints_no_second_token(client, sources, claude,
     argv = (await claude.started())["argv"]
     assert "--mcp-config" not in argv
     assert len(await token_rows(ctx)) == 1
+
+
+async def test_ending_a_live_run_keeps_its_jobs_own_cancel():
+    from oracle.simple.chat import _LiveRun
+
+    async def slow_to_stop():
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            await asyncio.sleep(0.3)
+            raise
+
+    live = _LiveRun(uuid.uuid4(), uuid.uuid4())
+    live.beat = asyncio.ensure_future(slow_to_stop())
+    await asyncio.sleep(0)
+    job = asyncio.ensure_future(live.end())
+    await asyncio.sleep(0.05)
+    job.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await job
