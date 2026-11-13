@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { SELECT } from "@/app/settings/_components/fields";
-import { Button, Chip } from "@/components/ds";
+import { Button, Chip, Icon } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { Role } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
@@ -41,7 +41,7 @@ export function useAccessRequestRows(requests: AccessRequest[], reload: () => Pr
     try {
       if (action === "approve") await unwrap(api.POST("/v1/access-requests/{request_id}/approve", { ...path, body: { role } }));
       else await unwrap(api.POST("/v1/access-requests/{request_id}/decline", path));
-      setSettled((m) => new Map(m).set(r.id, { r, label: action === "approve" ? `Approved as ${ROLE_WORD[role]} ✓` : "Declined", declined: action === "decline" }));
+      setSettled((m) => new Map(m).set(r.id, { r, label: action === "approve" ? `Approved as ${ROLE_WORD[role]}` : "Declined", declined: action === "decline" }));
       if (onActed) {
         // The banner says it, Undo with it; onActed reloads (and the rail badge with it).
         onActed({
@@ -91,6 +91,8 @@ export function useAccessRequestRows(requests: AccessRequest[], reload: () => Pr
           </span>
           {done && (
             <Chip kind={done.label === "Declined" ? "line" : "pass"} data-testid="access-settled">
+              {/* An icon, never the ✓ character (detailed-b 4). */}
+              {!done.declined && <Icon name="check" size={16} />}
               {done.label}
             </Chip>
           )}

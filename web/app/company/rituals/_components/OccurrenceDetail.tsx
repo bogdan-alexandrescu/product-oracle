@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { FindingCard } from "@/app/company/market/_components/FindingCard";
 import { MarkdownBody } from "@/components/MarkdownBody";
-import { Button, Chip, LinkButton, NotFoundPanel, Panel } from "@/components/ds";
+import { Button, Chip, Icon, LinkButton, NotFoundPanel, Panel } from "@/components/ds";
 import { ErrorNote, INPUT, LoadError, Loading } from "@/components/ui";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { forgetReads } from "@/lib/api/shared-reads";
@@ -19,7 +19,18 @@ import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import { CompanyHeader } from "../../_nav";
 import { STATE_KIND, STATE_LABEL, localTime, zoneTime, type Occurrence } from "./lib";
-import { MetricsTable, VarianceCards, type MetricRow, type VarianceRow } from "./MetricBlocks";
+import {
+  MetricsTable,
+  PriorityChangesBlock,
+  StaleItemsBlock,
+  TracksBlock,
+  VarianceCards,
+  type MetricRow,
+  type PriorityChangeRow,
+  type StaleItemRow,
+  type TrackRow,
+  type VarianceRow,
+} from "./MetricBlocks";
 
 /** H5: the blocks drawn as their own cards across the page (the metrics review). */
 const WIDE = new Set(["metrics_table", "variances"]);
@@ -131,8 +142,10 @@ export function OccurrenceDetail({ id }: { id: string }) {
           occurrence's own heading: the way back, its name and its state together (qa-company-35). */}
       <CompanyHeader />
       <div className="mb-1 flex flex-col gap-1" data-testid="occurrence-heading">
-        <Link href="/company/rituals" className="self-start text-sm text-text2 hover:underline">
-          ← Rituals
+        {/* detailed-b 18: the same back-link component and icon as Runs, with a gap (not "←Rituals"). */}
+        <Link href="/company/rituals" className="inline-flex min-h-6 items-center gap-1 self-start text-sm text-text2 hover:text-text hover:underline">
+          <Icon name="back" size={16} />
+          Rituals
         </Link>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <h2 className="min-w-0 font-display text-[22px] leading-7 font-bold tracking-heading break-words">{occ.title}</h2>
@@ -249,6 +262,13 @@ function BlockCard({
         <MetricsTable rows={block.rows as unknown as MetricRow[]} />
       ) : block.key === "variances" ? (
         <VarianceCards rows={block.rows as unknown as VarianceRow[]} live={live} onChanged={onChanged} />
+      ) : block.key === "tracks" ? (
+        // detailed-b 7: each track and its "N at risk" link out; see MetricBlocks.tsx.
+        <TracksBlock rows={block.rows as unknown as TrackRow[]} />
+      ) : block.key === "stale_items" ? (
+        <StaleItemsBlock rows={block.rows as unknown as StaleItemRow[]} />
+      ) : block.key === "priority_changes" ? (
+        <PriorityChangesBlock rows={block.rows as unknown as PriorityChangeRow[]} />
       ) : block.key === "suggested_next" ? (
         <div className="flex flex-wrap gap-2 px-4 py-3">
           {block.rows.map((r) =>

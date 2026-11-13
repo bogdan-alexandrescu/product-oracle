@@ -73,10 +73,13 @@ export function ConnectionsSettings() {
         }
         status={
           <>
+            {/* The count leads to the cards it counts (detailed-b 11). */}
             {q.data && (
-              <Chip kind="line">
-                <span className="tnum">{active}</span> connected
-              </Chip>
+              <a href="#connection-cards" className="rounded-full hover:underline" data-testid="connected-count">
+                <Chip kind="line">
+                  <span className="tnum">{active}</span> connected
+                </Chip>
+              </a>
             )}
             {broken > 0 && (
               <Chip kind="warn" dot>
@@ -106,7 +109,7 @@ export function ConnectionsSettings() {
         )}
 
         {q.data && (
-          <div className="grid items-start gap-4 md:grid-cols-2 max-[600px]:gap-3">
+          <div id="connection-cards" className="grid scroll-mt-20 items-start gap-4 md:grid-cols-2 max-[600px]:gap-3">
             {providers.map((p) => (
               <ProviderCard
                 key={p.key}
@@ -289,14 +292,15 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
         <Chip kind={STATUS_KIND[c.status]} dot>
           {c.status === "active" ? connectedBy(c.auth_mode) : STATUS_LABEL[c.status]}
         </Chip>
-        {c.scopes.length > 0 && (
-          <InfoTip label={`${name} scopes`}>Scopes: {c.scopes.join(", ")}</InfoTip>
-        )}
-        {c.reconnect_reason && (
+        {/* One (i) per row (detailed-b 10): why to reconnect, then the scopes. */}
+        {c.reconnect_reason ? (
           <InfoTip label={`why reconnect ${name}`}>
             This Google sign-in cannot read folders. Reconnect once, then choose files and folders on Sources.
             Oracle can read your Drive; it pulls in only the files and folders you choose there.
+            {c.scopes.length > 0 && <span className="mt-1 block">Scopes: {c.scopes.join(", ")}</span>}
           </InfoTip>
+        ) : (
+          c.scopes.length > 0 && <InfoTip label={`${name} scopes`}>Scopes: {c.scopes.join(", ")}</InfoTip>
         )}
         <span className="flex flex-none items-center gap-1">
           {c.endpoint_url && can("set_connection_endpoint") && !changing && (

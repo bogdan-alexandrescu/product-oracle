@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { Button, Chip, FilterChips, LinkButton, InspectorSection, Page, PageHeader, SegmentedControl, Sheet, Split, type Column } from "@/components/ds";
+import { Button, Chip, FilterChips, Icon, LinkButton, InspectorSection, Page, PageHeader, SegmentedControl, Sheet, Split, type Column } from "@/components/ds";
 import { blockingLeftText, DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
 import { ItemInspector } from "@/components/review/ItemInspector";
 import { ItemsTable } from "@/components/review/ItemsTable";
@@ -597,7 +597,8 @@ function YourCall({
     return (
       <>
         <span className="flex flex-wrap items-center gap-1 text-sm font-medium text-pass" data-testid="row-done">
-          ✓ {joined.length > 1 ? `${joined.length} dependencies removed` : doneText(a, titleOf)}
+          {/* detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium. */}
+          <Icon name="check" size={16} /> {joined.length > 1 ? `${joined.length} dependencies removed` : doneText(a, titleOf)}
           {mayUndo && (
             <>
               <span aria-hidden>·</span>
@@ -612,7 +613,18 @@ function YourCall({
     );
   }
   if (askedChip && it.state === "waiting") return askedChip;
-  if (mode === "viewer" || !open.length) return askedChip || (it.reasons.length ? <span className="text-sm text-text2">{it.state === "handled" ? "✓ Handled" : ""}</span> : <span className="text-sm text-text2">—</span>);
+  if (mode === "viewer" || !open.length) {
+    if (askedChip) return askedChip;
+    if (!it.reasons.length) return <span className="text-sm text-text2">—</span>;
+    // detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium.
+    return it.state === "handled" ? (
+      <span className="flex items-center gap-1 text-sm text-text2">
+        <Icon name="check" size={16} /> Handled
+      </span>
+    ) : (
+      <span className="text-sm text-text2" />
+    );
+  }
   return (
     <>
       {askedChip}
@@ -992,7 +1004,8 @@ function ReviewInspector({
                   <p className="mt-1.5 text-sm break-words">{datesInWords(r.text)}</p>
                   {!isOpen && by ? (
                     <p className="mt-1.5 flex items-center gap-2 text-sm font-medium text-pass">
-                      ✓ {doneText(by, titleOf)}
+                      {/* detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium. */}
+                      <Icon name="check" size={16} /> {doneText(by, titleOf)}
                       {(mode === "approver" || by.created_by?.id === meId) && (
                         <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void undoReason(by, r, item, ops)}>
                           Undo

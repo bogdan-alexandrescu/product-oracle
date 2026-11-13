@@ -37,7 +37,7 @@ import { RawFileSheet } from "@/components/review/RawFileSheet";
 import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { named, namedText } from "@/lib/codes";
+import { named, namedText, useNames, type Names } from "@/lib/codes";
 import { failedAt, formatDateTime, formatDay, formatTime, plural } from "@/lib/format";
 import { useMe, type Operation } from "@/lib/me";
 
@@ -517,7 +517,8 @@ export function RunDetail({ id }: { id: string }) {
             </span>
           </Notice>
         )}
-        {run.status === "paused_overrun" && <OverrunHeld mayResume={can("resume_run")} mayCancel={mayCancel} />}
+        {/* detailed-b 20: who may resume has the pill and Resume / Cancel run; the line is for the rest. */}
+        {run.status === "paused_overrun" && !can("resume_run") && <OverrunHeld mayResume={false} mayCancel={mayCancel} />}
         {checked && (
           <Notice testId="tick-result">
             {!checked.lead && checked.text}
@@ -2674,15 +2675,25 @@ function GateList({ gate, message, onWaive }: { gate: NonNullable<CheckpointOut[
   );
 }
 
+/**
+ * A reason's feature as a person reads it (detailed-b 2): its code and name ("F-2 Usage alerts"),
+ * the name from the reason or else the company's features; a bare key only when neither has it.
+ */
+function gateItem(x: { item: string; item_title?: string | null }, names: Names | undefined): string {
+  const title = x.item_title ?? names?.byKey.get(x.item)?.title;
+  return title ? namedText(named(title, x.item)) : x.item;
+}
+
 const gateKey = (x: { item: string; code: string; ref?: string }) => `${x.item}|${x.ref || x.code}`;
 
 /** One blocking reason: its own reason box, text and Waive, so waiving it waives it alone. */
 function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"][number]; onWaive?: (body: ActionIn) => Promise<void> }) {
   const [open, setOpen] = useState(false);
+  const names = useNames();
   return (
     <li data-testid="gate-reason" data-ref={x.ref || x.code}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{x.item_title ?? x.item}</span>
+        <span className="font-medium">{gateItem(x, names)}</span>
         <Chip kind="crit" className={REASON_CHIP}>
           {x.label}
         </Chip>

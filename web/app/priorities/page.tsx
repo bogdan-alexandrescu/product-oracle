@@ -239,9 +239,13 @@ const pct = (n: number | null | undefined) => (n == null ? null : Math.round(n *
 /** A goal as words: its code and name ("G-B Growth"), never its key. */
 const goalText = (key: string, title: string) => (isUnknownGoal({ goal: key, title }) ? "Unknown goal" : namedText(named(title, key)));
 
-/** A feature key as words: the ranked feature's name only, never its code (qa-plan-17). */
+/** A ranked feature as words: its code and name ("F-5 Address lookup service"). */
+const featureWords = (f: { key: string; title: string }) => namedText(named(f.title, f.key));
+
+/** A feature key as words: the ranked feature's code and name (detailed-b 1). */
 function featureText(features: RankedFeature[], key: string): string {
-  return features.find((x) => x.key === key)?.title ?? key;
+  const f = features.find((x) => x.key === key);
+  return f ? featureWords(f) : key;
 }
 
 /**
@@ -273,10 +277,8 @@ function goalWidth(features: RankedFeature[], max = GOAL_MAX): number {
   return Math.min(max, Math.max(GOAL_MIN, Math.ceil(need) + 1));
 }
 
-/** A feature key as its name only (beside other names, the code adds nothing). */
-function featureName(features: RankedFeature[], key: string): string {
-  return features.find((x) => x.key === key)?.title ?? key;
-}
+/** A feature key as its code and name, as everywhere a feature is shown. */
+const featureName = featureText;
 
 /**
  * A row's reason: a short label the chip shows on one line (qa-plan-49), the rest of the
@@ -341,12 +343,12 @@ function rankReasons(f: RankedFeature, features: RankedFeature[], who: WhoOf): R
   }
   // A person moved or pinned a lower-scored feature above it (qa-plan-20): that says who,
   // beside any reason of its own, never left to read as a dependency's doing.
-  const moved = (x: RankedFeature) => `${x.title} (moved by ${who(x.override!.by).name})`;
+  const moved = (x: RankedFeature) => `${featureWords(x)} (moved by ${who(x.override!.by).name})`;
   const higher = features.slice(0, at).filter((x) => s(x) < s(f));
   const movedAbove = higher.filter((x) => !!x.override).map(moved);
   if (out.length === 0) {
     // Nothing of its own: features moved up for their dependencies sit above it.
-    const above = higher.filter((x) => !x.override).map((x) => x.title);
+    const above = higher.filter((x) => !x.override).map(featureWords);
     if (above.length > 0) {
       out.push({
         label: "Ranked lower",
@@ -358,7 +360,7 @@ function rankReasons(f: RankedFeature, features: RankedFeature[], who: WhoOf): R
     const below = features
       .slice(at + 1)
       .filter((x) => s(x) > s(f))
-      .map((x) => (x.override ? moved(x) : `${x.title} (${!x.serves_goal ? "no confirmed goal" : "waits for a dependency"})`));
+      .map((x) => (x.override ? moved(x) : `${featureWords(x)} (${!x.serves_goal ? "no confirmed goal" : "waits for a dependency"})`));
     if (higher.length === 0 && below.length > 0) {
       out.push({
         label: "Ranked higher",
@@ -558,8 +560,8 @@ function FeatureInspector({
     <div id={id}>
       <Inspector
         eyebrow="Feature"
-        title={f.title}
-        label={`Feature ${f.title}`}
+        title={featureWords(f)}
+        label={`Feature ${featureWords(f)}`}
         testId="priority-inspector"
         // Four tiles two by two, so no score or label breaks across lines at 1440 or 1512.
         statColumns={runRow ? 2 : undefined}
@@ -1080,6 +1082,8 @@ function Priorities() {
   const [chosen, setMethod] = useState<Method>("goal_weighted");
   const method: Method = cmp?.snapshot.method ?? chosen;
   const [selected, setSelected] = useState<string | null>(null);
+  // A header count's rows (detailed-b 6): each count chip shows only the features it counts.
+  const [only, setOnly] = useState<CountFilter | null>(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<Schemas["PrioritySnapshotOut"] | null>(null);
@@ -1285,7 +1289,7 @@ function Priorities() {
             className={`block max-w-full text-left font-medium break-words ${on ? "" : "hover:underline"}`}
             data-testid="feature-name"
           >
-            {fonts && featureRoom ? fitWords(f.title, featureRoom, 500, 15) : f.title}
+            {fonts && featureRoom ? fitWords(featureWords(f), featureRoom, 500, 15) : featureWords(f)}
             {f.new && (
               <span className="ml-2 inline-block align-middle">
                 <Chip kind="acc" title="Not in the Ground Truth yet: proposed by this PRD's run">
@@ -1521,10 +1525,27 @@ function Priorities() {
             <>
               {capsReady && !canSnapshot && !canOverride && <ViewOnly />}
               {/* The run's order lists its own features, not the whole live ranking. */}
-              <Chip kind="acc">{`${cmp ? features.length : counts.features} ranked`}</Chip>
-              {counts.no_goal > 0 && <Chip kind="crit">{counts.no_goal} no goal</Chip>}
-              {counts.unscored > 0 && <Chip kind="warn">{counts.unscored} unscored</Chip>}
-              {counts.in_cycles > 0 && <Chip kind="warn">{counts.in_cycles} in a cycle</Chip>}
+              {/* While a count shows only its rows, the whole count brings every row back. */}
+              {only ? (
+                <CountChip kind="acc" on={false} onClick={() => setOnly(null)}>{`${cmp ? features.length : counts.features} ranked`}</CountChip>
+              ) : (
+                <Chip kind="acc">{`${cmp ? features.length : counts.features} ranked`}</Chip>
+              )}
+              {counts.no_goal > 0 && (
+                <CountChip kind="crit" on={only === "no_goal"} onClick={() => setOnly((o) => (o === "no_goal" ? null : "no_goal"))}>
+                  {counts.no_goal} no goal
+                </CountChip>
+              )}
+              {counts.unscored > 0 && (
+                <CountChip kind="warn" on={only === "unscored"} onClick={() => setOnly((o) => (o === "unscored" ? null : "unscored"))}>
+                  {counts.unscored} unscored
+                </CountChip>
+              )}
+              {counts.in_cycles > 0 && (
+                <CountChip kind="warn" on={only === "cycle"} onClick={() => setOnly((o) => (o === "cycle" ? null : "cycle"))}>
+                  {counts.in_cycles} in a cycle
+                </CountChip>
+              )}
             </>
           )
         }
@@ -1608,7 +1629,7 @@ function Priorities() {
               label="Ranking"
               testId="priority-table"
               columns={columns}
-              rows={rows}
+              rows={only && rows ? rows.filter((f) => counted(only, f, r?.cycles ?? [])) : rows}
               rowKey={(f) => f.key}
               selected={current?.key ?? null}
               onSelect={(k) => pick(k)}
@@ -1659,7 +1680,7 @@ function Priorities() {
           <ChangesPanel reloadKey={changesKey} features={features} canChange={canChange} who={who} />
         </Split>
         {phone && current && (
-          <Sheet open={sheet} title={current.title} onClose={() => setSheet(false)} testId="priority-sheet">
+          <Sheet open={sheet} title={featureWords(current)} onClose={() => setSheet(false)} testId="priority-sheet">
             {inspector}
           </Sheet>
         )}
@@ -1679,6 +1700,24 @@ function Priorities() {
         )}
       </div>
     </Page>
+  );
+}
+
+type CountFilter = "no_goal" | "unscored" | "cycle";
+
+/** Whether a header count counts this feature: no confirmed goal, no score, or in a cycle. */
+function counted(only: CountFilter, f: RankedFeature, cycles: string[][]): boolean {
+  if (only === "no_goal") return !f.serves_goal;
+  if (only === "unscored") return f.serves_goal && f.score == null;
+  return f.flags.includes("dependency_cycle") || cycles.some((c) => c.includes(f.key));
+}
+
+/** A header count that shows the rows it counts; pressed while it does. */
+function CountChip({ kind, on, onClick, children }: { kind: ChipKind; on: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" aria-pressed={on} onClick={onClick} className="rounded-full hover:underline aria-pressed:outline-2 aria-pressed:outline-offset-1 aria-pressed:outline-current">
+      <Chip kind={kind}>{children}</Chip>
+    </button>
   );
 }
 

@@ -3,12 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { Button, Chip, FilterChips, Page, PageHeader, Ring, SegmentedControl, Sheet, Split } from "@/components/ds";
+import { Button, Chip, FilterChips, Icon, Page, PageHeader, Ring, SegmentedControl, Sheet, Split } from "@/components/ds";
 import { AgentQuestions } from "@/components/review/AgentQuestions";
 import { blockingLeftText, DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
 import { RunBackLink } from "@/components/review/parts";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
+// detailed-b 3: the row's own code and name (aliased: "named" here is the scope's own, below).
+import { named as namedCode, namedText } from "@/lib/codes";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -464,7 +466,12 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
           )}
         </Split>
       )}
-      <Sheet open={phone && sheet && !!inspector} title={selectedFeature?.title ?? "Feature"} onClose={() => setSheet(false)} testId="sheet-feature">
+      <Sheet
+        open={phone && sheet && !!inspector}
+        title={selectedFeature ? namedText(namedCode(selectedFeature.title, selectedFeature.key)) : "Feature"}
+        onClose={() => setSheet(false)}
+        testId="sheet-feature"
+      >
         {inspector}
       </Sheet>
       <RawFile open={rawOpen} onClose={() => setRawOpen(false)} runId={run.id} seq={cp.segment_seq ?? scope.segment_seq} />
@@ -509,6 +516,8 @@ function FeatureRow({
   const kept = f.requirements.filter((q) => q.decision === "keep").length;
   const suggestions = actionsOn(review, f.key).filter((a) => a.state === "suggested");
   const titleOf = (k: string) => scope.features.find((x) => x.key === k)?.title ?? k;
+  // detailed-b 3: the row's code with its name, never the key alone.
+  const rowTitle = namedText(namedCode(f.title, f.key));
   return (
     <div
       role="row"
@@ -540,11 +549,11 @@ function FeatureRow({
           <button
             type="button"
             onClick={onSelect}
-            title={f.title}
+            title={rowTitle}
             className="min-h-6 min-w-0 truncate text-left font-medium hover:underline max-[600px]:min-h-10 max-[600px]:flex-1 max-[600px]:whitespace-normal"
             data-testid="feature-title"
           >
-            {f.title}
+            {rowTitle}
           </button>
           {f.flags.includes("new_feature") && <Chip kind="acc">New</Chip>}
           {f.decision !== "include" && <Chip kind="na">{decisionText(f.decision)}</Chip>}
@@ -637,7 +646,8 @@ function YourCall({ f, scope, review, mode, ops, ui }: { f: Feature; scope: Scop
     );
   const done = (text: string, run: (() => Promise<void>) | null) => (
     <span className="flex flex-wrap items-center gap-1 text-sm font-medium text-pass" data-testid="row-done">
-      ✓ {text}
+      {/* detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium. */}
+      <Icon name="check" size={16} /> {text}
       {run && undo(run)}
     </span>
   );

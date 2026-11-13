@@ -328,10 +328,23 @@ def _check_features(out: OrderCheck, rows: list[dict[str, Any]], known: Known) -
             if dep in ranked and ranked[dep] > r["rank"]:
                 out.add(
                     "before_prerequisite",
-                    f"{r['key']} is ranked {r['rank']}, above {dep} (rank {ranked[dep]}), "
-                    "which it depends on",
+                    f"{_feature(r['key'], known)} is ranked {r['rank']}, above "
+                    f"{_feature(dep, known)} (rank {ranked[dep]}), which it depends on",
                     r["key"],
                 )
+
+
+# A key that is itself a code ("F-2"), as oracle.runs.gate's and the web's lib/codes.ts.
+_CODE = re.compile(r"[A-Z][A-Z0-9]*(?:[-.][A-Z0-9]+)+[a-j]?|[A-Z]{1,4}\d+")
+
+
+def _feature(key: str, known: Known) -> str:
+    """A feature as a person reads it (detailed-b 2): its code and name ("F-2 Usage alerts")
+    when its key is a code, else its name; the key only when it has no name."""
+    title = (known.features.get(key) or "").strip()
+    if not title or title == key:
+        return key
+    return f"{key} {title}" if _CODE.fullmatch(key) else title
 
 
 def _check_new_goals(out: OrderCheck, row: dict[str, Any], known: Known) -> None:

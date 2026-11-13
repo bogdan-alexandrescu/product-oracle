@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
-import { Button, Chip, Page, PageHeader, SegmentedControl, toast } from "@/components/ds";
+import { Button, Chip, Icon, Page, PageHeader, SegmentedControl, toast } from "@/components/ds";
 import { Menu } from "@/components/review/parts";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -287,8 +287,8 @@ export function EngReview({
                     }`}
                   >
                     <span className="flex items-baseline gap-2">
-                      {/* The feature's name; its key shows in small type in the pane, by its title. */}
-                      <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">{f.title}</span>
+                      {/* detailed-b 3: the row's code with its name, never the raw key alone. */}
+                      <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">{namedText(named(f.title, f.key))}</span>
                       <span className="tnum text-sm font-semibold text-text2" data-testid="brief-size">
                         <span className="sr-only">Size </span>
                         {size.toUpperCase()}
@@ -577,6 +577,9 @@ function BriefPane({
   const answered = f.questions.filter((q) => edit(acts, `answer:${q.id}`)).length;
   // The picked verdict is filled in as soon as it is clicked, before its note is saved.
   const shown = picking ?? current?.verdict ?? null;
+  // detailed-b 3: the key shows only when it reads as a code; a raw internal key ("f.guided-setup")
+  // never draws as if it were one.
+  const n = named(f.title, f.key);
 
   const pick = (v: Verdict) => {
     if (v === "feasible") {
@@ -601,9 +604,9 @@ function BriefPane({
           </button>
           <div className="text-[13px] font-semibold text-text2" data-testid="brief-position">
             Feature {at + 1} of {count}
-            <span className="ml-2 font-mono font-normal [overflow-wrap:anywhere]">{f.key}</span>
+            {n.code && <span className="ml-2 font-mono font-normal [overflow-wrap:anywhere]">{n.code}</span>}
           </div>
-          <h2 className="font-display text-[22px] leading-7 font-bold">{f.title}</h2>
+          <h2 className="font-display text-[22px] leading-7 font-bold">{n.name}</h2>
         </div>
         <div className="flex flex-none gap-1.5">
           <Button variant="secondary" disabled={at === 0} onClick={() => onGo(at - 1)} aria-label="Previous feature">
@@ -727,8 +730,9 @@ function BriefPane({
                 <li key={q.id} data-testid="brief-question" data-answered={answer ? "true" : "false"} className="rounded-md border border-line px-3 py-2.5">
                   <p className="flex items-start gap-1.5">
                     {done ? (
+                      // detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium.
                       <span className="mt-0.5 text-pass" aria-label="Answered">
-                        ✓
+                        <Icon name="check" size={16} />
                       </span>
                     ) : q.blocking ? (
                       <Chip kind="crit">Blocking</Chip>

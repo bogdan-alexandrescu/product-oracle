@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Button, Chip, Sparkline, ViewOnly } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { named, namedText } from "@/lib/codes";
 import { addDays, calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
@@ -273,5 +274,81 @@ function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Varianc
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
     </article>
+  );
+}
+
+/** A tracks row, as oracle.rituals.blocks.tracks builds it (detailed-b 7). */
+export type TrackRow = { track_id: string; title: string; health: string; at_risk_items: number; href: string; text: string };
+
+/** A potentially-stale item row, as oracle.rituals.blocks.stale_items builds it (detailed-b 7). */
+export type StaleItemRow = { item_key: string; title: string; track_id: string | null; href: string | null; text: string };
+
+/** A priority-change row, as oracle.rituals.blocks.priority_changes builds it (detailed-b 7): the
+ * feature's own key, named as everywhere else a feature is shown (`web/lib/codes.ts`). */
+export type PriorityChangeRow = { key: string; title: string; from: number; to: number; href: string; text: string };
+
+/**
+ * detailed-b 7: each track names its PRD or roadmap, and its "N at risk" leads to the same
+ * place as its own link, so the count never reads as plain text with nowhere to go.
+ */
+export function TracksBlock({ rows }: { rows: TrackRow[] }) {
+  return (
+    <ul className="flex flex-col gap-1 px-4 py-3 text-[15px]" data-testid="ritual-tracks">
+      {rows.map((r) => (
+        <li key={r.track_id} className="min-w-0 [overflow-wrap:anywhere]">
+          <Link href={r.href} className="font-medium text-accent-ink hover:underline">
+            {namedText(named(r.title))}
+          </Link>
+          <span className="text-text2">: {r.health.replace(/_/g, " ")}, </span>
+          {r.at_risk_items > 0 ? (
+            <Link href={r.href} data-testid="track-at-risk" className="text-accent-ink hover:underline">
+              {r.at_risk_items} at risk
+            </Link>
+          ) : (
+            <span className="text-text2">{r.at_risk_items} at risk</span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** detailed-b 7: a potentially stale item, its code and name where it has one (named()), linked to its place on the roadmap. */
+export function StaleItemsBlock({ rows }: { rows: StaleItemRow[] }) {
+  return (
+    <ul className="flex flex-col gap-1 px-4 py-3 text-[15px]" data-testid="ritual-stale-items">
+      {rows.map((r) => {
+        const label = namedText(named(r.title, r.item_key));
+        return (
+          <li key={r.item_key} className="min-w-0 [overflow-wrap:anywhere]">
+            {r.href ? (
+              <Link href={r.href} className="text-accent-ink hover:underline">
+                {label}
+              </Link>
+            ) : (
+              label
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * detailed-b 7: a feature's priority move, its code and name as the Priorities page itself
+ * shows it (`named(title, key)`), linked to Priorities (the real API's own href for this row).
+ */
+export function PriorityChangesBlock({ rows }: { rows: PriorityChangeRow[] }) {
+  return (
+    <ul className="flex flex-col gap-1 px-4 py-3 text-[15px]" data-testid="ritual-priority-changes">
+      {rows.map((r) => (
+        <li key={r.key} className="min-w-0 [overflow-wrap:anywhere]">
+          <Link href={r.href} className="text-accent-ink hover:underline">
+            {namedText(named(r.title, r.key))}: #{r.from} → #{r.to}
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
