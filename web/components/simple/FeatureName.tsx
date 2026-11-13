@@ -1,15 +1,33 @@
 "use client";
-// A feature as Simple's Goal map, Priorities and PRDs name it: its code, then its name (the
-// feature panel's own Named); one with no Ground Truth code is flagged, never refused.
+// A feature as Simple names it on every page: its code, then its name ("F-12 Alert rules engine");
+// one with no Ground Truth code is flagged, never refused (docs/ground-truth.md). The one flag and
+// the one code-and-name every page uses: the Roadmap's _gtflag and _fields re-export these.
 
-import { Named } from "@/app/simple/roadmap/_fields";
+import { Chip } from "@/components/ds/Chip";
 
-/** The flag a feature with no Ground Truth code carries (docs/ground-truth.md). */
-export function NotInGt() {
+/** The words of the flag a feature with no Ground Truth code carries. */
+export const NOT_IN_GT = "Not in the Ground Truth";
+
+/** A feature's code chip, then its name: "F-12 Alert rules engine". */
+export function Named({ item }: { item: { code?: string | null; title: string } }) {
   return (
-    <span className="simple-tag ml-1.5 whitespace-nowrap" data-testid="not-in-gt">
-      Not in the Ground Truth
-    </span>
+    <>
+      {item.code && <span className="simple-code mr-1.5">{item.code}</span>}
+      {item.title}
+    </>
+  );
+}
+
+/**
+ * The flag a feature with no Ground Truth code carries: the Roadmap's warn chip, on every page.
+ * Given an item, it shows only when the item has no code.
+ */
+export function NotInGt({ item, className = "ml-1.5 h-5! px-2! text-xs!" }: { item?: { code?: string | null }; className?: string }) {
+  if (item?.code) return null;
+  return (
+    <Chip kind="warn" className={`shrink-0 ${className}`} data-testid="not-in-gt">
+      {NOT_IN_GT}
+    </Chip>
   );
 }
 
@@ -18,7 +36,7 @@ export function FeatureName({ item }: { item: { code?: string | null; title: str
   return (
     <>
       <Named item={{ code: item.code ?? "", title: item.title }} />
-      {!item.code && <NotInGt />}
+      <NotInGt item={item} />
     </>
   );
 }
