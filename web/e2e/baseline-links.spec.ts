@@ -15,8 +15,8 @@ async function openItem(page: Page, key: string, title: string, email?: string) 
 test("Ground Truth: link a feature to a goal, change its contribution, unlock it and remove it; the matrix follows", async ({
   page,
 }) => {
-  const d = await openItem(page, "f.dark-mode", "Dark mode");
-  const row = page.getByTestId("feature-f.dark-mode");
+  const d = await openItem(page, "F-81", "Dark mode");
+  const row = page.getByTestId("feature-F-81");
   await expect(row.getByTestId("flag")).toHaveText(["Serves no goal"]);
 
   await d.getByRole("button", { name: "Link to goal" }).click();
@@ -51,7 +51,7 @@ test("Ground Truth: link a feature to a goal, change its contribution, unlock it
 });
 
 test("Ground Truth: add depends-on, blocks and part-of links, and confirm a proposed link", async ({ page }) => {
-  const d = await openItem(page, "f.saved-carts", "Saved carts");
+  const d = await openItem(page, "F-84", "Saved carts");
   // An agent proposed that Saved carts depends on Team invites.
   const deps = d.getByRole("list", { name: "Depends on" });
   await expect(deps).toContainText("Team invites");
@@ -83,7 +83,7 @@ test("Ground Truth: add depends-on, blocks and part-of links, and confirm a prop
 });
 
 test("Ground Truth: cite a source item as evidence, then remove evidence with a reason", async ({ page }) => {
-  const d = await openItem(page, "f.dark-mode", "Dark mode");
+  const d = await openItem(page, "F-81", "Dark mode");
   const evidence = d.getByRole("list", { name: "Evidence" });
   await expect(evidence.getByTestId("evidence-row")).toHaveCount(1);
   await d.getByRole("button", { name: "Cite a source item" }).click();
@@ -110,7 +110,7 @@ test("Ground Truth: cite a source item as evidence, then remove evidence with a 
 });
 
 test("Ground Truth: a viewer sees no link or evidence controls, and a View only label", async ({ page }) => {
-  const d = await openItem(page, "f.guided-setup", "Guided setup", "viewer@example.com");
+  const d = await openItem(page, "F-82", "Guided setup", "viewer@example.com");
   await expect(d.getByText("View only", { exact: true })).toBeVisible();
   for (const name of ["Link to goal", "Add dependency", "Cite a source item"]) {
     await expect(d.getByRole("button", { name })).toHaveCount(0);
@@ -121,7 +121,7 @@ test("Ground Truth: a viewer sees no link or evidence controls, and a View only 
 });
 
 test("Ground Truth: a commenter sees no link or cite controls, but can still add an evidence link", async ({ page }) => {
-  const d = await openItem(page, "f.guided-setup", "Guided setup", "commenter@example.com");
+  const d = await openItem(page, "F-82", "Guided setup", "commenter@example.com");
   for (const name of ["Link to goal", "Add dependency", "Cite a source item"]) {
     await expect(d.getByRole("button", { name })).toHaveCount(0);
   }
@@ -131,7 +131,7 @@ test("Ground Truth: a commenter sees no link or cite controls, but can still add
 
 test("Ground Truth: on a phone the Link to goal form fits", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const d = await openItem(page, "f.dark-mode", "Dark mode");
+  const d = await openItem(page, "F-81", "Dark mode");
   await d.getByRole("button", { name: "Link to goal" }).click();
   const form = d.getByRole("form", { name: "Link to goal" });
   await form.getByLabel("Goal").selectOption({ label: "Grow paid conversion" });

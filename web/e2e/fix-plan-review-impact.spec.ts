@@ -32,7 +32,7 @@ test("impact: the lineage names a Ground Truth item's kind, not its raw key", as
   // A version's preview reaches only that document's sections (as the API's): a Ground Truth
   // item is an upstream on its own what-if, opened from its drawer as a person would.
   await page.goto("/ground-truth");
-  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
   await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
   const graph = page.getByRole("region", { name: "Lineage" });

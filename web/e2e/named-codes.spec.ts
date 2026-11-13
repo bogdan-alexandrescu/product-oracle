@@ -40,7 +40,7 @@ test("Plan, Ground Truth and Priorities draw names, never a place code or a slug
   expect(await mainText(page)).not.toMatch(BARE);
 
   await page.goto("/ground-truth");
-  await expect(page.getByTestId("feature-f.guided-setup")).toBeVisible();
+  await expect(page.getByTestId("feature-F-82")).toBeVisible();
   await expect(page.locator("main").getByTestId("code-tag").filter({ hasText: "G-B" }).first()).toBeVisible();
   expect(await mainText(page)).not.toMatch(BARE);
 

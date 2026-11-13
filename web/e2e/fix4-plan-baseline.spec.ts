@@ -65,7 +65,7 @@ test("qa-plan-4: Plan's goal cards and the Ground Truth's Goals table show the s
 // name whole; its flags wrap under it; fails_when=the name ends in "Usa…"; no_claim=phones.
 test("qa-plan-7: an open drawer leaves the feature names whole in Feature × goal", async ({ page }) => {
   await openBaseline(page);
-  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
   await expect(page.getByRole("dialog", { name: "Guided setup" })).toBeVisible();
   const usage = ledger(page).getByTestId("feature-f.usage-export");
   const name = usage.getByRole("button", { name: "Usage export", exact: true });

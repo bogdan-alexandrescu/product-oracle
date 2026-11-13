@@ -11,7 +11,8 @@ import { login } from "./helpers";
  * fix. In the "ground-truth-flags" scenario: linking the PRD's F-09 Guest seats to a feature
  * clears it and its roadmap item F-09a, so Home's count drops to 7 at once, and Undo in the
  * sheet brings back 9. A viewer reads the line and the flags with no fixes; a phone shows the
- * sheet full screen; with no flags (the default company) there is no line.
+ * sheet full screen; the default company has one flag (Dark mode serves no goal), and with none
+ * left there is no line.
  */
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -63,7 +64,7 @@ for (const colorScheme of ["light", "dark"] as const)
     await picker.getByLabel("Find a feature").fill("F-12");
     await picker.getByRole("button", { name: "F-12 Digest emails" }).click();
     await expect(picker).toHaveCount(0);
-    await expect(notice(page)).toContainText("Linked “Guest seats” to “Digest emails”.");
+    await expect(notice(page)).toContainText("Linked “F-09 Guest seats” to “Digest emails”.");
     await expect(sheet(page).getByRole("heading").first()).toHaveText("Ground Truth flags · 7");
     await expect(count(page)).toHaveText("7 Ground Truth flags");
 
@@ -107,9 +108,19 @@ for (const colorScheme of ["light", "dark"] as const)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 
-test("with no Ground Truth flags, Home shows no line", async ({ page }) => {
+test("the default company's one flag (Dark mode serves no goal): picking a goal leaves no flags, and Home shows no line", async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await home(page, undefined, null);
+  await expect(page.getByRole("region", { name: /^(Summary|Waiting for you)$/ }).first()).toBeVisible();
+  await expect(count(page)).toHaveText("1 Ground Truth flag");
+  await count(page).click();
+  await openKind(page, "no_goal");
+  await row(page, "Dark mode").getByRole("button", { name: /Pick a goal/ }).click();
+  await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Raise activation" }).click();
+  await expect(notice(page)).toContainText(/Dark mode” now serves “Raise activation”/);
+  await expect(line(page)).toHaveCount(0);
+  await sheet(page).getByRole("button", { name: "Close" }).first().click();
+  await page.reload();
   await expect(page.getByRole("region", { name: /^(Summary|Waiting for you)$/ }).first()).toBeVisible();
   await expect(line(page)).toHaveCount(0);
 });

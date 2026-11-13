@@ -98,7 +98,7 @@ test("Merge into… on the duplicate removes its row and the target shows the mo
   await page.goto(`/ground-truth?run=${RUN}`);
   const evidence = async () => {
     await page.getByRole("tab", { name: "Graph" }).click();
-    await page.getByTestId("feature-f.saved-carts").click();
+    await page.getByTestId("feature-F-84").click();
     const stat = page.getByTestId("entity-drawer").getByText("Evidence", { exact: true }).locator("xpath=ancestor::div[1]");
     await expect(stat).toContainText(/\d/);
     const n = Number((await stat.innerText()).match(/\d+/)![0]);

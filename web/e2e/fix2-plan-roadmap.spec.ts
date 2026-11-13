@@ -64,21 +64,20 @@ test("qa-plan-39: the launches card is named after its filter, not Launches agai
 test("qa-plan-38: each header row has one button height, the primary's 40 px", async ({ page }) => {
   await start(page, { scenario: "launches" });
   await page.goto("/roadmap/launches");
-  const toChangelog = header(page).getByTestId("changelog-link");
   const newLaunch = header(page).getByTestId("new-launch");
   await expect(newLaunch).toBeVisible();
   expect(await height(newLaunch)).toBe(40);
-  expect(await height(toChangelog)).toBe(40);
 
-  await toChangelog.click();
+  // QA Nov 12 #14: the Plan strip's Changelog link goes there (no header button for it).
+  await header(page).getByTestId("roadmap-changelog-link").click();
   await expect(page).toHaveURL(/\/roadmap\/changelog$/);
   await expect(page.getByTestId("changelog-entry").first()).toBeVisible();
-  for (const id of ["launches-link", "export-md", "export-html", "new-entry"]) {
+  for (const id of ["export-md", "export-html", "new-entry"]) {
     expect(await height(header(page).getByTestId(id)), id).toBe(40);
   }
 });
 
-test("qa-plan-37: in dark, a disabled export has no outline and is dimmed, unlike the Launches link", async ({ page }) => {
+test("qa-plan-37: in dark, a disabled export has no outline and is dimmed", async ({ page }) => {
   await start(page, { theme: "dark" });
   await page.goto("/roadmap/changelog");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -89,9 +88,6 @@ test("qa-plan-37: in dark, a disabled export has no outline and is dimmed, unlik
       const s = getComputedStyle(el);
       return { border: s.borderTopColor, width: s.borderTopWidth, opacity: Number(s.opacity) };
     });
-  const link = await look(header(page).getByTestId("launches-link"));
-  expect(link.border).not.toBe("rgba(0, 0, 0, 0)");
-  expect(link.opacity).toBe(1);
   for (const id of ["export-md", "export-html"]) {
     const button = header(page).getByTestId(id);
     await expect(button).toBeDisabled();

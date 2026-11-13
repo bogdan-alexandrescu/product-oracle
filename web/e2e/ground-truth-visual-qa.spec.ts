@@ -56,7 +56,8 @@ async function gt1(page: Page, { phone, tag, ask, drawer }: { phone: boolean; ta
   }
   if (drawer) {
     await name.click();
-    await expect(page.getByRole("dialog", { name: await name.innerText() })).toBeVisible();
+    // The row reads the feature's code with its name (F-81 Dark mode); the panel is named by its name.
+    await expect(page.getByRole("dialog", { name: (await name.innerText()).replace(/^[A-Z]{1,3}-\d+[a-j]? /, "") })).toBeVisible();
   }
   expect((await cell.boundingBox())!.width).toBeGreaterThan(phone ? 300 : 200);
   if (phone) {

@@ -93,19 +93,22 @@ test("qa-plan-52: an export says what it downloaded", async ({ page }) => {
   await expect(page.getByTestId("changelog-day").first().locator("time")).toHaveText("Oct 20, 2026");
 });
 
-test("qa-plan-53: Launches and Changelog link to each other with the same button style", async ({ page }) => {
+// QA Nov 12 #14: the two pages lead to each other through the Plan strip's links only (one
+// control each, the same style), not a header button besides.
+test("qa-plan-53: Launches and Changelog link to each other with the same link style", async ({ page }) => {
   await start(page, { scenario: "launches" });
   await page.goto("/roadmap/changelog");
-  const toLaunches = page.getByTestId("launches-link");
-  await expect(toLaunches.locator("svg")).toHaveCount(1);
-  const variantA = await toLaunches.getAttribute("data-variant");
+  const strip = page.getByTestId("plan-links").filter({ visible: true });
+  const toLaunches = strip.getByTestId("roadmap-launches-link");
+  await expect(page.locator("[data-page-action]").filter({ visible: true }).getByRole("link", { name: "Launches" })).toHaveCount(0);
   const classA = await toLaunches.getAttribute("class");
   await toLaunches.click();
   await expect(page).toHaveURL(/\/roadmap\/launches$/);
-  const toChangelog = page.getByTestId("changelog-link");
-  await expect(toChangelog.locator("svg")).toHaveCount(1);
-  expect(await toChangelog.getAttribute("data-variant")).toBe(variantA);
+  const toChangelog = strip.getByTestId("roadmap-changelog-link");
+  await expect(page.locator("[data-page-action]").filter({ visible: true }).getByRole("link", { name: "Changelog" })).toHaveCount(0);
   expect(await toChangelog.getAttribute("class")).toBe(classA);
+  await toChangelog.click();
+  await expect(page).toHaveURL(/\/roadmap\/changelog$/);
 });
 
 test.describe("phone", () => {

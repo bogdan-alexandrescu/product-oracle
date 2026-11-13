@@ -156,7 +156,7 @@ test.describe("desktop", () => {
   test("impact what-if: the page says it is a preview in words, with no bare badge", async ({ page }) => {
     await scenario(page, "impact");
     await openBaseline(page);
-    await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+    await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
     await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
     await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
     await expect(page.getByText(/Preview only; nothing is marked stale\./)).toBeVisible();

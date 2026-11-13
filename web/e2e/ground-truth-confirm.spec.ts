@@ -55,6 +55,6 @@ test("Pick a goal on a goal it is only proposed to serve confirms that link", as
   await row(page, "no_goal", "Alert rules").getByRole("button", { name: /Pick a goal/ }).click();
   const picker = page.getByTestId("gt-picker");
   await picker.getByRole("button").filter({ hasText: "Raise activation" }).click();
-  await expect(page.getByTestId("gt-notice")).toContainText("“Alert rules” now serves “Raise activation”.");
+  await expect(page.getByTestId("gt-notice")).toContainText("“F-30 Alert rules” now serves “Raise activation”.");
   await expect(row(page, "no_goal", "Alert rules")).toHaveCount(0);
 });

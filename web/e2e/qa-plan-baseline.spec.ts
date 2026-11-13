@@ -56,7 +56,7 @@ test("goals table: names and chips are whole, the actions column is narrow", asy
 // drops Weight and Horizon; fails_when=the Goal column is squeezed away; no_claim=other tables.
 test("goals table: an open drawer drops Weight and Horizon, not the goal's name", async ({ page }) => {
   await openBaseline(page);
-  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
   await expect(page.getByRole("dialog", { name: "Guided setup" })).toBeVisible();
   const table = goalsTable(page);
   await expect(table.getByRole("columnheader", { name: "Goal", exact: true })).toBeVisible();
@@ -121,7 +121,7 @@ test("feature × goal: a legend, Confidence and Delivery headers; goals' Review 
   await expect(ledger.getByRole("columnheader", { name: "Delivery" })).toBeVisible();
   await expect(ledger.getByRole("columnheader", { name: "Confidence" })).toBeVisible();
   await expect(ledger.getByRole("columnheader", { name: "Conf." })).toHaveCount(0);
-  await expect(page.getByTestId("feature-f.guided-setup").getByRole("img", { name: "Confidence 71%" })).toBeVisible();
+  await expect(page.getByTestId("feature-F-82").getByRole("img", { name: "Confidence 71%" })).toBeVisible();
   await expect(goalsTable(page).getByRole("columnheader", { name: "Review", exact: true })).toBeVisible();
   await expect(goalsTable(page).getByRole("columnheader", { name: "State", exact: true })).toHaveCount(0);
 
@@ -173,7 +173,7 @@ test("conflicts: values in words, percentages, and why the leading claim leads",
 // whole; fails_when="status"/"effort" raw, or "Confide…"; no_claim=other kinds' attributes.
 test("entity drawer: attribute labels in words, Confidence label whole", async ({ page }) => {
   await openBaseline(page);
-  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
   const d = page.getByRole("dialog", { name: "Guided setup" });
   const labels = d.getByLabel("Attributes").locator("dt");
   await expect(labels).toContainText(["Status", "Effort"]);
@@ -221,7 +221,7 @@ test("phone: tabs all show; features keep delivery and confidence", async ({ pag
   await expect(page.getByRole("button", { name: /^Scroll/ })).toHaveCount(0);
   await expect(page.getByTestId("confirmed-chip")).toBeHidden();
 
-  const guided = page.getByTestId("feature-f.guided-setup");
+  const guided = page.getByTestId("feature-F-82");
   await expect(guided.getByTestId("phone-feature-delivery")).toBeVisible();
   await expect(guided.getByTestId("phone-feature-delivery")).toHaveText("In progress");
   await expect(guided.getByTestId("phone-feature-confidence")).toBeVisible();

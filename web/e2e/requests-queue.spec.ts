@@ -99,7 +99,7 @@ test("Inspector: link goals, theme, feature and PRD, then qualify with a reason"
   const panel = inspector(page);
   await panel.getByRole("checkbox", { name: "Raise activation" }).check();
   await panel.getByRole("combobox", { name: "Theme", exact: true }).selectOption({ label: "Reporting" });
-  await panel.getByLabel("Feature").selectOption({ label: "Dark mode" });
+  await panel.getByLabel("Feature").selectOption({ label: "F-81 Dark mode" });
   await panel.getByLabel("PRD").selectOption({ index: 1 });
   await panel.getByRole("button", { name: "Save links" }).click();
   await expect(row(page, "Dark mode").getByTestId("goal-chip")).toHaveText(["Raise activation"]);

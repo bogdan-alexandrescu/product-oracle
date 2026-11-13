@@ -64,11 +64,11 @@ test.describe("desktop", () => {
   test("qa4-docs-5: the group headers match the rows and the summary, with the dropped item counted apart", async ({ page }) => {
     await openRoadmap(page);
     await expect(visible(page, "draft-roadmap-status")).toContainText(/^4 items · 3 Now · 1 Next/);
-    // The tab opens on Changed: 3 of the 4 items, so the numbers start at 2; the page says so.
+    // The tab opens on Changed: 3 of the 4 items and the dropped one, so the numbers start at 2; the page says so.
     await expect(group(page, "now")).toHaveText("Now 2 of 3");
     await expect(group(page, "next")).toHaveText("Next 1");
     await expect(group(page, "later")).toHaveText("Later 0 · 1 dropped");
-    await expect(visible(page, "items-filter-note")).toHaveText("Showing 3 of 4 items · # is each item's place in the full list");
+    await expect(visible(page, "items-filter-note")).toHaveText("Showing 4 of 5 items · # is each item's place in the full list");
 
     await visible(page, "items-filter").getByRole("button", { name: /^All/ }).click();
     await expect(group(page, "now")).toHaveText("Now 3");
