@@ -10,6 +10,7 @@ import { InlineError, TEXTAREA } from "@/components/review/parts";
 import { SimpleAskPanel } from "@/components/simple/chat/SimpleAsk";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
+import { stripRawTokens } from "@/lib/raw-tokens";
 import { GENERAL, subjectKey, subjectWithView, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
 import { errorMessage } from "@/lib/use-query";
 
@@ -156,7 +157,9 @@ function ShareForm({ id, onShared, onCancel }: { id: string; onShared: (id: stri
         if (!live) return;
         const lastReply = [...page.items].reverse().find((m) => m.author_kind === "oracle" && m.body && !m.deleted);
         setTitle(d.title);
-        setText(d.summary ?? lastReply?.body ?? "");
+        // ask-phone QA row 1: the first message is everyone's to read, so Oracle's raw citation
+        // tokens ("[c:1]") are not carried into it.
+        setText(stripRawTokens(d.summary ?? lastReply?.body ?? ""));
       })
       .catch((e) => live && setError(errorMessage(e)));
     return () => {

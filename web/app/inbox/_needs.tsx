@@ -1257,8 +1257,10 @@ function ChildActions({
     <span data-child-actions className="inline-flex flex-wrap items-center justify-end gap-1.5 max-[600px]:w-full max-[600px]:[&>*]:w-full">
       {staged || (staging && fix) ? (
         <>
-          <span className="text-[14px] text-pass" data-testid="child-done">
-            ✓ {staged ? actionWords(staged, true) : fix ? actionWords(fix.action, true) : ""}
+          <span className="inline-flex items-center gap-1 text-[14px] text-pass" data-testid="child-done">
+            {/* The app's check icon: the ✓ character draws as an empty box without a font that has it (detailed-b 4). */}
+            <Icon name="check" size={16} />
+            {staged ? actionWords(staged, true) : fix ? actionWords(fix.action, true) : ""}
           </span>
           {staged && (
             <Button

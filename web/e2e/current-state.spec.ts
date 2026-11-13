@@ -189,21 +189,22 @@ for (const size of ["desktop", "phone"] as const) {
       await expect(rows.locator('[data-mark="exists_old"]')).toHaveText("Exists · proof old");
       // The pill follows the title, so every title starts at one x.
       for (const row of (await rows.all()).slice(0, 3)) await pillAfter(row.getByTestId("prio-title"), row.getByTestId("cs-mark"));
-      // cs2-b: right next to the name, not pushed to the far right of the row: on the name's last
-      // line, a small gap after its last word (or, where the row is narrow, on the line under it).
-      // A feature's own code (PR 1234, prio-own-key) is part of its name: the pill follows the code.
+      // cs2-b: right next to the name, not pushed to the far right of the row. Nov 12 QA PR3 (the
+      // owner's pick, simple-priorities-qa-nov12): the name, its code and its pill stay on one line,
+      // the name wrapping on its own, so the pill never drops under the name: it sits a small gap
+      // after the name's box, within the name's height. A feature's own code (prio-own-key) is
+      // part of its name, shown with it (docs/ground-truth.md): the pill follows the code.
       for (const row of (await rows.all()).slice(0, 5)) {
         const named = (await row.getByTestId("prio-own-key").count()) ? row.getByTestId("prio-own-key") : row.getByTestId("prio-title");
-        const end = await named.evaluate((el) => {
-          const r = document.createRange();
-          r.selectNodeContents(el);
-          const last = [...r.getClientRects()].at(-1)!;
-          return { x: last.right, top: last.top, bottom: last.bottom };
-        });
+        const end = (await named.boundingBox())!;
+        const title = (await row.getByTestId("prio-title").boundingBox())!;
         const p = (await row.getByTestId("cs-mark").boundingBox())!;
-        const name = (await row.getByTestId("prio-name").boundingBox())!;
-        if (p.y < end.bottom && end.top < p.y + p.height) expect(p.x - end.x, "the pill is right after the name's last word").toBeLessThanOrEqual(16);
-        else expect(Math.abs(p.x - name.x), "a pill under the name starts at the name's left").toBeLessThanOrEqual(2);
+        const gap = p.x - (end.x + end.width);
+        expect(gap, "the pill is right after the name").toBeGreaterThanOrEqual(0);
+        expect(gap, "the pill is right after the name").toBeLessThanOrEqual(16);
+        const mid = p.y + p.height / 2;
+        expect(mid, "the pill stays on the name's line, never under it").toBeGreaterThanOrEqual(title.y - 1);
+        expect(mid, "the pill stays on the name's line, never under it").toBeLessThanOrEqual(title.y + title.height + 1);
       }
       // A pill says what it means and its proof; its card names the feature, then its pill.
       await rows.first().getByRole("button", { name: "What In progress means" }).click();

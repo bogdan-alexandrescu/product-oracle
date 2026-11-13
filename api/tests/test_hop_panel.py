@@ -312,3 +312,28 @@ async def test_general_context_has_baseline_features_with_status_and_goals(clien
     assert SOURCE_LINE not in text
     titles = {e["title"] for e in built.entries.values()}
     assert {"Feature: Guided setup", "Feature: Usage alerts"} <= titles
+
+
+# protects=ask-phone QA row 1: Share as discussion never stores Oracle's raw citation tokens in
+# the first message everyone reads ("only [c:1]." reads "only."); fails_when=the posted
+# discussion shows "[c:1]" or "[l:2]"; no_claim=the share form's pre-fill (Playwright).
+async def test_share_drops_raw_tokens_from_the_first_message(client):
+    ctx, doc = await company(client)
+    d = await panel(client, ctx, doc, message={"body": "What would we cut?"})
+    raw = "Caps read the plan thresholds only [c:1]. Then detection [l:2]."
+    shared = await share(client, ctx, d["id"], first_message=raw)
+    [first] = await messages(client, ctx, shared["id"], "approver")
+    assert first["body"] == "Caps read the plan thresholds only. Then detection."
+    body = await share(client, ctx, d["id"], expect=422, first_message=" [c:1] ")
+    assert body["detail"] == "A message needs some text"
+
+
+# protects=ask-phone QA row 3: a chat on a PRD's title section ("# <PRD title>") is labelled
+# "<PRD> · Introduction", as the PRD page names it; fails_when=the PRD's name shows twice;
+# no_claim=the panel's heading (Playwright).
+async def test_a_chat_on_the_title_section_is_about_its_introduction(client):
+    ctx, doc = await company(client)
+    d = await panel(client, ctx, doc, subject=section(doc, key="title"))
+    assert d["subject_label"] == "Checkout redesign PRD · Introduction"
+    d = await panel(client, ctx, doc)
+    assert d["subject_label"] == "Checkout redesign PRD · 2. Problem"

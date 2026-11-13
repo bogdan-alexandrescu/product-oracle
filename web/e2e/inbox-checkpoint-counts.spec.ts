@@ -73,7 +73,7 @@ test("Move to Later stages the fix, the counts update, Undo restores both", asyn
   const caps = child(page, "budget-caps");
   await expect(caps).toContainText("Depends on a later item");
   await caps.getByRole("button", { name: "Move to Later for Budget caps" }).click();
-  await expect(caps.getByTestId("child-done")).toHaveText("✓ Moved to Later");
+  await expect(caps.getByTestId("child-done")).toHaveText("Moved to Later");
   await expect(caps.getByRole("button", { name: /^Undo/ })).toBeVisible();
   await expect(parent(page).getByTestId("checkpoint-label")).toHaveText("Roadmap items · 9 need you");
   await expect(parent(page).getByTestId("checkpoint-blocking")).toHaveText("2 blocking");
@@ -96,7 +96,7 @@ test("a fixed item gives its row to the next item that needs me", async ({ page 
   await openInbox(page);
   await page.goto("/inbox");
   await child(page, "budget-caps").getByRole("button", { name: "Move to Later for Budget caps" }).click();
-  await expect(child(page, "budget-caps").getByTestId("child-done")).toHaveText("✓ Moved to Later");
+  await expect(child(page, "budget-caps").getByTestId("child-done")).toHaveText("Moved to Later");
   await expect(childTitles(page)).toHaveText(["Slack alerts", "Budget caps", "Usage export", "Anomaly detection"]);
   await expect(child(page, "more").getByTestId("child-more")).toHaveText("+6 more · 1 handled");
   // Next visit: seen on the first, the checkpoint is under Open.
@@ -144,7 +144,7 @@ test("a commenter's suggestion shows as Suggested with Stage", async ({ page }) 
   const slack = child(page, "slack-alerts");
   await expect(slack.getByTestId("child-suggested")).toHaveText("Suggested: Remove date");
   await slack.getByRole("button", { name: "Stage Remove date on Slack alerts" }).click();
-  await expect(slack.getByTestId("child-done")).toHaveText("✓ Date removed");
+  await expect(slack.getByTestId("child-done")).toHaveText("Date removed");
   await expect(parent(page).getByTestId("checkpoint-blocking")).toHaveText("2 blocking");
 });
 

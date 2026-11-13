@@ -55,6 +55,7 @@ from oracle.discussions.schemas import (
 )
 from oracle.live import tokens as live_tokens
 from oracle.members.names import display_name
+from oracle.raw_tokens import strip_raw_tokens
 from oracle.v2.concurrency import expect_version, flush_or_conflict
 
 if TYPE_CHECKING:
@@ -448,6 +449,10 @@ class Labels:
                     Section.section_key == s["section_key"],
                 )
             )
+            # The document's own title as a section's heading (its "# Title" line) is its
+            # Introduction, as the PRD page names it (ask-phone QA row 3).
+            if heading and heading.strip() == doc.title.strip():
+                heading = "Introduction"
             return f"{doc.title} · {heading or s['section_key']}", f"{url}#{s['section_key']}"
         if kind in ("checkpoint", "checkpoint_item"):
             run = await self.get(Run, s["run_id"])
@@ -1295,14 +1300,16 @@ async def share(
         raise DiscussionError(422, PANEL_ONLY)
     if not seat.starter:
         raise DiscussionError(403, STARTER_SHARES)
-    _check_body(body.first_message)
+    # The first message is everyone's to read: Oracle's raw citation tokens ("[c:1]") a
+    # pre-filled reply carries are no words (ask-phone QA row 1).
+    first_message = _check_body(strip_raw_tokens(body.first_message))
     d, _first = await start(
         db, principal,
         DiscussionCreate(
             subject_kind=chat.subject_kind,
             subject=without_view(chat.subject),
             title=body.title,
-            message=DiscussionMessageIn(body=body.first_message),
+            message=DiscussionMessageIn(body=first_message),
         ),
     )  # fmt: skip
     now = datetime.now(UTC)
@@ -1325,7 +1332,7 @@ async def share(
     await audit.record(
         db, principal, "discussion.shared", ENTITY, d.id,
         {"from": str(chat.id), "to": str(d.id), "changes": copied,
-         "length": len(body.first_message)},
+         "length": len(first_message)},
     )  # fmt: skip
     await db.flush()
     return d

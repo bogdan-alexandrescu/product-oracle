@@ -32,7 +32,9 @@ for (const path of ["/simple/inbox", "/inbox"]) {
   test(`${path}: one load of the Inbox reads it once, and records the visit`, async ({ page }) => {
     await login(page);
     await page.goto(path);
-    await expect(page.getByText(/^\d+ waiting$/).first()).toBeVisible({ timeout: 15_000 });
+    // simple-home-qa-nov12 #18: Simple's Inbox says its count once, as Needs you's; /inbox keeps "N waiting".
+    const shown = path.startsWith("/simple") ? page.getByTestId("inbox-needs").getByTestId("panel-count").first() : page.getByText(/^\d+ waiting$/).first();
+    await expect(shown).toBeVisible({ timeout: 15_000 });
     const seen = await settledCalls(page);
     expect(wholeInbox(seen)).toEqual(["GET /v1/inbox"]);
     expect(seen.filter((c) => c === "POST /v1/inbox/seen")).toHaveLength(1);

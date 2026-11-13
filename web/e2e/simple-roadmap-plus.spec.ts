@@ -186,7 +186,10 @@ for (const [where, use] of [
         await openRoadmap(page, "gantt");
         await page.getByTestId("key-dates-open").click();
         await expect(editor(page)).toHaveAttribute("data-sheet", where === "phone" ? "bottom" : "float");
-        await expect(page.getByTestId("key-dates-hint")).toContainText("working draft");
+        // QA Nov 12 #13: where a change goes is behind the title's (i), not a line of prose.
+        await expect(editor(page).getByTestId("key-dates-tip")).toHaveAccessibleName("About Key dates");
+        await expect(editor(page).getByTestId("key-dates-tip")).toHaveAccessibleDescription(/working draft/);
+        await expect(page.getByTestId("key-dates-hint")).toHaveCount(0);
         await editor(page).getByLabel("Roadmap", { exact: true }).selectOption({ label: "Alerts roadmap" });
         await editor(page).getByLabel("New key date's name").fill("Partner summit");
         await editor(page).getByLabel("New key date's day").fill("2026-12-02");

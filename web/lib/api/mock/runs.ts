@@ -1433,6 +1433,11 @@ function unknownGoalMessage(feature: string, goal: string | undefined | null): s
 function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goals: Set<string> | null, goalTitle?: (key: string) => string | undefined): PriorityCheck {
   const live = ranking(given.method).features;
   const titleOf = (k: string) => live.find((f) => f.key === k)?.title ?? (scope ?? []).find((f) => f.key === k)?.title ?? given.order.find((o) => o.key === k && o.title)?.title ?? k;
+  // As the API's _feature (detailed-b 2): "F-2 Usage alerts" for a code-shaped key, else the name.
+  const feature = (k: string) => {
+    const t = titleOf(k).trim();
+    return !t || t === k ? k : /^(?:[A-Z][A-Z0-9]*(?:[-.][A-Z0-9]+)+[a-j]?|[A-Z]{1,4}\d+)$/.test(k) ? `${k} ${t}` : t;
+  };
   // A key ranked twice is checked once, at its first entry (api: duplicate_key).
   const times = new Map<string, number>();
   for (const o of given.order) times.set(o.key, (times.get(o.key) ?? 0) + 1);
@@ -1469,7 +1474,7 @@ function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goa
   }
   for (const k of keys) {
     for (const d of [...new Set(deps[k] ?? [])].sort()) {
-      if (d in rank && rank[d] > rank[k]) add("before_prerequisite", k, `${k} is ranked ${rank[k]}, above ${d} (rank ${rank[d]}), which it depends on`);
+      if (d in rank && rank[d] > rank[k]) add("before_prerequisite", k, `${feature(k)} is ranked ${rank[k]}, above ${feature(d)} (rank ${rank[d]}), which it depends on`);
     }
   }
   const order = spec.order.map((o, i) => {

@@ -39,7 +39,10 @@ test("inbox: an owner approves an access request, it moves to Done and the badge
   await expect(page.getByTestId("inbox-acted")).toContainText(`Approved ${NEW} as Commenter`);
   await expect(badge(page)).toHaveText(String(before - 1));
   await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Done/ }).click();
-  await expect(row).toContainText("Approved as Commenter ✓");
+  await expect(row).toContainText("Approved as Commenter");
+  // The app's check icon, not the ✓ character (detailed-b 4).
+  await expect(row).not.toContainText("✓");
+  await expect(row.getByTestId("access-settled").locator("svg")).toHaveCount(1);
   await expect(row.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
 
   // Approved: the request became an open invite.

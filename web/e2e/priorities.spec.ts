@@ -37,12 +37,11 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   await login(page);
   await page.goto("/priorities");
 
-  await expect(page.getByTestId("cycles-banner")).toContainText("Bulk export → Scheduled exports");
-  await expect(page.getByTestId("cycles-banner")).not.toContainText("F-7");
+  await expect(page.getByTestId("cycles-banner")).toContainText("F-7 Bulk export → F-8 Scheduled exports");
   const noGoal = page.getByTestId("priority-row-F-6");
   await expect(noGoal).toContainText("Serves no confirmed goal");
   await expect(page.getByTestId("priority-row-F-7")).toContainText("Dependency cycle");
-  await expect(page.getByTestId("priority-row-F-5")).toContainText("Ranked higher: Shipping cost shown in the cart depends on it");
+  await expect(page.getByTestId("priority-row-F-5")).toContainText("Ranked higher: F-2 Shipping cost shown in the cart depends on it");
   await expect(page.getByTestId("priority-row-F-4")).toContainText("Low confidence");
 
   // Select: the inspector shows steps, inputs, confidence and goals.
@@ -64,7 +63,6 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   await expect(page.getByTestId("explanation-F-5").locator("li", { hasText: "Moved for" })).toContainText(
     "Shipping cost shown in the cart",
   );
-  await expect(page.getByTestId("explanation-F-5").locator("li", { hasText: "Moved for" })).not.toContainText("F-2");
   await expect(page.getByTestId("explanation-F-5")).not.toContainText("depend(s)");
 
   // The inspector shows one feature at a time: F-1's explanation has gone.

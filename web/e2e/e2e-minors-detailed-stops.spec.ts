@@ -14,8 +14,8 @@ import { login, openSection } from "./helpers";
  *   draws it (re-confirmed Nov 4), the quiet ghost text button beside Approve; fails_when=it is
  *   disabled or an outlined secondary; no_claim=its decide call.
  * - "long key" (10): protects=a feature with a long key: the list shows its name only, the pane
- *   shows the key by its title (EC1 b, owner Nov 1) inside the pane; fails_when=the key shows in
- *   the list or runs out of the pane; no_claim=other review pages.
+ *   no longer shows a key that is not a code (detailed-a 3, Nov 12); fails_when=the key shows in
+ *   the list or the pane, or the pane scrolls sideways; no_claim=other review pages.
  * - "answered" (11): protects=an answered question shows the answer, who answered and Change, no
  *   empty box; Change reopens it filled; fails_when=the empty box and Answer stay under the answer.
  * - "not decided" (12): protects=a row with no verdict reads "Not decided" as text; fails_when=a
@@ -115,16 +115,14 @@ for (const [name, viewport] of [
       await expect(sendBack).toHaveAttribute("data-variant", "ghost");
     });
 
-    test("long key: the list shows a long-keyed feature by name only, its key stays inside the pane", async ({ page }) => {
-      // qa4-work-53 (train AF): the list shows the feature's name only; EC1 b (owner, Nov 1) shows the key by its title in the pane.
+    test("long key: the list and the pane show a long-keyed feature by name only", async ({ page }) => {
+      // qa4-work-53 (train AF): the list shows the feature's name only; detailed-a 3 (Nov 12): the pane shows no key that is not a code.
       await openCheck(page, "eng-check-long-key");
       const row = briefRow(page, "f.guided_setup_with_test_order_and_sample_catalogue");
       await expect(row).toBeVisible();
       await expect(row).not.toContainText("f.guided_setup_with_test_order_and_sample_catalogue");
       await row.getByRole("button").first().click();
-      const pane = await box(inspector(page));
-      const key = await box(inspector(page).getByText("f.guided_setup_with_test_order_and_sample_catalogue"));
-      expect(key.x + key.width, "the key runs out of the pane").toBeLessThanOrEqual(pane.x + pane.width);
+      await expect(inspector(page)).not.toContainText("f.guided_setup_with_test_order_and_sample_catalogue");
       const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(sideways).toBeLessThanOrEqual(0);
     });

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { Button, confirmInPage, InfoTip, toast } from "@/components/ds";
+import { Button, confirmInPage, Icon, InfoTip, toast } from "@/components/ds";
 import { usePhoneAsk } from "@/components/ds/AppShell";
 import { setToastPlace } from "@/components/ds/Toast";
 import { MeetingChat } from "@/components/simple/chat/MeetingChat";
@@ -23,7 +23,7 @@ import { usePhone } from "../../priorities/priorities";
 import { DeliveryLine, emailWords, slackWords } from "../_delivery";
 import { DecidedItem, LINK, momentWords } from "../_flow";
 import { DraftDates } from "./_draft";
-import { SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
+import { CHECK, SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
 import { AgendaSheet } from "@/components/simple/meetings/AgendaSheet";
 import { OpenFeatureContext } from "@/components/simple/OpenFeature";
 import { FeaturePanel, type PanelFeature } from "../../roadmap/_panel";
@@ -38,6 +38,8 @@ const STEPS = ["One-pager", "Roadmap", "Decisions"] as const;
 const MODE_WORDS: Record<Mode, string> = { everyone: "Everyone except viewers", presenter: "Only the presenter", named: "Presenter plus one or two people" };
 /** qa-simple-decide-48: a 44 px target on a phone. */
 const PHONE_TAP = "max-[600px]:min-h-11";
+/** QA Nov 12 (#12): a checkbox row as the Start sheet draws it. */
+const CHOICE = "flex min-h-8 cursor-pointer items-center gap-2.5 has-[:disabled]:cursor-not-allowed has-[:disabled]:text-text2";
 const cap = (h: string) => (h ? h[0]!.toUpperCase() + h.slice(1) : h);
 /** qa-simple-decide-17: a calendar day ("2026-11-05") as "Thu Nov 5"; qa-simple-decide-9: with its year when not this one ("Fri Jan 1, 2027"). */
 // fix4 review: "this year" is the company's (its zone, the mock's clock), not the browser's.
@@ -82,9 +84,12 @@ const questionWords = (q: string) => q.replace(/^D-\d+:\s*/, "");
 /** qa4-simple-decide-15: the roadmap step's rows in the roadmap's own order. */
 const ORDER: Record<string, number> = { now: 0, next: 1, later: 2, cut: 3 };
 
+/** The meeting PRD's roadmap slice (one read, shared by the steps, the proposals and the agenda's codes). */
+const useMeetingRoadmap = (m: Meeting) => useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
+
 /** qa-simple-decide-18: a proposal names its item ("move Sample data import to Now"). */
 function useProposalWords(m: Meeting) {
-  const roadmap = useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
+  const roadmap = useMeetingRoadmap(m);
   return (c: Meeting["pending_proposals"][number]) => {
     const id = (c.target as { item_id?: unknown }).item_id;
     const t = roadmap.data?.items.find((i) => i.id === id)?.title ?? null;
@@ -124,9 +129,9 @@ export function MeetingScreen({ id }: { id: string }) {
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) return <div className="px-6 py-8"><ErrorNote>{q.error ?? "Not found"}</ErrorNote></div>;
   return (
-    // qa-simple-decide-40: a stable gutter, so the header does not shift when a step is taller than the screen.
+    // QA Nov 12 (#8): no gutter of its own: the page's scrollbar is the one gutter (a stable one left an empty strip on the right).
     // qa-simple-decide-48: on a phone the page itself scrolls (no inner scrolling layer), still over the shell.
-    <div ref={screen} className="fixed inset-0 z-40 overflow-auto max-[600px]:absolute max-[600px]:bottom-auto max-[600px]:z-50 max-[600px]:min-h-dvh max-[600px]:overflow-visible bg-bg text-[length:var(--simple-body)] text-text [scrollbar-gutter:stable]" data-testid="meeting-screen">
+    <div ref={screen} className="fixed inset-0 z-40 overflow-auto max-[600px]:absolute max-[600px]:bottom-auto max-[600px]:z-50 max-[600px]:min-h-dvh max-[600px]:overflow-visible bg-bg text-[length:var(--simple-body)] text-text" data-testid="meeting-screen">
       {q.data.status === "ended" ? <EndScreen m={q.data} reload={q.reload} /> : <LiveScreen m={q.data} reload={q.reload} />}
     </div>
   );
@@ -201,6 +206,9 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const approveLabel = docs ? `Approve and publish edits to ${docs} (${edits})` : `Approve and publish one-pager edits (${edits})`;
   const code = decisionCode(m);
   const proposalWords = useProposalWords(m);
+  // QA Nov 12 (#2): every feature in the meeting reads its code before its name (the roadmap item's own).
+  const roadmap = useMeetingRoadmap(m);
+  const codeOf = (id: string) => roadmap.data?.items.find((i) => i.id === id)?.code ?? "";
   // qa4-simple-decide-17: the meeting's toasts sit at the bottom, clear of the header's steps and clock.
   useEffect(() => setToastPlace("corner"), []);
   // qa4-simple-decide-2: Approve publishes: it lists the edits it takes and asks first.
@@ -311,7 +319,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
       )}
       {/* qa-simple-decide-29: on a phone the attendees and the mode fold into one row. */}
       <button type="button" className={`hidden border-b border-line px-4 py-2 text-left text-base max-[600px]:block ${PHONE_TAP}`} aria-expanded={people} data-testid="meeting-people-toggle" onClick={() => setPeople((x) => !x)}>
-        {m.attendees.filter((a) => a.present && a.joined).length} of {m.attendees.length} here · Who changes things: {MODE_WORDS[m.change_mode]} <span aria-hidden>{people ? "▴" : "▾"}</span>
+        {m.attendees.filter((a) => a.present && a.joined).length} of {m.attendees.length} here · Who changes things: {MODE_WORDS[m.change_mode]} <span aria-hidden className="inline-flex align-middle"><Icon name={people ? "chevron-up" : "chevron-down"} size={16} /></span>
       </button>
       <div className={`flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line px-4 py-2 text-base ${people ? "" : "max-[600px]:hidden"}`} data-testid="meeting-people">
         <ul aria-label="Attendees" className="flex flex-wrap gap-2">
@@ -383,7 +391,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           feature names open the one feature panel (build-feature-panel). */}
       {(m.agenda.items ?? []).length > 0 && (
         <OpenFeatureContext.Provider value={setFeature}>
-          <AgendaSheet meetingId={m.id} agenda={m.agenda} can={m.can} phone={phone} reload={reload} />
+          <AgendaSheet meetingId={m.id} agenda={m.agenda} can={m.can} phone={phone} reload={reload} codeOf={codeOf} />
         </OpenFeatureContext.Provider>
       )}
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -404,12 +412,18 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
             </MeetingClock.Provider>
           )}
           {step === 1 && <RoadmapSlice m={m} reload={reload} refresh={roadmapRefresh} open={setFeature} />}
-          {step === 2 && <DecisionsStep m={m} reload={reload} />}
+          {/* QA Nov 12 (#2): the agenda's "Blocks" features read their codes and open the panel, as on Decisions. */}
+          {step === 2 && (
+            <OpenFeatureContext.Provider value={setFeature}>
+              <DecisionsStep m={m} reload={reload} />
+            </OpenFeatureContext.Provider>
+          )}
         </section>
         <aside aria-label="Chat column" className="flex min-w-0 flex-col gap-4">
           {/* qa-simple-decide-7: who changes things is set once, in the attendee bar above. */}
           {/* qa-simple-decide-22: on a phone the chat grows with the page (one scroll). */}
-          <MeetingChat meetingId={m.id} sessionId={m.session_id} onCardChanged={changed} rulesControl={false} scroll={!phone} />
+          {/* QA Nov 12 (#11): the header states who changes things; the chat's hints sit behind its (i). */}
+          <MeetingChat meetingId={m.id} sessionId={m.session_id} onCardChanged={changed} rulesControl={false} scroll={!phone} compact />
           {/* qa-simple-decide-21: a link that looks like one. */}
           <Link className={`self-start text-base ${LINK} ${PHONE_TAP}`} href={`/simple/meetings/${m.id}/chat?session=${m.session_id}`} data-testid="meeting-chat-page-link">
             Open chat on its own page
@@ -438,10 +452,11 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   );
 }
 
-/** A feature's name that opens its panel (build-feature-panel). */
-function FeatureName({ id, title, open, strong = false }: { id: string; title: string; open: (f: PanelFeature) => void; strong?: boolean }) {
+/** A feature's code and name that open its panel (build-feature-panel; QA Nov 12 #2: its code first). */
+function FeatureName({ id, code, title, open, strong = false }: { id: string; code?: string | null; title: string; open: (f: PanelFeature) => void; strong?: boolean }) {
   return (
-    <button type="button" className="text-left hover:underline" onClick={() => open({ id, code: "", name: title })}>
+    <button type="button" className="text-left hover:underline" onClick={() => open({ id, code: code ?? "", name: title })}>
+      {code && <code className="simple-code mr-1">{code}</code>}
       {strong ? <strong>{title}</strong> : title}
     </button>
   );
@@ -514,7 +529,7 @@ const HORIZONS = ["now", "next", "later"] as const;
 
 function RoadmapSlice({ m, reload, refresh, open }: { m: Meeting; reload: () => Promise<unknown>; refresh: string; open: (f: PanelFeature) => void }) {
   const zone = useCompanyZone();
-  const q = useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
+  const q = useMeetingRoadmap(m);
   // walkc-meeting r2 (5d): a card applied in the chat (or another attendee's change) shows here at once.
   const seenRefresh = useRef(refresh);
   const reloadRoadmap = q.reload;
@@ -539,9 +554,12 @@ function RoadmapSlice({ m, reload, refresh, open }: { m: Meeting; reload: () => 
       if (c.off_agenda) return setSaid(`${title} is on another roadmap: sent to its owner to decide.`);
       setSaid(c.status === "proposed" ? `Proposed: ${words[0]!.toLowerCase()}${words.slice(1)}. It waits on its decider.` : `${words}.`);
       // The rest of qa4-simple-decide-16: an applied move or cut is undone from its toast, like a decided question.
+      // QA Nov 12 (#10): it sits bottom-left over the stage, clear of the chat column (in the corner it covered the
+      // chat's box, and a toast under the pointer holds), so it times out like every other toast.
       if (c.can_undo)
         toast({
           message: words,
+          place: "rail",
           action: {
             label: "Undo",
             onClick: () =>
@@ -571,8 +589,9 @@ function RoadmapSlice({ m, reload, refresh, open }: { m: Meeting; reload: () => 
       <ul className="mt-2 divide-y divide-line">
         {items.map((i) => (
           <li key={i.id} data-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
-            <span className="min-w-0 flex-1">
-              <FeatureName id={i.id} title={i.title} open={open} strong /> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
+            {/* QA Nov 12 (#1): on a phone the name takes its own row; the buttons wrap below it. */}
+            <span className="min-w-0 flex-1 max-[600px]:basis-full">
+              <FeatureName id={i.id} code={i.code} title={i.title} open={open} strong /> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
             </span>
             {/* qa-simple-decide-45: a cut item comes back with Restore. */}
             {m.can.change && i.status === "cut" && (
@@ -915,8 +934,9 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                       and is stretched over its own row, so neighbouring decisions never overlap; ' · ' stays
                       with the approver's name. */}
                   <span data-testid="decision-taken" className="relative min-w-0 pl-4 -indent-4 max-[600px]:min-h-11">
-                    <Link className={`${LINK} max-[600px]:after:absolute max-[600px]:after:inset-0`} href={code(x).startsWith("D-") ? `/simple/decisions#d-${x.number}` : `/simple/decisions?meeting=${m.id}`}>{x.title}</Link>{" "}
-                    <span className="whitespace-nowrap">· {x.approver.name}</span>
+                    <Link className={`${LINK} max-[600px]:after:absolute max-[600px]:after:inset-0`} href={code(x).startsWith("D-") ? `/simple/decisions#d-${x.number}` : `/simple/decisions?meeting=${m.id}`}>{x.title}</Link>
+                    {/* QA Nov 12 (#12): a no-break space: "· name" never starts a line of its own. */}
+                    <span className="whitespace-nowrap" data-testid="decision-taken-by">{"\u00a0"}· {x.approver.name}</span>
                   </span>
                 </DecidedItem>
               ))}
@@ -957,18 +977,26 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             ) : m.can.end ? (
               <>
                 {/* walkc-meeting: the Decisions page shows the minutes already; Send marks them sent there. */}
-                <label className="flex items-center gap-2"><input type="checkbox" checked disabled /> Decisions page<span className="simple-small"> · shows them already; Send marks them sent</span></label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked disabled /> Each attendee&apos;s Inbox</label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={email} disabled={!m.email_available} onChange={(e) => setEmail(e.target.checked)} /> Email the attendees
-                  {!m.email_available && <span className="simple-small"> · Email isn&apos;t set up</span>}
-                </label>
+                {/* QA Nov 12 (#12): the Start sheet's checkboxes; a disabled one's reason behind its (i). */}
+                <div className="flex items-center gap-1" data-testid="delivery-decisions-page">
+                  <label className={CHOICE}><input type="checkbox" className={CHECK} checked disabled /> Decisions page</label>
+                  <InfoTip label="Decisions page" align="start">Shows them already; Send marks them sent.</InfoTip>
+                </div>
+                <label className={CHOICE}><input type="checkbox" className={CHECK} checked disabled /> Each attendee&apos;s Inbox</label>
+                <div className="flex items-center gap-1">
+                  <label className={CHOICE}>
+                    <input type="checkbox" className={CHECK} checked={email} disabled={!m.email_available} onChange={(e) => setEmail(e.target.checked)} /> Email the attendees
+                  </label>
+                  {!m.email_available && <InfoTip label="Email the attendees" align="start">Email isn&apos;t set up.</InfoTip>}
+                </div>
                 {slackReady ? (
-                  <label className="flex items-center gap-2"><input type="checkbox" checked={slack} onChange={(e) => setSlack(e.target.checked)} /> Post to {m.slack.channel}</label>
+                  <label className={CHOICE}><input type="checkbox" className={CHECK} checked={slack} onChange={(e) => setSlack(e.target.checked)} /> Post to {m.slack.channel}</label>
                 ) : (
-                  <p className="flex flex-wrap items-center gap-2">
-                    <input type="checkbox" disabled checked={false} onChange={() => undefined} aria-label="Post to Slack" /> Post to Slack
-                    <span className="simple-small"> · {m.slack.connected ? "Slack has no channel for minutes yet." : "Slack is not connected yet."}</span>
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className={CHOICE}>
+                      <input type="checkbox" className={CHECK} disabled checked={false} onChange={() => undefined} aria-label="Post to Slack" /> Post to Slack
+                    </span>
+                    <InfoTip label="Post to Slack" align="start">{m.slack.connected ? "Slack has no channel for minutes yet." : "Slack is not connected yet."}</InfoTip>
                     {/* qa4-simple-decide-32: drawn as a link, not grey like the note beside it. */}
                     <Link className={`text-[length:var(--simple-small)] ${LINK}`} href="/settings/connections" data-testid="slack-connect-link">{m.slack.connected ? "Pick a channel" : "Connect Slack"}</Link>
                   </p>

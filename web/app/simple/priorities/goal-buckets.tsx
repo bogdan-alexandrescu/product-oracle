@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { NotInGt } from "@/components/simple/FeatureName";
 import { storeGoalOrder } from "@/components/simple/GoalOrder";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { GOAL_CHANGED_EVENT } from "@/lib/api/simple-chat";
@@ -9,7 +10,7 @@ import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CodeTag, goalLabel, milestoneColour, planFeatures, weeksWords } from "./plan-buckets";
+import { CodeTag, goalLabel, gtCode, milestoneColour, planFeatures, weeksWords } from "./plan-buckets";
 
 /*
  * Goal buckets you can change (the owner's picks of mk-goalbuckets: GB1 a "Pencil, form in place",
@@ -161,12 +162,17 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
   const day = parseDay(f.due, year);
   const done = !!(f.title.trim() && f.measure.trim() && f.target.trim() && day);
   const set = (k: keyof Fields) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
+  // PR8: a field says what it lacks once the person leaves it (or tries to save), never as the form opens.
+  const [left, setLeft] = useState<Partial<Record<keyof Fields, boolean>>>({});
+  const leave = (k: keyof Fields) => () => setLeft((x) => (x[k] ? x : { ...x, [k]: true }));
+  const lacks = (k: keyof Fields, missing: boolean) => !!left[k] && missing;
   return (
     <form
       data-testid="goal-form"
       className="grid gap-2"
       onSubmit={async (e) => {
         e.preventDefault();
+        if (!done) setLeft({ title: true, measure: true, target: true, due: true });
         if (!done || busy) return;
         setBusy(true);
         setRefusal(null);
@@ -191,18 +197,18 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
         <h3 className="whitespace-nowrap text-[17px] font-[650]">{title}</h3>
         <span className="text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal {order} in the order; change it in the Ground Truth</span>
       </div>
-      <Field label="Goal" error={!f.title.trim() ? "Name the goal." : undefined} now={now.title}>
-        <textarea autoFocus rows={f.title.length > 60 ? 2 : 1} value={f.title} onChange={set("title")} className={`${INPUT} h-auto py-1.5`} />
+      <Field label="Goal" error={lacks("title", !f.title.trim()) ? "Name the goal." : undefined} now={now.title}>
+        <textarea autoFocus rows={f.title.length > 60 ? 2 : 1} value={f.title} onChange={set("title")} onBlur={leave("title")} className={`${INPUT} h-auto py-1.5`} />
       </Field>
-      <Field label="Measure: the number that shows it" error={!f.measure.trim() ? "Add a measure." : undefined} now={now.measure}>
-        <input value={f.measure} onChange={set("measure")} placeholder="For example: repeat orders a month" className={f.measure.trim() ? INPUT : BAD} />
+      <Field label="Measure: the number that shows it" error={lacks("measure", !f.measure.trim()) ? "Add a measure." : undefined} now={now.measure}>
+        <input value={f.measure} onChange={set("measure")} onBlur={leave("measure")} placeholder="For example: repeat orders a month" className={lacks("measure", !f.measure.trim()) ? BAD : INPUT} />
       </Field>
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Target" error={!f.target.trim() ? "Add a target." : undefined} now={now.target}>
-          <input value={f.target} onChange={set("target")} className={f.target.trim() ? INPUT : BAD} />
+        <Field label="Target" error={lacks("target", !f.target.trim()) ? "Add a target." : undefined} now={now.target}>
+          <input value={f.target} onChange={set("target")} onBlur={leave("target")} className={lacks("target", !f.target.trim()) ? BAD : INPUT} />
         </Field>
-        <Field label="By" error={!day ? "Pick a date." : undefined} now={now.due}>
-          <input type="text" value={f.due} onChange={set("due")} placeholder="Pick a day" className={day ? INPUT : BAD} />
+        <Field label="By" error={lacks("due", !day) ? "Pick a date." : undefined} now={now.due}>
+          <input type="text" value={f.due} onChange={set("due")} onBlur={leave("due")} placeholder="Pick a day" className={lacks("due", !day) ? BAD : INPUT} />
         </Field>
       </div>
       <OwnerField value={f.owner ?? null} onChange={(owner) => setF((x) => ({ ...x, owner }))} />
@@ -292,10 +298,68 @@ export function DragGhost({ code, name, weeks, style, className = "" }: { code: 
   return (
     <div aria-hidden data-testid="drag-ghost" className={`pointer-events-none fixed z-40 flex w-[420px] max-w-[80vw] rotate-[-1.5deg] items-center gap-2 rounded-md border-2 border-accent bg-surface px-2 py-[5px] text-[16px] shadow-2xl ${className}`} style={style}>
       <span className="text-[15px]">⠿</span>
-      {code && <CodeTag code={code} />}
+      {gtCode(code) && <CodeTag code={code!} />}
       <span className="flex-1">{name}</span>
       <span className="text-[15px] text-text2">{weeks}</span>
     </div>
+  );
+}
+
+/**
+ * A task's pencil and ⋯ (Edit task, Cut from the roadmap), for who may change it (./task-edit). A feature with no
+ * roadmap item has the same pencil and ⋯ (`editLabel` "Edit feature", no cut): they open its feature panel.
+ */
+export function TaskActions({ name, onEdit, onCut, disabled, editLabel = "Edit task" }: { name: string; onEdit: () => void; onCut?: () => void; disabled?: boolean; editLabel?: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", away);
+    window.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      window.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  return (
+    <span ref={ref} data-testid="task-actions" className="relative flex flex-none items-center">
+      <button type="button" aria-label={`Edit ${name}`} title={editLabel} className={`${ICON} h-7 w-7 disabled:opacity-40`} onClick={onEdit} disabled={disabled}>
+        ✎
+      </button>
+      <button type="button" aria-label={`More for ${name}`} aria-haspopup="menu" aria-expanded={open} className={`${ICON} h-7 w-7 disabled:opacity-40 ${open ? "border-line-strong bg-surface2" : ""}`} onClick={() => setOpen((o) => !o)} disabled={disabled}>
+        ⋯
+      </button>
+      {open && (
+        <div role="menu" className={MENU}>
+          <button
+            type="button"
+            role="menuitem"
+            className={ITEM}
+            onClick={() => {
+              setOpen(false);
+              onEdit();
+            }}
+          >
+            {editLabel}
+          </button>
+          {onCut && (
+            <button
+              type="button"
+              role="menuitem"
+              className={`${ITEM} text-warn`}
+              onClick={() => {
+                setOpen(false);
+                onCut?.();
+              }}
+            >
+              Cut from the roadmap
+            </button>
+          )}
+        </div>
+      )}
+    </span>
   );
 }
 
@@ -359,7 +423,7 @@ export function FeatureRows({
             data-testid="plan-feature"
             data-code={f.code}
             data-lifted={up ? "" : undefined}
-            className={`relative flex items-center gap-2 border-b border-line py-[5px] text-[16px] leading-[22px] max-sm:flex-wrap max-sm:gap-y-1 ${up ? "[&>*]:opacity-30" : ""}`}
+            className={`relative flex flex-wrap items-center gap-2 border-b border-line py-[5px] text-[16px] leading-[22px] max-sm:gap-y-1 ${up ? "[&>*]:opacity-30" : ""}`}
           >
             {movable && (
               <button
@@ -380,8 +444,14 @@ export function FeatureRows({
                 ⠿
               </button>
             )}
-            <CodeTag code={f.code} title={f.name} />{" "}
-            <span data-testid="plan-feature-name" className="min-w-0 flex-1">
+            {/* PR1: the feature's Ground Truth code, else the "Not in the Ground Truth" flag after its name. */}
+            {gtCode(f.code) && (
+              <>
+                <CodeTag code={f.code} title={f.name} />{" "}
+              </>
+            )}
+            {/* PR10: the name keeps room for a few words; the milestone chips wrap beside it instead. */}
+            <span data-testid="plan-feature-name" className="min-w-[10rem] flex-1">
               {onOpen ? (
                 <button type="button" data-testid="plan-feature-open" title={`Open ${f.name}`} className="text-left hover:underline" onClick={() => onOpen(f)}>
                   {f.name}
@@ -389,6 +459,7 @@ export function FeatureRows({
               ) : (
                 f.name
               )}
+              {!gtCode(f.code) && <NotInGt />}
               {others.length > 0 && (
                 <span data-testid="also-goals" title={`Also serves ${others.join(", ")}`} className="ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded-full border border-line-strong px-1.5 align-[1px] text-[12px] font-[650] text-text2">
                   +{others.length} {others.length === 1 ? "goal" : "goals"}
@@ -404,7 +475,7 @@ export function FeatureRows({
                 </span>
               )}
             </span>
-            <span className="flex flex-none gap-1 max-sm:order-last max-sm:basis-full max-sm:pl-[60px]">
+            <span data-testid="plan-chips" className="flex flex-wrap justify-end gap-1 max-sm:order-last max-sm:basis-full max-sm:justify-start max-sm:pl-[60px]">
               {milestones.map((code) => {
                 const c = milestoneColour(plan, code);
                 const name = plan.milestones.find((m) => m.code === code)?.name ?? "";
@@ -425,7 +496,8 @@ export function FeatureRows({
             <span data-testid="plan-feature-total" className="min-w-[56px] flex-none text-right text-[15px] tabular-nums text-text2">
               {f.weeks == null ? "PM-owned" : weeksWords(f.weeks)}
             </span>
-            {task?.actions(f)}
+            {/* PR6: every feature row has the same pencil and ⋯, for who may change it; one with no roadmap item opens its feature panel. */}
+            {task && (task.actions(f) ?? (grips && onOpen ? <TaskActions name={f.name} editLabel="Edit feature" onEdit={() => onOpen(f)} /> : null))}
           </li>
         );
       })}

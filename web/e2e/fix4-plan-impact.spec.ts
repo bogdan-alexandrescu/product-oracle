@@ -46,7 +46,7 @@ test.describe("desktop", () => {
 
   test("qa-plan-10: a what-if names the item by its title, never its Ground Truth key", async ({ page }) => {
     await scenario(page, "impact");
-    await openWhatIf(page, "f.guided-setup", "Guided setup");
+    await openWhatIf(page, "F-82", "Guided setup");
     const sidebar = page.getByRole("complementary", { name: "Regeneration plan" });
     const planRow = sidebar.getByTestId("plan-row").filter({ hasText: flowTitle });
     await planRow.getByRole("button").first().click();
@@ -96,7 +96,7 @@ test.describe("desktop", () => {
 
   test("qa-plan-41: the output's kind reads 'User flow' everywhere its title says user flow", async ({ page }) => {
     await scenario(page, "impact");
-    await openWhatIf(page, "f.guided-setup", "Guided setup");
+    await openWhatIf(page, "F-82", "Guided setup");
     await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
     const grid = page.getByRole("grid", { name: "Affected outputs" });
     await expect(grid).toContainText("User flow · 1");
@@ -109,7 +109,7 @@ test.describe("desktop", () => {
 
   test("qa-plan-42: a preview's header chip says what would be affected, not stale", async ({ page }) => {
     await scenario(page, "impact");
-    await openWhatIf(page, "f.guided-setup", "Guided setup");
+    await openWhatIf(page, "F-82", "Guided setup");
     await expect(page.getByText("Preview only; nothing is marked stale", { exact: false }).first()).toBeVisible();
     const chip = page.locator("[data-page-header]").getByTestId("impact-count");
     await expect(chip).toHaveText("1 would be affected");
@@ -127,7 +127,7 @@ test.describe("desktop", () => {
 
   test("qa-plan-44: the plan's action is a neutral status chip, 'Plan: regenerate'", async ({ page }) => {
     await scenario(page, "impact");
-    await openWhatIf(page, "f.guided-setup", "Guided setup");
+    await openWhatIf(page, "F-82", "Guided setup");
     const sidebar = page.getByRole("complementary", { name: "Regeneration plan" });
     const chip = sidebar.getByTestId("plan-row").filter({ hasText: flowTitle }).getByTestId("plan-action");
     await expect(chip).toHaveText("Plan: regenerate");
@@ -136,7 +136,7 @@ test.describe("desktop", () => {
 
   test("qa-plan-45: 'Reconcile…' is a bordered button like 'Mark reviewed'", async ({ page }) => {
     await scenario(page, "impact");
-    await openWhatIf(page, "f.guided-setup", "Guided setup");
+    await openWhatIf(page, "F-82", "Guided setup");
     const sidebar = page.getByRole("complementary", { name: "Regeneration plan" });
     const row = sidebar.getByTestId("plan-row").filter({ hasText: flowTitle });
     await row.getByRole("button").first().click();
@@ -154,7 +154,7 @@ test.describe("desktop", () => {
 
   test("qa-plan-46: the lineage node shows the item's kind in full beside its what-if link", async ({ page }) => {
     await scenario(page, "impact");
-    await openWhatIf(page, "f.guided-setup", "Guided setup");
+    await openWhatIf(page, "F-82", "Guided setup");
     const upstream = page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-upstream").filter({ hasText: "Guided setup" });
     const sub = upstream.getByTestId("lineage-upstream-sub");
     await expect(sub).toHaveText("Feature · locked");
@@ -163,7 +163,7 @@ test.describe("desktop", () => {
   });
 
   test("qa-plan-47: an item nothing is built from says when Impact will show something", async ({ page }) => {
-    await openWhatIf(page, "f.sample-data", "Sample data");
+    await openWhatIf(page, "F-83", "Sample data");
     const empty = page.getByTestId("impact-empty");
     await expect(empty).toContainText("No outputs depend on this item yet. Nothing to regenerate.");
     await expect(empty).toContainText("When a roadmap, spec or other output is built from it, Impact shows what a change to it would reach.");

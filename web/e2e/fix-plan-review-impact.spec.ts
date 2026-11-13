@@ -32,7 +32,7 @@ test("impact: the lineage names a Ground Truth item's kind, not its raw key", as
   // A version's preview reaches only that document's sections (as the API's): a Ground Truth
   // item is an upstream on its own what-if, opened from its drawer as a person would.
   await page.goto("/ground-truth");
-  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
   await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
   const graph = page.getByRole("region", { name: "Lineage" });
@@ -143,7 +143,8 @@ async function pickMethod(page: Page, name: string) {
 }
 
 async function stepsOf(page: Page, key: string, title: string) {
-  await page.getByTestId(`priority-row-${key}`).getByRole("button", { name: title, exact: true }).click();
+  // docs/ground-truth.md: a feature shows its code with its name ("F-1 Saved addresses at checkout").
+  await page.getByTestId(`priority-row-${key}`).getByRole("button", { name: `${key} ${title}`, exact: true }).click();
   const steps = page.getByTestId(`explanation-${key}`).getByRole("list", { name: "Steps" });
   await expect(steps).toBeVisible();
   return steps.getByRole("listitem").allInnerTexts();
@@ -232,7 +233,7 @@ async function confidenceReads(page: Page, key: string, title: string, shown: st
     return figure.right <= box.right + 0.5 && td.scrollWidth <= td.clientWidth + 1;
   });
   expect(fit, "the Confidence figure fits its column").toBe(true);
-  await row.getByRole("button", { name: title, exact: true }).click();
+  await row.getByRole("button", { name: `${key} ${title}`, exact: true }).click();
   const inspector = page.getByTestId("priority-inspector");
   const ring = inspector.getByRole("img", { name: `Confidence ${shown}` });
   await expect(ring).toBeVisible();
@@ -278,6 +279,6 @@ test("priorities: the Changes log names a retired override's anchor by the API's
   await expect(page.locator('tr[data-testid^="priority-row-"]').first()).toBeVisible();
   const log = page.getByTestId("change-log");
   const row = log.getByRole("listitem").filter({ hasText: "Saved addresses at checkout" });
-  await expect(row).toContainText("Moved above Shipping carrier picker");
-  await expect(row).not.toContainText("F-99");
+  // The API's title, with its code before it as every feature reads (docs/ground-truth.md).
+  await expect(row).toContainText("Moved above F-99 Shipping carrier picker");
 });

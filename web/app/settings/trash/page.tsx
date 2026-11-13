@@ -214,7 +214,7 @@ export default function TrashPage() {
                 {/* Where they delete: owners documents, everyone else the roadmap's features and goals. */}
                 {can("delete_document") ? (
                   <Link href="/documents" className="font-semibold text-accent-ink hover:underline">
-                    Open Documents
+                    Open PRDs
                   </Link>
                 ) : (
                   <Link href="/simple/roadmap" className="font-semibold text-accent-ink hover:underline">

@@ -998,6 +998,8 @@ export function seedSimpleMany(n = 500): SimpleDb {
       goal: goals[i % 8], track: tracks[i % 6], confidence: (["low", "medium", "high"] as const)[i % 3],
       ...(dated ? { start, end: start + 20 + (i % 30), source: "typed" as const } : {}),
       ...(i >= 12 && i % 5 === 3 ? { depends: [`item-${i - 12}`] } : {}),
+      // QA Nov 12: each a Ground Truth feature with its code, as the API's items are (F-200 on).
+      section: `f-${200 + i}`,
     };
   });
   const db: SimpleDb = { items, ids: Object.fromEntries(items.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), own: {}, suggestions: [] };

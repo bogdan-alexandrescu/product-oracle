@@ -14,7 +14,7 @@ import { invalidateWaiting, loadInbox, loadMyQuestions, NEED_KINDS, needKind, wa
 
 import { useAccessRequestRows } from "../inbox/_access";
 import { useActed } from "../inbox/_actions";
-import { allNeeds, NeedTable, usePerms, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
+import { allNeeds, NEED_COLUMNS_COMPACT, NeedTable, usePerms, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
 import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows, trackSuggestionRows } from "../inbox/_proposals";
 import { useQuestionRows } from "../inbox/_questions";
 import { GoalsPanel } from "./_goals-panel";
@@ -27,6 +27,20 @@ import { useGoals } from "./_use-goals";
 const IN_FLIGHT = new Set(["running", "awaiting_checkpoint", "awaiting_approval", "paused_overrun"]);
 /** A phone's width, as the layout's max-[600px]. */
 const PHONE = "(max-width: 600px)";
+
+/**
+ * QA Nov 12 #12: Needs you's Kind takes the Inbox's room plus the icon's, so a kind
+ * ("Cost approval", "Review reminder") reads whole on one line; a longer one wraps, never cut.
+ */
+const HOME_NEED_COLUMNS = NEED_COLUMNS_COMPACT.map((c) =>
+  c.key === "kind"
+    ? {
+        ...c,
+        width: "180px",
+        className: `${c.className ?? ""} min-[601px]:[&_.truncate]:line-clamp-2 min-[601px]:[&_.truncate]:whitespace-normal min-[601px]:[&_.truncate]:break-words`,
+      }
+    : c,
+);
 
 /**
  * qa-company-5, -6: how many of each kind wait, never a bordered pill that looks like a button.
@@ -372,7 +386,7 @@ export default function HomePage() {
               )}
             </Empty>
           )}
-          <NeedTable title="Needs you" testId="home-needs-table" rows={shownNeeds} compact />
+          <NeedTable title="Needs you" testId="home-needs-table" rows={shownNeeds} columns={HOME_NEED_COLUMNS} compact />
           {moreNeeds > 0 && (
             // qa-company-12: the footer's icon and link on one line, on a phone too.
             <div className="flex min-h-11 items-center gap-2.5 border-t border-line px-4 py-2 max-[600px]:px-3" data-testid="home-needs-footer">

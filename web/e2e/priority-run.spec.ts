@@ -104,7 +104,7 @@ test("a blocking problem disables Approve order; Request changes sends it back",
   await expect(band.getByTestId("cannot-approve")).toContainText("1 blocking problem");
   const chip = page.getByTestId("priority-row-F-2").getByTestId("problem-before_prerequisite");
   await expect(chip).toHaveAttribute("data-kind", "crit");
-  await expect(chip).toHaveAttribute("title", "F-2 is ranked 1, above F-5 (rank 2), which it depends on");
+  await expect(chip).toHaveAttribute("title", "F-2 Shipping cost shown in the cart is ranked 1, above F-5 Address lookup service (rank 2), which it depends on");
 
   const requestChanges = band.getByRole("button", { name: "Request changes" });
   await expect(requestChanges).toBeDisabled();

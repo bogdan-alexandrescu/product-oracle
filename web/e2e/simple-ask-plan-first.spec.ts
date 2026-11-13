@@ -52,7 +52,7 @@ for (const who of ["commenter", "owner"] as const) {
     const reply = panel.getByTestId("ask-chat-thread").getByTestId("ask-answer").last();
     await expect(reply).toHaveAttribute("data-status", "complete");
     // The pick's answer (ask-panel fidelity): the item as its title, when it runs, labelled lists, the plan as its source.
-    await expect(reply.getByTestId("answer-title")).toHaveText(/^Weekly alert digest/); // then its Current-state pill
+    await expect(reply.getByTestId("answer-title")).toHaveText(/^F-\d+\s*Weekly alert digest/); // its code, then its Current-state pill
     await expect(reply).toContainText(/Runs .+ – .+ · /);
     await expect(reply.getByTestId("answer-label").first()).toHaveText(/goal/i);
     await expect(reply.getByTestId("answer-source").filter({ hasText: "Open Weekly alert digest on the roadmap" })).toHaveAttribute("href", "/simple/roadmap");

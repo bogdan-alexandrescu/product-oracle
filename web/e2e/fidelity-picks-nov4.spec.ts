@@ -189,14 +189,14 @@ test.describe("RP1 a: the run's priority order", () => {
     // The baseline: proposed, serving the goal the order scored it on; locked, as the
     // approver's own accepted create (the API's decide_proposal for a person).
     await page.goto("/baseline");
-    const added = page.locator("main").getByRole("row", { name: /^Address book per account Locked Proposed/ }).filter({ visible: true });
+    const added = page.locator("main").getByRole("row", { name: /^N-\d+ Address book per account Locked Proposed/ }).filter({ visible: true });
     await expect(added).toHaveCount(1);
     await expect(added).not.toContainText("Serves no goal");
-    await expect(page.locator("main").getByRole("row", { name: /^Address labels and notes Locked Proposed/ }).filter({ visible: true })).toHaveCount(1);
+    await expect(page.locator("main").getByRole("row", { name: /^N-\d+ Address labels and notes Locked Proposed/ }).filter({ visible: true })).toHaveCount(1);
 
     // The goal it serves and what it needs come as Oracle's proposed links, for a person to confirm.
-    const delivery = page.locator("main").getByRole("row", { name: /^Default delivery address Locked Proposed/ }).filter({ visible: true });
-    await delivery.getByRole("button", { name: "Default delivery address" }).first().click();
+    const delivery = page.locator("main").getByRole("row", { name: /^N-\d+ Default delivery address Locked Proposed/ }).filter({ visible: true });
+    await delivery.getByRole("button", { name: /Default delivery address$/ }).first().click();
     const supports = page.getByRole("list", { name: "Supports" });
     await expect(supports.getByRole("listitem")).toHaveCount(1);
     await expect(supports.getByRole("listitem")).toContainText("Raise activation");
@@ -209,9 +209,9 @@ test.describe("RP1 a: the run's priority order", () => {
     // A goal named with no contribution: the link still comes, the contribution marked assumed
     // until a person sets it.
     await page.keyboard.press("Escape");
-    const shared = page.locator("main").getByRole("row", { name: /^Shared team addresses Locked Proposed/ }).filter({ visible: true });
+    const shared = page.locator("main").getByRole("row", { name: /^(N-\d+ )?Shared team addresses Locked Proposed/ }).filter({ visible: true });
     await expect(shared).not.toContainText("Serves no goal");
-    await shared.getByRole("button", { name: "Shared team addresses" }).first().click();
+    await shared.getByRole("button", { name: /Shared team addresses$/ }).first().click();
     const link = page.getByRole("list", { name: "Supports" }).getByRole("listitem");
     await expect(link).toHaveCount(1);
     await expect(link).toContainText("Grow paid conversion");

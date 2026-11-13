@@ -24,10 +24,12 @@ test("send back with staged actions and no note, then view the review that was s
   await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
   const slack = row(page, "slack-alerts");
   await slack.getByRole("button", { name: "Remove date", exact: true }).click();
-  await expect(slack.getByTestId("row-done")).toHaveText(/✓ Date removed/);
+  // Done chips draw a check icon now, not the ✓ character.
+  await expect(slack.getByTestId("row-done")).toHaveText(/Date removed/);
   const push = row(page, "mobile-push");
   await push.getByRole("button", { name: "Drop", exact: true }).click();
-  await expect(push.getByTestId("row-done")).toHaveText(/✓ Dropped/);
+  // Done chips draw a check icon now, not the ✓ character.
+  await expect(push.getByTestId("row-done")).toHaveText(/Dropped/);
   const bar = page.getByTestId("decision-bar");
   await expect(bar.getByLabel("Note to the agents")).toHaveValue("");
   await bar.getByRole("button", { name: "Send back to agents" }).click();

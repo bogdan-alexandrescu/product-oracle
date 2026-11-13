@@ -67,7 +67,8 @@ for (const phone of [false, true]) {
       );
       await login(page);
       await page.goto("/simple/inbox");
-      await expect(page.getByText("1 waiting", { exact: true })).toBeVisible();
+      // simple-home-qa-nov12 #18: Simple's Inbox says its count once, as Needs you's.
+      await expect(page.getByTestId("inbox-needs").getByTestId("panel-count")).toHaveText("1");
       await page.goto("/simple");
       const sentence = page.getByTestId("simple-page").getByTestId("home-sentence");
       await expect(sentence).toHaveText("A thing in your Inbox waits on you.");
@@ -77,7 +78,8 @@ for (const phone of [false, true]) {
       if (!phone) await expect(page.getByTestId("simple-nav-inbox-count")).toHaveText("1");
       await more.getByRole("link", { name: "Open" }).click();
       await expect(page).toHaveURL(/\/simple\/inbox$/);
-      await expect(page.getByText("1 waiting", { exact: true })).toBeVisible();
+      // simple-home-qa-nov12 #18: Simple's Inbox says its count once, as Needs you's.
+      await expect(page.getByTestId("inbox-needs").getByTestId("panel-count")).toHaveText("1");
     });
 
     test("ritual-retry: a ritual that failed to prepare offers Retry on Home, as the Inbox does", async ({ page }) => {

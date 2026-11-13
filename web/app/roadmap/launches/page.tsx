@@ -13,7 +13,6 @@ import {
   InfoTip,
   Inspector,
   InspectorSection,
-  LinkButton,
   Notice,
   Page,
   PageHeader,
@@ -54,8 +53,6 @@ const CHANNELS: { value: Channel; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 const PHONE = "(max-width: 600px)";
-/** qa-plan-38: a secondary button in the header row is the primary's 40 px height. */
-const HEADER_BUTTON = "h-10! rounded-button! px-4! text-[15px]!";
 
 function subscribePhone(onChange: () => void) {
   const mq = window.matchMedia(PHONE);
@@ -210,6 +207,8 @@ function Launches() {
         back={<PlanCrumb />}
         // qa-plan-11: the crumb sits on the title row, so the title is where the Plan tabs have theirs.
         backInline
+        // QA Nov 12 #15: the phone header says Plan, so the page's own name shows on a phone too, as on Changelog.
+        phoneTitle
         status={
           q.data && (
             <>
@@ -218,10 +217,8 @@ function Launches() {
           )
         }
         action={
+          // QA Nov 12 #14: no Changelog button here: the Plan strip's Changelog link below goes there.
           <div className="flex flex-wrap gap-2">
-            <LinkButton href="/roadmap/changelog" icon="doc" className={HEADER_BUTTON} data-testid="changelog-link">
-              Changelog
-            </LinkButton>
             {/* fix4 qa-plan-15: while there is no launch, New launch is the empty state's only. */}
             {canCreate && !none && (
               <Button

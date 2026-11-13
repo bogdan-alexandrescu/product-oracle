@@ -42,7 +42,8 @@ async function startReview(page: Page) {
   await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
   await tap(sheet.getByRole("button", { name: "Start", exact: true }));
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
+  // simple-home-qa-nov12 #11: in the meeting the chat's rules sit behind its (i) (chat-info).
+  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"], [data-testid="chat-info"]').first()).toBeVisible();
 }
 
 const chat = (page: Page) => page.getByTestId("meeting-chat");

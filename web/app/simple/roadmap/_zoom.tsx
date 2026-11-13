@@ -49,6 +49,7 @@ import {
   whereAttr,
 } from "./_lib";
 import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from "./_timeline";
+import { itemName, NotInGt } from "./_gtflag";
 import { joinedNames, joinedWords } from "@/lib/milestone-code";
 
 type Zoom = "3m" | "6m" | "1y" | "all";
@@ -254,6 +255,10 @@ export interface TimelineProps extends Common {
 const LABEL_W = 232;
 /** A milestone label's "+N" chip, about its width. */
 const MS_CHIP_W = 30;
+/** QA Nov 12 #8: at All 3 years a milestone label keeps up to this much of its words (px), */
+const MS_FIT_W = 180;
+/** stepping at most this far (px) past its day to clear the diamonds. */
+const MS_FIT_STEP = 120;
 const fullDay = (d: string) => calendarDay(d, { month: "short", day: "numeric", year: "numeric" });
 const ROW_H = 34;
 
@@ -283,7 +288,7 @@ export function ZoomTimeline(props: TimelineProps) {
           {side && openItem && (
             <aside
               data-testid="item-panel"
-              aria-label={openItem.title}
+              aria-label={itemName(openItem)}
               className="sticky top-3 z-30 max-h-[calc(100dvh-24px)] w-[400px] flex-none overflow-y-auto rounded-xl border border-line bg-surface shadow-tip"
             >
               {props.card(
@@ -356,9 +361,9 @@ export function ConflictPanel({
           // shows, its sentence behind the (i) (no visible prose).
           <span className={`flex items-center gap-1 text-sm text-text ${stacked ? "" : "min-w-[16rem] flex-1"}`}>
             <button type="button" onClick={() => onShow(i.key)} className="text-left hover:underline">
-              {i.title}
+              {itemName(i)}
             </button>
-            <InfoTip label={i.title} align="start" testId="conflict-why">
+            <InfoTip label={itemName(i)} align="start" testId="conflict-why">
               {f.reason}
             </InfoTip>
           </span>
@@ -548,27 +553,34 @@ function DayChart(props: TimelineProps) {
   const gems = (msCtl?.list ?? [])
     .flatMap((m) => (m.date && m.date >= t0 && m.date <= t1 ? [x(m.date)] : []))
     .sort((a, b) => a - b);
-  const clear = (left: number) => {
+  const clear = (left: number, need = 56) => {
     let l = left;
-    for (const g of gems) if (g + 15 > l + 4 && g - 12 < l + 4 + 56) l = g + 12;
+    for (const g of gems) if (g + 15 > l + 4 && g - 12 < l + 4 + need) l = g + 12;
     return l;
   };
+  // QA Nov 12 #8: at All 3 years the days sit a pixel or so apart, so a label cut to its 56 px
+  // ("M1 B…") says nothing. There a label keeps its whole words (up to MS_FIT_W): it steps past
+  // the diamonds that would cut it (unless that takes it far from its day), and a label that would
+  // cut the one before folds into that one's "+N" chip, as the 3 months' crowded labels do.
+  const needOf = (words: string) => (fit ? Math.min(16 + words.length * 7, MS_FIT_W) : 56);
   const marks = (data.milestones ?? [])
     .filter((m) => m.date && m.status !== "dropped" && m.date >= t0 && m.date <= t1)
     .sort((a, b) => (a.date as string).localeCompare(b.date as string))
     .map((m) => {
       const at = x(m.date as string);
       const words = `◆ ${joinedWords(m, joined)} · ${shortDay(m.date as string)}`;
-      const left = clear(fit ? at : Math.max(at, sl));
+      const whole = fit ? clear(at, needOf(words)) : null;
+      const need = whole != null && whole - at <= MS_FIT_STEP ? needOf(words) : 56;
+      const left = whole != null && need > 56 ? whole : clear(fit ? at : Math.max(at, sl));
       const next = gems.find((g) => g - 12 >= left + 4);
-      return { m, at, words, left, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
+      return { m, at, words, left, need, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
     });
   const msGroups: { head: (typeof marks)[number]; more: (typeof marks)[number][]; room: number }[] = [];
   for (const k of marks) {
     if (k.gone) continue;
     const g = msGroups[msGroups.length - 1];
     const room = g ? k.left - 6 - g.head.left - (g.more.length ? MS_CHIP_W + 2 : 0) : Infinity;
-    if (g && room < 56) g.more.push(k);
+    if (g && room < g.head.need) g.more.push(k);
     else {
       if (g) g.room = Math.min(room, g.head.gems);
       msGroups.push({ head: k, more: [], room: k.gems });
@@ -915,20 +927,24 @@ function DayChart(props: TimelineProps) {
             style={{ left: labelW + xt, width: 2, background: TODAY }}
             data-testid="today-line"
           />
-          <span
-            data-testid="today-pill"
-            data-keep-clear
-            className="absolute top-[21px] z-30 rounded-full px-2 text-xs leading-5 font-bold whitespace-nowrap text-white"
-            style={{
-              left: Math.max(
-                labelW + 2,
-                Math.min(labelW + xt - 22, labelW + trackW - 56),
-              ),
-              background: TODAY,
-            }}
-          >
-            Today
-          </span>
+          {/* QA Nov 12 #4: the pill shows only while today's line is in sight; scrolled past it,
+           * it is gone (Back to today brings it back), never clamped over the names column. */}
+          {(fit || (xt >= sl && xt <= sl + visible)) && (
+            <span
+              data-testid="today-pill"
+              data-keep-clear
+              className="absolute top-[21px] z-30 rounded-full px-2 text-xs leading-5 font-bold whitespace-nowrap text-white"
+              style={{
+                left: Math.max(
+                  labelW + sl + 2,
+                  Math.min(labelW + xt - 22, labelW + trackW - 56),
+                ),
+                background: TODAY,
+              }}
+            >
+              Today
+            </span>
+          )}
           {/* approved-roadmap-to-simple: the roadmap's milestones (an approved version's too),
            * each a dashed line on its day with its name, as the Gantt marks them. */}
           {marks.map(({ m, at }) =>
@@ -957,6 +973,8 @@ function DayChart(props: TimelineProps) {
           {msGroups.map(({ head: { m, left, words }, more, room }) => (
             <div
               key={m.id}
+              // QA Nov 12 #8: a same-day count (the band's) keeps clear of a label and its chip.
+              data-keep-clear
               className="absolute top-[21px] z-[25] flex items-start gap-0.5"
               style={{ left: labelW + left + 4 }}
             >
@@ -1069,7 +1087,7 @@ function DayChart(props: TimelineProps) {
                           }}
                           className="text-left text-accent-ink hover:underline focus-visible:outline-2 focus-visible:outline-accent"
                         >
-                          {i.title}
+                          {itemName(i)}
                         </button>
                       ))}
                     </div>
@@ -1204,7 +1222,7 @@ function TimelineMilestones({ rows, moved, x, labelW, trackW, phone, span, keepO
       continue;
     }
     const [s, e] = moved[r.item.id] ?? barSpan(r.item);
-    out.push({ id: r.item.id, title: r.item.title, lane: lanes[lanes.length - 1]?.key ?? "", y, h: ROW_H, start: s, end: e });
+    out.push({ id: r.item.id, title: itemName(r.item), lane: lanes[lanes.length - 1]?.key ?? "", y, h: ROW_H, start: s, end: e });
     y += ROW_H;
     if (lanes.length) lanes[lanes.length - 1].y1 = y;
   }
@@ -1334,7 +1352,7 @@ const TimelineRow = memo(function TimelineRow({
           onClick={() => on.name(i, sel, bx, bw)}
           className={`pointer-events-auto sticky left-0 z-[12] flex flex-none items-center gap-1.5 border-r border-line px-3 text-left text-sm ${sel ? "bg-accent-soft" : "bg-surface"} hover:underline`}
           style={{ width: labelW, paddingLeft: 12 + depth * 14 }}
-          title={i.title}
+          title={itemName(i)}
         >
           {/* feature-parts: a part drawn as a branch of its parent's tree. */}
           {depth > 0 && (
@@ -1342,8 +1360,9 @@ const TimelineRow = memo(function TimelineRow({
               └
             </span>
           )}
-          <span className="min-w-0 truncate" style={lk.name}>
-            {i.title}
+          {/* QA Nov 12 #1: the code before the name (F-06 Weekly alert digest), cut as the name was. */}
+          <span data-testid="timeline-row-name" className="min-w-0 truncate" style={lk.name}>
+            {itemName(i)}
             {/* panel-menu: a merged feature says where it went, by code and name as its panel does. */}
             {i.merged_into && <span data-testid="row-merged" className="ml-1 text-text2">· Merged into {mergedName(i, (id) => byId.get(id))}</span>}
           </span>
@@ -1360,6 +1379,8 @@ const TimelineRow = memo(function TimelineRow({
               ⚠
             </span>
           )}
+          {/* QA Nov 12 #2: an item with no Ground Truth code says so on its row (small, after its name). */}
+          <NotInGt item={i} className="h-[18px]! px-1.5! text-[11px]!" />
         </button>
         <div className="relative" style={{ width: trackW }}>
           <div
@@ -1378,7 +1399,7 @@ const TimelineRow = memo(function TimelineRow({
             data-start={ds}
             data-end={de}
             data-live={live ? (liveWarn.length ? "broken" : "ok") : undefined}
-            aria-label={`${i.title}, ${spanWords(ds, de, today)}${canChange && planned(i) && !closedItem(i) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${still ? "" : ". Arrows move it a week, Shift+arrows a month; Escape cancels"}`}
+            aria-label={`${itemName(i)}, ${spanWords(ds, de, today)}${canChange && planned(i) && !closedItem(i) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${still ? "" : ". Arrows move it a week, Shift+arrows a month; Escape cancels"}`}
             onClick={() => on.bar(i, sel)}
             onPointerDown={(e) => on.down(e, i)}
             onPointerMove={on.move}
@@ -1593,7 +1614,7 @@ function QuarterList(props: TimelineProps) {
                               └
                             </span>
                           )}
-                          {i.title}
+                          {itemName(i)}
                           {lk.chip ? (
                             <span
                               data-testid="draft-tag"
@@ -1603,6 +1624,7 @@ function QuarterList(props: TimelineProps) {
                             </span>
                           ) : null}
                         </span>
+                        <NotInGt item={i} className="mt-0.5 h-5! px-2! text-xs!" />
                         <span data-testid="timeline-row-dates" className="block text-xs text-text2">
                           {/* tb-mk: the dates only; the band's header names the track's goal. */}
                           {spanWords(i.start.date, i.end.date, data.today)}

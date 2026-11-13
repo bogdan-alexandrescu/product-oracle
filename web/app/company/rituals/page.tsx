@@ -402,11 +402,28 @@ function AddRitual({ onClose, onAdded }: { onClose: () => void; onAdded: (r: Rit
         }
       }}
     >
-      <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-semibold text-text2">
-        Title
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="inline-flex items-center gap-1 text-sm font-semibold text-text2">
+          <label htmlFor="add-ritual-title">Title</label>
+          {/* detailed-b 17: the defaults sentence sits behind its (i), not as a second line of prose. */}
+          <InfoTip label="this ritual's defaults" testId="add-ritual-defaults">
+            <span data-testid="add-ritual-hint">
+              It starts every Monday at 9:00 AM for 30 minutes, with you as owner and no attendees. Change any of it in the panel once it is added.
+            </span>
+          </InfoTip>
+        </span>
         {/* qa-company-24: the Title field has the focus, and a disabled Add says why. */}
-        <input className={INPUT} required maxLength={120} autoFocus aria-describedby={title.trim() ? undefined : "add-ritual-needs"} value={title} onChange={(e) => setTitle(e.target.value)} />
-      </label>
+        <input
+          id="add-ritual-title"
+          className={INPUT}
+          required
+          maxLength={120}
+          autoFocus
+          aria-describedby={title.trim() ? undefined : "add-ritual-needs"}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </div>
       <Button type="submit" variant="solid" disabled={!title.trim()} title={title.trim() ? undefined : "Type a title first"}>
         Add
       </Button>
@@ -418,9 +435,6 @@ function AddRitual({ onClose, onAdded }: { onClose: () => void; onAdded: (r: Rit
           Type a title to add the ritual.
         </p>
       )}
-      <p className="basis-full text-sm text-text2" data-testid="add-ritual-hint">
-        It starts every Monday at 9:00 AM for 30 minutes, with you as owner and no attendees. Change any of it in the panel once it is added.
-      </p>
       {error && <ErrorNote>{error}</ErrorNote>}
     </form>
   );

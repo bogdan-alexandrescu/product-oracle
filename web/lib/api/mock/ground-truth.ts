@@ -15,8 +15,10 @@
  * item linked to no feature whose own code or slice's feature is a confirmed feature's code is
  * in the Ground Truth by code and not flagged unlinked, though it is flagged if that feature runs
  * today; no_code and no_goal read every confirmed feature (the base mock's have a code and a goal
- * here), a goal served by a confirmed link to a confirmed goal. Every other scenario reads no
- * flags. The "ground-truth-confirm" scenario adds Usage sync (a run's proposal with its Code F-16 and
+ * here), a goal served by a confirmed link to a confirmed goal. Every other scenario reads the
+ * same check over its own state: the base mock's features have their codes (F-81 to F-85) and
+ * Dark mode serves no goal, so the default company has one no_goal flag. The
+ * "ground-truth-confirm" scenario adds Usage sync (a run's proposal with its Code F-16 and
  * its proposed goal link, on the roadmap item Usage sync) and Alert rules (confirmed before codes
  * kept their own: keyed F-30, its Code F-17), flagged code_differs. Invented data only.
  */
@@ -93,7 +95,7 @@ const ITEMS: [string, string, string | null, boolean, string?][] = [
 /** The PRD Scale's approved plan: its feature not in the Ground Truth, over two milestones; it serves the
  * scenario's goal. */
 const PRD_FEATURES = [{ code: "F-09", name: "Guest seats", milestones: ["Beta", "Launch"] }];
-/** The codes the base mock's confirmed features take here, so each of the scenario's kinds has its one flag. */
+/** The codes the base mock's confirmed features take here when they have none, so each of the scenario's kinds has its one flag. */
 const BASE_CODES = ["F-04", "F-05", "F-06", "F-07", "F-08"];
 
 /** The ground-truth-confirm scenario's roadmap item, on the proposed Usage sync. */
@@ -211,9 +213,11 @@ export function seedGroundTruth(baseline: BaselineState, simple: SimpleDb): void
   }
   // The base mock's confirmed features: each with a code and serving a confirmed goal (the check reads every one).
   const ours = new Set(FEATURES.map(([key]) => featureId(key)));
-  const others = baseline.entities.filter((e) => e.type === "feature" && e.status === "confirmed" && !ours.has(e.id) && !F_CODE.test(e.key));
-  others.forEach((e, n) => {
+  const others = baseline.entities.filter((e) => e.type === "feature" && e.status === "confirmed" && !ours.has(e.id));
+  others.filter((e) => !F_CODE.test(e.key)).forEach((e, n) => {
     if (n < BASE_CODES.length) e.key = BASE_CODES[n];
+  });
+  others.forEach((e) => {
     if (!baseline.edges.some((x) => x.type === "supports" && x.src_id === e.id && x.dst_id === goal.id && x.status === "confirmed"))
       baseline.edges.push({ ...edge, id: stableUuid(`ground-truth/serves/base/${e.id}`), src_id: e.id, dst_id: goal.id, status: "confirmed", locked: false, locked_by: null, locked_at: null });
   });
@@ -241,7 +245,8 @@ const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Flag>): Flag 
 const prdGoal = (baseline: BaselineState) =>
   baseline.entities.find((e) => e.type === "goal" && e.status === "confirmed") ?? baseline.entities.find((e) => e.type === "goal" && e.status !== "rejected");
 
-function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
+/** The check over the mock's state, as check.py's run. `seeded`: the scenario's PRD Scale is there (its plan's features are read). */
+function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: boolean): Flag[] {
   const byId = new Map(baseline.entities.filter((e) => e.type === "feature").map((e) => [e.id, e]));
   const truth = [...byId.values()].filter((e) => e.status === "confirmed");
   const g = prdGoal(baseline);
@@ -249,7 +254,8 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   const ref = (e: Entity) => ({ id: e.id, code: F_CODE.test(e.key) ? e.key : null, name: e.title });
   const both = { roadmap: ROADMAP, prd: PRD };
   const out: Flag[] = [];
-  const items = [...ITEMS.map(([key]) => key), CONFIRM_ITEM, SOUNDS_ITEM].map((key) => simple.items.find((x) => x.key === key)).filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
+  const ids: Record<string, string> = simple?.ids ?? {};
+  const items = [...ITEMS.map(([key]) => key), CONFIRM_ITEM, SOUNDS_ITEM].map((key) => simple?.items.find((x) => x.key === key)).filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
   // The Ground Truth by code (F-12, a slice F-12a), as check.py's truth_of.
   const truthOf = new Map(truth.filter((e) => F_CODE.test(e.key)).map((e) => [e.key, e]));
   // Link to a feature: a PRD feature linked to a Ground Truth feature is that feature.
@@ -258,7 +264,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
     const e = code ? byId.get(links[code] ?? "") : undefined;
     return e?.status === "confirmed" ? e : undefined;
   };
-  const missing = PRD_FEATURES.filter((f) => !truthOf.has(f.code) && !linkedTo(f.code));
+  const missing = seeded ? PRD_FEATURES.filter((f) => !truthOf.has(f.code) && !linkedTo(f.code)) : [];
   // Each item's code (F-15a for a slice section f-15a) and its slice's feature's (F-15). An item of a PRD
   // feature over several milestones takes the next letter no slice item of it has (F-09a), as check.py's slice_of.
   const sectionOf = (s: (typeof items)[number]) => {
@@ -290,7 +296,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
     const linked = byId.get(s.linked_feature ?? s.feature_id ?? "");
     // Its feature as the roadmap's working draft has it (a set_feature change: Add or Link).
     if (linked?.status === "confirmed" || (!linked && byCode(s))) continue;
-    const id = simple.ids[s.key];
+    const id = ids[s.key];
     const [code, parent] = codeOf(s);
     const item = { id, code, name: s.title };
     if (!linked && parent && !missing.some((f) => f.code === parent)) {
@@ -336,7 +342,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
     const mine = !wholeCode((e.attrs as Record<string, unknown> | null)?.code);
     const dup = ![undefined, e.id].includes(held.get(want));
     const on = mine && dup ? items.find((s) => (s.linked_feature ?? s.feature_id) === e.id && wholeCode(s.section) === want) : undefined;
-    if (on) out.push(flag("code_differs", [["link_to_feature", simple.ids[on.key]]], { item: { id: simple.ids[on.key], code: codeOf(on)[0], name: on.title }, feature: ref(e), where: both }));
+    if (on) out.push(flag("code_differs", [["link_to_feature", ids[on.key]]], { item: { id: ids[on.key], code: codeOf(on)[0], name: on.title }, feature: ref(e), where: both }));
     // Held with no item to link: Use its code could only be refused, so it is not flagged.
     else if (!dup) out.push(flag("code_differs", [["use_code", e.id]], { feature: ref(e) }));
   }
@@ -346,14 +352,15 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   for (const s of items) {
     // Its own feature, or the one it matches by code (F-03, F-03a).
     const f = byId.get(s.linked_feature ?? s.feature_id ?? "") ?? byCode(s);
-    if (f && RUNNING.has(f.id)) out.push(flag("runs_today_on_roadmap", [["take_off_roadmap", simple.ids[s.key]]], { item: { id: simple.ids[s.key], code: codeOf(s)[0], name: s.title }, feature: ref(f), where: both }));
+    if (f && RUNNING.has(f.id)) out.push(flag("runs_today_on_roadmap", [["take_off_roadmap", ids[s.key]]], { item: { id: ids[s.key], code: codeOf(s)[0], name: s.title }, feature: ref(f), where: both }));
   }
   return out;
 }
 
 /** GroundTruthOut for the scenario: its flags in CHECK_KINDS' order, their counts per kind (zero included) and the total. */
 export function groundTruthCheck(scenario: string | null, baseline: BaselineState, simple: SimpleDb | undefined): Schemas["GroundTruthOut"] {
-  const found = (scenario === GROUND_TRUTH_FLAGS_SCENARIO || scenario === GROUND_TRUTH_CONFIRM_SCENARIO) && simple ? flagsOf(baseline, simple) : [];
+  // Every scenario: the check reads the mock's own state (the scenario's PRD only where it is seeded).
+  const found = flagsOf(baseline, simple, (scenario === GROUND_TRUTH_FLAGS_SCENARIO || scenario === GROUND_TRUTH_CONFIRM_SCENARIO) && !!simple);
   const flags = CHECK_KINDS.flatMap((k) => found.filter((f) => f.kind === k));
   const counts = Object.fromEntries(CHECK_KINDS.map((k) => [k, flags.filter((f) => f.kind === k).length]));
   return { flags, counts, total: flags.length };

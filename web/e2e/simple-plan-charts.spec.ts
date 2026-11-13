@@ -127,7 +127,9 @@ for (const v of VIEWS) {
       await page.getByRole("tab", { name: "Goal buckets" }).click();
       const head = page.getByTestId("buckets-head");
       await expect(head.getByRole("heading", { name: "Where each goal's work lands" })).toBeVisible();
-      await expect(head.getByTestId("buckets-summary")).toHaveText(
+      // PR7 (QA Nov 12): a short line; the sentence is behind its (i).
+      await expect(head.getByTestId("buckets-summary")).toHaveText("Nov 2 – Feb 12 · 56 engineer-weeks, 5 spare");
+      await expect(head.getByTestId("buckets-summary-full")).toHaveText(
         "This plan, Nov 2 – Feb 12: 56 engineer-weeks over three milestones (51 planned + 5 spare). Bars are engineer-weeks.",
       );
       // B's legend: a swatch, the code in bold, its dates and how full ("M1 Oct 19 – Nov 13 · 14 of 14 weeks").
@@ -309,7 +311,7 @@ for (const v of VIEWS) {
       // alert-export and setup-video (value 0, effort 1) another.
       const count = page.locator('[data-testid="vxe-crowd"][data-count="13"]');
       await expect(count).toHaveAccessibleName(/^13 features at PM-owned, no effort · goal value 0 or no goal: F-110 Annual plan offer, .* and 10 more; show them$/);
-      await expect(page.getByRole("button", { name: "2 features at effort 1 week · goal value 0 · no goal: AHE Alert history export, WV Welcome video; show them" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "2 features at effort 1 week · goal value 0 · no goal: Alert history export, Welcome video; show them" })).toBeVisible();
       for (const code of ["alert-export", "setup-video", "setup-health-log"]) await expect(mark(page, code)).toHaveCount(0);
       // The median lines say what they are ("middle effort", "middle value"), never under a mark or a count.
       const marks = await page.locator('[data-testid="vxe-point"], [data-testid="vxe-crowd"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
@@ -322,7 +324,10 @@ for (const v of VIEWS) {
       }
       // A feature with no goal is never a cross: a neutral dashed circle, named in the legend (in a count's sheet too).
       await expect(mark(page, "price-tiers")).toHaveAttribute("data-shape", "none");
-      await expect((await countRowOf(page, "alert-export")).getByTestId("vxe-crowd-code")).toHaveText("AHE");
+      // PR1 (QA Nov 12): no made-up letters; a feature with no Ground Truth code is flagged.
+      const exportRow = await countRowOf(page, "alert-export");
+      await expect(exportRow.getByTestId("vxe-crowd-code")).toHaveCount(0);
+      await expect(exportRow.getByTestId("not-in-gt")).toBeVisible();
       for (const code of ["alert-export", "setup-video"]) await expect(page.locator(`[data-testid="vxe-crowd-row"][data-code="${code}"]`)).toHaveAttribute("data-shape", "none");
       await page.keyboard.press("Escape");
       await expect(await countRowOf(page, "setup-health-log")).toHaveAttribute("data-shape", "none");
@@ -336,7 +341,7 @@ for (const v of VIEWS) {
       await expect(legend.getByTestId("vxe-legend-no-goal")).toHaveText("No goal");
       // Demo 9: how to read the chart is behind the (i) by the heading; the legend keeps "Below the line".
       await expect(legend.getByTestId("vxe-legend-hollow")).toHaveText("Below the line");
-      await expect(page.locator("#prio-about-text")).toContainText("Each mark shows the feature's code; point at it for its name, its rank is in the list. Hollow: below the line (not this quarter).");
+      await expect(page.locator("#prio-about-text")).toContainText("Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list. Hollow: below the line (not this quarter).");
       await expect(page.locator("#prio-about-text")).toContainText("Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys)");
 
       // B's Ranked rows: one line each (rank, code, the name cut with "…", the score), a row

@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 
 import { Button, Chip, CodeChip, Dialog, InfoTip, Notice } from "@/components/ds";
 import { api, unwrap, type GraphOut, type Schemas } from "@/lib/api/client";
-import { named } from "@/lib/codes";
+import { named, namedText } from "@/lib/codes";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { goalCodes, goalTags } from "./common";
@@ -28,7 +28,16 @@ const KINDS: { kind: Kind; label: string; why: string }[] = [
 
 /** What the row is: the item (or slice) when there is one, else the feature. */
 const subject = (f: Flag) => f.item ?? f.feature!;
-const shown = (r: Schemas["GroundTruthRef"]) => (r.code ? `${r.code} ${r.name}` : r.name);
+/**
+ * The row's code and name: the subject's own code, else (an item with no code of its own) its
+ * feature's, as the item is that feature on the roadmap ("F-03 Night alerts").
+ */
+const subjectNamed = (f: Flag) => {
+  const s = subject(f);
+  return { code: s.code ?? (f.item ? (f.feature?.code ?? null) : null), name: s.name };
+};
+/** The row in words, its code before its name: "F-03 Night alerts". */
+const shown = (f: Flag) => namedText(subjectNamed(f));
 /** A row's own key, to mark it waiting for approval once a fix was sent. */
 const rowKey = (f: Flag) => `${f.kind}:${subject(f).id ?? subject(f).code ?? subject(f).name}`;
 /** The roadmap item a flag's Add or Link sets the feature of (unlinked items and slices). */
@@ -211,7 +220,7 @@ export function GroundTruthFlags({
 
   const takeOff = (flag: Flag, target: string) =>
     act(async () => {
-      const name = subject(flag).name;
+      const name = shown(flag);
       const { change } = await unwrap(api.POST("/v1/simple/changes", { body: { op: "cut", target: { item_id: target }, before: { cut: false }, after: {} } }));
       if (change.status === "proposed") return wait(flag, `Sent “${name}” off the roadmap for approval.`);
       const undo = change.can_undo ? () => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: change.id } } })) : undefined;
@@ -227,7 +236,7 @@ export function GroundTruthFlags({
   /** Give it a code: the next F-number (a slice its feature's, with a letter); a commenter's goes to an approver. */
   const giveCode = (flag: Flag, target: string) =>
     act(async () => {
-      const name = subject(flag).name;
+      const name = shown(flag);
       const path = { params: { path: { entity_id: target } } };
       const out = await unwrap(api.POST("/v1/baseline/entities/{entity_id}/code", path));
       if (out.status === "proposed") return { text: `Asked an approver to give “${name}” a code.` };
@@ -245,7 +254,7 @@ export function GroundTruthFlags({
   const linkPrd = (flag: Flag, code: string, feature: { id: string; title: string }) =>
     act(async () => {
       const prd = flag.where.prd!.id;
-      const name = subject(flag).name;
+      const name = shown(flag);
       const out = await unwrap(api.POST("/v1/baseline/prd-links", { body: { prd_document_id: prd, code, feature_id: feature.id } }));
       if (out.status === "proposed") return { text: `Asked an approver to link “${name}” to “${feature.title}”.` };
       return {
@@ -257,7 +266,7 @@ export function GroundTruthFlags({
   /** Link to a feature: the item's own feature, a change in its roadmap's working draft (a published item too). */
   const pickFeature = (flag: Flag, feature: { id: string; title: string }) =>
     act(async () => {
-      const name = subject(flag).name;
+      const name = shown(flag);
       const body = { op: "set_feature" as const, target: { item_id: flag.item!.id! }, before: { feature_id: flag.feature?.id ?? null }, after: { feature_id: feature.id } };
       const { change } = await unwrap(api.POST("/v1/simple/changes", { body }));
       if (change.status === "proposed") return wait(flag, `Sent linking “${name}” to “${feature.title}” for approval.`);
@@ -270,7 +279,7 @@ export function GroundTruthFlags({
       await unwrap(
         api.POST("/v1/baseline/edges", { body: { src_id: target, dst_id: goal.id, type: "supports", attrs: { contribution: 2 }, origin: "user" } }),
       );
-      return { text: `“${subject(flag).name}” now serves “${goal.name}”.` };
+      return { text: `“${shown(flag)}” now serves “${goal.name}”.` };
     });
 
   /** The fixes this person can make here: a commenter asks once. */
@@ -354,11 +363,14 @@ export function GroundTruthFlags({
             .filter((f) => f.kind === shownKind)
             .map((f, n) => {
               const s = subject(f);
+              const sn = subjectNamed(f);
               const row = fixes(f);
               const waiting = waits(f);
               // One short line; the flag's sentence is behind the (i). A feature a run proposed
               // waits for its yes: the status a chip, the feature its name with its code (D-12).
               const unconfirmed = !waiting && f.item && f.feature && f.fixes.some((x) => x.action === "confirm_feature") ? f.feature : null;
+              // The item reads as its feature's code and name: the feature once, not a second time (QA Nov 12 #10).
+              const same = !!unconfirmed && unconfirmed.code === sn.code && unconfirmed.name === sn.name;
               // An item whose code another feature holds: the feature it is on, by the number it is keyed by.
               const keyed = !waiting && f.kind === "code_differs" && f.item && f.feature?.code ? f.feature : null;
               const line = waiting || unconfirmed
@@ -368,9 +380,13 @@ export function GroundTruthFlags({
                     : (f.where.roadmap?.title ?? null);
               return (
                 <li key={`${s.id ?? s.code ?? s.name}-${n}`} data-testid="gt-row" className="flex flex-wrap items-center justify-between gap-2 py-2">
-                  <span className="min-w-0">
+                  <span className="min-w-0" data-testid={same ? "gt-unconfirmed" : undefined}>
                     <span className="flex items-center gap-1 text-[14px] text-text">
-                      {s.code ? <CodeChip kind="feature" entityId={f.item ? null : s.id} entityKey={s.code} title={s.name} /> : s.name}
+                      {sn.code ? (
+                        <CodeChip kind="feature" entityId={f.item ? (s.code ? null : (f.feature?.id ?? null)) : s.id} entityKey={sn.code} title={sn.name} />
+                      ) : (
+                        sn.name
+                      )}
                       <InfoTip label={s.name}>{f.words}</InfoTip>
                     </span>
                     {waiting ? (
@@ -378,9 +394,9 @@ export function GroundTruthFlags({
                         Waiting for an approver
                       </Link>
                     ) : unconfirmed ? (
-                      <span className="mt-1 flex flex-wrap items-center gap-1.5" data-testid="gt-unconfirmed">
+                      <span className="mt-1 flex flex-wrap items-center gap-1.5" data-testid={same ? undefined : "gt-unconfirmed"}>
                         <Chip kind="warn">Waiting to be confirmed</Chip>
-                        <CodeChip kind="feature" entityId={unconfirmed.id} entityKey={unconfirmed.code} title={unconfirmed.name} />
+                        {!same && <CodeChip kind="feature" entityId={unconfirmed.id} entityKey={unconfirmed.code} title={unconfirmed.name} />}
                       </span>
                     ) : keyed ? (
                       <span className="mt-1 flex flex-wrap items-center gap-1.5" data-testid="gt-keyed">
@@ -394,7 +410,7 @@ export function GroundTruthFlags({
                   {row.length > 0 && (
                     <span className="flex flex-wrap gap-2">
                       {row.map((x) => (
-                        <Button key={x.action} disabled={busy} onClick={x.run} aria-label={`${x.words}: ${shown(s)}`}>
+                        <Button key={x.action} disabled={busy} onClick={x.run} aria-label={`${x.words}: ${shown(f)}`}>
                           {x.words}
                         </Button>
                       ))}
@@ -456,7 +472,7 @@ function Picker({
   }, [graph, picking.what]);
   const words = q.trim().toLowerCase();
   const found = words ? options.filter((o) => `${o.code ?? ""} ${o.name}`.toLowerCase().includes(words)) : options;
-  const name = subject(picking.flag).name;
+  const name = shown(picking.flag);
   return (
     <Dialog title={picking.what === "goal" ? `Pick a goal for ${name}` : `Link ${name} to a feature`} onClose={onClose} busy={busy} testId="gt-picker" scrollBody>
       <input

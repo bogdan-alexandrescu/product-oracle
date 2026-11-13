@@ -53,6 +53,9 @@ type DocNamed = Parameters<typeof docLabel>[0];
  * What a run is for, by name (qa-shell-32), never its slug or short id: its document's title
  * ("Usage alerts PRD"), else the run's document in words (runName).
  */
+/** A header count as a toggle: outlined while the list shows only what it counts. */
+const COUNT_BUTTON = "rounded-full hover:underline aria-pressed:outline-2 aria-pressed:outline-offset-1 aria-pressed:outline-current";
+
 function runTitle(r: RunSummary, docs: Map<string, DocNamed>): string {
   const d = r.document_id ? docs.get(r.document_id) : undefined;
   // rirs-23: the document alone (the Flow column names the flow), in full.
@@ -68,6 +71,8 @@ export default function RunsPage() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
+  // detailed-b 5: the header's count shows only the runs it counts; pressed again, every run.
+  const [onlyWaiting, setOnlyWaiting] = useState(false);
   const runs = (q.data ?? []).filter((r) => r.status !== "draft");
   // A run delivering a decision recorded at its checkpoint waits on no one.
   const waiting = runs.filter((r) => WAITING_STATUSES.includes(r.status) && !isDelivering(r));
@@ -114,6 +119,8 @@ export default function RunsPage() {
   // qa-work-10: the badge counts only the runs this person can act on; the rest wait on others.
   const mine = waiting.filter((r) => rowAction(r) !== null);
   const others = waiting.length - mine.length;
+  // The runs the header counts: the ones this person decides, else the ones waiting on others.
+  const shown = !onlyWaiting ? runs : mine.length > 0 ? mine : others > 0 ? waiting : runs;
 
   const columns: Column<RunSummary>[] = [
     {
@@ -246,13 +253,17 @@ export default function RunsPage() {
         status={
           // qa-work-10: one count, said once. Only the runs this person can decide count (qa-work-10); the rest wait on others.
           mine.length > 0 ? (
-            <Chip kind="warn" data-testid="runs-waiting">
-              {plural(mine.length, "run")} {mine.length === 1 ? "needs" : "need"} a decision
-            </Chip>
+            <button type="button" aria-pressed={onlyWaiting} onClick={() => setOnlyWaiting((o) => !o)} className={COUNT_BUTTON}>
+              <Chip kind="warn" data-testid="runs-waiting">
+                {plural(mine.length, "run")} {mine.length === 1 ? "needs" : "need"} a decision
+              </Chip>
+            </button>
           ) : capsReady && others > 0 ? (
-            <Chip kind="na" data-testid="runs-waiting-others">
-              {plural(others, "run")} waiting on others
-            </Chip>
+            <button type="button" aria-pressed={onlyWaiting} onClick={() => setOnlyWaiting((o) => !o)} className={COUNT_BUTTON}>
+              <Chip kind="na" data-testid="runs-waiting-others">
+                {plural(others, "run")} waiting on others
+              </Chip>
+            </button>
           ) : null
         }
         action={
@@ -285,7 +296,7 @@ export default function RunsPage() {
         >
           <Panel
             title="Runs"
-            count={q.data ? runs.length : undefined}
+            count={q.data ? shown.length : undefined}
           >
             {q.data && runs.length === 0 ? (
               <Empty testId="runs-empty">
@@ -312,7 +323,7 @@ export default function RunsPage() {
                   label="Runs"
                   testId="runs-table"
                   columns={columns}
-                  rows={q.data ? runs : undefined}
+                  rows={q.data ? shown : undefined}
                   loading={q.loading}
                   rowKey={(r) => r.id}
                   selected={selected?.id ?? null}

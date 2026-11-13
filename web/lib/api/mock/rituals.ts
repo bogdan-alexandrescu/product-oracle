@@ -313,7 +313,23 @@ const BLOCK_TITLES: Record<string, string> = {
   baseline_rebuild: "Ground Truth rebuild",
 };
 
-type Row = { text: string; href?: string | null; method?: string; label?: string };
+type Row = {
+  text: string;
+  href?: string | null;
+  method?: string;
+  label?: string;
+  // detailed-b 7: the fields oracle.rituals.blocks.tracks sends beside text/href.
+  track_id?: string;
+  title?: string;
+  health?: string;
+  at_risk_items?: number;
+  // detailed-b 7: oracle.rituals.blocks.stale_items's own item_key (never shown raw).
+  item_key?: string;
+  // detailed-b 7: oracle.rituals.blocks.priority_changes's feature key and ranks.
+  key?: string;
+  from?: number;
+  to?: number;
+};
 
 function block(key: string, asOf: string, rows: Row[]) {
   return { key, title: BLOCK_TITLES[key] ?? key, as_of: asOf, rows };
@@ -322,14 +338,25 @@ function block(key: string, asOf: string, rows: Row[]) {
 /** The pre-read the roadmap refresh's builders make from the mock company's roadmap. */
 function roadmapBlocks(asOf: string, trackId: string) {
   return [
+    // detailed-b 7: tracks.py's own fields (track_id, title, health, at_risk_items), so the UI
+    // can link the track and its "N at risk" separately rather than reading one bare sentence.
     block("tracks", asOf, [
-      { text: "Usage alerts PRD: at risk, 2 at risk", href: `/roadmap?track=${trackId}` },
-      { text: "Team onboarding PRD: on track, 0 at risk", href: "/roadmap" },
-    ]),
+      {
+        track_id: trackId, title: "Usage alerts PRD", health: "at_risk", at_risk_items: 2,
+        href: `/roadmap?track=${trackId}`, text: "Usage alerts PRD: at risk, 2 at risk",
+      },
+      {
+        track_id: "team-onboarding", title: "Team onboarding PRD", health: "on_track", at_risk_items: 0,
+        href: "/roadmap", text: "Team onboarding PRD: on track, 0 at risk",
+      },
+    ]),  // fmt: skip
     block("slips", asOf, [{ text: `Threshold alerts beta: ${formatDate("2026-11-10")} → ${formatDate("2026-11-24")}`, href: `/roadmap?track=${trackId}` }]),
-    block("stale_items", asOf, [{ text: "Digest emails", href: "/roadmap?item=usage-alerts:digest-emails" }]),
+    block("stale_items", asOf, [
+      { item_key: "usage-alerts:digest-emails", title: "Digest emails", track_id: trackId, href: "/roadmap?item=usage-alerts:digest-emails", text: "Digest emails" },
+    ]),
     block("done_items", asOf, [{ text: "ENG-401 Alert settings page", href: `/roadmap?track=${trackId}` }]),
-    block("priority_changes", asOf, [{ text: "Usage alerts: #5 → #2", href: "/priorities" }]),
+    // detailed-b 7: priority_changes.py's own key (a feature's, named as Priorities names it) and ranks.
+    block("priority_changes", asOf, [{ key: "F-21", title: "Usage alerts", from: 5, to: 2, href: "/priorities", text: "Usage alerts: #5 → #2" }]),
     block("suggested_next", asOf, [
       { label: "Start a roadmap run from Usage alerts PRD", method: "POST", href: `/v1/tracks/${trackId}/roadmap-run`, text: "Start a roadmap run from Usage alerts PRD" },
       { label: "Review goals", href: "/ground-truth", text: "Review goals" },
@@ -719,17 +746,51 @@ export function ritualInbox(ctx: RitualsContext, db: RitualsDb): Schemas["InboxR
 
 // --- routes -------------------------------------------------------------------------------
 
-const SUMMARY_TEXT = [
-  "# Monthly roadmap refresh — summary",
-  "",
-  "## What to discuss first",
-  "",
-  "One track is at risk: **Usage alerts PRD**, whose Threshold alerts beta slipped two weeks to Nov 24.",
-  "",
-  "- Digest emails may be stale.",
-  "- Usage alerts rose from fifth to second in the priorities; a [roadmap run](/runs) from that track is the suggested next step.",
-  "- Links a run must not draw: [another site](/\\evil.example/a) and [a script](javascript:alert).",
-].join("\n");
+/**
+ * detailed-b 8: each ritual kind's mock summary heads with its own title ("Weekly goals
+ * check-in — summary"), not always "Monthly roadmap refresh — summary"; the body is kept for
+ * the one kind it describes and a short invented one stands in for the rest.
+ */
+function summaryText(r: Ritual): string {
+  const head = `# ${r.title} — summary`;
+  if (r.kind === "roadmap_refresh") {
+    return [
+      head,
+      "",
+      "## What to discuss first",
+      "",
+      "One track is at risk: **Usage alerts PRD**, whose Threshold alerts beta slipped two weeks to Nov 24.",
+      "",
+      "- Digest emails may be stale.",
+      "- Usage alerts rose from fifth to second in the priorities; a [roadmap run](/runs) from that track is the suggested next step.",
+      "- Links a run must not draw: [another site](/\\evil.example/a) and [a script](javascript:alert).",
+    ].join("\n");
+  }
+  if (r.kind === "goals_checkin") {
+    return [
+      head,
+      "",
+      "## What to discuss first",
+      "",
+      "**Paid conversion** is a touch below target this week; activation is on pace.",
+      "",
+      "- Weekly active teams held steady.",
+      "- No metric needs an explanation this week.",
+    ].join("\n");
+  }
+  if (r.kind === "goals_review") {
+    return [
+      head,
+      "",
+      "## What to discuss first",
+      "",
+      "**Two goals** are on track for the quarter; one is behind its target.",
+      "",
+      "- Review the goal missing an owner before the next cycle.",
+    ].join("\n");
+  }
+  return [head, "", "Nothing stands out this time."].join("\n");
+}
 
 const METRICS_SUMMARY_TEXT = [
   "## Weekly metrics review",
@@ -986,7 +1047,7 @@ async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string
     }
     // The mock summary run finishes on the second read after it starts.
     if (o.summary_state === "running" && (o.summary_reads = (o.summary_reads ?? 0) + 1) >= 2) {
-      Object.assign(o, { summary_state: "ready", summary: r.kind === "metrics_review" ? METRICS_SUMMARY_TEXT : r.kind === DIGEST.kind ? DIGEST_TEXT : SUMMARY_TEXT, summary_note: null });
+      Object.assign(o, { summary_state: "ready", summary: r.kind === "metrics_review" ? METRICS_SUMMARY_TEXT : r.kind === DIGEST.kind ? DIGEST_TEXT : summaryText(r), summary_note: null });
     }
     return json(200, occurrenceOut(ctx, r, o));
   }

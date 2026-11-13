@@ -118,7 +118,7 @@ for (const [phone, dark] of [
       await expect(asked.getByTestId("chat-message-body")).toHaveText(Q);
       await expect(asked.getByTestId("chat-who")).toHaveText(new RegExp(`^You · ${TIME}$`));
       const answer = panel.getByTestId("ask-answer").last();
-      await expect(answer.getByTestId("answer-title")).toHaveText(/^Weekly alert digest/); // then its Current-state pill
+      await expect(answer.getByTestId("answer-title")).toHaveText(/^F-\d+\s*Weekly alert digest/); // its code, then its Current-state pill
       await expect(answer.getByTestId("chat-who")).toHaveText(new RegExp(`^Oracle · ${TIME}$`));
       await expect(answer).toContainText(/Runs .+ – .+ · /);
       await expect(answer.getByTestId("answer-label")).not.toHaveCount(0);
@@ -155,7 +155,7 @@ for (const [phone, dark] of [
       await menu.getByTestId("ask-recent-row").first().click();
       await expect(menu).toHaveCount(0);
       await expect(panel.getByTestId("ask-about")).toHaveText(Q);
-      await expect(panel.getByTestId("answer-title")).toHaveText(/^Weekly alert digest/); // then its Current-state pill
+      await expect(panel.getByTestId("answer-title")).toHaveText(/^F-\d+\s*Weekly alert digest/); // its code, then its Current-state pill
 
       if (phone) {
         // The phone's Ask sheet is the whole screen, over the tab bar; no handle.

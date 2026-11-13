@@ -305,8 +305,30 @@ def test_check_before_prerequisite_names_both_features():
     )
     assert codes(out) == [("before_prerequisite", True, "b")]
     message = out.problems[0]["message"]
-    assert "b" in message.split() and "a" in message.split()
-    assert message == "b is ranked 1, above a (rank 2), which it depends on"
+    # A key that is not a code reads as the feature's name alone (detailed-b 2).
+    assert message == "B is ranked 1, above A (rank 2), which it depends on"
+
+
+def test_check_before_prerequisite_names_codes_with_their_names():
+    # detailed-b 2: a code-shaped key reads with its feature's name, never bare ("F-2").
+    keys = ("F-2", "F-5", "F-7")
+    out = run_order.check_order(
+        order(("F-2", 1), ("F-5", 2), ("F-7", 3)),
+        known=run_order.Known(
+            features={
+                "F-2": "Usage alerts",
+                "F-5": "Address lookup service",
+                "F-7": "Digest emails",
+            },
+            depends_on={"F-2": {"F-5"}},
+            live={"goal_weighted": [live_row(k, i + 1) for i, k in enumerate(keys)]},
+        ),
+    )
+    assert codes(out) == [("before_prerequisite", True, "F-2")]
+    assert out.problems[0]["message"] == (
+        "F-2 Usage alerts is ranked 1, above F-5 Address lookup service (rank 2), "
+        "which it depends on"
+    )
 
 
 def test_check_differs_from_live_and_no_goal_are_advisory():

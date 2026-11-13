@@ -127,7 +127,7 @@ test("lead decides: Approve waits for every verdict and the blocking answer, the
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByTestId("segment-priority").getByTestId("segment-state")).toHaveText("Running");
   await page.goto("/ground-truth");
-  await page.getByTestId("feature-f.saved-carts").getByRole("button", { name: "Saved carts" }).click();
+  await page.getByTestId("feature-F-84").getByRole("button", { name: "Saved carts" }).click();
   await expect(page.getByRole("dialog", { name: "Saved carts" }).locator('[data-attr="effort"]')).toHaveText("XL");
 });
 

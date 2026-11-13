@@ -350,12 +350,11 @@ export function RitualInspector({
               ))}
             </select>
           </Field>
-          {/* One zone (owner decision 2026-10-22): every ritual is in the Company time zone. */}
+          {/* One zone (owner decision 2026-10-22): every ritual is in the Company time zone.
+              detailed-b 16: its "Set it" notice lives once, above the table (page.tsx); here
+              only the zone's name, so the notice and link are never shown twice at once. */}
           <p className="col-span-2 self-center text-sm text-text2 max-[600px]:col-span-1">
-            Company time zone: <span data-testid="ritual-zone">{zoneText(saved.timezone, zoneDefault)}</span>{" "}
-            <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
-              {zoneDefault ? "Set it" : "Change"}
-            </Link>
+            Company time zone: <span data-testid="ritual-zone">{zoneText(saved.timezone, zoneDefault)}</span>
           </p>
           <Field label="Length (minutes)">
             <input

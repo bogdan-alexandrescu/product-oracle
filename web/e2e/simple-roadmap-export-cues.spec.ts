@@ -135,6 +135,8 @@ for (const side of ["later", "earlier"] as const) {
           start: bar.dataset.start ?? "",
           end: bar.dataset.end ?? "",
           name: row.querySelector("button[title]")?.getAttribute("title") ?? "",
+          // QA Nov 12 #2: a row with no code carries the "Not in the Ground Truth" mark.
+          gt: !!row.querySelector('[data-testid="not-in-gt"]'),
           // The bar's ends in the chart's own x (the names column from 0 to labelW).
           x0: r.left - box.left,
           x1: r.right - box.left,
@@ -188,8 +190,8 @@ for (const side of ["later", "earlier"] as const) {
       },
       [svg, shown.name] as const,
     );
-    // The name reads whole in the names column.
-    expect(row.names).toContain(shown.name);
+    // The name reads whole in the names column (with its "Not in the Ground Truth" mark after it, QA Nov 12 #2).
+    expect(row.names).toContain(shown.gt ? `${shown.name} · Not in the Ground Truth` : shown.name);
     // The arrow on the edge it runs past, wholly inside the chart (right of the names column).
     expect(row.side).toBe(side);
     expect(row.arrow!.x0).toBeGreaterThanOrEqual(shown.labelW);

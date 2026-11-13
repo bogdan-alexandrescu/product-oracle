@@ -158,20 +158,20 @@ for (const scheme of ["light", "dark"] as const) {
       await expect.poll(() => groupsDrawn(page)).toEqual(GOAL_LANES.map((l) => l.split(" · ")[0]));
       // The overlapping pieces are both Activation's, the ones in a row both Reliability's, and
       // in their goal lanes too they keep two rows and start order.
-      expect(await groupOf(page, "Setup checklist")).toBe("Activation");
-      expect(await groupOf(page, "Sample data import")).toBe("Activation");
+      expect(await groupOf(page, "F-01 Setup checklist")).toBe("Activation");
+      expect(await groupOf(page, "F-02 Sample data import")).toBe("Activation");
       const [gc, gs] = [(await bar(page, "setup-checklist").boundingBox())!, (await bar(page, "setup-import").boundingBox())!];
       // Two rows apart, not just a pixel: the one bar clears the other's height.
       expect(Math.abs(gc.y - gs.y)).toBeGreaterThanOrEqual(gc.height - 1);
-      expect(await groupOf(page, "Setup failure alerts")).toBe("Reliability");
-      expect(await groupOf(page, "Setup error report")).toBe("Reliability");
+      expect(await groupOf(page, "F-03 Setup failure alerts")).toBe("Reliability");
+      expect(await groupOf(page, "F-06 Setup error report")).toBe("Reliability");
       expect((await bar(page, "plan-f-03").boundingBox())!.y).toBeLessThan((await bar(page, "plan-f-06").boundingBox())!.y);
       // The Gantt draws PM-owned work grey and dashed, in the PM-owned group.
       await expect(group(page, "PM-owned")).toHaveCount(1);
       for (const [code, title] of [["F-04", "Pricing page words"], ["F-10", "Launch email"], ["F-18", "Pricing questions page"]]) {
         await expect(slice(page, code)).toHaveAttribute("data-pm-owned", "true");
         await expect(slice(page, code).locator("rect[data-slice-body]")).toHaveAttribute("stroke-dasharray", /\d/);
-        expect(await groupOf(page, title)).toBe("PM-owned");
+        expect(await groupOf(page, `${code} ${title}`)).toBe("PM-owned");
       }
       // A feature's two slices: one bar, one row, each piece in its own milestone, named by its name.
       await expect(bar(page, "plan-f-05").getByTestId("slice-bar")).toHaveCount(2);
@@ -261,7 +261,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
       for (const t of ["M1 Prove it", "M2 Scale volume", "M3 Open to all"]) await expect(group(page, t)).toHaveCount(1);
       await expect(group(page, "PM-owned")).toHaveCount(0);
-      await expect.poll(() => groupOf(page, "Team invites")).toBe("M1 Prove it");
+      await expect.poll(() => groupOf(page, "F-05 Team invites")).toBe("M1 Prove it");
       await expect(slice(page, "F-05b")).toBeAttached();
       for (const g of ["milestone", "track", "prd"] as const) {
         await page.getByTestId(`group-${g}`).click();
@@ -271,7 +271,7 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(group(page, "Activation")).toHaveCount(0);
         await expect
           .poll(async () => {
-            const [gc, gs] = [await groupOf(page, "Setup checklist"), await groupOf(page, "Sample data import")];
+            const [gc, gs] = [await groupOf(page, "F-01 Setup checklist"), await groupOf(page, "F-02 Sample data import")];
             const [c, s] = [(await bar(page, "setup-checklist").boundingBox())!, (await bar(page, "setup-import").boundingBox())!];
             return gc === title && gs === title && Math.abs(c.y - s.y) >= c.height - 1 ? "one group, two rows" : `${gc}:${c.y} ${gs}:${s.y} want ${title}`;
           }, { message: `${g}: Setup checklist and Sample data import share ${title} on two rows` })
@@ -311,12 +311,12 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(quarters.nth(1).locator("h3")).toHaveText(/^Q1 2027\s*Jan – Mar 2027 · 8 items$/);
       await expect(quarters.nth(2).locator("h3")).toHaveText(/^Q2 2027\s*Apr – Jun 2027 · 12 items$/);
       await expect(list.getByTestId("timeline-row")).toHaveCount(32);
-      await expect(row(page, "setup-checklist")).toHaveText(/^Setup checklist\s*Nov 2 – Nov 20$/);
-      await expect(row(page, "plan-f-03")).toHaveText(/^Setup failure alerts\s*Nov 2 – Nov 13/);
+      await expect(row(page, "setup-checklist")).toHaveText(/^F-01 Setup checklist\s*Nov 2 – Nov 20$/);
+      await expect(row(page, "plan-f-03")).toHaveText(/^F-03 Setup failure alerts\s*Nov 2 – Nov 13/);
       // P-1: rows in start order; board-quarters: the Goal map's undated One-tap sign-up link starts with Later (Apr 1).
-      await expect(quarters.nth(1).getByTestId("timeline-row").first()).toHaveText(/^Public signup\s*Jan 4 – Jan 29, 2027/);
-      await expect(quarters.nth(2).getByTestId("timeline-row").filter({ hasText: "One-tap sign-up link" })).toHaveText(/^One-tap sign-up link\s*Apr 1, 2027 – /);
-      await expect(quarters.nth(1).getByTestId("timeline-row").filter({ hasText: "Public signup" })).toHaveText(/^Public signup\s*Jan 4 – Jan 29, 2027/);
+      await expect(quarters.nth(1).getByTestId("timeline-row").first()).toHaveText(/^F-13 Public signup\s*Jan 4 – Jan 29, 2027/);
+      await expect(quarters.nth(2).getByTestId("timeline-row").filter({ hasText: "One-tap sign-up link" })).toHaveText(/^F-101 One-tap sign-up link\s*Apr 1, 2027 – /);
+      await expect(quarters.nth(1).getByTestId("timeline-row").filter({ hasText: "Public signup" })).toHaveText(/^F-13 Public signup\s*Jan 4 – Jan 29, 2027/);
       await expect(page.getByTestId("group-milestone")).toHaveCount(0);
 
       await row(page, "plan-f-05").getByTestId("timeline-bar").click();

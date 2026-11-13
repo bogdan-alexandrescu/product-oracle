@@ -11,6 +11,7 @@
 import { calendarDay, displayZone, zoneTime } from "@/lib/dates";
 
 import type { BoardColumn } from "./_board";
+import { itemName, NOT_IN_GT } from "./_gtflag";
 import { brokenLinks, shortDay, spanWords } from "./_lib";
 import { ordinal } from "./_timeline";
 
@@ -338,6 +339,8 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
     const title = name?.getAttribute("title") ?? "";
     const chip = el.querySelector('[data-testid="draft-tag"]')?.textContent ?? "";
     const warn = el.querySelector('[aria-label="Broken link"]') ? " ⚠" : "";
+    // QA Nov 12 #2: a row's "Not in the Ground Truth" mark, after its name (the title holds its code and name, #1).
+    const gt = el.querySelector('[data-testid="not-in-gt"]') ? ` · ${NOT_IN_GT}` : "";
     const closed = name?.querySelector<HTMLElement>("span")?.style.textDecoration.includes("line-through");
     const bar = el.querySelector<HTMLElement>('[data-testid="timeline-bar"]');
     const out: string[] = [`<g data-testid="export-row">`];
@@ -389,8 +392,13 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
     }
     // The names column, over the chart's lines.
     out.push(`<rect x="0" y="${y}" width="${labelW}" height="${h}" fill="var(--surface)"/><line x1="${labelW}" x2="${labelW}" y1="${y}" y2="${y + h}" stroke="var(--line)"/>`);
-    const tail = `${chip ? ` · ${chip}` : ""}${warn}`;
-    out.push(`<text x="12" y="${y + h / 2 + 4.5}" font-size="13" fill="${closed ? "var(--text2)" : "var(--text)"}"${closed ? ' text-decoration="line-through"' : ""}>${esc(fit(title, labelW - 24 - widthOf(tail, 13), 13) + tail)}</text>`);
+    const tail = `${chip ? ` · ${chip}` : ""}${gt}${warn}`;
+    const ink = `fill="${closed ? "var(--text2)" : "var(--text)"}"${closed ? ' text-decoration="line-through"' : ""}`;
+    if (gt && widthOf(title + tail, 13) > labelW - 24) {
+      // The mark would leave the name no room: the name on its line, the mark in small type under it.
+      const rest = `${chip ? `${chip} · ` : ""}${NOT_IN_GT}${warn}`;
+      out.push(`<text data-testid="export-name" x="12" y="${y + h / 2 - 1}" font-size="12" ${ink}>${esc(fit(title, labelW - 24, 12))}<tspan x="12" dy="12" font-size="10" fill="var(--text2)" text-decoration="none"> · ${esc(fit(rest, labelW - 34, 10))}</tspan></text>`);
+    } else out.push(`<text data-testid="export-name" x="12" y="${y + h / 2 + 4.5}" font-size="13" ${ink}>${esc(fit(title, labelW - 24 - widthOf(tail, 13), 13) + tail)}</text>`);
     out.push("</g>");
     rows.push(out.join(""));
     y += h;
@@ -426,9 +434,13 @@ export function boardPicture(cols: BoardColumn[], today: string, queue: string[]
       const fill = i.status === "cut" ? "var(--na-bg)" : est ? "url(#export-hatch)" : "var(--surface)";
       const stroke = red ? "var(--crit)" : "var(--line)";
       parts.push(`<rect x="${x + 8}" y="${y}" width="${colW - 16}" height="44" rx="8" fill="${fill}" stroke="${stroke}"${i.draft ? ' stroke-dasharray="5 3"' : ""}/>`);
-      parts.push(`<text x="${x + 16}" y="${y + 18}" font-size="13" font-weight="500" fill="var(--text)"${i.status === "cut" ? ' text-decoration="line-through"' : ""}>${esc(fit(i.title, colW - 32, 13, 500))}</text>`);
+      // QA Nov 12 #1/#2: the code before the name ("F-06 Weekly alert digest"); with no code, flagged
+      // after it, or first on the line under it where the name needs the room.
+      const name = itemName(i);
+      const beside = !i.code && widthOf(`${name} · ${NOT_IN_GT}`, 13, 500) <= colW - 32;
+      parts.push(`<text data-testid="export-name" x="${x + 16}" y="${y + 18}" font-size="13" font-weight="500" fill="var(--text)"${i.status === "cut" ? ' text-decoration="line-through"' : ""}>${esc(beside ? `${name} · ${NOT_IN_GT}` : fit(name, colW - 32, 13, 500))}</text>`);
       const place = queue.indexOf(i.id);
-      const meta = `${spanWords(i.start.date, i.end.date, today, true)}${est ? " · estimated" : ""}${i.draft ? " · draft" : ""}${place >= 0 ? ` · ${ordinal(place + 1)} to return` : ""}`;
+      const meta = `${i.code || beside ? "" : `${NOT_IN_GT} · `}${spanWords(i.start.date, i.end.date, today, true)}${est ? " · estimated" : ""}${i.draft ? " · draft" : ""}${place >= 0 ? ` · ${ordinal(place + 1)} to return` : ""}`;
       parts.push(`<text x="${x + 16}" y="${y + 35}" font-size="11" fill="var(--text2)">${esc(meta)}</text>`);
       y += 50;
     };

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
+import { InfoTip } from "@/components/ds/InfoTip";
 import { setToastPlace, toast } from "@/components/ds/Toast";
 import { FeatureFoundContext, OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
 import { usePhone } from "@/components/simple/PrdTimeline";
@@ -144,9 +145,12 @@ export function SimpleDecisions() {
   const { can } = useMe();
   const roadmap = useQuery("simple-roadmap:decisions", () => unwrap(api.GET("/v1/simple/roadmap", {})));
   useItemChanged(() => Promise.all([q.reload(), roadmap.reload()]));
+  const narrow = useNarrow();
+  const info = `${LEADS[view]} Dates are in ${zoneName(zone)}.`;
   const found = useCallback((f: Parameters<OpenFeature>[0]) => !!itemFor(roadmap.data?.items ?? [], f), [roadmap.data]);
+  // QA Nov 12 #16: on a phone the title is in the app bar, so its (i) sits on the filters' row, not alone above it.
   return (
-    <SimplePage title="Decisions" info={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
+    <SimplePage title="Decisions" info={narrow ? undefined : info}>
       <OpenFeatureContext.Provider value={setFeature}>
       <FeatureFoundContext.Provider value={found}>
       <DecisionSheetHost onChanged={() => q.reload()}>
@@ -159,6 +163,13 @@ export function SimpleDecisions() {
           <Filter label="PRD" value={prd} options={d?.prds ?? []} onChange={(v) => set("prd", v)} all="All PRDs" />
           <Filter label="Goal" value={goal} options={d?.goals ?? []} onChange={(v) => set("goal", v)} all="All goals" />
           <Filter label="Meeting" value={meeting} options={d?.meeting_options ?? []} onChange={(v) => set("meeting", v)} all="All meetings" />
+          {narrow && (
+            <span className="flex h-[38px] items-center self-end">
+              <InfoTip label="Decisions" testId="page-info" align="end" side="bottom">
+                {info}
+              </InfoTip>
+            </span>
+          )}
         </div>
         <ViewSwitch value={view} onChange={pick} />
       </div>
@@ -209,12 +220,14 @@ export function SimpleDecisions() {
       {d && d.approvals_waiting > 0 && (
         <p className="simple-plumb" data-testid="decisions-approvals">
           <Icon name="flag" size={16} stroke={1.7} />
-          {/* qa-simple-decide-29: plain words, no internal terms. */}
-          <span>
-            {d.approvals_waiting === 1 ? "1 approval for Oracle's own work waits" : `${d.approvals_waiting} approvals for Oracle's own work wait`} in your Inbox. They are not product decisions, so they are not listed or counted here.{" "}
+          {/* qa-simple-decide-29: plain words, no internal terms. QA Nov 12 #14: short, to Simple's own Inbox, the why behind the (i). */}
+          <span className="inline-flex flex-wrap items-center gap-1">
             <Link href="/simple/inbox" className="font-[650] text-accent-ink hover:underline">
-              Open the Inbox in Detailed
+              {d.approvals_waiting === 1 ? "1 approval waits" : `${d.approvals_waiting} approvals wait`} in your Inbox
             </Link>
+            <InfoTip label="Approvals in your Inbox" testId="decisions-approvals-info" align="start">
+              They approve Oracle&apos;s own work, not product decisions, so they are not listed or counted here.
+            </InfoTip>
           </span>
         </p>
       )}
@@ -224,6 +237,15 @@ export function SimpleDecisions() {
     </SimplePage>
   );
 }
+
+/** The width at which SimplePage hides its H1 (the phone's app bar shows the title). */
+const NARROW = "(max-width: 600px)";
+function subscribeNarrow(on: () => void) {
+  const m = window.matchMedia(NARROW);
+  m.addEventListener("change", on);
+  return () => m.removeEventListener("change", on);
+}
+const useNarrow = () => useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches, () => false);
 
 /** ec1 b: + New decision opens the decision sheet, empty, with Pick for who decides. */
 function NewDecision() {
@@ -286,7 +308,7 @@ function ViewSwitch({ value, onChange }: { value: View; onChange: (v: View) => v
 
 type Actions = ReturnType<typeof useQuestionActions>;
 
-/** A card of questions: the round flag icon, its title, the count and (Waiting for you) where they were read. */
+/** A card of questions: the round flag icon, its title and the count; (Waiting for you) where they were read, after the rows. */
 function QuestionCard({ label, testId, questions, count, source, children }: { label: string; testId: string; questions: Question[]; count: number; source?: boolean; children: ReactNode }) {
   const line = useSourceLine(questions);
   return (
@@ -302,13 +324,14 @@ function QuestionCard({ label, testId, questions, count, source, children }: { l
             {count}
           </span>
         )}
-        {source && line && (
-          <span data-testid="questions-source" className="simple-meta max-[600px]:w-full">
-            {line}
-          </span>
-        )}
       </header>
       {children}
+      {/* QA Nov 12 #15: the count also holds dates, links, suggestions and run stops, so where the questions were read sits after the rows, not beside the count. */}
+      {source && line && (
+        <p data-testid="questions-source" className="simple-meta">
+          {line}
+        </p>
+      )}
     </section>
   );
 }

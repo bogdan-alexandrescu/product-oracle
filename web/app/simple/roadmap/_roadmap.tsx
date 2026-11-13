@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 
 import { Button, clearToast, Icon, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { GoalPanel, goalRows, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
@@ -76,8 +76,12 @@ import {
   setRoadmapToday,
   yearSpan,
   drawnKeyDates,
+  goalMilestoneWords,
+  milestoneWords,
+  type Flag,
   type Scale as ChartScale,
 } from "./_lib";
+import { itemName, NotInGt } from "./_gtflag";
 import { Chart, PHASES, type Layout } from "./_timeline";
 import { ConflictPanel, ZoomTimeline } from "./_zoom";
 
@@ -178,14 +182,22 @@ function oneLane(data: Roadmap, group: Lane): Roadmap {
 const TODAY_ENTRY: LegendEntry = { key: "today", swatch: <i aria-hidden className="inline-block h-3.5 w-0.5 flex-none bg-crit" />, words: "Today" };
 
 /** qa4-simple-roadmap-31: a labelled group of legend entries ("Phases: Discover · Build · …"), read as one. */
-function legendGroup(key: string, label: string, entries: LegendEntry[]): LegendEntry {
+function legendGroup(key: string, label: string, entries: LegendEntry[], tip?: ReactNode): LegendEntry {
   return {
     key,
     testId: "legend-group",
     swatch: null,
     words: (
       <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1" data-group={key}>
-        <span className="font-semibold text-text2">{label}</span>
+        <span className="inline-flex items-center gap-1 font-semibold text-text2">
+          {label}
+          {/* QA Nov 12 #14: how the chart is used sits behind an (i) on the group's label, never as prose under the chart. */}
+          {tip && (
+            <InfoTip label={label} align="start" testId={`legend-${key}-tip`}>
+              {tip}
+            </InfoTip>
+          )}
+        </span>
         {entries.map((e) => (
           <span key={e.key} className="inline-flex items-center gap-1.5" data-testid={e.testId ?? "legend-item"} data-key={e.key}>
             {e.swatch}
@@ -597,7 +609,7 @@ function DoneItems({ items, open, reveal, onOpen }: { items: Item[]; open: strin
                 onClick={() => onOpen(i)}
                 className="min-h-9 truncate text-left text-[14px] font-medium text-text underline-offset-2 hover:underline"
               >
-                {i.title}
+                {itemName(i)}
               </button>
               {i.goal && <span className="truncate text-[13px] text-text2">{i.goal.title}</span>}
             </li>
@@ -680,6 +692,7 @@ function DecisionTray({
   items,
   byId,
   milestones = [],
+  planned = [],
   proposals,
   act,
   canChange,
@@ -699,6 +712,8 @@ function DecisionTray({
   byId: Map<string, Item>;
   /** roadmap-milestone-codes: the roadmap's milestones, an ask names one by its roadmap code. */
   milestones?: Roadmap["goal_milestones"];
+  /** QA Nov 12 #5: the roadmap's own milestones (M1 Beta), an end past one names it by its code. */
+  planned?: Roadmap["milestones"];
   proposals: Change[];
   act: Act;
   canChange: boolean;
@@ -726,11 +741,27 @@ function DecisionTray({
     onClose();
     openItem?.(id);
   };
+  // QA Nov 12 #1: each item by its code and name ("F-06 Weekly alert digest"); one with no code is flagged beside it.
   const named = (i: Item, className = "") => (
-    <button type="button" data-testid="tray-item" data-item={i.key} className={`text-left hover:underline ${className}`} onClick={() => open1(i.id)}>
-      {i.title}
-    </button>
+    <>
+      <button type="button" data-testid="tray-item" data-item={i.key} className={`text-left hover:underline ${className}`} onClick={() => open1(i.id)}>
+        {itemName(i)}
+      </button>
+      <NotInGt item={i} className="ml-1.5 align-middle" />
+    </>
   );
+  // QA Nov 12 #5: an end past its milestone names the milestone by its code and name ("M1 Beta"),
+  // as the Timeline and the board do: the goal milestone it was picked from, else the roadmap's one holding it.
+  const msOf = (i: Item, f: Flag) => {
+    const gm = i.milestone?.id ? milestones.find((m) => m.id === i.milestone!.id) : undefined;
+    if (gm) return goalMilestoneWords(gm, milestones);
+    const tm = planned.find((m) => m.roadmap_code && (m.item_ids.includes(i.id) || m.id === i.milestone?.record_id) && m.name === f.subject);
+    return tm ? milestoneWords(`${tm.roadmap_code} ${tm.name}`) : null;
+  };
+  const flagWords = (i: Item, f: Flag): Flag => {
+    const words = f.kind === "outside_milestone" && f.subject ? msOf(i, f) : null;
+    return words ? { ...f, reason: f.reason.replace(`‘${f.subject}’`, `‘${words}’`) } : f;
+  };
   // qa4-simple-roadmap-14: Escape closes the drawer, focus back on its button.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -793,7 +824,7 @@ function DecisionTray({
   const asked = (c: Change) => (c.op === "edit_goal_milestone" && !("milestone" in c.before) ? `PRD milestone ‘${msName(c)}’` : null);
   // milestone-rights: a goal milestone's proposal names the milestone and says change or remove.
   const ms = (c: Change) => c.op === "edit_goal_milestone" && typeof c.target.name === "string" && !asked(c);
-  const title = (c: Change) => asked(c) ?? (ms(c) ? `Milestone '${msName(c)}'` : kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
+  const title = (c: Change) => asked(c) ?? (ms(c) ? `Milestone '${msName(c)}'` : kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.has(String(c.target.item_id)) ? itemName(byId.get(String(c.target.item_id))!) : (typeof c.after.title === "string" ? c.after.title : "An item")));
   const asks = (c: Change) => (ms(c) ? ("milestone" in c.before && c.after.milestone === null ? "remove it" : "change it") : opWords(c.op).toLowerCase());
   const row = (c: Change) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
@@ -874,7 +905,7 @@ function DecisionTray({
                 {/* qa4-simple-roadmap-38: its broken links only; its other flags are listed once, under Other flags. */}
                 {brokenLinks(i).map((f) => (
                   <div key={`${f.kind}-${f.subject}`}>
-                    <FlagLine flag={f} />
+                    <FlagLine flag={flagWords(i, f)} />
                     <FixButtons item={i} flag={f} items={byId} act={act} canChange={canChange} />
                   </div>
                 ))}
@@ -896,7 +927,7 @@ function DecisionTray({
                   .filter((f) => !brokenLinks(i).includes(f))
                   .map((f) => (
                     <div key={`${f.kind}-${f.subject}`}>
-                      <FlagLine flag={f} />
+                      <FlagLine flag={flagWords(i, f)} />
                       <FixButtons item={i} flag={f} items={byId} act={act} canChange={canChange} />
                       {/* pre-demo QA S-6: a draft with no owner is resolved in its panel, where its owner is picked. */}
                       {f.kind === "draft_without_owner" && canChange && (
@@ -1307,7 +1338,7 @@ export function SimpleRoadmap() {
     goalLinked.current = true;
     setGoalPanel(g.goal);
   }, [params, suggestions.data]);
-  const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
+  const titleOf = useCallback((id: string | null) => { const i = id ? byId.get(id) : undefined; return i ? itemName(i) : undefined; }, [byId]);
   const canChange = can("create_simple_change");
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
   // A milestone's joined name and its "Also:" read every milestone, so a PRD, goal or track filter never changes them.
@@ -1338,7 +1369,11 @@ export function SimpleRoadmap() {
         toast({
           avoid: keys.length ? keys.map((k) => `[data-testid="conflict"][data-item="${k}"]`).join(", ") : undefined,
           message: resultWords(r, what, target?.deciders, note),
-          action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reloadAfter, (e) => toast({ message: String(e.message) })) } : undefined,
+          // QA Nov 12 #12: "Undone" answers in the corner its "Moved …" toast was in.
+          action:
+            r.change.status === "applied" && r.change.can_undo
+              ? { label: "Undo", onClick: () => void undo(r.change.id).then(() => (toast({ place: "corner", message: "Undone" }), reloadAfter()), (e) => toast({ place: "corner", message: String(e.message) })) }
+              : undefined,
         });
         return r;
       } catch (e) {
@@ -1383,7 +1418,7 @@ export function SimpleRoadmap() {
   const dates = useKeyBurst<Dates>(async (id, before, after) => {
     const item = latest.current.get(id);
     if (!item) return null;
-    const r = await run(`Moved '${item.title}' to ${shortDay(after.start_date!)} – ${shortDay(after.end_date!)}`, { op: "move_dates", target: { item_id: id }, before, after });
+    const r = await run(`Moved '${itemName(item)}' to ${shortDay(after.start_date!)} – ${shortDay(after.end_date!)}`, { op: "move_dates", target: { item_id: id }, before, after });
     if (!r) {
       const now = fetched.current?.get(id);
       return now ? shownDates(now) : null;
@@ -1393,7 +1428,7 @@ export function SimpleRoadmap() {
   const horizons = useKeyBurst<Horizon>(async (id, before, after) => {
     const item = latest.current.get(id);
     if (!item) return null;
-    const r = await run(`Moved '${item.title}' to ${HORIZONS.find((h) => h.key === after)!.label}`, { op: "change_horizon", target: { item_id: id }, before: { horizon: before }, after: { horizon: after } });
+    const r = await run(`Moved '${itemName(item)}' to ${HORIZONS.find((h) => h.key === after)!.label}`, { op: "change_horizon", target: { item_id: id }, before: { horizon: before }, after: { horizon: after } });
     if (!r) return fetched.current?.get(id)?.horizon ?? null;
     return r.change.status === "applied" ? after : before;
   }, sameHorizon);
@@ -1405,15 +1440,15 @@ export function SimpleRoadmap() {
   const onKeyMove = (item: Item, start: string, end: string) => {
     setCard(null);
     dates.press(item.id, shownDates(stored(item)), { start_date: start, end_date: end });
-    setSaid(`${item.title}: ${shortDay(start)} – ${shortDay(end)}, not sent yet. Pause to send it; Escape cancels.`);
+    setSaid(`${itemName(item)}: ${shortDay(start)} – ${shortDay(end)}, not sent yet. Pause to send it; Escape cancels.`);
   };
   const onKeyHorizon = (item: Item, horizon: Horizon) => {
     setCard(null);
     horizons.press(item.id, stored(item).horizon, horizon);
-    setSaid(`${item.title}: ${HORIZONS.find((h) => h.key === horizon)!.label}, not sent yet. Pause to send it; Escape cancels.`);
+    setSaid(`${itemName(item)}: ${HORIZONS.find((h) => h.key === horizon)!.label}, not sent yet. Pause to send it; Escape cancels.`);
   };
   const onKeyCancel = (burst: typeof dates | typeof horizons) => (item: Item) => {
-    if (burst.cancel(item.id)) setSaid(`${item.title}: the move is cancelled.`);
+    if (burst.cancel(item.id)) setSaid(`${itemName(item)}: the move is cancelled.`);
   };
 
   // A drag is a burst of one, sent at once (after any burst of the bar still on its way).
@@ -1636,7 +1671,7 @@ export function SimpleRoadmap() {
                 onClick: () =>
                   void undo(c.id).then(
                     () => {
-                      toast({ message: "Undone" });
+                      toast({ place: "corner", message: "Undone" });
                       return reloadAfter();
                     },
                     (e) => toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
@@ -1854,10 +1889,11 @@ export function SimpleRoadmap() {
       onUndo={(id) =>
         void undo(id).then(
           () => {
-            toast({ place: "top", message: "Undone" });
+            // QA Nov 12 #12: in the corner the Roadmap's change messages use, never over the page's title.
+            toast({ place: "corner", message: "Undone" });
             return reloadAfter();
           },
-          (e) => toast({ place: "top", message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
+          (e) => toast({ place: "corner", message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
         )
       }
       onSubmit={async (ds) => {
@@ -2033,11 +2069,11 @@ export function SimpleRoadmap() {
         {rowMenu && rowMenuItem && (
           <FeatureContextMenu
             at={rowMenu}
-            title={rowMenuItem.title}
+            title={itemName(rowMenuItem)}
             propose={!rowMenuItem.can_decide}
             onClose={() => setRowMenu(null)}
             onDelete={() => {
-              void removeFeature(rowMenuItem);
+              void removeFeature({ ...rowMenuItem, title: itemName(rowMenuItem) });
             }}
           />
         )}
@@ -2115,6 +2151,7 @@ export function SimpleRoadmap() {
                 onSuggestion={(how, d) => void onSuggestion(it, how, d)}
                 focus={it.id === linkedItem}
                 milestones={data.goal_milestones}
+                planned={data.milestones}
               />
             )}
           />
@@ -2224,6 +2261,7 @@ export function SimpleRoadmap() {
             onSuggestion={(how, d) => void onSuggestion(cardItem, how, d)}
             focus={cardItem.id === linkedItem}
             milestones={data.goal_milestones}
+            planned={data.milestones}
             onHorizon={format === "board" && canChange && !closedItem(cardItem) ? (h) => onHorizon(cardItem, h) : undefined}
           />
         )}
@@ -2260,17 +2298,12 @@ export function SimpleRoadmap() {
                 </span>
               ),
               words: p.key === "beta" ? "Beta phase" : p.label,
-            }))),
+            })), canChange ? `Drag a bar${phone ? " (press and hold first)" : ""} or use the arrow keys to move it; a dated gate stays on its day.` : "A dated gate stays on its day when the item moves."),
             { key: "solid", swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ background: "var(--accent)", borderColor: "var(--accent)" }} />, words: "Dated" },
             {
               key: "hatched",
               swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ background: "repeating-linear-gradient(45deg, var(--accent-soft) 0 2.6px, var(--accent) 2.6px 5.6px)", borderColor: "var(--accent)" }} />,
               words: MARK_WORDS.estimated,
-            },
-            {
-              key: "move",
-              swatch: null,
-              words: canChange ? `Drag a bar${phone ? " (press and hold first)" : ""} or use the arrow keys to move it; a dated gate stays on its day` : "A dated gate stays on its day when the item moves",
             },
             // qa4-simple-roadmap-31: Today with the key dates, under a "Marks" label (not on its own).
             legendGroup("marks", "Marks", [...keyDateEntries(laned ?? data), TODAY_ENTRY]),
@@ -2288,6 +2321,7 @@ export function SimpleRoadmap() {
           items={data.items}
           byId={byId}
           milestones={data.goal_milestones}
+          planned={data.milestones}
           proposals={allProposals}
           act={act}
           canChange={canChange}

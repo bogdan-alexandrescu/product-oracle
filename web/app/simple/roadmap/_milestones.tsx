@@ -375,12 +375,14 @@ function Diamond({ x, y, code, size = 12, hollow = false, dashed = false, title,
 /** A label's width at text-xs semibold, near enough to keep labels apart. */
 const textW = (t: string) => Math.ceil(t.length * 7.6) + 24;
 
-function Chip({ children, style, className = "", mx, testid, title, onClick }: { children: ReactNode; style?: CSSProperties; className?: string; mx?: number; testid?: string; title?: string; onClick?: () => void }) {
+function Chip({ children, style, className = "", mx, testid, title, onClick, keepIn }: { children: ReactNode; style?: CSSProperties; className?: string; mx?: number; testid?: string; title?: string; onClick?: () => void; keepIn?: { l0: number } }) {
   return (
     <span
       data-testid={testid}
       title={title}
       data-ms-label={mx != null ? "" : undefined}
+      data-ms-keep-in={keepIn ? "" : undefined}
+      data-l0={keepIn?.l0}
       data-mx={mx}
       data-t0={mx != null ? style?.top : undefined}
       onClick={onClick}
@@ -535,6 +537,45 @@ export function MsLayer(props: MsLayerProps) {
     fit();
     box.addEventListener("scroll", fit);
     return () => box.removeEventListener("scroll", fit);
+  });
+  // QA Nov 12 #7: a late chip ("Ends after M2 ...") and the Gantt's "+ Milestone" hint stay whole
+  // inside the part of the chart in view (the Gantt scrolls sideways): a late chip that is partly in
+  // view moves in whole from the edge; the hint takes the free place in view nearest its day,
+  // clear of the axis's names (keepOff), else it hides. One wholly out of view stays by its line.
+  useLayoutEffect(() => {
+    const layer = ref.current;
+    const els = layer ? [...layer.querySelectorAll<HTMLElement>("[data-ms-keep-in]")] : [];
+    if (!layer || !els.length) return;
+    let sc = layer.parentElement;
+    while (sc && !/auto|scroll/.test(getComputedStyle(sc).overflowX)) sc = sc.parentElement;
+    const box = sc;
+    const inset = props.view === "timeline" ? (props.left ?? 0) : 0;
+    const keep = () => {
+      const lx = layer.getBoundingClientRect().left;
+      const b = box ? box.getBoundingClientRect() : layer.getBoundingClientRect();
+      const cl = box ? box.clientLeft : 0;
+      const lo = b.left + cl - lx + inset + 4;
+      const hi = Math.min(b.left + cl + (box ? box.clientWidth : b.width) - lx, props.width) - 4;
+      const widths = els.map((el) => el.offsetWidth);
+      els.forEach((el, n) => {
+        const at = Number(el.dataset.l0);
+        const w = widths[n];
+        if (el.dataset.testid === "ms-add-hint") {
+          const spans = props.keepOff ?? [];
+          const free = (l: number) => l >= lo && l + w <= hi && spans.every(([a, c]) => l >= c + 6 || l + w <= a - 6);
+          const near = [Math.min(Math.max(at, lo), hi - w), ...spans.flatMap(([a, c]) => [c + 8, a - 6 - w])].filter(free);
+          const l = near.length ? near.reduce((p, q) => (Math.abs(q - at) < Math.abs(p - at) ? q : p)) : null;
+          el.style.visibility = l == null ? "hidden" : "";
+          el.style.left = `${l ?? at}px`;
+          return;
+        }
+        const seen = at + w > lo && at < hi;
+        el.style.left = `${seen ? Math.max(lo, Math.min(at, hi - w)) : at}px`;
+      });
+    };
+    keep();
+    box?.addEventListener("scroll", keep);
+    return () => box?.removeEventListener("scroll", keep);
   });
   // A same-day count sits on its diamond's top-right corner, else its top-left one, else the
   // nearest place along the axis clear of the other counts, the diamonds and the header's words
@@ -775,8 +816,11 @@ export function MsLayer(props: MsLayerProps) {
       if (late) {
         const t = `Ends after ${words(m)}`;
         const w = Math.min(textW(t), phone ? 220 : 360);
+        // QA Nov 12 #7: never past the chart's right edge (Math.min), and kept inside the part in view
+        // as the chart scrolls (data-ms-keep-in, the layout effect above).
+        const l0 = Math.max(left + 4, Math.min(mx - 10 - w, props.width - w - 4));
         out.push(
-          <Chip key={`late-${m.id}-${id}`} testid="ms-late" className="border border-crit bg-crit-bg text-crit" style={{ left: Math.max(left + 4, mx - 10 - w), top: cy - 10, maxWidth: w }}>
+          <Chip key={`late-${m.id}-${id}`} testid="ms-late" keepIn={{ l0 }} className="border border-crit bg-crit-bg text-crit" style={{ left: l0, top: cy - 10, maxWidth: w }}>
             {t}
           </Chip>,
         );
@@ -850,7 +894,7 @@ export function MsLayer(props: MsLayerProps) {
     }
     if (hintL != null && !ms.hover && !d && !phone)
       out.push(
-        <Chip key="hint" testid="ms-add-hint" className="z-[26] border border-dashed border-line-strong bg-surface text-text2" style={{ left: hintL, top: axisY - 10 }}>
+        <Chip key="hint" testid="ms-add-hint" keepIn={props.span ? undefined : { l0: hintL }} className="z-[26] border border-dashed border-line-strong bg-surface text-text2" style={{ left: hintL, top: axisY - 10 }}>
           + Milestone
         </Chip>,
       );
@@ -933,7 +977,37 @@ export function MsLayer(props: MsLayerProps) {
       placed.push(p);
       last[row] = p;
     }
-    for (const p of placed) p.w = Math.min(p.w, props.width - 4 - p.left - (p.more.length ? 30 : 0));
+    // QA Nov 12 #8: a label is drawn at least 40 px wide, its "+N" bubble (~30 px) after it. One that
+    // has no such room before the next label or the chart's edge (a phone's narrow chart, All 3 years)
+    // drops into the "+N" bubble of the label before it in its row, as the Timeline's axis does, so no
+    // two labels or bubbles overlap and none runs off the chart.
+    const CHIP = 33;
+    const LABEL_MIN = 40;
+    for (let row = 0; row < rows; row++) {
+      const line = placed.filter((p) => p.row === row);
+      for (let n = line.length - 1; n >= 0; n--) {
+        const p = line[n];
+        const edge = n + 1 < line.length ? line[n + 1].left - 4 : props.width - 4;
+        const chip = p.more.length ? CHIP : 0;
+        const room = edge - p.left - chip;
+        if (room >= LABEL_MIN) {
+          p.w = Math.min(p.w, room);
+          continue;
+        }
+        // Moved left to make the room, when the label before it in its row leaves that much.
+        const prev = n > 0 ? line[n - 1] : null;
+        const want = edge - chip - LABEL_MIN;
+        if (!prev || want >= prev.left + LABEL_MIN + (prev.more.length ? CHIP : 0) + 4) {
+          p.left = Math.max(left, want);
+          p.w = LABEL_MIN;
+          continue;
+        }
+        // Else into the bubble of the one before, which is then fitted (with its bubble) in turn.
+        prev.more.push(p.m, ...p.more);
+        placed.splice(placed.indexOf(p), 1);
+        line.splice(n, 1);
+      }
+    }
     out.push(<div key="band" data-testid="ms-band" aria-hidden className="pointer-events-none absolute z-[11] border-b border-line bg-surface2/60" style={{ left, top: props.bandTop, width: props.width - left, height: band }} />);
     // The joined milestone's longer name (the owner's "Join whenever names match").
     const bandWords = joinedWordsOf;
@@ -1041,11 +1115,23 @@ export function MsLayer(props: MsLayerProps) {
   );
 }
 
-function Field({ label, children, testid }: { label: string; children: ReactNode; testid?: string }) {
+function Field({ label, children, testid, tip }: { label: string; children: ReactNode; testid?: string; tip?: ReactNode }) {
+  const box = <span className="relative flex min-h-9 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2.5 text-sm font-normal text-text">{children}</span>;
+  // A field with an (i): the (i) beside its name, outside the <label> (a button in a label would take its click).
+  if (tip)
+    return (
+      <div className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-text2" data-testid={testid}>
+        <span className="flex h-4 items-center gap-1">
+          <span>{label}</span>
+          {tip}
+        </span>
+        <label className="flex min-w-0 flex-col">{box}</label>
+      </div>
+    );
   return (
     <label className="flex flex-col gap-1 text-xs font-semibold text-text2" data-testid={testid}>
       {label}
-      <span className="relative flex min-h-9 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2.5 text-sm font-normal text-text">{children}</span>
+      {box}
     </label>
   );
 }
@@ -1323,7 +1409,8 @@ export function MsCard() {
   const num = (v: string) => (v.trim() === "" || Number.isNaN(Number(v)) ? null : Number(v));
   const text = (label: string, value: string | number | null | undefined, on: (v: string) => void, ph = "") => (
     <Field label={label}>
-      <input aria-label={label} value={value ?? ""} placeholder={ph} onChange={(e) => on(e.target.value)} className={bare} />
+      {/* QA Nov 12 #3: a percent width, so a narrow column (Start, Target) holds the box whole. */}
+      <input aria-label={label} value={value ?? ""} placeholder={ph} onChange={(e) => on(e.target.value)} className={`${bare} w-full min-w-0`} />
     </Field>
   );
   const trackSel = (label: string, value: string | null, on: (t: string | null) => void) => (
@@ -1370,7 +1457,19 @@ export function MsCard() {
                 ))}
               </select>
             </Field>
-            <Field label="Status" testid="ms-status-field">
+            {/* Oracle's reason for the status it decided, on a tap or focus as well as a hover. QA Nov 12
+                #17: its (i) sits beside the field's name, outside the box, so "Oracle decides" reads whole. */}
+            <Field
+              label="Status"
+              testid="ms-status-field"
+              tip={
+                !k.status_set && own?.status_reason ? (
+                  <InfoTip label="Oracle's reason" align="start" side="bottom" testId="ms-status-why">
+                    {own.status_reason}
+                  </InfoTip>
+                ) : null
+              }
+            >
               <MkStatusMark status={status} size={12} />
               <select aria-label="Status" value={k.status_set ?? ""} onChange={(e) => setK({ status_set: (e.target.value || null) as MkStatus | null })} className={bare}>
                 <option value="">Oracle decides</option>
@@ -1380,12 +1479,6 @@ export function MsCard() {
                   </option>
                 ))}
               </select>
-              {/* Oracle's reason for the status it decided, on a tap or focus as well as a hover. */}
-              {!k.status_set && own?.status_reason && (
-                <InfoTip label="Oracle's reason" align="end" side="bottom" testId="ms-status-why">
-                  {own.status_reason}
-                </InfoTip>
-              )}
             </Field>
           </div>
         )}
@@ -1402,7 +1495,7 @@ export function MsCard() {
           {k?.kind !== "handoff" && trackSel("Track", k?.home_track_id ?? null, (home_track_id) => setK({ home_track_id }))}
         </div>
         {k && isMeasured(k.kind) && (
-          <div className="grid grid-cols-[1fr_72px_72px] gap-2" data-testid="ms-measure">
+          <div className="grid grid-cols-[minmax(0,1fr)_72px_72px] gap-2" data-testid="ms-measure">
             {text("Measure", k.measure, (v) => setK({ measure: v || null }), "What is counted")}
             {text("Start", k.baseline, (v) => setK({ baseline: num(v) }))}
             {text("Target", k.target, (v) => setK({ target: num(v) }))}

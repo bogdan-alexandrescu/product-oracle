@@ -37,7 +37,7 @@ async function acceptFirstThenOpenWarning(page: Page) {
 
 async function savedCarts(page: Page) {
   await page.getByRole("tab", { name: /Graph/ }).click();
-  await page.getByTestId("feature-f.saved-carts").getByRole("button", { name: "Saved carts" }).click();
+  await page.getByTestId("feature-F-84").getByRole("button", { name: "Saved carts" }).click();
   return page.getByRole("dialog", { name: "Saved carts" });
 }
 

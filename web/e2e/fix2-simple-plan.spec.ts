@@ -227,7 +227,8 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
       const activation = page.locator('[data-testid="goal-bucket"][data-key="faster-activation"]');
       // qa4-simple-plan-12: each code a chip beside its name.
       await expect(activation.getByTestId("bucket-features").locator("li").filter({ hasText: "Sample data import" }).getByTestId("prio-code")).toHaveText("F-12");
-      await expect(activation.getByTestId("bucket-features").locator("li").filter({ hasText: "Setup checklist" }).getByTestId("prio-code")).toHaveText("SC");
+      // PR1 (QA Nov 12): a feature with no Ground Truth code shows no made-up initials, it is flagged.
+      await expect(activation.getByTestId("bucket-features").locator("li").filter({ hasText: "Setup checklist" }).getByTestId("prio-code").filter({ hasText: /^SC$/ })).toHaveCount(0);
       // A card with weeks this quarter names its features; only a goal with none says "Nothing this quarter"
       // (the Goal map's goals since P-1: their features are all in Next).
       for (const card of await page.getByTestId("goal-bucket").all())
@@ -287,7 +288,7 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
     await setUp(page, { scheme: "dark", scenario: "simple-plan" });
     await open(page, "?tab=buckets");
     const head = page.getByTestId("buckets-head");
-    await expect(page.getByTestId("buckets-summary")).toContainText(/^This plan, Nov 2 – Feb 12: \d+ engineer-weeks over three milestones/);
+    await expect(page.getByTestId("buckets-summary-full")).toContainText(/^This plan, Nov 2 – Feb 12: \d+ engineer-weeks over three milestones/);
     await expect(head).not.toContainText(/\d\.0\b/);
     await expect(page.getByTestId("buckets-footnote")).not.toContainText("PRD");
     // mk-goalbuckets (train AL's picked frame): Goal buckets' line names the plan's quarter; its summary gives the dates.

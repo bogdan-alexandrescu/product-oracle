@@ -18,6 +18,7 @@ import { PrdStatus } from "@/components/simple/PrdStatus";
 import { RunReviewStep } from "@/components/simple/RunReviewStep";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { quoteLine } from "@/components/simple/quote-line";
+import { NotInGt } from "@/components/simple/FeatureName";
 import { InReviewBar, PresentMenu, SendForApproval } from "@/components/simple/ReviewFlow";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, ApiError, fixHref, unwrap, type ImportFix, type Schemas } from "@/lib/api/client";
@@ -506,6 +507,35 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-edit-for="${l.id}"]`)?.focus());
   }
   const notesFor = (id: string) => v.notes.filter((n) => n.line_id === id);
+  // OP2 (QA Nov 12): the draft's changes as the margin lists them: its number fixes, then its line changes by line.
+  const marginNotes = [...v.notes].sort((a, b) => (numbers.get(a.line_id) ?? 0) - (numbers.get(b.line_id) ?? 0));
+  const changeIds = [...v.fixed.map((f) => f.change_id), ...marginNotes.filter((n) => n.kind === "change").map((n) => n.change_id)];
+  // The banner's count goes to the first change shown: in the margin, else under its line or in Needs a look (a phone).
+  const goChange = () => {
+    const shown = (x: HTMLElement) => x.getClientRects().length > 0;
+    for (const id of changeIds) {
+      const sel = `[data-change="${CSS.escape(id)}"]`;
+      const el = [...(margin.current?.querySelectorAll<HTMLElement>(sel) ?? []), ...document.querySelectorAll<HTMLElement>(sel)].find(shown);
+      if (!el) continue;
+      el.scrollIntoView({ block: "center" });
+      el.focus({ preventScroll: true });
+      return;
+    }
+  };
+  // OP11 (QA Nov 12): a risk said twice (a top risk and its own risk line, "Stale prices: likely, …")
+  // shows once: the risk line, which names it; an earlier line holding its name is left out.
+  const sameRisk = new Set<string>();
+  for (const b of v.blocks) {
+    if (b.key !== "risks") continue;
+    b.lines.forEach((l, j) => {
+      const name = /^([^:]{3,60}):\s/.exec(l.full ?? l.text)?.[1];
+      if (!name || name.trim().split(/\s+/).length > 6) return;
+      const said = new RegExp(`(^|\\W)${name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\W|$)`, "i");
+      b.lines.slice(0, j).forEach((x) => {
+        if (x.state === "published" && editing !== x.id && !notesFor(x.id).length && said.test(x.full ?? x.text)) sameRisk.add(x.id);
+      });
+    });
+  }
   const plan = planNow ?? planQ.data ?? null;
   const planShown = !!plan && plan.status !== "none" && plan.milestones.length > 0;
   // Owner, Nov 10: the plan's card also lists the PRD's roadmap items with no plan milestone (the strip's "No milestone" row).
@@ -613,7 +643,17 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       {draftShown && v.draft && (
         <div role="status" aria-label="Working draft" className="simple-noprint flex flex-wrap items-center gap-3 border-b border-[var(--simple-rule)] bg-[var(--simple-edited)] px-4 py-2 text-base">
           <strong>Working draft</strong>
-          <span>· {v.draft.changes} {v.draft.changes === 1 ? "change" : "changes"}</span>
+          {/* OP2 (QA Nov 12): the count leads to its changes, the margin's list. */}
+          <span>
+            ·{" "}
+            {changeIds.length > 0 ? (
+              <button type="button" data-testid="draft-changes-go" className="underline" onClick={goChange}>
+                {v.draft.changes} {v.draft.changes === 1 ? "change" : "changes"}
+              </button>
+            ) : (
+              <>{v.draft.changes} {v.draft.changes === 1 ? "change" : "changes"}</>
+            )}
+          </span>
           {/* qa4-simple-prd-3: a PRD never published is not called published. */}
           <span>{v.published_at ? `· published v${v.draft.base_version ?? v.version} stays live until approved` : `· nothing is published until approved; others read v${v.draft.base_version ?? v.version}`}</span>
           {v.draft.decider_approved && (v.draft.waiting_on.length > 0 || v.draft.blocked_by.length > 0) && (
@@ -759,7 +799,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                 </div>
               ) : (
                 <ul className="mt-1 space-y-1">
-                  {b.lines.map((l) => (
+                  {b.lines.filter((l) => !sameRisk.has(l.id)).map((l) => (
                     <li key={l.id} data-line={l.id} data-state={l.state} className="group list-none" onPointerDown={(e) => { const touch = e.pointerType !== "mouse"; firstTap.current = touch && tapped !== l.id; if (touch) setTapped(l.id); }} onClick={() => { firstTap.current = false; }}>
                       <div className={`rounded px-2 py-1 ${TINT[l.state]}`}>
                         {editing === l.id ? (
@@ -813,6 +853,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                                 {(b.kind === "lines" || b.kind === "metrics") && (l.metric || leadRest(l.full ?? l.text, prd.codes) === (l.full ?? l.text)) ? "• " : ""}
                                 {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : leadRest(l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text, prd.codes)}
                               </button>
+                              {/* OP10 (QA Nov 12): a feature we will build names its code; one with none is flagged, never refused. */}
+                              {b.key === "bets" && !l.metric && !FEATURE_CODE.test(l.full ?? l.text) && <NotInGt />}
                               {l.full && !l.metric && foldAtSentence(l.full, l.text) !== l.full && (
                                 <button
                                   type="button"
@@ -845,8 +887,9 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                                 // qa-simple-prd-p3-1: hidden, a touch on it opens nothing. qa-simple-prd-p3-25: on a desktop it
                                 // always sits in the room kept at the line's end, so showing it moves no words.
                                 data-edit-for={l.id}
-                                // qa4-simple-prd-35: one Tab stop per line, its words; the keyboard edits from the line's sources (Enter on it).
-                                tabIndex={-1}
+                                // qa4-simple-prd-35: one Tab stop per line, its words; OP4 (QA Nov 12): with the line's sources open
+                                // (Enter on it) this Edit is the next stop, the one control that edits a line.
+                                tabIndex={open === l.id ? 0 : -1}
                                 className={`simple-noprint flex-none text-sm whitespace-nowrap underline focus:opacity-100 max-md:min-h-11 max-md:min-w-11 max-md:px-3 ${
                                   tapped === l.id
                                     ? "opacity-100 max-md:static md:absolute md:top-0 md:right-0"
@@ -860,6 +903,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                                   const tap = hiddenTap.current;
                                   hiddenTap.current = false;
                                   if (tap && e.detail > 0) return;
+                                  if (open === l.id) setOpen(null);
                                   setDiscarding(false);
                                   setEditing(l.id);
                                   setDraftText(l.words ?? l.full ?? l.text);
@@ -932,27 +976,13 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                               );
                             })}
                             {l.decisions.length > 0 && <p className="mb-2 text-sm text-text2">Decided in {l.decisions.map((d) => `D-${d.number} ${d.title}`).join(", ")}</p>}
-                            {(v.can_edit || v.can_propose) && (
-                              <button
-                                type="button"
-                                className="mr-3 text-sm underline"
-                                onClick={() => {
-                                  setOpen(null);
-                                  setDiscarding(false);
-                                  setEditing(l.id);
-                                  setDraftText(l.words ?? l.full ?? l.text);
-                                }}
-                              >
-                                {v.can_edit ? "Edit this line" : "Propose wording"}
-                              </button>
-                            )}
                             <Link className="underline" href={`/documents/${v.document.slug}#${l.source_keys[0]}`}>Open the detailed view</Link>
                             <button type="button" className="ml-3 text-sm underline" onClick={() => setOpen(null)}>Close</button>
                           </div>
                         )}
                       </div>
                       {/* Phone: the margin notes move under their line. */}
-                      <div className="md:hidden">{notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, quote: words.get(l.id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting: !!sessionId }} />)}</div>
+                      <div className="md:hidden">{notesFor(l.id).map((n) => <div key={n.change_id} data-change={n.change_id} tabIndex={-1}><MarginNote {...{ n, quote: words.get(l.id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting: !!sessionId }} /></div>)}</div>
                     </li>
                   ))}
                   {b.lines.length === 0 && <li className="list-none text-base text-text-faint" data-testid="one-pager-empty-block">{b.missing ? "Not in the PRD yet" : "Not written yet"}</li>}
@@ -969,17 +999,25 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
             </section>
           ))}
         </article>
-        <aside ref={margin} aria-label="Changes and proposals" className={`simple-noprint relative hidden min-w-0 ${(!v.notes.length && !v.can_edit && !v.can_propose) ? "" : "md:block"}`}>
+        <aside ref={margin} aria-label="Changes and proposals" className={`simple-noprint relative hidden min-w-0 ${(!v.notes.length && !v.fixed.length && !v.can_edit && !v.can_propose) ? "" : "md:block"}`}>
           {/* qa-simple-prd-34: the margin says what it is for; readers who change nothing see none when empty. */}
-          {v.notes.length === 0 && <p className="text-sm font-semibold uppercase tracking-wide text-text-faint">Changes and proposals</p>}
-          {[...v.notes].sort((a, b) => (numbers.get(a.line_id) ?? 0) - (numbers.get(b.line_id) ?? 0)).map((n) => (
-            <div key={n.change_id} data-note-for={n.line_id} data-change={n.change_id} className="absolute inset-x-0">
+          {v.notes.length === 0 && v.fixed.length === 0 && <p className="text-sm font-semibold uppercase tracking-wide text-text-faint">Changes and proposals</p>}
+          {/* OP2 (QA Nov 12): the draft's number fixes are its changes too, listed first (their Undo is in Needs a look). */}
+          {v.fixed.map((f) => (
+            <div key={f.change_id} data-note-for="" data-change={f.change_id} tabIndex={-1} className="absolute inset-x-0">
+              <div role="note" aria-label={f.words} data-testid="margin-fixed" className="min-w-0 rounded-md border border-[var(--simple-rule)] bg-[var(--simple-edited)] p-3 text-base [overflow-wrap:anywhere]">
+                {f.words}
+              </div>
+            </div>
+          ))}
+          {marginNotes.map((n) => (
+            <div key={n.change_id} data-note-for={n.line_id} data-change={n.change_id} tabIndex={-1} className="absolute inset-x-0">
               <MarginNote {...{ n, quote: words.get(n.line_id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting: !!sessionId }} />
             </div>
           ))}
           {/* qa4-simple-decide-25: in a meeting, once its edits are published, the margin says where they went;
               only when this meeting decided a line, not an earlier one. */}
-          {v.notes.length === 0 &&
+          {v.notes.length === 0 && v.fixed.length === 0 &&
             (sessionId && v.blocks.some((b) => b.lines.some((l) => l.decisions.some((d) => meetingDecisionIds.includes(d.id)))) ? (
               <p className="mt-1 text-base text-text2" data-testid="margin-published">
                 No changes waiting. Version {v.version} is published; “Decided in” under a line links to the decision that changed it.
@@ -1018,6 +1056,9 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   );
 }
 
+/** A Ground Truth feature's code in a line ("F-26", a slice "F-15a"). */
+const FEATURE_CODE = /\bF-\d+[a-z]?\b/;
+
 const norm = (x: string) => x.replace(/…$/, "").replace(/[.\s]+$/, "").replace(/\s+/g, " ").trim().toLowerCase();
 
 /** A section's row the line was read from: the same words, or the line's words start it. */
@@ -1050,7 +1091,10 @@ function Glyph({ d }: { d: string }) {
 function PrdHeader({ v, plan, summary, phone, draft, actions, inMeeting = false, onRunApproved }: { v: View; plan: Schemas["SimplePlanOut"] | null; summary: Schemas["DocumentSummary"] | null; phone: boolean; draft: boolean; actions: ReactNode; inMeeting?: boolean; onRunApproved?: () => void }) {
   // qa-simple-prd-3: the plan's own span only; with no dated milestone the header says so.
   // qa-simple-prd-p3-16: a PRD without a plan heads its one-pager the same way, with its own span.
-  const span = plan ? (plan.span ? { start: plan.span.start, end: plan.span.end } : null) : v.span_start && v.span_end ? { start: v.span_start, end: v.span_end } : null;
+  // OP7 (QA Nov 12): a plan with no span of its own (a milestone still undated) spans its dated milestones.
+  const dated = (plan?.milestones ?? []).flatMap((m) => (m.start_date && m.end_date ? [{ start: m.start_date, end: m.end_date }] : []));
+  const datedSpan = dated.length ? { start: dated.map((m) => m.start).sort()[0], end: dated.map((m) => m.end).sort().at(-1)! } : null;
+  const span = plan ? (plan.span ? { start: plan.span.start, end: plan.span.end } : datedSpan) : v.span_start && v.span_end ? { start: v.span_start, end: v.span_end } : null;
   const caps = (plan?.milestones ?? []).map((m) => m.effort_weeks).filter((x): x is number => x != null);
   const total = caps.length ? caps.reduce((a, b) => a + b, 0) : null;
   const published = v.published_at ? dmy(v.published_at.slice(0, 10)) : null;
@@ -1293,8 +1337,9 @@ export function NeedsALook({ items, blocks = [], sections = [], doc, version, co
     return x.text;
   };
   return (
-    <section aria-label="Needs a look" className="simple-noprint mb-4 rounded border border-dashed border-[var(--simple-rule)] px-3 py-2 text-sm text-text2">
-      <h2 className="font-semibold">Needs a look</h2>
+    // OP3 (QA Nov 12): a box of its own, padded, its heading inside it (the page's ruled blocks are its sections, not this).
+    <div role="region" aria-label="Needs a look" data-testid="needs-look-box" className="simple-noprint mb-5 rounded border border-dashed border-[var(--simple-rule)] px-4 py-3 text-sm text-text2">
+      <h2 className="font-semibold text-text">Needs a look</h2>
       <ul className="mt-1 space-y-1">
         {/* vqa-one-pager: the same item (kind, words, sections) shows once: the API's annotate (and the mock) keeps one each. */}
         {items.map((x, i) => {
@@ -1312,22 +1357,27 @@ export function NeedsALook({ items, blocks = [], sections = [], doc, version, co
                   {name ? ` On the roadmap it is ${code} ${name}.` : ""}
                 </InfoTip>
               )}
-              {w.names.length > 0 && w.line && (
-                <button type="button" className="text-text-faint underline max-md:min-h-11" data-testid="needs-look-go" onClick={() => go(w.line!)}>
-                  In: {w.names.join(", ")}
-                </button>
-              )}
-              {x.fix && fixes && <LookFix fix={x.fix} fixes={fixes} onFix={() => fixes.fix(x)} />}
-              {doc && version != null && key && (
-                <Link className="font-semibold text-accent-ink underline max-md:inline-flex max-md:min-h-11 max-md:items-center" data-testid="needs-look-open" href={sectionHref(doc, version, key)}>
-                  Open the section
-                </Link>
+              {/* OP3 (QA Nov 12): the item's actions as one group; on a phone a stack of their own under its words. */}
+              {((w.names.length > 0 && w.line) || (x.fix && fixes && (x.fix.proposal || fixes.can)) || (doc && version != null && key)) && (
+                <span data-testid="needs-look-actions" className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 max-md:basis-full max-md:flex-col max-md:items-start max-md:gap-y-0">
+                  {w.names.length > 0 && w.line && (
+                    <button type="button" className="text-text-faint underline max-md:min-h-11" data-testid="needs-look-go" onClick={() => go(w.line!)}>
+                      In: {w.names.join(", ")}
+                    </button>
+                  )}
+                  {x.fix && fixes && <LookFix fix={x.fix} fixes={fixes} onFix={() => fixes.fix(x)} />}
+                  {doc && version != null && key && (
+                    <Link className="font-semibold text-accent-ink underline max-md:inline-flex max-md:min-h-11 max-md:items-center" data-testid="needs-look-open" href={sectionHref(doc, version, key)}>
+                      Open the section
+                    </Link>
+                  )}
+                </span>
               )}
             </li>
           );
         })}
         {fixes?.fixed.map((f) => (
-          <li key={f.change_id} data-testid="needs-look-fixed" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <li key={f.change_id} data-testid="needs-look-fixed" data-change={f.change_id} tabIndex={-1} className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span role="status">{f.words}</span>
             {f.can_undo && (
               <button type="button" className={LOOK_ACTION} disabled={fixes.busy} onClick={() => fixes.change(f.change_id, "undo")}>
@@ -1337,7 +1387,7 @@ export function NeedsALook({ items, blocks = [], sections = [], doc, version, co
           </li>
         ))}
       </ul>
-    </section>
+    </div>
   );
 }
 

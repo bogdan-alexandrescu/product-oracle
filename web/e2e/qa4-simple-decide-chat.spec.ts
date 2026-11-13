@@ -98,7 +98,8 @@ for (const phone of [false, true]) {
     test(`qa4-simple-decide-5: the meeting chat says who applies and who proposes (${where})`, async ({ page }) => {
       // fails_when: the rule reads "Everyone except viewers" with no word that others only propose
       await startReview(page);
-      await expect(chat(page).getByTestId("chat-rules")).toContainText("Everyone except viewers");
+      // simple-home-qa-nov12 #11: in the meeting the header's select says the rule; its hint is behind the chat's (i).
+      await expect(chat(page).getByTestId("chat-rules")).toHaveCount(0);
       await expect(chat(page).getByTestId("chat-rules-hint")).toHaveText("Owners and each item's decider apply; others propose.");
       await chatPage(page);
       await expect(chat(page).getByTestId("chat-rules-hint")).toHaveText("Owners and each item's decider apply; others propose.");

@@ -119,7 +119,7 @@ test("impact: a what-if from a Ground Truth item's drawer", async ({ page }) => 
   await scenario(page, "impact");
   await login(page);
   await page.goto("/ground-truth");
-  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
   await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
   await expect(page.getByText("What if Guided setup changed? Preview only; nothing is marked stale.")).toBeVisible();

@@ -10,6 +10,7 @@ import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
+import { NoReportYet } from "./_empty";
 import { GenerateDialog } from "./_generate";
 import { type ReportItem } from "./_lib";
 
@@ -98,17 +99,7 @@ export default function ReportsPage() {
           testId="reports-panel"
         >
           {q.data.length === 0 ? (
-            <div data-testid="reports-empty" className="flex flex-col items-center gap-3 px-4 py-8 text-center text-[15px] text-text2">
-              <p>
-                No report yet. Oracle makes one every week for the week that ended.
-                {can("create_alignment_report") ? " You can generate one now for the week so far." : " An owner can generate one now."}
-              </p>
-              {can("create_alignment_report") && (
-                <Button variant="primary" icon="plus" onClick={() => setOpen(true)}>
-                  Generate now
-                </Button>
-              )}
-            </div>
+            <NoReportYet testId="reports-empty" canGenerate={can("create_alignment_report")} onGenerate={() => setOpen(true)} />
           ) : (
             <div data-testid="reports-table">
               <DataTable label="Reports" columns={COLUMNS} rows={q.data} rowKey={(r) => r.id} />

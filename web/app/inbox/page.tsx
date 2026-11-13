@@ -136,6 +136,8 @@ function Inbox() {
       <PageHeader
         title="Inbox"
         status={
+          // simple-home-qa-nov12 #18: Simple's Inbox says its count once, in Needs you.
+          !path.startsWith("/simple") &&
           waiting != null &&
           waiting > 0 && (
             <Chip kind="acc">

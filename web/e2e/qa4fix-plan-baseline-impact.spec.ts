@@ -135,7 +135,7 @@ test.describe("desktop", () => {
     ).toContainText("Not traced: Dark mode");
     await expect(
       ledger(page)
-        .getByTestId("feature-f.dark-mode")
+        .getByTestId("feature-F-81")
         .getByText("Serves no goal"),
     ).toBeVisible();
   });
@@ -194,7 +194,7 @@ test.describe("desktop", () => {
     await login(page);
     await page.goto("/ground-truth");
     await page
-      .getByTestId("feature-f.guided-setup")
+      .getByTestId("feature-F-82")
       .getByRole("button", { name: "Guided setup" })
       .click();
     await page
@@ -227,7 +227,7 @@ test.describe("phone", () => {
     const usage = ledger(page).getByTestId("feature-f.usage-export");
     await expect(usage.getByText("Proposed", { exact: true })).toBeVisible();
 
-    const guided = ledger(page).getByTestId("feature-f.guided-setup");
+    const guided = ledger(page).getByTestId("feature-F-82");
     const pill = guided
       .locator("td")
       .filter({ has: page.getByTestId("code-chip") })

@@ -68,9 +68,10 @@ async function switchTo(page: Page, email: string) {
 }
 
 async function waiting(page: Page): Promise<number> {
-  const chip = page.getByText(/^\d+ waiting$/).first();
-  await expect(chip).toBeVisible();
-  return Number((await chip.textContent())!.split(" ")[0]);
+  // simple-home-qa-nov12 #18: Simple's Inbox says its count once, as Needs you's.
+  const chip = page.getByTestId("inbox-needs").getByTestId("panel-count").first();
+  await expect(chip).toHaveText(/^\d+$/);
+  return Number((await chip.textContent())!.trim());
 }
 
 /** Simple's rail (More on a phone) to the Inbox, by a click; returns the count it showed. */
@@ -155,7 +156,8 @@ for (const phone of [false, true]) {
       const row = page.getByRole("row").filter({ has: page.getByTestId("date-suggestion-context") }).first();
       await expect(row).toBeVisible();
       await expect(row.getByTestId("date-suggestion-context")).toContainText(/Oracle suggests [A-Z][a-z]{2} \d{1,2}/);
-      const name = (await row.getByTestId("feature-name").textContent())!.trim();
+      // The name without its code chip (simple-home-qa-nov12 #4: "F-101 One-tap sign-up link").
+      const name = (await row.getByTestId("feature-name").evaluate((el) => [...el.childNodes].filter((n) => !(n instanceof Element && n.classList.contains("simple-code"))).map((n) => n.textContent).join("")))!.trim();
       await tap(row.getByRole("link", { name: `Open Oracle's dates for ${name}` }));
       await expect(page).toHaveURL(/\/simple\/roadmap\?.*dates=/);
       await expect(page.getByTestId("suggestion-popover")).toBeVisible();

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ds";
+import { Button, InfoTip } from "@/components/ds";
 import { useFitViewport } from "@/lib/fit-viewport";
 import { keyDateWords } from "@/lib/milestone-code";
 
@@ -104,21 +104,27 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
       className={`${phone ? "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl" : "absolute top-full right-0 z-40 mt-2 w-[440px] rounded-xl"} max-w-[calc(100vw-16px)] overflow-y-auto overscroll-contain border border-line bg-surface p-4 shadow-tip outline-none`}
     >
       <div className="sticky -top-4 z-10 -mx-4 -mt-4 flex items-start gap-2 bg-surface px-4 pt-4">
-        <h2 className="flex-1 text-lg font-semibold">
-          Key dates
-          {chosen && <span className="text-text2" data-testid="key-dates-of">{` · ${chosen.title}`}</span>}
-        </h2>
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <h2 className="min-w-0 text-lg font-semibold">
+            Key dates
+            {chosen && <span className="text-text2" data-testid="key-dates-of">{` · ${chosen.title}`}</span>}
+          </h2>
+          {/* QA Nov 12 #13: where a change goes sits behind an (i) beside the title, not as a line of prose. */}
+          {can && applies && (
+            <InfoTip label="Key dates" align="start" side="bottom" testId="key-dates-tip">
+              Your changes go into the roadmap&apos;s working draft (Undo in the message).
+            </InfoTip>
+          )}
+        </div>
         <button type="button" aria-label="Close" onClick={onClose} className="h-7 w-7 flex-none rounded text-text2 hover:bg-surface2">
           ×
         </button>
       </div>
-      <p className="mt-2 text-sm text-text2" data-testid="key-dates-hint">
-        {!can
-          ? "Owners and the roadmap's decider change key dates; you read them."
-          : applies
-            ? "Your changes go into the roadmap's working draft (Undo in the message)."
-            : "Owners and the roadmap's decider change key dates; yours are proposals they accept or decline."}
-      </p>
+      {!(can && applies) && (
+        <p className="mt-2 text-sm text-text2" data-testid="key-dates-hint">
+          {!can ? "Owners and the roadmap's decider change key dates; you read them." : "Owners and the roadmap's decider change key dates; yours are proposals they accept or decline."}
+        </p>
+      )}
       {groups.length === 0 && <p className="mt-3 text-sm text-text2">No key dates yet.</p>}
       {groups.map(({ r, list }) => (
         <section key={r.roadmap.id} data-testid="key-dates-group" data-roadmap={r.roadmap.title}>

@@ -171,7 +171,7 @@ test.describe("as the owner", () => {
     await picker.getByLabel("Find a feature").fill("Sheets");
     await picker.getByRole("button", { name: "F-11 Sheets export" }).click();
     await expect(picker).toHaveCount(0);
-    await expect(page.getByTestId("gt-notice")).toContainText("Linked “Usage report” to “Sheets export”.");
+    await expect(page.getByTestId("gt-notice")).toContainText("Linked “F-15a Usage report” to “Sheets export”.");
     await expect(row(page, "Usage report")).toHaveCount(0);
     await expect(count(page, "slice_parent_missing")).toContainText("1");
     await expect(row(page, "Usage chart")).toContainText("F-15b");
@@ -198,7 +198,7 @@ test.describe("as the owner", () => {
     await row(page, "Audit log").getByRole("button", { name: /Pick a goal/ }).click();
     const picker = page.getByTestId("gt-picker");
     await picker.getByRole("button").filter({ hasText: "Raise activation" }).click();
-    await expect(page.getByTestId("gt-notice")).toContainText("“Audit log” now serves “Raise activation”.");
+    await expect(page.getByTestId("gt-notice")).toContainText("“F-02 Audit log” now serves “Raise activation”.");
     await expect(count(page, "no_goal")).toHaveCount(0);
     await expect(total(page)).toHaveText("8");
   });
@@ -211,7 +211,7 @@ for (const colorScheme of ["light", "dark"] as const)
     await open(page);
     await openKind(page, "runs_today_on_roadmap");
     await row(page, "Night alerts").getByRole("button", { name: /Take it off the roadmap/ }).click();
-    await expect(page.getByTestId("gt-notice")).toContainText("Took “Night alerts” off the roadmap.");
+    await expect(page.getByTestId("gt-notice")).toContainText("Took “F-03 Night alerts” off the roadmap.");
     await expect(count(page, "runs_today_on_roadmap")).toHaveCount(0);
     await expect(total(page)).toHaveText("8");
     await page.getByTestId("gt-notice").getByRole("button", { name: "Undo" }).click();
@@ -246,7 +246,7 @@ for (const viewport of [DESKTOP, PHONE])
       const start = await open(page, "approver@example.com");
       await openKind(page, "runs_today_on_roadmap");
       await row(page, "Night alerts").getByRole("button", { name: /Take it off the roadmap/ }).click();
-      await expect(page.getByTestId("gt-notice")).toContainText("Sent “Night alerts” off the roadmap for approval.");
+      await expect(page.getByTestId("gt-notice")).toContainText("Sent “F-03 Night alerts” off the roadmap for approval.");
       await expect(row(page, "Night alerts").getByTestId("gt-pending")).toHaveText("Waiting for an approver");
       await expect(row(page, "Night alerts").getByRole("button", { name: /Take it off the roadmap/ })).toHaveCount(0);
       await expect(total(page)).toHaveText(String(start));

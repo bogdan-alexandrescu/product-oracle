@@ -52,10 +52,10 @@ test("confirming a proposed feature gives it its code", async ({ page }) => {
   await login(page);
   await page.goto("/ground-truth");
   await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
-  // A run proposed Dark mode (invented): it is not in the Ground Truth yet.
+  // A run proposed Dark mode (invented): it is not in the Ground Truth yet, so it has no code (a run's key).
   await page.evaluate(() => {
     const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
-    db.baseline.entities.find((e: { key: string }) => e.key === "f.dark-mode").status = "proposed";
+    Object.assign(db.baseline.entities.find((e: { key: string }) => e.key === "F-81"), { status: "proposed", key: "f.dark-mode" });
     localStorage.setItem("po-mock-db-v2", JSON.stringify(db));
   });
   await page.reload();

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-import { Button, Chip, Inspector, InspectorSection, Numeral, Ring, SegmentedControl } from "@/components/ds";
+import { Button, Chip, Icon, Inspector, InspectorSection, Numeral, Ring, SegmentedControl } from "@/components/ds";
 import { INPUT } from "@/components/ui";
+import { named, namedText } from "@/lib/codes";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
@@ -255,7 +256,8 @@ export function RequirementRow({ req, mode, ops, review, indent = true }: { req:
         </span>
         {req.edited && !req.added ? (
           <span className="flex items-center gap-1.5 text-sm text-pass" data-testid="requirement-done">
-            ✓ {cut ? "Requirement cut" : "Edited"}
+            {/* detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium. */}
+            <Icon name="check" size={16} /> {cut ? "Requirement cut" : "Edited"}
             {mode === "approver" && (
               <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void ops.patch(req, { revert: true })}>
                 Undo
@@ -497,6 +499,8 @@ export function ScopeInspector({
   const [blockedOn, setBlockedOn] = useState<string | null>(null);
   const onlyBlocked = f.decision === "include" && !kept && f.reasons.some((r) => !r.answered && r.severity === "blocking") && !f.reasons.some((r) => !r.answered && r.severity !== "blocking");
   // Undo of one reason: a call staged before each reason had its own may answer others too; they stay kept.
+  // detailed-b 3: the header's code with its name, never the key alone.
+  const n = named(f.title, f.key);
   const undoReason = async (answer: (typeof staged)[number], ref: string) => {
     if (answer.kind === "accept" && answer.field == null) {
       const covered = f.reasons.filter((r) => r.answered && r.severity !== "blocking" && answers(answer, r));
@@ -507,8 +511,8 @@ export function ScopeInspector({
   return (
     <Inspector
       eyebrow="Feature · selected"
-      title={f.title}
-      label={`Feature: ${f.title}`}
+      title={namedText(n)}
+      label={`Feature: ${namedText(n)}`}
       testId="scope-inspector"
       chips={
         <>
@@ -543,7 +547,8 @@ export function ScopeInspector({
                   </span>
                   {r.answered && answer ? (
                     <p className="mt-1.5 flex items-center gap-1.5 text-sm text-pass">
-                      ✓ {answer.kind === "waive" ? `Waived: ${((answer.value ?? {}) as { reason?: string }).reason ?? answer.note ?? ""}` : "Included"}
+                      {/* detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium. */}
+                      <Icon name="check" size={16} /> {answer.kind === "waive" ? `Waived: ${((answer.value ?? {}) as { reason?: string }).reason ?? answer.note ?? ""}` : "Included"}
                       {mode === "approver" && (
                         <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void undoReason(answer, refOf(r))}>
                           Undo
@@ -622,7 +627,8 @@ export function ScopeInspector({
         )}
         {f.edited && (
           <p className="mt-2 flex items-center gap-1.5 text-sm text-pass">
-            ✓ {changeText(f)}
+            {/* detailed-b 4: an icon, not the ✓ glyph that drew as an empty box in Chromium. */}
+            <Icon name="check" size={16} /> {changeText(f)}
             {mode === "approver" && (
               <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void ops.patch(f, { revert: true })}>
                 Undo

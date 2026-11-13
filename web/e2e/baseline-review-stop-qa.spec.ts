@@ -87,6 +87,8 @@ for (const view of VIEWS) {
         // open panel docked beside the page.
         const dock = await box(page.getByTestId("hop-dock"));
         expect(barBox.x + barBox.width).toBeLessThanOrEqual(dock.x + 0.5);
+        // The Ground Truth flags band above the rows can push the bar's button below the fold.
+        await approve.scrollIntoViewIfNeeded();
         const approveBox = await box(approve);
         // What a click on the bar's button lands on: the bar, or Ask lying over it.
         const onTop = await page.evaluate(([x, y]) => {

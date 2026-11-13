@@ -70,8 +70,8 @@ for (const phone of [false, true]) {
         await expect(region(page, "Waiting for others")).toContainText("No decider yet");
         await expect(outside(page, "Q1")).toContainText("Q1 Data retention period");
         await expect(outside(page, "Q1")).toContainText("Keep 90 days · Avery Stone");
-        await expect(page.getByTestId("decisions-approvals")).toContainText("1 approval for Oracle's own work waits in your Inbox.");
-        await expect(page.getByTestId("decisions-approvals").getByRole("link", { name: "Open the Inbox" })).toBeVisible();
+        // simple-home-qa-nov12 #14: one short line to Simple's Inbox, the why behind its (i).
+        await expect(page.getByTestId("decisions-approvals").getByRole("link", { name: "1 approval waits in your Inbox" })).toBeVisible();
         await expect(region(page, "Review: Usage alerts")).toBeVisible();
         // Ask Oracle opens Simple's Ask panel with the question in its box.
         await row(page, "Q5").getByRole("button", { name: "Ask Oracle" }).click();
@@ -252,7 +252,7 @@ for (const phone of [false, true]) {
         const due = region(page, "On the agenda");
         await expect(due.getByTestId("question-row").first()).toContainText("Q5 Reminder default time");
         await expect(due.getByTestId("question-row").first()).toContainText("Late · due Fri Oct 16");
-        await expect(due.getByTestId("question-row").first()).toContainText("Blocks Health log, first milestone");
+        await expect(due.getByTestId("question-row").first()).toContainText("Blocks F-03 Health log, first milestone");
         // The PRD's open questions, whoever decides them (Q7 is the approver's), not only mine.
         await expect(due.locator('[data-code="Q7"]')).toContainText("Q7 Legal input on health notes");
         await due.getByTestId("question-row").first().getByRole("button", { name: "Decide as recommended" }).click();
@@ -311,7 +311,7 @@ for (const phone of [false, true]) {
         const note = page.getByTestId("decisions-approvals");
         const outsideBox = (await region(page, "Outside meetings").boundingBox())!;
         expect((await note.boundingBox())!.y).toBeGreaterThan(outsideBox.y + outsideBox.height);
-        await expect(note.getByRole("link", { name: "Open the Inbox" })).toBeVisible();
+        await expect(note.getByRole("link", { name: "1 approval waits in your Inbox" })).toBeVisible();
 
         await page.goto("/simple");
         const card = region(page, "Waiting for you: Guided setup");

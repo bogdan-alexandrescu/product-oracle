@@ -145,7 +145,8 @@ for (const size of SIZES) {
           await openItem(page, "alert-digest");
           const targets = [
             panel(page).getByRole("button", { name: "Change the dates" }),
-            panel(page).getByRole("button", { name: "Why these dates" }),
+            // QA Nov 12 #10: the dates' why is the circled (i), "About these dates".
+            panel(page).getByRole("button", { name: "About these dates" }),
             panel(page).getByRole("button", { name: "Add a dependency" }),
             panel(page).getByRole("button", { name: "Remove Alert rules engine from what it depends on" }),
             panel(page).getByRole("button", { name: "Add a feature that needs it" }),
@@ -154,8 +155,13 @@ for (const size of SIZES) {
             await t.evaluate((el) => el.scrollIntoView({ block: "center" }));
             const box = await t.boundingBox();
             expect(box, await t.getAttribute("aria-label") ?? "").not.toBeNull();
-            expect(box!.width).toBeGreaterThanOrEqual(44);
-            expect(box!.height).toBeGreaterThanOrEqual(44);
+            // An (i) takes taps on its invisible pad (its ::before) round the 20 px circle.
+            const pad = await t.evaluate((el) => {
+              const s = getComputedStyle(el, "::before");
+              return s.content !== "none" && s.position === "absolute" ? { width: parseFloat(s.width) || 0, height: parseFloat(s.height) || 0 } : { width: 0, height: 0 };
+            });
+            expect(Math.max(box!.width, pad.width)).toBeGreaterThanOrEqual(44);
+            expect(Math.max(box!.height, pad.height)).toBeGreaterThanOrEqual(44);
           }
         });
 

@@ -138,7 +138,7 @@ function RowLoader({ id, onRow }: { id: string; onRow: (row: Row) => void }) {
     if (one.data) onRow(one.data);
   }, [one.data, onRow]);
   return (
-    <div className="flex flex-col gap-3 p-1" data-testid="decision-sheet-body">
+    <div className="flex flex-col gap-3 px-4 py-1" data-testid="decision-sheet-body">
       <p className="simple-meta" role="status">
         {one.error ?? "Loading…"}
       </p>
@@ -402,7 +402,7 @@ function SheetBody({ target, onClose, done, onWithdrawn }: BodyProps) {
   );
 
   return (
-    <div className="flex flex-col gap-3 p-1" data-testid="decision-sheet-body">
+    <div className="flex flex-col gap-3 px-4 py-1" data-testid="decision-sheet-body">
       {notice && (
         <p className="simple-meta rounded-lg border border-crit/40 bg-crit-bg px-3 py-2 text-crit" role="alert" data-testid="decision-sheet-notice">
           {notice}

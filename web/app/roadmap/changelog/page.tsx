@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { Button, Chip, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, toast, type ChipKind } from "@/components/ds";
+import { Button, Chip, InfoTip, Notice, Page, PageHeader, Panel, toast, type ChipKind } from "@/components/ds";
+import { usePhone } from "@/components/ds/page-info";
 import { PlanCrumb } from "@/app/plan/_crumb";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate, plural } from "@/lib/format";
@@ -28,9 +29,63 @@ const STATUS_KIND: Record<Entry["status"], ChipKind> = { draft: "na", published:
 const HEADER_BUTTON = "h-10! rounded-button! px-4! text-[15px]!";
 /**
  * qa-plan-37: a disabled export has no outline and no fill and is dimmed, so in dark it does
- * not read like the bordered Launches link beside it.
+ * not read like an enabled bordered button.
  */
 const EXPORT_BUTTON = `${HEADER_BUTTON} disabled:border-transparent! disabled:bg-transparent! disabled:opacity-60`;
+
+/**
+ * QA Nov 12 #15: on a phone, with New entry beside them, the two exports go under More (as
+ * Requests' header does, qa-work-41), so the header's buttons stay on one row. `on` false: the
+ * buttons as they are.
+ */
+function PhoneMore({ on, children }: { on: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      root.current?.querySelector<HTMLElement>("[data-more-button]")?.focus();
+    };
+    const onDown = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [open]);
+  if (!on) return <>{children}</>;
+  return (
+    <div ref={root} className="relative flex-none">
+      <Button
+        data-more-button=""
+        data-testid="changelog-more"
+        className={HEADER_BUTTON}
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-controls="changelog-more-panel"
+        onClick={() => setOpen((o) => !o)}
+      >
+        More
+      </Button>
+      {open && (
+        <div
+          id="changelog-more-panel"
+          role="group"
+          aria-label="More actions"
+          data-testid="changelog-more-panel"
+          className="absolute top-full right-0 z-30 mt-2 flex w-56 flex-col items-stretch gap-2 rounded-panel border border-line bg-surface p-3 shadow-tip"
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Days newest first, each with its categories in Keep a Changelog's order. */
 function grouped(entries: Entry[]): [string, [Entry["category"], Entry[]][]][] {
@@ -64,6 +119,7 @@ export default function ChangelogPage() {
   const exportWhy = canPublish && q.data && exportable === 0 ? "Nothing to export yet: export gives the published public entries." : null;
   const canCreate = can("create_changelog_entry");
   const empty = !!q.data && entries.length === 0;
+  const phone = usePhone();
 
   async function act(key: string, call: () => Promise<unknown>) {
     setBusy(key);
@@ -116,6 +172,8 @@ export default function ChangelogPage() {
         back={<PlanCrumb />}
         // qa-plan-11: the crumb sits on the title row, so the title is where the Plan tabs have theirs.
         backInline
+        // QA Nov 12 #15: the phone header says Plan, so the page's own name shows on a phone too.
+        phoneTitle
         status={
           q.data && (
             <>
@@ -124,12 +182,10 @@ export default function ChangelogPage() {
           )
         }
         action={
+          // QA Nov 12 #14: no Launches button here: the Plan strip's Launches link below goes there.
           <div className="flex flex-wrap gap-2">
-            <LinkButton href="/roadmap/launches" icon="flag" className={HEADER_BUTTON} data-testid="launches-link">
-              Launches
-            </LinkButton>
             {showExport && (
-              <>
+              <PhoneMore on={phone && canCreate && !empty}>
                 <Button
                   disabled={busy !== null || exportable === 0}
                   title={exportWhy ?? undefined}
@@ -150,7 +206,7 @@ export default function ChangelogPage() {
                 >
                   Export HTML
                 </Button>
-              </>
+              </PhoneMore>
             )}
             {/* fix4 qa-plan-15, qa-plan-58: while empty, New entry is in the empty card only. */}
             {canCreate && !empty && (

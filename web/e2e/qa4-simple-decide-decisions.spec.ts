@@ -96,7 +96,8 @@ for (const phone of [false, true]) {
     test("qa4-simple-decide-38: the footer's Inbox link in plain words; the Decided count is neutral", async ({ page }) => {
       await decisions(page, "list");
       const foot = page.getByTestId("decisions-approvals");
-      await expect(foot.getByRole("link", { name: "Open the Inbox in Detailed" })).toBeVisible();
+      // simple-home-qa-nov12 #14: the link goes to Simple's own Inbox.
+      await expect(foot.getByRole("link", { name: "1 approval waits in your Inbox" })).toHaveAttribute("href", "/simple/inbox");
       await expect(foot).not.toContainText("it leaves Simple");
       await page.getByTestId("decisions-view-board").click();
       await expect(page.getByTestId("board-decided-count")).toHaveClass(/simple-count-quiet/);

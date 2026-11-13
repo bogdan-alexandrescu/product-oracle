@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { toast as dsToast, type ToastAsk } from "@/components/ds";
 import { Icon } from "@/components/ds/Icon";
 import { InfoTip } from "@/components/ds/InfoTip";
+import { FeatureName } from "@/components/simple/FeatureName";
 import { NewPrdSheet, useCanStartPrd } from "@/components/simple/NewPrd";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { GmFeature, GmGoal, GmMilestone, GoalMap } from "@/lib/api/mock/goal-map";
@@ -603,7 +604,8 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
   return (
     <div className="flex flex-col gap-3 overflow-x-auto" data-testid="gm-grid">
       <div className="grid min-w-[1000px] grid-cols-[150px_repeat(var(--gm-n),minmax(0,1fr))] gap-x-3 max-[600px]:grid-cols-[96px_repeat(var(--gm-n),220px)]" style={{ "--gm-n": n } as CSSProperties}>
-        <span />
+        {/* The corner: on a phone it holds still with the track names, so the goal cards pass under it. */}
+        <span data-testid="gm-corner" className="max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg" />
         {goals.map((g) => (
           <div key={g.id} data-goal={g.id} data-testid="gm-goal" className="group flex flex-col gap-1 rounded-2xl border border-line bg-surface p-3">
             {/* One row when it fits; else the target wraps beside the (i) and ⋯ (floated top right, so never pushed
@@ -643,7 +645,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                 .map((m) => (
                   <span key={m.id} data-milestone={m.id} data-testid="gm-strip-milestone" className="group flex max-w-full items-center gap-1 rounded-md bg-surface2 px-1.5 py-0.5 text-[12px]">
                     <b className="text-accent-ink">{c.mcode.get(m.id)}</b>
-                    {c.renaming === m.id ? <Rename id={m.id} was={m.name} c={c} className="text-[12px]" /> : <span className="truncate" title={m.name}>{m.name}</span>}
+                    {c.renaming === m.id ? <Rename id={m.id} was={m.name} c={c} className="text-[12px]" /> : <span className="line-clamp-2 min-w-0 break-words" title={m.name} data-testid="gm-strip-name">{m.name}</span>}
                     <span className="whitespace-nowrap text-text2">{day(m.due_on)}</span>
                     {m.threshold === null && <Status s="no_gate" small on={m.can_change ? () => c.onEdit({ kind: "gate", milestone: m.id }) : undefined} hint="Set the gate" />}
                     {/* Out of sight at rest, not display:none, so Tab reaches it; it shows on hover or focus as a chip's ⋯. */}
@@ -657,8 +659,8 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
         </div>
         {c.tracks.map((t) => (
           <div key={t.id ?? "none"} className="contents">
-            <span className="flex items-start gap-1.5 border-t border-line pt-2 text-[14px] font-semibold max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg" data-testid="gm-track" data-track={t.id ?? "none"}>
-              <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ background: t.color }} />
+            <span className="flex items-start gap-1.5 border-t border-line pt-2 text-[14px] leading-[18px] font-semibold max-[600px]:sticky max-[600px]:left-0 max-[600px]:z-10 max-[600px]:bg-bg" data-testid="gm-track" data-track={t.id ?? "none"}>
+              <span className="mt-1 size-2.5 shrink-0 rounded-full" style={{ background: t.color }} />
               {t.name}
             </span>
             {goals.map((g) => (
@@ -676,8 +678,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                   >
                     <button type="button" onClick={() => c.onOpen(f)} className="min-w-0 flex-1 text-left">
                       <span className="block truncate hover:underline" title={`${c.codes.get(f.id) ?? ""} ${f.name}`.trim()}>
-                        {c.codes.get(f.id) && <span className="mr-1 text-[11.5px] text-text-faint">{c.codes.get(f.id)}</span>}
-                        {f.name}
+                        <FeatureName item={{ code: c.codes.get(f.id), title: f.name }} />
                       </span>
                       <span className="block truncate text-[11.5px] text-text2" title={f.ms.length ? f.ms.map((m) => mWords(m, c)).join(" · ") : undefined}>
                         {f.ms.length ? f.ms.map((m) => mWords(m, c)).join(" · ") : "No milestone"}
@@ -789,7 +790,11 @@ export function GoalMapPage() {
   const prdOf = useMemo(() => new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.prd ? [[m.id, m.prd] as const] : []))), [roadmap.data]);
   const router = useRouter();
   const refresh = () => Promise.all([q.reload(), goalList.reload(), roadmap.reload()]);
-  const codes = useMemo(() => new Map((roadmap.data?.items ?? []).flatMap((i) => (i.code ? [[i.id, i.code] as [string, string]] : []))), [roadmap.data]);
+  // Each feature's code as the roadmap reads it, else as the map's own read gives it (GmFeature.code, GmUnplaced.code).
+  const codes = useMemo(
+    () => new Map([...(map?.features ?? []), ...(map?.unplaced ?? [])].flatMap((f) => (f.code ? [[f.id, f.code] as [string, string]] : [])).concat((roadmap.data?.items ?? []).flatMap((i) => (i.code ? [[i.id, i.code] as [string, string]] : [])))),
+    [map, roadmap.data],
+  );
   const mcode = useMemo(() => new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.roadmap_code ? [[m.id, m.roadmap_code] as [string, string]] : []))), [roadmap.data]);
   const trackOf = useMemo(() => new Map((roadmap.data?.items ?? []).map((i) => [i.id, i.track?.id ?? null])), [roadmap.data]);
   const doneOf = useMemo(() => new Set((roadmap.data?.items ?? []).filter((i) => i.status === "done").map((i) => i.id)), [roadmap.data]);

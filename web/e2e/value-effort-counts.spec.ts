@@ -189,7 +189,7 @@ for (const [size, viewport] of [["phone", PHONE], ["desktop", DESKTOP]] as const
     test(`${where}: a lone mark opens its feature panel`, async ({ page }) => {
       await open(page, viewport, scenario);
       const mark = page.getByTestId("vxe-point").first();
-      const title = /^#\d+ \S+ · (.*)$/.exec((await mark.getByTestId("vxe-name").textContent()) ?? "")![1];
+      const title = /^#\d+ (?:[A-Z]{1,3}-\d+[a-j]? · )?(.*)$/.exec((await mark.getByTestId("vxe-name").textContent()) ?? "")![1];
       await mark.click();
       const panel = page.getByTestId("item-panel");
       await expect(panel).toBeVisible();
@@ -241,7 +241,7 @@ test("desktop: a mark moved onto another's spot with the arrow keys joins its co
   await page.keyboard.press("ArrowDown");
   await expect(sc).toHaveCount(0);
   const count = page.getByRole("button", { name: /^2 features at effort 2 weeks · goal value 3: / });
-  await expect(count).toHaveAccessibleName("2 features at effort 2 weeks · goal value 3: SC Setup checklist, ARB Alert routing by team; show them");
+  await expect(count).toHaveAccessibleName("2 features at effort 2 weeks · goal value 3: Setup checklist, Alert routing by team; show them");
   await expect(count).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("vxe-crowd-sheet").getByTestId("vxe-crowd-row")).toHaveText([/Setup checklist/, /Alert routing by team/]);

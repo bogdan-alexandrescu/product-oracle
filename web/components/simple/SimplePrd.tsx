@@ -7,7 +7,9 @@
  */
 import { Fragment, useEffect, useMemo, useRef, type ReactNode } from "react";
 
+import { withDays } from "@/components/MarkdownBody";
 import { numbersOf, ownNumber } from "@/components/PrdLook";
+import { NotInGt } from "@/components/simple/FeatureName";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
 import { api, unwrap, type Schemas, type SectionOut } from "@/lib/api/client";
 import { buildCodeIndex, lookupCode, nameCodes, splitCodes, type CodeIndex } from "@/lib/code-index";
@@ -85,8 +87,11 @@ function Text({ c, codes, prd, named = false }: { c: Inline[]; codes: CodeIndex;
         if (n.t === "text")
           return (
             <Fragment key={i}>
-              {splitCodes(stripRawTokens(named ? n.v : nameCodes(n.v, codes, null)), codes).map((p, j) =>
-                typeof p === "string" ? p : p.entry.kind === "Feature" ? <FeatureCode key={j} code={p.entry.code} name={p.entry.name} prd={prd}>{p.text}</FeatureCode> : <span key={j} title={`${p.entry.code} ${p.entry.name}`}>{p.text}</span>,
+              {/* OP9: a day in the prose reads month first ("needed by Nov 1, 2026"), as MarkdownBody reads it. */}
+              {withDays(stripRawTokens(named ? n.v : nameCodes(n.v, codes, null)), codes, `t${i}`, (words, _, k) =>
+                splitCodes(words, codes).map((p, j) =>
+                  typeof p === "string" ? p : p.entry.kind === "Feature" ? <FeatureCode key={`${k}-${j}`} code={p.entry.code} name={p.entry.name} prd={prd}>{p.text}</FeatureCode> : <span key={`${k}-${j}`} title={`${p.entry.code} ${p.entry.name}`}>{p.text}</span>,
+                ),
               )}
             </Fragment>
           );
@@ -110,6 +115,15 @@ function namedInRow(cell: Inline[], row: Inline[][], codes: CodeIndex): boolean 
   return !!name && row.some((x) => x !== cell && cellText(x) === name);
 }
 
+/** A cell's words, inside its links and bold too. */
+const plainOf = (c: Inline[]): string => c.map((x) => (x.t === "text" || x.t === "code" ? x.v : x.t === "strong" || x.t === "em" || x.t === "link" ? plainOf(x.c) : "")).join("");
+/** A feature code leading a cell or heading ("F-26 Calendar invites", "F-26"). */
+const LEADS_CODE = /^[A-Z]{1,3}-\d+[a-z]?(?![\w-])/;
+/** OP10: a table's feature column ("| Milestone | Feature |"), by its heading; -1 when none. */
+const featureColumn = (head: Inline[][]) => head.findIndex((h) => /^features?$/i.test(plainOf(h).trim()));
+/** OP10: a feature named with no code anywhere in its row is not in the Ground Truth. */
+const uncoded = (cell: Inline[], row: Inline[][]) => !!plainOf(cell).trim() && !row.some((c) => LEADS_CODE.test(plainOf(c).trim()));
+
 /** A section's body: paragraphs, lists, quotes and tables (a table scrolls across in its own box). */
 function Body({ md, codes, prd }: { md: string; codes: CodeIndex; prd: Doc }) {
   const blocks = useMemo(() => parseBlocks(md), [md]);
@@ -124,11 +138,23 @@ function Body({ md, codes, prd }: { md: string; codes: CodeIndex; prd: Doc }) {
           const items = b.items.map((it, j) => <li key={j}><Text c={it} codes={codes} prd={prd} /></li>);
           return b.t === "ul" ? <ul key={i}>{items}</ul> : <ol key={i}>{items}</ol>;
         }
+        const fcol = featureColumn(b.head);
         return (
           <div key={i} className="simple-prd-table" role="region" aria-label="Table" tabIndex={0}>
             <table>
               <thead><tr>{b.head.map((h, j) => <th key={j}><Text c={h} codes={codes} prd={prd} /></th>)}</tr></thead>
-              <tbody>{b.rows.map((r, j) => <tr key={j}>{r.map((c, k) => <td key={k}><Text c={c} codes={codes} prd={prd} named={namedInRow(c, r, codes)} /></td>)}</tr>)}</tbody>
+              <tbody>
+                {b.rows.map((r, j) => (
+                  <tr key={j}>
+                    {r.map((c, k) => (
+                      <td key={k}>
+                        <Text c={c} codes={codes} prd={prd} named={namedInRow(c, r, codes)} />
+                        {k === fcol && uncoded(c, r) && <NotInGt />}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
         );
@@ -183,6 +209,8 @@ export function PrdWhole({ prd, doc }: { prd: PrdSections; doc: Doc }) {
             <H className="simple-prd-sec-title" data-user-content>
               {nums.get(s.section_key) && <><span className="simple-prd-num">{nums.get(s.section_key)}</span><span className="sr-only"> </span></>}
               {titleOf(s.heading)}
+              {/* OP10: a feature's own section (9.1 Save cart) whose heading gives no code is flagged. */}
+              {s.level >= 3 && /^feature-/.test(s.section_key) && !LEADS_CODE.test(titleOf(s.heading).trim()) && <NotInGt />}
             </H>
             {hasWords(s) && <Body md={s.body_md} codes={codes} prd={doc} />}
           </section>

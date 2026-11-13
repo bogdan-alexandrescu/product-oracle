@@ -123,7 +123,9 @@ for (const phone of [false, true]) {
       await expect(ask).toContainText("The edit made in this meeting is not approved yet: it stays in a working draft until the decider approves.");
       await ask.getByRole("button", { name: "End meeting" }).click();
       await expect(page.getByTestId("end-screen")).toBeVisible();
-      await expect(page.getByRole("region", { name: "Delivery" })).toContainText("Decisions page · shows them already; Send marks them sent");
+      await expect(page.getByRole("region", { name: "Delivery" })).toContainText("Decisions page");
+      // simple-home-qa-nov12 #12: its reason sits behind the option's (i).
+      await expect(page.getByRole("region", { name: "Delivery" })).toContainText("Shows them already; Send marks them sent");
     });
 
     test(`a task line finds an item whose name holds "for" (${where})`, async ({ page, context }) => {

@@ -60,7 +60,7 @@ test("list and pane: the lead picks a feature from the list, decides it at the t
   await openCheck(page);
   await expect(list(page)).toContainText("9 features");
   // At rest: the first feature in the pane, its verdict and size on top.
-  await expect(pane(page).getByTestId("brief-position")).toHaveText("Feature 1 of 9f.guided-setup");
+  await expect(pane(page).getByTestId("brief-position")).toHaveText("Feature 1 of 9");
   await expect(pane(page).getByRole("heading", { level: 2 })).toHaveText("Guided setup");
   await expect(row(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Not decided");
   await expect(row(page, "f.guided-setup").getByTestId("brief-questions")).toHaveText("1 blocking0 of 2 answered");
@@ -191,7 +191,8 @@ for (const [name, viewport] of [
     const answered = questions.first();
     await expect(answered).toHaveAttribute("data-answered", "true");
     await expect(answered.getByRole("textbox")).toHaveCount(0);
-    await expect(answered.getByLabel("Answered")).toHaveText("✓");
+    // The app's check icon, not the ✓ character (detailed-b 4).
+    await expect(answered.getByLabel("Answered").locator("svg")).toHaveCount(1);
     await expect(answered.getByTestId("answer")).toContainText("Yes in 11 of our 14 regions; the other 3 fall back to the address slip.");
     await expect(answered.getByRole("button", { name: `Change the answer: ${REGIONS}` })).toHaveText("Change");
     await expect(pane(page).getByText("Architect's questions · 1 of 3 answered")).toBeVisible();

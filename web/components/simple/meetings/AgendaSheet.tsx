@@ -37,10 +37,14 @@ export function agendaSentence(words: string[]): string {
   return `${s[0]!.toUpperCase()}${s.slice(1)}.`;
 }
 
-/** A feature's name opens the one feature panel (in the sheet, a dialog, it closes the sheet
- * first: `onOpen`); a topic is plain text. */
-function Name({ x, onOpen }: { x: Row; onOpen?: () => void }) {
+/** A feature's code (from the meeting's roadmap slice: the agenda row carries none), else "". */
+type CodeOf = (featureId: string) => string | null | undefined;
+
+/** A feature's code and name open the one feature panel (in the sheet, a dialog, it closes the sheet
+ * first: `onOpen`); a topic is plain text. QA Nov 12 (#2): its code first. */
+function Name({ x, onOpen, codeOf }: { x: Row; onOpen?: () => void; codeOf?: CodeOf }) {
   const open = useOpenFeature();
+  const code = x.feature_id ? codeOf?.(x.feature_id) || "" : "";
   return x.feature_id ? (
     <button
       type="button"
@@ -48,9 +52,10 @@ function Name({ x, onOpen }: { x: Row; onOpen?: () => void }) {
       className="text-left hover:underline"
       onClick={() => {
         onOpen?.();
-        open?.({ id: x.feature_id, code: "", name: x.title });
+        open?.({ id: x.feature_id, code, name: x.title });
       }}
     >
+      {code && <code className="simple-code mr-1">{code}</code>}
       {x.title}
     </button>
   ) : (
@@ -77,7 +82,7 @@ function Mark({ s }: { s: Row["state"] }) {
   return null;
 }
 
-export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meetingId: string; agenda: Agenda; can: Schemas["SimpleMeetingCan"]; phone: boolean; reload: () => Promise<unknown> }) {
+export function AgendaSheet({ meetingId, agenda, can, phone, reload, codeOf }: { meetingId: string; agenda: Agenda; can: Schemas["SimpleMeetingCan"]; phone: boolean; reload: () => Promise<unknown>; codeOf?: CodeOf }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
@@ -138,14 +143,14 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
       <div aria-label="Agenda" data-testid="agenda-strip" className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-line px-4 py-2 text-base [overflow-wrap:anywhere]">
         {nowAt >= 0 && (
           <p data-testid="agenda-now">
-            <span className="font-semibold">Now:</span> <Name x={rows[nowAt]!} />
+            <span className="font-semibold">Now:</span> <Name x={rows[nowAt]!} codeOf={codeOf} />
           </p>
         )}
         {next && (
           // The item taken next, with its feature's Current-state pill (the agenda names roadmap items).
           <div className="flex flex-wrap items-center gap-2">
             <p data-testid="agenda-next">
-              <span className="font-semibold">Next:</span> <Name x={next} />
+              <span className="font-semibold">Next:</span> <Name x={next} codeOf={codeOf} />
               {next.kind === "topic" && <span className="text-sm text-text-faint"> · topic</span>}
             </p>
             {next.feature_id && (
@@ -243,7 +248,7 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
                     ) : (
                       <>
                         <p className={`break-words ${x.state === "done" ? "text-text2" : ""}`}>
-                          <Name x={x} onOpen={() => setOpen(false)} /> <Mark s={x.state} />
+                          <Name x={x} onOpen={() => setOpen(false)} codeOf={codeOf} /> <Mark s={x.state} />
                         </p>
                         <p className="text-sm text-text-faint">
                           {x.mins} min{x.kind === "topic" ? " · topic" : ""}

@@ -137,9 +137,8 @@ test("rirs-18: one cost line per panel on the run page and the runs list", async
 test("rirs-19: a paused run says what Resume lets go on", async ({ page }) => {
   await openRun(page, "Paused");
   await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
-  await expect(page.getByTestId("run-overrun-held")).toHaveText(
-    "Paused: over budget. Resume or cancel it.",
-  );
+  // detailed-b 20: who may resume reads it from the pill and Resume; no line says it again.
+  await expect(page.getByTestId("run-overrun-held")).toHaveCount(0);
   // F-39: what Resume allows sits behind the Overrun (i).
   await expect(page.getByTestId("run-resume-allows")).toHaveText("Resuming lets it spend up to $18.70 in total, $4.50 more.");
 });

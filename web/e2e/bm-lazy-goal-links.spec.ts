@@ -30,8 +30,9 @@ async function openOnRoadmap(page: Page, name: RegExp) {
   await page.getByRole("button", { name }).first().click();
   await expect(panel(page).getByTestId("card-goal")).toBeVisible();
 }
-const launchEmail = (page: Page) => openOnRoadmap(page, /^Launch email:/);
-const teamInvites = (page: Page) => openOnRoadmap(page, /^Team invites/);
+// docs/ground-truth.md: a roadmap row reads its feature's code before its name (a slice keeps its letter).
+const launchEmail = (page: Page) => openOnRoadmap(page, /^F-10[a-z]? Launch email:/);
+const teamInvites = (page: Page) => openOnRoadmap(page, /^F-05[a-z]? Team invites/);
 
 async function openBuckets(page: Page) {
   await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "simple-plan"] as const);

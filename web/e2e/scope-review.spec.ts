@@ -53,7 +53,7 @@ test("a blocking dependency disables Approve until Include <dependency> fixes it
   const bulk = row(page, "Bulk edit");
   await expect(bulk.getByTestId("row-reasons")).toContainText("Depends on Address book export, left out");
   await bulk.getByRole("button", { name: "Include dependency" }).click();
-  await expect(bulk.getByTestId("row-done")).toContainText("✓");
+  await expect(bulk.getByTestId("row-done").locator("svg").first()).toBeVisible();
   await expect(bar(page).getByTestId("decision-tally")).toContainText("0 blocking problems left");
   await expect(bar(page).getByRole("button", { name: "Approve with 1 edit" })).toBeEnabled();
 });
@@ -70,7 +70,7 @@ test("leave out asks a reason, stages a chip, and removing the chip undoes it", 
   const why = labels.getByRole("group", { name: "Why leave it out?" });
   await expect(why).toBeVisible();
   await why.getByRole("button", { name: "No goal" }).click();
-  await expect(labels.getByTestId("row-done")).toContainText("✓ Left out · No goal");
+  await expect(labels.getByTestId("row-done")).toContainText("Left out · No goal");
   const chip = bar(page).getByTestId("staged-chip").filter({ hasText: "Address labels: left out" });
   await expect(chip).toBeVisible();
 
@@ -168,7 +168,7 @@ test("a commenter suggests leave out; the approver accepts it", async ({ page })
   await again.getByTestId("feature-title").click();
   const suggestions = page.getByTestId("scope-inspector").getByTestId("inspector-suggestions");
   await suggestions.getByRole("button", { name: "Accept" }).click();
-  await expect(again.getByTestId("row-done")).toContainText("✓ Left out · Not now");
+  await expect(again.getByTestId("row-done")).toContainText("Left out · Not now");
   await expect(again.getByTestId("suggested-by")).toHaveCount(0);
   await again.getByTestId("feature-title").click();
   await expect(page.getByTestId("scope-inspector").getByTestId("history")).toContainText("Changed by Priya Raman");
@@ -256,7 +256,7 @@ test("a held console approval is confirmed once the blocking row is waived", asy
   const form = page.getByTestId("scope-inspector").getByTestId("waive-form");
   await form.getByRole("textbox", { name: "Why is this fine?" }).fill("The export ships in the same release");
   await form.getByRole("button", { name: "Waive" }).click();
-  await expect(bulk.getByTestId("row-done")).toContainText("✓ Waived");
+  await expect(bulk.getByTestId("row-done")).toContainText("Waived");
   await expect(confirm).toBeEnabled();
   await confirm.click();
   await expect(page.getByTestId("checkpoint-feature_set")).toContainText("Approved");

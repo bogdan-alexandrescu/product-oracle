@@ -11,7 +11,7 @@ import {
 /**
  * Simple Priorities: stable item codes on Value / effort (#723; the owner's pick "Short code +
  * highlight"). Each mark shows a short code that never changes with rank (the feature's code,
- * F-12 for setup-import in the mock, else the letters of the item's name: ARB for Alert routing by team); the
+ * F-12 for setup-import in the mock; one with no Ground Truth code shows none, never made-up letters, PR1); the
  * ranked side list shows the same code beside the rank; the item just moved stays highlighted
  * on the chart and in the list with "moved #a → #b" ("now #b (effort n weeks)" for a re-estimate) until the next move (an accepted proposal
  * included). Every action is driven through the UI (a mouse drag, a finger's touch drag, the
@@ -92,19 +92,20 @@ async function fingerLeft(
 /** Every feature's code on the chart, by item: on its mark, or in its count's sheet (PV-1 One count per spot). */
 const markCodes = chartCodes;
 
-const CODES = {
-  "setup-checklist": "SC",
-  "alert-rules": "ARE",
+// PR1 (QA Nov 12): a feature with no Ground Truth code shows none on its mark (never made-up letters).
+const CODES: Record<string, string | null> = {
+  "setup-checklist": null,
+  "alert-rules": null,
   "alert-digest": "F-06",
-  "alert-mobile": "MAP",
+  "alert-mobile": null,
   "setup-import": "F-12",
-  "alert-export": "AHE",
-  "alert-sso": "ARB",
+  "alert-export": null,
+  "alert-sso": null,
   // F-03 Health log: the Guided setup PRD's feature on the onboarding roadmap (no code of its own,
   // its section's); a live, planned roadmap item, so it is a mark too.
   "setup-health-log": "F-03",
-  "price-tiers": "NPT",
-  "setup-video": "WV",
+  "price-tiers": null,
+  "setup-video": null,
   // P-1: the Goal map's features, roadmap items from the first load (their PRD section's code).
   ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`gm-f${i + 1}`, `F-${101 + i}`])),
 };
@@ -126,7 +127,7 @@ test.describe("desktop", () => {
     const admin = await open(page, "admin@example.com");
     expect(await markCodes(admin)).toEqual(CODES);
     await expect(admin.locator("#prio-about-text")).toContainText(
-      "Each mark shows the feature's code; point at it for its name, its rank is in the list.",
+      "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list.",
     );
     await expect(admin.getByLabel("Legend")).not.toContainText(
       "Numbers are ranks",
@@ -257,14 +258,12 @@ test.describe("desktop", () => {
     await dark(page.context());
     const viewer = await open(page, "viewer@example.com");
     expect(await markCodes(viewer)).toEqual(CODES);
-    await expect(side(viewer, "alert-sso").getByTestId("side-code")).toHaveText(
-      "ARB",
-    );
+    await expect(side(viewer, "alert-sso").getByTestId("side-code")).toHaveCount(0);
     await expect(side(viewer, "alert-sso").getByTestId("side-rank")).toHaveText(
       "7",
     );
     await expect(viewer.locator("#prio-about-text")).toContainText(
-      "Each mark shows the feature's code; point at it for its name, its rank is in the list.",
+      "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list.",
     );
   });
 
@@ -357,7 +356,7 @@ test.describe("phone", () => {
     );
     await expect(
       side(admin, "alert-mobile").getByTestId("side-code"),
-    ).toHaveText("MAP");
+    ).toHaveCount(0);
     expect(await markCodes(admin)).toEqual(CODES);
   });
 });

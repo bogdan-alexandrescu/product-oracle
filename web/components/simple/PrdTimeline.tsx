@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentState";
+import { NotInGt } from "@/components/simple/FeatureName";
 import { FlowDiagram } from "@/components/simple/FlowViews";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
 import { ErrorNote } from "@/components/ui";
@@ -243,17 +244,18 @@ function timelineDue(plan: Plan, d: { day: string; owner: string | null }, today
   return { ...due, words: `${d.owner} decision, taken ${due.words}` };
 }
 
-const named = (s: Slice) => `${s.code} ${s.name}`;
+const named = (s: Slice) => (s.code ? `${s.code} ${s.name}` : s.name);
 
 /**
- * A bar's label, longest first: every feature by name, then fewer with "+N". qa-simple-prd-p3-3:
- * never a code alone: the last one ends in "…" where it does not fit (its codes on hover).
+ * A bar's label, longest first: every feature by its code and name, then fewer with "+N".
+ * qa-simple-prd-p3-3: never a code alone; OP6: never a name without its code: the last one
+ * ends in "…" where it does not fit (every whole name on hover and in its milestone's card).
  */
 function barVariants(p: Piece): string[] {
   const sl = p.slices;
-  if (sl.length === 1) return [sl[0].name];
-  const out = [sl.map((s) => s.name).join(" · ")];
-  for (let k = sl.length - 1; k >= 1; k--) out.push(`${sl.slice(0, k).map((s) => s.name).join(" · ")} +${sl.length - k}`);
+  if (sl.length === 1) return [named(sl[0])];
+  const out = [sl.map(named).join(" · ")];
+  for (let k = sl.length - 1; k >= 1; k--) out.push(`${sl.slice(0, k).map(named).join(" · ")} +${sl.length - k}`);
   return out;
 }
 
@@ -409,6 +411,8 @@ function NoMilestone({ loose }: { loose: Loose[] }) {
               ) : (
                 <b className="text-[15px] leading-5 font-bold">{x.title}</b>
               )}
+              {/* OP1: an item with no code is flagged, never hidden. */}
+              {!x.code && <NotInGt />}
               <MarkFor itemId={x.id} />
             </span>
           </li>
@@ -655,8 +659,12 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
   // it) does not squeeze the plan: the axis starts a week before it, and what is earlier sits
   // at its left edge (its words keep its day).
   if (start - first > 0.25 * (last - first)) first = start - 5 * DAY;
-  const T0 = first - 2 * DAY;
   const T1 = last + 3 * DAY;
+  // OP5: the first month starts on its 1st, so every month is as wide as its days ("Oct" a whole
+  // month beside "Nov", today inside it), unless that would squeeze the plan as above.
+  const from = new Date(first - 2 * DAY);
+  const month1 = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 1);
+  const T0 = start - month1 <= 0.25 * (T1 - month1) ? month1 : first - 2 * DAY;
   const X = (day: string) => Math.max(0, ((ms(day) - T0) / (T1 - T0)) * W);
   const XE = (day: string) => ((ms(day) + DAY - T0) / (T1 - T0)) * W;
   const XT = Math.max(1, X(today) + ((0.5 * DAY) / (T1 - T0)) * W);
@@ -666,12 +674,15 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
     months.push({ label: calendarDay(new Date(at).toISOString().slice(0, 10), { month: "short" }), x: ((at - T0) / (T1 - T0)) * W, at });
   }
   // The first month's label gives way when the next one starts within a label's width; a
-  // label the Today pill would cover moves just past the pill.
+  // label the Today pill would cover moves just past the pill, unless today is in that month
+  // (OP5: today is never drawn before its own month's name): then the pill stands for it.
   const pill = { from: Math.max(XT, 26) - 25, to: Math.max(XT, 26) + 25 };
   const shown: typeof months = [];
   months.forEach((m, i) => {
+    const covered = m.x + 40 > pill.from && m.x < pill.to + 4;
+    if (covered && new Date(m.at).toISOString().slice(0, 7) <= today.slice(0, 7)) return;
     // A clear gap either side of the pill, so a month's name never touches it.
-    const x = m.x + 40 > pill.from && m.x < pill.to + 4 ? pill.to + 4 : m.x;
+    const x = covered ? pill.to + 4 : m.x;
     const next = months[i + 1];
     if ((next && next.x - x < 34) || x + 30 > W) return;
     shown.push({ ...m, x });
@@ -757,8 +768,8 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
                     {l.pieces.map((p) => {
                       const c = hue(plan, p.milestone);
                       const x0 = X(p.start);
-                      // A bar too short for its name still shows its first four letters ("Sett…"), never "Se…".
-                      const room = Math.max(XE(p.end) - x0, textWidth(`${p.slices[0].name.slice(0, 4)}…`, 12, 650) + 22);
+                      // A bar too short for its name still shows its code and first four letters ("F-04 Pric…"), never "Se…".
+                      const room = Math.max(XE(p.end) - x0, textWidth(`${named(p.slices[0]).slice(0, (p.slices[0].code ? p.slices[0].code.length + 1 : 0) + 4)}…`, 12, 650) + 22);
                       const mile = plan.milestones.find((x) => x.code === p.milestone);
                       return (
                         <button

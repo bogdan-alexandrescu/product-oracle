@@ -79,7 +79,7 @@ test("a commenter's suggestion shows on the approver's page within one poll", as
   // The approver's page reads the draft every 10 s.
   await expect(budget.getByTestId("suggested-by")).toHaveText(/Suggested by Theo Brandt: Move to Later/, { timeout: 12_000 });
   await budget.getByRole("button", { name: "Stage" }).click();
-  await expect(budget.getByTestId("row-done")).toHaveText(/✓ Moved to Later/);
+  await expect(budget.getByTestId("row-done")).toHaveText(/Moved to Later/);
 });
 
 // Card stale-revision: protects = nothing is decided over changes the approver has not seen;

@@ -38,7 +38,7 @@ test("run page: the sent-back review names the Company day it was sent back on",
   await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
   const push = page.locator('[data-testid="roadmap-item-row"][data-key="mobile-push"]');
   await push.getByRole("button", { name: "Drop", exact: true }).click();
-  await expect(push.getByTestId("row-done")).toHaveText(/✓ Dropped/);
+  await expect(push.getByTestId("row-done")).toHaveText(/Dropped/);
   await page.getByTestId("decision-bar").getByRole("button", { name: "Send back to agents" }).click();
   await page.getByTestId("sheet-send-back").getByRole("button", { name: "Send back", exact: true }).click();
   await expect(page.getByTestId("review-status")).toHaveText(/^Sent back/);

@@ -7,6 +7,7 @@ import { Button, Chip, Icon, Inspector, InspectorSection, Page, PageHeader, Shee
 import { RawFileSheet } from "@/components/review/RawFileSheet";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { named, namedText } from "@/lib/codes";
 import { formatDay } from "@/lib/format";
 import { errorMessage } from "@/lib/use-query";
 
@@ -260,7 +261,8 @@ export function EngDates({
                   }`}
                 >
                   <button type="button" className="min-w-0 text-left hover:underline" onClick={() => setSelected(i.key)}>
-                    <span className="block font-semibold">{i.title}</span>
+                    {/* detailed-b 3: the item's code with its name, never a bare key. */}
+                    <span className="block font-semibold">{namedText(named(i.title, i.key))}</span>
                     {i.section && <span className="block text-sm text-text2">PRD section: {keyWords(i.section)}</span>}
                   </button>
                   <span className="tnum font-semibold" data-testid="date-size">
@@ -570,8 +572,10 @@ function DatesInspector({
     if (d.word === "No date") return `No date${d.reason ? `: ${d.reason}` : ""}`;
     return "Accept";
   };
+  // detailed-b 3: the header's code with its name, never a bare key.
+  const coded = named(i.title, i.key);
   return (
-    <Inspector eyebrow="Now item · selected" title={i.title} label={`Dates: ${i.title}`} testId="dates-inspector">
+    <Inspector eyebrow="Now item · selected" title={namedText(coded)} label={`Dates: ${namedText(coded)}`} testId="dates-inspector">
       <InspectorSection label="Proposed date">
         {i.proposed ? (
           <p className="font-semibold">{basisWords(i.proposed)}</p>

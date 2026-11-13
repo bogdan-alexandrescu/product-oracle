@@ -3,13 +3,17 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { Button, Chip, InspectorSection, Notice, Panel, Sheet } from "@/components/ds";
+import { Button, Chip, Icon, InspectorSection, Notice, Panel, Sheet } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { named, namedText } from "@/lib/codes";
 import { formatDateTime } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { dayText, evidenceName, sourceName } from "./words";
+
+/** A feature as words: its code and name ("F-5 Address lookup service", detailed-b 1). */
+const words = (f: { key: string; title: string }) => namedText(named(f.title, f.key));
 
 type RankedFeature = Schemas["RankedFeature"];
 type OverrideOut = Schemas["OverrideOut"];
@@ -142,7 +146,7 @@ export function changeLabel(
   name?: NameOf,
 ): string {
   const key = typeof o.above === "string" ? o.above : o.above?.key;
-  const own = typeof o.above === "object" ? o.above?.title : undefined;
+  const own = typeof o.above === "object" && o.above?.title ? words({ key: o.above.key, title: o.above.title }) : undefined;
   const above = key ? (own ?? name?.(key) ?? key) : null;
   return o.kind === "move" ? `Moved above ${above ?? "—"}` : `Pinned at #${o.position}`;
 }
@@ -229,7 +233,7 @@ export function RowActions({
     ? null
     : !next
       ? "Already last"
-      : `${next.title} is last: pin at #${features.length} from More actions`;
+      : `${words(next)} is last: pin at #${features.length} from More actions`;
   const btn =
     "grid size-7 min-h-6 min-w-6 place-items-center rounded-button text-text2 hover:bg-surface2 hover:text-text disabled:opacity-40 aria-disabled:opacity-40 aria-disabled:cursor-not-allowed aria-disabled:hover:bg-transparent max-[600px]:size-11 max-[600px]:min-h-11 max-[600px]:min-w-11";
   return (
@@ -243,7 +247,7 @@ export function RowActions({
         type="button"
         className={btn}
         aria-label="Move up"
-        title={upWhy ?? `Move ${f.title} above ${prev!.title}`}
+        title={upWhy ?? `Move ${words(f)} above ${words(prev!)}`}
         aria-disabled={!prev || undefined}
         onClick={() => prev && onDraft({ feature: f, kind: "move", above: prev, position: null })}
       >
@@ -253,7 +257,7 @@ export function RowActions({
         type="button"
         className={btn}
         aria-label="Move down"
-        title={downWhy ?? `Move ${f.title} below ${next!.title}`}
+        title={downWhy ?? `Move ${words(f)} below ${words(next!)}`}
         aria-disabled={!down || undefined}
         onClick={() => {
           if (down) onDraft(down);
@@ -265,7 +269,7 @@ export function RowActions({
         type="button"
         className={btn}
         aria-label="More actions"
-        title={`More for ${f.title}`}
+        title={`More for ${words(f)}`}
         aria-haspopup="menu"
         aria-expanded={!!menu}
         onClick={(e) => {
@@ -274,14 +278,15 @@ export function RowActions({
           setMenu((m) => (m ? null : { top: r.bottom + 4, right: window.innerWidth - r.right }));
         }}
       >
-        ⋯
+        {/* The app's icon: the ⋯ character draws as an empty box where no font has it (detailed-b 4). */}
+        <Icon name="more" size={16} />
       </button>
       {menu &&
         createPortal(
           <div
             ref={list}
             role="menu"
-            aria-label={`Change ${f.title}`}
+            aria-label={`Change ${words(f)}`}
             style={{ top: menu.top, right: menu.right }}
             className="fixed z-40 flex w-48 flex-col rounded-button border border-line bg-surface py-1 shadow-tip"
           >
@@ -445,14 +450,14 @@ export function OverrideSheet({
   const choices = features.filter(
     (x) => x.key !== f.key && `${x.key} ${x.title}`.toLowerCase().includes(find.trim().toLowerCase()),
   );
-  const title = draft.kind === "move" ? `Move ${f.title}` : `Pin ${f.title}`;
+  const title = draft.kind === "move" ? `Move ${words(f)}` : `Pin ${words(f)}`;
 
   return (
     <Sheet open title={title} onClose={onClose} testId="override-sheet">
       <div className="mx-auto flex w-full max-w-[640px] flex-col gap-3 px-4 py-3 text-[15px]">
         {pushback ? (
           <>
-            <PushbackView p={pushback} name={(k) => features.find((x) => x.key === k)?.title ?? k} />
+            <PushbackView p={pushback} name={(k) => { const x = features.find((y) => y.key === k); return x ? words(x) : k; }} />
             {error && <Notice tone="error">{error}</Notice>}
             <div className="flex flex-wrap justify-end gap-2 pb-2">
               <Button variant="ghost" onClick={onClose}>
@@ -469,9 +474,9 @@ export function OverrideSheet({
               <div className="flex flex-col gap-2">
                 <p className="font-semibold" data-testid="move-target">
                   {draft.below && above?.key === draft.above?.key
-                    ? `Move below ${draft.below.title}`
+                    ? `Move below ${words(draft.below)}`
                     : above
-                      ? `Move above ${above.title}`
+                      ? `Move above ${words(above)}`
                       : "Move above…"}
                 </p>
                 {!draft.above && (
@@ -493,7 +498,7 @@ export function OverrideSheet({
                             className={`flex min-h-10 w-full items-center gap-2 px-3 text-left hover:bg-surface2 ${above?.key === x.key ? "bg-accent-bg font-semibold" : ""}`}
                           >
                             <span className="tnum w-8 flex-none text-text2">#{x.rank}</span>
-                            <span className="min-w-0 truncate">{x.title}</span>
+                            <span className="min-w-0 truncate">{words(x)}</span>
                           </button>
                         </li>
                       ))}
@@ -681,7 +686,10 @@ export function ChangesPanel({
       ),
     { keepPrevious: true },
   );
-  const title = (key: string, fallback: string) => features.find((f) => f.key === key)?.title ?? fallback;
+  const title = (key: string, fallback: string) => {
+    const f = features.find((x) => x.key === key);
+    return f ? words(f) : namedText(named(fallback, key));
+  };
   return (
     <Panel
       title="Changes"

@@ -24,12 +24,10 @@ test.describe("desktop", () => {
 
   test("qa4-work-25: the over-budget banner says what Resume allows in the shown numbers, in short sentences", async ({ page }) => {
     await openRun(page, "Team workspaces");
-    await expect(page.getByTestId("run-overrun-held")).toHaveText(
-      "Paused: over budget. Resume or cancel it.",
-    );
+    // detailed-b 20: who may resume reads it from the pill and Resume; no line says it again.
+    await expect(page.getByTestId("run-overrun-held")).toHaveCount(0);
     // F-39: what Resume allows sits behind the Overrun (i).
     await expect(page.getByTestId("run-resume-allows")).toHaveText("Resuming lets it spend up to $18.70 in total, $4.50 more.");
-    await expect(page.getByTestId("run-overrun-held")).not.toContainText(";");
   });
 
   test("qa4-work-26: the header's Decide is a jump to the decision, with no menu chevron", async ({ page }) => {

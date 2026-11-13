@@ -178,7 +178,7 @@ test("a title-only edit saves after evidence the decision rests on is removed fr
   await expect(inspector(page).getByTestId("decision-evidence")).toContainText(STALL);
 
   await page.goto("/ground-truth");
-  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
   const drawer = page.getByRole("dialog", { name: "Guided setup" });
   await drawer.getByRole("list", { name: "Evidence" }).getByRole("button", { name: "Remove example-org/storefront#128" }).click();
   const ask = drawer.getByRole("form", { name: "Remove evidence" });

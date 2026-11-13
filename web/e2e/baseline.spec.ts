@@ -72,16 +72,16 @@ test("Ground Truth: products with their features, and an Unassigned group", asyn
   await expect(unassigned.getByTestId(/^feature-/)).toHaveText([/Usage export/]);
 
   // Flags from the trace report sit on the feature rows.
-  await expect(page.getByTestId("feature-f.dark-mode").getByTestId("flag")).toHaveText(["Serves no goal"]);
-  await expect(page.getByTestId("feature-f.saved-carts").getByTestId("flag")).toHaveText(["Low confidence"]);
-  await expect(page.getByTestId("feature-f.guided-setup").getByTestId("flag")).toHaveCount(0);
-  await expect(page.getByTestId("feature-f.guided-setup")).toContainText("Locked");
-  await expect(page.getByTestId("feature-f.saved-carts").getByTestId("confidence")).toHaveAttribute("data-tone", "red");
+  await expect(page.getByTestId("feature-F-81").getByTestId("flag")).toHaveText(["Serves no goal"]);
+  await expect(page.getByTestId("feature-F-84").getByTestId("flag")).toHaveText(["Low confidence"]);
+  await expect(page.getByTestId("feature-F-82").getByTestId("flag")).toHaveCount(0);
+  await expect(page.getByTestId("feature-F-82")).toContainText("Locked");
+  await expect(page.getByTestId("feature-F-84").getByTestId("confidence")).toHaveAttribute("data-tone", "red");
 });
 
 test("Ground Truth: the feature drawer shows links, evidence and the lock", async ({ page }) => {
   await openBaseline(page);
-  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
   const d = drawer(page, "Guided setup");
   await expect(d).toBeVisible();
   await expect(d).not.toContainText("f.guided-setup");
@@ -142,7 +142,7 @@ test("Ground Truth: the feature drawer shows links, evidence and the lock", asyn
   );
 
   // Links open the linked item in the drawer.
-  await d.getByRole("list", { name: "Depends on" }).getByRole("button", { name: "Sample data", exact: true }).click();
+  await d.getByRole("list", { name: "Depends on" }).getByRole("button", { name: /^(F-83 )?Sample data$/ }).click();
   await expect(drawer(page, "Sample data")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -150,7 +150,7 @@ test("Ground Truth: the feature drawer shows links, evidence and the lock", asyn
 
 test("Ground Truth: evidence from a removed source item says 'source removed' and no longer links out", async ({ page }) => {
   await openBaseline(page);
-  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
   const d = drawer(page, "Guided setup");
   const chips = d.getByTestId("evidence-chip");
   await expect(chips).toHaveCount(3);
@@ -170,7 +170,7 @@ test("Ground Truth: evidence from a removed source item says 'source removed' an
 
 test("Ground Truth: editing a feature saves and locks it; unlock releases it", async ({ page }) => {
   await openBaseline(page);
-  const row = page.getByTestId("feature-f.sample-data");
+  const row = page.getByTestId("feature-F-83");
   await expect(row).not.toContainText("Locked");
   await row.getByRole("button", { name: "Sample data" }).click();
   const d = drawer(page, "Sample data");
@@ -210,11 +210,11 @@ test("Ground Truth: flagged tab lists the feature that serves no goal, with goal
   await expect(tab.getByTestId("tab-count-flagged")).toHaveText("3");
   await tab.click();
 
-  await expect(page.getByTestId("flagged-f.dark-mode")).toContainText("Dark mode");
-  await expect(page.getByTestId("flagged-f.dark-mode").getByTestId("flag")).toHaveText(["Serves no goal"]);
-  await expect(page.getByTestId("flagged-f.saved-carts").getByTestId("flag")).toHaveText(["Low confidence"]);
+  await expect(page.getByTestId("flagged-F-81")).toContainText("Dark mode");
+  await expect(page.getByTestId("flagged-F-81").getByTestId("flag")).toHaveText(["Serves no goal"]);
+  await expect(page.getByTestId("flagged-F-84").getByTestId("flag")).toHaveText(["Low confidence"]);
   await expect(page.getByTestId("flagged-f.usage-export").getByTestId("flag")).toHaveText(["No evidence"]);
-  await expect(page.getByTestId("flagged-f.guided-setup")).toHaveCount(0);
+  await expect(page.getByTestId("flagged-F-82")).toHaveCount(0);
 
   const summary = page.getByLabel("Summary");
   await expect(summary).toContainText("Flagged3");
@@ -259,8 +259,8 @@ test("Ground Truth: an approver resolves an open material conflict by picking a 
 
   // The pick is a person's write: it locks the feature.
   await page.getByRole("tab", { name: /Graph/ }).click();
-  await expect(page.getByTestId("feature-f.saved-carts")).toContainText("In progress");
-  await expect(page.getByTestId("feature-f.saved-carts")).toContainText("Locked");
+  await expect(page.getByTestId("feature-F-84")).toContainText("In progress");
+  await expect(page.getByTestId("feature-F-84")).toContainText("Locked");
 });
 
 test("Ground Truth: an approver accepts and rejects proposals", async ({ page }) => {
@@ -292,10 +292,10 @@ test("Ground Truth: an approver accepts and rejects proposals", async ({ page })
 
   // The accepted change is applied to the feature; the rejected one is not.
   await page.getByRole("tab", { name: /Graph/ }).click();
-  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
   await expect(drawer(page, "Guided setup").locator('[data-attr="effort"]')).toHaveText("L");
   await page.keyboard.press("Escape");
-  await page.getByTestId("feature-f.dark-mode").getByRole("button", { name: "Dark mode" }).click();
+  await page.getByTestId("feature-F-81").getByRole("button", { name: "Dark mode" }).click();
   await expect(drawer(page, "Dark mode").locator('[data-attr="status"]')).toHaveText("Idea");
 });
 
@@ -307,7 +307,7 @@ test("Ground Truth: a viewer reads everything but sees no write buttons", async 
   await expect(page.getByTestId("goal-g.early-churn")).toContainText("Proposed");
   await expect(main.getByRole("button", { name: "Confirm" })).toHaveCount(0);
 
-  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
   const d = drawer(page, "Guided setup");
   await expect(d.getByTestId("evidence-chip")).toHaveCount(3);
   await expect(d.getByTestId("lock-note")).toBeVisible();

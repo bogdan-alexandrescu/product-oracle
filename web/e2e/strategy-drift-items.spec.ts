@@ -46,7 +46,7 @@ test("drift: the roadmap items review shows outside and stopped, and an owner wa
   await stopped.getByRole("button", { name: "Waive…" }).click();
   await itemInspector(page).getByLabel("Why waive it").fill("Committed to the pilot customer before the strategy");
   await itemInspector(page).getByRole("button", { name: "Waive", exact: true }).click();
-  await expect(card(page, "Stopped in the strategy")).toContainText("✓ Waived");
+  await expect(card(page, "Stopped in the strategy")).toContainText("Waived");
   // The waive names Stopped only: Outside the strategy on the same item stays open (review #581).
   await expect(card(page, "Outside the strategy")).not.toContainText("✓");
   await expect(card(page, "Outside the strategy").getByRole("button", { name: "Waive…" })).toBeVisible();
@@ -64,12 +64,12 @@ test("drift: an approver's waive of Outside leaves Stopped in the strategy open 
   await page.goto(SCREEN);
   await pickItem(page, "sso-login");
   await card(page, "New since").getByRole("button", { name: "Accept", exact: true }).click();
-  await expect(card(page, "New since")).toContainText("✓");
+  await expect(card(page, "New since").locator("svg").first()).toBeVisible();
   const outside = card(page, "Outside the strategy");
   await outside.getByRole("button", { name: "Waive…" }).click();
   await itemInspector(page).getByLabel("Why waive it").fill("An enterprise pilot we keep this quarter");
   await itemInspector(page).getByRole("button", { name: "Waive", exact: true }).click();
-  await expect(card(page, "Outside the strategy")).toContainText("✓ Waived");
+  await expect(card(page, "Outside the strategy")).toContainText("Waived");
   const stopped = card(page, "Stopped in the strategy");
   await expect(stopped).not.toContainText("✓");
   await expect(stopped.getByRole("button", { name: "Move to Later", exact: true })).toBeVisible();
@@ -86,7 +86,7 @@ test("drift: an approver's waive on a stopped item does not replace the owner's"
   await card(page, "Stopped in the strategy").getByRole("button", { name: "Waive…" }).click();
   await itemInspector(page).getByLabel("Why waive it").fill("Committed to the pilot customer before the strategy");
   await itemInspector(page).getByRole("button", { name: "Waive", exact: true }).click();
-  await expect(card(page, "Stopped in the strategy")).toContainText("✓ Waived");
+  await expect(card(page, "Stopped in the strategy")).toContainText("Waived");
   await signOut(page);
   await login(page, "approver@example.com");
   await page.goto(SCREEN);
@@ -94,10 +94,10 @@ test("drift: an approver's waive on a stopped item does not replace the owner's"
   await card(page, "Outside the strategy").getByRole("button", { name: "Waive…" }).click();
   await itemInspector(page).getByLabel("Why waive it").fill("An enterprise pilot we keep this quarter");
   await itemInspector(page).getByRole("button", { name: "Waive", exact: true }).click();
-  await expect(card(page, "Outside the strategy")).toContainText("✓ Waived");
+  await expect(card(page, "Outside the strategy")).toContainText("Waived");
   await card(page, "Outside the strategy").getByRole("button", { name: "Undo" }).click();
   await expect(card(page, "Outside the strategy")).not.toContainText("✓");
-  await expect(card(page, "Stopped in the strategy")).toContainText("✓ Waived");
+  await expect(card(page, "Stopped in the strategy")).toContainText("Waived");
 });
 
 // protects=an approver acts on a stopped item (Move to Later) but cannot waive it, and waives an
@@ -114,7 +114,7 @@ test("drift: an approver moves a stopped item and waives only the item outside t
   await expect(stopped.getByRole("button", { name: "Move to Later", exact: true })).toBeVisible();
   await expect(stopped.getByRole("button", { name: "Waive…" })).toHaveCount(0);
   await stopped.getByRole("button", { name: "Move to Later", exact: true }).click();
-  await expect(card(page, "Stopped in the strategy")).toContainText("✓ Moved to Later");
+  await expect(card(page, "Stopped in the strategy")).toContainText("Moved to Later");
 
   await pickItem(page, "mobile-push");
   const outside = card(page, "Outside the strategy");
@@ -122,7 +122,7 @@ test("drift: an approver moves a stopped item and waives only the item outside t
   await outside.getByRole("button", { name: "Waive…" }).click();
   await itemInspector(page).getByLabel("Why waive it").fill("A retention bet we keep this quarter");
   await itemInspector(page).getByRole("button", { name: "Waive", exact: true }).click();
-  await expect(card(page, "Outside the strategy")).toContainText("✓ Waived");
+  await expect(card(page, "Outside the strategy")).toContainText("Waived");
 });
 
 const withPlanDrift = (page: Page) => page.addInitScript((key) => localStorage.setItem(key, "strategy-plan"), MOCK_SCENARIO_KEY);

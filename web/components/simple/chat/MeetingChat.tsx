@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { InfoTip } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { meetingSay, meetingThread, setChatMode, type ChangeMode, type ChatRules, type ChatThread } from "@/lib/api/simple-chat";
@@ -63,6 +64,7 @@ export function MeetingChat({
   rulesControl = true,
   scroll = false,
   heading = true,
+  compact = false,
 }: {
   meetingId: string;
   sessionId: string;
@@ -73,6 +75,9 @@ export function MeetingChat({
   scroll?: boolean;
   /** The card's own title; the chat's own page has it as the page title. */
   heading?: boolean;
+  /** QA Nov 12 (#11): the meeting screen, whose header states who changes things: no rule lines
+   * here, and the chat's hints sit behind an (i) by the title. The chat's own page keeps them. */
+  compact?: boolean;
 }) {
   const [thread, setThread] = useState<ChatThread | null>(null);
   const zone = useCompanyZone();
@@ -113,15 +118,29 @@ export function MeetingChat({
 
   const rules = thread?.rules ?? null;
   const shown = useMemo(() => (thread ? plainLines(thread) : null), [thread]);
+  const hint = rules?.ask_only ? viewerHint(rules) : "For a question about the plan, use Ask Oracle.";
+  const tucked = compact && !rules?.ended;
   return (
     <section aria-label="Meeting chat" data-testid="meeting-chat" data-session={sessionId || undefined} className="simple-card flex min-h-0 flex-col gap-3 max-[600px]:mb-[76px]">
-      {heading && <h2 className="simple-h2">Meeting chat</h2>}
+      {tucked ? (
+        <div className="flex items-center gap-1">
+          {heading && <h2 className="simple-h2">Meeting chat</h2>}
+          {rules && (
+            <InfoTip label="Meeting chat" align="start" testId="chat-info">
+              {rules.change_mode === "everyone" && <><span data-testid="chat-rules-hint">{RULES_HINT}</span>{" "}</>}
+              <span data-testid="chat-hint">{hint}</span>
+            </InfoTip>
+          )}
+        </div>
+      ) : (
+        heading && <h2 className="simple-h2">Meeting chat</h2>
+      )}
       {error && !thread && (
         <p role="alert" className="simple-small text-crit">
           {error}
         </p>
       )}
-      {rules && (
+      {rules && !tucked && (
         <div className="flex flex-col gap-2 border-b border-line pb-3">
           {/* qa-simple-decide-10: the presenter's control states the setting; everyone else reads the line. */}
           {!(rulesControl && rules.is_presenter && !rules.ended) && <p className="simple-small" data-testid="chat-rules">
@@ -154,7 +173,7 @@ export function MeetingChat({
           thread={shown}
           // qa-simple-decide-3: this chat makes changes and notes; questions go to Ask Oracle.
           placeholder={rules?.ask_only ? "Ask a question about what is on screen" : "Ask for a change, or type “note: …”"}
-          hint={rules?.ask_only ? viewerHint(rules) : "For a question about the plan, use Ask Oracle."}
+          hint={tucked ? undefined : hint}
           scroll={scroll ? "max-h-[50vh]" : undefined}
           send={async (text) => setThread(await meetingSay(meetingId, text))}
           onCardChanged={() => {

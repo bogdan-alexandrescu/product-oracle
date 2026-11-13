@@ -310,7 +310,8 @@ test("One zone: a ritual has no Time zone field; the inspector names the Company
   await expect(panel.getByLabel("Repeats")).toBeVisible();
   await expect(panel.getByLabel("Time zone")).toHaveCount(0);
   await expect(panel.getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles) for now");
-  await expect(panel.getByRole("link", { name: "Set it" })).toHaveAttribute("href", "/settings/company#timezone");
+  // Said once, above the table (detailed-b 16).
+  await expect(panel.getByRole("link", { name: "Set it" })).toHaveCount(0);
   await page.getByRole("button", { name: "Add ritual" }).click();
   const form = page.getByRole("form", { name: "Add ritual" });
   await form.getByLabel("Title").fill("Pricing sync");
