@@ -67,7 +67,7 @@ test("Pick a goal on a proposed link keeps the contribution picked", async ({ pa
   await openKind(page, "no_goal");
   await row(page, "no_goal", "Alert rules").getByRole("button", { name: /Pick a goal/ }).click();
   await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Raise activation" }).click();
-  await expect(page.getByTestId("gt-notice")).toContainText("“Alert rules” now serves “Raise activation”.");
+  await expect(page.getByTestId("gt-notice")).toContainText("“F-30 Alert rules” now serves “Raise activation”.");
   await page.getByTestId("feature-F-30").getByRole("button", { name: "Alert rules" }).click();
   await expect(page.getByRole("dialog", { name: "Alert rules" }).getByLabel("Contribution to Raise activation")).toHaveValue("2");
 });
@@ -80,7 +80,7 @@ test("A code another feature holds offers Link to a feature on its item", async 
   await expect(sounds.getByRole("button", { name: /Use its code/ })).toHaveCount(0);
   await sounds.getByRole("button", { name: /Link to a feature/ }).click();
   await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Sheets export" }).click();
-  await expect(page.getByTestId("gt-notice")).toContainText("Linked “Alert sounds” to “Sheets export”.");
+  await expect(page.getByTestId("gt-notice")).toContainText("Linked “F-11 Alert sounds” to “Sheets export”.");
   await expect(row(page, "code_differs", "Alert sounds")).toHaveCount(0);
 });
 
