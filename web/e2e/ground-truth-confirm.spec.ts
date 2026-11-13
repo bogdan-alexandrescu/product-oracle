@@ -9,7 +9,9 @@ import { login } from "./helpers";
  * by its own code when no other feature has it). The "ground-truth-confirm" scenario: Usage sync, a
  * feature a run proposed with its Code F-16 and its link to the goal, on a roadmap item; Alert rules,
  * confirmed before as F-30 while its Code is F-17, its goal link still only proposed (contribution 1); Alert
- * sounds, confirmed as F-31 while its roadmap item's code F-11 is Sheets export's.
+ * sounds, confirmed as F-31 while its roadmap item's code F-11 is Sheets export's; Alert volume,
+ * confirmed as F-32 while its Code F-11 is Sheets export's; Alert digest, confirmed as F-33 while its Code
+ * F-18 is read only by the slice F-18a.
  */
 
 async function open(page: Page) {
@@ -80,4 +82,19 @@ test("A code another feature holds offers Link to a feature on its item", async 
   await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Sheets export" }).click();
   await expect(page.getByTestId("gt-notice")).toContainText("Linked “Alert sounds” to “Sheets export”.");
   await expect(row(page, "code_differs", "Alert sounds")).toHaveCount(0);
+});
+
+test("A Code another feature holds, with no item to link, is not flagged", async ({ page }) => {
+  await open(page);
+  await openKind(page, "code_differs");
+  await expect(row(page, "code_differs", "Alert sounds")).toHaveCount(1);
+  await expect(row(page, "code_differs", "Alert volume")).toHaveCount(0);
+});
+
+test("A slice's code does not hold its whole code: Use its code re-keys", async ({ page }) => {
+  await open(page);
+  await openKind(page, "code_differs");
+  await row(page, "code_differs", "Alert digest").getByRole("button", { name: /Use its code/ }).click();
+  await expect(page.getByTestId("gt-notice")).toContainText("“Alert digest” is now F-18.");
+  await expect(row(page, "code_differs", "Alert digest")).toHaveCount(0);
 });

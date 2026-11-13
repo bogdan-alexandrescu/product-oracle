@@ -29,6 +29,13 @@ Cards (protects / fails_when / no_claim):
 - test_one_read_and_one_failure_says_the_failure_plainly: protects=an answer citing one
   live read beside a raw failure keeps its read and says the failure in the plain line;
   fails_when=the raw failure reaches the line.
+- test_a_retried_live_run_mints_no_second_token: protects=a live run that fails after a live
+  read and is retried by the worker runs its second attempt without live reads: one token
+  for the question, one 8-read cap; fails_when=the retry mints a second token (16 reads);
+  no_claim=the model's own wording.
+- test_ending_a_live_run_keeps_its_jobs_own_cancel: protects=a job cancelled while its live
+  run's lease renewal winds down stays cancelled; fails_when=end() swallows the job's own
+  cancel; no_claim=a database.
 - test_a_long_live_run_keeps_its_lease: protects=a run longer than replies.LEASE keeps its
   line ``streaming`` and its token through the minute tick's lease sweep; fails_when=the
   sweep fails the line and revokes the token mid-answer; no_claim=the real 150 s.
@@ -276,3 +283,48 @@ async def test_a_long_live_run_keeps_its_lease(client, sources, claude, monkeypa
     assert line["kind"] == "answer" and line["body"] == "You can read 4,321 Fireflies meetings."
     [token] = await token_rows(ctx)
     assert token["revoked_at"] is not None
+
+
+@pytest.mark.parametrize("bad", ["Not an answer at all", "FAIL"])
+async def test_a_retried_live_run_mints_no_second_token(client, sources, claude, bad):  # noqa: F811
+    ctx = await make_people()
+    await World(ctx).build()
+    await with_key(ctx, PLAN)
+    conn = str(await _fireflies(ctx.tenant_id, ctx.users["commenter"], ARCHIVE_ENDPOINT))
+    await ask(client, ctx, "commenter", QUESTION)
+    running = await run_reader(ctx)
+    raw = await started_token(claude)
+    async with mcp_client(raw) as m:
+        ok = await m.call_tool("live_fireflies_list_meetings", {"connection_id": conn, "limit": 1})
+        assert not ok.is_error, text_of(ok)
+    claude.answer(bad)
+    await asyncio.wait_for(running, 30)
+    async with tenant_session(ctx.tenant_id) as s:
+        job = await s.scalar(select(LlmJob).where(LlmJob.kind == "chat_reader"))
+    assert job.status == "queued", (job.status, job.error)
+    claude.dump.unlink()
+    claude.answer(said("You can read 4,321 Fireflies meetings."))
+    await asyncio.wait_for(await run_reader(ctx), 30)
+    argv = (await claude.started())["argv"]
+    assert "--mcp-config" not in argv
+    assert len(await token_rows(ctx)) == 1
+
+
+async def test_ending_a_live_run_keeps_its_jobs_own_cancel():
+    from oracle.simple.chat import _LiveRun
+
+    async def slow_to_stop():
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            await asyncio.sleep(0.3)
+            raise
+
+    live = _LiveRun(uuid.uuid4(), uuid.uuid4())
+    live.beat = asyncio.ensure_future(slow_to_stop())
+    await asyncio.sleep(0)
+    job = asyncio.ensure_future(live.end())
+    await asyncio.sleep(0.05)
+    job.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await job
