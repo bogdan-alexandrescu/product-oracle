@@ -76,3 +76,22 @@ test("#5: the Gantt's and the Waterfall's bar names the milestone with its code"
     await expect(bar, format).toHaveAttribute("aria-label", /after its milestone ‘M\d+ Beta’/);
   }
 });
+
+test("#5: the Timeline's exported picture names the milestone with its code in a pill's hover words", async ({ page }) => {
+  // protects: the goal lanes laid out for Export PNG give Weekly alert digest's pill the hover words "… after its milestone ‘M1 Beta’ …", as its panel does
+  // fails_when: the pill's hover words say "after its milestone ‘Beta’"
+  await open(page, "timeline");
+  // The lanes are laid out off screen only while the file is made: their hover words are kept as they appear.
+  await page.evaluate(() => {
+    const seen: string[] = ((window as unknown as { seen: string[] }).seen = []);
+    new MutationObserver(() => {
+      for (const t of document.querySelectorAll("[inert] title")) seen.push(t.textContent ?? "");
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  const saved = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export PNG" }).click();
+  await saved;
+  const words = await page.evaluate(() => (window as unknown as { seen: string[] }).seen.filter((t) => t.startsWith("Weekly alert digest") && t.includes("after its milestone")));
+  expect(words.length).toBeGreaterThan(0);
+  for (const w of words) expect(w).toMatch(/after its milestone ‘M\d+ Beta’/);
+});
