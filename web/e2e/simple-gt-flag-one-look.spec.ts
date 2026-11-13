@@ -1,7 +1,6 @@
-import { GM_TRACKS_HARD_SCENARIO } from "../lib/api/mock/goal-map-tracks";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Locator } from "./test";
 
 /*
  * Train BQ review: one "Not in the Ground Truth" flag (docs/ground-truth.md), the same on every page
@@ -28,30 +27,28 @@ async function look(flag: Locator) {
   };
 }
 
-async function roadmapFlag(page: Page) {
+test("the Not in the Ground Truth flag looks the same on the Roadmap, Priorities and the Goal map", async ({ page }) => {
+  // protects=the flag on Priorities' ranked list and on the Goal map's chips is the Roadmap's warn chip
+  // (same kind, colours and shape); fails_when=one page shows it as a neutral tag and another as a warn chip;
+  // no_claim=which features are flagged, the flag's size in each place.
+  // The mock reads its scenario at sign-in: the Goal map's hard one has a chip with no code.
+  await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "goal-map-hard"] as const);
   await login(page);
+  await page.goto("/simple/goals");
+  await expect(page.getByTestId("gm-grid")).toBeVisible();
+  const chip = page.locator('[data-testid="gm-chip"][data-track="none"]').filter({ hasText: "Faster ID check" });
+  const goalMap = await look(chip.getByTestId("not-in-gt"));
+
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
   await page.getByTestId("format-timeline").click();
   const rules = page.locator('[data-testid="timeline-row"][data-item="alert-rules"]').first();
   await rules.scrollIntoViewIfNeeded();
-  return look(rules.getByTestId("not-in-gt"));
-}
-
-test("the Not in the Ground Truth flag looks the same on the Roadmap, Priorities and the Goal map", async ({ page }) => {
-  // protects=the flag on Priorities' ranked list and on the Goal map's chips is the Roadmap's warn chip
-  // (same kind, colours and shape); fails_when=one page shows it as a neutral tag and another as a warn chip;
-  // no_claim=which features are flagged, the flag's size in each place.
-  const roadmap = await roadmapFlag(page);
+  const roadmap = await look(rules.getByTestId("not-in-gt"));
   expect(roadmap.kind).toBe("warn");
+  expect(goalMap).toEqual(roadmap);
 
   await page.goto("/simple/priorities");
   const prio = await look(page.locator('[data-testid="prio-row"][data-code="alert-sso"]').getByTestId("not-in-gt"));
   expect(prio).toEqual(roadmap);
-
-  await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, GM_TRACKS_HARD_SCENARIO] as const);
-  await page.goto("/simple/goals");
-  await expect(page.getByTestId("gm-grid")).toBeVisible();
-  const chip = page.locator('[data-testid="gm-chip"][data-track="none"]').filter({ hasText: "Faster ID check" });
-  expect(await look(chip.getByTestId("not-in-gt"))).toEqual(roadmap);
 });
