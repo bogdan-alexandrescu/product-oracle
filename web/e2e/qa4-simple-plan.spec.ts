@@ -162,7 +162,8 @@ test.describe("QA pass 4: simple-plan, desktop", () => {
 
     await page.getByRole("switch", { name: "Compare with Oracle" }).click();
     const oracle = page.getByRole("region", { name: "Oracle's order" });
-    const sso = (await oracle.locator('[data-code="alert-sso"]').locator("span.font-medium").textContent())!.trim();
+    // PR1 (QA Nov 12): the row's name, without its "Not in the Ground Truth" flag.
+    const sso = (await oracle.locator('[data-code="alert-sso"]').locator("span.font-medium").textContent())!.replace("Not in the Ground Truth", "").trim();
     await expect(oracle.locator('[data-code="alert-export"]').getByTestId("oracle-why")).toHaveText(`Yours: #2 (pulled up to come before ${sso}, which needs it)`);
   });
 
@@ -238,7 +239,8 @@ test.describe("QA pass 4: simple-plan, desktop", () => {
     await expect(page.getByTestId("buckets-intro")).not.toContainText("No dated plan yet");
     await expect(page.getByTestId("buckets-intro")).toContainText("milestones and key dates");
     const setup = page.getByTestId("bucket-features").locator("li").filter({ hasText: "Setup checklist" });
-    await expect(setup.getByTestId("prio-code")).toHaveText("SC");
+    // PR1 (QA Nov 12): no made-up initials ("SC") as a code.
+    await expect(setup.getByTestId("prio-code").filter({ hasText: /^SC$/ })).toHaveCount(0);
 
     const opener = page.getByRole("button", { name: /^See or make suggestions for Grow retention, \d+ waiting$/ });
     await expect(opener).toHaveText(/^See or make suggestions · \d+$/);

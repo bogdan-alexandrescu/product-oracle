@@ -68,6 +68,9 @@ for (const size of SIZES) {
       await form.getByLabel("Measure: the number that shows it").fill("Support chats a week");
       await form.getByLabel("Target").fill("Under 40");
       await expect(save).toBeDisabled();
+      // PR8 (QA Nov 12): a field says what it lacks once the person leaves it.
+      await form.getByLabel("By").focus();
+      await form.getByLabel("By").blur();
       await expect(form).toContainText("Pick a date.");
       await form.getByLabel("By").fill("Mar 31, 2027");
       await expect(save).toBeEnabled();

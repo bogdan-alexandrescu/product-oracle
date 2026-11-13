@@ -3,12 +3,9 @@ import { expect, test, type Locator, type Page } from "./test";
 import { countRowOf } from "./vxe-counts";
 
 /*
- * Simple priorities, QA pass 4 (qa4-simple-plan-11, the owner's pick "Letters from the
- * name"): a feature with no real F-NN code shows the initials of its shown name (Alert routing
- * by team ARB), never of its internal key (alert-sso AS); a real code stays (F-12). A rename
- * from the Ask panel moves the letters with the name (Team alert routing TAR) on the list and
- * on the Value / effort marks; a name with a number keeps it (Alert routing 2 AR2). Desktop
- * (1366x820) and a phone (390x844).
+ * Simple priorities: a feature shows its real Ground Truth code (F-12) or none, never letters made up from its name
+ * (PR1, QA Nov 12, 2026, replacing qa4-simple-plan-11's "Letters from the name"). A rename from the Ask panel
+ * brings no letters either (Team alert routing, Alert routing 2). Desktop (1366x820) and a phone (390x844).
  */
 
 /** Clicks `l` once it is scrolled to the middle (on a phone the tab bar covers the bottom of the screen). */
@@ -19,8 +16,8 @@ async function tap(l: Locator) {
 
 // prio-company (the owner, Nov 4): the ranked rows show no made-up letters, only a real code beside
 // the name; the letters stay on Value / effort, where a mark and its side row read alike.
-const code = (page: Page, key: string): Locator =>
-  page.locator(`[data-testid="side-row"][data-code="${key}"]`).getByTestId("side-code");
+const side = (page: Page, key: string): Locator => page.locator(`[data-testid="side-row"][data-code="${key}"]`);
+const code = (page: Page, key: string): Locator => side(page, key).getByTestId("side-code");
 
 async function rowsNameNoLetters(page: Page): Promise<void> {
   await page.goto("/simple/priorities");
@@ -39,15 +36,15 @@ for (const phone of [false, true]) {
       if (phone) await page.setViewportSize({ width: 390, height: 844 });
     });
 
-    test(`a feature without a real code shows its name's letters, and a rename changes them (${where})`, async ({ page }) => {
-      // protects: qa4-simple-plan-11: Alert routing by team reads ARB (its name's initials), Sample data import keeps its real code F-12; renamed Team alert routing, it reads TAR on the list and its mark
-      // fails_when: a code comes from the internal key (AS), a real code turns into letters, or a rename leaves the old letters
-      // no_claim: the API's rule (pytest test_short_codes_take_the_letters_of_the_shown_name, test_short_codes_follow_a_rename)
+    test(`a feature without a real code shows no made-up letters, before or after a rename (${where})`, async ({ page }) => {
+      // protects: PR1 (QA Nov 12, replacing qa4-simple-plan-11's letters): Alert routing by team has no Ground Truth code, so it shows no code (never ARB), Sample data import keeps its real code F-12; renamed Team alert routing, it still shows none (never TAR) on the list and its mark
+      // fails_when: a code is made up from the name or the internal key, a real code turns into letters, or a rename brings letters
+      // no_claim: the API's short_code rule (Priorities shows own_key only)
       await login(page);
       await rowsNameNoLetters(page);
       await page.goto("/simple/priorities?tab=value-effort");
-      await expect(code(page, "alert-sso")).toHaveText("ARB");
-      await expect(code(page, "alert-sso")).toHaveAttribute("title", "Alert routing by team");
+      await expect(side(page, "alert-sso").getByTestId("prio-title")).toHaveText("Alert routing by team");
+      await expect(code(page, "alert-sso")).toHaveCount(0);
       await expect(code(page, "setup-import")).toHaveText("F-12");
 
       await page.goto("/simple/roadmap");
@@ -60,20 +57,19 @@ for (const phone of [false, true]) {
       await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 
       await page.goto("/simple/priorities?tab=value-effort");
-      await expect(code(page, "alert-sso")).toHaveText("TAR");
-      await expect(code(page, "alert-sso")).toHaveAttribute("title", "Team alert routing");
+      await expect(side(page, "alert-sso").getByTestId("prio-title")).toHaveText("Team alert routing");
+      await expect(code(page, "alert-sso")).toHaveCount(0);
       await expect(code(page, "setup-import")).toHaveText("F-12");
-      await page.goto("/simple/priorities?tab=value-effort");
-      await expect(mark(page, "alert-sso")).toHaveText("TAR");
+      await expect(mark(page, "alert-sso")).toHaveCount(0);
       // PV-1: on a phone F-12's mark is in a count (with Alert rules engine): its row in the count's sheet reads the code.
       if (phone) await expect((await countRowOf(page, "setup-import")).getByTestId("vxe-crowd-code")).toHaveText("F-12");
       else await expect(mark(page, "setup-import")).toHaveText("F-12");
     });
 
-    test(`a name with a number keeps the number in its code (${where})`, async ({ page }) => {
-      // protects: review minor of codes-from-names: renamed Alert routing 2, the feature reads AR2 (its letters, then its number), never AR with the number dropped
-      // fails_when: the code drops the name's number, or a real code turns into letters
-      // no_claim: the API's rule (pytest test_short_codes_keep_the_number_in_a_name)
+    test(`a name with a number gets no made-up code either (${where})`, async ({ page }) => {
+      // protects: PR1 (QA Nov 12): renamed Alert routing 2, the feature still shows no code (never AR2), and F-12 stays
+      // fails_when: a code is made up from the name, or a real code turns into letters
+      // no_claim: the API's short_code rule (Priorities shows own_key only)
       await login(page);
       await page.goto("/simple/roadmap");
       await tap(page.getByTestId(phone ? "phone-ask" : "simple-ask").filter({ visible: true }).first());
@@ -85,11 +81,10 @@ for (const phone of [false, true]) {
       await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 
       await page.goto("/simple/priorities?tab=value-effort");
-      await expect(code(page, "alert-sso")).toHaveText("AR2");
-      await expect(code(page, "alert-sso")).toHaveAttribute("title", "Alert routing 2");
+      await expect(side(page, "alert-sso").getByTestId("prio-title")).toHaveText("Alert routing 2");
+      await expect(code(page, "alert-sso")).toHaveCount(0);
       await expect(code(page, "setup-import")).toHaveText("F-12");
-      await page.goto("/simple/priorities?tab=value-effort");
-      await expect(mark(page, "alert-sso")).toHaveText("AR2");
+      await expect(mark(page, "alert-sso")).toHaveCount(0);
     });
   });
 }

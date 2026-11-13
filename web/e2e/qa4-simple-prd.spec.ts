@@ -186,8 +186,12 @@ test.describe("desktop", () => {
     // The next stop is the next line's words, not the first line's Edit.
     await expect(lines.nth(1)).toBeFocused();
     await page.keyboard.press("Enter");
-    const sources = page.getByRole("region", { name: /^Sources of/ });
-    await sources.getByRole("button", { name: "Edit this line" }).press("Enter");
+    await expect(page.getByRole("region", { name: /^Sources of/ })).toBeVisible();
+    // OP4 (QA Nov 12): the line's own Edit is the one control; with its sources open it is a Tab stop.
+    const edit = lines.nth(1).locator("xpath=ancestor::li[1]").locator("[data-edit-for]");
+    for (let i = 0; i < 4 && !(await edit.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
+    await expect(edit).toBeFocused();
+    await page.keyboard.press("Enter");
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
   });
 
