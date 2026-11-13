@@ -1485,6 +1485,7 @@ export function SimpleRoadmap() {
   const linkedDates = params.get("dates");
   const [opened, setOpened] = useState<string | null>(null);
   const [reveal, setReveal] = useState<string | null>(null);
+  const centrePop = useRef(false);
   useEffect(() => {
     const link = linkedItem ? `item:${linkedItem}` : linkedDates ? `dates:${linkedDates}` : null;
     const it = linkedItem ? byId.get(linkedItem) : undefined;
@@ -1498,9 +1499,18 @@ export function SimpleRoadmap() {
     // The bars are drawn by the next frame.
     requestAnimationFrame(() => {
       if (it) setCard({ id: it.id, ...anchorOf(it.id) });
-      else if (dated) setPop({ id: dated.id, ...anchorOf(dated.id) });
+      else if (dated) {
+        centrePop.current = true;
+        setPop({ id: dated.id, ...anchorOf(dated.id) });
+      }
     });
   }, [linkedItem, linkedDates, opened, byId]);
+  // QA Nov 12 home #5: the linked suggestion, once drawn, is scrolled to the middle of the window.
+  useEffect(() => {
+    if (!pop || !centrePop.current) return;
+    centrePop.current = false;
+    wrap.current?.querySelector('[data-testid="suggestion-popover"]')?.scrollIntoView({ block: "center" });
+  }, [pop]);
 
   const onDecide = useCallback(
     async (c: Change, how: "accept" | "decline") => {

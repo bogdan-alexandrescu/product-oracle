@@ -29,10 +29,16 @@ test("#5: a Dates row's Open shows Oracle's suggestion in view, centred", async 
   const pop = page.getByTestId("suggestion-popover");
   await expect(pop).toBeVisible();
   await expect(pop).toBeInViewport();
+  // Centred, or as near as the page scrolls: at its end, the whole suggestion in view.
   await expect
-    .poll(async () => {
-      const b = (await pop.boundingBox())!;
-      return Math.abs(b.y + b.height / 2 - 450);
-    }, { message: "its middle is near the window's middle" })
-    .toBeLessThan(120);
+    .poll(
+      async () => {
+        const b = (await pop.boundingBox())!;
+        const [y, max, h] = await page.evaluate(() => [window.scrollY, document.scrollingElement!.scrollHeight - innerHeight, innerHeight]);
+        const whole = b.y >= 0 && b.y + b.height <= h;
+        return whole && (Math.abs(b.y + b.height / 2 - h / 2) < 120 || y >= max - 1);
+      },
+      { message: "its middle is near the window's middle, or the page is scrolled to its end with it whole in view" },
+    )
+    .toBe(true);
 });
