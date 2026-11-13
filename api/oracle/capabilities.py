@@ -35,6 +35,8 @@ EVERY_MEMBER = frozenset(
         "get_company_source_coverage",
         "get_draft_defaults",
         "get_inbox",
+        # inbox-reads: the caller's own Inbox counts and last visit only.
+        "get_inbox_counts",
         "get_my_account",
         "get_preferences",
         "get_priorities",
@@ -84,6 +86,7 @@ EVERY_MEMBER = frozenset(
         "live_fireflies_list_meetings",
         "live_fireflies_search",
         "live_sources",
+        "mark_inbox_seen",
         "me",
         "oauth_callback",
         "oauth_slack_notifications_callback",
