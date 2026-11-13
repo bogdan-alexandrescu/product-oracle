@@ -1992,10 +1992,14 @@ async def _live_of(
     db: AsyncSession, tenant_id: uuid.UUID, read: SimpleChatRead, msg: DiscussionMessage
 ) -> _LiveRun | None:
     """A live run for an Ask panel line whose asker may read live there (replies.live_plan,
-    unminted); None in a meeting's chat, a chat others are in, or with no live source."""
+    unminted); None in a meeting's chat, a chat others are in, with no live source, or on a
+    retry of a line that already had its live run (one token, one read cap per question)."""
     from oracle.discussions import replies
+    from oracle.live.tokens import LiveToken
 
     if read.meeting_id is not None:
+        return None
+    if await db.scalar(select(LiveToken.id).where(LiveToken.message_id == msg.id).limit(1)):
         return None
     d = await db.get(Discussion, read.discussion_id)
     if d is None or d.subject_key.startswith("meeting_chat:"):
