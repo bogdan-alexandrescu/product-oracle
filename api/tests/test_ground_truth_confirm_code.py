@@ -199,3 +199,85 @@ async def test_the_repair_is_for_approvers(client):
     await _mis_keyed(ctx, fid)
     r = await client.post(f"/v1/baseline/entities/{fid}/own-code", headers=ctx.as_("viewer"))
     assert r.status_code == 403
+
+
+# --- review fixes: a person's chosen contribution, slices, proposed goals, duplicates --------
+
+
+async def _link(ctx, fid: str, grow: str) -> Edge:
+    async with tenant_session(ctx.tenant_id) as s:
+        return await s.scalar(
+            select(Edge).where(Edge.src_id == uuid.UUID(fid), Edge.dst_id == uuid.UUID(grow))
+        )
+
+
+async def test_picking_a_proposed_link_keeps_the_chosen_contribution(client):
+    ctx, fid, grow, _ = await world()
+    r = await client.post(
+        "/v1/baseline/edges",
+        headers=ctx.as_("approver"),
+        json={"src_id": fid, "dst_id": grow, "type": "supports", "origin": "user",
+              "attrs": {"contribution": 3}},
+    )  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+    assert r.json()["edge"]["status"] == "confirmed"
+    assert r.json()["edge"]["attrs"]["contribution"] == 3
+    assert (await _link(ctx, fid, grow)).attrs["contribution"] == 3
+
+
+@pytest.mark.parametrize(
+    ("origin", "status"), [("agent", "proposed"), ("agent", None), ("user", "proposed")]
+)
+async def test_only_a_person_confirming_confirms_a_proposed_link(client, origin, status):
+    ctx, fid, grow, _ = await world()
+    body = {"src_id": fid, "dst_id": grow, "type": "supports", "origin": origin,
+            "attrs": {"contribution": 3}}  # fmt: skip
+    if status:
+        body["status"] = status
+    r = await client.post("/v1/baseline/edges", headers=ctx.as_("approver"), json=body)
+    assert r.status_code == 409, r.text
+    edge = await _link(ctx, fid, grow)
+    assert edge.status == "proposed" and "contribution" not in (edge.attrs or {})
+
+
+async def test_confirm_leaves_links_to_a_proposed_goal_proposed(client):
+    ctx, fid, _, _ = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        idea = await s.scalar(select(Entity).where(Entity.key == "grow"))
+        idea.status = "proposed"
+        await s.commit()
+        grow = str(idea.id)
+    await _confirm(client, ctx, fid)
+    assert (await _link(ctx, fid, grow)).status == "proposed"
+
+
+async def test_use_its_code_leaves_a_slice_its_letter(client):
+    """A slice F-35a of F-35 whose Code attribute reads F-07 is not flagged, nor re-keyed."""
+    ctx, _, _, _ = await world(section=None)
+    async with tenant_session(ctx.tenant_id) as s:
+        f35 = await s.scalar(select(Entity).where(Entity.key == "F-35"))
+        part = Entity(type="feature", key="F-35a", title="Night alerts by email",
+                      status="confirmed", origin="agent", parent_id=f35.id,
+                      attrs={"code": "F-07"})  # fmt: skip
+        s.add(part)
+        await s.flush()
+        s.add(EntityRevision(entity_id=part.id, actor="approver@example.com",
+                             before={"key": "night-email", "status": "proposed"},
+                             after={"key": "F-35a", "status": "confirmed"}))  # fmt: skip
+        await s.commit()
+        sid = str(part.id)
+    assert sid not in [f["feature"]["id"] for f in _of(await _check(client, ctx), "code_differs")]
+    r = await client.post(f"/v1/baseline/entities/{sid}/own-code", headers=ctx.as_("approver"))
+    assert r.status_code == 409, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.get(Entity, uuid.UUID(sid))).key == "F-35a"
+
+
+async def test_a_duplicate_holding_the_code_offers_link_to_a_feature(client):
+    """Its item's code F-07 is Bulk import's: Link to a feature on its item, not Use its code."""
+    ctx, fid, _, item = await world(code=None, taken=True)
+    await _confirm(client, ctx, fid)
+    flags = _of(await _check(client, ctx), "code_differs")
+    assert [f["feature"]["id"] for f in flags] == [fid]
+    assert [(x["action"], x["target"]) for x in flags[0]["fixes"]] == [("link_to_feature", item)]
+    assert flags[0]["item"]["id"] == item and flags[0]["item"]["name"] == "Usage sync"

@@ -93,9 +93,10 @@ export function wantedCode(e: Entity, tied: string[]): string | null {
   return codes.length === 1 ? codes[0] : null;
 }
 
-/** fixes._free: no other feature has `code`, now or as a code it gave back. */
-export function codeFree(s: BaselineState, e: Entity, code: string): boolean {
+/** fixes._free: no other feature has `code`, now (its key, or `read`: through its published item's PRD section) or as a code it gave back. */
+export function codeFree(s: BaselineState, e: Entity, code: string, read?: Map<string, string>): boolean {
   if (s.entities.some((x) => x.type === "feature" && x.id !== e.id && x.key === code)) return false;
+  if ([...(read ?? [])].some(([id, c]) => id !== e.id && c === code)) return false;
   const former = formerKeys(s).get(code);
   return !former || former === e.id;
 }
@@ -104,12 +105,12 @@ export function codeFree(s: BaselineState, e: Entity, code: string): boolean {
  * fixes.code_on_join: a confirmed feature with no code gets its own code (wantedCode) when free, else its next code as its key; a code it
  * has is kept; a slice whose feature has no code keeps its key. The caller writes the revision.
  */
-export function codeOnJoin(s: BaselineState, e: Entity, seen: string[], tied: string[] = []): void {
+export function codeOnJoin(s: BaselineState, e: Entity, seen: string[], tied: string[] = [], read?: Map<string, string>): void {
   if (e.type !== "feature" || e.status !== "confirmed") return;
   // Its own code first (its Code attribute, else its roadmap item's), when no other feature has it.
   const parent = e.parent_id ? s.entities.find((x) => x.id === e.parent_id && x.type === "feature") : undefined;
   const want = !ANY_CODE.test(e.key) && !parent ? wantedCode(e, tied) : null;
-  if (want && codeFree(s, e, want)) return setCode(s, e, want);
+  if (want && codeFree(s, e, want, read)) return setCode(s, e, want);
   const next = nextFeatureCode(s, e, seen);
   if ("code" in next) setCode(s, e, next.code);
 }

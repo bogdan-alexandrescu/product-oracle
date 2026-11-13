@@ -1672,9 +1672,10 @@ async def create_edge(
     _check_edge_attrs(type_, attrs)
     _check_status(status)
     if (found := await find_edge(db, src_id, dst_id, type_)) is not None:
-        if found.status == "proposed":
-            # Picking a link a run only proposed confirms it (Pick a goal on that goal).
-            return await update_edge(db, writer, found, {"status": "confirmed"})
+        if found.status == "proposed" and writer.locks and status in (None, "confirmed"):
+            # A person picking a link a run only proposed confirms it, with what they picked
+            # (Pick a goal on that goal, its contribution). Anyone else: it exists.
+            return await update_edge(db, writer, found, {"status": "confirmed", "attrs": attrs})
         raise ConflictError("This link already exists")
     if writer.must_propose(None):
         fields = {"src_id": src_id, "dst_id": dst_id, "type": type_, "attrs": attrs,

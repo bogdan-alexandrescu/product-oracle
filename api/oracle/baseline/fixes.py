@@ -349,7 +349,8 @@ async def _free(db: AsyncSession, feature: Entity, code: str) -> bool:
 
 async def confirm_goal_links(db: AsyncSession, writer: Writer, feature: Entity) -> None:
     """A confirmed feature's goal links a run proposed with it are confirmed with it, so it
-    is not flagged Serves no goal for a link it has."""
+    is not flagged Serves no goal for a link it has: links to a confirmed goal only (a goal
+    a run only proposed waits for its own yes)."""
     from oracle.baseline.models import Edge
     from oracle.baseline.service import update_edge
 
@@ -363,7 +364,7 @@ async def confirm_goal_links(db: AsyncSession, writer: Writer, feature: Entity) 
             Edge.type == "supports",
             Edge.status == "proposed",
             Entity.type == "goal",
-            Entity.status != "rejected",
+            Entity.status == "confirmed",
         )
     )
     for edge in list(edges):
@@ -373,9 +374,13 @@ async def confirm_goal_links(db: AsyncSession, writer: Writer, feature: Entity) 
 async def use_own_code(db: AsyncSession, writer: Writer, feature: Entity) -> str:
     """Use its code (the check's ``code_differs``): a feature keyed by the next number as it
     was confirmed gets its own code as its key; the number it had is given back, an alias
-    never given again (:func:`former_keys`). Its proposed goal links are confirmed too."""
+    never given again (:func:`former_keys`). Its proposed goal links are confirmed too. A slice
+    keeps its letter (F-35a): it has no code of its own to take."""
     if feature.status != "confirmed":
         raise ConflictError("This feature is not in the Ground Truth yet.")
+    if await _is_slice(db, feature):
+        # A slice reads its feature's code with its letter (F-35a), never a code of its own.
+        raise ConflictError("This feature already has its own code.")
     want = await wanted_code(db, feature)
     if not want or want == canonical_code(feature.key):
         raise ConflictError("This feature already has its own code.")
