@@ -43,10 +43,13 @@ function openFor(who: string | null): boolean {
   return !!s && !!who && (s === "1" || s === who);
 }
 
+/** The page a linked discussion opened the panel on (askThread): the page change that brought it there keeps it open. */
+let openedOn: string | null = null;
 /** `remember` false: opened for one question (Simple's Ask Oracle): not reopened on the next page load (qa-simple-decide-10). */
 let transient = false;
 export function setPanelOpen(next: boolean, remember = true) {
   transient = next && !remember;
+  openedOn = null;
   if (next && !openFor(user)) focusAsk = true;
   stored = next ? (user ?? "1") : null;
   // A linked discussion it showed is let go with it: the next opening starts on its chats.
@@ -103,7 +106,7 @@ export function askWith(text: string) {
 
 /** Leaving the page that opened the panel for one question (Simple's Ask Oracle, a goal's Suggest) closes it (the shell, on every page change). */
 export function closeTransientPanel() {
-  if (transient && readStored()) setPanelOpen(false);
+  if (transient && readStored() && openedOn !== window.location.pathname) setPanelOpen(false);
 }
 
 /** Takes the typed-in words (they are cleared). */
@@ -150,6 +153,7 @@ export function askThread(next: LinkedThread) {
   if (!readStored()) {
     setPanelOpen(true, false);
     focusAsk = false;
+    openedOn = window.location.pathname;
   }
 }
 
