@@ -55,7 +55,12 @@ function Name({ x, onOpen, codeOf }: { x: Row; onOpen?: () => void; codeOf?: Cod
         open?.({ id: x.feature_id, code, name: x.title });
       }}
     >
-      {code && <code className="simple-code mr-1">{code}</code>}
+      {/* BR (E): a space, not a margin, between the code and the name, so they read apart ("F-06 Weekly alert digest"). */}
+      {code && (
+        <>
+          <code className="simple-code">{code}</code>{" "}
+        </>
+      )}
       {x.title}
     </button>
   ) : (
