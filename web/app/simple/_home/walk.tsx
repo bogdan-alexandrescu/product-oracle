@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "@/components/ds/Toast";
 import { ChatCard } from "@/components/simple/chat/ChatCard";
 import { recommendsLine, type Answer, type Question } from "@/components/simple/questions/Questions";
+import { useItemCode } from "@/components/simple/WaitingItems";
 import { api, unwrap } from "@/lib/api/client";
 import { askSay, askThread, PENDING_POLL_MS, undoCard, walk, type ChatCard as Card, type ChatMessage, type WalkStep } from "@/lib/api/simple-chat";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
@@ -293,6 +294,7 @@ export function Walk({ onDone }: { onDone: () => void }) {
             {step.kind === "agenda_decision" ? agendaWords(step) : KIND_WORDS[step.kind]}
           </p>
           <p className="font-semibold" data-testid="walk-step-title">
+            <StepCode step={step} />
             {step.title}
           </p>
           <p className="simple-small" data-testid="walk-step-why">
@@ -458,4 +460,10 @@ function TypeInstead({ hint }: { hint: string }) {
       )}
     </div>
   );
+}
+
+/** simple-home-qa-nov12 #4: a broken link step's item code (its id is "link:<item id>:…"), as Home's rows show it. */
+function StepCode({ step }: { step: Step }) {
+  const code = useItemCode(step.kind === "broken_link" ? step.id.split(":")[1] : null);
+  return code ? <code className="simple-code mr-1">{code}</code> : null;
 }

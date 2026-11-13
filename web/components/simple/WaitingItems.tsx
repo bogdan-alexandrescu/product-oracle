@@ -48,6 +48,51 @@ export function useWaitingList(): { data: Waiting | undefined; error: unknown; r
   return { data, error, reload: () => setChanges((c) => c + 1) };
 }
 
+/**
+ * simple-home-qa-nov12 #4: each roadmap item's code (F-06), by the item's id and by its open date
+ * suggestion's id, from the roadmap read; shared by every row and read again when what waits changed.
+ */
+let codesHit: Promise<Map<string, string>> | null = null;
+if (typeof window !== "undefined") onWaitingChanged(() => (codesHit = null));
+
+function loadItemCodes(): Promise<Map<string, string>> {
+  codesHit ??= unwrap(api.GET("/v1/simple/roadmap", {})).then((rm) => {
+    const codes = new Map<string, string>();
+    for (const i of rm.items) {
+      if (!i.code) continue;
+      codes.set(i.id, i.code);
+      if (i.suggestion) codes.set(i.suggestion.id, i.code);
+    }
+    return codes;
+  });
+  codesHit.catch(() => (codesHit = null));
+  return codesHit;
+}
+
+/** A roadmap item's code by its id (or its date suggestion's id); null when it has none or is not read yet. */
+export function useItemCode(id: string | null | undefined): string | null {
+  const [code, setCode] = useState<{ id: string; code: string | null } | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    loadItemCodes()
+      .then((codes) => alive && setCode({ id, code: codes.get(id) ?? null }))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+  return id && code?.id === id ? code.code : null;
+}
+
+/** The roadmap item a waiting row is about: a broken link's or a date's item (from its link). */
+function itemOf(i: WaitingItem): string | null {
+  if (i.kind === "broken_link") return i.ref_id;
+  if (i.kind !== "date" && i.kind !== "proposal") return null;
+  const q = i.href.indexOf("?");
+  return q < 0 ? null : new URLSearchParams(i.href.slice(q + 1)).get("item");
+}
+
 type Act = { label: string; run: () => Promise<unknown>; done: string; primary?: boolean };
 
 /** A decision-log call's Decide: its proposed option, then each other option. */
@@ -145,6 +190,7 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
   // A broken link fixes in place too, as Home's broken-links card does: "Fix the link" opens its
   // fixes (the item and its dependency read from the roadmap, as the change engine needs them).
   const [fixing, setFixing] = useState(false);
+  const code = useItemCode(itemOf(item));
   const acts = item.kind === "decision" ? (call ? decideActs(call) : []) : actionsOf(item);
   const act = async (run: () => Promise<unknown>, done: string) => {
     setBusy(true);
@@ -167,6 +213,7 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="break-words">
           <span className="text-text2">{WAITING_KIND[item.kind]} · </span>
+          {code && <code className="simple-code mr-1">{code}</code>}
           {item.title}
           {/* port-AN 5: the row's why sits in its (i), so the one list stays one line a row. */}
           {item.detail && (
