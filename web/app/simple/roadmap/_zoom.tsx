@@ -45,6 +45,7 @@ import {
   spanWords,
   estimateOnly,
   estimateWords,
+  codedFlag,
   type Flag,
   type Item,
   type Roadmap,
@@ -366,7 +367,8 @@ export function ConflictPanel({
               {itemName(i)}
             </button>
             <InfoTip label={itemName(i)} align="start" testId="conflict-why">
-              {f.reason}
+              {/* QA Nov 12 #5: the milestone by its code and name ("M1 Beta"). */}
+              {codedFlag(i, f, data.goal_milestones, data.milestones).reason}
             </InfoTip>
           </span>
         )}

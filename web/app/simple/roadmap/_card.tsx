@@ -31,6 +31,7 @@ import {
   type Item,
   type Milestone,
   yearSpan,
+  codedFlag,
 } from "./_lib";
 
 /** What a change asks the engine, built by the page and sent through `act`. */
@@ -1256,7 +1257,8 @@ export function FloatingCard({
             <section className="mt-3 space-y-1" data-testid="card-flags" data-waits>
               {flags.map((f) => (
                 <div key={`${f.kind}-${f.subject}`}>
-                  <FlagLine flag={f} />
+                  {/* QA Nov 12 #5: the milestone by its code and name ("M1 Beta"). */}
+                  <FlagLine flag={codedFlag(item, f, milestones, planned)} />
                   {f.state === "red" && (
                     <FixButtons
                       item={item}

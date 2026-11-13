@@ -7,7 +7,7 @@ import { LINK_KINDS } from "@/lib/roadmap-links";
 
 import { itemName, NotInGt } from "./_gtflag";
 import { MsBoardRow } from "./_milestones";
-import { barKind, broken, brokenLinks, closedItem, estimateOnly, estimateWords, mergedName, partsTree, shortDay, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
+import { barKind, broken, brokenLinks, closedItem, codedFlag, estimateOnly, estimateWords, mergedName, partsTree, shortDay, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
 
 export type Horizon = Item["horizon"];
 
@@ -452,12 +452,13 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           )}
           {red && (
             <p className="mt-1 text-sm text-crit" data-testid="board-broken">
-              {links[0].reason}
+              {codedFlag(item, links[0], data.goal_milestones, data.milestones).reason}
             </p>
           )}
           {unowned && (
             <p className="mt-1 text-sm text-warn" data-testid="board-flag">
-              {unowned.reason}
+              {/* QA Nov 12 #5: the milestone by its code and name ("M1 Beta"). */}
+              {codedFlag(item, unowned, data.goal_milestones, data.milestones).reason}
             </p>
           )}
           {pending && (

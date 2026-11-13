@@ -78,8 +78,7 @@ import {
   setRoadmapToday,
   yearSpan,
   drawnKeyDates,
-  goalMilestoneWords,
-  milestoneWords,
+  codedFlag,
   type Flag,
   type Scale as ChartScale,
 } from "./_lib";
@@ -752,18 +751,7 @@ function DecisionTray({
       <NotInGt item={i} className="ml-1.5 align-middle" />
     </>
   );
-  // QA Nov 12 #5: an end past its milestone names the milestone by its code and name ("M1 Beta"),
-  // as the Timeline and the board do: the goal milestone it was picked from, else the roadmap's one holding it.
-  const msOf = (i: Item, f: Flag) => {
-    const gm = i.milestone?.id ? milestones.find((m) => m.id === i.milestone!.id) : undefined;
-    if (gm) return goalMilestoneWords(gm, milestones);
-    const tm = planned.find((m) => m.roadmap_code && (m.item_ids.includes(i.id) || m.id === i.milestone?.record_id) && m.name === f.subject);
-    return tm ? milestoneWords(`${tm.roadmap_code} ${tm.name}`) : null;
-  };
-  const flagWords = (i: Item, f: Flag): Flag => {
-    const words = f.kind === "outside_milestone" && f.subject ? msOf(i, f) : null;
-    return words ? { ...f, reason: f.reason.replace(`‘${f.subject}’`, `‘${words}’`) } : f;
-  };
+  const flagWords = (i: Item, f: Flag): Flag => codedFlag(i, f, milestones, planned);
   // qa4-simple-roadmap-14: Escape closes the drawer, focus back on its button.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

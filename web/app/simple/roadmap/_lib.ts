@@ -544,6 +544,17 @@ export function milestoneInk(code: string): string {
 /** A milestone's words, its code with its name ("M2 Scale volume", never "M2 · Scale volume"). */
 export const milestoneWords = (name: string): string => name.replace(/\s*·\s*/, " ");
 
+/** QA Nov 12 #5: an end past its milestone names the milestone by its code and name ("M1 Beta"),
+ * as the Timeline and the board do: the goal milestone it was picked from, else the roadmap's one
+ * holding it. Every place that shows a flag's reason reads it through this. */
+export function codedFlag(i: Item, f: Flag, milestones: readonly GoalMilestone[] = [], planned: readonly Milestone[] = []): Flag {
+  if (f.kind !== "outside_milestone" || !f.subject) return f;
+  const gm = i.milestone?.id ? milestones.find((m) => m.id === i.milestone!.id) : undefined;
+  const tm = gm ? undefined : planned.find((m) => m.roadmap_code && (m.item_ids.includes(i.id) || m.id === i.milestone?.record_id) && m.name === f.subject);
+  const words = gm ? goalMilestoneWords(gm, milestones) : tm ? milestoneWords(`${tm.roadmap_code} ${tm.name}`) : null;
+  return words ? { ...f, reason: f.reason.replace(`‘${f.subject}’`, `‘${words}’`) } : f;
+}
+
 /** The plan's dated milestones (a start and an end), in date order. */
 export const planMilestones = (data: Roadmap): Milestone[] =>
   data.milestones.filter((m) => m.start_date && m.end_date).sort((a, b) => (a.end_date! < b.end_date! ? -1 : 1));
