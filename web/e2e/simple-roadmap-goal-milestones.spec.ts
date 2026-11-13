@@ -99,8 +99,8 @@ test.describe("milestones on the Timeline", () => {
     await card(page).getByLabel("Name").fill("Teams set 3 rules in week 1");
     await card(page).getByLabel("Date").fill("2027-01-20");
     await card(page).getByLabel("Builds toward", { exact: true }).selectOption({ label: "Grow retention" });
-    await page.locator('[data-testid="timeline-bar"][aria-label^="Mobile alert push,"]').click();
-    await page.locator('[data-testid="timeline-bar"][aria-label^="Alert routing by team,"]').click();
+    await page.locator('[data-testid="timeline-bar"][aria-label^="F-87 Mobile alert push,"]').click();
+    await page.locator('[data-testid="timeline-bar"][aria-label^="F-89 Alert routing by team,"]').click();
     await expect(card(page).getByTestId("ms-waits-chip")).toHaveCount(2);
     await expect(card(page).getByTestId("ms-waits-chip").filter({ hasText: "Alert routing by team" })).toContainText("after it");
     await card(page).getByLabel("It counts when").selectOption("Holds 7 days in a row on one live team");
