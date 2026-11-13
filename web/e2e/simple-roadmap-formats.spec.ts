@@ -98,7 +98,7 @@ for (const [where, use] of [
         await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
         await expect(column(page, "now").getByTestId("board-group").first()).toContainText(/Grow retention|Faster activation/);
         await expect(card(page, "alert-sso")).toHaveAttribute("data-kind", "estimated");
-        await expect(card(page, "alert-sso").getByTestId("board-dates")).toHaveText("No dates");
+        await expect(card(page, "alert-sso").getByTestId("board-dates")).toHaveText(/^No dates yet · estimated [A-Z][a-z]{2} \d/);
         await expect(card(page, "setup-ideas")).toHaveAttribute("data-kind", "draft");
         await expect(card(page, "alert-digest")).toHaveAttribute("data-broken", "true");
         await expect(card(page, "alert-digest").getByTestId("board-broken")).toContainText("which it depends on, ends");

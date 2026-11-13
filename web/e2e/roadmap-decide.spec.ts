@@ -294,7 +294,7 @@ test("an item with no dates of its own says so beside its bar when the bar has n
   await open(page);
   await page.getByTestId("zoom-all").click();
   const row = (key: string) => page.locator(`[data-testid="timeline-row"][data-item="${key}"]`);
-  await expect(row("setup-video").getByTestId("bar-no-dates")).toHaveText("No dates yet");
+  await expect(row("setup-video").getByTestId("bar-no-dates")).toHaveText(/^No dates yet · estimated [A-Z][a-z]{2} \d/);
   await expect(row("alert-rules").getByTestId("bar-no-dates")).toHaveCount(0);
 });
 

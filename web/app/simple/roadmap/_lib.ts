@@ -97,6 +97,13 @@ export function scale(start: string, end: string, px: number): Scale {
 /** The bar's drawn span: its resolved dates (an estimate spans its horizon's window). */
 export const barSpan = (i: Item): [string, string] => [i.start.date, i.end.date];
 
+/** QA Nov 12 #6: an item with only Oracle's estimate (no date of its own on either end). */
+export const estimateOnly = (i: Pick<Item, "start" | "end">): boolean => i.start.estimated && i.end.estimated;
+
+/** QA Nov 12 #6: how an estimate-only item's dates read in every format and export: "No dates
+ * yet · estimated Apr 1, 2027 – Oct 22, 2028" (each end with its year when not this year's). */
+export const estimateWords = (start: string, end: string, today: string = roadmapToday ?? todayIn(displayZone())): string => `No dates yet · estimated ${spanWords(start, end, today, true)}`;
+
 /** What a bar looks like, in order: draft (dashed), estimated (hatched), dated (solid). */
 export function barKind(i: Item): "draft" | "estimated" | "dated" {
   if (i.draft) return "draft";

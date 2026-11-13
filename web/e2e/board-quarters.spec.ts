@@ -8,7 +8,7 @@ import { expect, test, type Locator, type Page } from "./test";
  *
  * Card board-quarters: protects = the column headers read the quarters month first ("Now ·
  * Oct 1 – Dec 31", "Next · Jan 1 – Mar 31", "Later · Apr 1, 2027 on"); an undated item sits in
- * Later and says "No dates"; no card says its dates sit outside its column; a drag from Now to
+ * Later and says "No dates yet · estimated" and its estimate (QA Nov 12 #6); no card says its dates sit outside its column; a drag from Now to
  * Later and then from Later to Next moves the card's dates a quarter at a time (length kept)
  * and Undo puts them back; a commenter's drag is a proposal and the card's dates stay;
  * fails_when = a column comes from a stored horizon, a drag changes only the column, or the
@@ -52,7 +52,7 @@ test("the board shows each item in the quarter of its dates", async ({ page }) =
   await expect(card(page, "alert-rules").getByTestId("board-dates")).toHaveText("Oct 1 – Nov 10");
   // Stored in Next, but no dates: Later, saying so.
   await expect(column(page, "later").locator('[data-item="price-tiers"]')).toBeVisible();
-  await expect(card(page, "price-tiers").getByTestId("board-dates")).toHaveText("No dates");
+  await expect(card(page, "price-tiers").getByTestId("board-dates")).toHaveText(/^No dates yet · estimated [A-Z][a-z]{2} \d/);
   await expect(page.getByTestId("outside-column")).toHaveCount(0);
 });
 
@@ -79,7 +79,7 @@ test("a drag moves the card's dates by quarters, and Undo puts them back", async
   await expect(card(page, "price-tiers").getByTestId("board-dates")).toHaveText("Jan 1 – Mar 31, 2027");
   await page.getByRole("button", { name: "Undo" }).last().click();
   await expect(column(page, "later").locator('[data-item="price-tiers"]')).toBeVisible();
-  await expect(card(page, "price-tiers").getByTestId("board-dates")).toHaveText("No dates");
+  await expect(card(page, "price-tiers").getByTestId("board-dates")).toHaveText(/^No dates yet · estimated [A-Z][a-z]{2} \d/);
 });
 
 test("a commenter's drag proposes the move and the dates stay", async ({ page }) => {

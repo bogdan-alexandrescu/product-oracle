@@ -60,6 +60,8 @@ import {
   resultWords,
   shortDay,
   spanWords,
+  estimateOnly,
+  estimateWords,
   shownDates,
   storedDates,
   suggestion,
@@ -951,8 +953,9 @@ function DecisionTray({
             {dateRows.map(({ item: i, s, parts }) => (
               <li key={s.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-date" data-item={i.id}>
                 <div className="min-w-0 flex-1 text-[15px]">
+                  {/* QA Nov 12 #6: an item with only Oracle's estimate reads as it does on the chart, Oracle's dates after it. */}
                   <span>
-                    {named(i)}: {yearSpan(s.start_date, s.end_date)}
+                    {named(i)}: {estimateOnly(i) ? `${estimateWords(i.start.date, i.end.date)} · Oracle suggests ${yearSpan(s.start_date, s.end_date)}` : yearSpan(s.start_date, s.end_date)}
                   </span>
                   {parts.length > 0 && (
                     <span className="block" data-testid="tray-date-slices">

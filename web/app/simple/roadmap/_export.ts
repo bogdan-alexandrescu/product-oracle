@@ -12,7 +12,7 @@ import { calendarDay, displayZone, zoneTime } from "@/lib/dates";
 
 import type { BoardColumn } from "./_board";
 import { itemName, NOT_IN_GT } from "./_gtflag";
-import { brokenLinks, shortDay, spanWords } from "./_lib";
+import { brokenLinks, estimateOnly, estimateWords, shortDay, spanWords } from "./_lib";
 import { ordinal } from "./_timeline";
 
 const SCALE = 2;
@@ -354,7 +354,8 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
       const stroke = border ? ` stroke="${esc(border[3])}" stroke-width="${border[1]}"${border[2] === "dashed" ? ' stroke-dasharray="5 3"' : ""}` : "";
       const a = Math.max(x0, labelW);
       const b = Math.min(x1, width);
-      const words = spanWords(bar.dataset.start ?? "", bar.dataset.end ?? "", today);
+      // QA Nov 12 #6: an estimate-only item's words, as its row reads them.
+      const words = (bar.dataset.estimateOnly ? estimateWords : spanWords)(bar.dataset.start ?? "", bar.dataset.end ?? "", today);
       const ww = widthOf(words, 11) + 8;
       if (b > a) out.push(`<rect data-testid="export-bar" x="${a}" y="${y + 8}" width="${b - a}" height="18" rx="9" fill="${esc(fill)}"${stroke}/>`);
       // A bar the window's edge cuts says it goes on: an arrow on its end at that edge.
@@ -440,7 +441,7 @@ export function boardPicture(cols: BoardColumn[], today: string, queue: string[]
       const beside = !i.code && widthOf(`${name} · ${NOT_IN_GT}`, 13, 500) <= colW - 32;
       parts.push(`<text data-testid="export-name" x="${x + 16}" y="${y + 18}" font-size="13" font-weight="500" fill="var(--text)"${i.status === "cut" ? ' text-decoration="line-through"' : ""}>${esc(beside ? `${name} · ${NOT_IN_GT}` : fit(name, colW - 32, 13, 500))}</text>`);
       const place = queue.indexOf(i.id);
-      const meta = `${i.code || beside ? "" : `${NOT_IN_GT} · `}${spanWords(i.start.date, i.end.date, today, true)}${est ? " · estimated" : ""}${i.draft ? " · draft" : ""}${place >= 0 ? ` · ${ordinal(place + 1)} to return` : ""}`;
+      const meta = `${i.code || beside ? "" : `${NOT_IN_GT} · `}${estimateOnly(i) ? estimateWords(i.start.date, i.end.date, today) : `${spanWords(i.start.date, i.end.date, today, true)}${est ? " · estimated" : ""}`}${i.draft ? " · draft" : ""}${place >= 0 ? ` · ${ordinal(place + 1)} to return` : ""}`;
       parts.push(`<text x="${x + 16}" y="${y + 35}" font-size="11" fill="var(--text2)">${esc(meta)}</text>`);
       y += 50;
     };

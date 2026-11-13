@@ -35,6 +35,8 @@ import {
   placedSlices,
   type Slice,
   yearSpan,
+  estimateOnly,
+  estimateWords,
   drawnKeyDates,
 } from "./_lib";
 import { CALL_H, RH } from "./_pitch";
@@ -1122,7 +1124,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
   const mark = left >= 10 ? left : Math.min(width - 10, Math.max(sc.x(s?.end_date ?? end), x1) + sc.px + 12);
   // QA2 finding 14: a reader's words, not the API's raw enum (sourceWord, from ./_lib).
   // qa4-simple-roadmap-30: each red flag in its own words ("ends Jun 8, after its milestone 'Beta'"), as Now / Next / Later says it.
-  const label = `${item.title}: ${yearSpan(start, end, " to ")}, ${item.estimated ? sourceWord("estimated") : datesFrom(item)}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
+  const label = `${item.title}: ${!span && estimateOnly(item) ? estimateWords(start, end) : `${yearSpan(start, end, " to ")}, ${item.estimated ? sourceWord("estimated") : datesFrom(item)}`}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
   const strokeOf = (base: string) => (red ? "var(--crit)" : amber ? "var(--warn)" : base);
   const strokeW = red || amber || open ? 2.5 : 1.5;
   // fix4 qa-simple-roadmap-31: the suggestion's outline is drawn under the pill (its fill hides

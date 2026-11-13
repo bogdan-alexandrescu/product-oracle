@@ -7,7 +7,7 @@ import { LINK_KINDS } from "@/lib/roadmap-links";
 
 import { itemName, NotInGt } from "./_gtflag";
 import { MsBoardRow } from "./_milestones";
-import { barKind, broken, brokenLinks, closedItem, mergedName, partsTree, shortDay, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
+import { barKind, broken, brokenLinks, closedItem, estimateOnly, estimateWords, mergedName, partsTree, shortDay, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
 
 export type Horizon = Item["horizon"];
 
@@ -417,8 +417,8 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
               className={kind === "estimated" ? "rounded border border-dashed border-accent-mid px-1 text-accent-ink" : ""}
             >
               {/* board-quarters: an item no source dates sits in Later with no dates. */}
-              {item.start.estimated && item.end.estimated ? "No dates" : boardSpanWords(item.start.date, item.end.date, data.today)}
-              {kind === "estimated" && !(item.start.estimated && item.end.estimated) && " · estimated"}
+              {estimateOnly(item) ? estimateWords(item.start.date, item.end.date, data.today) : boardSpanWords(item.start.date, item.end.date, data.today)}
+              {kind === "estimated" && !estimateOnly(item) && " · estimated"}
             </span>
             {kind === "draft" && (
               <span className="rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag">
