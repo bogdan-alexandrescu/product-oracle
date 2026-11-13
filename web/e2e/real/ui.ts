@@ -16,8 +16,9 @@ export async function login(page: Page) {
  * Starting data: a confirmed Baseline entity (goals and features start proposed and are
  * confirmed), seeded through the API as publish.spec.ts seeds its blocker. Specs share one
  * database in file order: feedback-loop.spec.ts expects no goals, so seed them after it.
+ * A confirmed feature comes back keyed by its code (code_on_join), not the key it was sent.
  */
-export async function confirmedEntity(page: Page, data: Record<string, unknown>): Promise<{ id: string; title: string }> {
+export async function confirmedEntity(page: Page, data: Record<string, unknown>): Promise<{ id: string; key: string; title: string }> {
   const created = await page.request.post("/v1/baseline/entities", { data });
   expect(created.status(), await created.text()).toBe(201);
   const { entity } = await created.json();
