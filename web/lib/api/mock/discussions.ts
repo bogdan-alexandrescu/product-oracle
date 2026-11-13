@@ -13,6 +13,7 @@
 import type { Schemas } from "@/lib/api/client";
 import type { ChangeOut, ChangeStatus, ChangeVerb } from "@/lib/api/discussion-changes";
 import { pageNameOnly } from "@/lib/page-context";
+import { stripRawTokens } from "@/lib/raw-tokens";
 
 import { companyDayInWords } from "./connections";
 import { IN_CHAT, IN_CHAT_CODE, type LiveReply } from "./live";
@@ -1903,7 +1904,9 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     if (d.origin !== "panel") return refuse(422, "Only a panel chat is shared as a discussion");
     if (!starter(d)) return refuse(403, "Only the person who started this chat can share it");
     const input = await body<Schemas["DiscussionShareIn"]>();
-    if (!input.first_message.trim()) return refuse(422, "A message needs some text");
+    // As the API: Oracle's raw citation tokens are no words in the first message (ask-phone QA row 1).
+    const first = stripRawTokens(input.first_message).trim();
+    if (!first) return refuse(422, "A message needs some text");
     const at = ctx.now();
     const shared: DiscussionRow = {
       ...d,
@@ -1922,7 +1925,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     };
     db.discussions.push(shared);
     add(shared, me.id, "started");
-    push(shared, { author_kind: "person", author_id: me.id, body: input.first_message.trim(), mentions: [], mentions_oracle: false, reply_to: null });
+    push(shared, { author_kind: "person", author_id: me.id, body: first, mentions: [], mentions_oracle: false, reply_to: null });
     // As the API: the chat's open changes, of whatever kind, are copied as suggested by the sharer.
     for (const c of changesOf(d).filter((x) => x.status === "proposed" || x.status === "suggested" || x.status === "staged"))
       db.changes!.push({ ...c, id: ctx.uuid(), discussion_id: shared.id, status: "suggested", suggested_by: me.id, from_message_id: null, decision_note: null, override_reason: null, reason: null, result_ref: null, lock_version: 1, created_at: at });

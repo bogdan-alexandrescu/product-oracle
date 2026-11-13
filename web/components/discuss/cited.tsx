@@ -46,16 +46,21 @@ function chipCitation(c: Cite): CitationOut {
 /** A marker still being written at the end of a streaming reply ("[", "[c", "[c:1", "[l:1"). */
 const PARTIAL_MARKER = /\[([cl](:\d{0,4})?)?$/;
 
+/** A live read's words, the chip's and Simple's source line's (ask-phone QA row 10): "<source> · <call> · read <time>". */
+export function liveWords(c: Pick<Cite, "source" | "call" | "read_at">, zone: string): string {
+  const at = c.read_at ? formatInZone(c.read_at, zone, { hour: "numeric", minute: "2-digit" }) : null;
+  return [c.source, c.call, at && `read ${at}`].filter(Boolean).join(" · ");
+}
+
 /**
  * A live read (#710): "Fireflies Archive · list_meetings · read 7:42 AM PDT", in the Company
  * time zone, with no link (what was read is not in Oracle).
  */
 export function LiveChip({ c }: { c: Cite }) {
   const zone = useCompanyZone();
-  const at = c.read_at ? formatInZone(c.read_at, zone, { hour: "numeric", minute: "2-digit" }) : null;
   return (
     <span className="cite-chip" style={{ cursor: "default" }} data-testid="live-chip" title={c.item_id ? `Read live: ${c.item_id}` : "Read live"}>
-      <span className="text-text2">{[c.source, c.call, at && `read ${at}`].filter(Boolean).join(" · ")}</span>
+      <span className="text-text2">{liveWords(c, zone)}</span>
     </span>
   );
 }

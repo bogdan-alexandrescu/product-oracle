@@ -79,8 +79,9 @@ function useShownHeading(on: boolean): string | null {
     const main = document.querySelector("main");
     if (!on || !main) return;
     const update = () => {
-      // Next keeps recently visited routes mounted but hidden: the shown page's H1.
-      const h1s = [...main.querySelectorAll("h1")];
+      // Next keeps recently visited routes mounted but hidden: the shown page's H1 (on a phone,
+      // the one-pager's title is a level-1 heading drawn without an <h1>: ask-phone QA row 4).
+      const h1s = [...main.querySelectorAll<HTMLElement>('h1, [role="heading"][aria-level="1"]')];
       const h1 = h1s.find((h) => h.checkVisibility?.() !== false && h.getClientRects().length > 0) ?? h1s.find((h) => h.closest("[hidden]") === null);
       const t = h1?.textContent?.trim() || null;
       setText(t && t !== "One-pager" ? t : null);

@@ -609,6 +609,32 @@ function Composer({
   );
 }
 
+/**
+ * ask-phone QA row 8: while the Discussion actions menu is open, Escape closes the menu only,
+ * not the phone's Ask sheet around it (whose own Escape listens on the document): first, on the
+ * window, as Simple's Recent chats menu does. Focus goes back to the menu's button.
+ */
+function EscapeClosesMenu({ close }: { close: () => void }) {
+  const here = useRef<HTMLSpanElement>(null);
+  const shut = useRef(close);
+  useEffect(() => {
+    shut.current = close;
+  });
+  useEffect(() => {
+    const button = here.current?.closest("div.relative")?.querySelector<HTMLElement>("button[aria-expanded]");
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      shut.current();
+      button?.focus();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+  return <span ref={here} hidden />;
+}
+
 function MenuItem({ onClick, disabled = false, children }: { onClick: () => void; disabled?: boolean; children: ReactNode }) {
   return (
     <button
@@ -953,6 +979,7 @@ export function DiscussionThread({
             <Menu label="Discussion actions" icon="more" iconOnly>
               {(close) => (
                 <span className="flex min-w-44 flex-col gap-0.5">
+                  <EscapeClosesMenu close={close} />
                   <span role="menu" aria-label="Discussion actions" className="flex flex-col gap-0.5">
                     {items.map((it) =>
                       it.tip ? (

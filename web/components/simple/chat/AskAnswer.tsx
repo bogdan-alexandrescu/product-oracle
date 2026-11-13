@@ -4,7 +4,9 @@ import Link from "next/link";
 import { createContext, Fragment, useContext, useMemo, type ReactNode } from "react";
 
 import { FeatureMarks, MarkFor, WithFeatureMarks, type FeatureState } from "@/components/current-state/CurrentState";
-import { Icon } from "@/components/ds";
+import { liveWords } from "@/components/discuss/cited";
+import { CodeTag, Icon } from "@/components/ds";
+import { named } from "@/lib/codes";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { isSafeHref, parseBlocks, type Block, type Inline } from "@/lib/markdown";
 import { answerWords, noRawTokens } from "@/lib/raw-tokens";
@@ -36,7 +38,7 @@ export function Who({ name, at, zone, mine }: { name: string; at: string; zone: 
 }
 
 /** A citation as an answer carries it (oracle.discussions.context: n, kind, title, url). */
-export type AnswerCite = { n?: number; kind?: string; title?: string; url?: string | null; label?: string; ref?: string; source?: string; read_at?: string };
+export type AnswerCite = { n?: number; kind?: string; title?: string; url?: string | null; label?: string; ref?: string; source?: string; call?: string; read_at?: string };
 
 function plain(nodes: Inline[]): boolean {
   return nodes.every((n) => n.t === "cite" || (n.t === "text" && !n.v.trim()));
@@ -111,14 +113,32 @@ function NameMark({ f }: { f: FeatureState }) {
   );
 }
 
-/** Words with each feature's name followed by its pill. */
+/**
+ * Words with each feature's name after its code ("F-06 Weekly alert digest", ask-phone QA row 11:
+ * every feature shows its code with its name; none added where the words already say it) and
+ * followed by its pill.
+ */
 function withMarks(v: string, namer: Namer | null): ReactNode {
   if (!namer) return v;
   const out: ReactNode[] = [];
   let at = 0;
   for (const m of namesIn(v, namer)) {
+    const f = namer.byName.get(m[0])!;
     const end = m.index! + m[0].length;
-    out.push(v.slice(at, end), <NameMark key={m.index!} f={namer.byName.get(m[0])!} />);
+    const before = v.slice(at, m.index!);
+    // The feature's key is its code where it has one (lib/codes: "F-06", never a slug).
+    const code = named(f.title, f.code).code;
+    const said = !code || new RegExp(`(?<![\\p{L}\\p{N}-])${escapeRe(code)}\\s*$`, "u").test(before);
+    out.push(
+      before,
+      code && !said && (
+        <span key={`code-${m.index!}`} className="mr-1.5 inline-flex align-middle">
+          <CodeTag code={code} />
+        </span>
+      ),
+      m[0],
+      <NameMark key={m.index!} f={f} />,
+    );
     at = end;
   }
   if (!out.length) return v;
@@ -194,7 +214,7 @@ function Cite({ id, named }: { id: string; named: Set<string> }) {
   if (!/^\d{1,4}$/.test(id)) return null;
   const num = id;
   const c = cites.find((x) => x.kind !== "live" && String(x.n) === num);
-  const s = c ? source(c) : null;
+  const s = c ? source(c, zone) : null;
   if (!s?.url) return null;
   return (
     <>
@@ -330,8 +350,12 @@ function AnswerBody({ text, live, cites }: { text: string; live: boolean; cites:
   return <div data-testid="chat-message-body">{out}</div>;
 }
 
-/** One source under an answer: an icon, its words, a link when it has one. */
-function source(c: AnswerCite): { key: string; icon: "prds" | "roadmap" | "flag" | "link"; words: string; url: string | null } | null {
+/** One source under an answer: an icon, its words, a link when it has one. A live read is its words alone, as Detailed's live chip. */
+function source(c: AnswerCite, zone: string): { key: string; icon: "prds" | "roadmap" | "flag" | "link" | null; words: string; url: string | null } | null {
+  if (c.kind === "live") {
+    const words = liveWords({ ...c, source: c.source || "Meeting notes" }, zone);
+    return { key: `live:${c.ref ?? words}`, icon: null, words, url: null };
+  }
   const title = String(c.title ?? c.label ?? "").trim();
   if (!title) return null;
   const after = (s: string) => s.slice(s.indexOf(": ") + 2);
@@ -347,8 +371,6 @@ function source(c: AnswerCite): { key: string; icon: "prds" | "roadmap" | "flag"
       return { key: title, icon: "roadmap", words: `Open ${title.includes(": ") ? after(title) : title} on the roadmap`, url };
     case "decision":
       return { key: title, icon: "flag", words: `Open ${title}`, url };
-    case "live":
-      return null;
     default:
       return { key: title, icon: "link", words: title, url };
   }
@@ -356,23 +378,25 @@ function source(c: AnswerCite): { key: string; icon: "prds" | "roadmap" | "flag"
 
 /** Where the answer comes from, under it: one link per source (PRD first, then the roadmap). */
 export function AnswerSources({ cites }: { cites: AnswerCite[] }) {
+  const zone = useCompanyZone();
   const seen = new Set<string>();
-  const rank = { prds: 0, roadmap: 1, flag: 2, link: 3 } as const;
+  const rank = { prds: 0, roadmap: 1, flag: 2, link: 3, live: 4 } as const;
   const list = cites
-    .map(source)
+    .map((c) => source(c, zone))
     .filter((s): s is NonNullable<ReturnType<typeof source>> => !!s && !seen.has(s.words) && !!seen.add(s.words))
-    .sort((a, b) => rank[a.icon] - rank[b.icon]);
+    .sort((a, b) => rank[a.icon ?? "live"] - rank[b.icon ?? "live"]);
   if (list.length === 0) return null;
   return (
     <p className="mt-2.5 flex flex-wrap gap-x-3.5 gap-y-1" data-testid="answer-sources">
       {list.map((s) => {
         const inner = (
           <>
-            <Icon name={s.icon} size={16} stroke={2} className="size-3.5" />
+            {s.icon && <Icon name={s.icon} size={16} stroke={2} className="size-3.5" />}
             {s.words}
           </>
         );
-        const cls = "inline-flex items-center gap-1.5 text-[13px] leading-[18px] font-semibold text-accent-ink";
+        // A live read is no link: its words in the line's quieter colour.
+        const cls = `inline-flex items-center gap-1.5 text-[13px] leading-[18px] font-semibold ${s.icon ? "text-accent-ink" : "text-text2"}`;
         return s.url ? (
           <Link key={s.key} href={s.url} className={`${cls} hover:underline`} data-testid="answer-source">
             {inner}

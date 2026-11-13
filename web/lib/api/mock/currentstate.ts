@@ -8,7 +8,7 @@ import type { Schemas } from "@/lib/api/client";
 
 type State = Schemas["FeatureStateOut"];
 type Proof = Schemas["FeatureProofOut"];
-type Row = { feature_id: string; item_id?: string | null; code: string; title: string; milestone?: string | null; goal?: { title: string } | null };
+type Row = { feature_id: string; item_id?: string | null; code: string; own_key?: string | null; title: string; milestone?: string | null; goal?: { title: string } | null };
 
 export interface CurrentStateDb {
   // Per feature: what the API stores (feature_states and feature_proofs).
@@ -85,7 +85,8 @@ function stateOut(db: CurrentStateDb, r: Row, i: number, today: number): State {
   const thisMonth = MONTH[new Date(today).getUTCMonth()];
   return {
     feature_id: r.feature_id,
-    code: r.code,
+    // As the API (code=f.key): the feature's key, its Ground Truth code (F-06) where it has one.
+    code: r.own_key ?? r.code,
     title: r.title,
     area: AREAS[i % AREAS.length],
     goal: r.goal?.title ?? null,

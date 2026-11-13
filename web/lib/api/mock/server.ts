@@ -5235,7 +5235,9 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
       return { key: `roadmap_item:${doc.id}:${s.item_key}`, label: `${doc.title} · ${s.item_key}`, url: `${url}/items`, document_id: doc.id };
     const section = v.sections.find((x) => x.section_key === s.section_key);
     if (!section) return { status: 422, detail: `Section ${s.section_key} is not in version ${v.number}` };
-    return { key: `section:${doc.id}:${section.section_key}`, label: `${doc.title} · ${section.heading}`, url: `${url}#${section.section_key}`, document_id: doc.id };
+    // As the API: the document's own title as a section's heading is its Introduction (ask-phone QA row 3).
+    const heading = section.heading.trim() === doc.title.trim() ? "Introduction" : section.heading;
+    return { key: `section:${doc.id}:${section.section_key}`, label: `${doc.title} · ${heading}`, url: `${url}#${section.section_key}`, document_id: doc.id };
   }
   if (kind === "checkpoint" || kind === "checkpoint_item") {
     const run = db.runs?.runs.find((r) => r.id === s.run_id);
