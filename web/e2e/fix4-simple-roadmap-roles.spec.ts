@@ -83,7 +83,7 @@ test.describe("desktop", () => {
   });
 
   for (const scheme of ["light", "dark"] as const) {
-    test(`qa-simple-roadmap-46: the rail runs the page's height and dims with the page under a card (${scheme})`, async ({ page }) => {
+    test(`qa-simple-roadmap-46: the rail runs the page's height and a Gantt card in the side panel leaves it undimmed (${scheme})`, async ({ page }) => {
       await theme(page, scheme);
       await openRoadmap(page);
       const rail = page.getByTestId("simple-nav");
@@ -100,14 +100,14 @@ test.describe("desktop", () => {
       const bg = await rail.evaluate((el) => getComputedStyle(el).backgroundColor);
       await expect(under).toHaveCSS("background-color", bg);
 
-      // An item's card dims the rail with the page (its backdrop is over the rail). Re-pointed:
-      // the Timeline's side panel dims nothing, so this is the Gantt's floating card.
+      // QA Nov 12 #11 (the owner's pick): the Gantt's card sits in the side panel beside the
+      // chart, as the Timeline's does, and dims nothing: no backdrop over the rail.
       await openGanttItem(page, "alert-rules");
-      await expect(page.getByTestId("floating-card")).toBeVisible();
-      await expect(page.getByTestId("floating-card-backdrop")).toBeVisible();
+      await expect(page.getByTestId("item-panel")).toContainText("Alert rules engine");
+      await expect(page.getByTestId("floating-card-backdrop")).toHaveCount(0);
       const box = (await rail.boundingBox())!;
-      const top = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.getAttribute("data-testid") ?? null, [box.x + box.width / 2, box.y + box.height / 2] as const);
-      expect(top).toBe("floating-card-backdrop");
+      const onRail = await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('[data-testid="simple-nav"]'), [box.x + box.width / 2, box.y + box.height / 2] as const);
+      expect(onRail).toBe(true);
     });
   }
 
