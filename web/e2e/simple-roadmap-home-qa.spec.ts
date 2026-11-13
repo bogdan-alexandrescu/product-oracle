@@ -50,7 +50,7 @@ test.describe("desktop", () => {
     // no_claim: that the viewer is blocked from every edit in the panel; the phone is the S-1 phone test
     await roadmap(page, VIEWER);
     const row = page.locator('[data-testid="timeline-row"][data-item="alert-digest"]');
-    await row.getByText("Weekly alert digest", { exact: true }).click();
+    await row.getByText("F-06 Weekly alert digest", { exact: true }).click();
     await expect(card(page)).toBeVisible();
     await expect(card(page)).toContainText("Weekly alert digest");
     await expect(card(page)).toContainText("You can read this feature");

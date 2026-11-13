@@ -281,7 +281,11 @@ test.describe("desktop", () => {
     const note = (await row.getByTestId("return-place").innerText()).trim();
     const { svg } = await exported(page, "PNG");
     const texts = await textsIn(page, svg, "text");
-    expect(texts).toContain(`${title} · ${note}`);
+    // QA Nov 12 #2: a row with its "Not in the Ground Truth" mark too takes two lines: the name, then
+    // its notes from the place on; else one text. Either way the note comes right after the name.
+    const at = texts.indexOf(title);
+    const words = at >= 0 ? `${title} · ${texts[at + 1] ?? ""}` : (texts.find((t) => t.startsWith(`${title} · `)) ?? "");
+    expect(words.startsWith(`${title} · ${note}`), `${title} · ${note} in ${JSON.stringify(texts)}`).toBe(true);
   });
 
   test("a cut card in the Now / Next / Later export keeps its place in the return queue", async ({ page }) => {
@@ -297,7 +301,8 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("board")).toBeVisible();
     const { svg } = await exported(page, "PNG");
     const texts = await textsIn(page, svg, "text");
-    const at = texts.indexOf(title);
+    // QA Nov 12 #2: a card with no code reads its "Not in the Ground Truth" mark after its name where it fits.
+    const at = texts.findIndex((t) => t === title || t === `${title} · Not in the Ground Truth`);
     expect(at, `the card ${title}`).toBeGreaterThanOrEqual(0);
     expect(texts[at + 1]).toMatch(new RegExp(` · ${note}$`));
   });

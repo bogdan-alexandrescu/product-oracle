@@ -83,10 +83,11 @@ for (const phone of [false, true]) {
         await page.getByTestId("group-goal").click();
         await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
 
-        // fix4 qa-simple-roadmap-3: a row and a slice read by name, never by code ("F-05", "F-05a").
-        const invites = row(page, "Team invites");
+        // fix4 qa-simple-roadmap-3: a slice reads by name, never by code ("F-05a"); QA Nov 12 #1: a
+        // row reads its code before its name ("F-05 Team invites"), in one title, no separate code chip.
+        const invites = row(page, "F-05 Team invites");
         await expect(invites.getByTestId("label-code")).toHaveCount(0);
-        await expect(invites.getByTestId("label-title")).toHaveAttribute("title", "Team invites");
+        await expect(invites.getByTestId("label-title")).toHaveAttribute("title", "F-05 Team invites");
 
         await slice(page, "F-05a").scrollIntoViewIfNeeded();
         // A slice's name is cut with "…" to its bar (a phone's two-week bar reads "Tea…"), whole

@@ -104,7 +104,8 @@ async function sheets(page: Page, view: View) {
   await page.getByTestId("key-dates-open").click();
   const editor = page.getByTestId("key-dates-editor");
   await expect(editor).toBeVisible();
-  const hint = editor.getByTestId("key-dates-hint");
+  // QA Nov 12 #13: an owner's editor has no hint line (it is behind the title's (i)): its title is read.
+  const hint = editor.getByRole("heading", { name: /^Key dates/ });
   expect(await onTop(hint, "key-dates-editor"), `${view}: the Key dates editor is on top of the chart`).toBe(true);
   await page.keyboard.press("Escape");
   await expect(editor).toBeHidden();

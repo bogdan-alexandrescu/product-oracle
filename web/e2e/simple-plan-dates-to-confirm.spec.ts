@@ -26,6 +26,8 @@ const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile:
 const DESKTOP = { viewport: { width: 1366, height: 820 } };
 const ITEM = "plan-f-05";
 const TITLE = "Team invites";
+/** QA Nov 12 #1: the item as the roadmap names it, its code before its name. */
+const NAME = `F-05 ${TITLE}`;
 // The span of F-05's slices: F-05a's start (M1) to F-05b's end (M2).
 const SPAN = { start: "2026-11-09", end: "2026-12-11", words: "Nov 9 – Dec 11" };
 
@@ -67,8 +69,8 @@ for (const [where, use] of [
         await expect(row).toHaveCount(1);
         const words = row.locator("span").first();
         // One suggestion for the item: the span of its two slices, not its first slice's dates.
-        await expect(words).toHaveText(`${TITLE}: ${SPAN.words}`);
-        const shown = (await words.textContent())!.slice(`${TITLE}: `.length).trim();
+        await expect(words).toHaveText(`${NAME}: ${SPAN.words}`);
+        const shown = (await words.textContent())!.slice(`${NAME}: `.length).trim();
 
         await row.getByRole("button", { name: "Accept" }).click();
         await expect(page.getByText("Dates accepted in your working draft")).toBeVisible();
@@ -82,13 +84,14 @@ for (const [where, use] of [
         await expect(bar(page, ITEM)).toHaveAttribute("data-start", SPAN.start);
         await expect(bar(page, ITEM)).toHaveAttribute("data-end", SPAN.end);
         // The bar says where its dates came from.
-        await expect(bar(page, ITEM)).toHaveAttribute("aria-label", new RegExp(`^${TITLE}: ${shown.replace(" – ", " to ")}, Dates accepted from Oracle,`));
+        await expect(bar(page, ITEM)).toHaveAttribute("aria-label", new RegExp(`^${NAME}: ${shown.replace(" – ", " to ")}, Dates accepted from Oracle,`));
         await bar(page, ITEM).click();
         const card = page.getByTestId("floating-card");
         await expect(card.getByRole("heading", { name: TITLE })).toBeVisible();
-        // The one feature panel's Dates row: the span, where it came from, and its "Why these dates" (i).
-        await expect(card.getByTestId("card-dates")).toHaveText(`${shown} · Dates accepted from Oracle (i)`);
+        // The one feature panel's Dates row: the span, where it came from, and its "About these dates" (i) (QA Nov 12 #10).
+        await expect(card.getByTestId("card-dates")).toContainText(`${shown} · Dates accepted from Oracle`);
         await expect(card.getByTestId("card-dates-kind")).toHaveText("Dates accepted from Oracle");
+        await expect(card.getByTestId("card-dates-why")).toHaveAccessibleName("About these dates");
 
         if (where === "phone") expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
       });

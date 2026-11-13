@@ -270,7 +270,7 @@ for (const phone of [false, true]) {
         const tray = page.getByTestId("decision-tray");
         const row = tray.getByTestId("tray-date").filter({ hasText: "Self-serve checkout:" });
         await expect(row).toHaveCount(1);
-        await expect(row.locator("span").first()).toHaveText(/^Self-serve checkout: Dec 14, 2026 – Jan 22, 2027$/);
+        await expect(row.locator("span").first()).toHaveText(/^F-11 Self-serve checkout: Dec 14, 2026 – Jan 22, 2027$/);
         const parts = row.getByTestId("tray-date-slice");
         await expect(parts).toHaveCount(2);
         await expect(parts.nth(0)).toHaveAttribute("data-slice", "F-11a");

@@ -39,7 +39,7 @@ test.describe("Removed list", () => {
     await button(page).click();
     await expect(list(page).getByText("Removed from your plans")).toBeVisible();
     await expect(row(page, "In-app tour")).toContainText(/Feature · Onboarding roadmap · Cut on [A-Z][a-z]{2} \d+ by /);
-    await expect(row(page, "Fewer support tickets about billing")).toContainText(/Goal · Goals · Archived on [A-Z][a-z]{2} \d+ by /);
+    await expect(row(page, "Fewer support tickets about billing")).toContainText(/Goal · Archived on [A-Z][a-z]{2} \d+ by /);
     await expect(row(page, "Private beta for 20 teams")).toContainText(/Milestone · Grow retention · Removed on [A-Z][a-z]{2} \d+ by /);
     await shot(page, "ec2-c-open");
 
