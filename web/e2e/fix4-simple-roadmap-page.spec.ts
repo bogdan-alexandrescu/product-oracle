@@ -71,7 +71,8 @@ test.describe("desktop", () => {
     await page.getByTestId("group-milestone").click();
     await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
     const labels = page.getByTestId("chart-labels");
-    // Every milestone shows its code with its name (Ground Truth rule): "M1 Beta (Nov 30)".
+    // A milestone reads its code with its name ("M1 Beta"), a feature its code with its name
+    // ("F-06 Weekly alert digest"), as docs/ground-truth.md has every feature read.
     const beta = labels.getByTestId("chart-group").filter({ hasText: /^M1 Beta \(/ });
     await expect(beta).toHaveCount(1);
     // The digest's row sits under the Beta heading, before the next group's.

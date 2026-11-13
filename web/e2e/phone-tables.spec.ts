@@ -126,7 +126,10 @@ test("phone Ground Truth: the feature × goal ledger is a list of whole feature 
   // A flagged feature shows its flag as on desktop, not an unexplained dot.
   await expect(page.getByTestId("feature-F-81").getByText("Serves no goal")).toBeVisible();
   await expect(page.getByTestId("feature-F-84").getByText("Low confidence")).toBeVisible();
-  for (const row of await page.locator('[data-testid^="feature-f."]').all()) {
+  // Every ledger row (keys are codes now, F-81..F-85, not f.*): at least one, so it never passes on none.
+  const rows = await page.locator('tr[data-testid^="feature-"]').all();
+  expect(rows.length).toBeGreaterThan(0);
+  for (const row of rows) {
     expect(await clippedTexts(row)).toEqual([]);
     await expectInViewport(page, row);
   }

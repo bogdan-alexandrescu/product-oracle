@@ -334,8 +334,10 @@ test("only a short change request or a 'no' right after a card replaces a draft"
  */
 test("Apply in the Ask panel updates the page under it at once", async ({ page }) => {
   await signIn(page, "/simple/roadmap");
-  // The roadmap's own feature buttons (the Ask panel's card text is not a button).
-  const feature = (name: string) => page.getByRole("button", { name, exact: true });
+  // The roadmap's own feature buttons (the Ask panel's card text is not a button). docs/ground-truth.md:
+  // a feature shows its code with its name; this item is in no Ground Truth feature, so its name
+  // reads with its Not in the Ground Truth flag.
+  const feature = (name: string) => page.getByRole("button", { name: `${name} Not in the Ground Truth`, exact: true });
   await expect(feature("Setup checklist").first()).toBeVisible();
   await openAsk(page);
   const box = () => page.getByTestId("ask-chat").filter({ visible: true });

@@ -41,7 +41,7 @@ const shown = (f: Flag) => namedText(subjectNamed(f));
 /** A row's own key, to mark it waiting for approval once a fix was sent. */
 const rowKey = (f: Flag) => `${f.kind}:${subject(f).id ?? subject(f).code ?? subject(f).name}`;
 /** The roadmap item a flag's Add or Link sets the feature of (unlinked items and slices). */
-const itemOf = (f: Flag) => (f.kind === "unlinked_item" || f.kind === "slice_parent_missing" ? (f.item?.id ?? null) : null);
+const itemOf = (f: Flag) => (f.kind === "unlinked_item" || f.kind === "slice_parent_missing" || f.kind === "code_differs" ? (f.item?.id ?? null) : null);
 /** The code a PRD's feature or slice is added with (F-09, or F-15 for the slice F-15a). */
 const codeOf = (f: Flag) => f.fixes.find((x) => x.action === "add_to_ground_truth" && f.kind !== "unlinked_item")?.target ?? null;
 
@@ -373,6 +373,8 @@ export function GroundTruthFlags({
               const unconfirmed = !waiting && f.item && f.feature && f.fixes.some((x) => x.action === "confirm_feature") ? f.feature : null;
               // The item reads as its feature's code and name: the feature once, not a second time (QA Nov 12 #10).
               const same = !!unconfirmed && unconfirmed.code === sn.code && unconfirmed.name === sn.name;
+              // An item whose code another feature holds: the feature it is on, by the number it is keyed by.
+              const keyed = !waiting && f.kind === "code_differs" && f.item && f.feature?.code ? f.feature : null;
               const line = waiting || unconfirmed
                 ? null
                 : f.where.prd && !f.item?.id
@@ -397,6 +399,11 @@ export function GroundTruthFlags({
                       <span className="mt-1 flex flex-wrap items-center gap-1.5" data-testid={same ? undefined : "gt-unconfirmed"}>
                         <Chip kind="warn">Waiting to be confirmed</Chip>
                         {!same && <CodeChip kind="feature" entityId={unconfirmed.id} entityKey={unconfirmed.code} title={unconfirmed.name} />}
+                      </span>
+                    ) : keyed ? (
+                      <span className="mt-1 flex flex-wrap items-center gap-1.5" data-testid="gt-keyed">
+                        <CodeChip kind="feature" entityId={keyed.id} entityKey={keyed.code!} title={keyed.name} />
+                        {line && <span className="text-[13px] text-text2">{line}</span>}
                       </span>
                     ) : (
                       line && <span className="block text-[13px] text-text2">{line}</span>

@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import { InfoTip } from "@/components/ds/InfoTip";
+import { Named, NOT_IN_GT, NotInGt } from "@/components/simple/FeatureName";
 
 import { api, unwrap } from "@/lib/api/client";
 import { goalFigure } from "@/lib/format";
@@ -29,7 +30,6 @@ import {
   type Item,
   type Milestone,
 } from "./_lib";
-import { NOT_IN_GT } from "./_gtflag";
 
 /** pre-demo QA P-8: on a phone (the sheet), a 44 px hit area; the desktop look is unchanged. */
 const TAP = "max-sm:min-h-11 max-sm:min-w-11 max-sm:inline-flex max-sm:items-center max-sm:justify-center";
@@ -39,15 +39,8 @@ const REMOVE = "relative inline-flex h-6 w-6 flex-none items-center justify-cent
 const INPUT =
   "w-full rounded-md border border-line bg-surface px-2 py-1 text-[15px]";
 
-/** A feature's code chip, then its name: "F-12 Alert rules engine". */
-export function Named({ item }: { item: Pick<Item, "code" | "title"> }) {
-  return (
-    <>
-      {item.code && <><span className="simple-code mr-0.5">{item.code}</span>{" "}</>}
-      {item.title}
-    </>
-  );
-}
+/** A feature's code chip, then its name: "F-12 Alert rules engine", as every page shows it. */
+export { Named };
 
 /** "Mar 31, 2027": a goal's date, month first. */
 const dayWords = (day: string) => calendarDay(day, { month: "short", day: "numeric", year: "numeric" });
@@ -344,7 +337,7 @@ export function PanelFields({
             (item.code ?? (
               // QA Nov 12 #2: no code, so no Ground Truth feature: flagged, never hidden.
               <span className="inline-flex flex-wrap items-center gap-x-1" data-testid="card-code-flag">
-                <span className="text-text2">None</span> · <span className="text-warn">{NOT_IN_GT}</span>
+                <span className="text-text2">None</span> · <NotInGt className="h-5! px-2! text-xs!" />
                 <InfoTip label={NOT_IN_GT} align="start" testId="card-code-gt-why">
                   Roadmap items that are no feature of the Ground Truth, or one only proposed so far.
                 </InfoTip>

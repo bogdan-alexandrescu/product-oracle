@@ -31,7 +31,8 @@ for (const width of [1440, 1512]) {
     await expect(page.getByRole("columnheader", { name: "Depends on" })).toBeVisible();
     const deps = rowOf(page, "F-2").getByTestId("row-deps");
     await expect(deps).toBeVisible();
-    await expect(deps).toHaveText("Address lookup service");
+    // docs/ground-truth.md: a feature reads its code with its name.
+    await expect(deps).toHaveText("F-5 Address lookup service");
     await notCut(deps);
     const name = rowOf(page, "F-5").getByRole("button", { name: "Address lookup service" });
     expect((await name.boundingBox())!.width).toBeGreaterThan(80);

@@ -114,8 +114,8 @@ test.describe("desktop", () => {
         expect(await fits(chips.nth(i)), `${key}: a flag is cut`).toBe(true);
       }
     }
-    // The depended-on feature's code shows with its name (Ground Truth rule).
     const why = rowOf(page, "F-5").getByTestId("rank-reason");
+    // docs/ground-truth.md: a feature reads its code with its name.
     await expect(why).toHaveAttribute("title", /^Ranked higher: F-2 Shipping cost shown in the cart depends on it\./);
     await expect(why).toHaveText("Ranked higher: F-2 Shipping cost shown in the cart depends on it");
   });

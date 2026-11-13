@@ -365,17 +365,59 @@ async def may_read(db: AsyncSession, principal: Any, v: SimpleVisual) -> bool:
             if open_:
                 w = await drafts.who(db, {d.document_id for d in open_})
                 return any(drafts.sees(principal, d, w) for d in open_)
-    if v.document_id is None and v.subject_kind in LOOSE_KINDS:
-        # Another lane's subject asked for with no document: until its lane names the
-        # document, its requester and the company's owners only (never any reader who
-        # has the id).
+    if v.subject_kind in LOOSE_KINDS:
+        # Another lane's subject: whoever reads the chat card (its meeting's attendees, the
+        # Ask panel's person) or the goal's suggestion reads its visual, and the owners.
         me = _me(principal)
-        return me is not None and (has_role(principal.role, "owner") or me == v.requested_by)
+        if me is not None and has_role(principal.role, "owner"):
+            return True
+        reads = await _reads_loose(db, principal, v.subject_kind, v.subject_id)
+        if reads is not None:
+            return reads
+        if v.document_id is None:
+            # No such card or suggestion here: its requester only (never any reader who
+            # has the id).
+            return me is not None and me == v.requested_by
     if v.subject_kind == "one_pager_line" and v.document_id is not None:
         # A bet's subject is its line: who has the PRD but finds no such bet on the page
         # does not read its drawing.
         return await bet_line(db, principal, v.document_id, v.subject_id) is not None
     return True
+
+
+async def _reads_loose(
+    db: AsyncSession, principal: Any, kind: str, subject_id: uuid.UUID
+) -> bool | None:
+    """Whether the caller reads the chat card or goal suggestion, as its own lane shows it
+    (chat._get: a meeting's card its attendees, an Ask panel's card its person;
+    additions.readable: a confirmed goal's suggestions, a held one the owners'); None when
+    there is no such card or suggestion."""
+    from oracle.simple.models import SimpleChatCard, SimpleGoalSuggestion
+
+    me = _me(principal)
+    if kind == "chat_card":
+        card = await db.get(SimpleChatCard, subject_id)
+        if card is None:
+            return None
+        if card.meeting_id is not None:
+            from oracle.simple import chat
+
+            try:
+                rules = await chat.rules_of(db, card.meeting_id)
+            except chat.ChatError:
+                return False
+            return chat._attends(principal, rules)
+        return card.owner_id is None or (me is not None and card.owner_id == me)
+    if kind == "suggestion":
+        s = await db.get(SimpleGoalSuggestion, subject_id)
+        if s is None:
+            return None
+        from oracle.baseline.models import Entity
+
+        goal = await db.get(Entity, s.goal_id)
+        held = bool(s.checks) and not has_role(principal.role, "owner")
+        return goal is not None and goal.type == "goal" and goal.status == "confirmed" and not held
+    return None
 
 
 async def _edits(db: AsyncSession, principal: Any, document_id: uuid.UUID) -> bool:

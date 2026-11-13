@@ -77,6 +77,7 @@ for (const width of [1440, 1024]) {
       const [s0, e0] = await span(b);
       // The right end: the start stays.
       await drag(page, b, 90, 0.99);
+      // The toast names the item by its feature code before its name.
       await expect(page.getByText(/Moved 'F-06 Weekly alert digest'/)).toBeVisible();
       await expect(b).not.toHaveAttribute("data-end", e0);
       await expect(b).toHaveAttribute("data-start", s0);

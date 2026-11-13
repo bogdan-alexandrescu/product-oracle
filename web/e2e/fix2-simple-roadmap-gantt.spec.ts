@@ -42,15 +42,22 @@ test.describe("desktop", () => {
   test.use(DESKTOP);
 
   for (const format of ["gantt", "waterfall"] as const) {
-    test(`${format}: a row shows its name, never a code (findings 15, 16; fix4 qa-simple-roadmap-3)`, async ({ page }) => {
+    test(`${format}: a row shows its code then its name, once, never a bare code (findings 15, 16; fix4 qa-simple-roadmap-3)`, async ({ page }) => {
       await open(page, "simple-plan");
       await page.getByTestId(`format-${format}`).click();
       await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
-      // QA Nov 12 #1 / Ground Truth: the name reads with its code first, as its card does:
-      // "F-05 Team invites", not a bare "Team invites".
+      // docs/ground-truth.md: a feature shows its code with its name ("F-05 Team invites"); one with
+      // no code reads its name with the Not in the Ground Truth flag. The code shows once, never alone.
       await expect(row(page, "F-05 Team invites").getByTestId("label-title")).toHaveAttribute("title", "F-05 Team invites");
       await expect(page.getByTestId("label-code")).toHaveCount(0);
-      await expect(page.getByTestId("chart-labels")).toContainText("F-05 Team invites");
+      const labels = page.getByTestId("chart-label");
+      await expect(labels.first()).toBeVisible();
+      for (const label of await labels.all()) {
+        const name = ((await label.getByTestId("label-title").textContent()) ?? "").trim();
+        expect(name, "a row is never a bare code").not.toMatch(/^[A-Z]-\d+[a-z]?$/);
+        expect(name, "a code shows once, never repeated").not.toMatch(/^([A-Z]-\d+[a-z]?) .*\b\1\b/);
+        if (!/^[A-Z]-\d+[a-z]? \S/.test(name)) await expect(label.getByTestId("not-in-gt"), `${name} is flagged`).toHaveCount(1);
+      }
     });
   }
 

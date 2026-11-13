@@ -25,7 +25,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { confirmGoalLinks, type BaselineState } from "./baseline";
 import { stableUuid } from "./ids";
-import { ANY_CODE as CODE_RE, codeFree, nextFeatureCode, setCode, wantedCode, wholeCode } from "./feature-codes";
+import { ANY_CODE as CODE_RE, codeFree, formerKeys, nextFeatureCode, setCode, wantedCode, wholeCode } from "./feature-codes";
 import { closed, roadmapId, type SimpleDb } from "./simple-roadmap";
 
 export const GROUND_TRUTH_FLAGS_SCENARIO = "ground-truth-flags";
@@ -100,10 +100,13 @@ const BASE_CODES = ["F-04", "F-05", "F-06", "F-07", "F-08"];
 
 /** The ground-truth-confirm scenario's roadmap item, on the proposed Usage sync. */
 const CONFIRM_ITEM = "gt-usage-sync";
+/** The ground-truth-confirm scenario's roadmap item on Alert sounds, from the PRD section of Sheets export's code. */
+const SOUNDS_ITEM = "gt-alert-sounds";
 
 /** The ground-truth-confirm scenario on top of ground-truth-flags: Usage sync, a run's proposal with its own
  * Code and its proposed link to the goal, on a roadmap item; Alert rules, keyed F-30 as it was confirmed
- * while its Code is F-17. */
+ * while its Code is F-17; Alert volume, keyed F-32 while its Code F-11 is Sheets export's; Alert digest, keyed
+ * F-33 while its Code is F-18, which only the slice F-18a reads. */
 export function seedGroundTruthConfirm(baseline: BaselineState, simple: SimpleDb): void {
   seedGroundTruth(baseline, simple);
   const template = baseline.entities.find((e) => e.type === "feature")!;
@@ -115,7 +118,22 @@ export function seedGroundTruthConfirm(baseline: BaselineState, simple: SimpleDb
   baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/usage-sync"), src_id: sync, dst_id: goal.id, status: "proposed", origin: "agent" });
   const rules = featureId("alert-rules");
   baseline.entities.push({ ...template, ...fresh, id: rules, key: "F-30", title: "Alert rules", attrs: { code: "F-17" }, status: "confirmed" });
-  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-rules"), src_id: rules, dst_id: goal.id, status: "proposed", origin: "agent" });
+  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-rules"), src_id: rules, dst_id: goal.id, attrs: { contribution: 1 }, status: "proposed", origin: "agent" });
+  // Alert sounds: confirmed as F-31 while its roadmap item's code, F-11, is Sheets export's.
+  const sounds = featureId("alert-sounds");
+  baseline.entities.push({ ...template, ...fresh, id: sounds, key: "F-31", title: "Alert sounds", attrs: {}, status: "confirmed" });
+  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-sounds"), src_id: sounds, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
+  // Alert volume: confirmed as F-32 while its Code, F-11, is Sheets export's.
+  const volume = featureId("alert-volume");
+  baseline.entities.push({ ...template, ...fresh, id: volume, key: "F-32", title: "Alert volume", attrs: { code: "F-11" }, status: "confirmed" });
+  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-volume"), src_id: volume, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
+  // Alert digest: confirmed as F-33 while its Code is F-18, which only the slice F-18a Alert digest by text reads.
+  const digest = featureId("alert-digest");
+  baseline.entities.push({ ...template, ...fresh, id: digest, key: "F-33", title: "Alert digest", attrs: { code: "F-18" }, status: "confirmed" });
+  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-digest"), src_id: digest, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
+  const byText = featureId("alert-digest-text");
+  baseline.entities.push({ ...template, ...fresh, id: byText, key: "F-18a", title: "Alert digest by text", attrs: {}, status: "confirmed" });
+  baseline.edges.push({ ...edge, ...fresh, id: stableUuid("ground-truth/serves/alert-digest-text"), src_id: byText, dst_id: goal.id, attrs: { contribution: 1 }, status: "confirmed" });
   (baseline.revisions ??= []).push({
     id: stableUuid("ground-truth/revision/alert-rules"),
     entity_id: rules,
@@ -126,13 +144,60 @@ export function seedGroundTruthConfirm(baseline: BaselineState, simple: SimpleDb
     reason: null,
     created_at: "2026-11-12T10:00:00Z",
   });
+  baseline.revisions.push({
+    id: stableUuid("ground-truth/revision/alert-sounds"),
+    entity_id: sounds,
+    edge_id: null,
+    before: { type: "feature", key: "alert-sounds", title: "Alert sounds", body: null, attrs: {}, status: "proposed" },
+    after: { type: "feature", key: "F-31", title: "Alert sounds", body: null, attrs: {}, status: "confirmed" },
+    actor: "user:approver",
+    reason: null,
+    created_at: "2026-11-12T10:05:00Z",
+  });
+  baseline.revisions.push({
+    id: stableUuid("ground-truth/revision/alert-volume"),
+    entity_id: volume,
+    edge_id: null,
+    before: { type: "feature", key: "alert-volume", title: "Alert volume", body: null, attrs: { code: "F-11" }, status: "proposed" },
+    after: { type: "feature", key: "F-32", title: "Alert volume", body: null, attrs: { code: "F-11" }, status: "confirmed" },
+    actor: "user:approver",
+    reason: null,
+    created_at: "2026-11-12T10:10:00Z",
+  });
+  baseline.revisions.push({
+    id: stableUuid("ground-truth/revision/alert-digest"),
+    entity_id: digest,
+    edge_id: null,
+    before: { type: "feature", key: "alert-digest", title: "Alert digest", body: null, attrs: { code: "F-18" }, status: "proposed" },
+    after: { type: "feature", key: "F-33", title: "Alert digest", body: null, attrs: { code: "F-18" }, status: "confirmed" },
+    actor: "user:approver",
+    reason: null,
+    created_at: "2026-11-12T10:15:00Z",
+  });
+  simple.items.push({ key: SOUNDS_ITEM, title: "Alert sounds", horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft: true, feature_id: sounds, section: "f-11" });
+  simple.ids[SOUNDS_ITEM] = stableUuid(`simple-item/${SOUNDS_ITEM}`);
   simple.items.push({ key: CONFIRM_ITEM, title: "Usage sync", horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft: true, feature_id: sync });
   simple.ids[CONFIRM_ITEM] = stableUuid(`simple-item/${CONFIRM_ITEM}`);
 }
 
-/** check.tied_codes: the codes of the scenario's roadmap items linked to a feature (a slice's letter dropped). */
-export function tiedCodes(simple: SimpleDb | undefined, feature: string): string[] {
-  return (simple?.items ?? []).filter((x) => (x.linked_feature ?? x.feature_id) === feature && !closed(x) && !x.trashed).flatMap((x) => wholeCode(x.section) ?? []);
+/** check.tied_codes: the codes of the scenario's roadmap items and the PRD features (Link to a feature) linked to a feature (a slice's letter dropped). */
+export function tiedCodes(simple: SimpleDb | undefined, feature: string, baseline?: BaselineState): string[] {
+  const items = (simple?.items ?? []).filter((x) => (x.linked_feature ?? x.feature_id) === feature && !closed(x) && !x.trashed).flatMap((x) => wholeCode(x.section) ?? []);
+  const prd = Object.values(baseline?.prdLinks ?? {}).flatMap((links) => Object.entries(links).flatMap(([code, to]) => (to === feature ? (wholeCode(code) ?? []) : [])));
+  return [...items, ...prd];
+}
+
+/** fixes._codes: {feature id: the code it reads through its first published roadmap item's PRD section}, for a feature whose key is no code. */
+export function codesRead(simple: SimpleDb | undefined, baseline?: BaselineState): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const x of simple?.items ?? []) {
+    const f = x.linked_feature ?? x.feature_id;
+    const m = /^([a-z]{1,3})-(\d+)([a-j])?$/i.exec((x.section ?? "").trim());
+    const keyed = baseline?.entities.find((e) => e.id === f)?.key ?? "";
+    if (x.draft || x.trashed || !f || !m || out.has(f) || F_CODE.test(keyed)) continue;
+    out.set(f, `${m[1].toUpperCase()}-${m[2].padStart(2, "0")}${(m[3] ?? "").toLowerCase()}`);
+  }
+  return out;
 }
 
 /** Adds the scenario's features (to the baseline) and items (to the Alerts roadmap). */
@@ -190,7 +255,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: 
   const both = { roadmap: ROADMAP, prd: PRD };
   const out: Flag[] = [];
   const ids: Record<string, string> = simple?.ids ?? {};
-  const items = [...ITEMS.map(([key]) => key), CONFIRM_ITEM].map((key) => simple?.items.find((x) => x.key === key)).filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
+  const items = [...ITEMS.map(([key]) => key), CONFIRM_ITEM, SOUNDS_ITEM].map((key) => simple?.items.find((x) => x.key === key)).filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
   // The Ground Truth by code (F-12, a slice F-12a), as check.py's truth_of.
   const truthOf = new Map(truth.filter((e) => F_CODE.test(e.key)).map((e) => [e.key, e]));
   // Link to a feature: a PRD feature linked to a Ground Truth feature is that feature.
@@ -261,10 +326,25 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: 
       .filter((r) => (r.before as { key?: string }).key !== (r.after as { key?: string }).key)
       .map((r) => `${r.entity_id}:${(r.after as { key?: string }).key}`),
   );
+  // Who holds each code (its key, a code it reads through its published item, a code it gave back), as check.py's held.
+  const read = codesRead(simple, baseline);
+  // A slice keeps its letter (F-12a holds no F-12), as check.py's held.
+  const held = new Map<string, string>(formerKeys(baseline));
+  for (const e of byId.values()) if (F_CODE.test(e.key)) held.set(e.key, e.id);
+  for (const [id, c] of read) held.set(c, id);
   for (const e of truth) {
     if (!F_CODE.test(e.key) || !joined.has(`${e.id}:${e.key}`)) continue;
-    const want = wantedCode(e, tiedCodes(simple, e.id));
-    if (want && want !== wholeCode(e.key)) out.push(flag("code_differs", [["use_code", e.id]], { feature: ref(e) }));
+    // A slice reads its feature's code with its letter (F-35a): no code of its own.
+    if (e.parent_id && byId.has(e.parent_id)) continue;
+    const want = wantedCode(e, tiedCodes(simple, e.id, baseline));
+    if (!want || want === wholeCode(e.key)) continue;
+    // Its item's code is another feature's (a duplicate): link the item to that feature.
+    const mine = !wholeCode((e.attrs as Record<string, unknown> | null)?.code);
+    const dup = ![undefined, e.id].includes(held.get(want));
+    const on = mine && dup ? items.find((s) => (s.linked_feature ?? s.feature_id) === e.id && wholeCode(s.section) === want) : undefined;
+    if (on) out.push(flag("code_differs", [["link_to_feature", ids[on.key]]], { item: { id: ids[on.key], code: codeOf(on)[0], name: on.title }, feature: ref(e), where: both }));
+    // Held with no item to link: Use its code could only be refused, so it is not flagged.
+    else if (!dup) out.push(flag("code_differs", [["use_code", e.id]], { feature: ref(e) }));
   }
   const goals = new Set(baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => e.id));
   const serving = new Set(baseline.edges.filter((e) => e.type === "supports" && e.status === "confirmed" && goals.has(e.dst_id)).map((e) => e.src_id));
@@ -406,9 +486,11 @@ export async function routeGroundTruthFixes(baseline: BaselineState, simple: Sim
     const e = baseline.entities.find((x) => x.id === p[3] && x.type === "feature");
     if (!e) return fail(404, "No such feature");
     if (e.status !== "confirmed") return fail(409, "This feature is not in the Ground Truth yet.");
-    const want = wantedCode(e, tiedCodes(simple, e.id));
+    // A slice reads its feature's code with its letter (F-35a), never a code of its own.
+    if (e.parent_id && baseline.entities.some((x) => x.id === e.parent_id && x.type === "feature")) return fail(409, "This feature already has its own code.");
+    const want = wantedCode(e, tiedCodes(simple, e.id, baseline));
     if (!want || want === wholeCode(e.key)) return fail(409, "This feature already has its own code.");
-    if (!codeFree(baseline, e, want)) return fail(409, `Another feature already has the code ${want}.`);
+    if (!codeFree(baseline, e, want, codesRead(simple, baseline))) return fail(409, `Another feature already has the code ${want}.`);
     const before = snapshot(e);
     e.key = want;
     (baseline.codesGiven ??= []).push(want);

@@ -81,6 +81,7 @@ test.describe("desktop", () => {
     await open(page);
     const row = rowOf(page, "F-5");
     const sheet = page.getByRole("dialog");
+    // docs/ground-truth.md: a feature reads its code with its name.
     const menu = page.getByRole("menu", {
       name: "Change F-5 Address lookup service",
     });

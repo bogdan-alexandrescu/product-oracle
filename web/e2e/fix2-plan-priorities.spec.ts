@@ -61,7 +61,7 @@ test.describe("desktop", () => {
     // #6 ▼ is the usual Move dialog: below the next row.
     await press(page, "F-4", "Move down");
     const dialog = page.getByRole("dialog");
-    // Every feature shows its code with its name (Ground Truth rule): "F-3 Shared projects".
+    // docs/ground-truth.md: a feature reads its code with its name.
     await expect(dialog).toContainText("Move below F-3 Shared projects");
     await expect(dialog.getByLabel("Rank")).toHaveCount(0);
     await dialog.getByRole("button", { name: "Cancel" }).click();
@@ -72,9 +72,9 @@ test.describe("desktop", () => {
     await open(page);
     await press(page, "F-5", "Move down");
     const dialog = page.getByRole("dialog");
-    // Every feature shows its code with its name (Ground Truth rule): "F-2 Shipping cost shown in the cart".
+    // docs/ground-truth.md: a feature reads its code with its name.
     await expect(dialog.getByTestId("move-target")).toHaveText("Move below F-2 Shipping cost shown in the cart");
-    await expect(dialog).not.toContainText("Move above Saved addresses at checkout");
+    await expect(dialog).not.toContainText("Move above F-1 Saved addresses at checkout");
   });
 
   test("qa-plan-16: the evidence picker says how many may be picked; each item's score is a percent", async ({ page }) => {
@@ -89,16 +89,16 @@ test.describe("desktop", () => {
     await expect(picker.getByTestId("cited-count")).toHaveText("1 picked, up to 5");
   });
 
-  test("qa-plan-17: features show their code with their name in the cycle, the inspector and Moved for", async ({ page }) => {
+  test("qa-plan-17: features read by code and name in the cycle, the inspector and Moved for", async ({ page }) => {
+    // docs/ground-truth.md: every feature shows its code with its name, never one without the other.
     await open(page);
     const banner = page.getByTestId("cycles-banner");
-    // Every feature shows its code with its name (Ground Truth rule): "F-7 Bulk export → F-8 Scheduled exports".
     await expect(banner).toContainText("F-7 Bulk export → F-8 Scheduled exports");
-    await rowOf(page, "F-5").getByRole("button", { name: "Address lookup service" }).click();
+    await rowOf(page, "F-5").getByRole("button", { name: "F-5 Address lookup service", exact: true }).click();
     const inspector = page.getByTestId("priority-inspector");
     await expect(page.getByTestId("explanation-F-5")).toBeVisible();
     const movedFor = inspector.locator("li", { hasText: "Moved for" });
-    await expect(movedFor).toContainText("Shipping cost shown in the cart");
+    await expect(movedFor).toContainText("F-2 Shipping cost shown in the cart");
   });
 
   test("qa-plan-18: every score has one precision per method, right-aligned", async ({ page }) => {

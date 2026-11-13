@@ -16,9 +16,10 @@ const railCount = (page: Page) => page.getByTestId("simple-nav").getByTestId("si
 
 /** The Inbox's "N waiting", on its page. */
 async function waiting(page: Page): Promise<number> {
-  const shown = page.getByText(/^\d+ waiting$/).first();
-  await expect(shown).toBeVisible({ timeout: 15_000 });
-  return Number((await shown.textContent())!.split(" ")[0]);
+  // simple-home-qa-nov12 #18: Simple's Inbox says its count once, as Needs you's.
+  const shown = page.getByTestId("inbox-needs").getByTestId("panel-count").first();
+  await expect(shown).toHaveText(/^\d+$/, { timeout: 15_000 });
+  return Number((await shown.textContent())!.trim());
 }
 
 test.beforeEach(async ({ page }) => {

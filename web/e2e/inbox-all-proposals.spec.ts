@@ -94,9 +94,10 @@ async function openInboxFromRail(page: Page, phone: boolean): Promise<number> {
 }
 
 async function waiting(page: Page): Promise<number> {
-  const chip = page.getByText(/^\d+ waiting$/).first();
-  await expect(chip).toBeVisible();
-  return Number((await chip.textContent())!.split(" ")[0]);
+  // simple-home-qa-nov12 #18: Simple's Inbox says its count once, as Needs you's.
+  const chip = page.getByTestId("inbox-needs").getByTestId("panel-count").first();
+  await expect(chip).toHaveText(/^\d+$/);
+  return Number((await chip.textContent())!.trim());
 }
 
 const askRow = (page: Page) => page.getByRole("row").filter({ hasText: "asked through Ask Oracle by" }).filter({ hasText: "Welcome video" });
