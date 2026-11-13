@@ -400,9 +400,9 @@ const CARTS_V1: SectionSeed[] = [
     body: [
       "| Milestone | Feature | Goal | Outcome |",
       "|---|---|---|---|",
-      "| [Beta](#milestone-beta) | [F-96 Save cart](#feature-save-cart) | Retention | A cart survives the session |",
-      "|  | [F-97 Cart on every device](#feature-sync) | Retention | The same cart on phone and laptop |",
-      "| [General release](#milestone-ga) | [F-98 Reminder email](#feature-reminder) | Retention | Shoppers come back to finish |",
+      "| [Beta](#milestone-beta) | [Save cart](#feature-save-cart) | Retention | A cart survives the session |",
+      "|  | [Cart on every device](#feature-sync) | Retention | The same cart on phone and laptop |",
+      "| [General release](#milestone-ga) | [Reminder email](#feature-reminder) | Retention | Shoppers come back to finish |",
     ].join("\n"),
   },
   {
@@ -429,19 +429,19 @@ const CARTS_V1: SectionSeed[] = [
   {
     key: "feature-save-cart",
     level: 3,
-    heading: "F-96 Save cart",
+    heading: "Save cart",
     body: "**Story:** as a signed-in shopper, I want my cart kept when I leave, so I can finish later.\n\n**Acceptance:** given a cart with items, when the session ends, then the cart is there at the next sign-in.",
   },
   {
     key: "feature-sync",
     level: 3,
-    heading: "F-97 Cart on every device",
+    heading: "Cart on every device",
     body: "**Story:** as a shopper on two devices, I want one cart, so I never rebuild it.\n\n**Acceptance:** an item added on the phone appears on the laptop within five seconds.",
   },
   {
     key: "feature-reminder",
     level: 3,
-    heading: "F-98 Reminder email",
+    heading: "Reminder email",
     body: "**Story:** as a shopper who left a cart, I want one reminder, so I remember to finish.\n\n**Acceptance:** one email per cart, sent after the chosen delay, with a one-click opt-out.",
   },
   { key: "milestones", level: 2, heading: "Milestones", body: "Dates come from the tracker estimates." },
