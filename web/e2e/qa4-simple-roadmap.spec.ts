@@ -195,8 +195,8 @@ test.describe("desktop only", () => {
     const welcome = page.locator('[data-testid="timeline-row"][data-item="setup-video"] [data-testid="timeline-bar"]').first();
     // walkb-roadmap (e4cdf478): an estimated item starts after its dependency (Welcome tour),
     // keeping its length (board-quarters: Later's window, from Apr 1, 2027), so Welcome video
-    // now runs Sep 15, 2027 to Apr 7, 2029.
-    await expect(welcome).toHaveAttribute("aria-label", /^Welcome video, Sep 15, 2027 – Apr 7, 2029(\. Arrows .*)?$/);
+    // now runs Sep 15, 2027 to Apr 7, 2029. QA Nov 12 #6: with only Oracle's estimate it says so.
+    await expect(welcome).toHaveAttribute("aria-label", /^Welcome video, No dates yet · estimated Sep 15, 2027 – Apr 7, 2029(\. Arrows .*)?$/);
     await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("return-place").first()).toHaveText("1st to return");
   });

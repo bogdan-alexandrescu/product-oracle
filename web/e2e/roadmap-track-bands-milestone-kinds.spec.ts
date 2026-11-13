@@ -215,7 +215,8 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     // Each item row in a band: its dates only (its goal is in the band's header).
     const dates = page.getByTestId("timeline-row-dates");
     expect(await dates.count()).toBeGreaterThan(3);
-    for (const t of await dates.allInnerTexts()) expect(t.trim()).toMatch(/^[A-Z][a-z]{2} \d{1,2}(, \d{4})? – [A-Z][a-z]{2} \d{1,2}(, \d{4})?$/);
+    // QA Nov 12 #6: an item with only Oracle's estimate reads "No dates yet · estimated …".
+    for (const t of await dates.allInnerTexts()) expect(t.trim()).toMatch(/^(No dates yet · estimated )?[A-Z][a-z]{2} \d{1,2}(, \d{4})? – [A-Z][a-z]{2} \d{1,2}(, \d{4})?$/);
     // The No track band reads just "No track", as the track bands' headers name no count.
     const bands = (await page.getByTestId("timeline-band").allInnerTexts()).map((t) => t.trim());
     expect(bands).toContain("No track");
