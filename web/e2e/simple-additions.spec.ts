@@ -37,11 +37,14 @@ async function openRoadmap(page: Page, email?: string) {
 /** A lane's key on the Timeline (timeline-overlap B2), by its title. */
 const laneOf = (page: Page, title: string) => page.getByTestId("chart-group").filter({ hasText: title }).getAttribute("data-lane");
 
-/** The Gantt's group (its title, as its header names it) an item's row sits under, by the item's title. */
+/**
+ * The Gantt's group (its title, as its header names it) an item's row sits under, by the item's title. The row
+ * names it by its code and name once it has a code ("F-31 Team usage report", docs/ground-truth.md), else its name.
+ */
 const groupOf = (page: Page, title: string) =>
   page
     .getByTestId("chart-label")
-    .filter({ has: page.getByTestId("label-title").getByText(title, { exact: true }) })
+    .filter({ has: page.getByTestId("label-title").getByText(new RegExp(`^(?:[A-Z][A-Z0-9]*-\\S+ )?${title}$`)) })
     .evaluate((el) => {
       let e = el.parentElement!.previousElementSibling;
       while (e && e.getAttribute("data-testid") !== "chart-group") e = e.previousElementSibling;
@@ -182,7 +185,7 @@ for (const scheme of ["light", "dark"] as const) {
       const c = boardCard(page, TWIN_KEY);
       await expect(column(page, "later").locator(`[data-item="${TWIN_KEY}"]`)).toBeVisible();
       await expect(c.getByTestId("draft-tag")).toHaveText("Draft");
-      await expect(c.getByTestId("board-looks-like")).toHaveText("Looks like Weekly alert digest");
+      await expect(c.getByTestId("board-looks-like")).toHaveText("Looks like F-06 Weekly alert digest");
       // one-feature-panel: the added draft opens its panel at once; close it to reach the tray.
       const added = page.getByTestId("floating-card");
       await expect(added.getByRole("heading", { name: TWIN })).toBeVisible();

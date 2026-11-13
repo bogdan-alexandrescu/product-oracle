@@ -25,6 +25,8 @@ const toast = (page: Page, text: string | RegExp) => page.getByRole("status").fi
 /** A milestone on the Goal map's strip, in its goal's part of it (goals in order). */
 const onStrip = (page: Page, goal: number, name: string) => page.getByTestId("gm-strip").locator(":scope > div").nth(goal).getByTestId("gm-strip-milestone").filter({ hasText: name });
 const panel = (page: Page) => page.getByTestId("floating-card");
+/** An item with no code reads None, flagged Not in the Ground Truth (docs/ground-truth.md, QA Nov 12 #2). */
+const NO_CODE = /^None · Not in the Ground Truth/;
 
 async function asRole(page: Page, role?: Role) {
   if (role) await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_ROLE_KEY, role] as const);
@@ -65,7 +67,7 @@ test.describe("a roadmap item's feature code", () => {
     await expect(page.getByTestId("simple-roadmap")).toBeVisible();
     await openRoadmapItem(page, "alert-export");
     await expect(panel(page)).toBeVisible();
-    await expect(panel(page).getByTestId("card-code")).toHaveText("None");
+    await expect(panel(page).getByTestId("card-code")).toHaveText(NO_CODE);
   }
 
   async function giveCode(page: Page, code: string) {
@@ -82,12 +84,12 @@ test.describe("a roadmap item's feature code", () => {
     await openExport(page);
     await giveCode(page, "F-06");
     await expect(toast(page, "F-06 is already the code of F-06 Weekly alert digest")).toBeVisible();
-    await expect(panel(page).getByTestId("card-code")).toHaveText("None");
+    await expect(panel(page).getByTestId("card-code")).toHaveText(NO_CODE);
     await giveCode(page, "f-31");
     await expect(panel(page).getByTestId("card-code")).toHaveText("F-31");
     await expect(panel(page).getByTestId("card-name")).toHaveText(/^F-31\s*Alert history export/);
     await toast(page, "Code changed").getByRole("button", { name: "Undo" }).click();
-    await expect(panel(page).getByTestId("card-code")).toHaveText("None");
+    await expect(panel(page).getByTestId("card-code")).toHaveText(NO_CODE);
   });
 
   test("Undo never gives the old code to a second item: it is refused in plain words", async ({ page, context }) => {
@@ -107,7 +109,7 @@ test.describe("a roadmap item's feature code", () => {
     await other.goto("/simple/roadmap");
     await expect(other.getByTestId("simple-roadmap")).toBeVisible();
     await openRoadmapItem(other, "alert-sso");
-    await expect(panel(other).getByTestId("card-code")).toHaveText("None");
+    await expect(panel(other).getByTestId("card-code")).toHaveText(NO_CODE);
     await giveCode(other, "F-31");
     await expect(panel(other).getByTestId("card-code")).toHaveText("F-31");
     await other.close();
@@ -126,7 +128,7 @@ test.describe("a roadmap item's feature code", () => {
     await openExport(page, "commenter");
     await giveCode(page, "F-31");
     await expect(toast(page, /Code changed proposed/)).toBeVisible();
-    await expect(panel(page).getByTestId("card-code")).toHaveText("None");
+    await expect(panel(page).getByTestId("card-code")).toHaveText(NO_CODE);
   });
 
   test("a code from its PRD reads in place, with why behind an (i)", async ({ page }) => {
