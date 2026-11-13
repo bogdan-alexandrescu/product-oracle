@@ -8,7 +8,8 @@ import { login } from "./helpers";
  * Confirm it keeps a feature's own code and its goal link (docs/ground-truth.md: a feature is keyed
  * by its own code when no other feature has it). The "ground-truth-confirm" scenario: Usage sync, a
  * feature a run proposed with its Code F-16 and its link to the goal, on a roadmap item; Alert rules,
- * confirmed before as F-30 while its Code is F-17, its goal link still only proposed.
+ * confirmed before as F-30 while its Code is F-17, its goal link still only proposed (contribution 1); Alert
+ * sounds, confirmed as F-31 while its roadmap item's code F-11 is Sheets export's.
  */
 
 async function open(page: Page) {
@@ -44,7 +45,7 @@ test("Use its code re-keys a feature confirmed under another number", async ({ p
   await expect(row(page, "code_differs", "Alert rules")).toContainText("F-30");
   await row(page, "code_differs", "Alert rules").getByRole("button", { name: /Use its code/ }).click();
   await expect(page.getByTestId("gt-notice")).toContainText("“Alert rules” is now F-17.");
-  await expect(count(page, "code_differs")).toHaveCount(0);
+  await expect(row(page, "code_differs", "Alert rules")).toHaveCount(0);
   await openKind(page, "no_goal");
   await expect(row(page, "no_goal", "Alert rules")).toHaveCount(0);
 });
@@ -57,4 +58,26 @@ test("Pick a goal on a goal it is only proposed to serve confirms that link", as
   await picker.getByRole("button").filter({ hasText: "Raise activation" }).click();
   await expect(page.getByTestId("gt-notice")).toContainText("“Alert rules” now serves “Raise activation”.");
   await expect(row(page, "no_goal", "Alert rules")).toHaveCount(0);
+});
+
+test("Pick a goal on a proposed link keeps the contribution picked", async ({ page }) => {
+  await open(page);
+  await openKind(page, "no_goal");
+  await row(page, "no_goal", "Alert rules").getByRole("button", { name: /Pick a goal/ }).click();
+  await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Raise activation" }).click();
+  await expect(page.getByTestId("gt-notice")).toContainText("“Alert rules” now serves “Raise activation”.");
+  await page.getByTestId("feature-F-30").getByRole("button", { name: "Alert rules" }).click();
+  await expect(page.getByRole("dialog", { name: "Alert rules" }).getByLabel("Contribution to Raise activation")).toHaveValue("2");
+});
+
+test("A code another feature holds offers Link to a feature on its item", async ({ page }) => {
+  await open(page);
+  await openKind(page, "code_differs");
+  const sounds = row(page, "code_differs", "Alert sounds");
+  await expect(sounds).toContainText("F-31");
+  await expect(sounds.getByRole("button", { name: /Use its code/ })).toHaveCount(0);
+  await sounds.getByRole("button", { name: /Link to a feature/ }).click();
+  await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Sheets export" }).click();
+  await expect(page.getByTestId("gt-notice")).toContainText("Linked “Alert sounds” to “Sheets export”.");
+  await expect(row(page, "code_differs", "Alert sounds")).toHaveCount(0);
 });
