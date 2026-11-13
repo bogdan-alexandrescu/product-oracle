@@ -9,9 +9,16 @@ Test cards (protects / fails_when / no_claim):
 - test_confirm_keys_by_its_items_code: protects=a proposed feature with no Code attribute,
   confirmed through its roadmap slice item f-07a, is keyed F-07 (the letter dropped);
   fails_when=it takes the next free number.
-- test_a_taken_code_falls_back_and_is_flagged: protects=when another feature has F-07 the
-  confirmed feature takes the next number and is flagged ``code_differs``; fails_when=the
-  confirm is refused, or the clash goes unflagged.
+- test_a_taken_code_falls_back_unflagged: protects=when another feature has its Code
+  attribute F-07 the confirmed feature takes the next number and is not flagged
+  ``code_differs`` (Use its code could only be refused); fails_when=the confirm is refused,
+  or a flag whose one fix is refused.
+- test_a_held_code_from_its_prd_feature_is_not_flagged: protects=a code its linked PRD
+  feature gives it, held by another feature, with no item to link, raises no flag;
+  fails_when=a flag whose one fix (Use its code) is refused.
+- test_link_to_a_feature_on_its_item_clears_code_differs: protects=Link to a feature on a
+  duplicate's item (its code F-07 is another feature's) links the item to that feature and
+  the ``code_differs`` flag is gone; fails_when=the flag stays after the link.
 - test_confirm_confirms_its_proposed_goal_links: protects=confirming a feature confirms the
   goal links a run proposed with it: no ``no_goal``; fails_when=a false Serves no goal.
 - test_picking_an_already_proposed_goal_confirms_it: protects=Pick a goal on a goal whose
@@ -107,13 +114,14 @@ async def test_confirm_keys_by_its_items_code(client):
     assert (await _confirm(client, ctx, fid))["key"] == "F-07"
 
 
-async def test_a_taken_code_falls_back_and_is_flagged(client):
+async def test_a_taken_code_falls_back_unflagged(client):
     ctx, fid, _, _ = await world(taken=True)
     key = (await _confirm(client, ctx, fid))["key"]
     assert key not in ("F-07", "usage-sync") and key.startswith("F-")
-    flags = _of(await _check(client, ctx), "code_differs")
-    assert [f["feature"]["id"] for f in flags] == [fid]
-    assert [(x["action"], x["target"]) for x in flags[0]["fixes"]] == [("use_code", fid)]
+    assert fid not in [f["feature"]["id"] for f in _of(await _check(client, ctx), "code_differs")]
+    # Use its code could only be refused: F-07 is Bulk import's.
+    r = await client.post(f"/v1/baseline/entities/{fid}/own-code", headers=ctx.as_("approver"))
+    assert r.status_code == 409, r.text
 
 
 async def test_confirm_confirms_its_proposed_goal_links(client):
@@ -199,3 +207,113 @@ async def test_the_repair_is_for_approvers(client):
     await _mis_keyed(ctx, fid)
     r = await client.post(f"/v1/baseline/entities/{fid}/own-code", headers=ctx.as_("viewer"))
     assert r.status_code == 403
+
+
+# --- review fixes: a person's chosen contribution, slices, proposed goals, duplicates --------
+
+
+async def _link(ctx, fid: str, grow: str) -> Edge:
+    async with tenant_session(ctx.tenant_id) as s:
+        return await s.scalar(
+            select(Edge).where(Edge.src_id == uuid.UUID(fid), Edge.dst_id == uuid.UUID(grow))
+        )
+
+
+async def test_picking_a_proposed_link_keeps_the_chosen_contribution(client):
+    ctx, fid, grow, _ = await world()
+    r = await client.post(
+        "/v1/baseline/edges",
+        headers=ctx.as_("approver"),
+        json={"src_id": fid, "dst_id": grow, "type": "supports", "origin": "user",
+              "attrs": {"contribution": 3}},
+    )  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+    assert r.json()["edge"]["status"] == "confirmed"
+    assert r.json()["edge"]["attrs"]["contribution"] == 3
+    assert (await _link(ctx, fid, grow)).attrs["contribution"] == 3
+
+
+@pytest.mark.parametrize(
+    ("origin", "status"), [("agent", "proposed"), ("agent", None), ("user", "proposed")]
+)
+async def test_only_a_person_confirming_confirms_a_proposed_link(client, origin, status):
+    ctx, fid, grow, _ = await world()
+    body = {"src_id": fid, "dst_id": grow, "type": "supports", "origin": origin,
+            "attrs": {"contribution": 3}}  # fmt: skip
+    if status:
+        body["status"] = status
+    r = await client.post("/v1/baseline/edges", headers=ctx.as_("approver"), json=body)
+    assert r.status_code == 409, r.text
+    edge = await _link(ctx, fid, grow)
+    assert edge.status == "proposed" and "contribution" not in (edge.attrs or {})
+
+
+async def test_confirm_leaves_links_to_a_proposed_goal_proposed(client):
+    ctx, fid, _, _ = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        idea = await s.scalar(select(Entity).where(Entity.key == "grow"))
+        idea.status = "proposed"
+        await s.commit()
+        grow = str(idea.id)
+    await _confirm(client, ctx, fid)
+    assert (await _link(ctx, fid, grow)).status == "proposed"
+
+
+async def test_use_its_code_leaves_a_slice_its_letter(client):
+    """A slice F-35a of F-35 whose Code attribute reads F-07 is not flagged, nor re-keyed."""
+    ctx, _, _, _ = await world(section=None)
+    async with tenant_session(ctx.tenant_id) as s:
+        f35 = await s.scalar(select(Entity).where(Entity.key == "F-35"))
+        part = Entity(type="feature", key="F-35a", title="Night alerts by email",
+                      status="confirmed", origin="agent", parent_id=f35.id,
+                      attrs={"code": "F-07"})  # fmt: skip
+        s.add(part)
+        await s.flush()
+        s.add(EntityRevision(entity_id=part.id, actor="approver@example.com",
+                             before={"key": "night-email", "status": "proposed"},
+                             after={"key": "F-35a", "status": "confirmed"}))  # fmt: skip
+        await s.commit()
+        sid = str(part.id)
+    assert sid not in [f["feature"]["id"] for f in _of(await _check(client, ctx), "code_differs")]
+    r = await client.post(f"/v1/baseline/entities/{sid}/own-code", headers=ctx.as_("approver"))
+    assert r.status_code == 409, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.get(Entity, uuid.UUID(sid))).key == "F-35a"
+
+
+async def test_a_duplicate_holding_the_code_offers_link_to_a_feature(client):
+    """Its item's code F-07 is Bulk import's: Link to a feature on its item, not Use its code."""
+    ctx, fid, _, item = await world(code=None, taken=True)
+    await _confirm(client, ctx, fid)
+    flags = _of(await _check(client, ctx), "code_differs")
+    assert [f["feature"]["id"] for f in flags] == [fid]
+    assert [(x["action"], x["target"]) for x in flags[0]["fixes"]] == [("link_to_feature", item)]
+    assert flags[0]["item"]["id"] == item and flags[0]["item"]["name"] == "Usage sync"
+
+
+async def test_link_to_a_feature_on_its_item_clears_code_differs(client):
+    """Link to a feature on its item (as the flag's fix does: a set_feature change) links the
+    item to Bulk import, which holds F-07: Code differs is gone."""
+    ctx, fid, _, item = await world(code=None, taken=True)
+    await _confirm(client, ctx, fid)
+    assert [f["feature"]["id"] for f in _of(await _check(client, ctx), "code_differs")] == [fid]
+    async with tenant_session(ctx.tenant_id) as s:
+        bulk = str(await s.scalar(select(Entity.id).where(Entity.key == "F-07")))
+    body = {"op": "set_feature", "target": {"item_id": item}, "before": {"feature_id": fid},
+            "after": {"feature_id": bulk}}  # fmt: skip
+    r = await client.post("/v1/simple/changes", headers=ctx.as_("owner"), json=body)
+    assert r.status_code in (200, 201), r.text
+    assert r.json()["change"]["status"] == "applied"
+    assert not _of(await _check(client, ctx), "code_differs")
+
+
+async def test_a_held_code_from_its_prd_feature_is_not_flagged(client):
+    """Its PRD feature F-07 is linked to it while Bulk import has F-07, and no item of it
+    reads F-07: no flag, as Use its code could only be refused."""
+    ctx, fid, _, _ = await world(code=None, section=None, taken=True)
+    async with tenant_session(ctx.tenant_id) as s:
+        plan = await s.scalar(select(SimplePrdPlan))
+        plan.data = {**PLAN, "links": {"F-07": fid}}
+        await s.commit()
+    await _confirm(client, ctx, fid)
+    assert fid not in [f["feature"]["id"] for f in _of(await _check(client, ctx), "code_differs")]

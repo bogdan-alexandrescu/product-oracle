@@ -70,6 +70,8 @@ export type BaselineCaller = {
   codesSeen?: () => string[];
   /** check.tied_codes: the PRD section codes of the roadmap items linked to a feature. */
   codesOf?: (featureId: string) => string[];
+  /** fixes._codes: the codes features read through their published roadmap item's PRD section ({feature id: code}). */
+  codesRead?: () => Map<string, string>;
 };
 
 /** What citing a source item copies from it. */
@@ -838,7 +840,7 @@ function updateEntity(
   s: BaselineState,
   e: EntityRow,
   changes: Changes,
-  writer: { origin: "user" | "agent"; userId: string; reason?: string | null; runId?: string | null; seen?: string[]; tied?: string[] },
+  writer: { origin: "user" | "agent"; userId: string; reason?: string | null; runId?: string | null; seen?: string[]; tied?: string[]; read?: Map<string, string> },
 ): ProposalRow | null {
   if (e.type === "goal") {
     // As service.update_entity: a goal's name is stripped and never blank; it and the description are written
@@ -894,12 +896,12 @@ function updateEntity(
   if (diff.status === "confirmed" && diff.key) {
     revise(before);
     const typed = entitySnapshot(e);
-    codeOnJoin(s, e, writer.seen ?? [], writer.tied);
+    codeOnJoin(s, e, writer.seen ?? [], writer.tied, writer.read);
     if (e.key !== typed.key) revise(typed);
     confirmGoalLinks(s, e, writer.userId);
     return null;
   }
-  if (diff.status === "confirmed") codeOnJoin(s, e, writer.seen ?? [], writer.tied);
+  if (diff.status === "confirmed") codeOnJoin(s, e, writer.seen ?? [], writer.tied, writer.read);
   // A revision for the change, as service._revision records it.
   revise(before);
   if (diff.status === "confirmed") confirmGoalLinks(s, e, writer.userId);
@@ -1155,9 +1157,9 @@ function createEdge(s: BaselineState, input: Schemas["EdgeCreate"], userId: stri
     throw new MockError(422, "a supports edge needs attrs.contribution, an integer 0-3");
   }
   const found = s.edges.find((e) => e.src_id === input.src_id && e.dst_id === input.dst_id && e.type === input.type);
-  // Picking a link a run only proposed confirms it (service.create_edge).
-  if (found?.status === "proposed") {
-    Object.assign(found, { status: "confirmed", updated_at: now() });
+  // A person picking a link a run only proposed confirms it, with what they picked (service.create_edge); anyone else: it exists.
+  if (found?.status === "proposed" && (input.origin ?? "user") === "user" && (input.status ?? "confirmed") === "confirmed") {
+    Object.assign(found, { status: "confirmed", attrs: mergeAttrs(found.attrs, input.attrs ?? {}), updated_at: now() });
     lock(found, userId);
     return found;
   }
@@ -1184,12 +1186,12 @@ function createEdge(s: BaselineState, input: Schemas["EdgeCreate"], userId: stri
   return e;
 }
 
-/** fixes.confirm_goal_links: a confirmed feature's goal links a run proposed with it are confirmed with it. */
+/** fixes.confirm_goal_links: a confirmed feature's goal links a run proposed with it are confirmed with it, to confirmed goals only. */
 export function confirmGoalLinks(s: BaselineState, e: { id: string; type: string; status: string }, userId: string): void {
   if (e.type !== "feature" || e.status !== "confirmed") return;
   for (const x of s.edges) {
     const goal = s.entities.find((g) => g.id === x.dst_id);
-    if (x.src_id === e.id && x.type === "supports" && x.status === "proposed" && goal?.type === "goal" && goal.status !== "rejected") {
+    if (x.src_id === e.id && x.type === "supports" && x.status === "proposed" && goal?.type === "goal" && goal.status === "confirmed") {
       Object.assign(x, { status: "confirmed", updated_at: now() });
       lock(x, userId);
     }
@@ -1658,6 +1660,7 @@ export async function routeBaseline(
           origin: input.origin ?? "user",
           seen: seen(),
           tied: caller.codesOf?.(e.id),
+          read: caller.codesRead?.(),
           userId: caller.userId,
           reason: input.reason,
           runId: input.run_id,
@@ -1675,7 +1678,7 @@ export async function routeBaseline(
           e.updated_at = now();
           lock(e, caller.userId);
           // codes-on-join: a feature confirmed gets its code in the same write (fixes.code_on_join).
-          if (status === "confirmed") codeOnJoin(s, e, seen(), caller.codesOf?.(e.id));
+          if (status === "confirmed") codeOnJoin(s, e, seen(), caller.codesOf?.(e.id), caller.codesRead?.());
           (s.revisions ??= []).push({
             id: newId(),
             entity_id: e.id,

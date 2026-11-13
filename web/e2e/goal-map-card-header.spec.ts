@@ -11,17 +11,20 @@ import { expect, test, type Locator, type Page } from "./test";
  *
  * protects: a wide pill (Not measured) or a long target (money, a number with a long unit) pushing
  *   the (i) past the card's border and the ⋯ down onto the name line, or off the rightmost card.
- * fails_when: any header part leaves its card, overlaps another or the name, or the ⋯ cannot be clicked.
+ * fails_when: any header part leaves its card, overlaps another or the name, or the ⋯ cannot be clicked;
+ *   or a header that fits is not the picked one-row frame (status, target and ⋯ centred on one line,
+ *   a 24px row: the name at the card's top + 1px border + 12px padding + 24 + 4px gap).
  * no_claim: the menu's items or what they do (goal-map-tracks-grid covers them).
  */
 
-type Goal = { name: string; target: string; status: string };
+/** fits: the widths its header is one row at (target, status, (i) and ⋯ side by side). */
+type Goal = { name: string; target: string; status: string; fits?: number[] };
 
 const FOUR: Goal[] = [
-  { name: "Booked demos per rep per day", target: "40", status: "Met" },
-  { name: "Recovered card payments per month", target: "$250,000", status: "At risk" },
+  { name: "Booked demos per rep per day", target: "40", status: "Met", fits: [1920, 1512] },
+  { name: "Recovered card payments per month", target: "$250,000", status: "At risk", fits: [1920] },
   { name: "Activations per team per week", target: "1,200 shops signed up each week", status: "Not measured" },
-  { name: "Revenue per day", target: "$12,000", status: "On track" },
+  { name: "Revenue per day", target: "$12,000", status: "On track", fits: [1920] },
 ];
 const FIVE: Goal[] = [...FOUR, { name: "Referrals from happy customers", target: "1,500 referred teams per month", status: "On track" }];
 
@@ -86,6 +89,13 @@ async function checkHeaders(page: Page, goals: Goal[], width: number) {
     expect(Math.abs(info.y + info.height / 2 - (more.y + more.height / 2)), `${at}: (i) beside ⋯`).toBeLessThan(4);
     expect(more.x, `${at}: ⋯ right of (i)`).toBeGreaterThan(info.x);
     expect(more.y, `${at}: ⋯ at the top`).toBeLessThan(first.y + 16);
+    if (g.fits?.includes(width)) {
+      const mid = (b: Box) => b.y + b.height / 2;
+      const [status] = drawn.status;
+      expect(Math.abs(mid(status) - mid(first)), `${at}: status centred on the target`).toBeLessThanOrEqual(2);
+      expect(Math.abs(mid(status) - mid(more)), `${at}: status centred on the ⋯`).toBeLessThanOrEqual(2);
+      expect(Math.abs(n.y - (c.y + 1 + 12 + 24 + 4)), `${at}: one 24px header row above the name`).toBeLessThanOrEqual(1);
+    }
     await clickable(parts.info);
     await clickable(parts.more);
     await parts.more.click();

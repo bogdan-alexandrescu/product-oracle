@@ -51,6 +51,10 @@ It gives each feature its mark:
   Ground Truth by that code at once), and an item's own code (F-02, F-09 for an item F-09a). It
   also links what was flagged (the roadmap item, or the PRD's feature). A new feature serves no
   goal yet, so it is flagged `no_goal` until one is picked.
+- A feature that joins the Ground Truth (confirmed, or its PRD approved) is keyed by its own
+  code: its Code attribute, else its roadmap item's or PRD feature's code, when no other
+  feature has it; else by the next number. The key it had stays an alias of it and is never
+  given again. A slice keeps its letter (F-15a): it has no code of its own.
 - A code key (F-09, a slice F-15a) is a feature's only, stored the one way it is read (F-9 and
   F-009 are F-09; a slice keeps its letter), and once: the API refuses a new feature keyed by a
   code another feature has, whether by its key, through its published roadmap item's PRD
@@ -80,7 +84,7 @@ and **Link to a feature** (**Confirm it** and **Link to a feature** when its fea
 proposed), or the one fix its kind needs. Home and the Ground Truth page
 count the flags, and each count leads to the flagged items.
 
-The Ground Truth check lists every flag. Its six kinds, and the fixes each offers (the
+The Ground Truth check lists every flag. Its seven kinds, and the fixes each offers (the
 check's `action`, with the button's words):
 
 | Kind | What it means | Fixes |
@@ -90,6 +94,7 @@ check's `action`, with the button's words):
 | `slice_parent_missing` | A roadmap slice item (F-15a, or an item of a PRD feature over several milestones) linked to no feature, whose feature (F-15) is not in the Ground Truth | Add to Ground Truth (adds F-15), Link to a feature (links the item) |
 | `prd_feature_missing` | A feature of a PRD's approved version whose code no Ground Truth feature has, or that has no code | Add to Ground Truth, Link to a feature |
 | `no_code` | A Ground Truth feature with no F-code | Give it a code (`give_code`) |
+| `code_differs` | A Ground Truth feature keyed by the next number as it joined while its own code (its Code attribute, else its roadmap item's or PRD feature's) is another; a slice is never flagged. Shown as **Code differs from its PRD** | Use its code (`use_code`: its own code becomes its key, the old number stays an alias, never given again, and its proposed goal links to confirmed goals are confirmed); when that is its roadmap item's code and another feature has it, Link to a feature (`link_to_feature`) on that item instead; when another feature has it and no item of its own reads it (its Code attribute, its PRD feature's code), not flagged: it keeps the number it has |
 | `no_goal` | A Ground Truth feature that serves no confirmed goal by a confirmed link (a run's proposed goal or link does not count) | Pick a goal (`pick_goal`) |
 | `runs_today_on_roadmap` | A feature that runs today but is still on the roadmap | Take it off the roadmap (`take_off_roadmap`) |
 

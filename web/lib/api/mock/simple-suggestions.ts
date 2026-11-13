@@ -194,6 +194,14 @@ export function fileSuggestion(db: SimpleDb, ctx: Ctx, goal: string, title: stri
   return r;
 }
 
+/** As visuals._reads_loose of a suggestion (additions.readable): whoever reads its goal's suggestions, a
+ * confirmed goal's; a held one the owners'. null: no such suggestion. */
+export function readsGoalSuggestion(db: SimpleDb | undefined, ctx: Ctx, id: string): boolean | null {
+  const s = db?.goal_suggestions?.find((x) => x.id === id);
+  if (!s) return null;
+  return !newCompany() && goalKeys(db, ctx).includes(s.goal) && (ctx.role === "owner" || !s.checks?.length);
+}
+
 /** Takes back a person's suggestion while it is open (the chat card's Undo). */
 export function unfileSuggestion(db: SimpleDb, id: string): boolean {
   const rows = db.goal_suggestions ?? [];
