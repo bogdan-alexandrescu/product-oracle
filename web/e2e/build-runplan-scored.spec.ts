@@ -51,7 +51,8 @@ test.describe("desktop", () => {
     await expect(first).toContainText("4.20");
     await expect(first.getByTestId("live-rank")).toHaveText("—");
     // What a new feature depends on, as the run's feature set says (frames rp1-a-rest, rp1-a-open).
-    for (const key of ["N-2", "N-3", "N-4"]) await expect(page.getByTestId(`priority-row-${key}`).getByTestId("row-deps")).toHaveText("Address book per account");
+    // docs/ground-truth.md: a feature reads its code with its name ("N-1 Address book per account").
+    for (const key of ["N-2", "N-3", "N-4"]) await expect(page.getByTestId(`priority-row-${key}`).getByTestId("row-deps")).toHaveText("N-1 Address book per account");
     await expect(first.getByTestId("row-deps")).toHaveText("—");
 
     // Opened: Import addresses is #8 at 1.80, worked out on the formula; 60% set by the run.

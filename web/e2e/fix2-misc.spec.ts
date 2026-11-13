@@ -146,7 +146,8 @@ test("webhooks and trash: their empty states explain themselves", async ({ page 
   // One short line and where to delete from; the 30 days and who restores sit behind its (i).
   const trash = page.getByTestId("trash-empty");
   await expect(trash).toContainText("Trash is empty.");
-  await expect(trash.getByRole("link", { name: "Open Documents" })).toHaveAttribute("href", "/documents");
+  // Train BQ: the link reads "Open PRDs" (it still goes to /documents).
+  await expect(trash.getByRole("link", { name: "Open PRDs" })).toHaveAttribute("href", "/documents");
   await trash.getByRole("button", { name: "About deleted items" }).click();
   await expect(trash.getByRole("tooltip")).toContainText("waits here for 30 days");
   await expect(trash.getByRole("tooltip")).toContainText("gone for good");

@@ -167,7 +167,8 @@ test.describe("Roadmap findings, Nov 10", () => {
     await page.getByTestId("group-goal").click();
     const lane = (title: string) => page.getByTestId("chart-group").filter({ has: page.locator("span", { hasText: new RegExp(`^${title}$`) }) });
     // Launch email is PM-owned work; it is put on Grow retention, a goal with a measure.
-    await page.getByRole("button", { name: /^Launch email:/ }).click();
+    // Launch email's bar reads with its feature code before its name.
+    await page.getByRole("button", { name: /^F-10[a-z]? Launch email:/ }).click();
     await panel(page).getByRole("button", { name: "Change the goal" }).click();
     await panel(page).getByRole("combobox", { name: "Goal" }).selectOption({ label: "Grow retention (measured by Teams active after 90 days)" });
     await panel(page).getByRole("button", { name: "Save" }).click();

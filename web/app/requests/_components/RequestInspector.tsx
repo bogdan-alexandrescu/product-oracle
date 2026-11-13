@@ -532,6 +532,8 @@ function Decision({
   busy: boolean;
   run: Run;
 }) {
+  const basisFeature = request.basis?.kind === "feature" ? features.find((f) => f.id === request.basis?.id) : undefined;
+  const basisTitle = basisFeature ? namedText(named(basisFeature.title, basisFeature.key)) : request.basis?.title;
   const [open, setOpen] = useState<Action | null>(prefill ? "disqualify" : null);
   const [note, setNote] = useState("");
   const [into, setInto] = useState("");
@@ -597,7 +599,7 @@ function Decision({
         </Link>
       )}
       {request.disqualify_reason && <p>{REASON_LABEL[request.disqualify_reason]}</p>}
-      {request.basis?.title && <p className="text-sm text-text2">Basis: {request.basis.title}</p>}
+      {request.basis?.title && <p className="text-sm text-text2">Basis: {basisTitle}</p>}
       {request.decision_note && <p className="whitespace-pre-wrap text-text2">{request.decision_note}</p>}
       {request.no_reply_reason === "no_note" && (
         <p data-testid="no-reply-reason" className="text-sm text-text2">

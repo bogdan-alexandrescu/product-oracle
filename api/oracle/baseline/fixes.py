@@ -336,20 +336,33 @@ async def wanted_code(db: AsyncSession, feature: Entity, *, tied: bool = True) -
     return check.own_code(feature, (await check.tied_codes(db, {feature.id})).get(feature.id))
 
 
+async def held_codes(
+    db: AsyncSession, codes: dict[uuid.UUID, str] | None = None
+) -> dict[str, set[uuid.UUID]]:
+    """{a code read one way: every feature that has it now (``codes``, else the codes the check
+    reads) or as a code it gave back (:func:`former_keys`)}. One reading for the check's
+    Code differs and Use its code (:func:`_free`), so they never disagree."""
+    from oracle.baseline.check import _code
+
+    if codes is None:
+        codes = (await _taken(db)).codes
+    out: dict[str, set[uuid.UUID]] = {}
+    for k, i in (await former_keys(db)).items():
+        out.setdefault(canonical_code(k) or k, set()).add(i)
+    for i, c in codes.items():
+        out.setdefault(_code(c) or c, set()).add(i)
+    return out
+
+
 async def _free(db: AsyncSession, feature: Entity, code: str) -> bool:
     """Whether no other feature has ``code``, now or as a code it gave back."""
-    t = await _taken(db)
-    if any(c == code for i, c in t.codes.items() if i != feature.id):
-        return False
-    return all(
-        i == feature.id or (canonical_code(k) or k) != code
-        for k, i in (await former_keys(db)).items()
-    )
+    return not (await held_codes(db)).get(code, set()) - {feature.id}
 
 
 async def confirm_goal_links(db: AsyncSession, writer: Writer, feature: Entity) -> None:
     """A confirmed feature's goal links a run proposed with it are confirmed with it, so it
-    is not flagged Serves no goal for a link it has."""
+    is not flagged Serves no goal for a link it has: links to a confirmed goal only (a goal
+    a run only proposed waits for its own yes)."""
     from oracle.baseline.models import Edge
     from oracle.baseline.service import update_edge
 
@@ -363,7 +376,7 @@ async def confirm_goal_links(db: AsyncSession, writer: Writer, feature: Entity) 
             Edge.type == "supports",
             Edge.status == "proposed",
             Entity.type == "goal",
-            Entity.status != "rejected",
+            Entity.status == "confirmed",
         )
     )
     for edge in list(edges):
@@ -373,9 +386,13 @@ async def confirm_goal_links(db: AsyncSession, writer: Writer, feature: Entity) 
 async def use_own_code(db: AsyncSession, writer: Writer, feature: Entity) -> str:
     """Use its code (the check's ``code_differs``): a feature keyed by the next number as it
     was confirmed gets its own code as its key; the number it had is given back, an alias
-    never given again (:func:`former_keys`). Its proposed goal links are confirmed too."""
+    never given again (:func:`former_keys`). Its proposed goal links are confirmed too. A slice
+    keeps its letter (F-35a): it has no code of its own to take."""
     if feature.status != "confirmed":
         raise ConflictError("This feature is not in the Ground Truth yet.")
+    if await _is_slice(db, feature):
+        # A slice reads its feature's code with its letter (F-35a), never a code of its own.
+        raise ConflictError("This feature already has its own code.")
     want = await wanted_code(db, feature)
     if not want or want == canonical_code(feature.key):
         raise ConflictError("This feature already has its own code.")

@@ -105,8 +105,9 @@ test("qa-plan-20: every row out of score order says why in the row", async ({ pa
   await expect(rowOf(page, "F-4").getByTestId("rank-reason")).toHaveText("Not scored: no Reach");
   // MoSCoW: Could have (2) above Should have (3) for a dependency.
   await methods.getByRole("radio", { name: "MoSCoW" }).click();
+  // docs/ground-truth.md: a feature reads its code with its name.
   await expect(rowOf(page, "F-5").getByTestId("rank-reason")).toHaveText(
-    "Ranked higher: Shipping cost shown in the cart depends on it",
+    "Ranked higher: F-2 Shipping cost shown in the cart depends on it",
   );
 });
 
@@ -180,7 +181,8 @@ test("qa-plan-42 / prod-4: Goal and Depends on read in full, every goal whole", 
   }
   const deps = rowOf(page, "F-2").getByTestId("row-deps");
   await expect(deps).toBeVisible();
-  await expect(deps).toHaveText("Address lookup service");
+  // docs/ground-truth.md: a feature reads its code with its name.
+  await expect(deps).toHaveText("F-5 Address lookup service");
   await notCut(deps);
 });
 

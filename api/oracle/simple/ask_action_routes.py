@@ -248,6 +248,8 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "take_code_back",
         "tidy_up",
         "unlink_prd_feature",
+        # Train BP's Ground Truth repair: a feature keyed by the next number uses its own code.
+        "use_own_code",
         # Port AN 5's routes (the one waiting list, Simple's one-pager list): not offered until
         # allowed by name.
         "get_simple_roadmap_waiting",
@@ -488,6 +490,7 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "get_feedback_package",
         "get_graph",
         "get_inbox",
+        "get_inbox_counts",
         "get_intake",
         "get_intake_analysis_input",
         "get_intake_composition_inputs",
@@ -680,6 +683,7 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "mark_alignment_report_read",
         "mark_blocker_option_fallback",
         "mark_discussion_read",
+        "mark_inbox_seen",
         "mark_launched",
         "mark_metric_variance_noise",
         "mark_metric_variance_unknown",

@@ -181,7 +181,11 @@ export function ChangeForm({
   const approvers = people.filter((x) => hasRole(x.role, "approver"));
   const loadError = featuresQ.error ?? requirementsQ.error ?? peopleQ.error;
   // The subject's feature, until the person picks one (an add names the feature too).
-  const hinted = featureHint ? features.find((f) => f.id === featureHint || f.key === featureHint || f.key === `f.${featureHint}`) : undefined;
+  // A feature with a code (F-84) no longer has the f.* slug a checkpoint item's key names: its title does.
+  const slugOf = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const hinted = featureHint
+    ? features.find((f) => f.id === featureHint || f.key === featureHint || f.key === `f.${featureHint}`) ?? features.find((f) => slugOf(f.title) === featureHint)
+    : undefined;
   const featureId = str(p.feature_id) || (wantsFeatures ? (hinted?.id ?? "") : "");
 
   const save = async () => {

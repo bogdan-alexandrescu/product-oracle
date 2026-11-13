@@ -58,8 +58,10 @@ test("an approved PRD's items show once on the Simple roadmap", async ({ page })
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await expect(page.getByTestId("draft-from-prd")).toHaveText(/2 items came from Visit reminders \(version 1\)/);
 
+  // docs/ground-truth.md: a feature shows its code with its name; Alert history export is in no
+  // Ground Truth feature, so it reads by its name alone (flagged Not in the Ground Truth).
   const items = [
-    ["Weekly alert digest", "2027-02-19", "Feb 19, 2027"],
+    ["F-06 Weekly alert digest", "2027-02-19", "Feb 19, 2027"],
     ["Alert history export", "2027-02-26", "Feb 26, 2027"],
   ] as const;
 
@@ -88,7 +90,9 @@ test("an approved PRD's items show once on the Simple roadmap", async ({ page })
   // above the chart names it too (roadmap-home-qa 53098a13e); the Timeline's rows list it once.
   await expect(page.getByTestId("conflict").filter({ hasText: "Weekly alert digest" })).toHaveCount(1);
   for (const [title, , day] of items) {
-    await expect(page.getByTestId("timeline-row").getByRole("button", { name: title, exact: true })).toHaveCount(1);
+    // An item with no code carries the Not in the Ground Truth flag in its row's name (docs/ground-truth.md).
+    const name = /^[A-Z]-\d/.test(title) ? title : `${title} Not in the Ground Truth`;
+    await expect(page.getByTestId("timeline-row").getByRole("button", { name, exact: true })).toHaveCount(1);
     await expect(page.getByRole("button", { name: new RegExp(`^${title}, .*${day}\\.`) })).toHaveCount(1);
   }
 });
@@ -117,7 +121,8 @@ test("a copy the draft holds already shows as the one item it copies", async ({ 
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await page.getByTestId("format-gantt").click();
   await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
-  const bar = page.locator('g[data-testid="bar"][aria-label^="Weekly alert digest:"]');
+  // docs/ground-truth.md: a feature shows its code with its name.
+  const bar = page.locator('g[data-testid="bar"][aria-label^="F-06 Weekly alert digest:"]');
   await expect(bar).toHaveCount(1);
   await expect(bar).toHaveAttribute("data-end", "2027-02-19");
 });
@@ -144,7 +149,9 @@ test("an item keyed phase-2 is its own item, never folded into phase", async ({ 
 
   await page.goto("/simple/roadmap?roadmap=alerts-roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  // Both are on the roadmap, each by its own name (neither is read as a copy of the other).
-  for (const title of ["Reminder rollout", "Reminder rollout two"])
+  // Both are on the roadmap, each by its own name (neither is read as a copy of the other), with
+  // the code of the feature they were copied from before it (docs/ground-truth.md: a feature
+  // shows its code with its name).
+  for (const title of ["F-06 Reminder rollout", "F-06 Reminder rollout two"])
     await expect(page.getByTestId("simple-roadmap").getByRole("button", { name: title, exact: true }).first()).toBeVisible();
 });

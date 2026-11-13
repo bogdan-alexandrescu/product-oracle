@@ -50,9 +50,22 @@ for (const phone of [false, true]) {
       await expect(taken(page, "Moved Setup checklist").getByTestId("flow-thumb")).toHaveCount(0);
       await expect(taken(page, "Moved Setup checklist").getByTestId("flow-none")).toHaveCount(0);
       await row.getByRole("button", { name: "Open the flow for Team invite nudges" }).click();
-      // S10's one flow viewer: across the page on a desktop, a full-height sheet on a phone.
+      // S10's one flow viewer: on a desktop the row widens in place across the page (below the
+      // top, never the screen's full height); on a phone a full-height sheet.
       const detail = page.getByTestId("flow-detail");
       await expect(detail).toContainText("Invite your team · flow");
+      const view = page.viewportSize()!;
+      const box = (await detail.boundingBox())!;
+      if (phone) {
+        expect(Math.round(box.y)).toBe(0);
+        expect(Math.round(box.height)).toBe(view.height);
+        expect(Math.round(box.width)).toBe(view.width);
+      } else {
+        expect(Math.round(box.y)).toBe(16);
+        expect(box.height).toBeLessThan(view.height);
+        const rowBox = (await row.boundingBox())!;
+        expect(box.width).toBeGreaterThanOrEqual(rowBox.width - 32);
+      }
       await expect(detail.getByRole("img", { name: /^Wireframe of Invite step/ })).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(detail).toHaveCount(0);

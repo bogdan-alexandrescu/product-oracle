@@ -205,17 +205,10 @@ async def complete(
     mcp: Callable[[], Awaitable[tuple[str, McpServer | None]]] | None = None,
 ) -> Completion:
     """Run one built-in model call for the session's company. ``mcp``: as :func:`stream`'s."""
-    request = _request(system, messages, max_tokens, job, model)
-    with_mcp: LlmRequest | None = None
+    request_for = _lazy_mcp(_request(system, messages, max_tokens, job, model), mcp)
 
     async def call(transport: Transport, token: str) -> TransportResult:
-        nonlocal with_mcp
-        if mcp is None or not getattr(transport, "takes_mcp", False):
-            return await transport.complete(token, request)
-        if with_mcp is None:
-            mcp_system, server = await mcp()
-            with_mcp = dataclasses.replace(request, system=mcp_system, mcp=server)
-        return await transport.complete(token, with_mcp)
+        return await transport.complete(token, await request_for(transport))
 
     return await _run(session, job, call, transports, deadline, on_call, lambda: False)
 
@@ -244,8 +237,7 @@ async def stream(
     Code) is about to run the call, for that run's system prompt and server (None: no
     server); so nothing it makes, a live token, exists for a call the Messages API runs.
     Any other transport gets ``system`` as it is and no server."""
-    request = _request(system, messages, max_tokens, job, model)
-    with_mcp: LlmRequest | None = None
+    request_for = _lazy_mcp(_request(system, messages, max_tokens, job, model), mcp)
     sent = False
 
     async def told(text: str) -> None:
@@ -254,15 +246,28 @@ async def stream(
         await on_text(text)
 
     async def call(transport: Transport, token: str) -> TransportResult:
+        return await transport.stream(token, await request_for(transport), told)
+
+    return await _run(session, job, call, transports, deadline, on_call, lambda: sent)
+
+
+def _lazy_mcp(
+    request: LlmRequest, mcp: Callable[[], Awaitable[tuple[str, McpServer | None]]] | None
+) -> Callable[[Transport], Awaitable[LlmRequest]]:
+    """The request a transport runs: with ``mcp``'s system prompt and server, asked once and
+    only for a transport that takes an MCP server (Claude Code); as it is for any other."""
+    with_mcp: LlmRequest | None = None
+
+    async def request_for(transport: Transport) -> LlmRequest:
         nonlocal with_mcp
         if mcp is None or not getattr(transport, "takes_mcp", False):
-            return await transport.stream(token, request, told)
+            return request
         if with_mcp is None:
             mcp_system, server = await mcp()
             with_mcp = dataclasses.replace(request, system=mcp_system, mcp=server)
-        return await transport.stream(token, with_mcp, told)
+        return with_mcp
 
-    return await _run(session, job, call, transports, deadline, on_call, lambda: sent)
+    return request_for
 
 
 def _request(

@@ -200,7 +200,7 @@ import {
 } from "./simple-priorities";
 import { restoreTrack, routeRemoved, syncTracks, trackSuggestionRows } from "./simple-removed";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, restoreAgendaItem, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
-import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
+import { goalSuggestionInboxRows, readsGoalSuggestion, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
 import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
@@ -208,10 +208,10 @@ import { rebuildsOut } from "./rebuilds";
 import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedBetAddedOnePager, seedHeadingCountOnePager, seedMilestoneNamesOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedTwoCountsOnePager, seedVqaOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
-import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
+import { forgetBundles, routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { codesSeen, groundTruthCheck, GROUND_TRUTH_CONFIRM_SCENARIO, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth, seedGroundTruthConfirm, tiedCodes } from "./ground-truth";
+import { codesRead, codesSeen, groundTruthCheck, GROUND_TRUTH_CONFIRM_SCENARIO, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth, seedGroundTruthConfirm, tiedCodes } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { ONE_PAGER_MILESTONE_RENAME_SCENARIO, PICKED_MILESTONE, PRIORITIES_PLAN_MILESTONES_SCENARIO, seedOldMilestones, seedOwnMilestones, seedPlanPrdMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
@@ -5382,7 +5382,7 @@ function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] 
   const hidden = member ? hiddenDecisionEntities(db, member) : new Set<string>();
   return routeBaseline(
     db.baseline,
-    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id), codesSeen: () => codesSeen(db.simple_roadmap), codesOf: (id) => tiedCodes(db.simple_roadmap, id) },
+    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id), codesSeen: () => codesSeen(db.simple_roadmap), codesOf: (id) => tiedCodes(db.simple_roadmap, id, db.baseline), codesRead: () => codesRead(db.simple_roadmap, db.baseline) },
     req,
     p.slice(2),
     q,
@@ -5399,6 +5399,7 @@ function save(db: Db) {
 /** Drops all mock state (used by the "Reset mock data" control). */
 export function resetMockData() {
   cached = null;
+  forgetBundles();
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(SOURCES_STORAGE_KEY);
 }
@@ -6791,7 +6792,9 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
 
 /** #346: the change-set mock's view of the db; a proposal imports the next version, copied from its base. */
 function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsContext {
-  const guided = db.roadmap?.two_roadmaps && db.baseline.entities.find((e) => e.type === "feature" && e.key === "F-82");
+  const guided = db.roadmap?.two_roadmaps && db.baseline.entities.find((e) => e.type === "feature" && (e.key === "F-82" || e.key === "f.guided-setup"));
+  // The scenario's Guided setup has no code of its own (still its slug), so it takes its oldest published section's.
+  if (guided && guided.key === "F-82") guided.key = "f.guided-setup";
   // Seeded lazily, on the first change-set request: a page opened before Edit plan shows usage-alerts-roadmap v1 not yet approved.
   if (guided) seedTwoRoadmaps(db, (db.plan_edits ??= emptyPlanEdits()), guided.id);
   let codes: Record<string, string> | undefined;
@@ -8355,6 +8358,24 @@ async function route(db: Db, req: Request): Promise<Response> {
         const decider = db.members.find((x) => x.email === "dana.decider@example.com")?.id;
         if (decider) return me.id === decider;
         return mockApproverOwnsTrack() && me.email === "approver@example.com";
+      },
+      // As visuals._reads_loose: a meeting's card its presenter and attendees, an Ask panel's card its
+      // person; a goal's suggestion its readers (a held one the owners'). null: the mock holds no such one.
+      reads: (kind, id) => {
+        if (kind === "chat_card") {
+          const c = db.simple_chat?.cards[id];
+          if (!c) return null;
+          // An S8 review meeting's own rules, else the chat's meeting (chat.rules_of).
+          const m = c.meeting_id ? (db.simple_meetings?.meetings.find((x) => x.id === c.meeting_id) ?? db.simple_chat!.meetings[c.meeting_id]) : null;
+          if (c.meeting_id) return !!m && (m.presenter_id === me.id || m.attendee_ids.includes(me.id));
+          const owner = db.simple_chat!.threads[c.thread]?.owner_id;
+          return !owner || owner === me.id;
+        }
+        if (kind === "suggestion") {
+          const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
+          return readsGoalSuggestion(roadmapItems, { id: me.id, role: me.role, names: {}, companyGoals }, id);
+        }
+        return null;
       },
     },
     req,

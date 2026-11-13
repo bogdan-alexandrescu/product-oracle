@@ -56,7 +56,11 @@ test.describe("desktop", () => {
     await expect(drawn).toHaveCount(6);
     const undated = timeline.getByTestId("plan-timeline-undated-item");
     await expect(undated).toHaveText(["Budgets per team"]);
-    expect([...(await drawn.allTextContents()), ...(await undated.allTextContents())].sort()).toEqual([...titles].sort());
+    // docs/ground-truth.md: a feature shows its code with its name, so a coded item's bar reads
+    // "F-06 Weekly alert digest"; the table's Item column holds the title, the same item.
+    await expect(drawn.filter({ hasText: "Weekly alert digest" })).toHaveText("F-06 Weekly alert digest");
+    const named = (await drawn.allTextContents()).map((t) => t.replace(/^[A-Z]-\d+[a-z]? /, ""));
+    expect([...named, ...(await undated.allTextContents())].sort()).toEqual([...titles].sort());
     // In the Group by's groups, with Today's line, a milestone and a dependency.
     // B-26: the label column's heading names the Group by ("Horizon", not the lane's "Track").
     const heading = timeline.getByTestId("chart-labels").locator("> div").first();
