@@ -57,6 +57,19 @@ CURRENT = {
 }
 
 
+#: Dates as people read them (oracle-product rules), for every kind whose text people read.
+DATES = (
+    'Dates: write every date a person reads month first, as "Nov 12, 2026" ("Nov 12" '
+    'when the year is plain), and a time as "Nov 12, 2026, 2:49 PM PST" in the company\'s '
+    "time zone; never day first or ISO (2026-11-12), even when a source writes them so. A "
+    "JSON field this prompt asks for as YYYY-MM-DD stays YYYY-MM-DD."
+)
+
+#: The kinds whose output people read. Not public_text (it writes no date at all) nor
+#: discussion_reply_goal (it follows discussion_reply's prompt, which carries the rule).
+DATED = frozenset(CURRENT) - {"public_text", "discussion_reply_goal"}
+
+
 @cache
 def load(name: str) -> str:
     return (PROMPTS / f"{name}.md").read_text(encoding="utf-8")
@@ -65,7 +78,10 @@ def load(name: str) -> str:
 def current(kind: str) -> tuple[str, str]:
     """(prompt name, prompt text) for a job kind."""
     name = CURRENT[kind]
-    return name, load(name)
+    text = load(name)
+    if kind in DATED:
+        text = f"{text.rstrip()}\n\n{DATES}\n"
+    return name, text
 
 
 class AnswerError(ValueError):
