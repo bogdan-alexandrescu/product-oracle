@@ -194,35 +194,22 @@ test.describe("a restored item's code", () => {
   // protects=Restore in Settings › Trash of an item whose code another item took while it was in
   // Trash is refused in set_code's plain words and the item stays in Trash; fails_when=two items
   // read F-31 after the restore; no_claim=a feature's key (pytest).
-  //
-  // The draft "Team invite nudges" (setup-ideas) is the only default item with no code of its
-  // own (every other default item's code now comes from its PRD section and cannot be typed by
-  // hand); the second item to take F-31 meanwhile is added fresh, so it starts with no code too.
   test("a code another item took meanwhile is refused in plain words", async ({ page }) => {
     await login(page);
     await page.goto("/simple/roadmap");
     await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-    await giveCode(page, "setup-ideas", "F-31");
-    const bar = page.locator('[data-testid="timeline-row"][data-item="setup-ideas"] [data-testid="timeline-bar"]');
+    await giveCode(page, "alert-export", "F-31");
+    const bar = page.locator('[data-testid="timeline-row"][data-item="alert-export"] [data-testid="timeline-bar"]');
     await bar.click({ button: "right" });
     await page.getByTestId("feature-menu").getByRole("menuitem", { name: "Delete feature" }).click();
     await expect(page.getByTestId("toasts")).toContainText("to Trash.");
     await expect(bar).toHaveCount(0);
-
-    await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
-    await page.getByLabel("Add an item").fill("Night digest");
-    await page.getByLabel("Add an item").press("Enter");
-    await expect(toast(page, "Added Night digest as a draft")).toBeVisible();
-    await panel(page).getByRole("button", { name: "Change the code" }).click();
-    await panel(page).getByLabel("Code").fill("F-31");
-    await panel(page).getByTestId("card-code-edit").getByRole("button", { name: "Save" }).click();
-    await expect(panel(page).getByTestId("card-code")).toHaveText("F-31");
-    await page.keyboard.press("Escape");
+    await giveCode(page, "alert-sso", "F-31");
 
     await page.goto("/settings/trash");
-    const row = page.getByTestId("trash-entry").filter({ hasText: "Team invite nudges" });
+    const row = page.getByTestId("trash-entry").filter({ hasText: "Alert history export" });
     await row.getByRole("button", { name: /^Restore / }).click();
-    await expect(row).toContainText("F-31 is already the code of F-31 Night digest: rename it first");
+    await expect(row).toContainText("F-31 is already the code of F-31 Alert routing by team: rename it first");
     await expect(row).toHaveCount(1);
     await page.goto("/simple/roadmap");
     await expect(page.getByTestId("simple-roadmap")).toBeVisible();

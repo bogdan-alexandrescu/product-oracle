@@ -159,10 +159,10 @@ for (const [where, use] of [
       const exportStart = await bar(page, "alert-export").getAttribute("data-start");
       const mobileStart = await bar(page, "alert-mobile").getAttribute("data-start");
       await dragBar(page, "alert-export", 90);
-      await expect(toast(page, /Moved 'F-88 Alert history export'/)).toBeVisible();
+      await expect(toast(page, /Moved 'Alert history export'/)).toBeVisible();
       await expect(page.getByTestId("draft-count")).toHaveText("1");
       await dragBar(page, "alert-mobile", 90);
-      await expect(toast(page, /Moved 'F-87 Mobile alert push'/)).toBeVisible();
+      await expect(toast(page, /Moved 'Mobile alert push'/)).toBeVisible();
       await expect(page.getByTestId("draft-count")).toHaveText("2");
       const banner = page.getByTestId("draft-banner");
       const movedExport = await bar(page, "alert-export").getAttribute("data-start");
@@ -177,7 +177,7 @@ for (const [where, use] of [
       await banner.getByRole("button", { name: "See changes" }).click();
       await expect(banner.getByTestId("draft-changes").getByRole("listitem")).toHaveCount(1);
       // Each row names what it changed, so a person sees which change Undo takes back next.
-      await expect(banner.getByTestId("draft-changes").getByRole("listitem").first()).toContainText("Move the dates: F-88 Alert history export");
+      await expect(banner.getByTestId("draft-changes").getByRole("listitem").first()).toContainText("Move the dates: Alert history export");
 
       // A second Undo: the first move goes back too.
       await banner.getByRole("button", { name: "Undo" }).click();
@@ -321,7 +321,7 @@ test.describe("desktop Gantt", () => {
     await open(page, undefined, true);
     const before = await bar(page, "alert-export").getAttribute("data-start");
     await dragBar(page, "alert-export", 90);
-    await expect(toast(page, /Moved 'F-88 Alert history export' to .* in your working draft/)).toBeVisible();
+    await expect(toast(page, /Moved 'Alert history export' to .* in your working draft/)).toBeVisible();
     await expect(bar(page, "alert-export")).not.toHaveAttribute("data-start", before!);
     await page.getByTestId("draft-banner").getByRole("button", { name: "Undo" }).click();
     await expect(bar(page, "alert-export")).toHaveAttribute("data-start", before!);
@@ -404,7 +404,7 @@ test.describe("phone, proposals", () => {
     const ty = target.y + target.height / 2;
     for (let n = 1; n <= 8; n++) await c.dispatchEvent("pointermove", { ...ev, clientX: x + ((tx - x) * n) / 8, clientY: y + ((ty - y) * n) / 8 });
     await c.dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: tx, clientY: ty });
-    await expect(toast(page, /^Moved 'F-88 Alert history export' to Now proposed: it waits for .+ in Needs a decision$/)).toBeVisible();
+    await expect(toast(page, /^Moved 'Alert history export' to Now proposed: it waits for .+ in Needs a decision$/)).toBeVisible();
     await expect(page.locator('[data-horizon-column="next"]').locator('[data-item="alert-export"]')).toBeVisible();
     await expect(c.getByTestId("board-pending")).toContainText("Proposed by Theo Brandt: move to Now");
   });

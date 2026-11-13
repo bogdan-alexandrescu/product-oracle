@@ -121,13 +121,12 @@ test("expand: a feature row and a milestone show their detail in place; comments
   await page.goto("/documents/saved-carts/v/2");
   const items = await openSection(page, "brief-items");
 
-  // F-96: the Saved carts PRD's features now carry their Ground Truth codes in-line.
-  await items.getByRole("button", { name: "Expand F-96 Save cart" }).click();
+  await items.getByRole("button", { name: "Expand Save cart" }).click();
   const detail = section(page, "feature-save-cart");
   await expect(detail).toBeVisible();
   await expect(detail.getByTestId("layer-badge")).toHaveText("Detail");
   await expect(detail).toContainText("I want my cart kept when I leave");
-  await expect(items.getByRole("button", { name: "Collapse F-96 Save cart" })).toHaveAttribute("aria-expanded", "true");
+  await expect(items.getByRole("button", { name: "Collapse Save cart" })).toHaveAttribute("aria-expanded", "true");
   // The milestone in the same table expands too, and so does the outcome-level roadmap's.
   await items.getByRole("button", { name: "Expand Beta" }).click();
   await expect(section(page, "milestone-beta")).toContainText("Exit: two weeks without a lost cart");
@@ -175,10 +174,10 @@ test("expand: a feature row and a milestone show their detail in place; comments
   // Back on the brief, Collapse hides the detail again; a comment on it opens it from the panel.
   await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Brief" }).click();
   await openSection(page, "brief-items");
-  await items.getByRole("button", { name: "Collapse F-96 Save cart" }).click();
+  await items.getByRole("button", { name: "Collapse Save cart" }).click();
   await expect(section(page, "feature-save-cart")).toHaveCount(0);
   await showAll(page);
-  await detailComment.getByRole("button", { name: /Show comment in F-96 Save cart/ }).click();
+  await detailComment.getByRole("button", { name: /Show comment in Save cart/ }).click();
   await expect(section(page, "feature-save-cart")).toBeVisible();
 });
 
@@ -216,8 +215,8 @@ test("present: one brief section per slide, keyboard and click navigation, Expan
   await expect(present.getByRole("region", { name: "Slide 5 of 10: Features by milestone" })).toBeVisible();
 
   // Expand a feature on the slide: its detail opens in an overlay for questions.
-  await present.getByRole("button", { name: "Expand F-96 Save cart" }).click();
-  const overlay = page.getByRole("dialog", { name: "Detail: F-96 Save cart" });
+  await present.getByRole("button", { name: "Expand Save cart" }).click();
+  const overlay = page.getByRole("dialog", { name: "Detail: Save cart" });
   await expect(overlay).toBeVisible();
   await expect(overlay).toContainText("I want my cart kept when I leave");
   await page.keyboard.press("ArrowRight"); // ignored while the overlay is open

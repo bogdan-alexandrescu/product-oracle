@@ -63,10 +63,10 @@ for (const size of SIZES) {
 
         // Add one: it now depends on this one.
         await tap(panel(page).getByRole("button", { name: "Add a feature that needs it" }));
-        await panel(page).getByLabel("Feature that needs it").selectOption({ label: "F-88 Alert history export" });
+        await panel(page).getByLabel("Feature that needs it").selectOption({ label: "Alert history export" });
         await tap(panel(page).getByRole("button", { name: "Save" }));
         await expect(needed.getByTestId("card-needed-row").filter({ hasText: "Alert history export" })).toBeVisible();
-        await tap(needed.getByRole("button", { name: "F-88Alert history export", exact: true }));
+        await tap(needed.getByRole("button", { name: "Alert history export", exact: true }));
         await expect(panel(page).getByTestId("card-depends")).toContainText("Alert rules engine");
       });
 
@@ -82,20 +82,20 @@ for (const size of SIZES) {
         // Alert history export now waits on Alert rules engine; Alert routing by team waits on Alert history export.
         await openItem(page, "alert-export");
         await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
-        await panel(page).getByLabel("Feature it depends on").selectOption({ label: "F-86 Alert rules engine" });
+        await panel(page).getByLabel("Feature it depends on").selectOption({ label: "Alert rules engine" });
         await tap(panel(page).getByRole("button", { name: "Save" }));
         const needed = panel(page).getByTestId("card-needed");
         await expect(needed).toContainText("Alert routing by team");
         await expect(panel(page).getByTestId("card-depends")).toContainText("Alert rules engine");
-        await tap(needed.getByRole("button", { name: "F-89Alert routing by team", exact: true }));
+        await tap(needed.getByRole("button", { name: "Alert routing by team", exact: true }));
         await expect(panel(page).getByTestId("card-depends")).toContainText("Alert history export");
 
         // From Alert routing by team, a feature it waits on (directly or through others) would make a loop.
         await tap(panel(page).getByRole("button", { name: "Add a feature that needs it" }));
         const pick = panel(page).getByLabel("Feature that needs it");
-        for (const [code, name] of [["F-88", "Alert history export"], ["F-86", "Alert rules engine"]]) {
+        for (const name of ["Alert history export", "Alert rules engine"]) {
           const loop = pick.locator("option", { hasText: name });
-          await expect(loop).toHaveText(`${code} ${name} · This one needs it: it would make a loop`);
+          await expect(loop).toHaveText(`${name} · This one needs it: it would make a loop`);
           await expect(loop).toBeDisabled();
         }
         const free = pick.locator("option", { hasText: "Weekly alert digest" });
