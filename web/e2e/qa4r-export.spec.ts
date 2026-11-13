@@ -79,7 +79,8 @@ test.describe("desktop", () => {
         const unnamed: string[] = [];
         for (const g of bars) {
           const said = g.getAttribute("aria-label") ?? "";
-          const name = (new RegExp(`^(.*?): (?:${months}) \\d`).exec(said)?.[1] ?? said).trim();
+          // QA Nov 12 #6: an estimate-only bar says "No dates yet · estimated …" before its dates.
+          const name = (new RegExp(`^(.*?): (?:No dates yet · estimated )?(?:${months}) \\d`).exec(said)?.[1] ?? said).trim();
           const named = rows.some((r) => r === name || r.includes(name) || (r.endsWith("…") && name.startsWith(r.slice(0, -1))));
           if (!named) unnamed.push(name);
         }
