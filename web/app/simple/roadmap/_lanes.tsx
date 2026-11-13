@@ -39,6 +39,7 @@ import {
   estimateWords,
   drawnKeyDates,
   codedFlag,
+  type Flag,
   type GoalMilestone,
   type Milestone,
 } from "./_lib";
@@ -1283,7 +1284,7 @@ const Pill = memo(function Pill({ unit, item, milestones, planned: roadmapMs, la
             })}
           </>
         ) : (
-          <PlainPiece item={item} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} stroke={strokeOf} strokeW={strokeW} besideAt={s && mark > x1 ? mark + 12 : x1 + 6} room={room} stop={item.milestone?.date ? sc.x(item.milestone.date) : undefined} />
+          <PlainPiece item={item} flags={broken(item).map((f) => codedFlag(item, f, milestones, roadmapMs))} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} stroke={strokeOf} strokeW={strokeW} besideAt={s && mark > x1 ? mark + 12 : x1 + 6} room={room} stop={item.milestone?.date ? sc.x(item.milestone.date) : undefined} />
         )}
         {/* fix4 qa-simple-roadmap-4: a track's milestone sits on the pill's top edge at its date,
             above the pill's name, never over it. */}
@@ -1352,7 +1353,7 @@ function pillWords(name: string, code: string | null | undefined, b: { x: number
 }
 
 /** An item with no plan as one pill: its title, cut with "…" to the pill, or beside a pill too short for it; a draft says so ("Draft · Setup tips"), a cut item is struck through (its place in the return queue on hover). */
-function PlainPiece({ item, piece, b, y, cut, place, stroke, strokeW, besideAt, room, stop }: { item: Item; piece: Piece; b: { x: number; w: number }; y: number; cut: boolean; place?: number; stroke: (base: string) => string; strokeW: number; besideAt: number; room: number; stop?: number }) {
+function PlainPiece({ item, flags, piece, b, y, cut, place, stroke, strokeW, besideAt, room, stop }: { item: Item; flags: Flag[]; piece: Piece; b: { x: number; w: number }; y: number; cut: boolean; place?: number; stroke: (base: string) => string; strokeW: number; besideAt: number; room: number; stop?: number }) {
   const c = look(piece, item, cut);
   const draft = item.draft && !cut;
   // fix4 qa-simple-roadmap-3/15: the title alone (no "F-06", no "#1"); a draft's reads "Draft · <title>".
@@ -1362,8 +1363,9 @@ function PlainPiece({ item, piece, b, y, cut, place, stroke, strokeW, besideAt, 
   const { words, beside } = pillWords(full, piece.code, b, room, besideAt, stop);
   const w = words ? textWidth(words, 12, beside ? 600 : 650) : 0;
   const tag = draft && words.startsWith("Draft");
-  // qa4-simple-roadmap-30: its red flags' own words, as Now / Next / Later writes them on its card.
-  const hover = `${full}${place != null ? ` · ${ordinal(place)} to come back if room opens` : ""}${broken(item).map((f) => ` · ${f.reason}`).join("")}`;
+  // qa4-simple-roadmap-30: its red flags' own words, as Now / Next / Later writes them on its card
+  // (QA Nov 12 #5: a milestone with its code).
+  const hover = `${full}${place != null ? ` · ${ordinal(place)} to come back if room opens` : ""}${flags.map((f) => ` · ${f.reason}`).join("")}`;
   return (
     <>
       <title>{hover}</title>
@@ -1712,7 +1714,7 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                       {p.name}
                       {item.draft && !closedItem(item) && <span className="ml-1.5 rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag">Draft</span>}
                     </span>
-                    <span className={`text-[12.5px] whitespace-nowrap ${red.length ? "font-[650] text-crit" : "text-text-faint"}`} title={red[0]?.reason}>
+                    <span className={`text-[12.5px] whitespace-nowrap ${red.length ? "font-[650] text-crit" : "text-text-faint"}`} title={red[0] && codedFlag(item, red[0], data.goal_milestones, data.milestones).reason}>
                       <i aria-hidden className="mr-[5px] inline-block h-[9px] w-[9px] rounded-full align-[0]" style={p.pm || !p.milestone ? { border: `1.5px ${p.pm || c.dash ? "dashed" : "solid"} ${c.stroke}`, background: p.pm ? "transparent" : c.fill } : { background: mLine(p.milestone) }} />
                       {red.length ? "⚠ " : ""}
                       {dm(p.start)} – {dm(p.end)}
