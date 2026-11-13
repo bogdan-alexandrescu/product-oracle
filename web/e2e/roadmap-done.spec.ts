@@ -92,7 +92,8 @@ test("an item marked done leaves every view, its broken links and every count, a
   await expect(done.getByTestId("done-items-toggle")).toHaveText("Done · 1");
   await expect(done.getByTestId("done-item")).toBeHidden();
   await done.getByTestId("done-items-toggle").click();
-  await expect(done.getByTestId("done-item")).toHaveText(["Alert rules engine"]);
+  // The done item shows its code with its name (Ground Truth rule).
+  await expect(done.getByTestId("done-item")).toHaveText(["F-86 Alert rules engine"]);
   await done.getByTestId("done-item").click();
   await expect(page.getByTestId("floating-card").getByTestId("card-status")).toHaveText("Done");
   await page.keyboard.press("Escape");

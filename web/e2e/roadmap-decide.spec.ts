@@ -105,7 +105,8 @@ test("the draft's change list names the item on every line, and the banner says 
   await expect(banner).not.toContainText("no approved version yet");
   await banner.getByRole("button", { name: "See changes" }).click();
   const rows = banner.getByTestId("draft-changes").locator("li");
-  await expect(rows.first()).toContainText("Move the dependents: Weekly alert digest");
+  // The change list names the item with its code (Ground Truth rule).
+  await expect(rows.first()).toContainText("Move the dependents: F-06 Weekly alert digest");
   for (const row of await rows.all()) await expect(row).toContainText(/: \S/);
   await expect(banner.getByRole("button", { name: "Send for review" })).toHaveCount(0);
   await banner.getByTestId("draft-publish").click();

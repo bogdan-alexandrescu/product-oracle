@@ -46,10 +46,11 @@ test.describe("desktop", () => {
       await open(page, "simple-plan");
       await page.getByTestId(`format-${format}`).click();
       await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
-      // fix4 qa-simple-roadmap-3: plain words, no internal ids: "Team invites", not "F-05 Team invites".
-      await expect(row(page, "Team invites").getByTestId("label-title")).toHaveAttribute("title", "Team invites");
+      // QA Nov 12 #1 / Ground Truth: the name reads with its code first, as its card does:
+      // "F-05 Team invites", not a bare "Team invites".
+      await expect(row(page, "F-05 Team invites").getByTestId("label-title")).toHaveAttribute("title", "F-05 Team invites");
       await expect(page.getByTestId("label-code")).toHaveCount(0);
-      await expect(page.getByTestId("chart-labels")).not.toContainText(/\b[A-Z]-\d{2}\b/);
+      await expect(page.getByTestId("chart-labels")).toContainText("F-05 Team invites");
     });
   }
 

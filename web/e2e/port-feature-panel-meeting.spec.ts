@@ -36,7 +36,9 @@ for (const size of SIZES) {
       await startReview(page);
       await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));
       const row = page.locator('li[data-item="setup-checklist"]');
-      await tap(row.getByRole("button", { name: "Setup checklist", exact: true }));
+      // The row's button now names the feature with its code too, per the Ground Truth rule
+      // that every feature shows its code with its name ("F-90 Setup checklist").
+      await tap(row.getByRole("button", { name: /^F-90\s*Setup checklist$/ }));
       const panel = page.getByTestId("floating-card");
       await expect(panel).toBeVisible();
       await expect(panel.getByTestId("card-name")).toContainText("Setup checklist");

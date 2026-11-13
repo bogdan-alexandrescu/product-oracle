@@ -54,7 +54,8 @@ for (const [name, use] of [
       expect(at6.x).toBeLessThan(view.x + view.width);
       // One row per item, under its goal.
       await expect(page.getByTestId("timeline-lane").filter({ hasText: "Below the line" })).toBeVisible();
-      const name = row(page, "alert-rules").getByRole("button", { name: "Alert rules engine", exact: true });
+      // Every item shows its code with its name (Ground Truth rule).
+      const name = row(page, "alert-rules").getByRole("button", { name: "F-86 Alert rules engine", exact: true });
       await expect(name).toBeVisible();
       const before = (await name.boundingBox())!.x;
       // Scrolled sideways into next year: the names stay on the left.
@@ -167,8 +168,9 @@ for (const [name, use] of [
       const scroll = page.getByTestId("timeline-scroll");
       await scroll.evaluate((el) => (el.scrollLeft += 500));
       await expect.poll(() => scroll.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
-      // Clicking another item's name swaps the panel, no closing first.
-      await row(page, "setup-checklist").getByRole("button", { name: "Setup checklist", exact: true }).click();
+      // Clicking another item's name swaps the panel, no closing first. The button shows the
+      // item's code with its name (Ground Truth rule).
+      await row(page, "setup-checklist").getByRole("button", { name: "F-90 Setup checklist", exact: true }).click();
       await expect(side.getByTestId("floating-card")).toContainText("Setup checklist");
       await expect(row(page, "setup-checklist")).toHaveAttribute("data-open", "true");
       await expect(row(page, "alert-rules")).not.toHaveAttribute("data-open", "true");
