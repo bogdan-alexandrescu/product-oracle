@@ -6,6 +6,13 @@ all when the database is already at head: the head is read from the revision scr
 and compared with ``alembic_version``. Only when they differ (or either can not be read) does
 Alembic run, with every script, exactly as ``alembic upgrade head`` would.
 
+Read errors are not guessed around. A revision script whose ids the parse can not tell for
+sure (not plain strings, a merge, more than one head) only makes the head unknown, so
+Alembic runs. A script file that can not be read at all (an OSError, bytes that are not
+UTF-8) or a database that can not be reached raises, and the start exits 1 without
+serving, as ``alembic upgrade head`` would have; so does a database at a revision these
+scripts do not have (an older image started after a newer one migrated it).
+
 Cloud Run, Nov 12: an added instance took about 34 s before serving (9 s to Alembic's first
 log line, 24 s more to uvicorn's), so requests routed to it waited that long.
 """
