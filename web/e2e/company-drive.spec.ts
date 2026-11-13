@@ -6,7 +6,8 @@ import { login } from "./helpers";
 /** Connects the mock Google account (OAuth connects at once in mock mode). */
 async function connectGoogle(page: Page) {
   await page.goto("/settings/connections");
-  await page.getByTestId("connection-card-google").getByRole("button", { name: "Connect with Google Docs" }).click();
+  await page.getByTestId("connection-card-google").getByRole("button", { name: "Add another account" }).click();
+  await page.getByTestId("connection-card-google").getByRole("button", { name: "Sign in with Google Docs" }).click();
   await expect(page).toHaveURL(/connected=google/);
 }
 
