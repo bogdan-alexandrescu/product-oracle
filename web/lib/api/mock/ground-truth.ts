@@ -318,7 +318,8 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
     const dup = ![undefined, e.id].includes(held.get(want));
     const on = mine && dup ? items.find((s) => (s.linked_feature ?? s.feature_id) === e.id && wholeCode(s.section) === want) : undefined;
     if (on) out.push(flag("code_differs", [["link_to_feature", simple.ids[on.key]]], { item: { id: simple.ids[on.key], code: codeOf(on)[0], name: on.title }, feature: ref(e), where: both }));
-    else out.push(flag("code_differs", [["use_code", e.id]], { feature: ref(e) }));
+    // Held with no item to link: Use its code could only be refused, so it is not flagged.
+    else if (!dup) out.push(flag("code_differs", [["use_code", e.id]], { feature: ref(e) }));
   }
   const goals = new Set(baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => e.id));
   const serving = new Set(baseline.edges.filter((e) => e.type === "supports" && e.status === "confirmed" && goals.has(e.dst_id)).map((e) => e.src_id));

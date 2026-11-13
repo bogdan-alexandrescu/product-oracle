@@ -21,7 +21,9 @@ here, each flag with one plain sentence and the fixes a person can make in the U
 - ``code_differs``: a feature keyed by the next number as it was confirmed while its own code
   (its Code attribute, else its roadmap item's or PRD feature's) is another, fixed by Use its
   code (``oracle.baseline.fixes.use_own_code``); when that code is a roadmap item's and another
-  feature has it, by Link to a feature on that item instead; a slice (F-35a) is never flagged;
+  feature has it, by Link to a feature on that item instead; another feature's code with no
+  item of its own reading it is not flagged (Use its code would be refused); a slice (F-35a)
+  is never flagged;
 - ``no_goal``: a Ground Truth feature serving no confirmed goal by a confirmed link;
 - ``runs_today_on_roadmap``: a feature running today (Current state) still on the roadmap,
   its own feature or the one it matches by code (F-03, F-03a), fixed by taking it off the
@@ -467,6 +469,8 @@ async def run(db: AsyncSession) -> GroundTruthOut:
             held = {(canonical_code(k) or k): i for k, i in (await former_keys(db)).items()}
             held |= {(_code(c) or c): i for i, c in code_of.items()}
         # Its item's code is another feature's (a duplicate): link the item to that feature.
+        # Held with no item to link (its Code attribute, a PRD feature's code): Use its code
+        # could only be refused, so it keeps the number it has, unflagged.
         mine = whole_code((f.attrs or {}).get("code")) is None
         dup = held.get(want) not in (None, f.id)
         on = None
@@ -479,7 +483,7 @@ async def run(db: AsyncSession) -> GroundTruthOut:
         if on is not None:
             flag("code_differs", [("link_to_feature", str(on.id))], item=item_ref(on),
                  feature=ref(f), where=where_of(on))  # fmt: skip
-        else:
+        elif not dup:
             flag(
                 "code_differs", [("use_code", str(f.id))], feature=ref(f), where=GroundTruthWhere()
             )
