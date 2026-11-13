@@ -13,11 +13,14 @@ Test cards (protects / fails_when / no_claim):
   ready, notes, decisions taken in them) to tests/roadmap_scale_seed.py's company.
 - test_roadmap_takes_few_statements, test_priorities_takes_few_statements,
   test_decisions_takes_few_statements: protects=each read's statement count on that company
-  (warm, sign-in included): the roadmap 55, priorities 52 (before: 69; the members,
-  documents, tracks and PRD plans were read again by each part), decisions 50 (before: 182;
-  three statements per PRD for its questions, five per meeting for its PRD's deciders and the
-  members' names); fails_when=a loader comes back per row, a table is read twice or a read
-  builds the same thing again; no_claim=wall-clock time.
+  (warm, sign-in included): the roadmap 50 (before: 55; the open proposals were read twice,
+  the review policies, the goal milestones' open renames and the milestones carried over
+  again, and the items once for the feature codes and again for the PRD order), priorities
+  51 (before: 69, then 52; the members, documents, tracks and PRD plans were read again by
+  each part, then the submitted versions twice), decisions 50 (before: 182; three statements
+  per PRD for its questions, five per meeting for its PRD's deciders and the members' names);
+  fails_when=a loader comes back per row, a table is read twice or a read builds the same
+  thing again; no_claim=wall-clock time.
 - test_profile (READ_PROFILE=1 only): prints each read's statements, wall and CPU time and
   writes its CPU-time cProfile (READ_SORT, READ_FILTER) and statements under $TMPDIR, for the
   handoff; asserts nothing.
@@ -170,7 +173,7 @@ async def _statements(client, url: str, headers: dict, **params) -> int:
     return len(statements)
 
 
-ROADMAP_MAX, PRIORITIES_MAX, DECISIONS_MAX = 55, 52, 50
+ROADMAP_MAX, PRIORITIES_MAX, DECISIONS_MAX = 50, 51, 50
 
 
 async def _warm_statements(client, ctx, url: str, **params) -> int:
