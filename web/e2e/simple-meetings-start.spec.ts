@@ -57,7 +57,7 @@ for (const phone of [false, true]) {
         await expect(past.getByRole("link", { name: "Its decisions" })).toHaveAttribute("href", /\/simple\/decisions\?meeting=/);
         await page.getByRole("button", { name: "Start review" }).first().click();
         const s = sheet(page);
-        await expect(s.getByRole("region", { name: "What is reviewed" })).toContainText("The PRD, its roadmap slice, its open decisions");
+        await expect(s.getByRole("region", { name: "What is reviewed" }).getByRole("button", { name: "About What is reviewed" })).toHaveAccessibleDescription("The PRD, its roadmap slice, its open decisions");
         await s.getByLabel("PRD").selectOption({ label: "Guided setup" });
         await expect(s.getByRole("checkbox", { name: "Avery Stone" })).toBeChecked();
         await expect(s.getByRole("checkbox", { name: "Priya Raman" })).toBeChecked();
