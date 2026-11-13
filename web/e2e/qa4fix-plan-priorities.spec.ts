@@ -81,8 +81,9 @@ test.describe("desktop", () => {
     await open(page);
     const row = rowOf(page, "F-5");
     const sheet = page.getByRole("dialog");
+    // docs/ground-truth.md: a feature reads its code with its name.
     const menu = page.getByRole("menu", {
-      name: "Change Address lookup service",
+      name: "Change F-5 Address lookup service",
     });
     await expect(async () => {
       if (!(await sheet.isVisible())) {
@@ -105,7 +106,7 @@ test.describe("desktop", () => {
       .getByRole("button", { name: /Saved addresses at checkout/ })
       .click();
     await expect(sheet.getByTestId("move-target")).toHaveText(
-      "Move above Saved addresses at checkout",
+      "Move above F-1 Saved addresses at checkout",
     );
     await sheet
       .getByLabel("Why?")

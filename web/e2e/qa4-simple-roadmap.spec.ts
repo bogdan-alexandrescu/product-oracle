@@ -227,7 +227,7 @@ test.describe("desktop only", () => {
 test.describe("phone only", () => {
   test.use(PHONE);
 
-  test("qa4-32 / 33 / 35: the phone Timeline's list shows names only, a plain count, and each quarter says its months", async ({ page }) => {
+  test("qa4-32 / 33 / 35: the phone Timeline's list shows each feature's code then its name, a plain count, and each quarter says its months", async ({ page }) => {
     await open(page, { scenario: "simple-plan-lanes", url: "/simple/roadmap?roadmap=onboarding-roadmap" });
     const list = page.getByTestId("timeline-list");
     await expect(list).toBeVisible();
@@ -238,6 +238,16 @@ test.describe("phone only", () => {
       await expect(head).not.toContainText("· 1 items");
       await expect(head).not.toContainText("at once");
     }
-    for (const t of await list.getByTestId("timeline-row").allTextContents()) expect(t).not.toMatch(/\b[FD]-\d/);
+    // docs/ground-truth.md: a feature shows its code with its name ("F-01 Setup checklist"), once;
+    // one with no code reads its name with the Not in the Ground Truth flag; never a bare id.
+    const rows = list.getByTestId("timeline-row");
+    await expect(rows.first()).toBeVisible();
+    for (const r of await rows.all()) {
+      const t = ((await r.textContent()) ?? "").trim();
+      expect(t, "no decision id").not.toMatch(/\bD-\d/);
+      expect(t, "a code shows once").not.toMatch(/^(F-\d+[a-z]?) .*\b\1\b/);
+      if (/^[A-Z]-\d/.test(t)) expect(t, "a code is followed by its name").toMatch(/^F-\d+[a-z]? [A-Za-z]/);
+      else await expect(r.getByTestId("not-in-gt"), `${t} is flagged`).toHaveCount(1);
+    }
   });
 });

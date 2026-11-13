@@ -70,7 +70,7 @@ test.describe("desktop", () => {
     });
   }
 
-  test("qa-2, 3, 15: every Timeline row is named, never by an id; a new item reads its title with a Draft tag", async ({ page }) => {
+  test("qa-2, 3, 15: every Timeline row reads its code then its name, never a bare id; a new item reads its title with a Draft tag", async ({ page }) => {
     await open(page);
     const rows = page.getByTestId("timeline-row");
     await expect(rows.first()).toBeVisible();
@@ -78,11 +78,16 @@ test.describe("desktop", () => {
       const key = await r.getAttribute("data-item");
       const name = (await r.locator("button[title]").first().textContent())!.trim();
       expect(name.length, `${key} carries its name`).toBeGreaterThan(2);
-      expect(name, `${key}'s name has no id`).not.toMatch(/\b[A-Z]-\d{2}[a-z]?\b|#\d/);
-      // The bar says its name too (to a screen reader), never an id.
+      // docs/ground-truth.md: a feature shows its code with its name ("F-06 Weekly alert digest");
+      // one with no code reads its name with the Not in the Ground Truth flag; never a bare id.
+      expect(name, `${key}'s name is never a bare id`).not.toMatch(/^[A-Z]-\d+[a-z]?$|#\d/);
+      const coded = /^[A-Z]-\d+[a-z]? \S{2,}/.test(name);
+      if (!coded) await expect(r.getByTestId("not-in-gt"), `${key} is flagged Not in the Ground Truth`).toHaveCount(1);
+      // The bar says the same code and name too (to a screen reader), never a bare id.
       const bar = await r.getByTestId("timeline-bar").getAttribute("aria-label");
       expect(bar, `${key}'s bar is named`).toMatch(/^\S.{2,}, /);
-      expect(bar!).not.toMatch(/\b[A-Z]-\d{2}[a-z]?\b|#\d/);
+      expect(bar!).not.toMatch(/#\d/);
+      if (coded) expect(bar!, `${key}'s bar reads its code then its name`).toMatch(new RegExp(`^${name.match(/^[A-Z]-\d+[a-z]? /)![0]}\\S`));
     }
 
     const title = "Push notifications for alerts";
@@ -92,7 +97,9 @@ test.describe("desktop", () => {
     await page.getByLabel("Add an item").press("Enter");
     const added = rows.filter({ has: page.locator(`button[title="${title}"]`) });
     await expect(added).toHaveCount(1);
-    await expect(added.locator("button[title]").first()).toHaveText(/^Push notifications for alerts\s*Draft$/);
+    // A new item is in no Ground Truth feature yet: its title, its Draft tag, and the Not in the
+    // Ground Truth flag (docs/ground-truth.md), never refused.
+    await expect(added.locator("button[title]").first()).toHaveText(/^Push notifications for alerts\s*Draft\s*Not in the Ground Truth$/);
   });
 
   test("qa-30: the month axis reads three-letter months, the first in sight with its year", async ({ page }) => {

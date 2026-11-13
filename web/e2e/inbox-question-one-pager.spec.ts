@@ -47,9 +47,10 @@ async function as(page: Page, email: string | undefined, size: { width: number; 
 }
 
 async function waiting(page: Page): Promise<number> {
-  const chip = page.getByText(/^\d+ waiting$/).first();
-  await expect(chip).toBeVisible();
-  return Number((await chip.textContent())!.split(" ")[0]);
+  // simple-home-qa-nov12 #18: Simple's Inbox says its count once, as Needs you's.
+  const chip = page.getByTestId("inbox-needs").getByTestId("panel-count").first();
+  await expect(chip).toHaveText(/^\d+$/);
+  return Number((await chip.textContent())!.trim());
 }
 
 /** Simple's rail (More on a phone) to the Inbox, by a click; returns the count it showed. */
