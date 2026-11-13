@@ -58,7 +58,7 @@ test("Recent chats closed and opened again before its chats come: only the secon
   await panel.getByRole("button", { name: "Send" }).click();
   await expect(
     panel.getByTestId("ask-answer").last().getByTestId("answer-title"),
-  ).toHaveText(/^Weekly alert digest/); // then its Current-state pill
+  ).toHaveText(/^F-\d+\s*Weekly alert digest/); // its code, then its Current-state pill
 
   const recent = panel.getByRole("button", { name: "Recent chats" });
   const menu = panel.getByTestId("ask-recent-list");
