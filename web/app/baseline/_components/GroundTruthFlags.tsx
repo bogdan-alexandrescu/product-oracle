@@ -359,6 +359,8 @@ export function GroundTruthFlags({
               // One short line; the flag's sentence is behind the (i). A feature a run proposed
               // waits for its yes: the status a chip, the feature its name with its code (D-12).
               const unconfirmed = !waiting && f.item && f.feature && f.fixes.some((x) => x.action === "confirm_feature") ? f.feature : null;
+              // An item whose code another feature holds: the feature it is on, by the number it is keyed by.
+              const keyed = !waiting && f.kind === "code_differs" && f.item && f.feature?.code ? f.feature : null;
               const line = waiting || unconfirmed
                 ? null
                 : f.where.prd && !f.item?.id
@@ -379,6 +381,11 @@ export function GroundTruthFlags({
                       <span className="mt-1 flex flex-wrap items-center gap-1.5" data-testid="gt-unconfirmed">
                         <Chip kind="warn">Waiting to be confirmed</Chip>
                         <CodeChip kind="feature" entityId={unconfirmed.id} entityKey={unconfirmed.code} title={unconfirmed.name} />
+                      </span>
+                    ) : keyed ? (
+                      <span className="mt-1 flex flex-wrap items-center gap-1.5" data-testid="gt-keyed">
+                        <CodeChip kind="feature" entityId={keyed.id} entityKey={keyed.code!} title={keyed.name} />
+                        {line && <span className="text-[13px] text-text2">{line}</span>}
                       </span>
                     ) : (
                       line && <span className="block text-[13px] text-text2">{line}</span>
