@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { isHidden, type DiscussionRow, type DiscussionSummary } from "@/components/discuss/DiscussionList";
 import { Button, Icon, InfoTip, Mark, Notice, SegmentedControl } from "@/components/ds";
+import { useLinkedThread, type LinkedThread } from "@/components/hop/open-state";
 import { InlineError, TEXTAREA } from "@/components/review/parts";
 import { SimpleAskPanel } from "@/components/simple/chat/SimpleAsk";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -269,6 +270,14 @@ function DetailedPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = 
     setTick((t) => t + 1);
   };
   const trigger = useRef<HTMLButtonElement>(null);
+  // ask-phone-12: a linked discussion opens here, on its changes when the link says so.
+  const linked = useLinkedThread();
+  const [shownLinked, setShownLinked] = useState<LinkedThread | null>(null);
+  if (linked && linked !== shownLinked) {
+    setShownLinked(linked);
+    setRecentOpen(false);
+    setView({ kind: "thread", id: linked.id });
+  }
 
   // qa-shell-12: Simple's layout (the owner's pick): the head with New chat, the This page |
   // General switch with "Just you and Oracle", "New chat about Home" with Recent chats, the
@@ -356,6 +365,7 @@ function DetailedPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = 
               <DiscussionThread
                 key={view.id}
                 id={view.id}
+                focusChanges={linked?.id === view.id && linked.changes}
                 // With the panel's head, its New chat goes back; the phone's sheet has no head of the panel's own.
                 {...(showHeader ? {} : { backLabel: "New chat", onBack: newChat })}
                 onChanged={() => setTick((t) => t + 1)}
