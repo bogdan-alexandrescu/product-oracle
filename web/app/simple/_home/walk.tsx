@@ -465,5 +465,5 @@ function TypeInstead({ hint }: { hint: string }) {
 /** simple-home-qa-nov12 #4: a broken link step's item code (its id is "link:<item id>:…"), as Home's rows show it. */
 function StepCode({ step }: { step: Step }) {
   const code = useItemCode(step.kind === "broken_link" ? step.id.split(":")[1] : null);
-  return code ? <code className="simple-code mr-1">{code}</code> : null;
+  return code ? <><code className="simple-code">{code}</code>{" "}</> : null;
 }

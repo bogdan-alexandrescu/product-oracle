@@ -235,7 +235,7 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="break-words">
           <span className="text-text2">{WAITING_KIND[item.kind]} · </span>
-          {code && <code className="simple-code mr-1">{code}</code>}
+          {code && <><code className="simple-code">{code}</code>{" "}</>}
           {item.title}
           {/* port-AN 5: the row's why sits in its (i), so the one list stays one line a row. */}
           {detail && (

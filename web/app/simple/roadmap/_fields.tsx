@@ -43,7 +43,7 @@ const INPUT =
 export function Named({ item }: { item: Pick<Item, "code" | "title"> }) {
   return (
     <>
-      {item.code && <span className="simple-code mr-1.5">{item.code}</span>}
+      {item.code && <><span className="simple-code mr-0.5">{item.code}</span>{" "}</>}
       {item.title}
     </>
   );

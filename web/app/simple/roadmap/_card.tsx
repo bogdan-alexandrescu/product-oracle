@@ -514,7 +514,7 @@ type FeatureRef = { id: string; code: string; title: string };
 function FeatureLink({ f, onOpen }: { f: FeatureRef; onOpen?: (id: string) => void }) {
   const words = (
     <>
-      {f.code && <span className="simple-code mr-1">{f.code}</span>}
+      {f.code && <><span className="simple-code mr-px">{f.code}</span>{" "}</>}
       {f.title}
     </>
   );
@@ -998,7 +998,7 @@ export function FloatingCard({
           <NameEdit item={item} act={act} done={() => setRenaming(false)} />
         ) : (
           <>
-            {item.code && <span className="simple-code mr-1.5">{item.code}</span>}
+            {item.code && <><span className="simple-code mr-0.5">{item.code}</span>{" "}</>}
             <h2 className="inline">
               {item.title}
               {item.draft && item.status !== "merged" && (

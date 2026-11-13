@@ -23,7 +23,7 @@ const panelHref = (documentId: string, itemId: string) => `/simple/roadmap?roadm
 function FeatureName({ name, itemId, documentId }: { name: string; itemId?: string | null; documentId?: string | null }) {
   // simple-home-qa-nov12 #4: the item's code before its name, as its panel reads it.
   const code = useItemCode(itemId);
-  const chip = code && <code className="simple-code mr-1">{code}</code>;
+  const chip = code && <><code className="simple-code mr-px">{code}</code>{" "}</>;
   if (!itemId || !documentId)
     return (
       <span className="min-w-0 truncate" title={name}>

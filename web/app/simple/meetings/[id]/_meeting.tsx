@@ -455,7 +455,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
 function FeatureName({ id, code, title, open, strong = false }: { id: string; code?: string | null; title: string; open: (f: PanelFeature) => void; strong?: boolean }) {
   return (
     <button type="button" className="text-left hover:underline" onClick={() => open({ id, code: code ?? "", name: title })}>
-      {code && <code className="simple-code mr-1">{code}</code>}
+      {code && <><code className="simple-code">{code}</code>{" "}</>}
       {strong ? <strong>{title}</strong> : title}
     </button>
   );
