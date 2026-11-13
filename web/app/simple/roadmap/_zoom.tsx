@@ -577,7 +577,8 @@ function DayChart(props: TimelineProps) {
       const need = whole != null && whole - at <= MS_FIT_STEP ? needOf(words) : 56;
       const left = whole != null && need > 56 ? whole : clear(fit ? at : Math.max(at, sl));
       const next = gems.find((g) => g - 12 >= left + 4);
-      return { m, at, words, left, need, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
+      // A label too short for its words at All 3 years keeps its code and name ("M1 Beta"), its day in its tip.
+      return { m, at, words, short: joinedWords(m, joined), left, need, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
     });
   const msGroups: { head: (typeof marks)[number]; more: (typeof marks)[number][]; room: number }[] = [];
   for (const k of marks) {
@@ -974,7 +975,7 @@ function DayChart(props: TimelineProps) {
               />
             ) : null,
           )}
-          {msGroups.map(({ head: { m, left, words }, more, room }) => (
+          {msGroups.map(({ head: { m, left, words, short }, more, room }) => (
             <div
               key={m.id}
               // QA Nov 12 #8: a same-day count (the band's) keeps clear of a label and its chip.
@@ -995,7 +996,8 @@ function DayChart(props: TimelineProps) {
                 className="min-w-0 cursor-pointer overflow-hidden rounded-full border border-line bg-surface px-2 text-xs leading-4 text-ellipsis whitespace-nowrap text-text hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
                 style={{ maxWidth: room < Infinity ? room : undefined }}
               >
-                {words}
+                {/* QA Nov 12 #8: never "M1 B…" at All 3 years: its code and name where its words would be cut. */}
+                {fit && room < needOf(words) ? short : words}
               </button>
               {more.length > 0 && (
                 <div className="group relative flex-none">
