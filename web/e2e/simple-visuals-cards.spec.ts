@@ -20,10 +20,10 @@ async function tap(l: Locator) {
   await l.click();
 }
 
-/** The owner (the meeting's presenter) in the meeting's chat, with a feature ask's card. */
-async function askInMeeting(page: Page): Promise<Locator> {
+/** An attendee (by default the owner, the meeting's presenter) in the meeting's chat, with a feature ask's card. */
+async function askInMeeting(page: Page, email: string = ADMIN.email): Promise<Locator> {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(ADMIN.email);
+  await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(ADMIN.password);
   await tap(page.getByRole("button", { name: "Sign in" }));
   await expect(page).not.toHaveURL(/\/login/);
@@ -66,8 +66,25 @@ for (const phone of [false, true]) {
       await expect(full).toHaveCount(0);
     });
 
-    test(`an attendee comments on a chat card's flow and Oracle redraws it (${where})`, async ({ page }) => {
-      // protects: a chat card's flow takes a comment and Revise draws version 2, which the card's row then shows
+    test(`an attendee who is no owner reads a chat card's flow and comments on it (${where})`, async ({ page }) => {
+      // protects: a meeting attendee who is no owner opens a chat card's flow (its chat_card visual) and comments; Revise is the owners'
+      // fails_when: the attendee is told "No such visual", cannot comment, or is offered Revise
+      // no_claim: the real API's rule (api tests: test_card_and_suggestion_visuals_follow_who_reads_them)
+      const card = await askInMeeting(page, "approver@example.com");
+      await tap(card.getByRole("button", { name: `Open the flow for ${ASK}` }));
+      await expect(page.getByTestId("flow-detail").getByTestId("flow-svg")).toBeVisible();
+      await page.getByTestId("flow-detail").getByRole("button", { name: "Comment" }).click();
+      const full = page.getByTestId("flow-fullscreen");
+      const panel = full.getByTestId("flow-comments-panel");
+      await panel.getByLabel("Comment on the flow").fill("Snooze for a week too");
+      await panel.getByRole("button", { name: "Post comment" }).click();
+      await expect(panel.getByTestId("flow-comments")).toContainText("Snooze for a week too");
+      await expect(panel.getByTestId("flow-version")).toHaveText("Version 1 of 1");
+      await expect(full.getByRole("button", { name: "Revise" })).toHaveCount(0);
+    });
+
+    test(`the presenter revises a chat card's flow from a comment (${where})`, async ({ page }) => {
+      // protects: a chat card's flow takes a comment and the owner's Revise draws version 2, which the card's row then shows
       // fails_when: the card's flow has no Comment or Revise, or the row still reads version 1
       // no_claim: who may revise in the real API (api tests: visuals.may_revise)
       const card = await askInMeeting(page);
@@ -85,12 +102,12 @@ for (const phone of [false, true]) {
       await expect(card.getByTestId("flow-drawn")).toContainText("Version 2");
     });
 
-    test(`a goal suggestion's flow opens in the panel and takes a comment (${where})`, async ({ page }) => {
-      // protects: a goal suggestion's flow is its suggestion visual in the one viewer, opened in the goal's panel, and takes a comment
-      // fails_when: the suggestion shows the old plain step list, or its flow cannot be commented on
+    test(`a commenter opens a goal suggestion's flow in the panel and comments on it (${where})`, async ({ page }) => {
+      // protects: a goal suggestion's flow is its suggestion visual in the one viewer, opened in the goal's panel by a commenter (no owner), and takes a comment
+      // fails_when: the suggestion shows the old plain step list, a commenter is told "No such visual", or its flow cannot be commented on
       // no_claim: the suggestion job's ideas (api tests of oracle.simple.additions)
       await page.context().addInitScript((key) => localStorage.setItem(key, "default"), MOCK_SCENARIO_KEY);
-      await login(page);
+      await login(page, "commenter@example.com");
       await page.goto("/simple/roadmap");
       await expect(page.getByTestId("simple-roadmap")).toBeVisible();
       await tap(page.getByTestId("goal-counter-empty").getByTestId("goal-counter-suggestions"));
@@ -106,6 +123,7 @@ for (const phone of [false, true]) {
       await comments.getByLabel("Comment on the flow").fill("Let teams pick the hours");
       await comments.getByRole("button", { name: "Post comment" }).click();
       await expect(comments.getByTestId("flow-comments")).toContainText("Let teams pick the hours");
+      await expect(comments.getByRole("button", { name: "Revise" })).toHaveCount(0);
     });
   });
 }

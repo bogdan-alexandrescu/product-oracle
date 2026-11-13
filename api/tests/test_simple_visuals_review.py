@@ -15,6 +15,11 @@ Test cards (protects / fails_when / no_claim):
   owners only, never by any reader who has the id; with its document, by the document's
   readers; fails_when=a viewer reads a document-less suggestion visual; no_claim=S7/S9's
   own screens.
+- test_card_and_suggestion_visuals_follow_who_reads_them: protects=a chat card's or a goal
+  suggestion's visual (drawn with no document) is read by whoever reads the card (its
+  meeting's attendees; the Ask panel's person) or the suggestion (whoever reads the goal's
+  suggestions), and owners; Revise stays the owners'; fails_when=a non-owner attendee or a
+  commenter on a goal's suggestions is told "No such visual"; no_claim=S8/S9's own screens.
 - test_request_refuses_subjects_simple_cannot_look_up: protects=``/request`` draws only
   subjects Simple can look up (a change, a roadmap feature or draft item): a suggestion,
   a chat card or a one-pager line is drawn with its proposal, so asking for any uuid is
@@ -38,7 +43,15 @@ from oracle import company_time
 from oracle.auth.models import User
 from oracle.review.models import DocumentReviewPolicy
 from oracle.simple import visuals
-from oracle.simple.models import SimpleChange, SimpleSession, SimpleVisual
+from oracle.baseline.models import Entity
+from oracle.simple.models import (
+    SimpleChange,
+    SimpleChatCard,
+    SimpleGoalSuggestion,
+    SimpleMeeting,
+    SimpleSession,
+    SimpleVisual,
+)
 from oracle.tenancy import tenant_session
 from tests.test_simple_one_pager_api import edit, get, world
 from tests.test_simple_roadmap_api import NOW
@@ -112,6 +125,62 @@ async def test_documentless_visual_of_another_lane_is_closed(client):
         assert got.status_code == status, (who, kind, got.text)
         got = await client.get(f"{URL}/{kind}/{sid}/versions/1", headers=ctx.as_(who))
         assert got.status_code == status, (who, kind, got.text)
+
+
+async def test_card_and_suggestion_visuals_follow_who_reads_them(client):
+    ctx = await world(client)
+    rm, _ = await roadmap_world(ctx)
+    owner, attendee = ctx.users["owner"].id, ctx.users["approver"].id
+    async with tenant_session(ctx.tenant_id) as s:
+        session = SimpleSession(kind="meeting", started_by=owner, started_at=NOW)
+        s.add(session)
+        await s.flush()
+        m = SimpleMeeting(title="Example roadmap review", prd_document_id=rm.id,
+                          origin="roadmap", session_id=session.id, presenter_id=owner,
+                          attendee_ids=[attendee], joined_ids=[owner, attendee],
+                          started_at=NOW)  # fmt: skip
+        goal = Entity(type="goal", key="G-01", title="Faster setup", status="confirmed",
+                      origin="user")  # fmt: skip
+        s.add_all([m, goal])
+        await s.flush()
+        card = {"op": "add_item", "target": {}, "before": {}, "after": {}}
+        met = SimpleChatCard(meeting_id=m.id, summary="A guided tour", **card)
+        asked = SimpleChatCard(owner_id=ctx.users["commenter"].id, summary="A tour", **card)
+        sug = SimpleGoalSuggestion(goal_id=goal.id, title="A sample project",
+                                   outcome="Admins see a sample", origin="person",
+                                   proposed_by=ctx.users["commenter"].id)  # fmt: skip
+        s.add_all([met, asked, sug])
+        await s.flush()
+        await visuals.request_visual(s, None, "chat_card", met.id, met.summary)
+        await visuals.request_visual(s, None, "chat_card", asked.id, asked.summary)
+        await visuals.request_visual(s, None, "suggestion", sug.id, sug.title)
+        await s.commit()
+        ids = {"met": met.id, "asked": asked.id, "sug": sug.id}
+    await run_visual_jobs(ctx)
+    for who, kind, key, status in [
+        ("approver", "chat_card", "met", 200),
+        ("owner", "chat_card", "met", 200),
+        ("commenter", "chat_card", "met", 404),
+        ("viewer", "chat_card", "met", 404),
+        ("commenter", "chat_card", "asked", 200),
+        ("approver", "chat_card", "asked", 404),
+        ("commenter", "suggestion", "sug", 200),
+        ("approver", "suggestion", "sug", 200),
+        ("viewer", "suggestion", "sug", 200),
+    ]:
+        path = f"{URL}/{kind}/{ids[key]}"
+        got = await client.get(path, headers=ctx.as_(who))
+        assert got.status_code == status, (who, kind, key, got.text)
+        if status == 200:
+            assert got.json()["flow"]["version"] == 1 and got.json()["can_revise"] is False
+            got = await client.get(f"{path}/versions/1", headers=ctx.as_(who))
+            assert got.status_code == 200, (who, kind, key, got.text)
+            r = await client.post(f"{path}/revise", json={"note": "Show the skip path"},
+                                  headers=ctx.as_(who))  # fmt: skip
+            assert r.status_code == 403, (who, kind, key, r.text)
+    # Revise is the owners'.
+    got = await client.get(f"{URL}/suggestion/{ids['sug']}", headers=ctx.as_("owner"))
+    assert got.status_code == 200 and got.json()["can_revise"] is True, got.text
 
 
 async def test_request_refuses_subjects_simple_cannot_look_up(client):
