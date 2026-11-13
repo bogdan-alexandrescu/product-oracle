@@ -32,7 +32,7 @@ const shown = (r: Schemas["GroundTruthRef"]) => (r.code ? `${r.code} ${r.name}` 
 /** A row's own key, to mark it waiting for approval once a fix was sent. */
 const rowKey = (f: Flag) => `${f.kind}:${subject(f).id ?? subject(f).code ?? subject(f).name}`;
 /** The roadmap item a flag's Add or Link sets the feature of (unlinked items and slices). */
-const itemOf = (f: Flag) => (f.kind === "unlinked_item" || f.kind === "slice_parent_missing" ? (f.item?.id ?? null) : null);
+const itemOf = (f: Flag) => (f.kind === "unlinked_item" || f.kind === "slice_parent_missing" || f.kind === "code_differs" ? (f.item?.id ?? null) : null);
 /** The code a PRD's feature or slice is added with (F-09, or F-15 for the slice F-15a). */
 const codeOf = (f: Flag) => f.fixes.find((x) => x.action === "add_to_ground_truth" && f.kind !== "unlinked_item")?.target ?? null;
 
