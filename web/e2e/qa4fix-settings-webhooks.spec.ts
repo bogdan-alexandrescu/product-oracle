@@ -146,7 +146,7 @@ test("qa4-settings-32: the rail's two-digit Inbox badge fits its number and clea
   await login(page);
   const inbox = page.getByTestId("app-nav").getByTestId("nav-inbox");
   const badge = inbox.getByTestId("nav-inbox-badge");
-  await expect(badge).toHaveText("28");
+  await expect(badge).toHaveText("11");
   const b = (await badge.boundingBox())!;
   const icon = (await inbox.locator("svg").first().boundingBox())!;
   expect(b.height).toBeGreaterThanOrEqual(18);

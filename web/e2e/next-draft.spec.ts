@@ -154,23 +154,23 @@ test("Inbox: tabs by state with counts, New by default, and the badge counts onl
   const tab = (name: string) => tabs.getByRole("tab", { name: new RegExp(`^${name}`) });
   // New is the default tab on arrival; a first visit, so every waiting item is New.
   await expect(tab("New")).toHaveAttribute("aria-selected", "true");
-  // The seed's 10, Oracle's 17 dates (made with the seed) and the pending access request (A5, #203 part 3).
-  await expect(tab("New")).toHaveText("New28");
+  // The seed's 10 and the pending access request (A5, #203 part 3).
+  await expect(tab("New")).toHaveText("New11");
   await expect(tab("Seen")).toHaveText("Seen");
   await expect(tab("Staged")).toHaveText("Staged2");
   await expect(tab("Declined")).toHaveText("Declined1");
   await expect(tab("Done")).toHaveText("Done5");
-  await expect(page.getByTestId("inbox-tab-new").locator("tr[data-row]")).toHaveCount(28);
+  await expect(page.getByTestId("inbox-tab-new").locator("tr[data-row]")).toHaveCount(11);
   // Feedback one row per item, newest first.
   const newRows = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback").locator("tr[data-row]");
   await expect(newRows).toHaveCount(5);
   await expect(newRows.first()).toContainText("Add a metric that shows the outbound check works");
   await expect(newRows.first().getByRole("button", { name: "Accept", exact: true })).toBeVisible();
 
-  // The badge: checkpoints 1 + cost 2 + questions 2 + feedback 5 + access requests 1 + dates 17 (new or
+  // The badge: checkpoints 1 + cost 2 + questions 2 + feedback 5 + access requests 1 (new or
   // open); staged, declined and done do not count.
-  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("28");
-  await expect(page.getByText("28 waiting").filter({ visible: true })).toBeVisible();
+  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("11");
+  await expect(page.getByText("11 waiting").filter({ visible: true })).toBeVisible();
 
   await tab("Staged").click();
   const staged = page.getByTestId("inbox-tab-staged");
@@ -199,18 +199,18 @@ test("Inbox: arriving marks items seen; they stay New for this visit, Open on th
   await login(page);
   await page.goto("/inbox");
   const tabs = page.getByTestId("inbox-state-tabs");
-  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New28");
+  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New11");
   // Let the arrival's mark-seen call land, then come back.
   await page.waitForTimeout(500);
   await page.goto("/documents");
   await page.goto("/inbox");
   await page.reload();
   await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New");
-  await expect(tabs.getByRole("tab", { name: /^Seen/ })).toHaveText("Seen28");
+  await expect(tabs.getByRole("tab", { name: /^Seen/ })).toHaveText("Seen11");
   // Nothing is new: the Inbox opens on Seen, where the items wait (qa-company-2); the badge
   // still counts them.
   await expect(tabs.getByRole("tab", { name: /^Seen/ })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("28");
+  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("11");
   await tabs.getByRole("tab", { name: /^Seen/ }).click();
   await expect(page.getByTestId("inbox-tab-open").getByTestId("inbox-feedback").locator("tr[data-row]")).toHaveCount(5);
 });

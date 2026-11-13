@@ -17,10 +17,10 @@ test("the badge counts each new or open item and equals New + Open; no item is d
   await page.goto("/inbox");
   await expect(tab(page, "New")).toHaveAttribute("aria-selected", "true");
   const badge = page.getByTestId("nav-inbox-badge");
-  // The seed's 10, Oracle's 17 dates (made with the seed) and the pending access request (A5, #203 part 3).
-  await expect(badge).toHaveText("28");
-  expect((await tabCount(page, "New")) + (await tabCount(page, "Seen"))).toBe(28);
-  await expect(page.getByText("28 waiting")).toBeVisible();
+  // The seed's 10 and the pending access request (A5, #203 part 3).
+  await expect(badge).toHaveText("11");
+  expect((await tabCount(page, "New")) + (await tabCount(page, "Seen"))).toBe(11);
+  await expect(page.getByText("11 waiting")).toBeVisible();
 
   // Every kind under New on a first visit, the feedback one row per item (no per-document row).
   const panel = page.getByTestId("inbox-tab-new");
@@ -48,7 +48,7 @@ test("the badge counts each new or open item and equals New + Open; no item is d
     }
   }
   // Staged, declined and done never count.
-  await expect(badge).toHaveText("28");
+  await expect(badge).toHaveText("11");
 });
 
 test("staged items wait for the next draft: Build draft N+1, and the link opens the panel on Staged", async ({ page }) => {
@@ -74,7 +74,7 @@ test("staged items wait for the next draft: Build draft N+1, and the link opens 
 test("a second visit: what was new is Open; Home's Needs you lists the same New + Open items, capped", async ({ page }) => {
   await login(page);
   await page.goto("/inbox");
-  await expect(tab(page, "New")).toContainText("28");
+  await expect(tab(page, "New")).toContainText("11");
   // The visit is recorded after the page has drawn (mark_seen); leaving before the mock has
   // saved it would make the next visit another first one.
   await expect
@@ -82,13 +82,13 @@ test("a second visit: what was new is Open; Home's Needs you lists the same New 
     .toBeGreaterThan(0);
   await page.goto("/home");
   const needs = page.getByTestId("home-needs");
-  await expect(needs.getByTestId("panel-count")).toHaveText("28");
-  // Six lines and '+22 more in Inbox': 28 items (Oracle's 17 dates and the pending access request among them), each once.
-  await expect(needs.getByTestId("home-needs-more")).toHaveText("+22 more in Inbox");
+  await expect(needs.getByTestId("panel-count")).toHaveText("11");
+  // Six lines and '+5 more in Inbox': 11 items (the pending access request among them), each once.
+  await expect(needs.getByTestId("home-needs-more")).toHaveText("+5 more in Inbox");
   await expect(page.getByTestId("home-needs-table").locator("tr[data-row]")).toHaveCount(6);
   await page.goto("/inbox");
-  await expect(tab(page, "New")).not.toContainText("28");
+  await expect(tab(page, "New")).not.toContainText("11");
   await tab(page, "Seen").click();
-  expect(await tabCount(page, "Seen")).toBe(28);
-  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("28");
+  expect(await tabCount(page, "Seen")).toBe(11);
+  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("11");
 });
