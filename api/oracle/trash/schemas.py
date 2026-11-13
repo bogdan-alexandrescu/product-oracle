@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 # removed-tracks: a product track.
 # goal-map-editing: a goal milestone.
 # feature-panel: a roadmap item's dropped task.
+# outcomes-edit: an outcome record.
 TrashItemType = Literal[
     "document",
     "intake",
@@ -23,6 +24,7 @@ TrashItemType = Literal[
     "track",
     "milestone",
     "task",
+    "outcome",
 ]
 
 

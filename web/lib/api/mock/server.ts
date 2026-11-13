@@ -7503,6 +7503,10 @@ async function route(db: Db, req: Request): Promise<Response> {
           ensureRequests(db).requests.push(entry.request as RequestsDb["requests"][number]);
           return null;
         }
+        if (entry.outcome !== undefined) {
+          db.quality?.outcomes.push(entry.outcome as QualityDb["outcomes"][number]);
+          return null;
+        }
         if (!entry.agenda || !db.simple_meetings) return "Its meeting was deleted: there is no agenda to put it back on";
         const mctx = {
           me: { id: me.id, role: me.role },
@@ -7934,6 +7938,22 @@ async function route(db: Db, req: Request): Promise<Response> {
     blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
     queueReview: (documentId, n) => queueQualityReview(llm, documentId, n),
     job: (id) => llm.db.jobs.find((j) => j.id === id),
+    isGoal: (id) => db.baseline.entities.some((e) => e.id === id && e.type === "goal"),
+    // outcomes-edit (quality.outcomes.trash_outcome): the row waits in a Trash entry.
+    trash: (row, reason) => {
+      const at = now();
+      const entry: TrashEntryRow = {
+        out: {
+          id: uuid(), root: { type: "outcome", id: row.id, slug: null, title: row.title, kind: "outcome" }, items: [],
+          deleted_by: me.id, deleted_by_name: trashName(me), deleted_at: at, reason, published: false,
+          purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
+        },
+        documents: [], versions: [], runs: [], intakes: [],
+        outcome: row,
+      };
+      (db.trash ??= emptyTrash()).entries.push(entry);
+      return entryOut(entry, at, true);
+    },
   };
   passOutcomes(db);
   const quality = await routeQuality(qualityCtx, req, p, q);

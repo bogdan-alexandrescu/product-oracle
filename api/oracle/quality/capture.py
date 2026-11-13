@@ -32,6 +32,7 @@ from oracle.priorities.scoring import CONFIDENCE_WORDS, FeatureInput, confidence
 from oracle.quality.models import OutcomeRecord
 from oracle.roadmap.models import RoadmapItem
 from oracle.tenant_settings_api import company_horizons, horizon_windows
+from oracle.trash.filter import INCLUDE_TRASHED
 
 HORIZON_OF_ITEM = {"now": "short", "next": "medium", "later": "long"}
 UNSET = "Not set yet"
@@ -198,7 +199,9 @@ async def predictions_for_roadmap(
                 (OutcomeRecord.track_id == track_id)
                 & (OutcomeRecord.roadmap_item_key == item.item_key)
             )
-        if await db.scalar(select(OutcomeRecord.id).where(or_(*same)).limit(1)):
+        # outcomes-edit: one moved to Trash is not made again (Restore brings it back).
+        found = select(OutcomeRecord.id).where(or_(*same)).limit(1)
+        if await db.scalar(found.execution_options(**{INCLUDE_TRASHED: True})):
             continue
         outcome = await _outcome_for(db, feature.id)
         prediction = prediction_for(item, goal, outcome, _by(item, windows))

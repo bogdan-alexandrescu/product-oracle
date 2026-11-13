@@ -264,6 +264,11 @@ def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
         from oracle.roadmap.models import ProductTrack
 
         _CRITERIA[ProductTrack] = lambda cls: and_(_some_prd_live(cls), cls.deleted_at.is_(None))
+        # outcomes-edit: an outcome moved to Trash itself, as well as with its PRD.
+        from oracle.quality.models import OutcomeRecord
+
+        outcome = _CRITERIA[OutcomeRecord]
+        _CRITERIA[OutcomeRecord] = lambda cls: and_(outcome(cls), cls.deleted_at.is_(None))
     return _CRITERIA
 
 

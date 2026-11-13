@@ -8627,13 +8627,18 @@ export interface paths {
         get: operations["get_outcome"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Outcome
+         * @description outcomes-edit (owner, Nov 13): move the outcome to Settings › Trash. It leaves every
+         *     list, count and the track record; Restore there brings it back.
+         */
+        delete: operations["delete_outcome"];
         options?: never;
         head?: never;
         /**
          * Update Outcome
          * @description Edit the prediction while the item is predicted (audited); once shipped it is
-         *     frozen (409). The owner can change any time.
+         *     frozen (409). The owner and the goal can change any time.
          */
         patch: operations["update_outcome"];
         trace?: never;
@@ -33719,12 +33724,14 @@ export interface components {
         };
         /**
          * OutcomeUpdate
-         * @description PATCH /v1/outcomes/{id}: the prediction (while predicted) and the owner.
+         * @description PATCH /v1/outcomes/{id}: the prediction (while predicted), the owner and the goal.
          */
         OutcomeUpdate: {
             prediction?: components["schemas"]["oracle__quality__schemas__PredictionIn"] | null;
             /** Owner Id */
             owner_id?: string | null;
+            /** Goal Id */
+            goal_id?: string | null;
             /** Lock Version */
             lock_version: number;
         };
@@ -34722,13 +34729,17 @@ export interface components {
             /** Unit */
             unit?: string | null;
             /** Direction */
-            direction?: ("increase" | "decrease") | null;
+            direction?: ("increase" | "decrease" | "hold") | null;
             /** Baseline Value */
             baseline_value?: number | null;
             /** Predicted Value */
             predicted_value?: number | null;
             /** Threshold Value */
             threshold_value?: number | null;
+            /** Confidence */
+            confidence?: ("high" | "medium" | "low") | null;
+            /** Why */
+            why?: string | null;
         };
         /**
          * Preferences
@@ -48914,7 +48925,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track" | "milestone" | "task";
+            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track" | "milestone" | "task" | "outcome";
             /**
              * Id
              * Format: uuid
@@ -49993,13 +50004,17 @@ export interface components {
             /** Unit */
             unit?: string | null;
             /** Direction */
-            direction?: ("increase" | "decrease") | null;
+            direction?: ("increase" | "decrease" | "hold") | null;
             /** Baseline Value */
             baseline_value?: number | null;
             /** Predicted Value */
             predicted_value?: number | null;
             /** Threshold Value */
             threshold_value?: number | null;
+            /** Confidence */
+            confidence?: ("high" | "medium" | "low") | null;
+            /** Why */
+            why?: string | null;
             /**
              * Goal Id
              * Format: uuid
@@ -50024,13 +50039,17 @@ export interface components {
             /** Unit */
             unit?: string | null;
             /** Direction */
-            direction?: ("increase" | "decrease") | null;
+            direction?: ("increase" | "decrease" | "hold") | null;
             /** Baseline Value */
             baseline_value?: number | null;
             /** Predicted Value */
             predicted_value?: number | null;
             /** Threshold Value */
             threshold_value?: number | null;
+            /** Confidence */
+            confidence?: ("high" | "medium" | "low") | null;
+            /** Why */
+            why?: string | null;
         };
         /** MergeIn */
         oracle__requests__schemas__MergeIn: {
@@ -67854,6 +67873,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OutcomeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_outcome: {
+        parameters: {
+            query?: {
+                reason?: string | null;
+            };
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
                 };
             };
             /** @description Validation Error */

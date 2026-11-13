@@ -54,6 +54,8 @@ export interface TrashEntryRow {
   agenda?: { meeting_id: string; row: unknown; at: number };
   /** port-an-decisions: a deleted request's row, put back on Restore. */
   request?: unknown;
+  /** outcomes-edit: a deleted outcome's row, put back on Restore. */
+  outcome?: unknown;
   /** feature-panel: a dropped task's status before the drop, put back on Restore (root status_before). */
   task_status?: string;
 }
@@ -77,7 +79,7 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   /** The spec requests: a tech brief's link to its PRD (its versions name no source). */
   specRequests: () => { source_document_id: string; document_slug?: string | null }[];
   me: { id: string; email: string; name?: string | null; role: Role };
-  /** port-an-decisions: Restore of a meeting's agenda item or a request puts it back; the refusal's
+  /** port-an-decisions: Restore of a meeting's agenda item or a request (outcomes-edit: or an outcome) puts it back; the refusal's
    * words when it cannot (409: its meeting has ended), else null. */
   restoreRoot?: (entry: TrashEntryRow) => string | null;
   /** every-field: the refusal's words when Restore would give an item a code another item took meanwhile (409), else null. */
@@ -205,7 +207,7 @@ export const entryOut = (e: TrashEntryRow, now: string, canRestore = false): Sch
  * whoever deleted a feature, a goal, a decision, a question or a meeting's agenda item restores it too. */
 export function mayRestore(entry: TrashEntryRow, me: { id: string; role: string }): boolean {
   if (me.role === "owner") return true;
-  return entry.out.deleted_by === me.id && ["feature", "goal", "decision", "question", "agenda_item", "milestone", "task"].includes(entry.out.root.type);
+  return entry.out.deleted_by === me.id && ["feature", "goal", "decision", "question", "agenda_item", "milestone", "task", "outcome"].includes(entry.out.root.type);
 }
 
 /** trash-features-goals: the Simple rows a feature's or a goal's entry marks `trashed`; the mock
@@ -334,7 +336,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     if (!entry) return json(404, { detail: "Not in Trash" });
     if (m === "POST" && p[3] === "restore") {
       if (!mayRestore(entry, ctx.me)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
-      const refused = entry.agenda || entry.request !== undefined ? (ctx.restoreRoot?.(entry) ?? null) : (ctx.refuseRestore?.(entry) ?? null);
+      const refused = entry.agenda || entry.request !== undefined || entry.outcome !== undefined ? (ctx.restoreRoot?.(entry) ?? null) : (ctx.refuseRestore?.(entry) ?? null);
       if (refused) return json(409, { detail: refused });
       return json(200, restore(ctx, entry, now));
     }
