@@ -200,7 +200,7 @@ import {
 } from "./simple-priorities";
 import { restoreTrack, routeRemoved, syncTracks, trackSuggestionRows } from "./simple-removed";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, restoreAgendaItem, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
-import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
+import { goalSuggestionInboxRows, readsGoalSuggestion, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
 import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
@@ -208,7 +208,7 @@ import { rebuildsOut } from "./rebuilds";
 import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedBetAddedOnePager, seedHeadingCountOnePager, seedMilestoneNamesOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedTwoCountsOnePager, seedVqaOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
-import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
+import { forgetBundles, routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { codesRead, codesSeen, groundTruthCheck, GROUND_TRUTH_CONFIRM_SCENARIO, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth, seedGroundTruthConfirm, tiedCodes } from "./ground-truth";
@@ -5397,6 +5397,7 @@ function save(db: Db) {
 /** Drops all mock state (used by the "Reset mock data" control). */
 export function resetMockData() {
   cached = null;
+  forgetBundles();
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(SOURCES_STORAGE_KEY);
 }
@@ -8333,6 +8334,24 @@ async function route(db: Db, req: Request): Promise<Response> {
         const decider = db.members.find((x) => x.email === "dana.decider@example.com")?.id;
         if (decider) return me.id === decider;
         return mockApproverOwnsTrack() && me.email === "approver@example.com";
+      },
+      // As visuals._reads_loose: a meeting's card its presenter and attendees, an Ask panel's card its
+      // person; a goal's suggestion its readers (a held one the owners'). null: the mock holds no such one.
+      reads: (kind, id) => {
+        if (kind === "chat_card") {
+          const c = db.simple_chat?.cards[id];
+          if (!c) return null;
+          // An S8 review meeting's own rules, else the chat's meeting (chat.rules_of).
+          const m = c.meeting_id ? (db.simple_meetings?.meetings.find((x) => x.id === c.meeting_id) ?? db.simple_chat!.meetings[c.meeting_id]) : null;
+          if (c.meeting_id) return !!m && (m.presenter_id === me.id || m.attendee_ids.includes(me.id));
+          const owner = db.simple_chat!.threads[c.thread]?.owner_id;
+          return !owner || owner === me.id;
+        }
+        if (kind === "suggestion") {
+          const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
+          return readsGoalSuggestion(roadmapItems, { id: me.id, role: me.role, names: {}, companyGoals }, id);
+        }
+        return null;
       },
     },
     req,
