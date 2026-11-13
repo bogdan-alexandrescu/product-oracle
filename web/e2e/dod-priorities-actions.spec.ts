@@ -171,7 +171,7 @@ test.describe("phone", () => {
     expect(oracle.slice(0, ORACLE_HEAD.length)).toEqual(ORACLE_HEAD);
     await dragRow(page, "alert-export", 0);
     await giveReason(page, "Two large customers asked for it", "Move");
-    await expect(page.getByText("Moved Alert history export to rank 1")).toBeVisible();
+    await expect(page.getByText("Moved Alert history export (F-88) to rank 1")).toBeVisible();
     expect((await codes(page))[0]).toBe("alert-export");
     await expect(row(page, "alert-export").getByTestId("prio-ghost")).toHaveText("Oracle #6");
     await expect(row(page, "alert-export").getByTestId("prio-override")).toContainText("Moved by Avery Stone: “Two large customers asked for it”");

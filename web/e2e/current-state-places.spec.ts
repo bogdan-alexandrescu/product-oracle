@@ -197,7 +197,9 @@ for (const size of ["desktop", "phone"] as const) {
       for (const [r, name, word, means, proof] of kinds) {
         const it = item(r, name);
         await expect(it.getByTestId("cs-mark")).toHaveText(word);
-        await pillAfter(it.getByText(name, { exact: true }), it.getByTestId("cs-mark"));
+        // seed codes: the item's name now opens with its Ground Truth code (e.g. "F-90 Setup checklist"); the pill
+        // still comes right after the whole name, code included.
+        await pillAfter(it.getByTestId("plan-strip-item-open"), it.getByTestId("cs-mark"));
         await tap(it.getByRole("button", { name: `What ${word} means` }));
         const card = it.getByTestId("cs-mark-card");
         await expect(card).toBeVisible();
@@ -226,7 +228,8 @@ for (const size of ["desktop", "phone"] as const) {
       await expect(cardIn.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 
       const strip = page.getByTestId("agenda-strip");
-      await expect(page.getByTestId("agenda-next")).toHaveText("Next: Setup checklist");
+      // seed codes: Setup checklist now carries its Ground Truth code F-90.
+      await expect(page.getByTestId("agenda-next")).toHaveText("Next: F-90Setup checklist");
       await expect(strip.getByTestId("cs-mark")).toHaveText("In progress");
       await pillAfter(page.getByTestId("agenda-next"), strip.getByTestId("cs-mark"));
 
