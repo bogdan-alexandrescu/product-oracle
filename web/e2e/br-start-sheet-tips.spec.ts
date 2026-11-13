@@ -27,7 +27,7 @@ async function openSheet(page: Page, url: string, button: string) {
   await start.scrollIntoViewIfNeeded();
   await start.click();
   const sheet = page.getByRole("dialog", { name: "Start a review" });
-  await expect(sheet.getByText("Who attends", { exact: true })).toBeVisible();
+  await expect(sheet.getByRole("group", { name: /Who attends/ })).toBeVisible();
   return sheet;
 }
 
@@ -44,7 +44,7 @@ for (const phone of [false, true]) {
           await expect(tip).toHaveAccessibleDescription(words);
           await expect(sheet.getByText(words, { exact: true })).toBeHidden();
           // Beside its heading: on the heading's line.
-          const h = await sheet.getByText(heading, { exact: true }).boundingBox();
+          const h = await sheet.locator("h3, legend").filter({ hasText: heading }).boundingBox();
           const t = await tip.boundingBox();
           expect(Math.abs(h!.y + h!.height / 2 - (t!.y + t!.height / 2))).toBeLessThan(14);
           await tip.click();
