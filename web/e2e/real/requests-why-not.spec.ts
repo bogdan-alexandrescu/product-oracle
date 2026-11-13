@@ -10,6 +10,10 @@ test("requests: an owner says no as Already possible, names the feature and sees
   test.setTimeout(30_000);
   await login(page);
   const feature = await confirmedEntity(page, { type: "feature", key: "e2e-board-export", title: "Board export" });
+  // Confirm gives the feature its code (F-01, not the key it was sent); the Feature picker and the
+  // Basis read it as code and name, as namedText(named(title, key)) in lib/codes.
+  expect(feature.key).toMatch(/^F-\d+$/);
+  const featureName = `${feature.key} ${feature.title}`;
   const filed = await page.request.post("/v1/requests", {
     data: { title: TITLE, body: "Asked on a call", channel: "sales", requester_name: "An ops lead at a customer", requester_kind: "customer" },
   });
@@ -23,10 +27,10 @@ test("requests: an owner says no as Already possible, names the feature and sees
   await panel.getByRole("button", { name: "Disqualify", exact: true }).click();
   const form = panel.locator("form").filter({ has: page.getByRole("button", { name: "Disqualify request" }) });
   await form.getByLabel("Reason").selectOption({ label: "Already possible" });
-  await form.getByLabel("Feature").selectOption({ label: feature.title });
+  await form.getByLabel("Feature").selectOption({ label: featureName });
   await form.getByRole("button", { name: "Disqualify request" }).click();
 
   await expect(panel.getByTestId("decision-chip")).toHaveText(new RegExp(`^D-\\d+ Say no to ${TITLE}$`));
-  await expect(panel).toContainText(`Basis: ${feature.title}`);
+  await expect(panel).toContainText(`Basis: ${featureName}`);
   await expect(page.getByTestId("why-not")).toBeVisible();
 });
