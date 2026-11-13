@@ -112,7 +112,7 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
         });
 
         test(`P-3, V-4: ${email}'s Value / effort marks name their feature and keep apart; bottom names sit off the zero line`, async ({ page }) => {
-          // protects: on Priorities' Value / effort tab (owner and viewer, light and dark, 1440 and 390 wide), the Setup checklist mark has its name as its accessible name and shows "#1 Setup checklist" on hover (desktop) or tap (phone), no two marks or counts touch (4 px gap), the Fill-ins and Later labels sit above the zero line, and the how-to-read text is hidden
+          // protects: on Priorities' Value / effort tab (owner and viewer, light and dark, 1440 and 390 wide), the Setup checklist mark has its name as its accessible name and shows "#1 F-90 · Setup checklist" on hover (desktop) or tap (phone), with its code per the Ground Truth rule that every feature shows its code with its name, no two marks or counts touch (4 px gap), the Fill-ins and Later labels sit above the zero line, and the how-to-read text is hidden
           // fails_when: the mark has no name or tag, two marks touch, Fill-ins or Later sits on the zero line, or the how-to-read text shows without the (i)
           // no_claim: that the (i) shows that text, how the marks look, or any mark but Setup checklist's name
           await open(page, email, theme, "value-effort");
@@ -123,7 +123,7 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
           if (size === "1440") await mark.hover();
           else await mark.click();
           await expect(mark.getByTestId("vxe-name")).toBeVisible();
-          await expect(mark.getByTestId("vxe-name")).toHaveText("#1 Setup checklist");
+          await expect(mark.getByTestId("vxe-name")).toHaveText("#1 F-90 · Setup checklist");
           await page.mouse.move(0, 0);
           // V-4: every two marks keep a gap (no touching rings); a count is a mark too.
           const boxes = await page.locator('[data-testid="vxe-point"], [data-testid="vxe-crowd"]').evaluateAll((es) => es.map((e) => e.querySelector("svg")!.getBoundingClientRect()).map((b) => [b.left, b.top, b.right, b.bottom]));

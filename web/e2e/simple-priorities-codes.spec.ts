@@ -94,18 +94,18 @@ const markCodes = chartCodes;
 
 // PR1 (QA Nov 12): a feature with no Ground Truth code shows none on its mark (never made-up letters).
 const CODES: Record<string, string | null> = {
-  "setup-checklist": null,
-  "alert-rules": null,
+  "setup-checklist": "F-90",
+  "alert-rules": "F-86",
   "alert-digest": "F-06",
-  "alert-mobile": null,
+  "alert-mobile": "F-87",
   "setup-import": "F-12",
-  "alert-export": null,
-  "alert-sso": null,
+  "alert-export": "F-88",
+  "alert-sso": "F-89",
   // F-03 Health log: the Guided setup PRD's feature on the onboarding roadmap (no code of its own,
   // its section's); a live, planned roadmap item, so it is a mark too.
   "setup-health-log": "F-03",
-  "price-tiers": null,
-  "setup-video": null,
+  "price-tiers": "F-95",
+  "setup-video": "F-93",
   // P-1: the Goal map's features, roadmap items from the first load (their PRD section's code).
   ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`gm-f${i + 1}`, `F-${101 + i}`])),
 };
@@ -127,7 +127,7 @@ test.describe("desktop", () => {
     const admin = await open(page, "admin@example.com");
     expect(await markCodes(admin)).toEqual(CODES);
     await expect(admin.locator("#prio-about-text")).toContainText(
-      "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list.",
+      "Each mark shows the feature's code from its one-pager; point at it for its name, its rank is in the list.",
     );
     await expect(admin.getByLabel("Legend")).not.toContainText(
       "Numbers are ranks",
@@ -258,12 +258,13 @@ test.describe("desktop", () => {
     await dark(page.context());
     const viewer = await open(page, "viewer@example.com");
     expect(await markCodes(viewer)).toEqual(CODES);
-    await expect(side(viewer, "alert-sso").getByTestId("side-code")).toHaveCount(0);
+    // Single sign-on is in the Ground Truth now (F-89): its code shows with its rank.
+    await expect(side(viewer, "alert-sso").getByTestId("side-code")).toHaveText("F-89");
     await expect(side(viewer, "alert-sso").getByTestId("side-rank")).toHaveText(
       "7",
     );
     await expect(viewer.locator("#prio-about-text")).toContainText(
-      "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list.",
+      "Each mark shows the feature's code from its one-pager; point at it for its name, its rank is in the list.",
     );
   });
 
@@ -354,9 +355,10 @@ test.describe("phone", () => {
     await expect(side(admin, "alert-mobile").getByTestId("moved")).toHaveText(
       /^now #2 \(effort 1 week\)$/,
     );
+    // Mobile alert push is in the Ground Truth now (F-87): its code shows with the move.
     await expect(
       side(admin, "alert-mobile").getByTestId("side-code"),
-    ).toHaveCount(0);
+    ).toHaveText("F-87");
     expect(await markCodes(admin)).toEqual(CODES);
   });
 });

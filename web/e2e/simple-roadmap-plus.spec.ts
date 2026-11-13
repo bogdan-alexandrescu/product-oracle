@@ -104,7 +104,7 @@ for (const [where, use] of [
         const launch = await phase(page, "alert-rules", "launch").getAttribute("data-end");
         if (where === "phone") await longPressDrag(page, "alert-rules", 40);
         else await mouseDrag(page, "alert-rules", 60);
-        await expect(page.getByText(/Moved 'Alert rules engine' to .* in your working draft/)).toBeVisible();
+        await expect(page.getByText(/Moved 'F-86 Alert rules engine' to .* in your working draft/)).toBeVisible();
         await expect(bar(page, "alert-rules")).not.toHaveAttribute("data-start", start);
         const start2 = (await bar(page, "alert-rules").getAttribute("data-start"))!;
         const end2 = (await bar(page, "alert-rules").getAttribute("data-end"))!;
@@ -133,7 +133,7 @@ for (const [where, use] of [
         const end = (await bar(page, "alert-rules").getAttribute("data-end"))!;
         await bar(page, "alert-rules").focus();
         await page.keyboard.press("Shift+ArrowRight");
-        await expect(page.getByText(/Moved 'Alert rules engine'.* in your working draft/)).toBeVisible();
+        await expect(page.getByText(/Moved 'F-86 Alert rules engine'.* in your working draft/)).toBeVisible();
         await expect(bar(page, "alert-rules")).toHaveAttribute("data-start", new Date(Date.parse(start) + 7 * 86_400_000).toISOString().slice(0, 10));
         await expect(bar(page, "alert-rules")).toHaveAttribute("data-end", new Date(Date.parse(end) + 7 * 86_400_000).toISOString().slice(0, 10));
         await openRoadmap(page, "waterfall", COMMENTER, true);
@@ -325,7 +325,7 @@ for (const scheme of ["light", "dark"] as const) {
       await openRoadmap(page, "gantt");
       const start = (await bar(page, "alert-rules").getAttribute("data-start"))!;
       await longPressDrag(page, "alert-rules", 40);
-      await expect(page.getByText(/Moved 'Alert rules engine' to .* in your working draft/)).toBeVisible();
+      await expect(page.getByText(/Moved 'F-86 Alert rules engine' to .* in your working draft/)).toBeVisible();
       await expect(page.getByTestId("draft-count")).toHaveText("1");
       await expect(bar(page, "alert-rules")).not.toHaveAttribute("data-start", start);
     });

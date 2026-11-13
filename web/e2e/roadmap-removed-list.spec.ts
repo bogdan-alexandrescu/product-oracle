@@ -56,7 +56,7 @@ test.describe("Removed list", () => {
     await expect(list(page)).toBeHidden();
     await expect(button(page)).toHaveText("Removed · 5");
     const toasts = page.getByTestId("toasts");
-    await expect(toasts).toContainText("Restored In-app tour");
+    await expect(toasts).toContainText("Restored F-92 In-app tour");
     await shot(page, "ec2-c-result");
     await toasts.getByRole("button", { name: "Undo" }).click();
     await expect(button(page)).toHaveText("Removed · 6");

@@ -32,9 +32,9 @@ test("a merge links the kept item to the merged goal, and its panel reads it", a
   await tap(panel(page).getByRole("button", { name: "More actions" }));
   await tap(panel(page).getByRole("menuitem", { name: "Merge into…" }));
   const form = panel(page).getByTestId("card-merge-edit");
-  await form.getByLabel("Merge into").selectOption({ label: "Alert history export" });
+  await form.getByLabel("Merge into").selectOption({ label: "F-88 Alert history export" });
   await tap(form.getByRole("button", { name: "Merge", exact: true }));
-  await expect(page.getByTestId("toasts")).toContainText("Merged 'Alert routing by team' into Alert history export");
+  await expect(page.getByTestId("toasts")).toContainText("Merged 'Alert routing by team' into F-88 Alert history export");
   await open(page, "alert-export");
   await expect(panel(page).getByTestId("card-goal")).toContainText("Grow retention");
 });
