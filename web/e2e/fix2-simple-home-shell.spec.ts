@@ -129,16 +129,14 @@ test("qa-simple-home-29: the phone's tabs and More sheet show the rail's counts"
       await expect(tab).toHaveAccessibleDescription(/waiting on you/);
     } else await expect(badge).toHaveCount(0);
   }
-  // inbox-meeting-proposals fix: More sums Meetings and what waits in the Inbox beyond what the
-  // tabs count (the Roadmap tab counts its proposals), so it is at least Meetings' count and at
-  // most Meetings' and the Inbox's together; the sheet shows the rail's Inbox count.
+  // simple-home-qa-nov12 #17: More sums Meetings and the Inbox's own count; the sheet shows the
+  // rail's Inbox count.
   const meetings = Number(counts.meetings ?? 0);
   const inbox = Number(counts.inbox ?? 0);
   if (meetings + inbox) {
     const shown = await page.getByTestId("simple-tab-more-count").allTextContents();
     const more = shown.length ? Number(shown[0].trim()) : 0;
-    expect(more).toBeGreaterThanOrEqual(meetings);
-    expect(more).toBeLessThanOrEqual(meetings + inbox);
+    expect(more).toBe(meetings + inbox);
   }
   if (counts.inbox || counts.meetings) {
     await page.getByTestId("simple-tab-more").click();
