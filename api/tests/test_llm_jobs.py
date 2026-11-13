@@ -239,7 +239,7 @@ async def test_feedback_queues_one_job_that_classifies_groups_and_suggests(clien
     assert job["status"] == "succeeded"
     assert job["account_label"] == "personal" and job["via"] == "account"
     assert (job["input_tokens"], job["output_tokens"], job["cost_usd"]) == (1200, 300, 0.0421)
-    assert job["input"]["prompt"] == "review_comments.v3"
+    assert job["input"]["prompt"] == "review_comments.v3+dates.v1"
     assert job["output"]["handled"] == 5
     assert job["output"]["classifications"] == {
         "change_request": 3,
@@ -1156,7 +1156,7 @@ def test_every_kind_has_a_versioned_prompt():
     for kind in ("review_comments", "reporting", "refinement"):
         name, text = prompting.current(kind)
         assert name.startswith(f"{kind}.v") and len(text) > 500
-        assert (prompting.PROMPTS / f"{name}.md").exists()
+        assert (prompting.PROMPTS / f"{name.split('+')[0]}.md").exists()
     # O1c and O1e are in the instructions of every kind that writes section text.
     for kind in ("review_comments", "refinement"):
         text = prompting.current(kind)[1]

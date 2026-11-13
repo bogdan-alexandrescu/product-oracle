@@ -30,7 +30,7 @@ def test_job_prompts_that_write_text_are_new_versions_with_the_rules():
     versions = {"refinement": "v2", "refinement_batch": "v3", "review_comments": "v3"}
     for kind, version in versions.items():
         name, text = prompting.current(kind)
-        assert name == f"{kind}.{version}"
+        assert name == f"{kind}.{version}+dates.v1"
         for rule in RULES:
             assert rule in text, (kind, rule)
     # Earlier versions stay as they were: a job records the prompt it ran with.

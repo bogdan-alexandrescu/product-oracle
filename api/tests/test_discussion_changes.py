@@ -232,7 +232,7 @@ async def test_a_reply_with_changes_streams_prose_and_stores_one_proposed_change
     assert sent["label"] == "Move mobile-push to Next"
     async with tenant_session(rv.tenant_id) as s:
         reply = await s.get(DiscussionMessage, uuid.UUID(dict(evs)["done"]["id"]))
-        assert "<<<" not in reply.body and reply.prompt == "discussion_reply.v2"
+        assert "<<<" not in reply.body and reply.prompt == "discussion_reply.v2+dates.v1"
         [row] = list(await s.scalars(select(DiscussionChange)))
         assert row.from_message_id == reply.id
 
