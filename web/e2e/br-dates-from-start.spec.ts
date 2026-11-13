@@ -7,7 +7,7 @@ import { expect, test } from "./test";
  * the mock's invented data: Oracle's date suggestions are made by its daily run, never by a page
  * view, so they wait in the Inbox before anyone opens the roadmap, and opening it adds none.
  * protects: the Inbox lists Oracle's dates on a first visit; after the roadmap is opened it lists
- * the same number. fails_when: none show until the roadmap is read, or opening it adds rows.
+ * the same number under Seen. fails_when: none show until the roadmap is read, or opening it adds rows.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -25,6 +25,8 @@ test("Oracle's dates wait in the Inbox from the start, and a roadmap view adds n
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await page.goto("/inbox");
+  // Seen on the first visit, they wait under Seen now.
+  await page.getByRole("tab", { name: /^Seen/ }).click();
   await expect(dates.first()).toBeVisible();
   await expect(dates).toHaveCount(n);
 });

@@ -270,6 +270,8 @@ interface SimpleDb {
   /** one-roadmap-many-prds (api/oracle/roadmap/company.feeding_ids): the company roadmap's slug;
    * while set, its items alone feed Simple and older per-PRD roadmaps' items are history. */
   company_roadmap?: string;
+  /** detailed-a #8: Oracle's daily date run has made the seed's suggestions (seedOracleDates). */
+  dates_run?: boolean;
   /** simple-replaced-prds (api/oracle/roadmap/company.replaced_prd_ids): the ids and slugs of the
    * PRDs marked replaced, set by server.ts from its documents; their items no longer feed Simple. */
   replaced_prds?: string[];
@@ -1584,6 +1586,14 @@ export function itemSuggestion(db: SimpleDb, itemId: string): Suggestion | undef
   return { ...first, start_date: start, end_date: end };
 }
 
+/** detailed-a #8: Oracle's date suggestions as its daily run left them (suggestions.daily), made once
+ * with the seed, never on a read; afterwards only the refresh, the daily tick or an item draft makes them. */
+export function seedOracleDates(db: SimpleDb): void {
+  if (db.dates_run) return;
+  db.dates_run = true;
+  if (!db.suggestions.length && !Object.keys(db.own).length) regenerate(db, companyToday());
+}
+
 /** oracle.simple.suggestions.regenerate: one open suggestion per undated item (plan-model: per slice of a planned one). */
 function regenerate(db: SimpleDb, today: string): number {
   const resolved = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s) }]));
@@ -2396,7 +2406,6 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
   if (p[1] !== "simple" || p[2] !== "roadmap") return null;
   const m = req.method;
   const today = companyToday();
-  if (!db.suggestions.length && !Object.keys(db.own).length) regenerate(db, today);
   settleDrafting(db);
   if (!p[3] && m === "GET") {
     if (q.get("roadmap") && !readableRoadmap(q.get("roadmap"), me.role)) return json(404, { detail: "No such roadmap" });
