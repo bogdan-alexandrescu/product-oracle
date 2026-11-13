@@ -41,9 +41,9 @@ from sqlalchemy import select
 
 from oracle import company_time
 from oracle.auth.models import User
+from oracle.baseline.models import Entity
 from oracle.review.models import DocumentReviewPolicy
 from oracle.simple import visuals
-from oracle.baseline.models import Entity
 from oracle.simple.models import (
     SimpleChange,
     SimpleChatCard,
@@ -172,13 +172,15 @@ async def test_card_and_suggestion_visuals_follow_who_reads_them(client):
         got = await client.get(path, headers=ctx.as_(who))
         assert got.status_code == status, (who, kind, key, got.text)
         if status == 200:
-            assert got.json()["flow"]["version"] == 1 and got.json()["can_revise"] is False
+            assert got.json()["flow"]["version"] == 1, (who, kind, key, got.text)
+            assert got.json()["can_revise"] is (who == "owner"), (who, kind, key)
             got = await client.get(f"{path}/versions/1", headers=ctx.as_(who))
             assert got.status_code == 200, (who, kind, key, got.text)
-            r = await client.post(f"{path}/revise", json={"note": "Show the skip path"},
-                                  headers=ctx.as_(who))  # fmt: skip
-            assert r.status_code == 403, (who, kind, key, r.text)
-    # Revise is the owners'.
+            if who != "owner":
+                # Revise is the owners'.
+                r = await client.post(f"{path}/revise", json={"note": "Show the skip path"},
+                                      headers=ctx.as_(who))  # fmt: skip
+                assert r.status_code == 403, (who, kind, key, r.text)
     got = await client.get(f"{URL}/suggestion/{ids['sug']}", headers=ctx.as_("owner"))
     assert got.status_code == 200 and got.json()["can_revise"] is True, got.text
 
