@@ -25,8 +25,9 @@ async def main_goals(db: AsyncSession, prd_ids: Iterable[uuid.UUID]) -> dict[uui
     """Each PRD's main goal, as that goal's place in the goal order (0 = first): the goal
     most of its roadmap items serve, each item's goal as Simple › Roadmap reads it (a goal
     linked to the item first, else the one its feature supports)."""
+    from oracle.roadmap.codes import item_links
     from oracle.roadmap.models import RoadmapItem
-    from oracle.simple import goal_reads
+    from oracle.simple import drafts, goal_reads
     from oracle.simple.service import _goals
 
     ids = list(prd_ids)
@@ -34,13 +35,22 @@ async def main_goals(db: AsyncSession, prd_ids: Iterable[uuid.UUID]) -> dict[uui
         return {}
     goals = sort_goals(await goal_reads.all_goals(db))
     rank = {g.id: n for n, g in enumerate(goals)}
-    rows = (
-        await db.execute(
-            select(RoadmapItem.prd_document_id, RoadmapItem.goal_ids, RoadmapItem.feature_id).where(
-                RoadmapItem.prd_document_id.in_(ids), RoadmapItem.cut.is_(False)
+    if drafts.reading():
+        # read-speed: the read's every item, read once (oracle.roadmap.codes.item_links).
+        of = set(ids)
+        rows = [
+            (r.prd_document_id, r.goal_ids, r.feature_id)
+            for r in await item_links(db)
+            if r.prd_document_id in of and r.cut is False
+        ]
+    else:
+        rows = (
+            await db.execute(
+                select(
+                    RoadmapItem.prd_document_id, RoadmapItem.goal_ids, RoadmapItem.feature_id
+                ).where(RoadmapItem.prd_document_id.in_(ids), RoadmapItem.cut.is_(False))
             )
-        )
-    ).all()
+        ).all()
     supported = await _goals(db, {f for _, _, f in rows if f is not None})
     counts: dict[uuid.UUID, Counter[int]] = {}
     for prd_id, goal_ids, feature_id in rows:

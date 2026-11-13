@@ -452,6 +452,13 @@ async def once(key: str, load: Callable[[], Awaitable[Any]]) -> Any:
     return memo[key]
 
 
+def forget(key: str) -> None:
+    """Within :func:`one_read`, read ``key`` again next time (a part wrote its table)."""
+    memo = _read_memo.get()
+    if memo is not None:
+        memo.pop(key, None)
+
+
 async def all_tracks(db: AsyncSession) -> list[ProductTrack]:
     """Every track in the company's order (track-order), read once per read."""
 
@@ -495,13 +502,27 @@ async def who(db: AsyncSession, doc_ids: set[uuid.UUID]) -> Who:
     return out
 
 
+async def _policies(db: AsyncSession, doc_ids: set[uuid.UUID]) -> list[DocumentReviewPolicy]:
+    """The review policies of ``doc_ids`` (one a document at most); within :func:`one_read`
+    every policy is read once, however many parts ask for which documents."""
+    if _read_memo.get() is None:
+        return list(
+            await db.scalars(
+                select(DocumentReviewPolicy).where(DocumentReviewPolicy.document_id.in_(doc_ids))
+            )
+        )
+
+    async def load() -> list[DocumentReviewPolicy]:
+        return list(await db.scalars(select(DocumentReviewPolicy)))
+
+    return [p for p in await once("review_policies", load) if p.document_id in doc_ids]
+
+
 async def _who(db: AsyncSession, doc_ids: set[uuid.UUID]) -> Who:
     out = Who()
     if not doc_ids:
         return out
-    for p in await db.scalars(
-        select(DocumentReviewPolicy).where(DocumentReviewPolicy.document_id.in_(doc_ids))
-    ):
+    for p in await _policies(db, doc_ids):
         out.deciders[p.document_id] = p.decider_id
         out.reviewers[p.document_id] = list(p.mandatory_reviewer_ids or [])
     # A roadmap's owners own its tracks; a PRD's (a one-pager's draft, S5) own the tracks
@@ -739,16 +760,16 @@ async def reader(db: AsyncSession, principal: Any) -> Reader:
     # replaced-prd-history: a replaced PRD's roadmap is history: no working draft, no count.
     history = await company.history_ids(db)
     ds = [d for d in await open_drafts(db) if d.document_id not in history]
-    proposals = await _proposals(
-        db,
-        set(
-            await db.scalars(
-                select(SimpleChange.document_id).where(SimpleChange.status == "proposed").distinct()
-            )
+    # Every document's open proposals, counted in one read.
+    proposals = {
+        doc: n
+        for doc, n in await db.execute(
+            select(SimpleChange.document_id, func.count())
+            .where(SimpleChange.status == "proposed", SimpleChange.document_id.is_not(None))
+            .group_by(SimpleChange.document_id)
         )
-        - {None}
-        - history,
-    )
+        if doc not in history
+    }
     w = await who(db, {d.document_id for d in ds} | set(proposals))
     n = await counts(db, ds)
     overlays: dict[uuid.UUID, dict[str, Any]] = {}
@@ -812,18 +833,22 @@ def _withdrawn():
 
 async def submitted_versions(db: AsyncSession) -> set[uuid.UUID]:
     """Versions submitted from drafts and not approved yet, and versions withdrawn from
-    review: never what readers are shown."""
-    return set(
-        await db.scalars(
-            select(SimpleDraft.version_id)
-            .where(SimpleDraft.status == "submitted", SimpleDraft.version_id.is_not(None))
-            .union(
-                select(DocumentVersion.id).where(
-                    DocumentVersion.approved_at.is_(None), _withdrawn()
+    review: never what readers are shown; read once within :func:`one_read`."""
+
+    async def load() -> set[uuid.UUID]:
+        return set(
+            await db.scalars(
+                select(SimpleDraft.version_id)
+                .where(SimpleDraft.status == "submitted", SimpleDraft.version_id.is_not(None))
+                .union(
+                    select(DocumentVersion.id).where(
+                        DocumentVersion.approved_at.is_(None), _withdrawn()
+                    )
                 )
             )
         )
-    )
+
+    return set(await once("submitted_versions", load))
 
 
 async def effective(db: AsyncSession, rows: list[RoadmapItem]) -> dict[str, RoadmapItem]:
