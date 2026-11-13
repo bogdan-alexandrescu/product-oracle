@@ -856,9 +856,9 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
               {/* fix4 qa-simple-roadmap-3: no "#1" on a row: the place in the return queue in words
                   ("1st"). QA Nov 12 #1: the name reads with its code first ("F-06 Weekly alert
                   digest"), as its card does. The name gets the row's space first; the chips after
-                  it shrink (finding 7). */}
+                  it shrink (finding 7). The place keeps to the 40% the name leaves it, wrapping (layout's nameH). */}
               {r.place != null && (
-                <span className="tnum flex-none text-xs text-text2" data-testid="return-place" title={`${ordinal(r.place)} to come back if room opens`}>
+                <span className="tnum max-w-[40%] flex-none text-xs leading-tight text-text2" data-testid="return-place" title={`${ordinal(r.place)} to come back if room opens`}>
                   {/* qa4-simple-roadmap-23: the number says what it is. */}
                   {ordinal(r.place)} to return
                 </span>
