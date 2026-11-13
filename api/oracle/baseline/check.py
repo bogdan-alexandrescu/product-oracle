@@ -20,7 +20,8 @@ here, each flag with one plain sentence and the fixes a person can make in the U
 - ``no_code``: a Ground Truth feature with no F-code;
 - ``code_differs``: a feature keyed by the next number as it was confirmed while its own code
   (its Code attribute, else its roadmap item's or PRD feature's) is another, fixed by Use its
-  code (``oracle.baseline.fixes.use_own_code``);
+  code (``oracle.baseline.fixes.use_own_code``); when that code is a roadmap item's and another
+  feature has it, by Link to a feature on that item instead; a slice (F-35a) is never flagged;
 - ``no_goal``: a Ground Truth feature serving no confirmed goal by a confirmed link;
 - ``runs_today_on_roadmap``: a feature running today (Current state) still on the roadmap,
   its own feature or the one it matches by code (F-03, F-03a), fixed by taking it off the
@@ -450,10 +451,35 @@ async def run(db: AsyncSession) -> GroundTruthOut:
         ).all()
     }
     tied = _tied(items, feature_of, plans, truth_ids)
+    held: dict[str, uuid.UUID] | None = None
     for f in truth:
         if (f.id, f.key) not in joined or f.id not in code_of:
             continue
-        if (want := own_code(f, tied.get(f.id))) and want != whole_code(code_of[f.id]):
+        # A slice reads its feature's code with its letter (F-35a): no code of its own.
+        if (up := by_id.get(f.parent_id)) is not None and up.type == "feature":  # type: ignore[arg-type]
+            continue
+        want = own_code(f, tied.get(f.id))
+        if not want or want == whole_code(code_of[f.id]):
+            continue
+        if held is None:
+            from oracle.baseline.fixes import canonical_code, former_keys
+
+            held = {(canonical_code(k) or k): i for k, i in (await former_keys(db)).items()}
+            held |= {(_code(c) or c): i for i, c in code_of.items()}
+        # Its item's code is another feature's (a duplicate): link the item to that feature.
+        mine = whole_code((f.attrs or {}).get("code")) is None
+        dup = held.get(want) not in (None, f.id)
+        on = None
+        if mine and dup:
+            on = next(
+                (i for i in items
+                 if feature_of[i.id] == f.id and whole_code(i.prd_section_key) == want),
+                None,
+            )  # fmt: skip
+        if on is not None:
+            flag("code_differs", [("link_to_feature", str(on.id))], item=item_ref(on),
+                 feature=ref(f), where=where_of(on))  # fmt: skip
+        else:
             flag(
                 "code_differs", [("use_code", str(f.id))], feature=ref(f), where=GroundTruthWhere()
             )
