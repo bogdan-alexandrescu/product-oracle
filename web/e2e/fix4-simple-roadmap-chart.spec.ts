@@ -78,13 +78,11 @@ test.describe("desktop", () => {
       const key = await r.getAttribute("data-item");
       const name = (await r.locator("button[title]").first().textContent())!.trim();
       expect(name.length, `${key} carries its name`).toBeGreaterThan(2);
-      // Ground Truth rule: every feature shows its code with its name (e.g. "F-86 Alert rules
-      // engine"); a bare "#1"-style id, with no name alongside it, is still never shown.
-      expect(name, `${key}'s name is not only an id`).not.toMatch(/^#\d+$/);
-      // The bar says its name too (to a screen reader), with its code, never a bare id alone.
+      expect(name, `${key}'s name has no id`).not.toMatch(/\b[A-Z]-\d{2}[a-z]?\b|#\d/);
+      // The bar says its name too (to a screen reader), never an id.
       const bar = await r.getByTestId("timeline-bar").getAttribute("aria-label");
       expect(bar, `${key}'s bar is named`).toMatch(/^\S.{2,}, /);
-      expect(bar!, `${key}'s bar is not only an id`).not.toMatch(/^#\d+,/);
+      expect(bar!).not.toMatch(/\b[A-Z]-\d{2}[a-z]?\b|#\d/);
     }
 
     const title = "Push notifications for alerts";
@@ -94,9 +92,7 @@ test.describe("desktop", () => {
     await page.getByLabel("Add an item").press("Enter");
     const added = rows.filter({ has: page.locator(`button[title="${title}"]`) });
     await expect(added).toHaveCount(1);
-    // A new item has no Ground Truth code yet, so it is flagged as such, per the Ground Truth
-    // rule: "Not in the Ground Truth", never refused.
-    await expect(added.locator("button[title]").first()).toHaveText(/^Push notifications for alerts\s*Draft\s*Not in the Ground Truth$/);
+    await expect(added.locator("button[title]").first()).toHaveText(/^Push notifications for alerts\s*Draft$/);
   });
 
   test("qa-30: the month axis reads three-letter months, the first in sight with its year", async ({ page }) => {

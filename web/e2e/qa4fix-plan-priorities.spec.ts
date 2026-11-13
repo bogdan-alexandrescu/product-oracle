@@ -82,7 +82,7 @@ test.describe("desktop", () => {
     const row = rowOf(page, "F-5");
     const sheet = page.getByRole("dialog");
     const menu = page.getByRole("menu", {
-      name: "Change F-5 Address lookup service",
+      name: "Change Address lookup service",
     });
     await expect(async () => {
       if (!(await sheet.isVisible())) {
@@ -105,7 +105,7 @@ test.describe("desktop", () => {
       .getByRole("button", { name: /Saved addresses at checkout/ })
       .click();
     await expect(sheet.getByTestId("move-target")).toHaveText(
-      "Move above F-1 Saved addresses at checkout",
+      "Move above Saved addresses at checkout",
     );
     await sheet
       .getByLabel("Why?")

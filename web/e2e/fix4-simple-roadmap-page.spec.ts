@@ -71,8 +71,7 @@ test.describe("desktop", () => {
     await page.getByTestId("group-milestone").click();
     await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
     const labels = page.getByTestId("chart-labels");
-    // Every milestone shows its code with its name (Ground Truth rule): "M6 Beta (Nov 30)".
-    const beta = labels.getByTestId("chart-group").filter({ hasText: /^M6 Beta \(/ });
+    const beta = labels.getByTestId("chart-group").filter({ hasText: /^Beta \(/ });
     await expect(beta).toHaveCount(1);
     // The digest's row sits under the Beta heading, before the next group's.
     await expect
@@ -82,13 +81,13 @@ test.describe("desktop", () => {
           let group = "";
           for (const r of rows) {
             if (r.getAttribute("data-testid") === "label-title") {
-              if (r.textContent?.trim() === "F-06 Weekly alert digest") return group;
+              if (r.textContent?.trim() === "Weekly alert digest") return group;
             } else group = (r.textContent ?? "").trim();
           }
           return null;
         }),
       )
-      .toMatch(/^M6 Beta \(/);
+      .toMatch(/^Beta \(/);
   });
 
   test("qa-12: an inverted range swaps; an empty result says so and clears", async ({ page }) => {

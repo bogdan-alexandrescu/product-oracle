@@ -315,8 +315,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(row(page, "plan-f-03")).toHaveText(/^F-03 Setup failure alerts\s*Nov 2 – Nov 13/);
       // P-1: rows in start order; board-quarters: the Goal map's undated One-tap sign-up link starts with Later (Apr 1).
       await expect(quarters.nth(1).getByTestId("timeline-row").first()).toHaveText(/^F-13 Public signup\s*Jan 4 – Jan 29, 2027/);
-      // Oracle's 17 seeded date suggestions mark this undated item "No dates yet · estimated" ahead of its estimated range.
-      await expect(quarters.nth(2).getByTestId("timeline-row").filter({ hasText: "One-tap sign-up link" })).toHaveText(/^F-101 One-tap sign-up link\s*No dates yet · estimated Apr 1, 2027 – /);
+      await expect(quarters.nth(2).getByTestId("timeline-row").filter({ hasText: "One-tap sign-up link" })).toHaveText(/^F-101 One-tap sign-up link\s*Apr 1, 2027 – /);
       await expect(quarters.nth(1).getByTestId("timeline-row").filter({ hasText: "Public signup" })).toHaveText(/^F-13 Public signup\s*Jan 4 – Jan 29, 2027/);
       await expect(page.getByTestId("group-milestone")).toHaveCount(0);
 

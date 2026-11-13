@@ -62,8 +62,7 @@ test.describe("1440", () => {
     await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
     await page.getByTestId("group-goal").click();
-    // The label shows the item's code with its name (Ground Truth rule): "F-101 One-tap sign-up link".
-    const label = page.getByTestId("chart-label").filter({ has: page.getByTestId("label-title").getByText(`F-101 ${FEATURE}`, { exact: true }) });
+    const label = page.getByTestId("chart-label").filter({ has: page.getByTestId("label-title").getByText(FEATURE, { exact: true }) });
     await expect(label).toBeVisible();
     // The regroup from track bands lands a frame after the press: read it once it has.
     await expect

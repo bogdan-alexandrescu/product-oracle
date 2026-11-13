@@ -172,8 +172,7 @@ for (const [where, use] of [
         await expect(card.getByRole("heading", { name: "Weekly alert digest" })).toBeVisible();
         await expect(card.getByTestId("card-owner")).toHaveText("No owner yet");
         await expect(card.getByTestId("card-dates")).toContainText("accepted");
-        // The depends-on item shows its code with its name (Ground Truth rule).
-        await expect(card.getByTestId("card-depends")).toHaveText("F-86Alert rules engine");
+        await expect(card.getByTestId("card-depends")).toHaveText("Alert rules engine");
         await expect(card.getByTestId("card-reasons")).toContainText("Serves the goal Grow retention.");
         await expect(card.getByTestId("card-decisions")).toContainText("Send the digest weekly or daily?");
         await expect(card.getByTestId("card-flags")).toContainText("which it depends on, ends");
@@ -209,8 +208,7 @@ test("an owner drags a bar: applied, with Undo", async ({ page }) => {
   await open(page);
   const before = await bar(page, "alert-export").getAttribute("data-start");
   await drag(page, "alert-export", 90);
-  // The toast names the item with its code (Ground Truth rule).
-  await expect(page.getByText(/Moved 'F-88 Alert history export' to .* in your working draft/)).toBeVisible();
+  await expect(page.getByText(/Moved 'Alert history export' to .* in your working draft/)).toBeVisible();
   await expect(page.getByTestId("draft-banner")).toContainText("Your working draft");
   await expect(page.getByTestId("draft-count")).toHaveText("1");
   await expect(bar(page, "alert-export")).not.toHaveAttribute("data-start", before!);
@@ -245,8 +243,7 @@ test("the drag shows dates and constraint flags live", async ({ page }) => {
   await expect(page.getByTestId("drag-live")).toHaveAttribute("data-state", "broken");
   await expect(tl).toHaveAttribute("data-live", "broken");
   await page.mouse.up();
-  // The toast names the item with its code (Ground Truth rule).
-  await expect(page.getByText(/Moved 'F-87 Mobile alert push'/)).toBeVisible();
+  await expect(page.getByText(/Moved 'Mobile alert push'/)).toBeVisible();
 });
 
 /**
@@ -408,7 +405,7 @@ test("a viewer reads and cannot drag", async ({ page }) => {
 test("only a new feature's proposal carries a flow thumbnail", async ({ page }) => {
   await open(page, "commenter@example.com");
   await drag(page, "alert-export", 90);
-  await expect(page.getByText(/Moved 'F-88 Alert history export'.*proposed: it waits for .+ in Needs a decision/)).toBeVisible();
+  await expect(page.getByText(/Moved 'Alert history export'.*proposed: it waits for .+ in Needs a decision/)).toBeVisible();
   await bar(page, "alert-export").click();
   const card = page.getByTestId("floating-card");
   await expect(card.getByTestId("card-proposals")).toContainText("Move the dates");
@@ -449,7 +446,7 @@ test("the keyboard moves and resizes a bar", async ({ page }) => {
   const plus = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
   await b.focus();
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByText(/Moved 'F-88 Alert history export'.*in your working draft/)).toBeVisible();
+  await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible();
   await expect(b).toHaveAttribute("data-start", plus(start, 7));
   await expect(b).toHaveAttribute("data-end", plus(end, 7));
   // effort-reader: its 1-week span is 7 days, its end included, so Shift+arrow lengthens it
@@ -473,7 +470,7 @@ test.describe("phone, long-press", () => {
     await open(page, undefined, true);
     const before = await bar(page, "alert-export").getAttribute("data-start");
     await longPressDrag(page, "alert-export", 60);
-    await expect(page.getByText(/Moved 'F-88 Alert history export'/)).toBeVisible();
+    await expect(page.getByText(/Moved 'Alert history export'/)).toBeVisible();
     await expect(bar(page, "alert-export")).not.toHaveAttribute("data-start", before!);
     await noSidewaysScroll(page);
   });

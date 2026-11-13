@@ -123,7 +123,7 @@ for (const [where, use] of [
         await expect(conflict(page)).toHaveCount(0);
         await expect(b).toHaveAttribute("data-start", plus(start, 14));
         await expect(b).toHaveAttribute("data-end", plus(end, 14));
-        await expect(page.getByText(/Moved 'F-88 Alert history export'.*in your working draft/)).toBeVisible();
+        await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible();
         await expect(page.getByTestId("draft-count")).toHaveText("1");
         // A second burst builds on the first one's result.
         await b.focus();
@@ -204,7 +204,7 @@ for (const [where, use] of [
         await b.focus();
         await page.keyboard.press("Shift+ArrowRight");
         await page.keyboard.press("Shift+ArrowRight");
-        await expect(page.getByText(/Moved 'F-88 Alert history export'.*in your working draft/)).toBeVisible();
+        await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible();
         await expect(page.getByTestId("draft-count")).toHaveText("1");
         await page.waitForTimeout(800);
         await expect(conflict(page)).toHaveCount(0);
@@ -257,7 +257,7 @@ for (const [where, use] of [
         await away.focus();
         await expect(b).toHaveAttribute("data-start", plus(start, 14));
         // The first burst's change returns (its toast); the second is still on its way.
-        await expect(page.getByText(/Moved 'F-88 Alert history export'/).first()).toBeVisible({ timeout: 4000 });
+        await expect(page.getByText(/Moved 'Alert history export'/).first()).toBeVisible({ timeout: 4000 });
         for (let n = 0; n < 6; n++) {
           expect(await b.getAttribute("data-start")).toBe(plus(start, 14));
           await page.waitForTimeout(100);
@@ -286,7 +286,7 @@ for (const [where, use] of [
         await bar(other, "alert-export").focus();
         await other.keyboard.press("ArrowLeft");
         await other.getByTestId("format-switch").getByTestId("format-timeline").focus();
-        await expect(other.getByText(/Moved 'F-88 Alert history export'/)).toBeVisible();
+        await expect(other.getByText(/Moved 'Alert history export'/)).toBeVisible();
         await other.close();
         await slowChanges(page);
         const b = bar(page, "alert-export");
@@ -298,7 +298,7 @@ for (const [where, use] of [
         await page.keyboard.press("ArrowRight");
         await away.focus();
         await expect(conflict(page)).toBeVisible({ timeout: 4000 });
-        await expect(page.getByText(/Moved 'F-88 Alert history export'.*in your working draft/)).toBeVisible({ timeout: 5000 });
+        await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible({ timeout: 5000 });
         await expect(b).toHaveAttribute("data-start", plus(start, 14));
       });
 
@@ -339,7 +339,7 @@ for (const [where, use] of [
         await page.keyboard.press(right);
         await expect(column(page, "later").locator('[data-item="alert-rules"]')).toBeVisible();
         await expect(card(page, "alert-rules")).toBeFocused();
-        await expect(page.getByText("Moved 'F-86 Alert rules engine' to Later in your working draft")).toBeVisible();
+        await expect(page.getByText("Moved 'Alert rules engine' to Later in your working draft")).toBeVisible();
         await expect(page.getByTestId("draft-count")).toHaveText("1");
         await page.waitForTimeout(800);
         await expect(conflict(page)).toHaveCount(0);
@@ -400,7 +400,7 @@ test.describe("phone, long-press", () => {
     const svg = page.getByTestId("chart-svg");
     for (let n = 1; n <= 8; n++) await svg.dispatchEvent("pointermove", { ...ev, clientX: x + (60 * n) / 8 });
     await svg.dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: x + 60 });
-    await expect(page.getByText(/Moved 'F-88 Alert history export'/)).toBeVisible();
+    await expect(page.getByText(/Moved 'Alert history export'/)).toBeVisible();
     await expect(page.getByTestId("draft-count")).toHaveText("1");
     await page.waitForTimeout(800);
     await expect(conflict(page)).toHaveCount(0);

@@ -114,10 +114,9 @@ test.describe("desktop", () => {
         expect(await fits(chips.nth(i)), `${key}: a flag is cut`).toBe(true);
       }
     }
-    // The depended-on feature's code shows with its name (Ground Truth rule).
     const why = rowOf(page, "F-5").getByTestId("rank-reason");
-    await expect(why).toHaveAttribute("title", /^Ranked higher: F-2 Shipping cost shown in the cart depends on it\./);
-    await expect(why).toHaveText("Ranked higher: F-2 Shipping cost shown in the cart depends on it");
+    await expect(why).toHaveAttribute("title", /^Ranked higher: Shipping cost shown in the cart depends on it\./);
+    await expect(why).toHaveText("Ranked higher: Shipping cost shown in the cart depends on it");
   });
 
   test("qa-plan-50: MoSCoW and RICE scores are whole numbers; goal-weighted keeps two places", async ({ page }) => {

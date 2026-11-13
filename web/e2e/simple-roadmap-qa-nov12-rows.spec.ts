@@ -20,6 +20,7 @@ declare global {
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DIGEST = /^F-06 Weekly alert digest$/;
+const NOT_IN_GT = "Not in the Ground Truth";
 
 type Format = "timeline" | "gantt" | "waterfall" | "board";
 
@@ -39,21 +40,20 @@ const boardCard = (page: Page, key: string): Locator => page.locator(`[data-test
 test.describe("desktop", () => {
   test.use(DESKTOP);
 
-  test("the Timeline's rows read code and name", async ({ page }) => {
-    // protects: QA Nov 12 #1 on the Timeline: Weekly alert digest's row reads "F-06 Weekly alert digest"
-    // fails_when: a row shows the name alone
+  test("the Timeline's rows read code and name, and flag an item with no code", async ({ page }) => {
+    // protects: QA Nov 12 #1/#2 on the Timeline: Weekly alert digest's row reads "F-06 Weekly alert digest"; Alert rules engine's row carries "Not in the Ground Truth", the coded row does not
+    // fails_when: a row shows the name alone, or the uncoded item has no mark, or a coded one has it
     // no_claim: the phone's quarter list; how the mark looks
     await open(page, "timeline");
     const digest = page.locator('[data-testid="timeline-row"][data-item="alert-digest"]').first();
     await digest.scrollIntoViewIfNeeded();
     await expect(digest.getByTestId("timeline-row-name")).toHaveText(DIGEST);
     await expect(digest.getByTestId("not-in-gt")).toHaveCount(0);
-    // Alert rules engine is in the Ground Truth now too (F-86): its row shows the code with the
-    // name and carries no "Not in the Ground Truth" flag.
     const rules = page.locator('[data-testid="timeline-row"][data-item="alert-rules"]').first();
     await rules.scrollIntoViewIfNeeded();
-    await expect(rules.getByTestId("timeline-row-name")).toHaveText(/^F-86 Alert rules engine/);
-    await expect(rules.getByTestId("not-in-gt")).toHaveCount(0);
+    await expect(rules.getByTestId("timeline-row-name")).toHaveText(/^Alert rules engine/);
+    await expect(rules.getByTestId("not-in-gt")).toBeVisible();
+    await expect(rules.getByTestId("not-in-gt")).toHaveText(NOT_IN_GT);
   });
 
   test("the Today pill leaves when today scrolls out of the 3 months' view", async ({ page }) => {
@@ -73,9 +73,9 @@ test.describe("desktop", () => {
     expect(box.x, "the pill sits right of the names column").toBeGreaterThanOrEqual(names.x + names.width);
   });
 
-  test("the Gantt and Waterfall name column reads code and name", async ({ page }) => {
-    // protects: QA Nov 12 #1 on the Gantt and the Waterfall: the label reads "F-06 Weekly alert digest"
-    // fails_when: a label shows the name alone
+  test("the Gantt and Waterfall name column reads code and name, and flags an item with no code", async ({ page }) => {
+    // protects: QA Nov 12 #1/#2 on the Gantt and the Waterfall: the label reads "F-06 Weekly alert digest"; Alert rules engine's label carries "Not in the Ground Truth"
+    // fails_when: a label shows the name alone, or the uncoded item has no mark
     // no_claim: the phone's narrower column
     await open(page, "gantt");
     for (const format of ["gantt", "waterfall"] as const) {
@@ -83,8 +83,7 @@ test.describe("desktop", () => {
       await expect(page.getByTestId(`format-${format}`)).toHaveAttribute("aria-pressed", "true");
       await expect(chartLabel(page, "Weekly alert digest").getByTestId("label-title"), format).toHaveText(DIGEST);
       await expect(chartLabel(page, "Weekly alert digest").getByTestId("not-in-gt"), format).toHaveCount(0);
-      // Alert rules engine is in the Ground Truth now too (F-86): it carries no flag either.
-      await expect(chartLabel(page, "Alert rules engine").getByTestId("not-in-gt"), format).toHaveCount(0);
+      await expect(chartLabel(page, "Alert rules engine").getByTestId("not-in-gt"), format).toBeVisible();
     }
   });
 
@@ -104,9 +103,9 @@ test.describe("desktop", () => {
     await expect(lanes.filter({ hasText: /M\d+ Beta \([A-Z][a-z]{2} \d{1,2}\)/ }).first()).toBeVisible();
   });
 
-  test("the board's cards and its PNG read code and name", async ({ page }) => {
-    // protects: QA Nov 12 #1 on the board and its export: the card reads "F-06 Weekly alert digest"; the exported picture names the card "F-06 Weekly alert digest"
-    // fails_when: a card or the export shows the name alone
+  test("the board's cards and its PNG read code and name, and flag an item with no code", async ({ page }) => {
+    // protects: QA Nov 12 #1/#2 on the board and its export: the card reads "F-06 Weekly alert digest", Alert rules engine's card carries "Not in the Ground Truth"; the exported picture names the card "F-06 Weekly alert digest" and flags Alert rules engine
+    // fails_when: a card or the export shows the name alone, or the uncoded item is not flagged
     // no_claim: the PDF's pages; the Timeline's and Gantt's exports
     await page.context().addInitScript(() => {
       const d = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src")!;
@@ -122,8 +121,7 @@ test.describe("desktop", () => {
     await open(page, "board");
     await expect(boardCard(page, "alert-digest").getByTestId("board-card-name")).toHaveText(DIGEST);
     await expect(boardCard(page, "alert-digest").getByTestId("not-in-gt")).toHaveCount(0);
-    // Alert rules engine is in the Ground Truth now too (F-86): its card carries no flag either.
-    await expect(boardCard(page, "alert-rules").getByTestId("not-in-gt")).toHaveCount(0);
+    await expect(boardCard(page, "alert-rules").getByTestId("not-in-gt")).toBeVisible();
     await Promise.all([page.waitForEvent("download", { timeout: 60_000 }), page.getByRole("button", { name: "Export PNG" }).click()]);
     const svgs = await page.evaluate(() => window.__exportSvgs ?? []);
     expect(svgs.length).toBeGreaterThan(0);
@@ -133,8 +131,9 @@ test.describe("desktop", () => {
     );
     expect(texts).toContain("F-06 Weekly alert digest");
     expect(texts).not.toContain("Weekly alert digest");
-    const rules = texts.findIndex((t) => t.startsWith("F-86 Alert rules engine"));
-    expect(rules, "F-86 Alert rules engine is in the picture").toBeGreaterThanOrEqual(0);
+    const rules = texts.findIndex((t) => t.startsWith("Alert rules engine"));
+    expect(rules, "Alert rules engine is in the picture").toBeGreaterThanOrEqual(0);
+    expect(`${texts[rules]} ${texts[rules + 1] ?? ""}`, "and flagged on its card").toContain(NOT_IN_GT);
   });
 });
 

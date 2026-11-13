@@ -28,13 +28,9 @@ async function partOf(page: Page, parent: string) {
   await tap(panel(page).getByRole("button", { name: "More actions" }));
   await tap(panel(page).getByRole("menuitem", { name: "Part of…" }));
   const form = panel(page).getByTestId("card-parent-edit");
-  // The "Part of" options now carry their code with their name ("F-90 Setup checklist"),
-  // per the Ground Truth rule that every feature shows its code with its name.
-  await form.getByLabel("Part of").selectOption({ label: `F-90 ${parent}` });
+  await form.getByLabel("Part of").selectOption({ label: parent });
   await tap(form.getByRole("button", { name: "Save", exact: true }));
-  // The toast also names the parent with its code, per the Ground Truth rule that every
-  // feature shows its code with its name.
-  await expect(toasts(page)).toContainText(`part of F-90 ${parent} in your working draft`);
+  await expect(toasts(page)).toContainText(`part of ${parent} in your working draft`);
 }
 
 test("a feature's parts are listed in roadmap order, a cut one where it stands", async ({ page }) => {
@@ -51,9 +47,7 @@ test("a feature's parts are listed in roadmap order, a cut one where it stands",
   await partOf(page, "Setup checklist");
   await tap(panel(page).getByTestId("card-part-of").getByRole("button", { name: "Setup checklist" }));
   const parts = panel(page).getByTestId("card-parts").getByTestId("card-part");
-  // Each part now shows its own code with its name, per the Ground Truth rule that every
-  // feature shows its code with its name (F-92 In-app tour, F-93 Welcome video).
-  await expect(parts).toHaveText([/^F-92\s*In-app tour\s*\(cut\)$/, /^F-93\s*Welcome video$/]);
+  await expect(parts).toHaveText([/^In-app tour\s*\(cut\)$/, /^Welcome video$/]);
 });
 
 test("the goal counters follow the lanes' goal order, the Goal map's goals too", async ({ page }) => {

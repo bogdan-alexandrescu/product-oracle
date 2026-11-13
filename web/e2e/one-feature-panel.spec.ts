@@ -64,8 +64,7 @@ for (const size of SIZES) {
       const deps = panel(page).getByTestId("card-depends");
       await expect(deps).toContainText("Alert rules engine");
       await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
-      // The picker's options show the feature's code with its name (Ground Truth rule).
-      await panel(page).getByLabel("Feature it depends on").selectOption({ label: "F-88 Alert history export" });
+      await panel(page).getByLabel("Feature it depends on").selectOption({ label: "Alert history export" });
       await tap(panel(page).getByRole("button", { name: "Save" }));
       await expect(deps.getByTestId("card-depends-row").filter({ hasText: "Alert history export" })).toBeVisible();
       await tap(panel(page).getByRole("button", { name: "Remove Alert history export from what it depends on" }));

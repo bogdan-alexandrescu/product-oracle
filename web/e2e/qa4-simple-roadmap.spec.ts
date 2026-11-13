@@ -227,7 +227,7 @@ test.describe("desktop only", () => {
 test.describe("phone only", () => {
   test.use(PHONE);
 
-  test("qa4-32 / 33 / 35: the phone Timeline's list shows each name with its code, a plain count, and each quarter says its months", async ({ page }) => {
+  test("qa4-32 / 33 / 35: the phone Timeline's list shows names only, a plain count, and each quarter says its months", async ({ page }) => {
     await open(page, { scenario: "simple-plan-lanes", url: "/simple/roadmap?roadmap=onboarding-roadmap" });
     const list = page.getByTestId("timeline-list");
     await expect(list).toBeVisible();
@@ -238,7 +238,6 @@ test.describe("phone only", () => {
       await expect(head).not.toContainText("· 1 items");
       await expect(head).not.toContainText("at once");
     }
-    // Ground Truth rule: every feature shows its code with its name (e.g. "F-01 Setup checklist").
-    for (const t of await list.getByTestId("timeline-row").allTextContents()) expect(t).toMatch(/^[FD]-\d+ /);
+    for (const t of await list.getByTestId("timeline-row").allTextContents()) expect(t).not.toMatch(/\b[FD]-\d/);
   });
 });

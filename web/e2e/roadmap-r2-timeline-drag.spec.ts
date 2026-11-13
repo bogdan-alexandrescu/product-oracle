@@ -53,7 +53,7 @@ for (const width of [1440, 1024]) {
       const [s0, e0] = await span(b);
       await expect(b).toHaveCSS("cursor", "grab");
       await drag(page, b, 120);
-      await expect(page.getByText(/Moved 'F-88 Alert history export' to .* in your working draft/)).toBeVisible();
+      await expect(page.getByText(/Moved 'Alert history export' to .* in your working draft/)).toBeVisible();
       await expect(b).not.toHaveAttribute("data-start", s0);
       const [s1, e1] = await span(b);
       // A move keeps its length.
@@ -77,7 +77,7 @@ for (const width of [1440, 1024]) {
       const [s0, e0] = await span(b);
       // The right end: the start stays.
       await drag(page, b, 90, 0.99);
-      await expect(page.getByText(/Moved 'F-06 Weekly alert digest'/)).toBeVisible();
+      await expect(page.getByText(/Moved 'Weekly alert digest'/)).toBeVisible();
       await expect(b).not.toHaveAttribute("data-end", e0);
       await expect(b).toHaveAttribute("data-start", s0);
       const [, e1] = await span(b);
@@ -128,7 +128,7 @@ for (const width of [1440, 1024]) {
       const dir = process.env.R2_SHOTS;
       if (dir) await page.screenshot({ path: `${dir}/timeline-drag-${width}-during.png` });
       await page.mouse.up();
-      await expect(page.getByText(/Moved 'F-87 Mobile alert push'/)).toBeVisible();
+      await expect(page.getByText(/Moved 'Mobile alert push'/)).toBeVisible();
       await expect(page.getByTestId("drag-live")).toHaveCount(0);
       if (dir) await page.screenshot({ path: `${dir}/timeline-drag-${width}-after.png` });
     });
@@ -210,7 +210,7 @@ test.describe("roadmap-r2 review, a touch tablet", () => {
     await page.waitForTimeout(650);
     for (let n = 1; n <= 12; n++) await b.dispatchEvent("pointermove", { ...ev, clientX: x + n * 10, clientY: y });
     await b.dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: x + 120, clientY: y });
-    await expect(page.getByText(/Moved 'F-88 Alert history export' to .* in your working draft/)).toBeVisible();
+    await expect(page.getByText(/Moved 'Alert history export' to .* in your working draft/)).toBeVisible();
     await expect(b).not.toHaveAttribute("data-start", s0);
   });
 });

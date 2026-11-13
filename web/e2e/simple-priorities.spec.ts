@@ -92,8 +92,7 @@ test.describe("desktop", () => {
 
     await dragRow(admin, "alert-export", 0);
     await giveReason(admin, "alert-export", "Two large customers asked for it this month", "Move");
-    // The moved toast names the feature with its code (Ground Truth rule).
-    await expect(admin.getByText("Moved Alert history export (F-88) to rank 1")).toBeVisible();
+    await expect(admin.getByText("Moved Alert history export to rank 1")).toBeVisible();
     expect((await codes(admin))[0]).toBe("alert-export");
     await expect(row(admin, "alert-export").getByTestId("prio-ghost")).toHaveText("Oracle #6");
     await expect(row(admin, "alert-export").getByTestId("prio-override")).toContainText("Moved by Avery Stone: “Two large customers asked for it this month”");
@@ -174,8 +173,7 @@ test.describe("desktop", () => {
   test("value / effort: a sideways drag re-estimates effort and the rank moves at once", async ({ page }) => {
     const admin = await as(page, "admin@example.com");
     await admin.getByRole("tab", { name: "Value / effort" }).click();
-    // The mark's name carries its code, as the Sample data import one already does (Ground Truth rule).
-    await expect(admin.getByRole("button", { name: "#7 Alert routing by team (F-89): goal value 3, effort 2 weeks, below the line" })).toBeVisible();
+    await expect(admin.getByRole("button", { name: "#7 Alert routing by team: goal value 3, effort 2 weeks, below the line" })).toBeVisible();
     await expect(admin.getByRole("button", { name: "#5 Sample data import (F-12): goal value 6, effort 3 weeks" })).toBeVisible();
     expect(await codes(admin, "side-row")).toEqual(ORACLE);
     const point = admin.locator('[data-testid="vxe-point"][data-code="setup-import"]');
