@@ -16,6 +16,9 @@ Test cards (protects / fails_when / no_claim):
 - test_a_held_code_from_its_prd_feature_is_not_flagged: protects=a code its linked PRD
   feature gives it, held by another feature, with no item to link, raises no flag;
   fails_when=a flag whose one fix (Use its code) is refused.
+- test_link_to_a_feature_on_its_item_clears_code_differs: protects=Link to a feature on a
+  duplicate's item (its code F-07 is another feature's) links the item to that feature and
+  the ``code_differs`` flag is gone; fails_when=the flag stays after the link.
 - test_confirm_confirms_its_proposed_goal_links: protects=confirming a feature confirms the
   goal links a run proposed with it: no ``no_goal``; fails_when=a false Serves no goal.
 - test_picking_an_already_proposed_goal_confirms_it: protects=Pick a goal on a goal whose
@@ -286,6 +289,22 @@ async def test_a_duplicate_holding_the_code_offers_link_to_a_feature(client):
     assert [f["feature"]["id"] for f in flags] == [fid]
     assert [(x["action"], x["target"]) for x in flags[0]["fixes"]] == [("link_to_feature", item)]
     assert flags[0]["item"]["id"] == item and flags[0]["item"]["name"] == "Usage sync"
+
+
+async def test_link_to_a_feature_on_its_item_clears_code_differs(client):
+    """Link to a feature on its item (as the flag's fix does: a set_feature change) links the
+    item to Bulk import, which holds F-07: Code differs is gone."""
+    ctx, fid, _, item = await world(code=None, taken=True)
+    await _confirm(client, ctx, fid)
+    assert [f["feature"]["id"] for f in _of(await _check(client, ctx), "code_differs")] == [fid]
+    async with tenant_session(ctx.tenant_id) as s:
+        bulk = str(await s.scalar(select(Entity.id).where(Entity.key == "F-07")))
+    body = {"op": "set_feature", "target": {"item_id": item}, "before": {"feature_id": fid},
+            "after": {"feature_id": bulk}}  # fmt: skip
+    r = await client.post("/v1/simple/changes", headers=ctx.as_("owner"), json=body)
+    assert r.status_code in (200, 201), r.text
+    assert r.json()["change"]["status"] == "applied"
+    assert not _of(await _check(client, ctx), "code_differs")
 
 
 async def test_a_held_code_from_its_prd_feature_is_not_flagged(client):
