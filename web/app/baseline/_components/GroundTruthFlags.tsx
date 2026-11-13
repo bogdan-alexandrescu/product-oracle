@@ -314,12 +314,14 @@ export function GroundTruthFlags({
 
   if (check.total === 0) return null;
   return (
-    <section aria-label="Ground Truth flags" data-testid="gt-band" className="mb-4 rounded-lg border border-line bg-surface p-3">
+    <section aria-label="Ground Truth checks" data-testid="gt-band" className="mb-4 rounded-lg border border-line bg-surface p-3">
+      {/* Named apart from the Flagged items tab, which counts features, not checks (detailed-a 9). */}
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-[15px] font-semibold text-text">Ground Truth flags</h2>
+        <h2 className="text-[15px] font-semibold text-text">Ground Truth checks</h2>
         <span className="text-[13px] text-text2" data-testid="gt-total">{check.total}</span>
-        <InfoTip label="Ground Truth flags">
-          Anything that breaks the Ground Truth is allowed, and flagged here with its fix.
+        <InfoTip label="Ground Truth checks">
+          Anything that breaks the Ground Truth is allowed, and flagged here with its fix. Each check that fails counts
+          here; Flagged items counts features, so the two can differ.
         </InfoTip>
       </div>
       <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Flags by kind">

@@ -454,7 +454,7 @@ export default function BaselinePage() {
     ...(!view && fromRunFailed ? [{ id: "from-run" as const, label: "From this run" }] : []),
     { id: "graph", label: "Graph" },
     { id: "items", label: "Items" },
-    { id: "flagged", label: "Flagged", count: trace.data?.summary.flagged, kind: "crit" },
+    { id: "flagged", label: "Flagged items", count: trace.data?.summary.flagged, kind: "crit" },
     { id: "conflicts", label: "Conflicts", count: openConflicts, kind: "warn" },
     { id: "proposals", label: "Proposals", count: proposals.data && cardsOf(proposals.data).length, kind: "acc" },
     { id: "blockers", label: "Blockers", count: blockers.data?.length, kind: "warn" },
