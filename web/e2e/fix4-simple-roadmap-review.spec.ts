@@ -42,15 +42,17 @@ test.describe("desktop", () => {
     await expect(page).toHaveURL(/\/simple\/priorities/);
   });
 
-  // Re-pointed: the Timeline's side panel dims nothing; the backdrop is the Gantt's card's.
-  test("SimpleShell: a click on the backdrop away from the rail only closes the card", async ({ page }) => {
+  // Re-pointed again by QA Nov 12 #11 (the owner's pick): the Gantt's card sits in the side panel
+  // beside the chart, as the Timeline's does, so no backdrop dims the page; Close only closes it.
+  test("SimpleShell: the Gantt's card in the side panel has no backdrop, and Close only closes it", async ({ page }) => {
     await open(page);
     await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
     await page.locator('g[data-testid="bar"][data-item="alert-rules"]').click();
-    await expect(page.getByTestId("floating-card")).toBeVisible();
-    await expect(page.getByTestId("floating-card-backdrop")).toBeVisible();
-    await page.mouse.click(1400, 880);
+    const card = page.getByTestId("item-panel").getByTestId("floating-card");
+    await expect(card).toBeVisible();
+    await expect(page.getByTestId("floating-card-backdrop")).toHaveCount(0);
+    await card.getByRole("button", { name: "Close" }).click();
     await expect(page.getByTestId("floating-card")).toHaveCount(0);
     await expect(page).toHaveURL(/\/simple\/roadmap/);
   });
