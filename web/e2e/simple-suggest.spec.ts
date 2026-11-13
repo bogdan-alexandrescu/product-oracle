@@ -6,8 +6,8 @@ import { expect, test, type Locator, type Page } from "./test";
 /*
  * Pick D+E (the owner, 2026-10-28): each goal's ONE button "Suggestions · N" (Home's goal cards,
  * Priorities' goal buckets) opens its drawer: the "Suggest a feature" form on top (who decides
- * named), "Suggest from the chat", then the tabs "People · N" and "✦ Oracle · N". Oracle suggests
- * only when asked ("✦ Get more from Oracle"; the button says "Oracle is suggesting..." until it is
+ * named), "✦ Ask Oracle to suggest" (PR9, Nov 13: no chat link), then the tabs "People · N" and "✦ Oracle · N". Oracle suggests
+ * only when asked ("✦ Ask Oracle to suggest"; the button says "Oracle is suggesting..." until it is
  * done); only the decider sees Accept / Reject, and their form folds to one line. From the chat,
  * "Suggest a feature for <goal>: <words>" is restated with its look-alikes and ONE card; Apply
  * files it as the person's own suggestion (People). Mock data is invented
@@ -75,7 +75,7 @@ for (const phone of [false, true]) {
        * Card simple-suggest-drawer: protects = a commenter's goal card has ONE "Suggestions · N"
        * button; its drawer has the form (Feature name, What it does and for whom, the goal set,
        * "<decider> will review your suggestion.") and the People / ✦ Oracle tabs; Send suggestion lands under People
-       * with who sent it; "✦ Get more from Oracle" makes the button say "Oracle is suggesting..."
+       * with who sent it; "✦ Ask Oracle to suggest" makes the button say "Oracle is suggesting..."
        * and the count changes only once it is done; the commenter sees no Accept / Reject; the
        * owner (the decider) sees the form folded to one line and accepts the person's suggestion;
        * goal targets read in words with their unit; fails_when = the button or tabs are missing,
@@ -111,7 +111,7 @@ for (const phone of [false, true]) {
         await expect(first.getByTestId("oracle-suggested")).toHaveText("✦ Oracle suggested");
         await expect(first.getByTestId("suggestion-why")).toContainText("Why:");
         await expect(first.getByTestId("suggestion-evidence")).toContainText("Sources:");
-        await drawer.getByRole("button", { name: "✦ Get more from Oracle" }).click();
+        await drawer.getByRole("button", { name: "✦ Ask Oracle to suggest" }).click();
         await expect(drawer.getByTestId("suggest-pending")).toBeVisible();
         // While Oracle suggests, the count holds and the button says why.
         await expect(retentionButton(page)).toHaveText("Oracle is suggesting...");
@@ -134,23 +134,22 @@ for (const phone of [false, true]) {
       });
 
       /**
-       * Card simple-suggest-chat: protects = "Suggest from the chat" opens Ask Oracle with
-       * "Suggest a feature for Grow retention: " typed in; the person finishes it in their words;
+       * Card simple-suggest-chat: protects = in Ask Oracle, "Suggest a feature for Grow retention: "
+       * and the person's own words;
        * Oracle restates it, flags the look-alike by its code and name ("It looks like F-06 Weekly
        * alert digest, which …", never the item's key)
        * and shows ONE card with Preview / Apply / Discard; Apply files it as the person's own
-       * suggestion, under People in the goal's drawer; fails_when = Ask opens empty, there is no
+       * suggestion, under People in the goal's drawer; fails_when = there is no
        * look-alike line, it names the item's key, there is more than one card, or the applied
        * suggestion is not under People;
        * no_claim = Oracle's model reading free words (the fixed phrase is what the mock reads).
        */
       test(`a commenter suggests a feature from the chat (${where})`, async ({ page }) => {
         await signIn(page, EMAILS.commenter);
-        const drawer = await openDrawer(page);
-        await drawer.getByRole("button", { name: "Ask in the chat" }).click();
-        await expect(page.getByTestId("goal-panel")).toHaveCount(0);
+        // PR9 (owner, Nov 13): the drawer has no chat link; the person asks in Ask itself.
+        await page.getByTestId(phone ? "phone-ask" : "simple-ask").filter({ visible: true }).first().click();
         const box = page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true });
-        await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
+        await box.fill("Suggest a feature for Grow retention: ");
         await box.pressSequentially("weekly digest for admins so leads see what fired");
         await box.press("Enter");
         const chat = page.getByTestId("ask-chat-thread").filter({ visible: true });
@@ -172,63 +171,6 @@ for (const phone of [false, true]) {
         const again = await openDrawer(page);
         await expect(again.getByRole("tab", { name: "People · 1" })).toBeVisible();
         await expect(again.locator('[data-testid="person-suggestion"][data-title="Weekly digest for admins"]')).toContainText("weekly digest for admins so leads see what fired");
-      });
-
-      /**
-       * Card simple-suggest-chat-from-thread: protects = "Suggest from the chat" while the Ask
-       * panel shows a chat thread brings back Ask's box with "Suggest a feature for Grow
-       * retention: " typed in, at once (the words are never left waiting to show up later);
-       * fails_when = the panel stays on the thread and the box (and its words) does not show;
-       * no_claim = the thread's own answer (the mock's canned reply).
-       */
-      test(`"Suggest from the chat" from an open Ask thread (${where})`, async ({ page }) => {
-        await signIn(page, EMAILS.commenter);
-        await page.getByTestId(phone ? "phone-ask" : "simple-ask").filter({ visible: true }).first().click();
-        const panel = page.getByTestId("hop-panel").filter({ visible: true });
-        await panel.getByRole("textbox", { name: "Message Oracle" }).fill("What should we cut first?");
-        await panel.getByRole("button", { name: "Send" }).click();
-        // ask-fresh: the panel's chat thread (SimpleAsk) shows the question asked.
-        await expect(panel.getByTestId("ask-chat-thread").getByTestId("chat-message").first()).toBeVisible();
-        if (phone) await page.keyboard.press("Escape");
-        const drawer = await openDrawer(page);
-        await drawer.getByRole("button", { name: "Ask in the chat" }).click();
-        const box = page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true });
-        await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
-        await noSidewaysScroll(page, phone);
-      });
-
-      /**
-       * Card simple-suggest-chat-again (train Z review): protects = "Suggest from the chat"
-       * pressed a second time with the same words fills the box again after the person cleared
-       * it, and pressed while the Ask panel shows Recent chats brings back the chat with the
-       * words in its box; fails_when = the second press leaves the box empty, or the panel stays
-       * on Recent chats; no_claim = the thread's own answer.
-       */
-      test(`"Suggest from the chat" again, and from Recent chats (${where})`, async ({ page }) => {
-        await signIn(page, EMAILS.commenter);
-        let drawer = await openDrawer(page);
-        await drawer.getByRole("button", { name: "Ask in the chat" }).click();
-        const box = page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true });
-        await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
-        await box.fill("");
-        if (phone) await page.keyboard.press("Escape");
-        drawer = await openDrawer(page);
-        await drawer.getByRole("button", { name: "Ask in the chat" }).click();
-        await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
-        const panel = page.getByTestId("hop-panel").filter({ visible: true });
-        await panel.getByTestId("ask-recent").click();
-        await expect(panel.getByTestId("ask-recent-list")).toBeVisible();
-        if (phone) {
-          // Recent chats is a menu over the chat (ask-panel fidelity, pick C): Escape closes it first, then the sheet.
-          await page.keyboard.press("Escape");
-          await expect(panel.getByTestId("ask-recent-list")).toHaveCount(0);
-          await page.keyboard.press("Escape");
-        }
-        drawer = await openDrawer(page);
-        await drawer.getByRole("button", { name: "Ask in the chat" }).click();
-        await expect(page.getByTestId("hop-panel").filter({ visible: true }).getByTestId("ask-recent-list")).toHaveCount(0);
-        await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
-        await noSidewaysScroll(page, phone);
       });
 
       /**
@@ -277,8 +219,8 @@ for (const phone of [false, true]) {
 
       /**
        * Card simple-suggest-viewer-priorities: protects = Priorities' goal bucket has the same one
-       * button and drawer; a viewer reads both tabs with no form, no "Suggest from the chat", no
-       * "Get more from Oracle" and no Accept / Reject; fails_when = any of those shows to a viewer
+       * button and drawer; a viewer reads both tabs with no form, no chat link, no
+       * "Ask Oracle to suggest" and no Accept / Reject; fails_when = any of those shows to a viewer
        * or the bucket lists suggestions inline; no_claim = the buckets' header (plan-charts lane).
        */
       test(`a viewer reads a bucket's suggestions on Priorities (${where})`, async ({ page }) => {
@@ -292,7 +234,7 @@ for (const phone of [false, true]) {
         await expect(drawer.getByRole("button", { name: "Ask in the chat" })).toHaveCount(0);
         await drawer.getByRole("tab", { name: "✦ Oracle · 1" }).click();
         await expect(drawer.getByTestId("goal-suggestion")).toHaveCount(1);
-        await expect(drawer.getByRole("button", { name: "✦ Get more from Oracle" })).toHaveCount(0);
+        await expect(drawer.getByRole("button", { name: "✦ Ask Oracle to suggest" })).toHaveCount(0);
         await expect(drawer.getByRole("button", { name: "Accept" })).toHaveCount(0);
       });
     });

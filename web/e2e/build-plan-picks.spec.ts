@@ -10,7 +10,7 @@ import { expect, test, type Locator, type Page } from "./test";
  *   divider and no "N of M miss" sentence; each row keeps its real rank, rising in each part.
  * - QP2 "Numbers, no bar": a row reads value · confidence · weeks · score, with no bar.
  * - QP3 "Labelled row, confirm": the suggestions drawer has one row at the top with
- *   "+ Suggest a feature", "✦ Get more from Oracle" and "Ask in the chat"; each look-alike has its
+ *   "+ Suggest a feature" and "✦ Ask Oracle to suggest" (PR9, Nov 13: no chat link); each look-alike has its
  *   own Duplicate button, which asks in place before it declines; the message has Undo.
  * - QP4 "Confirm, filtered list": Home's proposal rows stay short; Accept on one that moves dates
  *   opens a window listing each item with its old and new dates; a goal card opens Priorities
@@ -114,10 +114,10 @@ for (const v of SIZES) {
       await page.getByTestId("goal-ask-oracle").first().click();
       const drawer = page.getByTestId("goal-panel");
       const actions = drawer.getByTestId("suggest-actions");
-      await expect(actions.getByRole("button")).toHaveText(["+ Suggest a feature", "✦ Get more from Oracle", "Ask in the chat"]);
+      await expect(actions.getByRole("button")).toHaveText(["+ Suggest a feature", "✦ Ask Oracle to suggest"]);
       // On a wide screen the buttons sit on one row (the link beside them, or under them on a phone, as its frame shows).
       const spread = async () => {
-        const tops = await actions.locator("button").filter({ hasText: /Suggest a feature|Get more from Oracle/ }).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2)));
+        const tops = await actions.locator("button").filter({ hasText: /Suggest a feature|Ask Oracle to suggest/ }).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2)));
         return Math.max(...tops) - Math.min(...tops);
       };
       if (!v.phone) await expect.poll(spread).toBeLessThan(12);

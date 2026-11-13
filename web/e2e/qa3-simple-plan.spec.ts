@@ -474,9 +474,9 @@ test.describe("QA pass 3: simple-plan, the suggestions drawer", () => {
     const oracle = drawer.getByTestId("suggestions-tab-oracle");
     const [p, o] = [await people.textContent(), await oracle.textContent()];
     if (/· 0$/.test(p ?? "") && !/· 0$/.test(o ?? "")) await expect(oracle).toHaveAttribute("aria-selected", "true");
-    // qa-simple-plan-35: one suggest control, a chat button that says where it goes.
+    // qa-simple-plan-35: one suggest control; PR9 (Nov 13): no chat link.
     await expect(drawer.getByTestId("suggest-first-feature")).toHaveCount(0);
-    await expect(drawer.getByTestId("suggest-from-chat")).toHaveText("Ask in the chat");
+    await expect(drawer.getByTestId("suggest-from-chat")).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(drawer).toHaveCount(0);
     await expect(opener).toBeFocused();
