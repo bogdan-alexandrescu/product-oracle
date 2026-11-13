@@ -26,8 +26,6 @@ from zoneinfo import ZoneInfo
 import anyio
 import httpx
 import httpx2
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
 
 from oracle.sources.connectors import fireflies
 
@@ -321,6 +319,10 @@ class ArchiveBackend:
         return 1
 
     async def _tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        # The MCP SDK loads at the first live call, not with the app.
+        from mcp import ClientSession
+        from mcp.client.streamable_http import streamable_http_client
+
         bridge = _Bridge(self.client)
         http = httpx2.AsyncClient(
             transport=bridge, headers={"Authorization": f"Bearer {self.api_key}"}

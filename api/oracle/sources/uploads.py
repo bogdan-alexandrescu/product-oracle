@@ -8,9 +8,6 @@ import io
 from dataclasses import dataclass
 from pathlib import PurePath
 
-from pypdf import PdfReader
-from pypdf.errors import PdfReadError
-
 from oracle.sources.base import ItemUpsert
 
 MAX_BYTES = 20 * 1024 * 1024
@@ -36,6 +33,10 @@ def _name(filename: str | None) -> str:
 
 
 def _pdf_text(name: str, data: bytes) -> str:
+    # pypdf loads at the first PDF upload, not with the app.
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+
     try:
         reader = PdfReader(io.BytesIO(data))
         pages = [page.extract_text() or "" for page in reader.pages]

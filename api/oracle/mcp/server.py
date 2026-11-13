@@ -4,18 +4,18 @@ Every request is authenticated here (:mod:`oracle.mcp.auth`), then served by a f
 low-level MCP server whose tools are the app's REST operations plus the curated ones.
 """
 
-import logging
-from typing import Any
+from __future__ import annotations
 
-import mcp_types as types
+import logging
+from typing import TYPE_CHECKING, Any
+
 from fastapi import FastAPI
-from mcp.server import Server
-from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.types import Receive, Scope, Send
 
+from oracle.lazy import LazyModule
 from oracle.mcp import auth, scopes
 from oracle.mcp.curated import CONFIDENCE_GUIDANCE, CURATED, CURATED_NAMES, Curated
 from oracle.mcp.egress import client_address, run_token_allowed
@@ -30,6 +30,13 @@ from oracle.mcp.tools import (
     tool_names,
 )
 from oracle.runtokens import RUN_TOKEN_PREFIX
+
+if TYPE_CHECKING:
+    import mcp_types as types
+    from mcp.server import Server
+else:
+    # The MCP SDK loads at the first MCP call, not with the app.
+    types = LazyModule("mcp_types")
 
 log = logging.getLogger(__name__)
 
@@ -175,6 +182,8 @@ def plain_for(caller: auth.McpCaller) -> bool:
 
 
 def build_server(catalog: Catalog) -> Server:
+    from mcp.server import Server
+
     async def list_tools(ctx, params) -> types.ListToolsResult:
         return types.ListToolsResult(
             tools=catalog.tools(),
@@ -214,6 +223,8 @@ class McpEndpoint:
             await unauthorized(request, error=raw is not None)(scope, receive, send)
             return
         # Stateless: a fresh server and transport per request, so no app lifespan is needed.
+        from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+
         manager = StreamableHTTPSessionManager(
             build_server(Catalog(self.app, caller)), stateless=True, json_response=True
         )
