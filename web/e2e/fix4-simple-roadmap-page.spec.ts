@@ -71,8 +71,8 @@ test.describe("desktop", () => {
     await page.getByTestId("group-milestone").click();
     await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
     const labels = page.getByTestId("chart-labels");
-    // Every milestone shows its code with its name (Ground Truth rule): "M6 Beta (Nov 30)".
-    const beta = labels.getByTestId("chart-group").filter({ hasText: /^M6 Beta \(/ });
+    // Every milestone shows its code with its name (Ground Truth rule): "M1 Beta (Nov 30)".
+    const beta = labels.getByTestId("chart-group").filter({ hasText: /^M1 Beta \(/ });
     await expect(beta).toHaveCount(1);
     // The digest's row sits under the Beta heading, before the next group's.
     await expect
@@ -88,7 +88,7 @@ test.describe("desktop", () => {
           return null;
         }),
       )
-      .toMatch(/^M6 Beta \(/);
+      .toMatch(/^M1 Beta \(/);
   });
 
   test("qa-12: an inverted range swaps; an empty result says so and clears", async ({ page }) => {

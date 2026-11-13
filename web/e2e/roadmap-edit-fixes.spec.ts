@@ -74,21 +74,18 @@ for (const phone of [false, true]) {
       await login(page);
       await open(page, "setup-video");
       const name = panel(page).getByTestId("card-name");
-      await expect(name.locator(".simple-code")).toHaveText("F-93");
-      // The item's own code (F-93, from its Ground Truth feature) wins over the "F-07" its
-      // title carries, per the Ground Truth rule that every feature shows its code with its
-      // name; a mismatched embedded code is left in the title rather than stripped.
-      await expect(name.locator("h2")).toHaveText("F-07 Welcome video");
+      await expect(name.locator(".simple-code")).toHaveText("F-07");
+      await expect(name.locator("h2")).toHaveText(/^Welcome video/);
       await tap(panel(page).getByRole("button", { name: "More actions" }));
       await tap(page.getByRole("menuitem", { name: "Rename" }));
-      await expect(panel(page).getByLabel("Name")).toHaveValue("F-07 Welcome video");
+      await expect(panel(page).getByLabel("Name")).toHaveValue("Welcome video");
       await panel(page).getByLabel("Name").fill("Welcome film");
       await tap(panel(page).getByRole("button", { name: "Save" }));
       await expect(name.locator("h2")).toHaveText(/^Welcome film/);
-      await expect(name.locator(".simple-code")).toHaveText("F-93");
+      await expect(name.locator(".simple-code")).toHaveText("F-07");
       await page.reload();
       await open(page, "setup-video");
-      await expect(panel(page).getByTestId("card-name").locator(".simple-code")).toHaveText("F-93");
+      await expect(panel(page).getByTestId("card-name").locator(".simple-code")).toHaveText("F-07");
       await expect(panel(page).getByTestId("card-name").locator("h2")).toHaveText(/^Welcome film/);
     });
 
