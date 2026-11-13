@@ -322,9 +322,10 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   );
   // Who holds each code (its key, a code it reads through its published item, a code it gave back), as check.py's held.
   const read = codesRead(simple, baseline);
-  const held = new Map<string, string>([...formerKeys(baseline)].map(([k, id]) => [wholeCode(k) ?? k, id]));
-  for (const e of byId.values()) if (F_CODE.test(e.key)) held.set(wholeCode(e.key) ?? e.key, e.id);
-  for (const [id, c] of read) held.set(wholeCode(c) ?? c, id);
+  // A slice keeps its letter (F-12a holds no F-12), as check.py's held.
+  const held = new Map<string, string>(formerKeys(baseline));
+  for (const e of byId.values()) if (F_CODE.test(e.key)) held.set(e.key, e.id);
+  for (const [id, c] of read) held.set(c, id);
   for (const e of truth) {
     if (!F_CODE.test(e.key) || !joined.has(`${e.id}:${e.key}`)) continue;
     // A slice reads its feature's code with its letter (F-35a): no code of its own.
