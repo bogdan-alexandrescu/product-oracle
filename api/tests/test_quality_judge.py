@@ -77,7 +77,7 @@ async def test_an_approver_queues_a_model_review_that_is_labelled_model_output(c
 
     async with tenant_session(ctx.tenant_id) as s:
         stored = (await s.scalars(select(LlmJob))).one()
-        assert stored.status == "succeeded" and stored.input["prompt"] == "quality_review.v1"
+        assert stored.status == "succeeded" and stored.input["prompt"] == "quality_review.v1+dates.v1"
         report = (await s.scalars(select(m.EvaluationReport))).one()
         assert report.evaluator == "llm_job" and report.policy == "advisory"
         assert report.summary["label"] == "model_output"

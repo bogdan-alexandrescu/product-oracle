@@ -51,13 +51,16 @@ def test_dates_rule_says_month_first() -> None:
 @pytest.mark.parametrize("kind", READ)
 def test_read_prompts_carry_dates_once(kind: str) -> None:
     name, text = prompting.current(kind)
-    assert name == prompting.CURRENT[kind]
+    # The recorded name says the rule was added, so a job's prompt stays traceable.
+    assert name == f"{prompting.CURRENT[kind]}+dates.v1"
     assert text.count(_dates()) == 1
 
 
 @pytest.mark.parametrize("kind", WITHOUT)
 def test_dateless_prompts_do_not(kind: str) -> None:
-    assert _dates() not in prompting.current(kind)[1]
+    name, text = prompting.current(kind)
+    assert name == prompting.CURRENT[kind]
+    assert _dates() not in text
 
 
 def test_every_kind_is_decided() -> None:

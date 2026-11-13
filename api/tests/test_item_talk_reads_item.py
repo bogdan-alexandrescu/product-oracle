@@ -205,7 +205,7 @@ async def test_reader_prompt_is_v7(client):
     from oracle.jobs import prompting
 
     name, text = prompting.current("chat_reader")
-    assert name == "chat_reader.v7"
+    assert name == "chat_reader.v7+dates.v1"
     for field in ("`key`", "`feature`", "`depends_on`", "`needed_by`", "`goal_measure`"):
         assert field in text
     assert "month first" in text and "`start`" in text
