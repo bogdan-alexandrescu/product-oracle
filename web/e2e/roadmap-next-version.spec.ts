@@ -27,7 +27,8 @@ test("after version 2 is approved, the next working draft's banner says version 
   await expect(page.getByText(/Approved: .* is published/)).toBeVisible();
   // A new change on the same roadmap opens its next working draft: the digest's bar moves a day on the Gantt.
   await page.getByRole("button", { name: "Gantt", exact: true }).click();
-  await page.locator('[aria-label^="Weekly alert digest:"]').first().focus();
+  // The digest's bar is named by its feature code before its name.
+  await page.locator('[aria-label^="F-06 Weekly alert digest:"]').first().focus();
   await page.keyboard.press("ArrowRight");
   await expect(banner.getByTestId("draft-next")).toContainText("version 3");
   await expect(banner.getByTestId("draft-next")).not.toContainText("version 2");

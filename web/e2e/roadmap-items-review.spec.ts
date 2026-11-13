@@ -93,12 +93,14 @@ test("Remove date stages the edit, survives a reload, and Undo restores the row"
   const slack = row(page, "slack-alerts");
   await expect(bar(page).getByTestId("decision-tally")).toContainText("0 of 10 handled");
   await slack.getByRole("button", { name: "Remove date", exact: true }).click();
-  await expect(slack.getByTestId("row-done")).toHaveText(/✓ Date removed/);
+  // Done chips draw a check icon now, not the ✓ character.
+  await expect(slack.getByTestId("row-done")).toHaveText(/Date removed/);
   await expect(slack.locator("s", { hasText: "Nov 30, 2026" })).toBeVisible();
   await expect(bar(page).getByTestId("decision-tally")).toContainText("1 of 10 handled");
   await expect(bar(page).getByTestId("staged-chip")).toHaveText(["Slack alerts: date removed"]);
   await page.reload();
-  await expect(row(page, "slack-alerts").getByTestId("row-done")).toHaveText(/✓ Date removed/);
+  // Done chips draw a check icon now, not the ✓ character.
+  await expect(row(page, "slack-alerts").getByTestId("row-done")).toHaveText(/Date removed/);
   await row(page, "slack-alerts").getByRole("button", { name: "Undo" }).click();
   await expect(row(page, "slack-alerts").getByRole("button", { name: "Remove date", exact: true })).toBeVisible();
   await expect(bar(page).getByTestId("staged-chip")).toHaveCount(0);
@@ -119,7 +121,8 @@ test("blocking reasons hold Approve; fixed or waived it approves with edits", as
   await page.getByRole("menuitem", { name: "Waive…" }).click();
   await page.getByTestId("roadmap-items-table").getByLabel("Why waive it").fill("The export section lands in the next PRD version");
   await page.getByTestId("roadmap-items-table").getByRole("button", { name: "Waive", exact: true }).click();
-  await expect(row(page, "usage-export").getByTestId("row-done")).toHaveText(/✓ Waived/);
+  // Done chips draw a check icon now, not the ✓ character.
+  await expect(row(page, "usage-export").getByTestId("row-done")).toHaveText(/Waived/);
   await expect(approve).toHaveText("Approve with 2 edits");
   await expect(approve).toBeEnabled();
   await approve.click();
@@ -157,7 +160,8 @@ test("Send back lists its entries and shows the sent-back state", async ({ page 
 test("the run page's summary counts only the items still needing a person", async ({ page }) => {
   await open(page);
   await row(page, "slack-alerts").getByRole("button", { name: "Remove date", exact: true }).click();
-  await expect(row(page, "slack-alerts").getByTestId("row-done")).toHaveText(/✓ Date removed/);
+  // Done chips draw a check icon now, not the ✓ character.
+  await expect(row(page, "slack-alerts").getByTestId("row-done")).toHaveText(/Date removed/);
   await page.goto(`/runs/${RUN}`);
   await expect(page.getByTestId("items-review-line").getByTestId("items-open")).toHaveText("2 blocking · 7 to confirm");
 });
@@ -326,7 +330,8 @@ test("Enter on a row asks to confirm its first fix; the bar's buttons are reache
   await expect(bar(page).getByTestId("staged-chip")).toHaveCount(0);
   await expectVisibleFocus(page, /^Confirm: Remove date/);
   await page.keyboard.press("Enter");
-  await expect(row(page, "slack-alerts").getByTestId("row-done")).toHaveText(/✓ Date removed/);
+  // Done chips draw a check icon now, not the ✓ character.
+  await expect(row(page, "slack-alerts").getByTestId("row-done")).toHaveText(/Date removed/);
   await expect(bar(page).getByTestId("staged-chip")).toHaveCount(1);
   // Escape leaves the confirm without staging.
   await row(page, "budget-caps").focus();

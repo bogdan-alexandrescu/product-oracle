@@ -41,7 +41,8 @@ test("a commenter suggests; the approver stages the suggestion", async ({ page }
   await expect(suggested).toHaveText(/Suggested by Theo Brandt: Remove date/);
   await expect(row(page, "slack-alerts").getByRole("button", { name: "Dismiss" })).toBeVisible();
   await row(page, "slack-alerts").getByRole("button", { name: "Stage" }).click();
-  await expect(row(page, "slack-alerts").getByTestId("row-done")).toHaveText(/✓ Date removed/);
+  // Done chips draw a check icon now, not the ✓ character.
+  await expect(row(page, "slack-alerts").getByTestId("row-done")).toHaveText(/Date removed/);
   await expect(bar(page).getByTestId("decision-tally")).toContainText("1 of 10 handled");
 });
 
@@ -73,7 +74,8 @@ test("an approver's open review shows a commenter's suggestion within one poll",
   await expect(mine.getByTestId("suggested-by")).toHaveText(/Suggested by Theo Brandt: Remove date/, { timeout: 12_000 });
   await expect(mine.getByRole("button", { name: "Dismiss" })).toBeVisible();
   await mine.getByRole("button", { name: "Stage" }).click();
-  await expect(mine.getByTestId("row-done")).toHaveText(/✓ Date removed/);
+  // Done chips draw a check icon now, not the ✓ character.
+  await expect(mine.getByTestId("row-done")).toHaveText(/Date removed/);
   await expect(bar(page).getByTestId("decision-tally")).toContainText("1 of 10 handled");
   // The commenter's tab is still the commenter's.
   await other.reload();
