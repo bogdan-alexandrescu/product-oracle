@@ -320,7 +320,8 @@ function hard(): GoalMap {
     const list = msFor[area];
     return ft(
       `h${i}`,
-      name,
+      // Each with its invented code (F-151 ...), as the API's map reads it; the last has none, so it carries the flag.
+      i === names.length - 1 ? name : `F-${151 + i} ${name}`,
       area,
       [list[i % list.length]],
       leverOf[area][0],

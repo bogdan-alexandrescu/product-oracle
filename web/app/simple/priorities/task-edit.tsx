@@ -2,10 +2,14 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { NotInGt } from "@/components/simple/FeatureName";
 import { api, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { BTN, nextNoteId, type Note } from "./goal-buckets";
+import { BTN, nextNoteId, TaskActions, type Note } from "./goal-buckets";
+import { gtCode } from "./plan-buckets";
+
+export { TaskActions };
 
 /*
  * Tasks in the goal buckets (the owner, Nov 4: "edit, delete, add in place new tasks"). A task is
@@ -22,11 +26,8 @@ type ChangeIn = Schemas["SimpleChangeIn"];
 type Change = Schemas["SimpleChangeOut"];
 
 const PRIMARY = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent px-3 text-[14px] font-[650] text-on-accent disabled:border-line-strong disabled:bg-surface2 disabled:text-text2";
-const ICON = "inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2 disabled:opacity-40";
 const INPUT = "h-9 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px] text-text";
 const BAD = "h-9 w-full min-w-0 rounded-lg border-2 border-warn bg-surface px-2.5 text-[15px] text-text";
-const MENU = "absolute right-0 top-9 z-30 w-64 rounded-lg border border-line bg-surface p-1 text-[15px] shadow-lg";
-const ITEM = "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left hover:bg-surface2";
 
 /** A task as the buckets show it: its roadmap item, its code and name. */
 export type Task = { itemId: string; code: string; name: string };
@@ -141,59 +142,6 @@ export function TaskForm({
         {!done && <span className="min-w-0 text-[13px] text-text2">A task needs a name.</span>}
       </div>
     </form>
-  );
-}
-
-/** A task's pencil and ⋯ (Edit task, Cut from the roadmap), for who may change it. */
-export function TaskActions({ name, onEdit, onCut, disabled }: { name: string; onEdit: () => void; onCut: () => void; disabled?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", away);
-    window.addEventListener("keydown", esc);
-    return () => {
-      document.removeEventListener("mousedown", away);
-      window.removeEventListener("keydown", esc);
-    };
-  }, [open]);
-  return (
-    <span ref={ref} data-testid="task-actions" className="relative flex flex-none items-center">
-      <button type="button" aria-label={`Edit ${name}`} title="Edit task" className={`${ICON} h-7 w-7`} onClick={onEdit} disabled={disabled}>
-        ✎
-      </button>
-      <button type="button" aria-label={`More for ${name}`} aria-haspopup="menu" aria-expanded={open} className={`${ICON} h-7 w-7 ${open ? "border-line-strong bg-surface2" : ""}`} onClick={() => setOpen((o) => !o)} disabled={disabled}>
-        ⋯
-      </button>
-      {open && (
-        <div role="menu" className={MENU}>
-          <button
-            type="button"
-            role="menuitem"
-            className={ITEM}
-            onClick={() => {
-              setOpen(false);
-              onEdit();
-            }}
-          >
-            Edit task
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className={`${ITEM} text-warn`}
-            onClick={() => {
-              setOpen(false);
-              onCut();
-            }}
-          >
-            Cut from the roadmap
-          </button>
-        </div>
-      )}
-    </span>
   );
 }
 
@@ -416,12 +364,13 @@ export function TaskRow({
           ⠿
         </button>
       )}
-      {(!draft || knownCode(code)) && (
+      {/* PR1: a Ground Truth code only (never a short code made from initials); none is flagged after the name. */}
+      {gtCode(code) && (
         <span data-testid="prio-code" title={name} className="inline-block min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center align-middle text-[13px] font-semibold leading-5 tabular-nums text-text">
           {code}
         </span>
       )}{" "}
-      <span data-testid="plan-feature-name" className="min-w-0 flex-1">
+      <span data-testid="plan-feature-name" className="min-w-[10rem] flex-1">
         {onOpen || feature ? (
           <button type="button" data-testid="plan-feature-open" data-feature={feature} title={`Open ${name}`} className="text-left hover:underline" onClick={onOpen}>
             {name}
@@ -429,6 +378,7 @@ export function TaskRow({
         ) : (
           name
         )}
+        {!gtCode(code) && <NotInGt />}
         {draft && <span className="ml-1.5 inline-flex h-5 items-center rounded-full border border-line-strong px-1.5 align-[1px] text-[12px] font-[650] text-text2">Draft</span>}
         {partOf && <span className="ml-1.5">{partOf}</span>}
       </span>

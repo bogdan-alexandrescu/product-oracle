@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { InfoTip } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
 
@@ -70,6 +71,19 @@ function summary(plan: Plan): string {
   return `${span}: ${engineerWeeks(capacity)} over ${over} (${split}). Bars are engineer-weeks.`;
 }
 
+/** PR7: the summary's short line, "Nov 2 – Feb 12 · 56 engineer-weeks, 5 spare" (its sentence and the footnote behind the (i)). */
+function shortSummary(plan: Plan): string {
+  const ms = plan.milestones;
+  const planned = ms.reduce((n, m) => n + (m.planned_weeks ?? 0), 0);
+  let weeks = `${engineerWeeks(planned)} planned`;
+  if (!ms.some((m) => m.effort_weeks == null)) {
+    const capacity = ms.reduce((n, m) => n + (m.effort_weeks ?? 0), 0);
+    const spare = capacity - planned;
+    weeks = `${engineerWeeks(capacity)}, ${spare >= 0 ? `${wk(spare)} spare` : `${wk(-spare)} over`}`;
+  }
+  return plan.span ? `${planSpan(plan.span)} · ${weeks}` : weeks;
+}
+
 /** The goals in the plan's order (then any only the weeks name). */
 export function planGoals(plan: Plan): string[] {
   const names = [...plan.goals.map((g) => g.name)];
@@ -104,6 +118,9 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
   }, []);
   return [ref, width];
 }
+
+/** A Ground Truth feature code (F-12, a slice F-15a), else null: a short code made from a name's initials is no code. */
+export const gtCode = (code: string | null | undefined): string | null => (code && /^[A-Z]{1,3}-\d+[a-j]?$/.test(code) ? code : null);
 
 /** qa-simple-plan-37: a code as the other tabs draw it (the Ranked list's chip), never grey monospace. */
 export function CodeTag({ code, title }: { code: string; title?: string }) {
@@ -207,8 +224,12 @@ export function PlanBucketsHead<G extends { name: string }>({
   return (
     <section data-testid="buckets-head" className="rounded-[var(--simple-card-radius)] border border-line bg-surface px-4 py-4 sm:px-5">
       <h2 className="text-[21px] font-[650] leading-7">Where each goal&apos;s work lands</h2>
-      <p data-testid="buckets-summary" className="mb-2 mt-0.5 text-[16px] leading-6 text-text2">
-        {summary(plan)}
+      <p className="mb-2 mt-0.5 flex items-center gap-1.5 text-[16px] leading-6 text-text2">
+        <span data-testid="buckets-summary">{shortSummary(plan)}</span>
+        <InfoTip label="these bars" align="start" testId="buckets-about">
+          <span data-testid="buckets-summary-full">{summary(plan)}</span>{" "}
+          <span data-testid="buckets-footnote">Each feature counts once, under the goal it moves most (the first goal the one-pager names for it). Engineer-weeks are the one-pager&apos;s, part by part.</span>
+        </InfoTip>
       </p>
       <ul className="mb-1.5 flex flex-wrap gap-x-[18px] gap-y-1" aria-label="Milestones">
         {plan.milestones.map((m) => {
@@ -237,9 +258,6 @@ export function PlanBucketsHead<G extends { name: string }>({
           <GoalBar key={r.goal} plan={plan} goal={r.goal} code={codeOf(r.goal)} parts={r.parts} total={r.total} max={max} />
         ))}
       </ul>
-      <p data-testid="buckets-footnote" className="mt-2 text-[14px] leading-5 text-text2">
-        Each feature counts once, under the goal it moves most (the first goal the one-pager names for it). Engineer-weeks are the one-pager&apos;s, part by part.
-      </p>
     </section>
   );
 }

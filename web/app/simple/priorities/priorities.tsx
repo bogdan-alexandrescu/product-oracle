@@ -21,6 +21,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
 import { ITEM_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
+import { NotInGt } from "@/components/simple/FeatureName";
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, otherGoal, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { goalKeysOf, KeyResultList, liftedMoves, topGoalBuckets, topGoalPlan, topGoalPriorities, usePriorityKeyResults, type PriorityKeyResults } from "./key-results";
@@ -100,10 +101,10 @@ const SUBTITLE: Record<Tab, string> = {
 
 /** Value / effort's how-to-read words, behind the page's (i) (Demo 9: no visible explanation). */
 const VE_WORDS = (data: Out, mayChange: boolean, phone: boolean): string => {
-  const fCodes = data.rows.length > 0 && data.rows.every((r) => /^F-\d+$/.test(r.short_code || r.code));
+  const fCodes = data.rows.length > 0 && data.rows.every((r) => !!r.own_key);
   const tap = phone ? "tap" : "click";
   // PV-1 One count per spot: every mark opens the one feature panel; a count lists the marks it holds.
-  return `${fCodes ? "Each mark shows the feature's code from its one-pager; point at it for its name, its rank is in the list." : "Each mark shows the feature's code; point at it for its name, its rank is in the list."} Hollow: below the line (${lineWords(data)}). A mark on a middle line counts on the side its rank puts it. ${mayChange ? "Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys); a feature with no goal has no goal value to change." : "Select a mark to open its feature."} Where marks would cover each other, one dark mark counts them; ${tap} it for their list.`;
+  return `${fCodes ? "Each mark shows the feature's code from its one-pager; point at it for its name, its rank is in the list." : "Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list."} Hollow: below the line (${lineWords(data)}). A mark on a middle line counts on the side its rank puts it. ${mayChange ? "Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys); a feature with no goal has no goal value to change." : "Select a mark to open its feature."} Where marks would cover each other, one dark mark counts them; ${tap} it for their list.`;
 };
 
 /** Goal buckets' how-to-read words, behind the page's (i) like Value / effort's. */
@@ -446,10 +447,12 @@ function PartOf({ r }: { r: Row }) {
   );
 }
 
+/** PR1: the feature's real code only, never made-up letters (a feature with none is flagged beside its name). */
 function CodeChip({ r }: { r: Row }) {
+  if (!r.own_key) return null;
   return (
     <span data-testid="prio-code" title={r.title} className="min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center text-[length:var(--simple-small)] font-semibold tabular-nums text-text">
-      {r.short_code || r.title}
+      {r.own_key}
     </span>
   );
 }
@@ -660,8 +663,9 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
             data-misses={r.above_line ? undefined : "true"}
             data-moved={words ? "true" : undefined}
             data-shown={shown(r) ? "true" : undefined}
-            className={`rounded-[var(--simple-card-radius)] border p-3 ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"} ${target || words || shown(r) ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
+            className={`max-sm:relative rounded-[var(--simple-card-radius)] border p-3 ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"} ${target || words || shown(r) ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
           >
+            {/* PR4: on a phone the row's ⋯ is pinned top-right, so it never takes a line of its own. */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {mayChange && r.can_reorder && (
                 <button
@@ -694,16 +698,23 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
               />
               {/* The Current-state pill sits right after the title (cs2-b, the owner's later pick), never pushed
                   to the far right; the title and its pill wrap as one group, so every title starts at one x. */}
-              <span className="flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1" data-testid="prio-name">
-                {open ? (
-                  <button type="button" className="min-w-0 text-left font-medium hover:underline" data-testid="prio-title" onClick={() => open(r)}>
-                    {r.title}
-                  </button>
-                ) : (
-                  <span className="min-w-0 font-medium" data-testid="prio-title">{r.title}</span>
-                )}
-                <OwnKey r={r} />
-                <MarkFor featureId={r.feature_id} />
+              <span className={`flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1 ${mayChange && r.item_id ? "max-sm:pr-7" : ""}`} data-testid="prio-name">
+                {/* PR3: the title, its code and its pill stay on one line; the title wraps on its own. */}
+                <span className="flex min-w-0 max-w-full items-center gap-x-2" data-testid="prio-named">
+                  {open ? (
+                    <button type="button" className="min-w-0 text-left font-medium hover:underline" data-testid="prio-title" onClick={() => open(r)}>
+                      {r.title}
+                    </button>
+                  ) : (
+                    <span className="min-w-0 font-medium" data-testid="prio-title">{r.title}</span>
+                  )}
+                  <OwnKey r={r} />
+                  <span className="flex flex-none items-center">
+                    <MarkFor featureId={r.feature_id} />
+                  </span>
+                </span>
+                {/* PR1: a feature with no Ground Truth code is flagged, never given made-up letters. */}
+                {!r.own_key && <NotInGt />}
                 <PartOf r={r} />
               </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
@@ -730,7 +741,11 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                 <Numbers r={r} mayChange={mayChange} changed={changed} />
               </span>
               {/* trash-features-goals: Delete feature (to Trash, Undo) for who decides on it. */}
-              {mayChange && r.item_id && <FeatureMenu title={nameOf(r)} propose={!r.applies} onDelete={() => onDelete({ id: r.item_id!, title: r.title, parts: r.parts })} />}
+              {mayChange && r.item_id && (
+                <span className="flex-none max-sm:absolute max-sm:right-1.5 max-sm:top-1.5" data-testid="prio-row-menu">
+                  <FeatureMenu title={nameOf(r)} propose={!r.applies} onDelete={() => onDelete({ id: r.item_id!, title: r.title, parts: r.parts })} />
+                </span>
+              )}
             </div>
             {/* qa4-simple-plan-25: Oracle's rank and the move sit in a slot of their own under the row, so the row keeps its layout. */}
             {((r.oracle_rank != null && r.oracle_rank !== r.rank) || words) && (
@@ -885,6 +900,7 @@ function OracleOrder({ data }: { data: Out }) {
                   r.title
                 )}
                 <OwnKey r={r} />
+                {!r.own_key && <NotInGt />}
               </span>
               <span className="flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
                 {goalOf(r) ? (
@@ -1612,11 +1628,12 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   }
 
   const QUADRANTS = [
-    { name: "Quick wins", at: "left-[10px] top-[8px]" },
-    { name: "Big bets", at: "right-[10px] top-[8px] text-right" },
+    // PR5: each name has the plot's own background (its text where it was), so a middle line never runs through it.
+    { name: "Quick wins", at: "left-[6px] top-[8px]" },
+    { name: "Big bets", at: "right-[6px] top-[8px] text-right" },
     // V-4: the bottom names sit just above the zero line (4% up), never on it.
-    { name: "Fill-ins", at: "bottom-[calc(4%+4px)] left-[10px]" },
-    { name: "Later", at: "bottom-[calc(4%+4px)] right-[10px] text-right" },
+    { name: "Fill-ins", at: "bottom-[calc(4%+4px)] left-[6px]" },
+    { name: "Later", at: "bottom-[calc(4%+4px)] right-[6px] text-right" },
   ];
   const effortAt = xPct(byEffort.median);
   const valueAt = yPct(byValue.median);
@@ -1697,7 +1714,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
               </span>
             )}
             {QUADRANTS.map((q, k) => (
-              <span key={q.name} data-testid="vxe-quadrant" className={`pointer-events-none absolute whitespace-nowrap text-[15px] font-[650] leading-5 text-text-faint ${q.at}`}>
+              <span key={q.name} data-testid="vxe-quadrant" className={`pointer-events-none absolute whitespace-nowrap rounded bg-surface px-1 text-[15px] font-[650] leading-5 text-text-faint ${q.at}`}>
                 {q.name} · {counts[k]}
               </span>
             ))}
@@ -1755,7 +1772,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   onPointerCancel={() => setDrag(null)}
                   onKeyDown={(e) => key(e, r)}
                 >
-                  <ShapeMark shape={shapeOf(r)} hollow={!r.above_line} code={r.short_code || r.code} />
+                  {/* PR1: the feature's real code only, never made-up letters; one with none is flagged in its name tag. */}
+                  <ShapeMark shape={shapeOf(r)} hollow={!r.above_line} code={r.own_key ?? undefined} />
                   {/* P-3: a mark's code with its name, on hover, focus or selection (the plot has no room to name every mark). */}
                   <span
                     data-testid="vxe-name"
@@ -1763,7 +1781,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                     className={`pointer-events-none absolute ${onRight ? "right-0" : "left-0"} ${tagAbove ? "bottom-full mb-1" : "top-full mt-1"} z-30 truncate whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-[13px] font-semibold leading-[18px] text-bg group-hover:block group-focus-visible:block ${isSelected ? "block" : "hidden"}`}
                     style={{ maxWidth: tagRoom }}
                   >
-                    #{r.rank} {r.short_code || r.code} · {r.title}
+                    #{r.rank} {r.own_key ? `${r.own_key} · ${r.title}` : r.title}
                   </span>
                 </button>
               );
@@ -1884,16 +1902,18 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                     {r.rank}
                   </span>
                   {/* The mark's code, so a mark and its row read alike (Value / effort only; the ranked rows name the feature). */}
-                  <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
-                    {r.short_code || r.title}
-                  </span>
+                  {r.own_key && (
+                    <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
+                      {r.own_key}
+                    </span>
+                  )}
                   <span className="min-w-0 flex-1 truncate" data-testid="prio-title" title={r.title}>
                     {r.title}
                   </span>
                   {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}
                   {r.after ? (
                     <span data-testid="side-held" title={`After ${r.after.title}, which it needs`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
-                      after {rows.find((x) => x.code === r.after!.code)?.short_code || r.after.title}
+                      after {rows.find((x) => x.code === r.after!.code)?.own_key || r.after.title}
                     </span>
                   ) : (
                     r.oracle_rank != null &&
@@ -1909,6 +1929,12 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                 {isSelected && (
                   <span data-testid="side-numbers" className="block px-2 pb-1 pl-[34px] text-[13px] tabular-nums text-text">
                     {r.effort == null ? `goal value ${fmt(r.goal_value)} · PM-owned, no score` : `goal value ${fmt(r.goal_value)} · confidence ${fmt(r.confidence, 2)} · ${weeksWords(r.effort)} · score ${fmt(r.score, 2)}`}
+                  </span>
+                )}
+                {/* PR1: no made-up letters; a selected feature with no Ground Truth code is flagged under its row (the row has no room). */}
+                {isSelected && !r.own_key && (
+                  <span className="block px-2 pb-1 pl-[28px]">
+                    <NotInGt />
                   </span>
                 )}
                 {/* The badge on a line of its own, so the name stays readable. */}
@@ -2202,7 +2228,13 @@ function Numbers({ r, mayChange = false, changed }: { r: Row; mayChange?: boolea
     ...(r.effort == null
       ? // qa-simple-plan-8: PM-owned work has no engineer-weeks, so no score.
         [
-          <span key="pm" data-testid="prio-pm-owned">PM-owned, no engineer-weeks, no score</span>,
+          // PR2: a short tag; why it has no score is behind its (i).
+          <span key="pm" data-testid="prio-pm-owned" className="inline-flex items-center gap-1">
+            <span className="simple-tag">PM-owned</span>
+            <InfoTip label="PM-owned" align="start" testId="prio-pm-owned-help">
+              PM-owned work has no engineer-weeks, so it has no score.
+            </InfoTip>
+          </span>,
           ...(mayChange && changed ? [<EffortEdit key="effort" r={r} changed={changed} />] : []),
         ]
       : [
@@ -2903,13 +2935,14 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
                   <span className={`font-[650] ${b.no_goal ? "text-warn" : ""}`}>{b.no_goal ? "⚠ Serves no confirmed goal" : b.title}</span>
                   {": "}
                   {rows.map((r, k) => (
-                    <span key={r.code} className="inline-flex items-center gap-1.5">
+                    <span key={r.code} className="inline-flex max-w-full flex-wrap items-center gap-x-1.5">
                       {k > 0 && ", "}
                       <CodeChip r={r} />
                       {/* The feature's name opens the one feature panel. */}
                       <button type="button" className="text-left hover:underline" onClick={() => setOpened({ code: r.code, name: r.title })}>
                         {r.title}
                       </button>
+                      {!r.own_key && <NotInGt />}
                     </span>
                   ))}
                   <span className="whitespace-nowrap text-text2"> · {weeksWords(rows.reduce((n, r) => n + (r.effort ?? 0), 0)).replace(" ", "\u00a0")}</span>

@@ -6,6 +6,7 @@
 import type { ReactNode } from "react";
 
 import { Sheet } from "@/components/ds";
+import { NotInGt } from "@/components/simple/FeatureName";
 
 import { weeksWords } from "./plan-buckets";
 
@@ -13,7 +14,7 @@ import { weeksWords } from "./plan-buckets";
 export type Box = [number, number, number, number];
 type Pt = [number, number];
 /** What a count needs of a feature. */
-export type CountRow = { feature_id: string; code: string; short_code?: string | null; title: string; rank: number; goal_value?: number | null; effort?: number | null };
+export type CountRow = { feature_id: string; code: string; short_code?: string | null; own_key?: string | null; title: string; rank: number; goal_value?: number | null; effort?: number | null };
 
 /** Features drawn as one count mark, at `at`, in rank order. */
 export type Crowd<T extends CountRow> = { id: string; at: Pt; rows: T[] };
@@ -127,7 +128,8 @@ export function crowdWhere<T extends CountRow>(rows: T[], goalOf: GoalOf<T>): st
 export function crowdName<T extends CountRow>(rows: T[], goalOf: GoalOf<T>): string {
   const first = rows
     .slice(0, 3)
-    .map((r) => `${r.short_code || r.code} ${r.title}`)
+    // PR1: the feature's real code only, never made-up letters.
+    .map((r) => (r.own_key ? `${r.own_key} ${r.title}` : r.title))
     .join(", ");
   return `${rows.length} features at ${crowdWhere(rows, goalOf)}: ${first}${rows.length > 3 ? ` and ${rows.length - 3} more` : ""}; show them`;
 }
@@ -142,8 +144,9 @@ function CountListRow<T extends CountRow>({ r, mark, shape, onOpen, nums }: { r:
       <button type="button" data-testid="vxe-crowd-row" data-code={r.code} data-shape={shape(r)} onClick={() => onOpen(r)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[15px] leading-[22px] hover:bg-surface2">
         <span className="w-6 flex-none text-right font-[650] tabular-nums">{r.rank}</span>
         {mark(r)}
-        <span data-testid="vxe-crowd-code" className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text">{r.short_code || r.code}</span>
+        {r.own_key && <span data-testid="vxe-crowd-code" className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text">{r.own_key}</span>}
         <span className="min-w-0 flex-1 truncate">{r.title}</span>
+        {!r.own_key && <NotInGt />}
         {nums && <span className="flex-none whitespace-nowrap text-[13px] tabular-nums text-text2">{rowNums(r)}</span>}
       </button>
     </li>

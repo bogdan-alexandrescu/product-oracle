@@ -105,9 +105,15 @@ const PROSE_DAY = /(?<![\w./-])(\d{4}-\d{2}-\d{2})(?![\w/-]|:\d)/;
  * people read dates everywhere else. The day as written stays in the text, hidden, and the
  * words are left out of the anchor's count, so a comment's quote still matches the stored body.
  */
-function withDays(text: string, codes: CodeIndex | undefined, key: string): ReactNode {
+export function withDays(
+  text: string,
+  codes: CodeIndex | undefined,
+  key: string,
+  // Simple's whole PRD (SimplePrd's Text) reads the words between the days its own way.
+  rest: (text: string, codes: CodeIndex | undefined, key: string) => ReactNode = withCodes,
+): ReactNode {
   const pieces = text.split(PROSE_DAY);
-  if (pieces.length === 1) return withCodes(text, codes, key);
+  if (pieces.length === 1) return rest(text, codes, key);
   return pieces.map((piece, i) =>
     i % 2 === 1 ? (
       <span key={`${key}d${i}`} data-day={piece}>
@@ -115,7 +121,7 @@ function withDays(text: string, codes: CodeIndex | undefined, key: string): Reac
         <span {...{ [IGNORE_ATTR]: "" }}>{calendarDay(piece, { month: "short", day: "numeric", year: "numeric" })}</span>
       </span>
     ) : (
-      <Fragment key={`${key}d${i}`}>{withCodes(piece, codes, `${key}d${i}`)}</Fragment>
+      <Fragment key={`${key}d${i}`}>{rest(piece, codes, `${key}d${i}`)}</Fragment>
     ),
   );
 }
