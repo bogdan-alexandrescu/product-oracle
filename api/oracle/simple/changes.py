@@ -1451,6 +1451,14 @@ async def _apply(
     c.draft_ids = await drafts.write_items(db, c, values, session, KEYED, write, undo=undo)
     if c.op == "set_goals":
         await _move_feature(db, c, values)
+    if c.op == "set_feature" and values.get("feature_id"):
+        # A person's link to a match the item declined (Its own feature) wins over the decline.
+        from oracle.baseline.fixes import DECLINED, item_mark, unmark
+
+        row = await db.get(RoadmapItem, uuid.UUID(c.target["item_id"]))
+        feature = await db.get(Entity, uuid.UUID(values["feature_id"]))
+        if row is not None and feature is not None:
+            unmark(feature, DECLINED, item_mark(row))
     if c.op == "accept_date_suggestion":
         s = await db.get(RoadmapDateSuggestion, uuid.UUID(c.target["suggestion_id"]))
         if s is not None and not undo and s.status == "open":

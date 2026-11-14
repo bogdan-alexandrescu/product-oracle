@@ -573,6 +573,10 @@ def _mark(feature: Entity, kind: str, mark: str, on: bool) -> None:
     feature.attrs = {**attrs, kind: marks} if marks else attrs
 
 
+def unmark(feature: Entity, kind: str, mark: str) -> None:
+    _mark(feature, kind, mark, False)
+
+
 async def confirmed_for(
     db: AsyncSession, feature: Entity, item_id: uuid.UUID, joined: bool
 ) -> None:
@@ -611,7 +615,8 @@ async def own_feature(db: AsyncSession, principal: Any, item_id: uuid.UUID) -> E
     has it, else the next free code, and becomes the item's feature (a set_feature change, as
     Add to Ground Truth). The feature it was matched to (a proposal, maybe shared with other
     items) is declined for this item: never offered to it again. An entry of the item's name
-    is reused, confirmed if it was only proposed, never a second entry of that name."""
+    is reused, confirmed if it was only proposed (for this item only), never a second entry of
+    that name."""
     from oracle import audit
     from oracle.baseline import check
     from oracle.baseline.service import create_entity, link_new_feature, set_entity_status
@@ -646,6 +651,7 @@ async def own_feature(db: AsyncSession, principal: Any, item_id: uuid.UUID) -> E
         _mark(was, UNCONFIRMED, mark, False)  # type: ignore[arg-type]
         await db.flush()
     free = code is not None and not await code_taken(db, code)
+    joined = same is not None and same.status != "confirmed"
     if same is not None:
         feature = same
         _mark(feature, DECLINED, mark, False)
@@ -661,6 +667,10 @@ async def own_feature(db: AsyncSession, principal: Any, item_id: uuid.UUID) -> E
         feature = made.entity  # type: ignore[assignment]
     if was_id != feature.id:
         await link_new_feature(db, writer, feature, None, row.id)
+    if joined:
+        # A proposal of the item's name, maybe shared with other items: in the Ground Truth for
+        # this item only, the others each wait for their own Confirm it.
+        await confirmed_for(db, feature, row.id, joined=True)
     await audit.record(db, principal, "baseline.item.own_feature", "roadmap_item", row.id, {
         "feature_id": str(feature.id), "reused": same is not None,
         "declined": str(was_id) if declined else None,
