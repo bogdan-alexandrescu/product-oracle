@@ -8,7 +8,7 @@ Commenters may only propose (POST /v1/baseline/proposals).
 import uuid
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import inspect, select
 
@@ -82,6 +82,7 @@ from oracle.baseline.schemas import (
 )
 from oracle.discussions import research as discussion_research
 from oracle.http import read_capped_body
+from oracle.routing import APIRouter
 from oracle.runs import actions, review_file
 from oracle.runs.models import Checkpoint, Run
 from oracle.runs.schemas import FromRunCheckpoint, FromRunOut

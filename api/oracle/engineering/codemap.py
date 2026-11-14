@@ -29,7 +29,7 @@ import math
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from oracle.base_model import BaseModel
 
 VERSION = 1
 FILE = "code_map.json"

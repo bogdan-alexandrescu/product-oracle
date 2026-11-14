@@ -11,9 +11,11 @@ document carries each operation's role as ``x-min-role`` for the web app's mock.
 """
 
 from collections.abc import Callable, Iterator
-from typing import Any
+from inspect import Parameter
+from typing import Annotated, Any, get_args, get_origin
 
-from fastapi import FastAPI
+from fastapi import FastAPI, params
+from fastapi.dependencies.utils import get_typed_signature
 from fastapi.routing import APIRoute
 
 from oracle.auth.deps import get_principal
@@ -372,10 +374,44 @@ PER_ITEM: dict[str, Role | None] = {
 }
 
 
-def _calls(dependant: Any) -> Iterator[Callable[..., Any]]:
-    yield dependant.call
-    for sub in dependant.dependencies:
-        yield from _calls(sub)
+def _depends_on(param: Parameter) -> Callable[..., Any] | None:
+    """What a parameter depends on, read as fastapi.dependencies.utils.analyze_param does."""
+    annotation, depends = param.annotation, None
+    if get_origin(annotation) is Annotated:
+        annotation, *marks = get_args(annotation)
+        marks = [m for m in marks if isinstance(m, (params.Param, params.Body, params.Depends))]
+        if marks and isinstance(marks[-1], params.Depends):
+            depends = marks[-1]
+    if isinstance(param.default, params.Depends):
+        depends = param.default
+    if depends is None:
+        return None
+    return depends.dependency or annotation
+
+
+# id(call) -> (call, the calls under it): shared dependencies are read once.
+_reached: dict[int, tuple[Callable[..., Any], tuple[Callable[..., Any], ...]]] = {}
+
+
+def _reach(call: Callable[..., Any]) -> tuple[Callable[..., Any], ...]:
+    """The call and every dependency under it, in the order FastAPI's get_dependant builds
+    them, from the signatures alone (none of the fields FastAPI's build makes)."""
+    if id(call) not in _reached:
+        found = [call]
+        for param in get_typed_signature(call).parameters.values():
+            if (sub := _depends_on(param)) is not None:
+                found += _reach(sub)
+        _reached[id(call)] = (call, tuple(found))
+    return _reached[id(call)][1]
+
+
+def _calls(route: APIRoute) -> Iterator[Callable[..., Any]]:
+    """Every call in the route's dependency tree (its declared dependencies, then its
+    handler's), without building the tree: Oracle's routes build it at their first request
+    (oracle.routing), and the role map is read at a new instance's first page load."""
+    for depends in route.dependencies:
+        yield from _reach(depends.dependency)  # type: ignore[arg-type]
+    yield from _reach(route.endpoint)
 
 
 def _routes(routes: list[Any]) -> Iterator[APIRoute]:
@@ -398,7 +434,7 @@ def operation_roles(app: FastAPI) -> dict[str, Role]:
     if key not in _cache:
         roles: dict[str, Role] = {}
         for route in _routes(app.router.routes):
-            calls = list(_calls(route.dependant))
+            calls = list(_calls(route))
             if get_principal not in calls:
                 continue
             named = [getattr(c, "min_role", None) for c in calls]
@@ -415,7 +451,7 @@ def lead_roles(app: FastAPI) -> dict[str, Role]:
         _lead_cache[key] = {
             route.name: lead
             for route in _routes(app.router.routes)
-            for c in _calls(route.dependant)
+            for c in _calls(route)
             if (lead := getattr(c, "lead_role", None))
         }
     return _lead_cache[key]

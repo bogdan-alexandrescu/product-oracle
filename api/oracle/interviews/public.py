@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import Text, case, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -50,6 +50,7 @@ from oracle.interviews.schemas import (
     PublicInterviewTurn,
 )
 from oracle.models import Tenant
+from oracle.routing import APIRouter
 from oracle.tenancy import tenant_session, unscoped_session
 
 router = APIRouter(prefix="/v1/public/interviews", tags=["interviews"])

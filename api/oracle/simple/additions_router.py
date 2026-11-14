@@ -17,9 +17,10 @@ item, merging a draft and keeping both are change-engine ops (``POST /v1/simple/
 import uuid
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
 
 from oracle.auth.deps import Principal, TenantDB
+from oracle.routing import APIRouter
 from oracle.simple import additions
 from oracle.simple.changes_router import _run
 from oracle.simple.router import _people

@@ -31,7 +31,7 @@ import uuid
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +41,7 @@ from oracle.authz import has_role
 from oracle.decisions import service as decisions
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
+from oracle.routing import APIRouter
 from oracle.simple import questions
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange

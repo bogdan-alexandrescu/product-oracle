@@ -6,7 +6,9 @@ Each result and page is data marked ``untrusted: true`` with :data:`oracle.web.s
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
+
+from oracle.base_model import BaseModel
 
 MAX_QUERY = 200
 PAGE_TEXT_CHARS = 20_000

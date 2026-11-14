@@ -14,7 +14,7 @@ Importing this module registers the ``critical_blockers`` readiness check.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
@@ -41,6 +41,7 @@ from oracle.blockers.schemas import (
     FeasibilityScopeIn,
 )
 from oracle.docs import service as docs_service
+from oracle.routing import APIRouter
 from oracle.v2.schemas import BlockerStatus, FeasibilityExperimentOut, Importance
 
 router = APIRouter(prefix="/v1", tags=["blockers"])

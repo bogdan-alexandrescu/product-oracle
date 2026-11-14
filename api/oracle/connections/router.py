@@ -12,15 +12,16 @@ from typing import Annotated, Literal
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.auth.models import User
 from oracle.auth.service import may_sign_in
 from oracle.authz import has_role, not_for_runs, require_role, require_role_now
+from oracle.base_model import BaseModel
 from oracle.config import get_settings
 from oracle.connections import oauth, service
 from oracle.connections.models import Connection
@@ -33,6 +34,7 @@ from oracle.connections.providers import (
     get_provider,
     reconnect_reason,
 )
+from oracle.routing import APIRouter
 from oracle.sources.connectors import fireflies
 from oracle.tenancy import tenant_session
 

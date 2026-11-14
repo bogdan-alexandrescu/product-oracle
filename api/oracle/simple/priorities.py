@@ -40,7 +40,7 @@ import uuid
 from datetime import date
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,6 +54,7 @@ from oracle.priorities import service as priorities
 from oracle.priorities.schemas import RankedFeature
 from oracle.roadmap import company
 from oracle.roadmap.models import HORIZONS, RoadmapItem
+from oracle.routing import APIRouter
 from oracle.simple import additions, changes, drafts, key_dates, service, targets
 from oracle.simple.models import SimpleChange
 from oracle.simple.router import Reader

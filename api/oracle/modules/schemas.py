@@ -4,8 +4,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from oracle.base_model import BaseModel
 from oracle.modules.composer import (
     ComposedModule,
     CompositionProblem,

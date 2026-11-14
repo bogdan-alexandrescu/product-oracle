@@ -27,10 +27,11 @@ Changes made in a meeting go through ``POST /v1/simple/changes`` with the meetin
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, HTTPException, Query
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.decisions.models import Decision
+from oracle.routing import APIRouter
 from oracle.simple import meeting_draft, meetings
 from oracle.simple.router import _people
 from oracle.simple.schemas import (

@@ -14,7 +14,7 @@ import uuid
 from collections.abc import Awaitable
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
@@ -42,6 +42,7 @@ from oracle.quality.schemas import (
     ShippedIn,
 )
 from oracle.readiness import Purpose
+from oracle.routing import APIRouter
 from oracle.trash.schemas import TrashEntryOut
 from oracle.v2.schemas import EvaluationReportDetail
 

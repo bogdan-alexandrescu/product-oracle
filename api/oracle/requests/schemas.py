@@ -4,8 +4,9 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import ConfigDict, Field, StringConstraints
 
+from oracle.base_model import BaseModel
 from oracle.runs.schemas import RunStatus
 
 Channel = Literal[

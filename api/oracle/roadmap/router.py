@@ -16,7 +16,7 @@ potentially stale) after the trace lane's ``trace.mark_stale``, and
 import uuid
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import Depends, HTTPException, Query, Response, status
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -102,6 +102,7 @@ from oracle.roadmap.schemas import (
     TrackSummary,
     WithdrawOut,
 )
+from oracle.routing import APIRouter
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import KnobsIn, RunCreate, RunOut
 from oracle.tenancy import current_tenant

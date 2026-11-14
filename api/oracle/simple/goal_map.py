@@ -39,7 +39,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +47,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from oracle import company_time
 from oracle.auth.models import User
+from oracle.base_model import BaseModel
 from oracle.baseline.goal_order import sort_goals
 from oracle.baseline.goals import COMPARISONS, CURRENCY_SIGNS, figure_words, goal_name, meets
 from oracle.baseline.models import Entity, GoalMeasurement

@@ -21,7 +21,7 @@ while they are still being found).
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import Depends, HTTPException, Query, Response, status
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import has_role, require_role
@@ -52,6 +52,7 @@ from oracle.export.schemas import (
     SlideOut,
 )
 from oracle.roadmap import variants
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1", tags=["export"], dependencies=[Depends(require_role("viewer"))])
 

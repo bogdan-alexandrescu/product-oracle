@@ -5,8 +5,9 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
+from oracle.base_model import BaseModel
 from oracle.intake.schemas import AnswerResult
 
 Status = Literal["draft", "invited", "in_progress", "finished", "expired", "revoked"]

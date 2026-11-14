@@ -12,7 +12,7 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import Depends, HTTPException, Query, Response, status
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role, require_role_now
@@ -37,6 +37,7 @@ from oracle.market.schemas import (
     Rating,
     WebFindingOut,
 )
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1", tags=["market"])
 Viewer = Annotated[Principal, Depends(require_role("viewer"))]

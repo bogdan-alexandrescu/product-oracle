@@ -4,8 +4,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from oracle.base_model import BaseModel
 from oracle.rituals.schedule import RitualSchedule
 
 RitualStatus = Literal["active", "paused"]

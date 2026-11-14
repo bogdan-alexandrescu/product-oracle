@@ -2,10 +2,11 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 
 from oracle.auth.models import Role
 from oracle.auth.service import PASSWORD_MIN_LENGTH
+from oracle.base_model import BaseModel
 from oracle.members.schemas import ApiTokenOut
 
 SignInMethod = Literal["password", "google"]

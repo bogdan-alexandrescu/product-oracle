@@ -2,8 +2,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import ConfigDict, Field, computed_field, field_validator
 
+from oracle.base_model import BaseModel
 from oracle.docs.schemas import (
     DateMarkOut,
     DocumentStatus,

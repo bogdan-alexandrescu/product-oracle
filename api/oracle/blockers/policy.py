@@ -30,7 +30,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal, get_args
 
-from pydantic import BaseModel
+from oracle.base_model import BaseModel
 
 LimitKind = Literal["capacity", "eligibility", "permission", "policy", "other"]
 LIMIT_KINDS: tuple[str, ...] = get_args(LimitKind)

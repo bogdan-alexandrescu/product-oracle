@@ -1,8 +1,7 @@
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel
-
+from oracle.base_model import BaseModel
 from oracle.docs.schemas import VersionSource
 
 ExportLayer = Literal["full", "brief", "deck"]

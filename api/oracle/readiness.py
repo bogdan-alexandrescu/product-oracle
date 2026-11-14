@@ -26,8 +26,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from oracle.base_model import BaseModel
 
 Status = Literal["pass", "warning", "critical", "not_applicable"]
 # Who asks: the dashboard ("advisory") or the publish transaction ("publish").

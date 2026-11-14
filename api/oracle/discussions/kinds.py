@@ -18,8 +18,9 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from oracle.base_model import BaseModel
 from oracle.baseline import goals
 from oracle.discussions.models import CHANGE_KINDS, SUBJECT_KINDS
 

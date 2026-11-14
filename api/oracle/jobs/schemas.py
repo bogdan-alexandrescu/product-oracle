@@ -2,8 +2,9 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from oracle.base_model import BaseModel
 from oracle.docs.schemas import WordOp
 from oracle.jobs.prompting import MAX_BODY_CHARS
 

@@ -12,7 +12,7 @@ import uuid
 from collections.abc import Awaitable
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import Depends, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
@@ -53,6 +53,7 @@ from oracle.review.schemas import (
     VersionPublishIn,
 )
 from oracle.review.service import ReviewError, get_document, get_version
+from oracle.routing import APIRouter
 from oracle.v2.concurrency import VersionConflict
 
 router = APIRouter(prefix="/v1", tags=["review"], dependencies=[Depends(require_role("viewer"))])

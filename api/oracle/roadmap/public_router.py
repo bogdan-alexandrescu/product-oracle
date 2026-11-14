@@ -11,13 +11,14 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from pydantic import BaseModel, Field, field_validator
+from fastapi import Depends, HTTPException, Query, Response, status
+from pydantic import Field, field_validator
 from sqlalchemy import select
 
 from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import has_role
+from oracle.base_model import BaseModel
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
 from oracle.jobs import service as jobs_service
@@ -25,6 +26,7 @@ from oracle.jobs.schemas import LlmJobOut
 from oracle.review.models import DocumentPublication
 from oracle.roadmap import leak_check, public, views
 from oracle.roadmap.models import RoadmapItem, RoadmapPublicCheck, RoadmapPublicText
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1", tags=["roadmaps"])
 

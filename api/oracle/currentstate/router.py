@@ -9,7 +9,7 @@ Reading is open to every member. Changing needs what confirming an entity needs
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 
 from oracle import company_time
 from oracle.auth.deps import Principal, TenantDB
@@ -21,6 +21,7 @@ from oracle.currentstate.schemas import (
     FeatureStateOut,
     FeatureStatesOut,
 )
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1", tags=["currentstate"])
 

@@ -19,16 +19,10 @@ from urllib.parse import urlsplit
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    ValidationError,
-    ValidationInfo,
-    field_validator,
-)
+from pydantic import ConfigDict, Field, ValidationError, ValidationInfo, field_validator
 
 from oracle import parse_budget, safe_yaml
+from oracle.base_model import BaseModel
 from oracle.config import get_settings
 from oracle.docs import layers
 from oracle.docs.schemas import (

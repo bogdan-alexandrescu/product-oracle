@@ -8,7 +8,7 @@ pushes back once (409) when the numbers or the evidence disagree with a change.
 import uuid
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import Body, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
@@ -27,6 +27,7 @@ from oracle.priorities.schemas import (
     PushbackOut,
 )
 from oracle.quality.schemas import CalibrationOut
+from oracle.routing import APIRouter
 
 # Which snapshots a reader sees: saved by default (C8: a run's order is proposed until its
 # priority stop is approved, discarded when sent back).

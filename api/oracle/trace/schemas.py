@@ -4,8 +4,9 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
+from oracle.base_model import BaseModel
 from oracle.priorities.schemas import RankedFeature
 from oracle.v2.schemas import (
     ArtifactKind,

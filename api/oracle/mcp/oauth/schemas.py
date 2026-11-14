@@ -2,9 +2,10 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
 from oracle.auth.models import Role
+from oracle.base_model import BaseModel
 
 
 class ProtectedResourceMetadata(BaseModel):

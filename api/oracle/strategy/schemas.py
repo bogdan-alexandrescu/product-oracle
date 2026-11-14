@@ -2,7 +2,9 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
+
+from oracle.base_model import BaseModel
 
 FindingKind = Literal[
     "goal_without_strategy",

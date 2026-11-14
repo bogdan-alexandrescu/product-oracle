@@ -24,9 +24,10 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ConfigDict, Field, ValidationError
 
 from oracle import parse_budget
+from oracle.base_model import BaseModel
 from oracle.specs.contract import Problem
 from oracle.specs.sanitize import MAX_FILE_BYTES, Sanitized, sanitize_svg, sanitize_wireframe
 
