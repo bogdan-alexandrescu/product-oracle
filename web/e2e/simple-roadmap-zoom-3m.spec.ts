@@ -117,7 +117,7 @@ function readsWhole(scheme: "light" | "dark") {
 
   test(`${scheme}: a milestone's label stays clear of the names column at every zoom`, async ({ page }) => {
     // protects: the track's "◆ M<n> Beta · Nov 30" label, at 3 months, 6 months, 1 year and All, and after sliding the chart till its line is left of the names column, starts at or right of the names column, ends inside the chart, reads whole (at All, where it has no room, its code and name), and is not covered by the + Milestone hint
-    // fails_when: the label sits over the names column, runs past the chart's right edge, reads differently, or the hint covers it
+    // fails_when: the label sits over the names column, runs past the chart's right edge, reads differently, the hint covers it, or it steps along the Goal map's diamonds far from its day (1 year) and the slide loses it
     // no_claim: other milestones or two close ones (the next test); this runs in light and dark at 1440 wide
     await open(page, scheme);
     const head = page.getByTestId("timeline-names-head");
@@ -145,6 +145,10 @@ function readsWhole(scheme: "light" | "dark") {
       await expect(label).toBeVisible();
       await clear(z);
       if (z === "all") continue;
+      // It starts by its own day's line, never stepped along a row of diamonds (one a month at 1 year)
+      // far from its day, where the slide below would take its day out of sight and the label with it.
+      const day = (await page.locator('[data-testid="timeline-milestone-line"][data-day="2026-11-30"]').boundingBox())!;
+      expect((await label.boundingBox())!.x - day.x, "the label starts by its day").toBeLessThanOrEqual(40);
       // Slide the chart until the milestone's line sits just left of the names column.
       const h = (await head.boundingBox())!;
       const line = (await label.boundingBox())!.x - 4;
