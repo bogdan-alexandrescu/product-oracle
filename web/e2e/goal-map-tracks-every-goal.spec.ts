@@ -131,7 +131,7 @@ test.describe("A feature that serves more than one goal", () => {
     await open(page);
     const name = "Lead list ranking";
     await addFeature(page, "$15k revenue per day", name, "Add");
-    await (await chipIn(page, REVENUE, name)).getByRole("button", { name: new RegExp(name) }).click();
+    await (await chipIn(page, REVENUE, name)).getByRole("button", { name: new RegExp(`^(F-\\d+ )?${name}`) }).click();
     await expect(page.getByTestId("floating-card").getByTestId("card-name")).toContainText(/F-\d+\s*Lead list ranking/);
     await expect(page.getByTestId("gm-panel-milestone")).toContainText("$15k revenue per day");
   });

@@ -688,7 +688,8 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                       <span data-testid="gm-chip-name" className="block truncate hover:underline max-[600px]:whitespace-normal max-[600px]:line-clamp-2" title={`${c.codes.get(f.id) ?? ""} ${f.name}`.trim()}>
                         <FeatureName item={{ code: c.codes.get(f.id), title: f.name }} />
                       </span>
-                      <span className="block truncate text-[11.5px] text-text2" title={f.ms.length ? f.ms.map((m) => mWords(m, c)).join(" · ") : undefined}>
+                      {/* The milestones' codes and names, as people named them (a list, not prose). */}
+                      <span data-user-content className="block truncate text-[11.5px] text-text2" title={f.ms.length ? f.ms.map((m) => mWords(m, c)).join(" · ") : undefined}>
                         {f.ms.length ? f.ms.map((m) => mWords(m, c)).join(" · ") : "No milestone"}
                       </span>
                     </button>
