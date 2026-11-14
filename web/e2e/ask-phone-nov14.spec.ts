@@ -22,7 +22,8 @@ const COMMENTER = "commenter@example.com";
 const scenario = (page: Page, name: string) => page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, name] as const);
 
 async function openAsk(page: Page): Promise<Locator> {
-  await page.getByTestId("simple-ask").filter({ visible: true }).first().click();
+  // The rail's Ask Oracle; on a phone, the header's Ask.
+  await page.locator('[data-testid="simple-ask"], [data-testid="phone-ask"]').filter({ visible: true }).first().click();
   const panel = page.getByTestId("hop-panel").filter({ visible: true });
   await expect(panel.getByTestId("ask-chat")).toBeVisible();
   return panel;
@@ -63,7 +64,7 @@ test("rows 2 and 6: a run's discussion names its item and its people pill is chi
   await scenario(page, "run-discussions");
   await login(page, COMMENTER);
   await page.goto(`/runs/${RUN}?discussion=${RUN_DISCUSSION_OPEN}`);
-  const thread = page.getByTestId("linked-discussion-sheet").getByTestId("discussion-thread");
+  const thread = page.getByTestId("run-discussion-sheet").getByTestId("discussion-thread");
   await expect(thread).toContainText("Bulk edit: keep it without the export?");
   await expect(thread).toContainText("Feature set · Bulk address edit");
   await expect(thread).not.toContainText("bulk-address-edit");
