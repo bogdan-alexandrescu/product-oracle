@@ -21,7 +21,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
 import { ITEM_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
-import { NotInGt } from "@/components/simple/FeatureName";
+import { Named, NotInGt } from "@/components/simple/FeatureName";
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, otherGoal, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { goalKeysOf, KeyResultList, liftedMoves, topGoalBuckets, topGoalPlan, topGoalPriorities, usePriorityKeyResults, type PriorityKeyResults } from "./key-results";
@@ -1925,10 +1925,14 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   </span>
                   {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}
                   {r.after ? (
-                    // The name keeps its room: the pill names the feature it needs by code, else says "after" (its name is in
-                    // the tip and on the selected row's second line).
-                    <span data-testid="side-held" title={`After ${r.after.title}, which it needs`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
-                      after{heldKey(r) ? ` ${heldKey(r)}` : <span className="sr-only"> {r.after.title}</span>}
+                    // The name keeps its room: the pill says "after"; the feature it needs, code with name, is in the tip and on
+                    // the selected row's second line (never a code without its name).
+                    <span data-testid="side-held" title={`After ${heldKey(r) ? `${heldKey(r)} ` : ""}${r.after.title}, which it needs`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
+                      after
+                      <span className="sr-only">
+                        {" "}
+                        <Named item={{ code: heldKey(r), title: r.after.title }} />
+                      </span>
                     </span>
                   ) : (
                     r.oracle_rank != null &&
@@ -1941,9 +1945,9 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   {!r.above_line && <MissesTag data={data} compact />}
                   <span className="flex-none tabular-nums text-text2" title="Score">{r.score == null ? "–" : fmt(r.score, 2)}</span>
                 </button>
-                {isSelected && r.after && !heldKey(r) && (
+                {isSelected && r.after && (
                   <span data-testid="side-after" className="block truncate px-2 pl-[34px] text-[13px] text-text2">
-                    after {r.after.title}
+                    after <Named item={{ code: heldKey(r), title: r.after.title }} />
                   </span>
                 )}
                 {isSelected && (
