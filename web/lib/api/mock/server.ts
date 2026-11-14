@@ -212,7 +212,7 @@ import { forgetBundles, routeSimpleVisuals, seedVisuals, type VisualsDb } from "
 import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { ANY_CODE, wholeCode } from "./feature-codes";
-import { codesRead, codesSeen, confirmedFor, DECLINED, groundTruthCheck, GROUND_TRUTH_CONFIRM_SCENARIO, GROUND_TRUTH_FLAGS_SCENARIO, GROUND_TRUTH_SHARED_SCENARIO, itemById, mark, routeGroundTruthFixes, seedGroundTruth, seedGroundTruthConfirm, seedGroundTruthShared, tiedCodes, UNCONFIRMED } from "./ground-truth";
+import { codesRead, codesSeen, confirmedFor, DECLINED, groundTruthCheck, GROUND_TRUTH_CONFIRM_SCENARIO, GROUND_TRUTH_FLAGS_SCENARIO, GROUND_TRUTH_SHARED_NAMED_SCENARIO, GROUND_TRUTH_SHARED_SCENARIO, itemById, mark, routeGroundTruthFixes, seedGroundTruth, seedGroundTruthConfirm, seedGroundTruthShared, tiedCodes, UNCONFIRMED } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { ONE_PAGER_MILESTONE_RENAME_SCENARIO, PICKED_MILESTONE, PRIORITIES_PLAN_MILESTONES_SCENARIO, seedOldMilestones, seedOwnMilestones, seedPlanPrdMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
@@ -4784,12 +4784,12 @@ function load(): Db {
                 ? seedTracksClosedScenario
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
-              : scenario === GROUND_TRUTH_SHARED_SCENARIO
+              : scenario === GROUND_TRUTH_SHARED_SCENARIO || scenario === GROUND_TRUTH_SHARED_NAMED_SCENARIO
                 ? () => {
-                    // The Ground Truth check, with a run's proposal two roadmap items share.
+                    // The Ground Truth check, with a run's proposal two roadmap items share (named after one of them).
                     const db = seed();
                     db.simple_roadmap = seedSimpleRoadmap();
-                    seedGroundTruthShared(db.baseline, db.simple_roadmap);
+                    seedGroundTruthShared(db.baseline, db.simple_roadmap, scenario === GROUND_TRUTH_SHARED_NAMED_SCENARIO ? "Chat alerts" : undefined);
                     return db;
                   }
               : scenario === GROUND_TRUTH_CONFIRM_SCENARIO

@@ -32,6 +32,8 @@ export const GROUND_TRUTH_FLAGS_SCENARIO = "ground-truth-flags";
 export const GROUND_TRUTH_CONFIRM_SCENARIO = "ground-truth-confirm";
 /** ground-truth-confirm plus Community alerts, a run's proposal two roadmap items share (Chat alerts, PRD section f-140, and Forum alerts). */
 export const GROUND_TRUTH_SHARED_SCENARIO = "ground-truth-shared";
+/** ground-truth-shared with the shared proposal named after one of its items: Chat alerts. */
+export const GROUND_TRUTH_SHARED_NAMED_SCENARIO = "ground-truth-shared-named";
 
 type Kind = Schemas["GroundTruthFlag"]["kind"];
 type Action = Schemas["GroundTruthFix"]["action"];
@@ -186,11 +188,11 @@ export function seedGroundTruthConfirm(baseline: BaselineState, simple: SimpleDb
 const SHARED_ITEMS = ["gt-chat-alerts", "gt-forum-alerts"];
 
 /** The ground-truth-shared scenario on top of ground-truth-confirm: Community alerts, a run's proposal shared by Chat alerts and Forum alerts. */
-export function seedGroundTruthShared(baseline: BaselineState, simple: SimpleDb): void {
+export function seedGroundTruthShared(baseline: BaselineState, simple: SimpleDb, title = "Community alerts"): void {
   seedGroundTruthConfirm(baseline, simple);
   const template = baseline.entities.find((e) => e.type === "feature")!;
   const id = featureId("community-alerts");
-  baseline.entities.push({ ...template, id, key: "community-alerts", title: "Community alerts", body: null, attrs: {}, parent_id: null, locked: false, locked_by: null, locked_at: null, status: "proposed", origin: "agent" });
+  baseline.entities.push({ ...template, id, key: "community-alerts", title, body: null, attrs: {}, parent_id: null, locked: false, locked_by: null, locked_at: null, status: "proposed", origin: "agent" });
   for (const [key, title, section] of [[SHARED_ITEMS[0], "Chat alerts", "f-140"], [SHARED_ITEMS[1], "Forum alerts", undefined]] as const) {
     simple.items.push({ key, title, horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft: true, feature_id: id, ...(section ? { section } : {}) });
     simple.ids[key] = stableUuid(`simple-item/${key}`);
@@ -411,7 +413,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: 
 /** GroundTruthOut for the scenario: its flags in CHECK_KINDS' order, their counts per kind (zero included) and the total. */
 export function groundTruthCheck(scenario: string | null, baseline: BaselineState, simple: SimpleDb | undefined): Schemas["GroundTruthOut"] {
   // Every scenario: the check reads the mock's own state (the scenario's PRD only where it is seeded).
-  const found = flagsOf(baseline, simple, (scenario === GROUND_TRUTH_FLAGS_SCENARIO || scenario === GROUND_TRUTH_CONFIRM_SCENARIO || scenario === GROUND_TRUTH_SHARED_SCENARIO) && !!simple);
+  const found = flagsOf(baseline, simple, (scenario === GROUND_TRUTH_FLAGS_SCENARIO || scenario === GROUND_TRUTH_CONFIRM_SCENARIO || scenario === GROUND_TRUTH_SHARED_SCENARIO || scenario === GROUND_TRUTH_SHARED_NAMED_SCENARIO) && !!simple);
   const flags = CHECK_KINDS.flatMap((k) => found.filter((f) => f.kind === k));
   const counts = Object.fromEntries(CHECK_KINDS.map((k) => [k, flags.filter((f) => f.kind === k).length]));
   return { flags, counts, total: flags.length };
