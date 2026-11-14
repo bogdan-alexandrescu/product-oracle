@@ -365,6 +365,23 @@ async def documents(db: AsyncSession) -> list[Document]:
     return await drafts.once("documents", read)
 
 
+async def all_milestones(db: AsyncSession) -> list[TrackMilestone]:
+    """Every milestone, the soonest first, read once per read (read-speed: the goal
+    milestones are these rows too)."""
+    from oracle.simple import drafts
+
+    async def read() -> list[TrackMilestone]:
+        return list(
+            await db.scalars(
+                select(TrackMilestone).order_by(
+                    TrackMilestone.target_date.nulls_last(), TrackMilestone.created_at
+                )
+            )
+        )
+
+    return list(await drafts.once("milestones", read))
+
+
 async def load(
     db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | None = None, light: bool = False
 ) -> Read:
@@ -479,13 +496,7 @@ async def load(
         for g in (every_goal.get(t.goal_id) for t in tracks.values() if t.goal_id)
         if g is not None and g.status != "rejected"
     }
-    milestones = list(
-        await db.scalars(
-            select(TrackMilestone).order_by(
-                TrackMilestone.target_date.nulls_last(), TrackMilestone.created_at
-            )
-        )
-    )
+    milestones = await all_milestones(db)
     keys = {r.item_key for r in rows}
     records: dict[tuple[Any, str], list[TrackerRecord]] = defaultdict(list)
     prd_records: dict[tuple[Any, str], list[TrackerRecord]] = defaultdict(list)

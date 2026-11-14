@@ -171,11 +171,17 @@ class Prediction(BaseModel):
     by: date | None = None
     # H3: typed, comparable figures beside the text ("%", "min", "count", a currency).
     unit: str | None = Field(default=None, max_length=40)
-    direction: Literal["increase", "decrease"] | None = None
+    # outcomes-edit (owner, Nov 13): "hold" is a level to stay at or under ("Hold at most":
+    # 0 account restrictions); its baseline may equal the prediction.
+    direction: Literal["increase", "decrease", "hold"] | None = None
     baseline_value: float | None = None
     predicted_value: float | None = None
     # The least that still counts as "partly held".
     threshold_value: float | None = None
+    # outcomes-edit (owner, Nov 13): how sure the person is, and why, in one line. The word
+    # sets the outcome's confidence_at_prediction (Priorities' track record reads it).
+    confidence: Literal["low", "medium", "high"] | None = None
+    why: str | None = Field(default=None, max_length=300)
 
 
 class PredictionIn(Prediction):
@@ -184,13 +190,21 @@ class PredictionIn(Prediction):
     @model_validator(mode="after")
     def _typed(self) -> "PredictionIn":
         base, want, line = self.baseline_value, self.predicted_value, self.threshold_value
+        if self.direction == "hold":
+            # Partly held up to the mark: it lies at or above the level to stay under.
+            if want is not None and line is not None and line < want:
+                raise ValueError(
+                    "a hold prediction's partly-held line is at or above the prediction"
+                )
+            return self
         if base is not None and want is not None:
             if self.direction is None:
-                raise ValueError("say which way the prediction goes: increase or decrease")
+                raise ValueError("say which way the prediction goes: increase, decrease or hold")
             if (want - base) * (1 if self.direction == "increase" else -1) <= 0:
                 raise ValueError(
-                    f"an {self.direction} prediction must be "
-                    f"{'above' if self.direction == 'increase' else 'below'} its baseline"
+                    "an increase prediction must be above its baseline"
+                    if self.direction == "increase"
+                    else "a decrease prediction must be below its baseline"
                 )
             if line is not None and not min(base, want) <= line <= max(base, want):
                 raise ValueError(
@@ -281,10 +295,12 @@ class ProposedAssessment(BaseModel):
 
 
 class OutcomeUpdate(BaseModel):
-    """PATCH /v1/outcomes/{id}: the prediction (while predicted) and the owner."""
+    """PATCH /v1/outcomes/{id}: the prediction (while predicted), the owner and the goal."""
 
     prediction: PredictionIn | None = None
     owner_id: uuid.UUID | None = None
+    # outcomes-edit (owner, Nov 13): another company goal, in any state; the prediction stays.
+    goal_id: uuid.UUID | None = None
     lock_version: int
 
 

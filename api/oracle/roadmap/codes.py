@@ -121,11 +121,47 @@ def _by_feature(features: list[Any], sections: list[Any]) -> dict[uuid.UUID, str
     }
 
 
+async def item_links(db: Any) -> list[Any]:
+    """Every live roadmap item's PRD, goals, feature, PRD section, ``published`` (on a version)
+    and ``cut``, oldest first, read once per read (oracle.simple.drafts.one_read): the feature
+    codes' sections and the PRD order's main goals (oracle.docs.prd_order) both come from it
+    (read-speed)."""
+    from oracle.roadmap.models import RoadmapItem
+    from oracle.simple import drafts
+
+    async def load() -> list[Any]:
+        return list(
+            (
+                await db.execute(
+                    select(
+                        RoadmapItem.prd_document_id,
+                        RoadmapItem.goal_ids,
+                        RoadmapItem.feature_id,
+                        RoadmapItem.prd_section_key,
+                        RoadmapItem.roadmap_version_id.is_not(None).label("published"),
+                        RoadmapItem.cut,
+                    ).order_by(RoadmapItem.created_at)
+                )
+            ).all()
+        )
+
+    return await drafts.once("item_links", load)
+
+
 async def feature_codes(db: Any) -> dict[uuid.UUID, str]:
     """Every feature's code (:func:`_by_feature`), read with an async session."""
+    from oracle.simple import drafts
+
     features, sections = feature_reads()
-    return _by_feature(list((await db.execute(features)).all()),
-                       list((await db.execute(sections)).all()))  # fmt: skip
+    if drafts.reading():
+        found = [
+            (r.feature_id, r.prd_section_key)
+            for r in await item_links(db)
+            if r.feature_id is not None and r.prd_section_key is not None and r.published
+        ]
+    else:
+        found = list((await db.execute(sections)).all())
+    return _by_feature(list((await db.execute(features)).all()), found)
 
 
 def _feature_codes_sync(session: Session) -> dict[uuid.UUID, str]:

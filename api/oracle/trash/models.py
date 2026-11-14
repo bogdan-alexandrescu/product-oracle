@@ -28,9 +28,10 @@ from oracle.db import Base, TenantScoped
 # entry, as the agenda is the meeting's JSON) and a request (an owner's delete).
 # removed-tracks: a product track.
 # goal-map-editing: a goal milestone (oracle.simple.goal_milestones), its features kept linked.
+# outcomes-edit: an outcome record (oracle.quality.outcomes.trash_outcome).
 ROOT_TYPES = (
     "document", "intake", "run", "feature", "goal", "decision", "question", "agenda_item",
-    "request", "track", "milestone",
+    "request", "track", "milestone", "task", "outcome",
 )  # fmt: skip
 # Days a deleted artifact waits in Trash before the ticker purges it.
 RETENTION_DAYS = 30
@@ -57,7 +58,7 @@ class TrashEntry(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(
             "root_type IN ('document', 'intake', 'run', 'feature', 'goal', 'decision', "
-            "'question', 'agenda_item', 'request', 'track', 'milestone', 'task')",
+            "'question', 'agenda_item', 'request', 'track', 'milestone', 'task', 'outcome')",
             name="root_type",
         ),
         Index("ix_trash_entries_purge_after", "purge_after"),

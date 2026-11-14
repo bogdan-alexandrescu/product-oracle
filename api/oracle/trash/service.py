@@ -490,6 +490,12 @@ def _request_model() -> type:
     return ProductRequest
 
 
+def _outcome_model() -> type:
+    from oracle.quality.models import OutcomeRecord
+
+    return OutcomeRecord
+
+
 def _models() -> tuple[type, ...]:
     from oracle.roadmap.models import ProductTrack
 
@@ -501,6 +507,7 @@ def _models() -> tuple[type, ...]:
         _decision_model(),
         _request_model(),
         ProductTrack,
+        _outcome_model(),
     )
 
 
@@ -851,9 +858,9 @@ async def _not_restored(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
 # it too (edit-decisions: and a decision or a PRD question); everything else in Trash is the
 # owners' alone. port-an-decisions: and a meeting's agenda item (a request is an owner's
 # delete).
-# feature-panel: and a dropped item task.
+# feature-panel: and a dropped item task. outcomes-edit: and an outcome.
 OWN_RESTORE = frozenset(
-    {"feature", "goal", "decision", "question", "agenda_item", "milestone", "task"}
+    {"feature", "goal", "decision", "question", "agenda_item", "milestone", "task", "outcome"}
 )
 
 
@@ -961,6 +968,7 @@ async def purge_entry(
         _decision_model(),
         _request_model(),
         ProductTrack,
+        _outcome_model(),
     ):
         await db.execute(
             delete(model)

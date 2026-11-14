@@ -30147,7 +30147,7 @@
           "quality"
         ],
         "summary": "Update Outcome",
-        "description": "Edit the prediction while the item is predicted (audited); once shipped it is\nfrozen (409). The owner can change any time.",
+        "description": "Edit the prediction while the item is predicted (audited); once shipped it is\nfrozen (409). The owner and the goal can change any time.",
         "operationId": "update_outcome",
         "security": [
           {
@@ -30186,6 +30186,74 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OutcomeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      },
+      "delete": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Delete Outcome",
+        "description": "outcomes-edit (owner, Nov 13): move the outcome to Settings \u203a Trash. It leaves every\nlist, count and the track record; Restore there brings it back.",
+        "operationId": "delete_outcome",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "outcome_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Outcome Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
                 }
               }
             }
@@ -102022,6 +102090,18 @@
             ],
             "title": "Owner Id"
           },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
           "lock_version": {
             "type": "integer",
             "title": "Lock Version"
@@ -102032,7 +102112,7 @@
           "lock_version"
         ],
         "title": "OutcomeUpdate",
-        "description": "PATCH /v1/outcomes/{id}: the prediction (while predicted) and the owner."
+        "description": "PATCH /v1/outcomes/{id}: the prediction (while predicted), the owner and the goal."
       },
       "OutlineEntry": {
         "properties": {
@@ -104859,7 +104939,8 @@
                 "type": "string",
                 "enum": [
                   "increase",
-                  "decrease"
+                  "decrease",
+                  "hold"
                 ]
               },
               {
@@ -104900,6 +104981,34 @@
               }
             ],
             "title": "Threshold Value"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why"
           }
         },
         "type": "object",
@@ -144109,7 +144218,8 @@
               "request",
               "track",
               "milestone",
-              "task"
+              "task",
+              "outcome"
             ],
             "title": "Type"
           },
@@ -146955,7 +147065,8 @@
                 "type": "string",
                 "enum": [
                   "increase",
-                  "decrease"
+                  "decrease",
+                  "hold"
                 ]
               },
               {
@@ -146996,6 +147107,34 @@
               }
             ],
             "title": "Threshold Value"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why"
           },
           "goal_id": {
             "type": "string",
@@ -147080,7 +147219,8 @@
                 "type": "string",
                 "enum": [
                   "increase",
-                  "decrease"
+                  "decrease",
+                  "hold"
                 ]
               },
               {
@@ -147121,6 +147261,34 @@
               }
             ],
             "title": "Threshold Value"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why"
           }
         },
         "type": "object",

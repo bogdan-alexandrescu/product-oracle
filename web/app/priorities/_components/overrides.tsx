@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { Button, Chip, Icon, InspectorSection, Notice, Panel, Sheet } from "@/components/ds";
+import { Button, Chip, Dialog, Icon, InspectorSection, Notice, Panel, Sheet } from "@/components/ds";
+import { usePhone } from "@/components/ds/page-info";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText } from "@/lib/codes";
@@ -451,10 +452,10 @@ export function OverrideSheet({
     (x) => x.key !== f.key && `${x.key} ${x.title}`.toLowerCase().includes(find.trim().toLowerCase()),
   );
   const title = draft.kind === "move" ? `Move ${words(f)}` : `Pin ${words(f)}`;
+  const phone = usePhone();
 
-  return (
-    <Sheet open title={title} onClose={onClose} testId="override-sheet">
-      <div className="mx-auto flex w-full max-w-[640px] flex-col gap-3 px-4 py-3 text-[15px]">
+  const body = (
+      <div className={`flex flex-col gap-3 text-[15px] ${phone ? "mx-auto w-full max-w-[640px] px-4 py-3" : ""}`}>
         {pushback ? (
           <>
             <PushbackView p={pushback} name={(k) => { const x = features.find((y) => y.key === k); return x ? words(x) : k; }} />
@@ -576,7 +577,16 @@ export function OverrideSheet({
           </>
         )}
       </div>
+  );
+  // detailed-b 15 (owner, Nov 13): a centred dialog above 600 px, like the other desktop confirmations; a bottom sheet on a phone.
+  return phone ? (
+    <Sheet open title={title} onClose={onClose} testId="override-sheet">
+      {body}
     </Sheet>
+  ) : (
+    <Dialog title={title} onClose={onClose} busy={busy} testId="override-sheet">
+      {body}
+    </Dialog>
   );
 }
 

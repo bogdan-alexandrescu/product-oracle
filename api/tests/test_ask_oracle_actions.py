@@ -138,6 +138,12 @@ def test_every_route_is_allowed_or_denied_by_name():
     assert cat.actions["create_entity"].summary == "Add a product record"
 
 
+def test_trashing_an_outcome_is_classed_by_name():
+    cat = ask_actions.catalogue(app)
+    assert "delete_outcome" in NOT_OFFERED
+    assert cat.denied["delete_outcome"] != ask_actions.NEW_ROUTE_WHY
+
+
 def test_no_offered_action_takes_a_secret():
     for a in ask_actions.catalogue(app).actions.values():
         fields = ask_actions.body_fields(a.op) if a.body else []

@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { askWith } from "@/components/hop/open-state";
 import { useCompanyZone, zoneDateTime } from "@/lib/dates";
 import { servedName } from "@/lib/key-results";
 import { useMe } from "@/lib/me";
@@ -504,8 +503,8 @@ function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi 
 /** Where the drawer opens: the form open (a goal card's "+ Suggest a feature") or Oracle's tab ("✦ Ask Oracle to suggest"). */
 export type GoalPanelStart = "form" | "oracle";
 
-/** The drawer's body: the form on top, "Suggest from the chat", then the People and Oracle tabs. */
-export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: GoalBrief; api: GoalSuggestionsApi; onChat?: () => void; start?: GoalPanelStart }) {
+/** The drawer's body: the form on top, "✦ Ask Oracle to suggest", then the People and Oracle tabs. */
+export function GoalSuggestionList({ goal, api: a, start }: { goal: GoalBrief; api: GoalSuggestionsApi; start?: GoalPanelStart }) {
   const { can } = useMe();
   const state = goalState(a, goal);
   const { people, oracle } = goalRows(a, goal);
@@ -532,7 +531,7 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
   ];
   return (
     <div data-testid="goal-suggestions" data-goal={goal.key} className="flex flex-col gap-3">
-      {/* One row at the top: three actions that each look different. */}
+      {/* One row at the top: "+ Suggest a feature" and "✦ Ask Oracle to suggest". */}
       {suggests && (
         <>
           <div className="flex flex-wrap items-center gap-2" data-testid="suggest-actions">
@@ -541,20 +540,10 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
                 + Suggest a feature
               </Button>
             )}
+            {/* PR9 (owner, Nov 13): one way to ask Oracle, never a second one or a chat link. */}
             <Button variant="secondary" data-testid="suggest-more" disabled={asking || !!state?.pending} onClick={() => void more()}>
-              ✦ Get more from Oracle
+              ✦ Ask Oracle to suggest
             </Button>
-            <button
-              type="button"
-              data-testid="suggest-from-chat"
-              onClick={() => {
-                onChat?.();
-                askWith(`Suggest a feature for ${(state?.goal ?? goal).title}: `);
-              }}
-              className="text-[length:var(--simple-small)] text-text2 underline hover:text-text"
-            >
-              Ask in the chat
-            </button>
           </div>
           {formOpen && (
             <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} decides={!!state?.can_decide} open onOpen={() => setFormOpen(true)} focus={start === "form"} onSent={async () => {
@@ -703,7 +692,7 @@ export function GoalPanel({ goal, api: a, onClose, start }: { goal: GoalBrief; a
     return (
       <Sheet open title={title} onClose={onClose} testId="goal-panel">
         <div className="p-4">
-          <GoalSuggestionList goal={goal} api={a} onChat={onClose} start={start} />
+          <GoalSuggestionList goal={goal} api={a} start={start} />
         </div>
       </Sheet>
     );
@@ -718,7 +707,7 @@ export function GoalPanel({ goal, api: a, onClose, start }: { goal: GoalBrief; a
           ×
         </button>
       </div>
-      <GoalSuggestionList goal={goal} api={a} onChat={onClose} start={start} />
+      <GoalSuggestionList goal={goal} api={a} start={start} />
     </aside>
     </>
   );

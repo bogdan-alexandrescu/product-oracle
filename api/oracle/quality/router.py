@@ -16,7 +16,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from oracle.auth.deps import Principal, TenantDB
+from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
 from oracle.jobs import service as jobs_service
 from oracle.jobs.schemas import LlmJobOut
@@ -42,6 +42,7 @@ from oracle.quality.schemas import (
     ShippedIn,
 )
 from oracle.readiness import Purpose
+from oracle.trash.schemas import TrashEntryOut
 from oracle.v2.schemas import EvaluationReportDetail
 
 router = APIRouter(prefix="/v1", tags=["quality"], dependencies=[Depends(require_role("viewer"))])
@@ -156,8 +157,27 @@ async def update_outcome(
     outcome_id: uuid.UUID, body: OutcomeUpdate, principal: Approver, db: TenantDB
 ) -> OutcomeOut:
     """Edit the prediction while the item is predicted (audited); once shipped it is
-    frozen (409). The owner can change any time."""
+    frozen (409). The owner and the goal can change any time."""
     out = await _call(outcomes.update_outcome(db, principal, outcome_id, body))
+    await db.commit()
+    return out
+
+
+@router.delete(
+    "/outcomes/{outcome_id}", response_model=TrashEntryOut, dependencies=[Depends(same_origin)]
+)
+async def delete_outcome(
+    outcome_id: uuid.UUID,
+    principal: Approver,
+    db: TenantDB,
+    reason: Annotated[str | None, Query(max_length=2000)] = None,
+) -> TrashEntryOut:
+    """outcomes-edit (owner, Nov 13): move the outcome to Settings › Trash. It leaves every
+    list, count and the track record; Restore there brings it back."""
+    from oracle.trash.router import _entry_out
+
+    entry = await _call(outcomes.trash_outcome(db, principal, outcome_id, reason))
+    out = _entry_out(entry, can_restore=True)
     await db.commit()
     return out
 

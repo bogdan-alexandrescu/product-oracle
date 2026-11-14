@@ -13,8 +13,8 @@ Service functions flush but never commit; the router commits.
 """
 
 import uuid
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +40,7 @@ from oracle.quality.schemas import (
     OutcomeUpdate,
     ShippedIn,
 )
+from oracle.trash.filter import INCLUDE_TRASHED
 from oracle.v2 import models as m
 from oracle.v2.models import GAP_CATEGORIES
 
@@ -107,7 +108,9 @@ async def create_outcome(
         if item is None:
             raise OutcomeError(422, f"roadmap_item_id {data.roadmap_item_id} is not a roadmap item")
         if await db.scalar(
-            select(OutcomeRecord.id).where(OutcomeRecord.roadmap_item_id == item.id)
+            select(OutcomeRecord.id)
+            .where(OutcomeRecord.roadmap_item_id == item.id)
+            .execution_options(**{INCLUDE_TRASHED: True})
         ):
             raise OutcomeError(409, "That roadmap item already has an outcome record")
     row = OutcomeRecord(
@@ -123,6 +126,7 @@ async def create_outcome(
         experiment_id=data.experiment_id,
         prediction=data.prediction.model_dump(mode="json"),
         needs_prediction=data.prediction.predicted_value is None and item is not None,
+        confidence_at_prediction=confidence_of(data),
         module_keys=list(dict.fromkeys(data.module_keys)),
         gap_categories=list(dict.fromkeys(data.gap_categories)),
         status="tracking",
@@ -322,7 +326,8 @@ async def assess(
 async def update_outcome(
     db: AsyncSession, principal: "Principal", outcome_id: uuid.UUID, data: OutcomeUpdate
 ) -> OutcomeOut:
-    """Edit the prediction (only while predicted: shipped, it is frozen) or the owner."""
+    """Edit the prediction (only while predicted: shipped, it is frozen), the owner or the
+    goal."""
     row = await get_outcome(db, outcome_id)
     if data.lock_version != row.lock_version:
         raise OutcomeError(409, "This outcome changed since you opened it; reload it")
@@ -332,15 +337,70 @@ async def update_outcome(
         before = row.prediction
         row.prediction = data.prediction.model_dump(mode="json")
         row.needs_prediction = data.prediction.predicted_value is None
+        # A Confidence picked replaces the one captured; none picked keeps it.
+        if (confidence := confidence_of(data)) is not None:
+            row.confidence_at_prediction = confidence
         await audit.record(
             db, principal, "outcome.prediction_edited", "outcome_record", row.id,
             {"before": before, "after": row.prediction},
         )  # fmt: skip
     if "owner_id" in data.model_fields_set and data.owner_id is not None:
         row.owner_id = data.owner_id
+    if data.goal_id is not None and data.goal_id != row.goal_id:
+        # outcomes-edit: the prediction is kept as written (its figures are the owner's), even
+        # when its unit is not the new goal's: changing the goal never loses it.
+        await _entity(db, data.goal_id, "goal", "goal_id")
+        before_goal = row.goal_id
+        row.goal_id = data.goal_id
+        await audit.record(
+            db, principal, "outcome.goal_changed", "outcome_record", row.id,
+            {"from": str(before_goal), "to": str(data.goal_id)},
+        )  # fmt: skip
     await db.flush()
     await db.refresh(row)
     return OutcomeOut.model_validate(row)
+
+
+def confidence_of(prediction: "OutcomeCreate | OutcomeUpdate") -> float | None:
+    """outcomes-edit: a prediction's Confidence as the confidence at prediction the track
+    record reads (Priorities' confidence words: High 0.8, Medium 0.5, Low 0.3)."""
+    from oracle.priorities.scoring import CONFIDENCE_WORDS
+
+    p = prediction.prediction
+    return CONFIDENCE_WORDS[p.confidence] if p is not None and p.confidence else None
+
+
+def describe_for_trash(row: OutcomeRecord) -> dict[str, Any]:
+    return {"type": "outcome", "id": str(row.id), "slug": None, "title": row.title,
+            "kind": "outcome"}  # fmt: skip
+
+
+async def trash_outcome(
+    db: AsyncSession, principal: "Principal", outcome_id: uuid.UUID, reason: str | None
+) -> Any:
+    """outcomes-edit (owner, Nov 13): an outcome moves to Settings › Trash (30 days, then
+    gone for good). It leaves every list, count and the track record; Restore there brings
+    it back as it was."""
+    from oracle.trash import service as trash
+    from oracle.trash.models import RETENTION_DAYS, TrashEntry
+
+    row = await get_outcome(db, outcome_id)
+    at = trash.now()
+    entry = TrashEntry(id=uuid.uuid4(), root_type="outcome", root_id=row.id,
+                       root=describe_for_trash(row), items=[], deleted_by=principal.id,
+                       deleted_by_name=await trash._actor_name(db, principal), reason=reason,
+                       published=False,
+                       purge_after=at + timedelta(days=RETENTION_DAYS))  # fmt: skip
+    entry.created_at = at
+    db.add(entry)
+    await db.flush()
+    row.deleted_at, row.deleted_by, row.deleted_reason = at, principal.id, reason
+    row.trash_entry_id = entry.id
+    await audit.record(db, principal, "trash.delete", "outcome_record", row.id,
+                       {"entry_id": str(entry.id), "root": entry.root, "items": [],
+                        "reason": reason})  # fmt: skip
+    await db.flush()
+    return entry
 
 
 async def mark_shipped(

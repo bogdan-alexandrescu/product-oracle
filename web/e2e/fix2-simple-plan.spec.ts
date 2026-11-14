@@ -243,9 +243,8 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
     await page.getByRole("button", { name: "Suggestions for Grow retention" }).click();
     const drawer = page.getByTestId("goal-panel");
     await expect(page.getByTestId("goal-panel-backdrop")).toBeVisible();
-    // build-plan QP3: "Ask in the chat" is the row's plain link, beside its two buttons.
-    await expect(drawer.getByTestId("suggest-from-chat")).toHaveText("Ask in the chat");
-    await expect(drawer.getByTestId("suggest-from-chat")).toHaveClass(/(^| )underline/);
+    // PR9 (Nov 13): the row has no chat link.
+    await expect(drawer.getByTestId("suggest-from-chat")).toHaveCount(0);
     await drawer.getByRole("tab", { name: /Oracle/ }).click();
     const card = drawer.getByTestId("goal-suggestion").first();
     await expect(card.getByTestId("flow-thumb")).toHaveCount(0);

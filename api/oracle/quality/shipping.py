@@ -40,12 +40,18 @@ CAVEAT = (
 def verdict(prediction: dict[str, Any], actual: float | None) -> str:
     """held when the actual reaches the prediction in its direction; partly held when it
     reaches the line (with none: at least half the predicted change); not held otherwise;
-    inconclusive with no value or no numeric prediction."""
+    inconclusive with no value or no numeric prediction. A hold bet (outcomes-edit) is held
+    at or under the prediction, partly held at or under its line (none: never)."""
     want = prediction.get("predicted_value")
     if actual is None or want is None:
         return "inconclusive"
     base = prediction.get("baseline_value")
     way = prediction.get("direction")
+    if way == "hold":
+        line = prediction.get("threshold_value")
+        if actual <= want:
+            return "held"
+        return "partially_held" if line is not None and actual <= line else "not_held"
     if way is None and base is not None and base != want:
         way = "increase" if want > base else "decrease"
     if way is None:

@@ -41,6 +41,8 @@ const KIND_LABEL: Record<string, string> = {
   // port-an-decisions: a meeting's removed agenda item and a request an owner deleted.
   agenda_item: "Agenda item",
   request: "Request",
+  // outcomes-edit: an outcome moved to Trash from Plan › Outcomes.
+  outcome: "Outcome",
 };
 
 export function itemKind(i: TrashItem): string {

@@ -240,6 +240,23 @@ async def _lookups(db: AsyncSession, rows: list[TrackMilestone]) -> dict[uuid.UU
     return out
 
 
+async def _open_asks(db: AsyncSession, ids: list[str]) -> list[SimpleChange]:
+    """The open ``edit_goal_milestone`` proposals of milestones ``ids``, oldest first; within
+    one read every open one, read once (read-speed: the roadmap asks twice)."""
+    q = (
+        select(SimpleChange)
+        .where(SimpleChange.op == "edit_goal_milestone", SimpleChange.status == "proposed")
+        .order_by(SimpleChange.at)
+    )
+    if not drafts.reading():
+        return list(await db.scalars(q.where(SimpleChange.target["milestone_id"].astext.in_(ids))))
+
+    async def load() -> list[SimpleChange]:
+        return list(await db.scalars(q))
+
+    return list(await drafts.once("goal_milestone_asks", load))
+
+
 async def with_asks(
     db: AsyncSession, principal: Any, out: list[SimpleGoalMilestone], w: drafts.Who | None = None
 ) -> None:
@@ -251,17 +268,11 @@ async def with_asks(
     mine = {str(m.id): m for m in out if m.prd is None and m.pending is None}
     if not mine:
         return
-    asks = list(
-        await db.scalars(
-            select(SimpleChange)
-            .where(
-                SimpleChange.op == "edit_goal_milestone",
-                SimpleChange.status == "proposed",
-                SimpleChange.target["milestone_id"].astext.in_(list(mine)),
-            )
-            .order_by(SimpleChange.at)
-        )
-    )
+    asks = [
+        c
+        for c in await _open_asks(db, list(mine))
+        if str((c.target or {}).get("milestone_id")) in mine
+    ]
     if not asks:
         return
     if w is None:
@@ -351,6 +362,7 @@ async def list_for_roadmaps(
                 .on_conflict_do_nothing()
             )
         await db.commit()
+        drafts.forget("milestones")
         rows = await _rows(db, list(docs), fresh=True)
     in_plan = {
         (doc_id, prd.id, m.code)
@@ -403,13 +415,25 @@ async def list_for_roadmaps(
     for m in out:
         m.sub_goal_ids = subs.get(m.id, [])
     # old-milestones: each one brought over from an older roadmap names it (one read).
-    came = (
-        await db.execute(
-            select(TrackMilestone.carried_to_id, Document)
-            .join(Document, Document.id == TrackMilestone.roadmap_id)
-            .where(TrackMilestone.carried_to_id.in_([m.id for m in out]))
-        )
-    ).all()
+    if drafts.reading():
+        # read-speed: from the read's milestones and documents, read once.
+        from oracle.simple.service import all_milestones, documents
+
+        ids = {m.id for m in out}
+        by_id = {d.id: d for d in await documents(db)}
+        came = [
+            (r.carried_to_id, by_id[r.roadmap_id])
+            for r in await all_milestones(db)
+            if r.carried_to_id in ids and r.roadmap_id in by_id
+        ]
+    else:
+        came = (
+            await db.execute(
+                select(TrackMilestone.carried_to_id, Document)
+                .join(Document, Document.id == TrackMilestone.roadmap_id)
+                .where(TrackMilestone.carried_to_id.in_([m.id for m in out]))
+            )
+        ).all()
     from_ = {to: SimpleDocRef(id=d.id, slug=d.slug, title=d.title) for to, d in came}
     for m in out:
         m.carried_from = from_.get(m.id)

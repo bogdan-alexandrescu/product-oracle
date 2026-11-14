@@ -30,6 +30,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
+from oracle.trash.models import Trashable, trashed_index
 from oracle.v2.models import _fk, _json, _lock_version, _texts, _updated_at, _uuids
 
 # H3: "predicted" until the item ships, then "tracking" (on screen: Measuring).
@@ -40,7 +41,8 @@ LEARNING_DIRECTIONS = ("recommend_more", "recommend_less", "note")
 LEARNING_STATUSES = ("active", "retired")
 
 
-class OutcomeRecord(TenantScoped, Base):
+# outcomes-edit (owner, Nov 13): an outcome moves to Trash from Plan › Outcomes.
+class OutcomeRecord(Trashable, TenantScoped, Base):
     __tablename__ = "outcome_records"
     __table_args__ = (
         CheckConstraint(_in("status", OUTCOME_STATUSES), name="status"),
@@ -61,6 +63,7 @@ class OutcomeRecord(TenantScoped, Base):
             "assess_due_on",
             postgresql_where=text("status = 'tracking'"),
         ),
+        trashed_index("outcome_records"),
     )
 
     title: Mapped[str] = mapped_column(Text, nullable=False)

@@ -36,6 +36,10 @@ export interface QualityContext {
   queueReview?: (documentId: string, n: number) => Schemas["LlmJobOut"] | { status: number; detail: string };
   /** A built-in model job by id (the model review's job). */
   job?: (id: string) => Schemas["LlmJobOut"] | undefined;
+  /** outcomes-edit (quality.outcomes.trash_outcome): the removed row waits in a Trash entry. */
+  trash?: (row: Outcome, reason: string | null) => Schemas["TrashEntryOut"];
+  /** Whether a baseline entity is a goal (quality.outcomes._entity). */
+  isGoal?: (id: string) => boolean;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -134,12 +138,18 @@ export function stateOf(o: Outcome): "predicted" | "tracking" | "due" | "assesse
 }
 
 /** The API's PredictionIn check, in its words. */
+/** As oracle.priorities.scoring.CONFIDENCE_WORDS: a prediction's Confidence as a figure. */
+const CONFIDENCE_WORDS = { high: 0.8, medium: 0.5, low: 0.3 } as const;
+
 function predictionProblem(p: Prediction): string | null {
   const base = p.baseline_value, want = p.predicted_value, line = p.threshold_value;
+  // outcomes-edit: a hold bet's partly-held line is at or above the level to stay under.
+  if (p.direction === "hold")
+    return want != null && line != null && line < want ? "a hold prediction's partly-held line is at or above the prediction" : null;
   if (base == null || want == null) return null;
-  if (!p.direction) return "say which way the prediction goes: increase or decrease";
+  if (!p.direction) return "say which way the prediction goes: increase, decrease or hold";
   if ((want - base) * (p.direction === "increase" ? 1 : -1) <= 0)
-    return `an ${p.direction} prediction must be ${p.direction === "increase" ? "above" : "below"} its baseline`;
+    return p.direction === "increase" ? "an increase prediction must be above its baseline" : "a decrease prediction must be below its baseline";
   if (line != null && !(Math.min(base, want) <= line && line <= Math.max(base, want)))
     return "the partly-held line lies between the baseline and the prediction";
   return null;
@@ -369,6 +379,9 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 const fail = (status: number, detail: string) => json(status, { detail });
+/** A PredictionIn refusal as the API answers it: FastAPI's 422 list with the value error's words. */
+const invalid = (msg: string) =>
+  json(422, { detail: [{ type: "value_error", loc: ["body", "prediction"], msg: `Value error, ${msg}`, input: null, ctx: { error: {} } }] });
 
 function uuid(): string {
   return crypto.randomUUID();
@@ -724,6 +737,8 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
     if (m === "POST" && !p[2]) {
       const data = await body<Schemas["OutcomeCreate"]>();
       if (!data?.goal_id || !data.prediction) return fail(422, "goal_id and prediction are required");
+      const problem = predictionProblem(data.prediction);
+      if (problem) return invalid(problem);
       if (data.roadmap_item_id && ctx.db.outcomes.some((x) => x.roadmap_item_id === data.roadmap_item_id))
         return fail(409, "That roadmap item already has an outcome record");
       const now = new Date().toISOString();
@@ -735,6 +750,7 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
         prediction: { baseline: null, threshold: null, by: null, ...data.prediction },
         module_keys: data.module_keys ?? [], gap_categories: data.gap_categories ?? [], status: "tracking", observed: null,
         needs_prediction: data.prediction.predicted_value == null && !!data.roadmap_item_id,
+        confidence_at_prediction: data.prediction.confidence ? CONFIDENCE_WORDS[data.prediction.confidence] : null,
         assessments: [], owner_id: data.owner_id ?? ctx.userId, created_by: ctx.userId, assessed_at: null, lock_version: 1,
         created_at: now, updated_at: now,
       };
@@ -749,13 +765,27 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
       if (data.prediction) {
         if (o.status !== "predicted") return fail(409, "Shipped: the prediction is frozen");
         const problem = predictionProblem(data.prediction);
-        if (problem) return fail(422, problem);
+        if (problem) return invalid(problem);
         o.prediction = { baseline: null, threshold: null, by: null, ...data.prediction };
         o.needs_prediction = data.prediction.predicted_value == null;
+        // outcomes-edit: a Confidence picked sets the confidence at prediction (High 0.8, Medium 0.5, Low 0.3).
+        if (data.prediction.confidence) o.confidence_at_prediction = CONFIDENCE_WORDS[data.prediction.confidence];
       }
       if (data.owner_id) o.owner_id = data.owner_id;
+      // outcomes-edit: another goal, in any state; the prediction stays as written.
+      if (data.goal_id && data.goal_id !== o.goal_id) {
+        if (!ctx.isGoal?.(data.goal_id)) return fail(422, `goal_id ${data.goal_id} is not a goal`);
+        o.goal_id = data.goal_id;
+      }
       Object.assign(o, { updated_at: new Date().toISOString(), lock_version: o.lock_version + 1 });
       return json(200, o);
+    }
+    // outcomes-edit (owner, Nov 13): Move to Trash; Settings › Trash restores it.
+    if (m === "DELETE" && p[2] && !p[3]) {
+      const at = ctx.db.outcomes.findIndex((x) => x.id === p[2]);
+      if (at < 0 || !ctx.trash) return fail(404, "Outcome not found");
+      const [row] = ctx.db.outcomes.splice(at, 1);
+      return json(200, ctx.trash(row, q.get("reason")));
     }
     if (m === "POST" && p[2] && p[3] === "shipped") {
       const o = ctx.db.outcomes.find((x) => x.id === p[2]);

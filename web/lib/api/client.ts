@@ -118,6 +118,17 @@ function retryAfter(response: Response): number | undefined {
 
 type Result<T> = { data?: T; error?: unknown; response: Response };
 
+/** outcomes-edit: FastAPI's 422 list says a model's own refusal as a value error ("Value error,
+ * a decrease prediction must be below its baseline"): its words, as a sentence; null for none. */
+function valueError(detail: unknown): string | null {
+  const said = Array.isArray(detail)
+    ? detail.find((e) => e && typeof e === "object" && e.type === "value_error" && typeof e.msg === "string")?.msg
+    : undefined;
+  const text = typeof said === "string" ? said.replace(/^Value error, /, "").trim() : "";
+  if (!text) return null;
+  return `${text[0].toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? "" : "."}`;
+}
+
 /** Returns the data of an openapi-fetch result or throws an ApiError. */
 export async function unwrap<T>(call: Promise<Result<T>>): Promise<T> {
   const { data, error, response } = await call;
@@ -137,7 +148,7 @@ export async function unwrap<T>(call: Promise<Result<T>>): Promise<T> {
   const detail =
     error && typeof error === "object" && "detail" in error && typeof error.detail === "string"
       ? error.detail
-      : (said ?? "");
+      : (said ?? valueError(inner) ?? "");
   throw new ApiError(response.status, describeStatus(response.status, detail), undefined, retryAfter(response), importFixes(error));
 }
 

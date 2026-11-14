@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState, useSyncExternalStore } from "react";
 
+import { DeleteMenu } from "@/components/ArtifactMenu";
 import { Button, Chip, type ChipKind, type Column, confirmInPage, DataTable, FilterChips, InfoTip, Inspector, InspectorRow, InspectorSection, Notice, Page, PageHeader, PageSkeleton, Panel, Sheet, Split } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -81,10 +82,16 @@ function stateOf(o: Outcome): State {
 const figure = (v: number | null | undefined, unit?: string | null) =>
   v == null ? null : `${v}${unit === "%" ? "%" : unit ? ` ${unit}` : ""}`;
 
+/** The predicted level: "at most 0 restrictions" for a hold bet (outcomes-edit). */
+const target = (p: Prediction) => {
+  const to = figure(p.predicted_value, p.unit) ?? p.predicted;
+  return p.direction === "hold" ? `at most ${to}` : to;
+};
+
 /** "38% → 42% by Dec 31", from the typed figures when there are any; `by: false` leaves the date out. */
 function predicted(p: Prediction, by = true): string {
   const from = figure(p.baseline_value, p.unit) ?? p.baseline;
-  const to = figure(p.predicted_value, p.unit) ?? p.predicted;
+  const to = target(p);
   return `${from ? `${from} → ` : ""}${to}${by && p.by ? ` by ${formatDate(p.by)}` : ""}`;
 }
 
@@ -256,6 +263,7 @@ function Outcomes() {
       key={`${active.id}-${active.lock_version}-${active.status}-${active.assessments.length}`}
       o={active}
       goal={goals.get(active.goal_id) ?? "its goal"}
+      goals={(goalsQ.data ?? []).filter((g) => g.status !== "rejected")}
       counted={counted.get(active.goal_id) ?? null}
       canApprove={canApprove}
       onChanged={async () => {
@@ -421,6 +429,10 @@ function Outcomes() {
 }
 
 const num = (s: string) => (s.trim() === "" ? null : Number(s));
+type Direction = NonNullable<Prediction["direction"]>;
+type Confidence = NonNullable<Prediction["confidence"]>;
+const CONFIDENCES: Confidence[] = ["low", "medium", "high"];
+const CONFIDENCE_LABEL: Record<Confidence, string> = { low: "Low", medium: "Medium", high: "High" };
 
 function PredictionForm({
   o,
@@ -437,7 +449,9 @@ function PredictionForm({
   const [line, setLine] = useState(p.threshold_value?.toString() ?? "");
   const [unit, setUnit] = useState(p.unit ?? "");
   const [by, setBy] = useState(p.by ?? "");
-  const [direction, setDirection] = useState<"increase" | "decrease">(
+  const [confidence, setConfidence] = useState<Confidence | "">(p.confidence ?? "");
+  const [why, setWhy] = useState(p.why ?? "");
+  const [direction, setDirection] = useState<Direction>(
     p.direction ?? "increase",
   );
   const field =
@@ -474,6 +488,8 @@ function PredictionForm({
       unit: u,
       direction,
       by: by || null,
+      confidence: confidence || null,
+      why: why.trim() || null,
       baseline: shown(b) ?? p.baseline ?? null,
       predicted: shown(w) ?? p.predicted,
       threshold: shown(t),
@@ -497,15 +513,39 @@ function PredictionForm({
         <select
           className={field}
           value={direction}
-          onChange={(e) =>
-            setDirection(e.target.value as "increase" | "decrease")
-          }
+          onChange={(e) => setDirection(e.target.value as Direction)}
         >
           <option value="increase">Up</option>
           <option value="decrease">Down</option>
+          <option value="hold">Hold at most</option>
         </select>
       </label>
       {input("By", by, setBy, "date")}
+      {/* outcomes-edit: how sure, and why in one line; Confidence feeds the track record. */}
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="text-text2">Confidence</span>
+        <select
+          className={field}
+          value={confidence}
+          onChange={(e) => setConfidence(e.target.value as Confidence | "")}
+        >
+          <option value="">—</option>
+          {CONFIDENCES.map((c) => (
+            <option key={c} value={c}>
+              {CONFIDENCE_LABEL[c]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="col-span-2 flex flex-col gap-1 text-sm">
+        <span className="text-text2">Why</span>
+        <input
+          className={field}
+          maxLength={300}
+          value={why}
+          onChange={(e) => setWhy(e.target.value)}
+        />
+      </label>
       <div className="col-span-2">
         <Button type="submit" variant="primary" disabled={busy}>
           Save prediction
@@ -632,12 +672,15 @@ function AssessmentForm({
 function OutcomeInspector({
   o,
   goal,
+  goals,
   counted,
   canApprove,
   onChanged,
 }: {
   o: Outcome;
   goal: string;
+  /** The company goals the outcome can be moved to (outcomes-edit, owner Nov 13). */
+  goals: { id: string; title: string }[];
   counted: number | null;
   canApprove: boolean;
   onChanged: () => Promise<void>;
@@ -702,6 +745,32 @@ function OutcomeInspector({
       label={`Outcome ${o.title}`}
       testId="outcome-inspector"
       chips={<StateChip o={o} hero />}
+      // outcomes-edit (owner, Nov 13): Delete… moves it to Settings › Trash, which restores it.
+      action={
+        <DeleteMenu
+          title={o.title}
+          op="delete_outcome"
+          dependents={async () => ({
+            root: { type: "outcome", id: o.id, title: o.title, kind: "outcome" },
+            items: [],
+            published: false,
+            working_runs: [],
+            feeds: [],
+            feeds_going: [],
+          })}
+          remove={(query) =>
+            unwrap(
+              api.DELETE("/v1/outcomes/{outcome_id}", {
+                params: { path: { outcome_id: o.id }, query: { reason: query.reason } },
+              }),
+            )
+          }
+          onDeleted={() => {
+            invalidateWaiting();
+            void onChanged().then(waitingChanged);
+          }}
+        />
+      }
     >
       {error && (
         <InspectorSection>
@@ -712,10 +781,42 @@ function OutcomeInspector({
         <p className="tnum text-sm">
           {/* qa4-plan-48: an unknown starting value said in words, never a bare "?". */}
           Predicted {figure(p.baseline_value, p.unit) ?? p.baseline ?? "from today's value (not measured yet)"} →{" "}
-          {figure(p.predicted_value, p.unit) ?? p.predicted}
+          {target(p)}
           {now ? ` · Now ${now}` : ""}
         </p>
-        <InspectorRow value={<span className="text-text2">{goal}</span>}>
+        <InspectorRow
+          value={
+            canApprove && goals.some((g) => g.id === o.goal_id) ? (
+              // outcomes-edit: another company goal; the prediction stays as written.
+              <select
+                aria-label="Goal"
+                className="h-8 max-w-full rounded-lg border border-line-strong bg-surface px-2 text-sm"
+                value={o.goal_id}
+                disabled={busy}
+                data-testid="outcome-goal"
+                onChange={(e) => {
+                  const goal_id = e.target.value;
+                  void act(() =>
+                    unwrap(
+                      api.PATCH("/v1/outcomes/{outcome_id}", {
+                        ...path,
+                        body: { goal_id, lock_version: o.lock_version },
+                      }),
+                    ),
+                  );
+                }}
+              >
+                {goals.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.title}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-text2">{goal}</span>
+            )
+          }
+        >
           Goal
         </InspectorRow>
         <InspectorRow value={<span className="text-text2">{p.metric}</span>}>
@@ -735,6 +836,24 @@ function OutcomeInspector({
             value={<span className="tnum">{formatDate(p.by)}</span>}
           >
             By
+          </InspectorRow>
+        )}
+        {p.confidence && (
+          <InspectorRow
+            value={<span data-testid="outcome-confidence">{CONFIDENCE_LABEL[p.confidence]}</span>}
+          >
+            Confidence
+          </InspectorRow>
+        )}
+        {p.why && (
+          <InspectorRow
+            value={
+              <span className="text-text2" data-testid="outcome-why" data-user-content>
+                {p.why}
+              </span>
+            }
+          >
+            Why
           </InspectorRow>
         )}
         {canApprove &&

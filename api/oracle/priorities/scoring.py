@@ -302,9 +302,6 @@ def score_feature(f: FeatureInput, method: str) -> Scored:
         )
     if method == "goal_weighted":
         effort = need("effort", "effort", "effort_weeks", positive=True)
-        goals_give = (
-            " + ".join(f"{t['weight']}×{t['contribution']} ({t['goal']})" for t in terms) or "0"
-        ) + f" = {_round(value)}"
         estimate = estimated_goal_value(f)
         if estimate is not None:
             # S6: a person's estimate of the goal value replaces the goals' sum.
@@ -315,6 +312,9 @@ def score_feature(f: FeatureInput, method: str) -> Scored:
             value = estimate
         else:
             inputs["goal_value"] = {"value": _round(value), "terms": terms}
+            goals_give = (
+                " + ".join(f"{t['weight']}×{t['contribution']} ({t['goal']})" for t in terms) or "0"
+            ) + f" = {_round(value)}"
             steps.append(f"goal value = {goals_give}")
         if effort is not None:
             score = value * confidence / effort
@@ -570,16 +570,20 @@ def apply_overrides(result: dict[str, Any], overrides: list[OverrideIn]) -> dict
 
     held: dict[str, str] = {}
     # Each move puts a feature below what it needs; a chain settles in at most n passes.
+    # read-speed: places come from a map, built again only after a move (no list scan per
+    # feature), and a feature with no prerequisite is never looked at.
+    needs = {k: p for k in order if (p := prerequisites(k))}
     for _ in range(len(order) + 1):
         moved = False
-        for k in list(order):
-            at = order.index(k)
-            below = [d for d in prerequisites(k) if order.index(d) > at]
+        at = {k: n for n, k in enumerate(order)}
+        for k in [k for k in order if k in needs]:
+            below = [d for d in needs[k] if at[d] > at[k]]
             if not below:
                 continue
-            lowest = max(below, key=order.index)
+            lowest = max(below, key=at.__getitem__)
             order.remove(k)
             order.insert(order.index(lowest) + 1, k)
+            at = {k: n for n, k in enumerate(order)}
             held[k] = lowest
             moved = True
         if not moved:
