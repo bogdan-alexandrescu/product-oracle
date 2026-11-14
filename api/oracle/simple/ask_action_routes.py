@@ -248,7 +248,9 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "take_code_back",
         "tidy_up",
         "unlink_prd_feature",
-        # Train BP's Ground Truth repair: a feature keyed by the next number uses its own code.
+        # Train BP's Ground Truth repair: a feature keyed by the next number uses its own code,
+        # and Its own feature (train BU): not offered until allowed by name.
+        "add_own_feature",
         "use_own_code",
         # Port AN 5's routes (the one waiting list, Simple's one-pager list): not offered until
         # allowed by name.

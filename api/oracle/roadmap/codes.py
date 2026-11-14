@@ -72,9 +72,25 @@ def named(row: Any, by_feature: dict[uuid.UUID, str]) -> str:
 def feature_reads() -> tuple[Any, Any]:
     """The two reads every feature's code comes from: the features, oldest first, and the PRD
     sections their published items came from (Priorities' _short_codes reads them too)."""
+    from sqlalchemy import Text, cast, func
+
+    from oracle.baseline.fixes import DECLINED
     from oracle.baseline.models import Entity
     from oracle.roadmap.models import RoadmapItem
 
+    # An item that declined its feature (Its own feature, oracle.baseline.fixes.own_feature)
+    # gives that feature no code, though its published row still names it.
+    mark = func.concat(cast(RoadmapItem.roadmap_document_id, Text), "/", RoadmapItem.item_key)
+    declined = (
+        select(Entity.id)
+        .where(
+            Entity.id == RoadmapItem.feature_id,
+            Entity.attrs.op("->")(DECLINED).op("@>", is_comparison=True)(
+                func.jsonb_build_array(mark)
+            ),
+        )
+        .exists()
+    )
     features = (
         select(Entity.id, Entity.key, Entity.title)
         .where(Entity.type == "feature")
@@ -87,6 +103,7 @@ def feature_reads() -> tuple[Any, Any]:
             RoadmapItem.prd_section_key.is_not(None),
             # Published roadmaps only: a draft's code is not every reader's.
             RoadmapItem.roadmap_version_id.is_not(None),
+            ~declined,
         )
         .order_by(RoadmapItem.created_at)
     )

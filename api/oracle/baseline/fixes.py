@@ -551,6 +551,124 @@ async def linked_codes(db: AsyncSession, links: dict[str, str] | None) -> dict[s
     return out
 
 
+# --------------------------------------------------------------------------- its own feature
+
+# A feature's marks of the roadmap items whose match to it a person declined (Its own feature)
+# or that still wait for their own Confirm it (a proposal shared by several items, confirmed from
+# one item's flag): ``"<roadmap id>/<item key>"``, so a mark holds across the roadmap's versions.
+DECLINED, UNCONFIRMED = "_declined_items", "_unconfirmed_items"
+
+
+def item_mark(row: Any) -> str:
+    return f"{row.roadmap_document_id}/{row.item_key}"
+
+
+def marked(feature: Entity, kind: str, row: Any) -> bool:
+    return item_mark(row) in ((feature.attrs or {}).get(kind) or [])
+
+
+def _mark(feature: Entity, kind: str, mark: str, on: bool) -> None:
+    attrs = dict(feature.attrs or {})
+    marks = [m for m in attrs.pop(kind, None) or [] if m != mark] + ([mark] if on else [])
+    feature.attrs = {**attrs, kind: marks} if marks else attrs
+
+
+async def confirmed_for(
+    db: AsyncSession, feature: Entity, item_id: uuid.UUID, joined: bool
+) -> None:
+    """Confirm it from one roadmap item's flag (the owner, Nov 13): that item is in the Ground
+    Truth. When the feature ``joined`` now, the other items on it (a proposal several items
+    shared) each wait for their own Confirm it; else the item no longer waits."""
+    from oracle.baseline import check
+    from oracle.simple import drafts
+
+    row = await db.get(RoadmapItem, item_id)
+    if row is None or feature.type != "feature":
+        raise NotFoundError("No such roadmap item")
+    _mark(feature, UNCONFIRMED, item_mark(row), False)
+    _mark(feature, DECLINED, item_mark(row), False)
+    if joined:
+        items, _ = await check._roadmap_items(db)
+        effective = await drafts.effective(db, items)
+        for i in items:
+            if effective[str(i.id)].feature_id == feature.id and item_mark(i) != item_mark(row):
+                _mark(feature, UNCONFIRMED, item_mark(i), True)
+    await db.flush()
+
+
+async def _slug_key(db: AsyncSession, name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:60] or "feature"
+    keys = set(await db.scalars(select(Entity.key).where(Entity.key.startswith(slug))))
+    key, n = slug, 2
+    while key in keys:
+        key, n = f"{slug}-{n}", n + 1
+    return key
+
+
+async def own_feature(db: AsyncSession, principal: Any, item_id: uuid.UUID) -> Entity:
+    """Its own feature (the owner, Nov 13): a roadmap item joins the Ground Truth as a feature of
+    its own, named as the item, keyed by the code the item or its PRD gives it when no feature
+    has it, else the next free code, and becomes the item's feature (a set_feature change, as
+    Add to Ground Truth). The feature it was matched to (a proposal, maybe shared with other
+    items) is declined for this item: never offered to it again. An entry of the item's name
+    is reused, confirmed if it was only proposed, never a second entry of that name."""
+    from oracle import audit
+    from oracle.baseline import check
+    from oracle.baseline.service import create_entity, link_new_feature, set_entity_status
+    from oracle.roadmap.codes import title_code
+    from oracle.simple import drafts
+    from oracle.simple.service import coded_title
+
+    row = await db.get(RoadmapItem, item_id)
+    if row is None:
+        raise NotFoundError("No such roadmap item")
+    writer = Writer(principal, "user", reason="Ground Truth fix: own_feature")
+    mark = item_mark(row)
+    was_id = (await drafts.effective_row(db, row)).feature_id
+    was = await db.get(Entity, was_id) if was_id is not None else None
+    code = check.whole_code(row.prd_section_key) or check.whole_code(title_code(row.title))
+    name = coded_title(row.title, None)[1].strip() or row.title
+    same = (
+        await db.scalars(
+            select(Entity)
+            .where(
+                Entity.type == "feature",
+                Entity.status != "rejected",
+                func.lower(func.btrim(Entity.title)) == name.lower(),
+            )
+            .order_by((Entity.status == "confirmed").desc(), Entity.created_at)
+            .limit(1)
+        )
+    ).first()
+    declined = was is not None and was.type == "feature" and was is not same
+    if declined:
+        _mark(was, DECLINED, mark, True)  # type: ignore[arg-type]
+        _mark(was, UNCONFIRMED, mark, False)  # type: ignore[arg-type]
+        await db.flush()
+    free = code is not None and not await code_taken(db, code)
+    if same is not None:
+        feature = same
+        _mark(feature, DECLINED, mark, False)
+        _mark(feature, UNCONFIRMED, mark, False)
+        if feature.status != "confirmed":
+            if free and not check.whole_code((feature.attrs or {}).get("code")):
+                feature.attrs = {**(feature.attrs or {}), "code": code}
+            await set_entity_status(db, principal, feature, "confirmed", None)
+    else:
+        key = code if free else await _slug_key(db, name)
+        made = await create_entity(db, writer, type_="feature", key=key, title=name,  # type: ignore[arg-type]
+                                   status="confirmed")  # fmt: skip
+        feature = made.entity  # type: ignore[assignment]
+    if was_id != feature.id:
+        await link_new_feature(db, writer, feature, None, row.id)
+    await audit.record(db, principal, "baseline.item.own_feature", "roadmap_item", row.id, {
+        "feature_id": str(feature.id), "reused": same is not None,
+        "declined": str(was_id) if declined else None,
+    })  # fmt: skip
+    await db.flush()
+    return feature
+
+
 # --------------------------------------------------------------------------- proposals
 
 

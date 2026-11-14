@@ -390,10 +390,23 @@ async def run(db: AsyncSession) -> GroundTruthOut:
         code = slice_of[i.id][0] if i.id in slice_of else _code(i.prd_section_key)
         return GroundTruthRef(id=i.id, code=code, name=i.title)
 
+    # Its own feature (oracle.baseline.fixes.own_feature): a match a person declined for the
+    # item is no feature of it. A proposal several items shared, confirmed from one item's
+    # flag, leaves each other item waiting for its own Confirm it (the owner, Nov 13).
+    from oracle.baseline.fixes import DECLINED, UNCONFIRMED, marked
+
+    own_of: dict[uuid.UUID, Entity | None] = {}
+    waiting: set[uuid.UUID] = set()
+    for i in items:
+        e = by_id.get(feature_of[i.id]) if feature_of[i.id] is not None else None  # type: ignore[arg-type]
+        own_of[i.id] = None if e is not None and marked(e, DECLINED, i) else e
+        if e is not None and e.id in truth_ids and marked(e, UNCONFIRMED, i):
+            waiting.add(i.id)
+
     # The feature of each item linked to none, by code: its own (F-02) or its slice's (F-15).
     by_code: dict[uuid.UUID, Entity] = {}
     for i in items:
-        if by_id.get(feature_of[i.id]) is None:  # type: ignore[arg-type]
+        if own_of[i.id] is None:
             parent = slice_of[i.id][1] if i.id in slice_of else None
             for code in (item_ref(i).code, parent):
                 if code in truth_of or (i.prd_document_id, code) in linked:
@@ -401,9 +414,9 @@ async def run(db: AsyncSession) -> GroundTruthOut:
                     break
 
     for i in items:
-        if feature_of[i.id] in truth_ids or i.id in by_code:
+        own = own_of[i.id]
+        if (own is not None and own.id in truth_ids and i.id not in waiting) or i.id in by_code:
             continue
-        own = by_id.get(feature_of[i.id]) if feature_of[i.id] is not None else None
         target = str(i.id)
         parent = slice_of[i.id][1] if i.id in slice_of else None
         if (
@@ -422,7 +435,7 @@ async def run(db: AsyncSession) -> GroundTruthOut:
         # Linked to a feature a run proposed: an approver confirms it (the owner, Nov 5).
         first = (
             ("confirm_feature", str(own.id))
-            if own is not None and own.status == "proposed"
+            if own is not None and (own.status == "proposed" or i.id in waiting)
             else ("add_to_ground_truth", target)
         )
         flag(

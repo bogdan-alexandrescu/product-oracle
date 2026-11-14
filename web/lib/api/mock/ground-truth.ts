@@ -30,6 +30,8 @@ import { closed, roadmapId, type SimpleDb } from "./simple-roadmap";
 
 export const GROUND_TRUTH_FLAGS_SCENARIO = "ground-truth-flags";
 export const GROUND_TRUTH_CONFIRM_SCENARIO = "ground-truth-confirm";
+/** ground-truth-confirm plus Community alerts, a run's proposal two roadmap items share (Chat alerts, PRD section f-140, and Forum alerts). */
+export const GROUND_TRUTH_SHARED_SCENARIO = "ground-truth-shared";
 
 type Kind = Schemas["GroundTruthFlag"]["kind"];
 type Action = Schemas["GroundTruthFix"]["action"];
@@ -180,6 +182,52 @@ export function seedGroundTruthConfirm(baseline: BaselineState, simple: SimpleDb
   simple.ids[CONFIRM_ITEM] = stableUuid(`simple-item/${CONFIRM_ITEM}`);
 }
 
+/** The ground-truth-shared scenario's roadmap items, both on the proposed Community alerts. */
+const SHARED_ITEMS = ["gt-chat-alerts", "gt-forum-alerts"];
+
+/** The ground-truth-shared scenario on top of ground-truth-confirm: Community alerts, a run's proposal shared by Chat alerts and Forum alerts. */
+export function seedGroundTruthShared(baseline: BaselineState, simple: SimpleDb): void {
+  seedGroundTruthConfirm(baseline, simple);
+  const template = baseline.entities.find((e) => e.type === "feature")!;
+  const id = featureId("community-alerts");
+  baseline.entities.push({ ...template, id, key: "community-alerts", title: "Community alerts", body: null, attrs: {}, parent_id: null, locked: false, locked_by: null, locked_at: null, status: "proposed", origin: "agent" });
+  for (const [key, title, section] of [[SHARED_ITEMS[0], "Chat alerts", "f-140"], [SHARED_ITEMS[1], "Forum alerts", undefined]] as const) {
+    simple.items.push({ key, title, horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft: true, feature_id: id, ...(section ? { section } : {}) });
+    simple.ids[key] = stableUuid(`simple-item/${key}`);
+  }
+}
+
+/**
+ * A feature's marks of roadmap items (fixes.py DECLINED, UNCONFIRMED): items whose match to it a person
+ * declined (Its own feature), and items still waiting for their own Confirm it on a proposal they shared.
+ */
+export const DECLINED = "_declined_items";
+export const UNCONFIRMED = "_unconfirmed_items";
+type MockItem = SimpleDb["items"][number];
+const markOf = (s: Pick<MockItem, "roadmap" | "key">) => `${s.roadmap}/${s.key}`;
+const marked = (e: Entity, kind: string, s: MockItem) => ((e.attrs?.[kind] as string[] | undefined) ?? []).includes(markOf(s));
+export function mark(e: Entity, kind: string, s: MockItem, on: boolean): void {
+  const { [kind]: had, ...rest } = (e.attrs ?? {}) as Record<string, unknown>;
+  const marks = [...((had as string[] | undefined) ?? []).filter((m) => m !== markOf(s)), ...(on ? [markOf(s)] : [])];
+  e.attrs = marks.length ? { ...rest, [kind]: marks } : rest;
+}
+
+/** The scenario's roadmap item by its id. */
+export const itemById = (simple: SimpleDb | undefined, id: string) => {
+  const key = simple ? Object.keys(simple.ids).find((k) => simple.ids[k] === id) : undefined;
+  return key ? simple!.items.find((x) => x.key === key) : undefined;
+};
+
+/** fixes.confirmed_for: Confirm it from one item's flag; when the feature joined now, each other item on it waits for its own. */
+export function confirmedFor(simple: SimpleDb | undefined, e: Entity, itemId: string, joined: boolean): void {
+  const it = itemById(simple, itemId);
+  if (!it || e.type !== "feature") return;
+  mark(e, UNCONFIRMED, it, false);
+  mark(e, DECLINED, it, false);
+  if (!joined) return;
+  for (const x of simple!.items) if (x !== it && !closed(x) && !x.trashed && (x.linked_feature ?? x.feature_id) === e.id) mark(e, UNCONFIRMED, x, true);
+}
+
 /** check.tied_codes: the codes of the scenario's roadmap items and the PRD features (Link to a feature) linked to a feature (a slice's letter dropped). */
 export function tiedCodes(simple: SimpleDb | undefined, feature: string, baseline?: BaselineState): string[] {
   const items = (simple?.items ?? []).filter((x) => (x.linked_feature ?? x.feature_id) === feature && !closed(x) && !x.trashed).flatMap((x) => wholeCode(x.section) ?? []);
@@ -255,7 +303,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: 
   const both = { roadmap: ROADMAP, prd: PRD };
   const out: Flag[] = [];
   const ids: Record<string, string> = simple?.ids ?? {};
-  const items = [...ITEMS.map(([key]) => key), CONFIRM_ITEM, SOUNDS_ITEM].map((key) => simple?.items.find((x) => x.key === key)).filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
+  const items = [...ITEMS.map(([key]) => key), CONFIRM_ITEM, SOUNDS_ITEM, ...SHARED_ITEMS].map((key) => simple?.items.find((x) => x.key === key)).filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
   // The Ground Truth by code (F-12, a slice F-12a), as check.py's truth_of.
   const truthOf = new Map(truth.filter((e) => F_CODE.test(e.key)).map((e) => [e.key, e]));
   // Link to a feature: a PRD feature linked to a Ground Truth feature is that feature.
@@ -293,9 +341,12 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: 
     return undefined;
   };
   for (const s of items) {
-    const linked = byId.get(s.linked_feature ?? s.feature_id ?? "");
-    // Its feature as the roadmap's working draft has it (a set_feature change: Add or Link).
-    if (linked?.status === "confirmed" || (!linked && byCode(s))) continue;
+    const was = byId.get(s.linked_feature ?? s.feature_id ?? "");
+    // Its feature as the roadmap's working draft has it (a set_feature change: Add or Link); a match the
+    // item declined is none, and an item on a shared proposal confirmed from another item's flag waits.
+    const linked = was && marked(was, DECLINED, s) ? undefined : was;
+    const waits = linked?.status === "confirmed" && marked(linked, UNCONFIRMED, s);
+    if ((linked?.status === "confirmed" && !waits) || (!linked && byCode(s))) continue;
     const id = ids[s.key];
     const [code, parent] = codeOf(s);
     const item = { id, code, name: s.title };
@@ -304,7 +355,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: 
       continue;
     }
     out.push(
-      flag("unlinked_item", [linked?.status === "proposed" ? ["confirm_feature", linked.id] : ["add_to_ground_truth", id], ["link_to_feature", id]], {
+      flag("unlinked_item", [linked && (linked.status === "proposed" || waits) ? ["confirm_feature", linked.id] : ["add_to_ground_truth", id], ["link_to_feature", id]], {
         item,
         feature: linked ? ref(linked) : null,
         where: both,
@@ -360,7 +411,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb | undefined, seeded: 
 /** GroundTruthOut for the scenario: its flags in CHECK_KINDS' order, their counts per kind (zero included) and the total. */
 export function groundTruthCheck(scenario: string | null, baseline: BaselineState, simple: SimpleDb | undefined): Schemas["GroundTruthOut"] {
   // Every scenario: the check reads the mock's own state (the scenario's PRD only where it is seeded).
-  const found = flagsOf(baseline, simple, (scenario === GROUND_TRUTH_FLAGS_SCENARIO || scenario === GROUND_TRUTH_CONFIRM_SCENARIO) && !!simple);
+  const found = flagsOf(baseline, simple, (scenario === GROUND_TRUTH_FLAGS_SCENARIO || scenario === GROUND_TRUTH_CONFIRM_SCENARIO || scenario === GROUND_TRUTH_SHARED_SCENARIO) && !!simple);
   const flags = CHECK_KINDS.flatMap((k) => found.filter((f) => f.kind === k));
   const counts = Object.fromEntries(CHECK_KINDS.map((k) => [k, flags.filter((f) => f.kind === k).length]));
   return { flags, counts, total: flags.length };

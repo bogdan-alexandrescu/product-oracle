@@ -214,7 +214,10 @@ export function GroundTruthFlags({
 
   const confirm = (flag: Flag, target: string) =>
     act(async () => {
-      const e = await unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", { params: { path: { entity_id: target } } }));
+      // From a roadmap item's flag, for that item only: other items on a proposal it shares stay flagged until each is confirmed.
+      const item = flag.kind === "unlinked_item" ? flag.item?.id : undefined;
+      const query = item ? { item_id: item } : undefined;
+      const e = await unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", { params: { path: { entity_id: target }, query } }));
       return { text: `Confirmed “${flag.feature?.name ?? subject(flag).name}”${asCode(e)}.` };
     });
 
@@ -261,6 +264,14 @@ export function GroundTruthFlags({
         text: `Linked “${name}” to “${feature.title}”.`,
         undo: () => unwrap(api.DELETE("/v1/baseline/prd-links", { params: { query: { prd_document_id: prd, code } } })),
       };
+    });
+
+  /** Its own feature: a roadmap item matched to a proposed feature joins the Ground Truth as a feature of its own, declining the match. */
+  const ownFeature = (flag: Flag) =>
+    act(async () => {
+      const out = await unwrap(api.POST("/v1/baseline/roadmap-items/{item_id}/own-feature", { params: { path: { item_id: flag.item!.id! } } }));
+      const name = out.feature?.name ?? subject(flag).name;
+      return { text: `Added “${name}” to the Ground Truth${out.code ? ` as ${out.code}` : ""}.` };
     });
 
   /** Link to a feature: the item's own feature, a change in its roadmap's working draft (a published item too). */
@@ -427,6 +438,11 @@ export function GroundTruthFlags({
           graph={graph}
           busy={busy}
           onClose={() => setPicking(null)}
+          onOwn={
+            canWrite && picking.what === "feature" && picking.flag.kind === "unlinked_item" && picking.flag.item?.id && picking.flag.fixes.some((x) => x.action === "confirm_feature")
+              ? () => void ownFeature(picking.flag)
+              : undefined
+          }
           onFeature={(feature) => {
             const t = picking.flag.fixes.find((x) => x.action === "link_to_feature")!.target;
             if (itemOf(picking.flag) === t) void pickFeature(picking.flag, feature);
@@ -442,12 +458,13 @@ export function GroundTruthFlags({
   );
 }
 
-/** Link to a feature: the Ground Truth's features by code and name; Pick a goal: its goals. */
+/** Link to a feature: the Ground Truth's features by code and name, first Its own feature for an item on a proposed match; Pick a goal: its goals. */
 function Picker({
   picking,
   graph,
   busy,
   onClose,
+  onOwn,
   onFeature,
   onGoal,
 }: {
@@ -455,6 +472,8 @@ function Picker({
   graph: GraphOut | undefined;
   busy: boolean;
   onClose: () => void;
+  /** Its own feature: the item joins the Ground Truth as a feature of its own (approvers, an item on a proposed match). */
+  onOwn?: () => void;
   onFeature: (f: { id: string; title: string }) => void;
   onGoal: (g: { id: string; name: string }) => void;
 }) {
@@ -484,6 +503,19 @@ function Picker({
         className="mb-2 h-10 w-full rounded-md border border-line-strong bg-surface px-3 text-[14px] text-text"
       />
       <ul className="flex flex-col gap-1">
+        {onOwn && (
+          <li>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onOwn}
+              data-testid="gt-own-feature"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[14px] text-accent-ink hover:bg-surface2"
+            >
+              + Its own feature
+            </button>
+          </li>
+        )}
         {found.map((o) => (
           <li key={o.id}>
             <button

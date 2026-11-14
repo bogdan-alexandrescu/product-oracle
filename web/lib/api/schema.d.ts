@@ -4553,7 +4553,10 @@ export interface paths {
         put?: never;
         /**
          * Confirm Entity
-         * @description Confirm a proposed entity; goals are confirmed this way only (B2).
+         * @description Confirm a proposed entity; goals are confirmed this way only (B2). ``item_id``: Confirm
+         *     it from that roadmap item's Ground Truth flag, which confirms the feature for that item only:
+         *     other items on a proposal they shared stay flagged until each is confirmed (the owner, Nov
+         *     13); a feature confirmed already is then confirmed for that item.
          */
         post: operations["confirm_entity"];
         delete?: never;
@@ -5144,6 +5147,29 @@ export interface paths {
          *     has that code.
          */
         post: operations["use_own_code"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/roadmap-items/{item_id}/own-feature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Own Feature
+         * @description Its own feature (the check's ``unlinked_item`` on a proposed match, the owner, Nov 13):
+         *     the roadmap item joins the Ground Truth as a feature of its own with its own code (its PRD's
+         *     or title's, else the next free one), declining the feature it was matched to; an entry of
+         *     its name is reused, never made twice (``oracle.baseline.fixes.own_feature``).
+         */
+        post: operations["add_own_feature"];
         delete?: never;
         options?: never;
         head?: never;
@@ -59943,7 +59969,9 @@ export interface operations {
     };
     confirm_entity: {
         parameters: {
-            query?: never;
+            query?: {
+                item_id?: string | null;
+            };
             header?: never;
             path: {
                 entity_id: string;
@@ -61159,6 +61187,37 @@ export interface operations {
             header?: never;
             path: {
                 entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroundTruthFixOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_own_feature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
             };
             cookie?: never;
         };

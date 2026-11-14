@@ -211,7 +211,8 @@ import { mockNowMs } from "./clock";
 import { forgetBundles, routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { codesRead, codesSeen, groundTruthCheck, GROUND_TRUTH_CONFIRM_SCENARIO, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth, seedGroundTruthConfirm, tiedCodes } from "./ground-truth";
+import { ANY_CODE, wholeCode } from "./feature-codes";
+import { codesRead, codesSeen, confirmedFor, DECLINED, groundTruthCheck, GROUND_TRUTH_CONFIRM_SCENARIO, GROUND_TRUTH_FLAGS_SCENARIO, GROUND_TRUTH_SHARED_SCENARIO, itemById, mark, routeGroundTruthFixes, seedGroundTruth, seedGroundTruthConfirm, seedGroundTruthShared, tiedCodes, UNCONFIRMED } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { ONE_PAGER_MILESTONE_RENAME_SCENARIO, PICKED_MILESTONE, PRIORITIES_PLAN_MILESTONES_SCENARIO, seedOldMilestones, seedOwnMilestones, seedPlanPrdMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
@@ -4783,6 +4784,14 @@ function load(): Db {
                 ? seedTracksClosedScenario
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
+              : scenario === GROUND_TRUTH_SHARED_SCENARIO
+                ? () => {
+                    // The Ground Truth check, with a run's proposal two roadmap items share.
+                    const db = seed();
+                    db.simple_roadmap = seedSimpleRoadmap();
+                    seedGroundTruthShared(db.baseline, db.simple_roadmap);
+                    return db;
+                  }
               : scenario === GROUND_TRUTH_CONFIRM_SCENARIO
                 ? () => {
                     // The Ground Truth check, with a proposed feature carrying its own code and a mis-keyed one.
@@ -7826,6 +7835,57 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The Ground Truth check (docs/ground-truth.md): flags only, for anyone who reads the roadmap.
   if (p[1] === "baseline" && p[2] === "check" && !p[3] && req.method === "GET") {
     return json(200, groundTruthCheck(localStorage.getItem(MOCK_SCENARIO_KEY), db.baseline, db.simple_roadmap));
+  }
+  // Its own feature (router.py add_own_feature, fixes.own_feature): the item joins the Ground Truth as a feature
+  // of its own with its own code, else the next free one; its proposed match is declined; an entry of its name is reused.
+  if (p[1] === "baseline" && p[2] === "roadmap-items" && p[3] && p[4] === "own-feature" && !p[5] && req.method === "POST") {
+    if (!atLeast(me.role, "approver")) return json(403, { detail: "Your role cannot do this" });
+    const it = itemById(db.simple_roadmap, p[3]);
+    if (!it) return json(404, { detail: "No such roadmap item" });
+    const ents = db.baseline.entities;
+    const was = ents.find((e) => e.type === "feature" && e.id === (it.linked_feature ?? it.feature_id));
+    const code = wholeCode(it.section) ?? wholeCode(/^([A-Z]{1,3}-\d+)\s/.exec(it.title)?.[1]);
+    const name = it.title.replace(/^[A-Z][A-Z0-9]*-\d+[a-z]?\s+/, "").trim() || it.title;
+    const same = ents
+      .filter((e) => e.type === "feature" && e.status !== "rejected" && e.title.trim().toLowerCase() === name.toLowerCase())
+      .sort((a, b) => Number(b.status === "confirmed") - Number(a.status === "confirmed"))[0];
+    if (was && was !== same) {
+      mark(was, DECLINED, it, true);
+      mark(was, UNCONFIRMED, it, false);
+    }
+    const free = !!code && !ents.some((e) => e.type === "feature" && wholeCode(e.key) === code) && !(db.baseline.codesGiven ?? []).includes(code);
+    const call = (path: string, body: unknown) =>
+      routeBaselineFor(db, me, new Request(new URL(path, req.url), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), path.split("/").filter(Boolean), new URLSearchParams());
+    let feature: typeof same | undefined = same;
+    if (same) {
+      mark(same, DECLINED, it, false);
+      mark(same, UNCONFIRMED, it, false);
+      if (same.status !== "confirmed") {
+        if (free && !same.attrs?.code) same.attrs = { ...same.attrs, code };
+        const res = await call(`/v1/baseline/entities/${same.id}/confirm`, null);
+        if (!res.ok) return res;
+      }
+    } else {
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "feature";
+      let key = free ? code! : slug;
+      for (let n = 2; ents.some((e) => e.key === key); n++) key = `${slug}-${n}`;
+      const had = new Set(ents.map((e) => e.id));
+      const res = await call("/v1/baseline/entities", { type: "feature", key, title: name, attrs: {}, status: "confirmed", origin: "user" });
+      if (!res.ok) return res;
+      feature = ents.find((e) => !had.has(e.id) && e.type === "feature");
+    }
+    if (!feature) return json(404, { detail: "No such feature" });
+    if (feature.id !== was?.id) await linkNewFeature(db, me, feature.id, { roadmap_item_id: p[3] });
+    const got = ANY_CODE.test(feature.key) ? feature.key : null;
+    return json(200, { status: "done", feature: { id: feature.id, code: got, name: feature.title }, code: got, proposal_id: null } satisfies Schemas["GroundTruthFixOut"]);
+  }
+  // Confirm it from one roadmap item's flag (router.py confirm_entity's item_id): other items on a shared proposal wait for their own.
+  if (p[1] === "baseline" && p[2] === "entities" && p[3] && p[4] === "confirm" && !p[5] && req.method === "POST" && q.get("item_id")) {
+    const e = db.baseline.entities.find((x) => x.id === p[3]);
+    const joined = !!e && e.status !== "confirmed";
+    const res = await routeBaselineFor(db, me, req, p, q);
+    if (res.ok && e) confirmedFor(db.simple_roadmap, e, q.get("item_id")!, joined);
+    return res;
   }
   // The check's fixes with routes of their own (Give it a code, Link to a feature), and accepting a commenter's.
   if (p[1] === "baseline") {

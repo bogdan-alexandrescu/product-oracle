@@ -15319,7 +15319,7 @@
           "baseline"
         ],
         "summary": "Confirm Entity",
-        "description": "Confirm a proposed entity; goals are confirmed this way only (B2).",
+        "description": "Confirm a proposed entity; goals are confirmed this way only (B2). ``item_id``: Confirm\nit from that roadmap item's Ground Truth flag, which confirms the feature for that item only:\nother items on a proposal they shared stay flagged until each is confirmed (the owner, Nov\n13); a feature confirmed already is then confirmed for that item.",
         "operationId": "confirm_entity",
         "security": [
           {
@@ -15338,6 +15338,23 @@
               "type": "string",
               "format": "uuid",
               "title": "Entity Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Id"
             }
           }
         ],
@@ -17514,6 +17531,59 @@
               "type": "string",
               "format": "uuid",
               "title": "Entity Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroundTruthFixOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/baseline/roadmap-items/{item_id}/own-feature": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Add Own Feature",
+        "description": "Its own feature (the check's ``unlinked_item`` on a proposed match, the owner, Nov 13):\nthe roadmap item joins the Ground Truth as a feature of its own with its own code (its PRD's\nor title's, else the next free one), declining the feature it was matched to; an entry of\nits name is reused, never made twice (``oracle.baseline.fixes.own_feature``).",
+        "operationId": "add_own_feature",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
             }
           }
         ],
