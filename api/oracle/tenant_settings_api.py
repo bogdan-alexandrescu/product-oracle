@@ -91,13 +91,13 @@ from typing import Annotated, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import not_for_runs, recheck_caller, require_role
+from oracle.base_model import BaseModel
 from oracle.baseline.models import LINK_KINDS
 from oracle.branding import DEFAULT as BRANDING_DEFAULT
 from oracle.confidence import DEFAULTS as CONFIDENCE_DEFAULTS

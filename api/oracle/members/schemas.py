@@ -4,9 +4,10 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import ConfigDict, Field, computed_field, field_validator
 
 from oracle.auth.models import Role
+from oracle.base_model import BaseModel
 
 # expired (A5): open, past its expiry; not claimed at sign-in until resent.
 InviteStatus = Literal["open", "expired", "accepted", "revoked"]

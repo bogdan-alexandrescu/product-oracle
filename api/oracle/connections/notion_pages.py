@@ -15,9 +15,10 @@ from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from oracle.auth.deps import TenantDB
+from oracle.base_model import BaseModel
 from oracle.connections import service
 from oracle.connections.router import ProviderHttp, UserPrincipal
 from oracle.sources.base import ConnectorAuthError, ConnectorError, ConnectorRateLimited

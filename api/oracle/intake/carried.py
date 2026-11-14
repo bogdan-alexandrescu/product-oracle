@@ -22,11 +22,11 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import company_time
+from oracle.base_model import BaseModel
 from oracle.decisions import standing
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document, DocumentVersion

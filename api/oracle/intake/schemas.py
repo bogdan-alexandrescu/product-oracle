@@ -8,8 +8,9 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
+from pydantic import AfterValidator, Field, field_validator, model_validator
 
+from oracle.base_model import BaseModel
 from oracle.intake.carried import Carried
 from oracle.runs.schemas import KnobsIn
 from oracle.templates.schemas import PrdAnswers

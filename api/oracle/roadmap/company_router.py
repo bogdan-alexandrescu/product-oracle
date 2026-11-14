@@ -6,10 +6,10 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from pydantic import BaseModel
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role, require_role_now
+from oracle.base_model import BaseModel
 from oracle.docs import service as docs_service
 from oracle.docs.schemas import DocumentOut, PrdRef
 from oracle.roadmap import company

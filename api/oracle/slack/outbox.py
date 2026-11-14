@@ -20,11 +20,11 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import httpx
-from pydantic import BaseModel
 from sqlalchemy import delete, exists, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from oracle.base_model import BaseModel
 from oracle.discussions.models import DiscussionMessage
 from oracle.integrations import slack_api, slack_oauth
 from oracle.integrations.models import CompanyIntegration

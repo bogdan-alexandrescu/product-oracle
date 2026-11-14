@@ -25,7 +25,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +33,7 @@ from oracle import audit, autonomy
 from oracle.auth.deps import Principal, TenantDB
 from oracle.auth.models import User
 from oracle.authz import require_role
+from oracle.base_model import BaseModel
 from oracle.baseline import goals, service
 from oracle.baseline.goal_order import sort_goals
 from oracle.baseline.models import Entity, Proposal

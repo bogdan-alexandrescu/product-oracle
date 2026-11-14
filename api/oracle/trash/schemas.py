@@ -2,7 +2,9 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from oracle.base_model import BaseModel
 
 # trash-features-goals: a roadmap feature or a goal, too (oracle.simple.trash_items).
 # edit-decisions: an open decision or a PRD question (oracle.simple.decision_sheet).

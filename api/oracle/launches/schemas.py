@@ -4,7 +4,9 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from oracle.base_model import BaseModel
 
 LaunchState = Literal["planned", "ready", "launched", "cancelled"]
 TaskAudience = Literal["internal", "external"]

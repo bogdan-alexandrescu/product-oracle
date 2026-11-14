@@ -2,7 +2,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
+
+from oracle.base_model import BaseModel
 
 Method = Literal["goal_weighted", "rice", "moscow", "wsjf"]
 OverrideKind = Literal["move", "pin"]

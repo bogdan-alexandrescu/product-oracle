@@ -17,12 +17,13 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 from sqlalchemy import select
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, recheck_caller, require_role, require_role_now
+from oracle.base_model import BaseModel
 from oracle.claude_accounts import fallback, store
 from oracle.claude_accounts.accounts import (
     DEFAULT_STALE_AFTER,

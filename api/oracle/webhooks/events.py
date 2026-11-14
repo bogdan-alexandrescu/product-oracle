@@ -21,10 +21,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle.base_model import BaseModel
 from oracle.docs import visibility
 from oracle.docs.models import Document
 from oracle.runs.models import Checkpoint, Run

@@ -29,9 +29,9 @@ from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
-from pydantic import BaseModel
 
 from oracle.auth.deps import TenantDB
+from oracle.base_model import BaseModel
 from oracle.config import get_settings
 from oracle.connections import service as connections
 from oracle.connections.models import Connection

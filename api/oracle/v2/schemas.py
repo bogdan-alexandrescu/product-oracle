@@ -9,8 +9,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import ConfigDict, Field, computed_field
 
+from oracle.base_model import BaseModel
 from oracle.v2.contract import ModulePolicy, OutputKind
 
 ModuleOrigin = Literal["builtin", "company"]

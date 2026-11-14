@@ -25,9 +25,9 @@ from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel
 
 from oracle.auth.deps import READ_ONLY, Principal, TenantDB
+from oracle.base_model import BaseModel
 from oracle.connections import service
 from oracle.connections.providers import DRIVE_READONLY, RECONNECT_TO_CHOOSE_FILES
 from oracle.connections.router import ProviderHttp, UserPrincipal

@@ -2,7 +2,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from oracle.base_model import BaseModel
 
 SourceKind = Literal["upload", "github", "slack", "notion", "fireflies", "google_docs"]
 SourceStatus = Literal["active", "paused", "error", "needs_attention"]

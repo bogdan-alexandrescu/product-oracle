@@ -31,9 +31,9 @@ from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel
 
 from oracle.auth.deps import TenantDB
+from oracle.base_model import BaseModel
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.connections.router import FirefliesHttp, UserPrincipal

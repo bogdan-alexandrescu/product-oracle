@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 from sqlalchemy import func, select
 
 from oracle import audit, crypto
@@ -23,6 +23,7 @@ from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.auth.models import User
 from oracle.auth.service import may_sign_in
 from oracle.authz import recheck_caller, require_role
+from oracle.base_model import BaseModel
 from oracle.connections import oauth
 from oracle.integrations import slack_api, slack_oauth
 from oracle.integrations.models import CompanyIntegration

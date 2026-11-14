@@ -23,11 +23,11 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 from sqlalchemy import select
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role
+from oracle.base_model import BaseModel
 from oracle.db import Base
 from oracle.v2 import models as m
 from oracle.v2 import schemas as s

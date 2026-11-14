@@ -28,11 +28,11 @@ import uuid
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 from sqlalchemy import select
 
 from oracle import audit, company_time
 from oracle.auth.deps import Principal, TenantDB
+from oracle.base_model import BaseModel
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap.tracks import on_prd as tracks_on_prd
 from oracle.simple import fit_date as fd

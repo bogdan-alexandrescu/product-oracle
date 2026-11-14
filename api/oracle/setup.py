@@ -20,12 +20,13 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import AfterValidator, BaseModel
+from pydantic import AfterValidator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.auth.models import User
+from oracle.base_model import BaseModel
 from oracle.connections.models import Connection
 from oracle.members.models import Invite
 from oracle.preferences.models import UserPreference

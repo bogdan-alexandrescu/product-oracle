@@ -33,7 +33,6 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from markupsafe import Markup, escape
-from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, not_for_runs, recheck_caller, require_role
+from oracle.base_model import BaseModel
 from oracle.branding_models import BrandAsset
 from oracle.tenancy import current_tenant
 

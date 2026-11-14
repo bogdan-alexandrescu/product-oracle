@@ -4,10 +4,11 @@ import uuid
 from typing import Annotated, Literal
 
 from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import ConfigDict, StringConstraints
 from sqlalchemy import select
 
 from oracle.auth.deps import CurrentPrincipal, TenantDB
+from oracle.base_model import BaseModel
 from oracle.preferences.models import UserPreference
 
 DocumentView = Literal["brief", "full"]

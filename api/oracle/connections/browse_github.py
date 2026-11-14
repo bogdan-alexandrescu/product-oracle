@@ -12,9 +12,9 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel
 
 from oracle.auth.deps import TenantDB
+from oracle.base_model import BaseModel
 from oracle.connections import browse
 from oracle.connections.browse import open_connection, provider_error, unreachable
 from oracle.connections.router import ProviderHttp, UserPrincipal

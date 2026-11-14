@@ -19,7 +19,6 @@ import re
 from typing import Annotated, Any, Literal, Union
 
 from pydantic import (
-    BaseModel,
     ConfigDict,
     Field,
     StrictBool,
@@ -29,6 +28,8 @@ from pydantic import (
     ValidationError,
     model_validator,
 )
+
+from oracle.base_model import BaseModel
 
 SEMVER_PATTERN = r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
 # "goals.outcomes", "constraints.solutions", "ai_agent.tool-policies".

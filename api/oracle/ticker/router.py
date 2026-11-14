@@ -43,10 +43,11 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import Field
 from sqlalchemy import select, text
 
 from oracle.auth.jwks import KeysUnavailable
+from oracle.base_model import BaseModel
 from oracle.claude_accounts import sweep as claude_sweep
 from oracle.config import get_settings
 from oracle.connections import service as connections_service

@@ -315,7 +315,7 @@ def test_a_failed_import_does_not_wait_on_the_check():
         [sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True, timeout=30
     )
     assert out.returncode != 0
-    assert "ImportError" in out.stderr, out.stderr
+    assert "import of oracle.main halted" in out.stderr, out.stderr
     assert time.monotonic() - started < 20
 
 

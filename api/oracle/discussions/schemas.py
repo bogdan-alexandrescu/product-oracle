@@ -2,9 +2,10 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from oracle.auth.models import Role
+from oracle.base_model import BaseModel
 
 SubjectKind = Literal[
     "document",

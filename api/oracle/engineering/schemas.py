@@ -2,8 +2,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from oracle.base_model import BaseModel
 from oracle.engineering.briefs import CodeMapUse, Question, Risk, Touch
 from oracle.v2.schemas import Freshness
 
