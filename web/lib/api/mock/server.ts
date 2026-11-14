@@ -142,6 +142,7 @@ import {
   routeQuality,
   seedLearnings,
   seedOracleRecorded,
+  seedLongOutcomes,
   seedOutcomes,
   seedQuality,
   addDecisionOutcome,
@@ -4827,7 +4828,7 @@ function load(): Db {
   // ("plan-section-linked": that approved item is linked to another feature, Alert routing rules, created after F-31 so
   // F-31 keeps its code; "plan-section-feature": with no feature F-31, Alert routing rules takes F-31 from that item).
   const approvedPlan = [
-    "launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, SHARED_DATE_SCENARIO, NOT_CLAIMS_SCENARIO, ALERTS_APPROVED_SCENARIO,
+    "launches", "plan-decider", "strategy-plan", "outcomes", "outcomes-long", DATE_BASES_SCENARIO, SHARED_DATE_SCENARIO, NOT_CLAIMS_SCENARIO, ALERTS_APPROVED_SCENARIO,
     "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history", PLAN_TIMELINE_EDIT_SCENARIO, PLAN_SECTION_CODE_SCENARIO,
     PLAN_SECTION_LINKED_SCENARIO, PLAN_SECTION_FEATURE_SCENARIO,
   ];
@@ -4870,7 +4871,7 @@ function load(): Db {
   if (scenario === "pricing") seedPricingScenario(db);
   // Outcomes (H3): synthetic predictions, one due for its check, in the "outcomes" scenario.
   // "outcomes-recorded" adds a verdict Oracle recorded (H11 at Act within limits) for the owner to change.
-  if (scenario === "outcomes" || scenario === "outcomes-recorded") {
+  if (scenario === "outcomes" || scenario === "outcomes-recorded" || scenario === "outcomes-long") {
     const goal = db.baseline.entities.find((e) => e.type === "goal" && e.title === "Raise activation");
     // A goal measured in its own unit, for moving an outcome to it (the metric and unit follow).
     if (goal) {
@@ -4879,6 +4880,14 @@ function load(): Db {
     }
     const outcomes = goal ? seedOutcomes(db.user_id, goal.id, null) : [];
     if (goal && scenario === "outcomes-recorded") outcomes.push(seedOracleRecorded(db.user_id, goal.id));
+    // "outcomes-long": long titles on a key result with a long name, and a goal with no metric.
+    if (goal && scenario === "outcomes-long") {
+      const kr = { ...goal, id: stableUuid("goal/revenue-kr"), key: "g.revenue-kr", body: null,
+        title: "Key result 2.3: raise company revenue per day from self-serve teams on every plan in every region we sell in",
+        attrs: { weight: 0.1, metric: "Company revenue per day across every self-serve plan and region, net of refunds", unit: "USD" } };
+      db.baseline.entities.push(kr, { ...goal, id: stableUuid("goal/simpler-billing"), key: "g.simpler-billing", title: "Simpler billing for every team", body: null, attrs: {} });
+      outcomes.push(...seedLongOutcomes(db.user_id, kr.id));
+    }
     if (goal) db.quality = { outcomes, learnings: seedLearnings(db.user_id) };
   }
   db.autonomy = emptyAutonomy();
