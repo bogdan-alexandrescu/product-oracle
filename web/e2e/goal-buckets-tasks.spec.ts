@@ -13,7 +13,7 @@ import { expect, test, type Page } from "./test";
  * Card tasks-move: protects = with no dated plan a task's grip carries it to another goal by
  * pointer (the page scrolls at the edge on a phone) or by keys (Enter, arrows, Enter); the target
  * lights up and says where it lands; Undo puts it back; fails_when = no grip, or it stays put.
- * Card tasks-add: protects = "+ Add a task" at a bucket's foot opens the form in place (name,
+ * Card tasks-add: protects = "+ Add a feature" at a bucket's foot opens the form in place (name,
  * outcome, milestone), Save stays off with no name, the task shows in that bucket as a draft,
  * Undo removes it. Card tasks-edit: protects = a task's pencil opens the same form filled in;
  * the new name shows; Undo puts the name back. Card tasks-cut: protects = ⋯ Cut from the roadmap
@@ -80,9 +80,9 @@ for (const view of VIEWS) {
         await open(page, view, size.viewport);
         const growth = bucket(page, view, "Growth");
         const add = growth.getByTestId("add-task");
-        await add.getByRole("button", { name: "+ Add a task" }).click();
+        await add.getByRole("button", { name: "+ Add a feature" }).click();
         const form = add.getByTestId("task-form");
-        await expect(form.getByRole("heading", { name: "New task" })).toBeVisible();
+        await expect(form.getByRole("heading", { name: "New feature" })).toBeVisible();
         await expect(form).toContainText("Goal: Growth");
         const save = form.getByRole("button", { name: "Save", exact: true });
         await expect(save).toBeDisabled();
@@ -95,7 +95,7 @@ for (const view of VIEWS) {
         const made = growth.getByTestId("plan-feature").filter({ hasText: "Saved carts" });
         await expect(made).toBeVisible();
         await expect(made).toContainText("Draft");
-        await expect(add.getByRole("button", { name: "+ Add a task" })).toBeVisible();
+        await expect(add.getByRole("button", { name: "+ Add a feature" })).toBeVisible();
         await note(page).getByRole("button", { name: "Undo" }).click();
         await expect(note(page)).toContainText("Undone");
         await expect(made).toHaveCount(0);
@@ -214,7 +214,7 @@ for (const view of VIEWS) {
         await open(page, view, size.viewport);
         const growth = bucket(page, view, "Growth");
         const add = growth.getByTestId("add-task");
-        await add.getByRole("button", { name: "+ Add a task" }).click();
+        await add.getByRole("button", { name: "+ Add a feature" }).click();
         await add.getByTestId("task-form").getByLabel("Name").fill("Saved carts");
         await add.getByTestId("task-form").getByRole("button", { name: "Save", exact: true }).click();
         await expect(note(page)).toContainText("Added Saved carts to Growth.");
@@ -282,7 +282,7 @@ for (const view of VIEWS) {
         await expect(row).toBeVisible();
         await expect(bucket(page, view, "Growth").locator('[data-code="F-03"]')).toHaveCount(0);
         const add = bucket(page, view, "Growth").getByTestId("add-task");
-        await add.getByRole("button", { name: "+ Add a task" }).click();
+        await add.getByRole("button", { name: "+ Add a feature" }).click();
         await add.getByTestId("task-form").getByLabel("Name").fill("Gift wrap notes");
         await add.getByTestId("task-form").getByRole("button", { name: "Save", exact: true }).click();
         await expect(note(page)).toContainText("Proposed adding Gift wrap notes to Growth: it waits for a decision.");
@@ -295,7 +295,7 @@ for (const view of VIEWS) {
       test("an approver proposes adding a task and moves one at once", async ({ page }) => {
         await open(page, view, size.viewport, "approver@example.com");
         const add = bucket(page, view, "Growth").getByTestId("add-task");
-        await add.getByRole("button", { name: "+ Add a task" }).click();
+        await add.getByRole("button", { name: "+ Add a feature" }).click();
         await add.getByTestId("task-form").getByLabel("Name").fill("Gift wrap notes");
         await add.getByTestId("task-form").getByRole("button", { name: "Save", exact: true }).click();
         await expect(note(page)).toContainText("Proposed adding Gift wrap notes to Growth: it waits for a decision.");
