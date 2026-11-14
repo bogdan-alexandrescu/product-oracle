@@ -6,7 +6,7 @@ time a request reaches the router that includes it. For a route served through
 ``app.include_router`` (all of Oracle's but /healthz) the first build is only read for the
 route's declared settings (path, methods, response model, ...): so the declared settings
 are set at once, the rest the first time something reads them (a request to a route
-declared on the app itself, the role map in oracle.capabilities). oracle.startup: about
+declared on the app itself, the OpenAPI document). oracle.startup: about
 40% of the app's import on one CPU, before a new instance could serve.
 """
 
@@ -131,13 +131,23 @@ class LazyAPIRoute(APIRoute):
 
     def __getattr__(self, attr: str) -> Any:
         # Only for what is not set yet: the parts FastAPI's build makes.
-        if attr.startswith("__") or "_declared" not in self.__dict__:
+        if attr.startswith("__"):
             raise AttributeError(attr)
         with _building:
-            declared = self.__dict__.pop("_declared", None)
+            declared = self.__dict__.get("_declared")
+            # The build's own reads of what it has not set yet (it runs under the lock).
+            if declared is not None and self.__dict__.get("_in_build"):
+                raise AttributeError(attr)
             if declared is not None:
-                path, endpoint, kwargs = declared
-                APIRoute.__init__(self, path, endpoint, **kwargs)
+                # Another thread's read waits on the lock, then finds the route built; a
+                # build that raises leaves the route as declared, to be tried again.
+                self._in_build = True
+                try:
+                    path, endpoint, kwargs = declared
+                    APIRoute.__init__(self, path, endpoint, **kwargs)
+                finally:
+                    del self._in_build
+                del self._declared
         return object.__getattribute__(self, attr)
 
 
