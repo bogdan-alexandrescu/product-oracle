@@ -1,6 +1,7 @@
 import { Chip, Ring, type ChipKind } from "@/components/ds";
 import { LockIcon } from "@/components/ui";
 import type { EntityOut, GraphOut, NodeStatus } from "@/lib/api/client";
+import { named, namedText } from "@/lib/codes";
 import { formatDate, formatPercent } from "@/lib/format";
 import { goalTree, scoredConfidence } from "@/lib/goal-tree";
 
@@ -254,11 +255,17 @@ export function titleOf(graph: GraphOut | undefined, id: string | null | undefin
   return graph?.entities.find((e) => e.id === id)?.title ?? "Unknown item";
 }
 
+/** An item's title, a feature's with its Ground Truth code before it ("F-84 Saved carts"). */
+export function codedTitleOf(graph: GraphOut | undefined, id: string | null | undefined): string {
+  const e = id ? graph?.entities.find((x) => x.id === id) : undefined;
+  return e?.type === "feature" ? namedText(named(e.title, e.key)) : titleOf(graph, id);
+}
+
 /** What a conflict or proposal is about: an entity's title, or "A → B" for an edge. */
 export function targetTitle(graph: GraphOut | undefined, entityId?: string | null, edgeId?: string | null): string {
-  if (entityId) return titleOf(graph, entityId);
+  if (entityId) return codedTitleOf(graph, entityId);
   const edge = edgeId ? graph?.edges.find((e) => e.id === edgeId) : undefined;
-  if (edge) return `${titleOf(graph, edge.src_id)} → ${titleOf(graph, edge.dst_id)} (${edge.type.replace("_", " ")})`;
+  if (edge) return `${codedTitleOf(graph, edge.src_id)} → ${codedTitleOf(graph, edge.dst_id)} (${edge.type.replace("_", " ")})`;
   return "—";
 }
 

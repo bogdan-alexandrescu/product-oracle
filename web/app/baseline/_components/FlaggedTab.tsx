@@ -2,6 +2,7 @@
 
 import { Chip, CodeChip, DataTable, KpiStrip, Panel, type Column } from "@/components/ds";
 import type { TraceFeature, TraceGoal, TraceReport } from "@/lib/api/client";
+import { named, namedText } from "@/lib/codes";
 
 import { ConfidenceRing, FlagBadges, KPI_PHONE, NodeStatusBadge } from "./common";
 
@@ -30,7 +31,7 @@ export function FlaggedTab({
       cell: (f) => (
         <span className="flex min-w-0 items-center gap-2">
           <button type="button" onClick={open(f.id)} className="min-w-0 truncate text-left font-medium hover:underline">
-            {f.title}
+            {namedText(named(f.title, f.key))}
           </button>
           <span className="flex flex-none gap-1.5">
             <FlagBadges flags={f.flags} />

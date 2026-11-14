@@ -12,12 +12,16 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 
 import { Button, InfoTip, PageHeader } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { named, namedText } from "@/lib/codes";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 export type FeatureState = Schemas["FeatureStateOut"];
 export type FeatureStates = Schemas["FeatureStatesOut"];
 export type Mark = FeatureState["mark"];
+
+/** A feature's Ground Truth code, then its name ("F-16 Setup checklist"); a key that is no code is not shown. */
+const featureName = (f: FeatureState) => namedText(named(f.title, f.code));
 
 export function useFeatureStates() {
   return useQuery<FeatureStates>("feature-states", () => unwrap(api.GET("/v1/feature-states")));
@@ -95,7 +99,7 @@ function MarkCard({ f }: { f: FeatureState }) {
   return (
     <div role="dialog" aria-label={`${f.title}: ${MARK_WORD[f.mark]}`} onClick={(e) => e.stopPropagation()} className="absolute left-0 top-full z-30 mt-2 w-[360px] max-w-[calc(100vw-24px)] rounded-xl border border-line bg-surface p-4 text-left text-[14px] font-normal normal-case tracking-normal text-text shadow-xl" data-testid="cs-mark-card">
       <div className="mb-2 flex items-center gap-2">
-        <span className="font-semibold">{f.title}</span>
+        <span className="font-semibold">{featureName(f)}</span>
         <FeaturePill mark={f.mark} />
       </div>
       <p className="mb-3 text-text2">{MEANS[f.mark]}</p>
@@ -271,7 +275,7 @@ export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; ph
             <div className={phone ? "space-y-1 px-3 py-2.5" : `${grid} items-center px-4 py-2.5`}>
               <span className="flex items-center gap-2 font-medium">
                 <Glyph old={old} />
-                {f.title}
+                {featureName(f)}
               </span>
               <span className="text-[13px] text-text2">{f.shipped_at ? day(f.shipped_at, true) : "—"}</span>
               <ProofWords f={f} wide={!phone} />
@@ -378,7 +382,7 @@ export function DesiredList({ data }: { data: FeatureStates }) {
               <MarkGlyph mark={f.mark} />
               <span className={phone ? "sr-only" : ""}>{MARK_WORD[f.mark]}</span>
             </span>
-            <span className="min-w-[10rem] flex-1 font-medium">{f.title}</span>
+            <span className="min-w-[10rem] flex-1 font-medium">{featureName(f)}</span>
             {!phone && <span className="w-[200px] flex-none text-[13px] text-text2" data-testid="cs-desired-area">{f.area ?? ""}</span>}
             {!phone && <span className="w-[140px] flex-none text-[13px] text-text2">{f.milestone ?? ""}</span>}
             {/* A fixed width off a phone, so every row's columns line up (D-5). */}
@@ -411,7 +415,7 @@ export function StillDesired({ data }: { data: FeatureStates }) {
           <span key={f.feature_id} data-mark={f.mark} title={MARK_WORD[f.mark]} className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[12px]" data-testid="cs-still-chip">
             <MarkGlyph mark={f.mark} size={11} />
             <span className="sr-only">{MARK_WORD[f.mark]}: </span>
-            {f.title}
+            {featureName(f)}
           </span>
         ))}
       </div>
@@ -480,7 +484,7 @@ export function ReadyBand({ data, onChanged }: { data: FeatureStates; onChanged:
         <span className="ml-2 inline-flex flex-wrap gap-1.5">
           {ready.map((f) => (
             <button key={f.feature_id} type="button" data-testid="cs3-ready-chip" onClick={() => setOpen(f)} className={`rounded-full border border-line bg-surface px-2.5 py-0.5 text-[13px] ${open?.feature_id === f.feature_id ? "ring-2 ring-accent" : ""}`}>
-              {f.title}
+              {featureName(f)}
             </button>
           ))}
         </span>
@@ -488,7 +492,7 @@ export function ReadyBand({ data, onChanged }: { data: FeatureStates; onChanged:
       {open && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-3" data-testid="cs3-dialog" onClick={() => !moving && setOpen(null)}>
           <div role="dialog" aria-modal="true" aria-label={`Move ${open.title} to Running today`} onClick={(e) => e.stopPropagation()} className="w-[520px] max-w-full rounded-2xl border border-line bg-surface p-5 shadow-2xl">
-            <h2 className="mb-1 text-[18px] font-semibold">Move {open.title} to Running today?</h2>
+            <h2 className="mb-1 text-[18px] font-semibold">Move {featureName(open)} to Running today?</h2>
             <p className="mb-3 text-[14px] text-text2">Oracle found proof that it runs today:</p>
             <ul className="mb-4 space-y-1.5 text-[14px]">
               <Line ok>Code map: {proof(open, "code_map")?.count ?? 0} files</Line>

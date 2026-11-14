@@ -400,7 +400,9 @@ export function GroundTruthFlags({
                       ) : (
                         sn.name
                       )}
-                      <InfoTip label={s.name}>{f.words}</InfoTip>
+                      <InfoTip label={s.name} align="start">
+                        {f.words}
+                      </InfoTip>
                     </span>
                     {waiting ? (
                       <Link href={asks(f) ? "/ground-truth?tab=proposals" : "/simple/roadmap"} data-testid="gt-pending" className="block text-[13px] text-accent-ink underline">
@@ -523,7 +525,7 @@ function Picker({
             <button
               type="button"
               disabled={busy}
-              onClick={() => (picking.what === "goal" ? onGoal({ id: o.id, name: o.name }) : onFeature({ id: o.id, title: o.name }))}
+              onClick={() => (picking.what === "goal" ? onGoal({ id: o.id, name: o.name }) : onFeature({ id: o.id, title: namedText(o) }))}
               className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[14px] text-text hover:bg-surface2"
             >
               {o.code && <span className="font-mono text-[13px] text-text2">{o.code}</span>}

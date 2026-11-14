@@ -11,7 +11,7 @@ import { useCompanyCodes } from "@/lib/codes";
 import { useCompanyZone, zoneDay } from "@/lib/dates";
 import { formatDateTime } from "@/lib/format";
 
-import { ACCEPT_LOCKS, fieldLabel, titleOf, valueWords } from "./common";
+import { ACCEPT_LOCKS, codedTitleOf, fieldLabel, titleOf, valueWords } from "./common";
 import { LIMIT_LABEL, suggestedBlocker } from "./PromoteBlocker";
 
 type Payload = { op?: string; kind?: string; fields?: Record<string, unknown>; reason?: string | null; origin?: string };
@@ -371,6 +371,10 @@ function Sentence({ p, graph, onOpen }: { p: ProposalOut; graph: GraphOut | unde
   const op = (p.payload as Payload).op;
   const title = p.entity_id && op !== "create" ? titleOf(graph, p.entity_id) : null;
   const at = title ? p.summary.indexOf(title) : -1;
+  // A feature's button reads its Ground Truth code too (F-81 Dark mode), unless the sentence already names it.
+  const coded = title ? codedTitleOf(graph, p.entity_id) : null;
+  const code = title && coded?.endsWith(` ${title}`) ? coded.slice(0, -title.length) : "";
+  const named = code && !p.summary.slice(0, at).endsWith(code) ? coded : title;
   return (
     <p data-testid="proposal-summary" className="line-clamp-2 min-w-0 font-semibold [overflow-wrap:anywhere]">
       {at < 0 || !title ? (
@@ -379,7 +383,7 @@ function Sentence({ p, graph, onOpen }: { p: ProposalOut; graph: GraphOut | unde
         <>
           <CodeText text={p.summary.slice(0, at)} />
           <button type="button" onClick={() => onOpen(p.entity_id!)} className="inline text-left font-semibold hover:underline">
-            {title}
+            {named}
           </button>
           <CodeText text={p.summary.slice(at + title.length)} />
         </>
@@ -459,11 +463,6 @@ function ProposalList({
               <button type="button" onClick={() => showSiblings(undoing)} className="font-semibold text-accent-ink hover:underline">
                 Show
               </button>
-            </p>
-          )}
-          {canWrite && (
-            <p data-testid="proposals-accept-help" className="border-b border-line px-4 py-2 text-sm text-text2">
-              {ACCEPT_LOCKS}
             </p>
           )}
           <ul aria-label="Proposals">

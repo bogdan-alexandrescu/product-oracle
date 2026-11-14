@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { InfoTip } from "@/components/ds/InfoTip";
 import { toast } from "@/components/ds/Toast";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { NotInGt } from "@/components/simple/FeatureName";
 import { fixChange, OP_WORDS, type BrokenLink, type FixOp } from "@/lib/simple-home";
 import { errorMessage } from "@/lib/use-query";
 import { invalidateWaiting, loadWaiting, onWaitingChanged, waitingChanged } from "@/lib/simple-waiting";
@@ -52,16 +53,16 @@ export function useWaitingList(): { data: Waiting | undefined; error: unknown; r
  * simple-home-qa-nov12 #4: each roadmap item's code (F-06), by the item's id and by its open date
  * suggestion's id, from the roadmap read; shared by every row and read again when what waits changed.
  */
-let codesHit: Promise<Map<string, string>> | null = null;
+let codesHit: Promise<Map<string, string | null>> | null = null;
 if (typeof window !== "undefined") onWaitingChanged(() => (codesHit = null));
 
-function loadItemCodes(): Promise<Map<string, string>> {
+function loadItemCodes(): Promise<Map<string, string | null>> {
   codesHit ??= unwrap(api.GET("/v1/simple/roadmap", {})).then((rm) => {
-    const codes = new Map<string, string>();
+    // An item with no code is kept too (null): it is not in the Ground Truth.
+    const codes = new Map<string, string | null>();
     for (const i of rm.items) {
-      if (!i.code) continue;
-      codes.set(i.id, i.code);
-      if (i.suggestion) codes.set(i.suggestion.id, i.code);
+      codes.set(i.id, i.code || null);
+      if (i.suggestion) codes.set(i.suggestion.id, i.code || null);
     }
     return codes;
   });
@@ -71,18 +72,23 @@ function loadItemCodes(): Promise<Map<string, string>> {
 
 /** A roadmap item's code by its id (or its date suggestion's id); null when it has none or is not read yet. */
 export function useItemCode(id: string | null | undefined): string | null {
-  const [code, setCode] = useState<{ id: string; code: string | null } | null>(null);
+  return useItemCodeRead(id) ?? null;
+}
+
+/** A roadmap item's code; null when the roadmap has it with no code (not in the Ground Truth), undefined when unknown or not read yet. */
+function useItemCodeRead(id: string | null | undefined): string | null | undefined {
+  const [code, setCode] = useState<{ id: string; code: string | null | undefined } | null>(null);
   useEffect(() => {
     if (!id) return;
     let alive = true;
     loadItemCodes()
-      .then((codes) => alive && setCode({ id, code: codes.get(id) ?? null }))
+      .then((codes) => alive && setCode({ id, code: codes.get(id) }))
       .catch(() => undefined);
     return () => {
       alive = false;
     };
   }, [id]);
-  return id && code?.id === id ? code.code : null;
+  return id && code?.id === id ? code.code : undefined;
 }
 
 /** The roadmap item a waiting row is about: a broken link's or a date's item (from its link). */
@@ -207,7 +213,7 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
   // A broken link fixes in place too, as Home's broken-links card does: "Fix the link" opens its
   // fixes (the item and its dependency read from the roadmap, as the change engine needs them).
   const [fixing, setFixing] = useState(false);
-  const code = useItemCode(itemOf(item));
+  const code = useItemCodeRead(itemOf(item));
   const acts = item.kind === "decision" ? (call ? decideActs(call) : []) : actionsOf(item);
   const act = async (run: () => Promise<unknown>, done: string, key?: string) => {
     setBusy(true);
@@ -237,6 +243,7 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
           <span className="text-text2">{WAITING_KIND[item.kind]} · </span>
           {code && <><code className="simple-code">{code}</code>{" "}</>}
           {item.title}
+          {code === null && <NotInGt />}
           {/* port-AN 5: the row's why sits in its (i), so the one list stays one line a row. */}
           {detail && (
             <>
