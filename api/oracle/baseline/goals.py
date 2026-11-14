@@ -378,12 +378,29 @@ _WORDS = {"at_least": "at least", "above": "more than", "at_most": "at most", "b
 CURRENCY_SIGNS = {"usd": "$", "eur": "€", "gbp": "£", "$": "$", "€": "€", "£": "£"}
 
 
+def singular_unit(unit: str) -> str:
+    """A unit's word in the singular, as the web's singularUnit: "events" -> "event", "failed
+    payments per 100 orders" -> "failed payment per 100 orders", "stories" -> "story"."""
+    head, *per = re.split(r"(?= per )", unit)
+
+    def one(m: re.Match[str]) -> str:
+        w = m.group(0)
+        if re.search(r"(ss|us|is|series|news)$", w, re.I) or not re.search(r"s$", w, re.I):
+            return w
+        if re.search(r"[^aeiou]ies$", w, re.I):
+            return f"{w[:-3]}y"
+        return w[:-2] if re.search(r"(ch|sh|x|z)es$", w, re.I) else w[:-1]
+
+    return "".join([re.sub(r"[A-Za-z]{3,}$", one, head), *per])
+
+
 def figure_words(value: float, unit: str | None) -> str:
     """goal-figure-words: a goal's number in its unit as people write it: a currency's sign
     before it ("$50,000", "€1,200", "£3.5"), other units after it ("1,200 shops", "60%",
-    "3 days"); commas between thousands, decimals kept (a currency's to at most two, half up as
-    the web's goalFigure: "$13,400.56"), a whole float without ".0". An infinite currency value or
-    one past 1e26 (beyond Decimal's 28 digits at cents) prints as it is, unrounded."""
+    "3 days"), singular for 1 ("1 day"); commas between thousands, decimals kept (a currency's to
+    at most two, half up as the web's goalFigure: "$13,400.56"), a whole float without ".0". An
+    infinite currency value or one past 1e26 (beyond Decimal's 28 digits at cents) prints as it
+    is, unrounded."""
     u = (unit or "").strip()
     sign = CURRENCY_SIGNS.get(u.lower())
     if sign and isinstance(value, float) and math.isfinite(value) and abs(value) < 1e26:
@@ -393,7 +410,9 @@ def figure_words(value: float, unit: str | None) -> str:
     minus = "-" if n < 0 else ""
     if sign:
         return f"{minus}{sign}{shown}"
-    return f"{minus}{shown}%" if u == "%" else f"{minus}{shown} {u}".strip()
+    if u == "%":
+        return f"{minus}{shown}%"
+    return f"{minus}{shown} {singular_unit(u) if abs(n) == 1 else u}".strip()
 
 
 def _figure(value: float, unit: str) -> str:
