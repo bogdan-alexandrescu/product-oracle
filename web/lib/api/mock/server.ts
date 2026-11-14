@@ -8440,9 +8440,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
   if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   // roadmap-milestone-codes: the Goal map's milestones as they are now (moved, renamed, in Trash).
-  // simple-goals: in every scenario with a map, as the API's map milestones are its roadmap's TrackMilestone rows (on the
+  // simple-goals: in the default scenario too (each other scenario keeps its own), as the API's map milestones are its roadmap's TrackMilestone rows (on the
   // roadmap its features join: knowGoalMapItems), so they carry their codes and the feature panel's picker lists them.
-  if (db.goal_map) (db.simple_roadmap.map_milestones ??= { roadmap: db.simple_roadmap.company_roadmap ?? "onboarding-roadmap", milestones: [] }).milestones = goalMapMilestones(db.goal_map);
+  if (db.goal_map && (db.simple_roadmap.map_milestones || !localStorage.getItem(MOCK_SCENARIO_KEY))) (db.simple_roadmap.map_milestones ??= { roadmap: db.simple_roadmap.company_roadmap ?? "onboarding-roadmap", milestones: [] }).milestones = goalMapMilestones(db.goal_map);
   // simple-replaced-prds: the PRDs marked replaced, whose items no longer feed Simple (service.load).
   markReplaced(db, db.simple_roadmap);
   const roadmapItems = db.simple_roadmap;
@@ -8673,8 +8673,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     }, () => {
       const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ ...e, title: bucketTitle(e) }));
       // simple-goals: one goal store, as the API's: a goal the roadmap's features serve is a Baseline goal too (here with
-      // no number to aim at, so off the map and named there), never left out in silence.
-      const served = [...new Set((db.simple_roadmap?.items ?? []).filter((i) => !i.trashed && !i.draft && i.goal && GOALS[i.goal]).map((i) => i.goal!))];
+      // no number to aim at, so off the map and named there), never left out in silence. Default scenario only.
+      const served = localStorage.getItem(MOCK_SCENARIO_KEY) ? [] : [...new Set((db.simple_roadmap?.items ?? []).filter((i) => !i.trashed && !i.draft && i.goal && GOALS[i.goal]).map((i) => i.goal!))];
       const known = new Set(goals.map((g) => g.title.toLowerCase()));
       return [...goals, ...served.filter((k) => !known.has(GOALS[k].toLowerCase())).map((k) => ({ id: stableUuid(`simple-goal/${k}`), key: k, title: GOALS[k], status: "confirmed", attrs: {} }))];
     }, (goalId) => !!db.simple_roadmap?.goal_buckets?.goals.some((g) => g.id === goalId && g.trashed));
