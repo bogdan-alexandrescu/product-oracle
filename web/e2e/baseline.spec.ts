@@ -549,7 +549,7 @@ test("Ground Truth: proposal sentences wrap on a phone", async ({ page }) => {
 /**
  * protects: a phone whose role read is slow: the proposals do not jump once it answers.
  * fails_when: the rows are drawn before GET /v1/me/capabilities answers, so Add item,
- * Promote to blocker, the Accept help line and the Accept / Reject buttons appear above
+ * Promote to blocker and the Accept / Reject buttons appear above
  * Guided setup afterwards and push it down, out of view.
  * no_claim: other tabs (they wait for the same read); other slow reads.
  */
@@ -561,7 +561,6 @@ test("Ground Truth: proposals on a phone stay put when the role answers late", a
   await row.scrollIntoViewIfNeeded();
   const top = (await row.boundingBox())!.y;
   await expect(row.getByRole("button", { name: "Accept" })).toBeInViewport();
-  await expect(page.getByTestId("proposals-accept-help")).toBeVisible();
   expect((await row.boundingBox())!.y).toBe(top);
   await expect(row.getByRole("button", { name: "Reject" })).toBeInViewport();
 });

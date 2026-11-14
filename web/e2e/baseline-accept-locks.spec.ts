@@ -13,7 +13,8 @@ test("the Proposals tab says Accept locks the item against Oracle's changes unti
   await page.goto("/ground-truth?tab=proposals");
   const proposals = page.getByTestId("proposal");
   await expect(proposals.first()).toBeVisible();
-  await expect(page.getByTestId("proposals-accept-help")).toContainText(LOCKED);
+  // The rule is on Accept (its title), not a standing paragraph (visual QA Nov 14).
+  await expect(page.getByText(LOCKED).filter({ visible: true })).toHaveCount(0);
   const accept = proposals.filter({ hasText: "Guided setup" }).getByRole("button", { name: "Accept" });
   await expect(accept).toHaveAttribute("title", new RegExp(LOCKED));
   await accept.click();
