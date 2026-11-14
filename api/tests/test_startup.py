@@ -26,11 +26,18 @@ no_claim=<what green does not prove>.
   interpreter, as a new instance does) loads no MCP SDK, PDF reader, SQL parser or
   template engine; fails_when=a route module imports one at its top again (Cloud Run, Nov
   13: the app's import took 13.9 s of a 20 s start); no_claim=they still load when used.
-- test_app_import_within_budget: protects=the app's import in a clean interpreter, gc off
-  as oracle.startup does, stays under IMPORT_BUDGET_S; fails_when=the import goes back to
-  building every pydantic schema and loading every library at import (5.8-6.1 s on the
-  lane's machine, 4.2-4.7 s after); no_claim=Cloud Run's own time (about 2.3 times this
-  machine's).
+- test_app_import_within_budget: protects=importing the app on one CPU (taskset -c 0, as
+  Cloud Run's one vCPU), cold, with collection off as oracle.startup does, stays under
+  IMPORT_BUDGET_S; fails_when=the import goes back to building every route's dependency tree
+  and fields at declaration (2.9-3.0 s on the lane's machine on one CPU, 2.2-2.3 s after);
+  no_claim=Cloud Run's own time.
+- test_routes_are_built_at_first_use: protects=importing the app builds no included route's
+  dependency tree, fields or handler (FastAPI builds them again per inclusion at the first
+  request); fails_when=a router goes back to fastapi.APIRouter's eager routes.
+- test_declared_settings_match_fastapis_build: protects=every route's declared settings
+  (path, methods, response model, operation id, ...) set at import equal what FastAPI's own
+  build sets; fails_when=oracle.routing's copy of the declared part drifts from FastAPI
+  (a route served or documented differently).
 - test_a_failed_check_stops_the_start: protects=the head check, run beside the app's
   import, still decides before anything is served; fails_when=its error is lost in its
   thread and the server starts on a database it could not read.
@@ -71,6 +78,7 @@ no_claim=<what green does not prove>.
 import asyncio
 import logging
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -255,9 +263,10 @@ def test_app_import_leaves_heavy_libraries_unloaded():
     assert out.stdout.strip() == "[]", out.stdout + out.stderr
 
 
-# The lane's machine: 5.8-6.1 s before (every schema built, every library loaded at
-# import), 4.2-4.7 s after; the budget leaves headroom over the after.
-IMPORT_BUDGET_S = 5.4
+# The lane's machine on one CPU (taskset -c 0): 2.9-3.0 s before (every route built at
+# declaration), 2.2-2.3 s after; the budget leaves headroom over the after.
+IMPORT_BUDGET_S = 2.7
+ONE_CPU = ["taskset", "-c", "0"] if shutil.which("taskset") else []
 
 
 @pytest.mark.timing
@@ -267,12 +276,54 @@ def test_app_import_within_budget():
         "print(time.perf_counter() - t)"
     )
     took = []
-    for _ in range(2):
+    for _ in range(3):
         out = subprocess.run(
-            [sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True, check=True
+            [*ONE_CPU, sys.executable, "-c", code],
+            cwd=API_DIR,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         took.append(float(out.stdout.strip().splitlines()[-1]))
     assert min(took) < IMPORT_BUDGET_S, took
+
+
+_ROUTES = """
+import oracle.main
+from oracle.capabilities import _routes
+
+included = [
+    r for inc in oracle.main.app.router.routes if hasattr(inc, "original_router")
+    for r in _routes(inc.original_router.routes)
+]
+"""
+
+
+def test_routes_are_built_at_first_use():
+    code = _ROUTES + (
+        "built = sorted(r.path for r in included if 'dependant' in vars(r))\n"
+        "print(len(included), built)\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    count, built = out.stdout.strip().split(" ", 1)
+    assert int(count) > 500
+    assert built == "[]"
+
+
+def test_declared_settings_match_fastapis_build():
+    code = _ROUTES + (
+        "drift = []\n"
+        "for r in included:\n"
+        "    declared = {k: v for k, v in vars(r).items() if not k.startswith('_')}\n"
+        # The first read of a built part runs FastAPI's own build over the same route.
+        "    assert r.dependant and r.app\n"
+        "    drift += [(r.path, k) for k, v in declared.items() if vars(r)[k] != v]\n"
+        "print(drift)\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "[]"
 
 
 def test_a_failed_check_stops_the_start(served, monkeypatch):
