@@ -332,7 +332,7 @@ export function PlanByMonth({
                         ) : (
                           <span className="min-w-0 break-words text-text">{name}</span>
                         )}
-                        <MarkFor itemId={id} />
+                        <MarkFor itemId={id} checked />
                       </li>
                     )] : [];
                   })}

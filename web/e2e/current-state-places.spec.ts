@@ -227,7 +227,9 @@ for (const size of ["desktop", "phone"] as const) {
       await expect(cardIn.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 
       const strip = page.getByTestId("agenda-strip");
-      await expect(page.getByTestId("agenda-next")).toHaveText("Next: Setup checklist");
+      // simple-home-qa-nov14 #1: Setup checklist has no code, so it carries the flag after its name.
+      await expect(page.getByTestId("agenda-next")).toHaveText("Next: Setup checklistNot in the Ground Truth");
+      await expect(page.getByTestId("agenda-next").getByTestId("not-in-gt")).toBeVisible();
       await expect(strip.getByTestId("cs-mark")).toHaveText("In progress");
       await pillAfter(page.getByTestId("agenda-next"), strip.getByTestId("cs-mark"));
 

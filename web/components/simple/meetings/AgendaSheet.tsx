@@ -167,7 +167,7 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload, codeOf }: {
             </p>
             {next.feature_id && (
               <WithFeatureMarks>
-                <MarkFor itemId={next.feature_id} />
+                <MarkFor itemId={next.feature_id} checked />
               </WithFeatureMarks>
             )}
           </div>
