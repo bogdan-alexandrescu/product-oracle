@@ -42,10 +42,9 @@ test("its own feature on a shared proposal of its name leaves the other item to 
   await expect(row(page, "Forum alerts")).toHaveCount(0);
 });
 
-// Pending: the declined row's Link to a feature sends before: none (the check names no feature for a
-// declined match, in the API too), while the item still points at it, so the link is refused as
-// "Changed since you saw it" before it can clear the decline (handoff.md, questions.json).
-test.fixme("linking an item back to the match it declined takes it off the list", async ({ page }) => {
+// A declined row reads no feature (check.py), while the item still points at the declined match: its Link to a
+// feature sends before: none, and the link is taken (changes._declined_match).
+test("linking an item back to the match it declined takes it off the list", async ({ page }) => {
   await open(page, GROUND_TRUTH_SHARED_SCENARIO, "approver@example.com");
   await row(page, "Chat alerts").getByRole("button", { name: /Confirm it/ }).click();
   await expect(page.getByTestId("gt-notice")).toContainText("Confirmed “Community alerts”");
