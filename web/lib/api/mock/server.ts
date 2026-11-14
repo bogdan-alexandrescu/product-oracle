@@ -5152,7 +5152,7 @@ function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): Discus
 /** G3 "discussion-record": Oracle's proposed date basis in an open discussion on checkout-redesign v2's guest-checkout item. */
 function seedDiscussionRecordScenario(db: Db): DiscussionsDb {
   const prd = findDocument(db, "checkout-redesign")!;
-  return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { ...prd, name: (key) => itemName(db, key) }, 2);
+  return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { ...prd, name: (key) => itemName(db, key, undefined, versionItemTitle(db, prd.id, 2, key)) }, 2);
 }
 
 /** G3 "discussion-change-kinds": Oracle's priority move, ask and decision on the feature-set stop's saved-carts item. */
@@ -5254,14 +5254,25 @@ function screenPageName(path: string): string {
 
 /**
  * An item as people read it (service.Labels._item_name): its Ground Truth feature's code and name ("F-12 Bulk address edit"),
- * else the run's scope row's title, else its key.
+ * else the run's scope row's title (or the roadmap item's own, `title`), else its key.
  */
-function itemName(db: Db, key: string, runId?: string): string {
+function itemName(db: Db, key: string, runId?: string, title?: string | null): string {
   const feature = db.baseline.entities.find((e) => e.type === "feature" && e.key === key);
   const row = runId ? (db.runs?.scopes?.[runId] ?? []).flatMap((x) => x.features).find((f) => f.key === key) : undefined;
-  const name = (row?.title || feature?.title || "").trim() || key;
+  const name = (row?.title || title || feature?.title || "").trim() || key;
   const code = feature ? featureCodes(db.baseline.entities.filter((e) => e.type === "feature"), db.roadmap?.section_code, db.plan_edits, db)[feature.id] : undefined;
   return code ? `${code} ${name}` : name;
+}
+
+/** A PRD version's roadmap item's own title (service.Labels._roadmap_item reads the version's RoadmapItem rows). */
+function versionItemTitle(db: Db, documentId: string, version: number, key: string): string | null {
+  const v = db.versions.find((x) => x.document_id === documentId && x.number === version);
+  const items = [
+    // Read, not stored: a discussion seed may ask before the draft roadmaps are seeded (their own ids, not the seed's).
+    ...((db.draft_roadmaps ?? seeded("item-titles", () => seedDraftRoadmaps(draftCtx(db)))).rows.find((r) => r.document_id === documentId && r.version === version)?.items ?? []),
+    ...(v ? (db.roadmap?.items[v.id] ?? db.sharing_items?.[v.id] ?? []) : []),
+  ];
+  return items.find((i) => i.item_key === key)?.title ?? null;
 }
 
 /** A discussion's subject as the API resolves it (oracle.discussions.service): documents, sections and run checkpoints are checked; other kinds are taken as given. */
@@ -5274,7 +5285,7 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     const url = `/documents/${doc.slug}/v/${v.number}`;
     if (kind === "document") return { key: `document:${doc.id}`, label: doc.title, url, document_id: doc.id };
     if (kind === "roadmap_item")
-      return { key: `roadmap_item:${doc.id}:${s.item_key}`, label: `${doc.title} · ${itemName(db, String(s.item_key))}`, url: `${url}/items`, document_id: doc.id };
+      return { key: `roadmap_item:${doc.id}:${s.item_key}`, label: `${doc.title} · ${itemName(db, String(s.item_key), undefined, versionItemTitle(db, doc.id, v.number, String(s.item_key)))}`, url: `${url}/items`, document_id: doc.id };
     const section = v.sections.find((x) => x.section_key === s.section_key);
     if (!section) return { status: 422, detail: `Section ${s.section_key} is not in version ${v.number}` };
     // As the API: the document's own title as a section's heading is its Introduction (ask-phone QA row 3).
