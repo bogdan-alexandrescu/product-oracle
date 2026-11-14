@@ -414,10 +414,30 @@ async def delete_entity(
 
 @router.post("/entities/{entity_id}/confirm", response_model=EntityOut)
 async def confirm_entity(
-    entity_id: uuid.UUID, principal: ApproverNow, db: TenantDB, body: ProposalDecision | None = None
+    entity_id: uuid.UUID,
+    principal: ApproverNow,
+    db: TenantDB,
+    body: ProposalDecision | None = None,
+    item_id: uuid.UUID | None = None,
 ) -> EntityOut:
-    """Confirm a proposed entity; goals are confirmed this way only (B2)."""
-    return await _set_status(db, principal, entity_id, "confirmed", body)
+    """Confirm a proposed entity; goals are confirmed this way only (B2). ``item_id``: Confirm
+    it from that roadmap item's Ground Truth flag, which confirms the feature for that item only:
+    other items on a proposal they shared stay flagged until each is confirmed (the owner, Nov
+    13); a feature confirmed already is then confirmed for that item."""
+    if item_id is None:
+        return await _set_status(db, principal, entity_id, "confirmed", body)
+    try:
+        entity = await service.get_entity(db, entity_id)
+        joined = entity.status != "confirmed"
+        await service.set_entity_status(
+            db, principal, entity, "confirmed", body.note if body else None
+        )
+        await fixes.confirmed_for(db, entity, item_id, joined)
+    except service.BaselineError as exc:
+        await db.rollback()
+        raise _fail(exc) from exc
+    await db.commit()
+    return (await _entities_out(db, [entity]))[0]
 
 
 @router.post("/entities/{entity_id}/reject", response_model=EntityOut)
@@ -1072,6 +1092,28 @@ async def use_own_code(
         feature = await fixes._feature(db, entity_id)
         code = await fixes.use_own_code(db, writer, feature)
     except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    out = GroundTruthFixOut(
+        status="done", feature=GroundTruthRef(id=feature.id, code=code, name=feature.title),
+        code=code,
+    )  # fmt: skip
+    await db.commit()
+    return out
+
+
+@router.post("/roadmap-items/{item_id}/own-feature", response_model=GroundTruthFixOut)
+async def add_own_feature(
+    item_id: uuid.UUID, principal: ApproverNow, db: TenantDB
+) -> GroundTruthFixOut:
+    """Its own feature (the check's ``unlinked_item`` on a proposed match, the owner, Nov 13):
+    the roadmap item joins the Ground Truth as a feature of its own with its own code (its PRD's
+    or title's, else the next free one), declining the feature it was matched to; an entry of
+    its name is reused, never made twice (``oracle.baseline.fixes.own_feature``)."""
+    try:
+        feature = await fixes.own_feature(db, principal, item_id)
+        code = await fixes.code_of(db, feature)
+    except service.BaselineError as exc:
+        await db.rollback()
         raise _fail(exc) from exc
     out = GroundTruthFixOut(
         status="done", feature=GroundTruthRef(id=feature.id, code=code, name=feature.title),

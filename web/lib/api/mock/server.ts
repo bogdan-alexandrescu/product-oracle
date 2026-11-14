@@ -212,7 +212,8 @@ import { mockNowMs } from "./clock";
 import { forgetBundles, routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { codesRead, codesSeen, groundTruthCheck, GROUND_TRUTH_CONFIRM_SCENARIO, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth, seedGroundTruthConfirm, tiedCodes } from "./ground-truth";
+import { ANY_CODE, wholeCode } from "./feature-codes";
+import { codesRead, codesSeen, confirmedFor, DECLINED, groundTruthCheck, GROUND_TRUTH_CONFIRM_SCENARIO, GROUND_TRUTH_FLAGS_SCENARIO, GROUND_TRUTH_SHARED_NAMED_SCENARIO, GROUND_TRUTH_SHARED_SCENARIO, itemById, mark, marked as markedItem, routeGroundTruthFixes, seedGroundTruth, seedGroundTruthConfirm, seedGroundTruthShared, tiedCodes, UNCONFIRMED } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { ONE_PAGER_MILESTONE_RENAME_SCENARIO, PICKED_MILESTONE, PRIORITIES_PLAN_MILESTONES_SCENARIO, seedOldMilestones, seedOwnMilestones, seedPlanPrdMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
@@ -4784,6 +4785,14 @@ function load(): Db {
                 ? seedTracksClosedScenario
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
+              : scenario === GROUND_TRUTH_SHARED_SCENARIO || scenario === GROUND_TRUTH_SHARED_NAMED_SCENARIO
+                ? () => {
+                    // The Ground Truth check, with a run's proposal two roadmap items share (named after one of them).
+                    const db = seed();
+                    db.simple_roadmap = seedSimpleRoadmap();
+                    seedGroundTruthShared(db.baseline, db.simple_roadmap, scenario === GROUND_TRUTH_SHARED_NAMED_SCENARIO ? "Chat alerts" : undefined);
+                    return db;
+                  }
               : scenario === GROUND_TRUTH_CONFIRM_SCENARIO
                 ? () => {
                     // The Ground Truth check, with a proposed feature carrying its own code and a mis-keyed one.
@@ -5365,6 +5374,17 @@ function activeMember(db: Db, userId: string): boolean {
   return db.members.some((m) => m.id === userId && m.status !== "disabled");
 }
 
+/** changes._apply's set_feature: a person's link to a match the item declined (Its own feature) clears the decline. */
+const undeclines = (db: Db): SimpleChangesCtx["linked"] => (item, featureId) => {
+  const e = db.baseline.entities.find((x) => x.id === featureId && x.type === "feature");
+  if (e) mark(e, DECLINED, item, false);
+};
+
+const declinedBy = (db: Db): SimpleChangesCtx["declined"] => (item, featureId) => {
+  const e = db.baseline.entities.find((x) => x.id === featureId && x.type === "feature");
+  return !!e && markedItem(e, DECLINED, item);
+};
+
 /** service.link_new_feature: the new feature's goal (a supports link) and its roadmap item's feature (set_feature, as the person). */
 async function linkNewFeature(db: Db, me: { id: string; role: Schemas["Me"]["role"] }, featureId: string, fields: Record<string, unknown>) {
   const goal = typeof fields.serves === "string" ? db.baseline.entities.find((e) => e.id === fields.serves && e.type === "goal") : undefined;
@@ -5381,7 +5401,7 @@ async function linkNewFeature(db: Db, me: { id: string; role: Schemas["Me"]["rol
   const names = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
   const body = { op: "set_feature", target: { item_id: item }, before: { feature_id: was }, after: { feature_id: featureId } };
   const req = new Request("http://mock/v1/simple/changes", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
-  await routeSimpleChanges(simple, { id: me.id, role: me.role, owners, names, roles }, req, ["v1", "simple", "changes"], new URLSearchParams());
+  await routeSimpleChanges(simple, { id: me.id, role: me.role, owners, names, roles, linked: undeclines(db), declined: declinedBy(db) }, req, ["v1", "simple", "changes"], new URLSearchParams());
 }
 
 /** /v1/baseline/... through ./baseline.ts, with the caller and the lookups it needs. */
@@ -7841,6 +7861,60 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "baseline" && p[2] === "check" && !p[3] && req.method === "GET") {
     return json(200, groundTruthCheck(localStorage.getItem(MOCK_SCENARIO_KEY), db.baseline, db.simple_roadmap));
   }
+  // Its own feature (router.py add_own_feature, fixes.own_feature): the item joins the Ground Truth as a feature
+  // of its own with its own code, else the next free one; its proposed match is declined; an entry of its name is reused.
+  if (p[1] === "baseline" && p[2] === "roadmap-items" && p[3] && p[4] === "own-feature" && !p[5] && req.method === "POST") {
+    if (!atLeast(me.role, "approver")) return json(403, { detail: "Your role cannot do this" });
+    const it = itemById(db.simple_roadmap, p[3]);
+    if (!it) return json(404, { detail: "No such roadmap item" });
+    const ents = db.baseline.entities;
+    const was = ents.find((e) => e.type === "feature" && e.id === (it.linked_feature ?? it.feature_id));
+    const code = wholeCode(it.section) ?? wholeCode(/^([A-Z]{1,3}-\d+)\s/.exec(it.title)?.[1]);
+    const name = it.title.replace(/^[A-Z][A-Z0-9]*-\d+[a-z]?\s+/, "").trim() || it.title;
+    const same = ents
+      .filter((e) => e.type === "feature" && e.status !== "rejected" && e.title.trim().toLowerCase() === name.toLowerCase())
+      .sort((a, b) => Number(b.status === "confirmed") - Number(a.status === "confirmed"))[0];
+    if (was && was !== same) {
+      mark(was, DECLINED, it, true);
+      mark(was, UNCONFIRMED, it, false);
+    }
+    const free = !!code && !ents.some((e) => e.type === "feature" && wholeCode(e.key) === code) && !(db.baseline.codesGiven ?? []).includes(code);
+    const call = (path: string, body: unknown) =>
+      routeBaselineFor(db, me, new Request(new URL(path, req.url), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), path.split("/").filter(Boolean), new URLSearchParams());
+    let feature: typeof same | undefined = same;
+    const joined = !!same && same.status !== "confirmed";
+    if (same) {
+      mark(same, DECLINED, it, false);
+      mark(same, UNCONFIRMED, it, false);
+      if (same.status !== "confirmed") {
+        if (free && !same.attrs?.code) same.attrs = { ...same.attrs, code };
+        const res = await call(`/v1/baseline/entities/${same.id}/confirm`, null);
+        if (!res.ok) return res;
+      }
+    } else {
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "feature";
+      let key = free ? code! : slug;
+      for (let n = 2; ents.some((e) => e.key === key); n++) key = `${slug}-${n}`;
+      const had = new Set(ents.map((e) => e.id));
+      const res = await call("/v1/baseline/entities", { type: "feature", key, title: name, attrs: {}, status: "confirmed", origin: "user" });
+      if (!res.ok) return res;
+      feature = ents.find((e) => !had.has(e.id) && e.type === "feature");
+    }
+    if (!feature) return json(404, { detail: "No such feature" });
+    if (feature.id !== was?.id) await linkNewFeature(db, me, feature.id, { roadmap_item_id: p[3] });
+    // A proposal of the item's name, maybe shared with other items: confirmed for this item only.
+    if (joined) confirmedFor(db.simple_roadmap, feature, p[3], true);
+    const got = ANY_CODE.test(feature.key) ? feature.key : null;
+    return json(200, { status: "done", feature: { id: feature.id, code: got, name: feature.title }, code: got, proposal_id: null } satisfies Schemas["GroundTruthFixOut"]);
+  }
+  // Confirm it from one roadmap item's flag (router.py confirm_entity's item_id): other items on a shared proposal wait for their own.
+  if (p[1] === "baseline" && p[2] === "entities" && p[3] && p[4] === "confirm" && !p[5] && req.method === "POST" && q.get("item_id")) {
+    const e = db.baseline.entities.find((x) => x.id === p[3]);
+    const joined = !!e && e.status !== "confirmed";
+    const res = await routeBaselineFor(db, me, req, p, q);
+    if (res.ok && e) confirmedFor(db.simple_roadmap, e, q.get("item_id")!, joined);
+    return res;
+  }
   // The check's fixes with routes of their own (Give it a code, Link to a feature), and accepting a commenter's.
   if (p[1] === "baseline") {
     const fixed = await routeGroundTruthFixes(db.baseline, db.simple_roadmap, me, req, p, q);
@@ -8607,7 +8681,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       const why = d && readOnlyWhy(db, d);
       if (why) return json(409, { detail: why });
     }
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced, ladder: ladderMilestones(db, { id: me.id, role: me.role, name: simpleNames[me.id] ?? me.email }, bin.trash, bin.now) }, r, p, q);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced, ladder: ladderMilestones(db, { id: me.id, role: me.role, name: simpleNames[me.id] ?? me.email }, bin.trash, bin.now), linked: undeclines(db), declined: declinedBy(db) }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
@@ -8717,7 +8791,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       reviews.propose(b.title, b.approver_id, doc, id, made.number);
       return id;
     };
-    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, ...askFiling, proposeTo: (d: string | null) => reviews.proposeTo(d),
+    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, ...askFiling, linked: undeclines(db), declined: declinedBy(db), proposeTo: (d: string | null) => reviews.proposeTo(d),
       // ask_actions.slack_reach: whether Slack sends a pinged person the message (connected, and their review-requested ping on).
       slackReach: (id: string): "on" | "off" | "none" => {
         const install = ensureReports(db, db.user_id, reportLive(db, me)).integration;
