@@ -43,8 +43,13 @@ async function switchTo(page: Page, email: string, url: string) {
 const strip = (page: Page) => page.getByTestId("agenda-strip");
 const sheet = (page: Page) => page.getByRole("dialog", { name: "Agenda" });
 const rows = (page: Page) => sheet(page).getByTestId("agenda-row");
-// simple-home-qa-nov12 #2: a feature's code chip (F-06) leads its name; the order is read by names.
-const names = async (page: Page) => (await rows(page).locator("p:first-child").allInnerTexts()).map((t) => t.replace(/\s*(✓|skipped)\s*$/, "").replace(/^F-\d+[a-j]?\s?/, "").trim());
+const NOT_IN_GT = "Not in the Ground Truth";
+// simple-home-qa-nov12 #2: a feature's code chip (F-06) leads its name; the order is read by names,
+// without the "Not in the Ground Truth" flag an uncoded feature carries (simple-home-qa-nov14 #1).
+const names = async (page: Page) =>
+  (await rows(page).locator("p:first-child").allInnerTexts()).map((t) =>
+    t.replace(NOT_IN_GT, "").replace(/\s*(✓|skipped)\s*$/, "").replace(/^F-\d+[a-j]?\s?/, "").trim(),
+  );
 
 test.beforeEach(async ({ context }) => {
   await context.addInitScript((key) => localStorage.setItem(key, "meeting-agenda-sheet"), MOCK_SCENARIO_KEY);
@@ -64,6 +69,9 @@ test.describe("desktop", () => {
     const s = sheet(page);
     await expect(s).toBeVisible();
     expect(await names(page)).toEqual(["Alert rules engine", "Weekly alert digest", "Mobile alert push", "Quiet hours for muted teams", "Alert history export"]);
+    // A feature with no code is flagged, never hidden; a coded one is not.
+    await expect(rows(page).filter({ hasText: "Alert rules engine" }).getByTestId("not-in-gt")).toHaveText(NOT_IN_GT);
+    await expect(rows(page).filter({ hasText: "Weekly alert digest" }).getByTestId("not-in-gt")).toHaveCount(0);
     // Done and current items are fixed; the item after Now has no up arrow, the last no down arrow.
     await expect(rows(page).nth(0).getByRole("button", { name: /^(Move|Rename|Remove)/ })).toHaveCount(0);
     await expect(rows(page).nth(1).getByRole("button", { name: /^(Move|Rename|Remove)/ })).toHaveCount(0);
