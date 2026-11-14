@@ -11,8 +11,8 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field, field_validator
+from fastapi import Depends, HTTPException, Request, status
+from pydantic import Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,8 @@ from oracle import audit, autonomy
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import recheck_caller, require_role
 from oracle.autonomy_models import OracleAction
+from oracle.base_model import BaseModel
+from oracle.routing import APIRouter
 from oracle.runs.schemas import InboxOracleAction
 from oracle.tenant_settings import TenantSetting
 

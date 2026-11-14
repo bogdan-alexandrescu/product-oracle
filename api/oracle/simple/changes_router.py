@@ -35,12 +35,13 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
+from fastapi import Body, Depends, HTTPException, Query, Response, status
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.docs import service as docs
 from oracle.docs.schemas import DocumentSummary
 from oracle.export.pdf import PdfUnavailable, html_to_pdf, overflow_headers
+from oracle.routing import APIRouter
 from oracle.simple import changes, drafts, one_pager
 from oracle.simple.router import _people
 from oracle.simple.schemas import (

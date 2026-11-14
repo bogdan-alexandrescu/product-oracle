@@ -10,7 +10,6 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from sqlalchemy import text
 
 from oracle import wording
@@ -18,6 +17,7 @@ from oracle.account.router import router as account_router
 from oracle.auth.deps import SameOriginMiddleware
 from oracle.auth.router import router as auth_router
 from oracle.autonomy_router import router as autonomy_router
+from oracle.base_model import BaseModel
 from oracle.baseline.goal_interview import router as goal_interview_router
 from oracle.baseline.goals import GoalAttrs
 from oracle.baseline.router import router as baseline_router

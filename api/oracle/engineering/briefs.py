@@ -29,9 +29,10 @@ Format (``version: 1``)::
 from collections.abc import Collection
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import Field, ValidationError
 
 from oracle import safe_yaml
+from oracle.base_model import BaseModel
 
 VERSION = 1
 FILE = "tech_briefs.yaml"

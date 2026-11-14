@@ -15,7 +15,7 @@ nobody else, run tokens included, lists, files or dismisses them.
 import uuid
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role, require_role_now
@@ -52,6 +52,7 @@ from oracle.requests.schemas import (
     TriageStart,
     TriageStatus,
 )
+from oracle.routing import APIRouter
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunOut
 from oracle.trash.schemas import TrashEntryOut

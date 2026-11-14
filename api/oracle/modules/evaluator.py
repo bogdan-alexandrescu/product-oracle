@@ -28,8 +28,9 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
+from oracle.base_model import BaseModel
 from oracle.v2.contract import (
     MAX_CONDITION_DEPTH,
     MAX_CONDITION_NODES,

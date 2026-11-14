@@ -4,8 +4,9 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from oracle.base_model import BaseModel
 from oracle.readiness import Purpose
 from oracle.v2.schemas import FindingStatus, GapCategory
 

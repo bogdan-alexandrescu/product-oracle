@@ -13,11 +13,12 @@ import uuid
 from collections.abc import Awaitable
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import Depends, HTTPException, Query, Response, status
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import not_for_runs, require_role_now
 from oracle.discussions import research
+from oracle.routing import APIRouter
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunOut
 from oracle.trash import regenerate, service

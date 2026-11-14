@@ -9,10 +9,11 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
+from oracle.routing import APIRouter
 from oracle.simple import one_pager, plan
 from oracle.simple.changes import ChangeError
 from oracle.simple.router import _people

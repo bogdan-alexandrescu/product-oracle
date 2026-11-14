@@ -34,7 +34,6 @@ from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException, status
-from pydantic import BaseModel
 from sqlalchemy import any_, bindparam, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.base_model import BaseModel
 from oracle.baseline.goal_order import goal_position, goal_sort_key
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion

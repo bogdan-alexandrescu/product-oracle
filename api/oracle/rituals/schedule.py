@@ -24,7 +24,9 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
+
+from oracle.base_model import BaseModel
 
 Freq = Literal["weekly", "monthly", "quarterly", "yearly", "every_n_weeks"]
 # The Company time zone of a company that never set one (owner decision 2026-10-22).

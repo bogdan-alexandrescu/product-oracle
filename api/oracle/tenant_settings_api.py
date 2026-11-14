@@ -90,18 +90,19 @@ from datetime import date, datetime, timedelta
 from typing import Annotated, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from fastapi import Depends, HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import not_for_runs, recheck_caller, require_role
+from oracle.base_model import BaseModel
 from oracle.baseline.models import LINK_KINDS
 from oracle.branding import DEFAULT as BRANDING_DEFAULT
 from oracle.confidence import DEFAULTS as CONFIDENCE_DEFAULTS
 from oracle.rituals.schedule import DEFAULT_ZONE as COMPANY_ZONE
+from oracle.routing import APIRouter
 from oracle.sources.models import ITEM_KINDS, SOURCE_KINDS
 from oracle.tenant_settings import TenantSetting
 

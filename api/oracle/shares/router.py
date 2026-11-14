@@ -14,20 +14,22 @@ from collections import Counter
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from fastapi import Depends, HTTPException, Query, status
+from pydantic import Field
 from sqlalchemy import func, select
 
 from oracle import audit, company_time
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.base_model import BaseModel
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document
 from oracle.members.names import display_name
 from oracle.review.models import DocumentPublication
 from oracle.roadmap import public as roadmap_public
 from oracle.roadmap.models import RoadmapPublicCheck
+from oracle.routing import APIRouter
 from oracle.shares import service
 from oracle.shares.models import ShareLink, ShareLinkView
 

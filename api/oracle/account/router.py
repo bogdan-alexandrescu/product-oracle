@@ -10,7 +10,7 @@ import uuid
 from collections.abc import Awaitable
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import Depends, HTTPException, Request, Response, status
 
 from oracle.account import service
 from oracle.account.schemas import (
@@ -30,6 +30,7 @@ from oracle.members import service as members
 from oracle.members import tokens
 from oracle.members.schemas import ApiTokenOut, NamePatch
 from oracle.members.service import MemberError
+from oracle.routing import APIRouter
 
 
 async def _member(principal: CurrentPrincipal) -> Principal:

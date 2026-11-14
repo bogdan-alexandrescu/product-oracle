@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ConfigDict, Field, ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy import update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
+from oracle.base_model import BaseModel
 from oracle.discussions import access, inbox, replies, research
 from oracle.discussions.models import (
     MAX_BODY,

@@ -8,16 +8,18 @@ Alembic run, with every script, exactly as ``alembic upgrade head`` would.
 
 Cloud Run, Nov 12: an added instance took about 34 s before serving (9 s to Alembic's first
 log line, 24 s more to uvicorn's), so requests routed to it waited that long. Nov 13: about
-20 s (3.9 s to check the head, then 13.9 s to import the app); the check now runs while the
-app imports, as one statement.
+20 s (3.9 s to check the head, then 13.9 s to import the app); the check then ran in a thread
+while the app imported, as one statement, and both slowed (11.7 s and 19.6 s): it now runs in
+a forked process.
 """
 
 import asyncio
 import gc
 import logging
 import os
+import pickle
 import re
-import threading
+import signal
 import time
 from pathlib import Path
 
@@ -141,28 +143,75 @@ def _log_to_stderr(*names: str) -> None:
         logger.propagate = False
 
 
+def _start_check(connect_args: tuple[list, dict]) -> tuple[int, int]:
+    """Starts the head check in a forked process; returns its pid and the pipe its answer
+    comes back on (a pickled ``(at_head, took, error)``).
+
+    A process, not a thread: a thread shares the import's interpreter, and on one CPU each
+    of them waited on the other's GIL (Cloud Run, Nov 13: "migrations checked in 11.7 s, app
+    imported in 19.6 s"). The fork copies the loaded asyncpg and connect arguments, so the
+    check imports nothing; it is forked before the app's import starts any thread."""
+    started = time.perf_counter()
+    read, write = os.pipe()
+    pid = os.fork()
+    if pid:
+        os.close(write)
+        return pid, read
+    # The check's process: answer, then end at once (no atexit, no buffers of the parent's).
+    code = 0
+    try:
+        os.close(read)
+        try:
+            answer = (at_head(connect_args), time.perf_counter() - started, None)
+        except BaseException as e:  # raised again in the server's process
+            answer = (None, time.perf_counter() - started, e)
+        with os.fdopen(write, "wb") as out:
+            try:
+                pickle.dump(answer, out)
+            except Exception as e:  # an error that does not pickle: its text
+                pickle.dump((None, answer[1], RuntimeError(repr(answer[2] or e))), out)
+    except BaseException:
+        code = 1
+    finally:
+        os._exit(code)
+
+
+def _check_answer(pid: int, read: int) -> tuple[bool, float]:
+    """The forked check's answer: (at head, seconds it took); its error raised here."""
+    with os.fdopen(read, "rb") as answers:
+        data = answers.read()
+    os.waitpid(pid, 0)
+    if not data:
+        raise RuntimeError("the migration head check ended without an answer")
+    at, took, error = pickle.loads(data)
+    if error is not None:
+        raise error
+    return at, took
+
+
+def _stop_check(pid: int, read: int) -> None:
+    """Ends the check's process (by its pid) when the start fails before reading it."""
+    try:
+        os.kill(pid, signal.SIGKILL)
+        os.waitpid(pid, 0)
+    except (ProcessLookupError, ChildProcessError):
+        pass
+    os.close(read)
+
+
 def main() -> None:
     _log_to_stderr(log.name, "alembic")
     started = time.perf_counter()
     url = database_url()
     # The head check waits on the database (on a new Cloud Run instance, mostly its first
-    # connection) while the app's modules load: it runs in a thread, and nothing is served
-    # until it has answered and, if the database is behind, Alembic has brought it to head.
+    # connection) while the app's modules load: it runs in its own process, and nothing is
+    # served until it has answered and, if the database is behind, Alembic has brought it to
+    # head.
     connect_args = _connect_args(url)
-    # Loaded here, so the check's thread imports nothing beside the app's imports.
+    # Loaded here, so the check's process imports nothing.
     import asyncpg  # noqa: F401
 
-    check: dict = {}
-
-    def run_check() -> None:
-        try:
-            check["at_head"] = at_head(connect_args)
-        except BaseException as e:  # raised again below, before anything is served
-            check["error"] = e
-        check["took"] = time.perf_counter() - started
-
-    checker = threading.Thread(target=run_check, name="oracle.startup.check")
-    checker.start()
+    pid, read = _start_check(connect_args)
     # No cyclic garbage collection while the app's modules load: they make a few hundred
     # thousand long-lived objects, and each collection on the way walks them all again (a
     # fifth of the import's time on one CPU). They are frozen out of later collections,
@@ -174,14 +223,15 @@ def main() -> None:
         from oracle.main import app
 
         gc.freeze()
+    except BaseException:
+        # A failed import ends the start now, not when the check's connection answers.
+        _stop_check(pid, read)
+        raise
     finally:
         gc.enable()
     imported = time.perf_counter()
-    checker.join()
-    if "error" in check:
-        raise check["error"]
-    ran = not check["at_head"]
-    migrated = check["took"]
+    at, migrated = _check_answer(pid, read)
+    ran = not at
     if ran:
         upgrade(url)
         migrated += time.perf_counter() - imported

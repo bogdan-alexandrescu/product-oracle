@@ -11,11 +11,10 @@ from datetime import datetime
 from typing import Annotated, Literal
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import Depends, HTTPException, Query, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse
-from fastapi.routing import APIRoute
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 from sqlalchemy import func, select
 
 from oracle import audit, crypto
@@ -23,6 +22,7 @@ from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.auth.models import User
 from oracle.auth.service import may_sign_in
 from oracle.authz import recheck_caller, require_role
+from oracle.base_model import BaseModel
 from oracle.connections import oauth
 from oracle.integrations import slack_api, slack_oauth
 from oracle.integrations.models import CompanyIntegration
@@ -32,6 +32,7 @@ from oracle.metrics import service as metrics_service
 from oracle.metrics.models import Metric
 from oracle.metrics.schemas import AnalyticsIn, AnalyticsOut
 from oracle.reports.alignment import CHANNEL_ID
+from oracle.routing import APIRouter, LazyAPIRoute
 from oracle.slack import bridge, outbox
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings import TenantSetting
@@ -327,7 +328,7 @@ async def test_slack_notifications(
 # as an id.
 
 
-class _NoInputRoute(APIRoute):
+class _NoInputRoute(LazyAPIRoute):
     """A route whose 422 never sends back what was sent: FastAPI's validation error echoes
     the request body in each error's ``input``, and the analytics PUT carries the key."""
 

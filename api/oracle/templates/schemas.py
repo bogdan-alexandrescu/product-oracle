@@ -2,8 +2,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
+from oracle.base_model import BaseModel
 from oracle.docs.schemas import UpdatePeriod
 
 TemplateKind = Literal["prd", "roadmap", "vision", "strategy", "update", "pricing"]

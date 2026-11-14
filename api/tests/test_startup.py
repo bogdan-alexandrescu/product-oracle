@@ -26,14 +26,43 @@ no_claim=<what green does not prove>.
   interpreter, as a new instance does) loads no MCP SDK, PDF reader, SQL parser or
   template engine; fails_when=a route module imports one at its top again (Cloud Run, Nov
   13: the app's import took 13.9 s of a 20 s start); no_claim=they still load when used.
-- test_app_import_within_budget: protects=the app's import in a clean interpreter, gc off
-  as oracle.startup does, stays under IMPORT_BUDGET_S; fails_when=the import goes back to
-  building every pydantic schema and loading every library at import (5.8-6.1 s on the
-  lane's machine, 4.2-4.7 s after); no_claim=Cloud Run's own time (about 2.3 times this
-  machine's).
+- test_app_import_within_budget: protects=importing the app and then reading the role map
+  (the first page load's GET /v1/me/capabilities) on one CPU (taskset -c 0, as Cloud Run's
+  one vCPU), cold, with collection off as oracle.startup does, stays under IMPORT_BUDGET_S,
+  the role map alone under ROLE_MAP_BUDGET_S; fails_when=the import goes back to building
+  every route's dependency tree and fields at declaration, or the role map builds them at
+  the first request instead; no_claim=Cloud Run's own time.
+- test_role_map_builds_no_route: protects=the role map (GET /v1/me/capabilities, read on
+  every page load) builds no route; fails_when=it reads route.dependant, which builds all
+  500+ routes inside the async handler (1.1-2.0 s on one CPU, the event loop blocked).
+- test_a_route_read_during_its_build_waits_for_it: protects=a second thread reading a route
+  that another thread is building gets the built part; fails_when=it gets AttributeError.
+- test_a_failed_build_is_tried_again: protects=a route whose build raises raises the same
+  error on the next read, and builds once the cause is gone; fails_when=it is left with
+  neither its declaration nor its build (AttributeError on every read).
+- test_routes_are_built_at_first_use: protects=importing the app builds no included route's
+  dependency tree, fields or handler (FastAPI builds them again per inclusion at the first
+  request); fails_when=a router goes back to fastapi.APIRouter's eager routes.
+- test_declared_settings_match_fastapis_build: protects=every route's declared settings
+  (path, methods, response model, operation id, ...) set at import equal what FastAPI's own
+  build sets; fails_when=oracle.routing's copy of the declared part drifts from FastAPI
+  (a route served or documented differently).
 - test_a_failed_check_stops_the_start: protects=the head check, run beside the app's
   import, still decides before anything is served; fails_when=its error is lost in its
   thread and the server starts on a database it could not read.
+- test_head_check_runs_outside_the_importing_process: protects=the head check runs in its
+  own process, so it never holds the importing interpreter's GIL; fails_when=it goes back to a
+  thread beside the import (Cloud Run, Nov 13: "migrations checked in 11.7 s, app imported in
+  19.6 s", both slowed by sharing one interpreter on one CPU); no_claim=the time it takes.
+- test_a_failed_import_does_not_wait_on_the_check: protects=an app import that fails ends
+  the start at once, its check stopped; fails_when=the process stays alive waiting on the
+  check's database connection (a non-daemon thread, or a check process left running).
+- test_defer_build_only_on_oracles_models: protects=only Oracle's own pydantic models build
+  at first use; fails_when=defer_build is set on pydantic's BaseModel, deferring the SDKs'
+  and FastAPI's models too (two threadpool threads can then race to build one), or an Oracle
+  model is left out of the project base.
+- test_lazy_module_imports_once: protects=a LazyModule imports its module at the first read
+  only; fails_when=every attribute read goes through importlib again.
 - test_script_head_is_alembics_head: protects=the head read from the scripts' text is the
   one Alembic computes; fails_when=the cheap parse drifts from Alembic (a stale head would
   skip a migration).
@@ -58,6 +87,7 @@ no_claim=<what green does not prove>.
 import asyncio
 import logging
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -242,24 +272,133 @@ def test_app_import_leaves_heavy_libraries_unloaded():
     assert out.stdout.strip() == "[]", out.stdout + out.stderr
 
 
-# The lane's machine: 5.8-6.1 s before (every schema built, every library loaded at
-# import), 4.2-4.7 s after; the budget leaves headroom over the after.
-IMPORT_BUDGET_S = 5.4
+# The lane's machine on one CPU (taskset -c 0): 2.9-3.0 s before (every route built at
+# declaration), 2.2-2.4 s after when the host is quiet, 3.1-3.2 s with the shared host
+# loaded. The first page load reads the role map (GET /v1/me/capabilities): 1.1-2.0 s when
+# it built every route's dependency tree, 0.04-0.07 s from the declared dependencies. The
+# total is a coarse guard: test_routes_are_built_at_first_use and
+# test_role_map_builds_no_route catch those regressions on any host.
+IMPORT_BUDGET_S = 3.5
+ROLE_MAP_BUDGET_S = 0.3
+ONE_CPU = ["taskset", "-c", "0"] if shutil.which("taskset") else []
 
 
 @pytest.mark.timing
 def test_app_import_within_budget():
     code = (
         "import gc, time; gc.disable(); t = time.perf_counter(); import oracle.main; "
-        "print(time.perf_counter() - t)"
+        "i = time.perf_counter(); from oracle.capabilities import capabilities; "
+        "capabilities(oracle.main.app, 'viewer', engineering_lead=True); "
+        "print(i - t, time.perf_counter() - i)"
     )
-    took = []
-    for _ in range(2):
+    took, role_map = [], []
+    for _ in range(3):
         out = subprocess.run(
-            [sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True, check=True
+            [*ONE_CPU, sys.executable, "-c", code],
+            cwd=API_DIR,
+            capture_output=True,
+            text=True,
+            check=True,
         )
-        took.append(float(out.stdout.strip().splitlines()[-1]))
+        imported, roles = map(float, out.stdout.strip().splitlines()[-1].split())
+        took.append(imported + roles)
+        role_map.append(roles)
+    assert min(role_map) < ROLE_MAP_BUDGET_S, role_map
     assert min(took) < IMPORT_BUDGET_S, took
+
+
+_ROUTES = """
+import oracle.main
+from oracle.capabilities import _routes
+
+included = [
+    r for inc in oracle.main.app.router.routes if hasattr(inc, "original_router")
+    for r in _routes(inc.original_router.routes)
+]
+"""
+
+
+def test_routes_are_built_at_first_use():
+    code = _ROUTES + (
+        "built = sorted(r.path for r in included if 'dependant' in vars(r))\n"
+        "print(len(included), built)\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    count, built = out.stdout.strip().split(" ", 1)
+    assert int(count) > 500
+    assert built == "[]"
+
+
+def test_declared_settings_match_fastapis_build():
+    code = _ROUTES + (
+        "drift = []\n"
+        "for r in included:\n"
+        "    declared = {k: v for k, v in vars(r).items() if not k.startswith('_')}\n"
+        # The first read of a built part runs FastAPI's own build over the same route.
+        "    assert r.dependant and r.app\n"
+        "    drift += [(r.path, k) for k, v in declared.items() if vars(r)[k] != v]\n"
+        "print(drift)\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "[]"
+
+
+def test_role_map_builds_no_route():
+    code = _ROUTES + (
+        "from oracle.capabilities import capabilities\n"
+        "capabilities(oracle.main.app, 'viewer', engineering_lead=True)\n"
+        "print(sorted(r.path for r in included if 'dependant' in vars(r)))\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "[]"
+
+
+def _endpoint() -> dict:
+    return {}
+
+
+def test_a_route_read_during_its_build_waits_for_it(monkeypatch):
+    import threading
+
+    from fastapi.routing import APIRoute
+
+    from oracle.routing import LazyAPIRoute
+
+    real, started = APIRoute.__init__, threading.Event()
+
+    def slow(self, *args, **kwargs):
+        started.set()
+        time.sleep(0.2)
+        real(self, *args, **kwargs)
+
+    monkeypatch.setattr(APIRoute, "__init__", slow)
+    route = LazyAPIRoute("/x", _endpoint)
+    first = threading.Thread(target=lambda: route.dependant)
+    first.start()
+    started.wait()
+    assert route.dependant.call is _endpoint
+    first.join()
+
+
+def test_a_failed_build_is_tried_again(monkeypatch):
+    from fastapi.routing import APIRoute
+
+    from oracle.routing import LazyAPIRoute
+
+    def boom(self, *args, **kwargs):
+        raise RuntimeError("build failed")
+
+    route = LazyAPIRoute("/x", _endpoint)
+    with monkeypatch.context() as patch:
+        patch.setattr(APIRoute, "__init__", boom)
+        with pytest.raises(RuntimeError, match="build failed"):
+            route.dependant  # noqa: B018 (the read builds)
+        with pytest.raises(RuntimeError, match="build failed"):
+            route.dependant  # noqa: B018
+    assert route.dependant.call is _endpoint
 
 
 def test_a_failed_check_stops_the_start(served, monkeypatch):
@@ -272,6 +411,78 @@ def test_a_failed_check_stops_the_start(served, monkeypatch):
         startup.main()
 
     assert served == []
+
+
+def test_head_check_runs_outside_the_importing_process(at_head, served, monkeypatch, tmp_path):
+    seen = tmp_path / "check.txt"
+
+    def recording(connect_args):
+        seen.write_text(str(os.getpid()))
+        return True
+
+    monkeypatch.setattr(startup, "at_head", recording)
+
+    startup.main()
+
+    assert int(seen.read_text()) != os.getpid()
+    assert len(served) == 1
+
+
+def test_a_failed_import_does_not_wait_on_the_check():
+    code = (
+        "import sys, time\n"
+        "from oracle import startup\n"
+        "startup.at_head = lambda connect_args: time.sleep(60) or True\n"
+        "sys.modules['oracle.main'] = None\n"
+        "startup.main()\n"
+    )
+    started = time.monotonic()
+    out = subprocess.run(
+        [sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True, timeout=30
+    )
+    assert out.returncode != 0
+    assert "import of oracle.main halted" in out.stderr, out.stderr
+    assert time.monotonic() - started < 20
+
+
+def test_defer_build_only_on_oracles_models():
+    code = (
+        "import pydantic, pydantic_settings, oracle.main\n"
+        "from oracle.base_model import BaseModel\n"
+        "def every(cls):\n"
+        "    for sub in cls.__subclasses__():\n"
+        "        yield sub\n"
+        "        yield from every(sub)\n"
+        "print(pydantic.BaseModel.model_config.get('defer_build'))\n"
+        "print(BaseModel.model_config.get('defer_build'))\n"
+        "print(sorted({c.__module__ + '.' + c.__qualname__ for c in every(pydantic.BaseModel)\n"
+        "    if c.__module__.startswith('oracle.') and '[' not in c.__qualname__\n"
+        "    and not issubclass(c, (BaseModel, pydantic_settings.BaseSettings))}))\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    pydantics, oracles, left_out = out.stdout.strip().splitlines()
+    assert pydantics == "None"
+    assert oracles == "True"
+    assert left_out == "[]"
+
+
+def test_lazy_module_imports_once(monkeypatch):
+    import importlib
+    import json
+
+    from oracle.lazy import LazyModule
+
+    imported: list[str] = []
+    real = importlib.import_module
+    monkeypatch.setattr(
+        importlib, "import_module", lambda name: imported.append(name) or real(name)
+    )
+    lazy = LazyModule("json")
+
+    assert lazy.dumps is json.dumps
+    assert lazy.loads is json.loads
+    assert imported == ["json"]
 
 
 def test_script_head_is_alembics_head():

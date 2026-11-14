@@ -16,7 +16,7 @@ import uuid
 from datetime import date
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 
 from oracle import audit, autonomy_drafts, changes, company_time
@@ -46,6 +46,7 @@ from oracle.launches.schemas import (
     TaskPatch,
 )
 from oracle.roadmap import router as _roadmap_router  # noqa: F401 - roadmap.items runs first
+from oracle.routing import APIRouter
 from oracle.runs import extensions
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunOut

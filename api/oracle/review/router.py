@@ -7,7 +7,7 @@ import uuid
 from collections.abc import Awaitable
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from oracle import wording
@@ -33,6 +33,7 @@ from oracle.review.schemas import (
     SectionReviewIn,
     SectionReviewOut,
 )
+from oracle.routing import APIRouter
 from oracle.runs import review_link
 from oracle.runs.schemas import RunReviewOut
 from oracle.specs import service as spec_service

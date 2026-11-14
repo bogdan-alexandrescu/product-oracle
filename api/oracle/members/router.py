@@ -9,7 +9,7 @@ import uuid
 from collections.abc import Awaitable
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from oracle import audit
@@ -40,6 +40,7 @@ from oracle.members.schemas import (
     TokenApprovalOut,
     TokenKind,
 )
+from oracle.routing import APIRouter
 
 router = APIRouter(
     prefix="/v1",

@@ -12,7 +12,7 @@ is audited; a confirmed revision also records change events (oracle.changes).
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,6 +45,7 @@ from oracle.modules.schemas import (
     RecommendationOut,
     RevisionIn,
 )
+from oracle.routing import APIRouter
 from oracle.templates.models import Template
 from oracle.v2.schemas import CompositionRevisionOut
 

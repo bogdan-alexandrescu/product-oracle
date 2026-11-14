@@ -5,8 +5,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import ConfigDict, Field, StringConstraints
 
+from oracle.base_model import BaseModel
 from oracle.pricing.models import ACCOUNT_MAX
 
 # --------------------------------------------------------------------------- Win and loss

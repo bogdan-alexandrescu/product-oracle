@@ -5,8 +5,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
+from pydantic import ConfigDict, Field, PrivateAttr, model_validator
 
+from oracle.base_model import BaseModel
 from oracle.members.schemas import PersonOut
 from oracle.v2.schemas import Freshness
 

@@ -11,8 +11,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
+from oracle.base_model import BaseModel
 from oracle.baseline.schemas import EvidenceOut
 from oracle.blockers.policy import BlockerCompliantPath, BlockerPolicyFlag, LimitKind
 from oracle.v2.schemas import (

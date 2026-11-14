@@ -2,8 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
-
+from oracle.base_model import BaseModel
 from oracle.docs.schemas import DocumentKind
 from oracle.runs.schemas import Flow
 

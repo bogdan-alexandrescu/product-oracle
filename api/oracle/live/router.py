@@ -28,10 +28,10 @@ from collections.abc import Awaitable, Callable, Hashable
 from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
-from pydantic import BaseModel
+from fastapi import Depends, HTTPException, Path, Query, Request, status
 
 from oracle.auth.deps import TenantDB
+from oracle.base_model import BaseModel
 from oracle.config import get_settings
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
@@ -39,6 +39,7 @@ from oracle.connections.router import FirefliesHttp, UserPrincipal
 from oracle.live import budget, tokens
 from oracle.live import fireflies as live
 from oracle.live.models import LiveRead
+from oracle.routing import APIRouter
 from oracle.sources.connectors.fireflies import MAX_MEETING_ID
 from oracle.sources.service import InvalidError, _read_credential
 from oracle.tenant_settings_api import company_timezone

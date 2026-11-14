@@ -17,7 +17,7 @@ import json
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +45,7 @@ from oracle.engineering.schemas import (
     TechBriefVerdict,
 )
 from oracle.engineering.store import KIND
+from oracle.routing import APIRouter
 from oracle.runs import extensions
 from oracle.runs import service as runs_service
 from oracle.runs.models import Run

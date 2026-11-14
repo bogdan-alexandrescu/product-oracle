@@ -5,7 +5,9 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from oracle.base_model import BaseModel
 
 Kind = Literal["direct", "indirect", "status_quo"]
 Label = Literal["pricing", "changelog", "product", "docs", "blog", "other"]

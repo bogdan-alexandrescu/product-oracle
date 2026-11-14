@@ -5,8 +5,9 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from oracle.base_model import BaseModel
 from oracle.docs.schemas import VersionSource
 from oracle.runs.schemas import KnobsIn
 from oracle.trace.schemas import TraceOutput

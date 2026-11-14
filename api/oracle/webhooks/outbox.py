@@ -37,12 +37,12 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
-from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.models import ApiToken, User
+from oracle.base_model import BaseModel
 from oracle.baseline.public_links import LinkError, guarded_transport
 from oracle.docs.models import Document
 from oracle.export.render import app_url

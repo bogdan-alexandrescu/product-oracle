@@ -11,7 +11,7 @@ on an intake (:mod:`oracle.interviews.team`) is theirs alone to answer in.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
@@ -30,6 +30,7 @@ from oracle.interviews.schemas import (
     TeamTurnIn,
     TeamTurnOut,
 )
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1", tags=["interviews"])
 

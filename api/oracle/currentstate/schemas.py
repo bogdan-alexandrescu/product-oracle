@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from oracle.base_model import BaseModel
 
 Mark = Literal["new", "in_progress", "exists", "exists_old"]
 ProofKind = Literal["code_map", "pull_requests", "tasks", "measured"]

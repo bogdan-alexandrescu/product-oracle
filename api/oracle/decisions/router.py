@@ -9,7 +9,7 @@ tool by its operation id; run tokens never decide, review or reassign.
 import uuid
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role, require_role_now
@@ -29,6 +29,7 @@ from oracle.decisions.schemas import (
 )
 from oracle.jobs import service as jobs_service
 from oracle.jobs.schemas import LlmJobOut
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1", tags=["decisions"])
 Viewer = Annotated[Principal, Depends(require_role("viewer"))]
