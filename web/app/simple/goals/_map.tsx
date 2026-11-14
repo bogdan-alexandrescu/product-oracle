@@ -677,7 +677,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     style={{ borderLeft: `3px solid ${t.color}` }}
                   >
                     <button type="button" onClick={() => c.onOpen(f)} className="min-w-0 flex-1 text-left">
-                      <span className="block truncate hover:underline" title={`${c.codes.get(f.id) ?? ""} ${f.name}`.trim()}>
+                      <span className="block truncate hover:underline max-[600px]:line-clamp-2 max-[600px]:whitespace-normal" data-testid="goal-map-feature-name" title={`${c.codes.get(f.id) ?? ""} ${f.name}`.trim()}>
                         <FeatureName item={{ code: c.codes.get(f.id), title: f.name }} />
                       </span>
                       <span className="block truncate text-[11.5px] text-text2" title={f.ms.length ? f.ms.map((m) => mWords(m, c)).join(" · ") : undefined}>

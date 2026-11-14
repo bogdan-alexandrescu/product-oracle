@@ -5147,7 +5147,7 @@ function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): Discus
 /** G3 "discussion-record": Oracle's proposed date basis in an open discussion on checkout-redesign v2's guest-checkout item. */
 function seedDiscussionRecordScenario(db: Db): DiscussionsDb {
   const prd = findDocument(db, "checkout-redesign")!;
-  return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, prd, 2);
+  return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { ...prd, name: (key) => itemName(db, key) }, 2);
 }
 
 /** G3 "discussion-change-kinds": Oracle's priority move, ask and decision on the feature-set stop's saved-carts item. */
@@ -5161,7 +5161,7 @@ function seedDiscussionChangeKindsScenario(db: Db): DiscussionsDb {
   };
   return seedDiscussionChangeKinds(
     { members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now },
-    { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind },
+    { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind, name: (key) => itemName(db, key, run.id) },
     { moved: feature("F-84"), above: feature("F-82") },
   );
 }
@@ -5197,7 +5197,7 @@ function seedRunDiscussionsScenario(db: Db): DiscussionsDb {
   const run = db.runs!.runs.find((r) => r.id === FEATURE_SET_RUN)!;
   const cp = run.checkpoints.find((c) => c.status === "pending")!;
   const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
-  return seedRunDiscussions({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind });
+  return seedRunDiscussions({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind, name: (key) => itemName(db, key, run.id) });
 }
 
 const CHECKPOINT_NAMES: Record<string, string> = {
@@ -5247,6 +5247,18 @@ function screenPageName(path: string): string {
   return name;
 }
 
+/**
+ * An item as people read it (service.Labels._item_name): its Ground Truth feature's code and name ("F-12 Bulk address edit"),
+ * else the run's scope row's title, else its key.
+ */
+function itemName(db: Db, key: string, runId?: string): string {
+  const feature = db.baseline.entities.find((e) => e.type === "feature" && e.key === key);
+  const row = runId ? (db.runs?.scopes?.[runId] ?? []).flatMap((x) => x.features).find((f) => f.key === key) : undefined;
+  const name = (row?.title || feature?.title || "").trim() || key;
+  const code = feature ? featureCodes(db.baseline.entities.filter((e) => e.type === "feature"), db.roadmap?.section_code, db.plan_edits, db)[feature.id] : undefined;
+  return code ? `${code} ${name}` : name;
+}
+
 /** A discussion's subject as the API resolves it (oracle.discussions.service): documents, sections and run checkpoints are checked; other kinds are taken as given. */
 function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): SubjectInfo | { status: number; detail: string } {
   if (kind === "document" || kind === "section" || kind === "roadmap_item") {
@@ -5257,7 +5269,7 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     const url = `/documents/${doc.slug}/v/${v.number}`;
     if (kind === "document") return { key: `document:${doc.id}`, label: doc.title, url, document_id: doc.id };
     if (kind === "roadmap_item")
-      return { key: `roadmap_item:${doc.id}:${s.item_key}`, label: `${doc.title} · ${s.item_key}`, url: `${url}/items`, document_id: doc.id };
+      return { key: `roadmap_item:${doc.id}:${s.item_key}`, label: `${doc.title} · ${itemName(db, String(s.item_key))}`, url: `${url}/items`, document_id: doc.id };
     const section = v.sections.find((x) => x.section_key === s.section_key);
     if (!section) return { status: 422, detail: `Section ${s.section_key} is not in version ${v.number}` };
     // As the API: the document's own title as a section's heading is its Introduction (ask-phone QA row 3).
@@ -5271,7 +5283,7 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     if (!cp) return { status: 404, detail: "Checkpoint not found" };
     const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
     if (kind === "checkpoint") return { key: `checkpoint:${run.id}:${cp.kind}`, label, url: `/runs/${run.id}`, run_id: run.id };
-    return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
+    return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${itemName(db, String(s.item_key), run.id)}`, url: `/runs/${run.id}`, run_id: run.id };
   }
   if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
   // An intake and its gaps open on the intake's page; a PRD's own gap on its newest version (as Labels.of).
