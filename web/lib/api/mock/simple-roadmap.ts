@@ -25,7 +25,7 @@ import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, planRowState, rowCodeTaken, type AppliedRecord } from "./approved-roadmap";
 import { codedTitle, prdCode } from "./item-code";
 export { codedTitle, prdCode, shownCode, shownName } from "./item-code";
-import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
+import { PLAN_PRD_SLUG, planGoalNames, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
 import { featureKeyOf, startEffort } from "./simple-priorities";
 import { basePlan as fitBasePlan, PLAN_TARGET as FIT_PLAN_TARGET, schedule as fitSchedule } from "./fit-date-engine";
@@ -382,10 +382,16 @@ export const MAP_GOALS: Record<string, string> = {};
  */
 /** tracks-goal (service.load): the live company goal a track is tied to (the Tracks sheet's track_state), by id and name. */
 export function trackGoal(db: SimpleDb, track: string): { goal_id: string | null; goal_name: string | null } {
-  const id = (db as SimpleDb & { track_state?: Record<string, { goal?: string | null }> }).track_state?.[track]?.goal;
+  const st = (db as SimpleDb & { track_state?: Record<string, { goal?: string | null }> }).track_state?.[track];
+  // QA Nov 14: the seed ties one track to a goal (TRACK_GOALS) till a person picks or clears one.
+  const seed = TRACK_GOALS[track];
+  const id = st && "goal" in st ? st.goal : seed ? stableUuid(`goal-bucket/${seed}`) : null;
+  if (id && !db.goal_buckets && !(st && "goal" in st) && planGoalNames().includes(seed)) return { goal_id: id, goal_name: seed };
   const g = id ? db.goal_buckets?.goals.find((x) => x.id === id && !x.archived && !x.trashed) : undefined;
   return { goal_id: g?.id ?? null, goal_name: g?.title ?? null };
 }
+/** The seed's track goals (a goal bucket's title by track): the Usage alerts track serves Reliability. Invented. */
+const TRACK_GOALS: Record<string, string> = { alerts: "Reliability" };
 
 export function mapGoalRef(db: Pick<SimpleDb, "goal_buckets">, id: string): Schemas["SimpleGoalRef"] | null {
   if (!(id in MAP_GOALS) || db.goal_buckets?.goals.some((g) => g.id === id && g.trashed)) return null;

@@ -140,7 +140,9 @@ export function layout(
     if (r.kind !== "item") continue;
     const it = r.item;
     // The name's group: the row less its padding, or its 60% when other chips share the row.
-    const w = (labelW - padX) * (r.place != null || it.draft || it.estimate_pending ? 0.6 : 1);
+    // QA Nov 14 #5: a phone's return place ("1st to return") takes a line of its own under the name.
+    const own = compact && r.place != null;
+    const w = (labelW - padX) * ((r.place != null && !own) || it.draft || it.estimate_pending ? 0.6 : 1);
     // QA Nov 12 #1/#2: the name reads with its code (F-06 Weekly alert digest); an item with no
     // code has its "Not in the Ground Truth" mark after it, measured as the pill is.
     const words = itemName(it);
@@ -151,7 +153,7 @@ export function layout(
     const beside = !tail || (n === 1 && textWidth(words, size, 400) + tail <= w);
     // Under the name, the pill and the mark share a line where both fit, else take one each.
     const under = beside ? 0 : pill && gt && tail > w ? 2 : 1;
-    const h = padY + n * lineH + under * (18 + gapY);
+    const h = padY + n * lineH + under * (18 + gapY) + (own ? 16 + gapY : 0);
     if (h > rowH) nameH.set(it.id, h);
   }
   const hs = rows.map((r) => {
@@ -857,7 +859,7 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
                   ("1st"). QA Nov 12 #1: the name reads with its code first ("F-06 Weekly alert
                   digest"), as its card does. The name gets the row's space first; the chips after
                   it shrink (finding 7). */}
-              {r.place != null && (
+              {r.place != null && !compact && (
                 <span className="tnum flex-none text-xs text-text2" data-testid="return-place" title={`${ordinal(r.place)} to come back if room opens`}>
                   {/* qa4-simple-roadmap-23: the number says what it is. */}
                   {ordinal(r.place)} to return
@@ -882,8 +884,14 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
                   {itemName(r.item)}
                 </span>
                 <ItemMark f={states?.get(`item:${r.item.id}`)} compact={compact} today={data.today} />
-                {/* QA Nov 12 #2: an item with no Ground Truth code is flagged on its row. */}
-                <NotInGt item={r.item} className="h-5! px-2! text-xs!" />
+                {/* QA Nov 12 #2: an item with no Ground Truth code is flagged on its row (QA Nov 14 #5:
+                    cut to the column on a phone, whole in its title). */}
+                <NotInGt item={r.item} className="h-5! max-w-full min-w-0 px-2! text-xs!" />
+                {r.place != null && compact && (
+                  <span className="tnum basis-full text-xs text-text2" data-testid="return-place" title={`${ordinal(r.place)} to come back if room opens`}>
+                    {ordinal(r.place)} to return
+                  </span>
+                )}
               </span>
               {r.item.draft && !closedItem(r.item) && (
                 <span className="max-w-[48px] min-w-0 shrink truncate rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag" title="Draft">

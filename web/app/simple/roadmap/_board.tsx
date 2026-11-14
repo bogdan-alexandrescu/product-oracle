@@ -7,7 +7,7 @@ import { LINK_KINDS } from "@/lib/roadmap-links";
 
 import { itemName, NotInGt } from "./_gtflag";
 import { MsBoardRow } from "./_milestones";
-import { barKind, broken, brokenLinks, closedItem, codedFlag, estimateOnly, estimateWords, mergedName, partsTree, shortDay, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
+import { barKind, broken, brokenLinks, closedItem, codedFlag, drawnKeyDates, estimateOnly, estimateWords, mergedName, partsTree, shortDay, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
 
 export type Horizon = Item["horizon"];
 
@@ -177,6 +177,7 @@ export interface BoardProps {
 export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, pending: held, onKeyMove, onKeyEnd, onKeyCancel, dropTargets, goalSuggestions, onGoal }: BoardProps) {
   const drag = useRef<Drag | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const keyDates = drawnKeyDates(data);
   // A card the keyboard moved: it gets the focus back once it is drawn in its new column.
   const refocus = useRef<{ id: string; horizon: Horizon } | null>(null);
   const cols = boardColumns(Object.keys(held).length ? { ...data, items: data.items.map((i) => (held[i.id] ? { ...i, horizon: held[i.id] } : i)) } : data);
@@ -495,7 +496,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
               {c.below.length > 0 && `, ${c.below.length} cut`}
             </span>
           </header>
-          <MsBoardRow horizon={c.key} windows={data.windows} />
+          <MsBoardRow horizon={c.key} windows={data.windows} milestones={data.milestones} keyDates={keyDates} />
           {c.groups.map((g) => (
             <div key={g.key} className="mb-2" data-testid="board-group">
               <h3

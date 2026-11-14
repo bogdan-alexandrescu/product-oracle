@@ -12,9 +12,9 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState
 import { Button, InfoTip } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { addDays, calendarDay } from "@/lib/dates";
-import { joinedNames } from "@/lib/milestone-code";
+import { joinedNames, joinedWords } from "@/lib/milestone-code";
 
-import { decide as decideChange, shortDay, type Item, type Roadmap } from "./_lib";
+import { decide as decideChange, shortDay, type Item, type KeyDate, type Roadmap } from "./_lib";
 import { doneLine, isMeasured, kindName, MK_KINDS, MK_STATUS, MkIcon, MkStatusMark, type MkKind, type MkStatus } from "./_mk";
 import { msEdge, msFill, msInk } from "./_timeline";
 
@@ -31,7 +31,8 @@ export function useMsBand(phone = false): number {
   return ms && ms.band.length ? msBand(phone) : 0;
 }
 const BAND_ROW = 24;
-export type MsRow = { id: string; title: string; lane: string; y: number; h: number; start: string; end: string };
+/** QA Nov 14 #4: `closed`, a cut or merged item (no milestone flags); `guess`, dates that are only an estimate. */
+export type MsRow = { id: string; title: string; lane: string; y: number; h: number; start: string; end: string; closed?: boolean; guess?: boolean };
 export type MsLane = { key: string; title: string; y0: number; y1: number };
 
 const day = (d: string) => shortDay(d);
@@ -808,12 +809,15 @@ export function MsLayer(props: MsLayerProps) {
     // Each item it waits on tied to it by a dotted line; one that ends after it is late (red).
     for (const id of m.item_ids) {
       const r = rowOf(id);
-      if (!r) continue;
+      // QA Nov 14 #4: a cut item's old dates and milestone flags no longer apply; an item with
+      // no dates yet is never late from its estimate (its tie is grey).
+      if (!r || r.closed) continue;
       const ex = X(r.end);
       const cy = r.y + r.h / 2;
-      const late = r.end > date;
-      if (!late && ex < mx) out.push(<div key={`g-${m.id}-${id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: ex + 2, top: cy - 1, width: mx - ex - 2, borderTop: `2px dotted ${msEdge(msCode(m))}` }} />);
-      out.push(<i key={`gd-${m.id}-${id}`} aria-hidden className="pointer-events-none absolute z-[13] h-2 w-2 rounded-full" style={{ left: (late ? mx : ex) - 4, top: cy - 4, background: late ? "var(--crit)" : msEdge(msCode(m)) }} />);
+      const late = r.end > date && !r.guess;
+      const tie = r.guess ? "var(--text2)" : msEdge(msCode(m));
+      if (!late && ex < mx) out.push(<div key={`g-${m.id}-${id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: ex + 2, top: cy - 1, width: mx - ex - 2, borderTop: `2px dotted ${tie}` }} />);
+      out.push(<i key={`gd-${m.id}-${id}`} aria-hidden data-testid={r.guess ? "ms-tie-guess" : undefined} className="pointer-events-none absolute z-[13] h-2 w-2 rounded-full" style={{ left: (late ? mx : Math.min(ex, mx)) - 4, top: cy - 4, background: late ? "var(--crit)" : tie }} />);
       if (late) {
         const t = `Ends after ${words(m)}`;
         const w = Math.min(textW(t), phone ? 220 : 360);
@@ -868,7 +872,7 @@ export function MsLayer(props: MsLayerProps) {
   // Moving one of the roadmap's own: a tip says what changes as it goes.
   const mv = ms.moving && own.find((m) => m.id === ms.moving!.id);
   if (mv && ms.moving!.date !== mv.date) {
-    const late = mv.item_ids.filter((id) => (rowOf(id)?.end ?? "") > ms.moving!.date).length;
+    const late = mv.item_ids.filter((id) => { const r = rowOf(id); return !!r && !r.closed && !r.guess && r.end > ms.moving!.date; }).length;
     out.push(
       <span key="mv" data-testid="ms-move-tip" className="absolute z-[16] rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" style={{ left: X(ms.moving!.date) + 16, top: axisY + 8 }}>
         {words(mv)} {day(mv.date!)} → {day(ms.moving!.date)}
@@ -1650,15 +1654,48 @@ export function MsKey() {
 }
 
 /** Now / Next / Later: the milestones in each horizon, as a row above its cards. */
-export function MsBoardRow({ horizon, windows }: { horizon: string; windows: Roadmap["windows"] }) {
+export function MsBoardRow({ horizon, windows, milestones = [], keyDates = [] }: { horizon: string; windows: Roadmap["windows"]; milestones?: Roadmap["milestones"]; keyDates?: KeyDate[] }) {
   const ms = useMsCtl();
   if (!ms) return null;
   const h = (d: string) => (d <= windows.now.end ? "now" : d <= windows.next.end ? "next" : "later");
   const here = ms.list.filter((m) => m.date && h(m.date) === horizon).sort((a, b) => a.date!.localeCompare(b.date!));
+  // QA Nov 14 #3: the roadmap's track milestones ("M1 Beta"), as the Timeline's header names them,
+  // each once (one the goal milestones above already show on its day is not repeated).
+  const joined = joinedNames(ms.list, milestones);
+  const shown = new Set(here.map((m) => `${msCode(m)}|${m.date}`));
+  const tracks = milestones
+    .filter((m) => m.date && !(m.start_date && m.end_date) && m.status !== "dropped" && h(m.date) === horizon)
+    .map((m) => ({ m, words: joinedWords(m, joined) }))
+    .filter(({ m, words: w }) => !shown.has(`${w.split(" ")[0]}|${m.date}`));
+  // QA Nov 14 #2: the key dates in this column's window, as the charts draw them.
+  const keys = keyDates.filter((k) => h(k.date) === horizon);
+  const dated = [
+    ...here.map((m) => ({ day: m.date!, el: null as ReactNode, m })),
+    ...tracks.map(({ m, words: w }) => ({
+      day: m.date!,
+      m: null,
+      el: (
+        <span key={`t-${m.id}`} data-testid="ms-board-track" title={`${w} · ${fullDay(m.date!)}`} className="inline-flex items-center gap-1.5 rounded-full border border-warn bg-warn-bg px-2 text-xs leading-6 font-semibold text-warn">
+          <i aria-hidden className="inline-block h-2 w-2 rotate-45 bg-warn" />
+          {w} · {day(m.date!)}
+        </span>
+      ),
+    })),
+    ...keys.map((k) => ({
+      day: k.date,
+      m: null,
+      el: (
+        <span key={`k-${k.id}`} data-testid="ms-board-key" data-name={k.name} title={`${k.name} · ${fullDay(k.date)}${k.note ? ` · ${k.note}` : ""} (${k.roadmap.title})`} className={`inline-flex items-center gap-1.5 rounded-full border border-accent-ink px-2 text-xs leading-6 font-semibold text-accent-ink ${k.in_draft ? "border-dashed" : ""}`}>
+          <i aria-hidden className="inline-block h-2 w-2 rotate-45 bg-accent-ink" />
+          {k.name} · {day(k.date)}
+        </span>
+      ),
+    })),
+  ].sort((a, b) => a.day.localeCompare(b.day));
   const w = windows[horizon as "now" | "next" | "later"];
   return (
     <div data-testid="ms-board-row" className="flex flex-wrap gap-1.5 px-1 pb-2">
-      {here.map((m) => (
+      {dated.map(({ m, el }) => (!m ? el : (
         <button
           type="button"
           key={m.id}
@@ -1671,7 +1708,7 @@ export function MsBoardRow({ horizon, windows }: { horizon: string; windows: Roa
           {m.prd ? "PRD · " : ""}
           {words(m)} · {day(m.date!)}
         </button>
-      ))}
+      )))}
       {ms.canAdd && (
         <button type="button" data-testid="ms-board-add" onClick={() => ms.begin(w.end < ms.today ? ms.today : w.end, null)} className="inline-flex items-center rounded-full border border-dashed border-line-strong px-2 text-xs leading-6 text-text2">
           + Milestone

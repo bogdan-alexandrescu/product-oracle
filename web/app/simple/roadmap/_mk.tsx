@@ -102,6 +102,12 @@ export function MkLegend() {
 
 /** What it is done by, in one line (a measure: its start to its target). */
 export function doneLine(m: Pick<Gm, "measure" | "baseline" | "target" | "current" | "done_when_line" | "kind">): string {
-  if (isMeasured(m.kind) && m.measure) return `${m.measure}: ${m.baseline ?? "?"} → ${m.target ?? "?"}${m.current != null ? ` (now ${m.current})` : ""}`;
+  // QA Nov 14 #6: only the ends that are known ("→ 70% of teams"), never "? → ?".
+  if (isMeasured(m.kind) && m.measure) {
+    const now = m.current != null ? ` (now ${m.current})` : "";
+    if (m.baseline == null && m.target == null) return `${m.measure}${m.current != null ? ` · now ${m.current}` : ""}`;
+    if (m.target == null) return `${m.measure}: from ${m.baseline}${now}`;
+    return `${m.measure}: ${m.baseline != null ? `${m.baseline} ` : ""}→ ${m.target}${now}`;
+  }
   return m.done_when_line ? `Done when ${m.done_when_line.charAt(0).toLowerCase()}${m.done_when_line.slice(1)}` : "";
 }

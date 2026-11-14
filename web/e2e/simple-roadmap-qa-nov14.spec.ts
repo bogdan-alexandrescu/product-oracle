@@ -79,8 +79,8 @@ test.describe("desktop", () => {
     await expect(editor).toHaveCount(0);
 
     for (const name of ["Customer conference", "Example partner demo"])
-      await expect(page.locator(`[data-testid="key-date-marker"][data-name="${name}"]`)).toHaveCount(1);
-    await expect(page.locator('[data-testid="key-date-marker"][data-name="Example partner demo"] [data-testid="key-date-label"]')).toHaveAttribute("title", /^Example partner demo · Dec 3/);
+      await expect(page.locator(`[data-testid="timeline-key-date"][data-name="${name}"]`)).toHaveCount(1);
+    await expect(page.locator('[data-testid="timeline-key-date"][data-name="Example partner demo"] [data-testid="timeline-key-date-label"]')).toHaveAttribute("title", /^Example partner demo · Dec 3/);
     await expect(page.getByTestId("timeline-key").locator('[data-key="key"]')).toHaveText("Key date");
 
     await page.getByTestId("format-board").click();
@@ -164,7 +164,7 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("zoom-all")).toHaveAttribute("aria-pressed", "true");
     const pill = (await page.getByTestId("today-pill").boundingBox())!;
     for (const l of await page.getByTestId("timeline-milestone").all()) expect(overlap(pill, (await l.boundingBox())!)).toBe(false);
-    for (const l of await page.getByTestId("key-date-label").all()) expect(overlap(pill, (await l.boundingBox())!)).toBe(false);
+    for (const l of await page.getByTestId("timeline-key-date-label").all()) expect(overlap(pill, (await l.boundingBox())!)).toBe(false);
   });
 
   test("a track band names its goal", async ({ page }) => {

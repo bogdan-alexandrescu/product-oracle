@@ -317,14 +317,18 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only, krs }: { data: 
   };
   const counterCard = (id: string, g: (typeof cards)[number][1]) => (
     <li key={id} data-testid="goal-counter" className="rounded-xl border border-line bg-surface px-3 py-2">
-      <p className="truncate text-[15px] font-semibold" title={g.title}>
+      {/* QA Nov 14 #8: a phone's long title wraps to two lines, as the metric does. */}
+      <p className="text-[15px] font-semibold break-words max-sm:line-clamp-2 sm:truncate" title={g.title} data-testid="goal-counter-title">
         <GoalNum n={numberOf(id, g.title)} />
         {g.title}
       </p>
-      {/* fix4 qa-simple-roadmap-49: the metric wraps to a second line, its full words on hover past that. */}
-      <p className="line-clamp-2 text-sm break-words text-text2" title={g.metric ?? undefined} data-testid="goal-counter-metric">
-        {g.metric ?? "No metric yet"}
-      </p>
+      {/* fix4 qa-simple-roadmap-49: the metric wraps to a second line, its full words on hover past that.
+          QA Nov 14 #8: no metric line that only repeats the title. */}
+      {g.metric?.trim().toLowerCase() !== g.title.trim().toLowerCase() && (
+        <p className="line-clamp-2 text-sm break-words text-text2" title={g.metric ?? undefined} data-testid="goal-counter-metric">
+          {g.metric ?? "No metric yet"}
+        </p>
+      )}
       <p className="mt-0.5 text-sm">
         <b className="tnum">{g.items}</b> {g.items === 1 ? "item" : "items"}
         {g.broken > 0 && (
@@ -676,10 +680,13 @@ function AppliedVersions({ lines, onApply }: { lines: Schemas["SimpleAppliedVers
 }
 
 /** A tray tile's number over its label. */
-function TileWords({ n, label }: { n: number; label: string }) {
+function TileWords({ n, label, all }: { n: number; label: string; all?: number }) {
   return (
     <>
-      <b className={`tnum block text-xl ${n ? "" : "font-medium"}`}>{n}</b>
+      <b className={`tnum block text-xl ${n ? "" : "font-medium"}`} data-testid="tray-counter-n">
+        {n}
+        {all !== undefined && all !== n && <span className="text-sm font-medium text-text2"> of {all}</span>}
+      </b>
       {/* #43: every tile's label sits at the same height with tight spacing, so
        * "Dates to confirm" wrapping to two lines doesn't push its number apart from
        * the one-line labels beside it. */}
@@ -798,9 +805,10 @@ function DecisionTray({
   const here = counts.total + suggested.length;
   const whole = here - counts.links - counts.dates.length + (allLinks ?? counts.links) + (allDates ?? counts.dates.length);
   // Review: each tile leads to the items it counts, the suggested features too, so the tiles add up to the button.
-  const counters: [string, number, string][] = [
-    ["Broken links", allLinks ?? counts.links, "tray-broken-links"],
-    ["Dates to confirm", allDates ?? dateRows.length, "tray-dates"],
+  // QA Nov 14 #7: under a filter a tile counts what the list below it shows, and names the rest ("1 of 17").
+  const counters: [string, number, string, number?][] = [
+    ["Broken links", counts.links, "tray-broken-links", allLinks],
+    ["Dates to confirm", dateRows.length, "tray-dates", allDates],
     ["Proposals", others.length, "review-proposals"],
     ["Pulled in", pulled.length, "tray-pulled"],
     ["Suggested features", suggested.length, "tray-suggested-features"],
@@ -869,17 +877,17 @@ function DecisionTray({
         )}
       </p>
       <ul className="mt-3 grid grid-cols-3 gap-2 min-[420px]:grid-cols-5" data-testid="tray-counters">
-        {counters.map(([label, n, to]) => (
+        {counters.map(([label, n, to, all]) => (
           // fix4 qa-simple-roadmap-38: equal tiles (each as tall as the tallest, its label on two
           // lines at most); a tile at 0 is muted, plain text, not something to press.
           <li key={label} data-testid="tray-counter" data-zero={n === 0 ? "true" : undefined} className={`flex rounded-lg text-center ${n ? "border border-line" : "bg-surface2 text-text-faint"}`}>
             {n ? (
               <button type="button" onClick={() => document.getElementById(to)?.scrollIntoView({ block: "start" })} className="flex flex-1 flex-col items-center justify-start rounded-lg px-1 py-1.5 hover:bg-surface2">
-                <TileWords n={n} label={label} />
+                <TileWords n={n} label={label} all={all} />
               </button>
             ) : (
               <span className="flex flex-1 flex-col items-center justify-start px-1 py-1.5">
-                <TileWords n={n} label={label} />
+                <TileWords n={n} label={label} all={all} />
               </span>
             )}
           </li>
@@ -2396,7 +2404,7 @@ function GanttMilestones({ l, sc, data, phone, keepOff }: { l: Layout; sc: Chart
     for (const id of g.item_ids) {
       const i = byId.get(id);
       const y = l.y.get(id);
-      if (i && y != null) rows.push({ id: i.id, title: i.title, lane: g.key, y, h: l.rowH, start: i.start.date, end: i.end.date });
+      if (i && y != null) rows.push({ id: i.id, title: i.title, lane: g.key, y, h: l.rowH, start: i.start.date, end: i.end.date, closed: closedItem(i), guess: estimateOnly(i) });
     }
   }
   // pre-demo QA S-12: "+ Milestone" steps past the key dates' and milestones' names over the axis.
