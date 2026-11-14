@@ -106,16 +106,13 @@ for (const size of SIZES) {
         await expect(panel(page).getByTestId("card-needed")).not.toContainText("Alert rules engine");
       });
 
-      test("S-4: the server's refusal of a loop reads the same words (a typed key on the Depends on side)", async ({ page }) => {
-        // The Needed by picker never lets a loop through, so the server's refusal is reached from the other side.
+      test("S-4: a loop cannot be added from the Depends on side's search either", async ({ page }) => {
+        // Neither picker lets a loop through: the other PRD's search does not offer it as a choice.
         await openItem(page, "alert-rules");
         await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
-        await panel(page).getByLabel("Or another PRD's feature key").fill("F-06");
-        await tap(panel(page).getByRole("button", { name: "Save" }));
-        const refusal = page.getByTestId("toasts").getByText(/^Not added, it would make a loop/);
-        await expect(refusal).toBeVisible();
-        await expect(refusal).toContainText("Weekly alert digest");
-        await expect(refusal).toContainText("Alert rules engine");
+        await panel(page).getByLabel("Or a feature from another PRD").fill("F-06");
+        await expect(panel(page).getByTestId("card-depends-search").getByRole("button", { name: /Weekly alert digest/, disabled: false })).toHaveCount(0);
+        await expect(panel(page).getByRole("button", { name: "Save" })).toBeDisabled();
         await expect(panel(page).getByTestId("card-depends")).not.toContainText("Weekly alert digest");
       });
 
