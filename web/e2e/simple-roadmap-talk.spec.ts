@@ -325,7 +325,7 @@ for (const [phone, dark] of [
      * Card roadmap-talk-wide-edge: protects = the widened talk card (pick C: 840 px, 16 px from
      * the page's top and foot, its right edge 22 px inside the page) opened from the bar nearest
      * the right edge stays inside the page, beside the rail and the Ask dock; "Hide the talk"
-     * narrows it back to the card by the bar; fails_when = its edges run past the page or it
+     * narrows it back to the card in the side panel; fails_when = its edges run past the page or it
      * keeps the narrow card's offset; no_claim = a phone (a bottom sheet there).
      */
     test(`the talk card opened near the right edge stays inside the roadmap (${where})`, async ({ page }) => {
@@ -351,7 +351,10 @@ for (const [phone, dark] of [
       expect(Math.round(fit.width)).toBe(840);
       await tap(floating.getByRole("button", { name: "Hide the talk" }));
       await expect(floating).toHaveAttribute("data-talk", "false");
-      expect(Math.round((await floating.boundingBox())!.width)).toBe(380);
+      // Side panel pick: on the Gantt the narrowed card fills the side panel beside the chart.
+      const panel = page.getByTestId("item-panel");
+      const inner = await panel.evaluate((el) => el.clientWidth);
+      expect(Math.round((await floating.boundingBox())!.width)).toBe(inner);
     });
 
     /**
