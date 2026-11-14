@@ -4880,12 +4880,14 @@ function load(): Db {
     }
     const outcomes = goal ? seedOutcomes(db.user_id, goal.id, null) : [];
     if (goal && scenario === "outcomes-recorded") outcomes.push(seedOracleRecorded(db.user_id, goal.id));
-    // "outcomes-long": long titles on a key result with a long name, and a goal with no metric.
+    // "outcomes-long": long titles on a key result with a long name, and goals with no metric.
     if (goal && scenario === "outcomes-long") {
       const kr = { ...goal, id: stableUuid("goal/revenue-kr"), key: "g.revenue-kr", body: null,
         title: "Key result 2.3: raise company revenue per day from self-serve teams on every plan in every region we sell in",
         attrs: { weight: 0.1, metric: "Company revenue per day across every self-serve plan and region, net of refunds", unit: "USD" } };
-      db.baseline.entities.push(kr, { ...goal, id: stableUuid("goal/simpler-billing"), key: "g.simpler-billing", title: "Simpler billing for every team", body: null, attrs: {} });
+      db.baseline.entities.push(kr, { ...goal, id: stableUuid("goal/simpler-billing"), key: "g.simpler-billing", title: "Simpler billing for every team", body: null, attrs: {} },
+        // A goal with a unit but no metric: an outcome in its own unit moved here has no goal metric to show.
+        { ...goal, id: stableUuid("goal/quicker-setup"), key: "g.quicker-setup", title: "Quicker setup for every team", body: null, attrs: { unit: "%" } });
       outcomes.push(...seedLongOutcomes(db.user_id, kr.id));
     }
     if (goal) db.quality = { outcomes, learnings: seedLearnings(db.user_id) };

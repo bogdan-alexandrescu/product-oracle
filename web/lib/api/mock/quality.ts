@@ -234,7 +234,8 @@ export function seedOutcomes(owner: string, goalId: string, roadmapVersionId: st
 /**
  * The "outcomes-long" scenario (synthetic): outcomes with long titles on a key result with a long
  * name, to check the inspector's room beside a long table: one needs a prediction (its form open), one holds at 1
- * event with a long Why, one with a short Why, and an enabler predicted in its own unit (% done).
+ * event with a long Why, one with a short Why, an enabler predicted in its own unit (% done), and one
+ * due for its check, read at 1 event.
  */
 export function seedLongOutcomes(owner: string, goalId: string): Outcome[] {
   const now = Date.now();
@@ -270,6 +271,12 @@ export function seedLongOutcomes(owner: string, goalId: string): Outcome[] {
       title: "Move the billing service to the new payments platform before the old provider's contract ends in the spring",
       goal_id: goalId, status: "predicted", roadmap_item_key: "payments-move",
       prediction: { metric, baseline: "0 % done", predicted: "100 % done", threshold: null, by, unit: "% done", direction: "increase", baseline_value: 0, predicted_value: 100 },
+    }, owner),
+    outcomeRow({
+      title: "Retry failed card payments overnight", goal_id: goalId, status: "tracking", roadmap_item_key: "payment-retries",
+      shipped_at: new Date(now - 40 * DAY).toISOString(), assess_due_on: isoDay(now - DAY),
+      prediction: { metric, baseline: "3 events", predicted: "0 events", threshold: null, by: isoDay(now - 5 * DAY), unit: "events", direction: "hold", baseline_value: 3, predicted_value: 0 },
+      proposed_assessment: { verdict: null, actual_value: 1, measured_at: isoDay(now - 2 * DAY), observed: "1 event", source: "goal_history", note: null },
     }, owner),
   ];
 }
