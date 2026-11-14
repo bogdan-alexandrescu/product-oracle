@@ -573,6 +573,13 @@ function DayChart(props: TimelineProps) {
     for (const g of gems) if (g + 15 > l + 4 && g - 12 < l + 4 + need) l = g + 12;
     return l;
   };
+  // A label steps past the diamonds at its own day, never along a row of them (one a month at 1
+  // year) far from its day, where a slide would take its day out of sight with its label still on
+  // screen: past MS_FIT_STEP it stays after its own day's diamonds, cut short of the next one.
+  const near = (left: number) => {
+    const l = clear(left);
+    return l - left <= MS_FIT_STEP ? l : clear(left, 12);
+  };
   // QA Nov 12 #8: at All 3 years the days sit a pixel or so apart, so a label cut to its 56 px
   // ("M1 B…") says nothing. There a label keeps its whole words (up to MS_FIT_W): it steps past
   // the diamonds that would cut it (unless that takes it far from its day), and a label that would
@@ -586,7 +593,7 @@ function DayChart(props: TimelineProps) {
       const words = `◆ ${joinedWords(m, joined)} · ${shortDay(m.date as string)}`;
       const whole = fit ? clear(at, needOf(words)) : null;
       const need = whole != null && whole - at <= MS_FIT_STEP ? needOf(words) : 56;
-      const left = whole != null && need > 56 ? whole : clear(fit ? at : Math.max(at, sl));
+      const left = whole != null && need > 56 ? whole : near(fit ? at : Math.max(at, sl));
       const next = [...gems, ...(pill ? [pill[0] + 12] : [])].sort((a, b) => a - b).find((g) => g - 12 >= left + 4);
       // A label too short for its words at All 3 years keeps its code and name ("M1 Beta"), its day in its tip.
       return { m, at, words, short: joinedWords(m, joined), left, need, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
