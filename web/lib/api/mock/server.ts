@@ -8549,15 +8549,18 @@ async function route(db: Db, req: Request): Promise<Response> {
     // goal-order: Simple's goals follow the baseline's one goal order (and the place Move up or Move
     // down stored on a bucket goal the baseline does not hold).
     const baselineGoals = db.baseline.entities.filter((e) => e.type === "goal");
-    // As the API, whose goals are all stored from the start: the goal buckets are seeded before the goal order is read,
-    // so the first Roadmap read ranks goals (and numbers milestones that share a day) as every later one does.
-    if (db.simple_roadmap) goalBucketsDb(db.simple_roadmap, db.members.map((x) => ({ id: x.id, name: displayName(x.email, x.name), email: x.email, role: x.role, disabled: x.status === "disabled" })));
     knowCompanyGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
     knowGoalOrderGoals(db.baseline.entities);
     // roadmap-milestones: its fourth goal names its work on every load.
     if (db.simple_roadmap?.items.some((i) => i.key === "pricing-faq")) GOALS["win-teams"] = "Win larger teams";
     knowGoalParents(db.baseline.entities);
+    // As the API, whose goals are all stored from the start: the goal buckets are seeded (once the goals' names are known)
+    // before a read ranks goals, so the first Roadmap read numbers milestones that share a day as every later one does.
+    if (db.simple_roadmap && !db.simple_roadmap.goal_buckets) {
+      goalBucketsDb(db.simple_roadmap, db.members.map((x) => ({ id: x.id, name: displayName(x.email, x.name), email: x.email, role: x.role, disabled: x.status === "disabled" })));
+      knowCompanyGoals([...baselineGoals, ...bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key)))]);
+    }
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served a page built from its own sections (vqa B-13), with its own draft and changes.
     const onePagerDb = await onePagerOf(db, r, p);
