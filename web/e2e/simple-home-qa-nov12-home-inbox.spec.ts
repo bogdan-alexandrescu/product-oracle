@@ -16,8 +16,8 @@ async function open(page: Page, path: string) {
 }
 
 /**
- * The waiting rows of a feature with a code start its name with that code: both of Weekly alert
- * digest's broken links (F-06) and Health log's dates (F-03). A feature with no code (the cut
+ * The waiting rows of a feature with a code start its name with that code: Weekly alert
+ * digest's broken links (F-06, one row) and Health log's dates (F-03). A feature with no code (the cut
  * In-app tour) has none to show.
  */
 async function codedRows(page: Page, { broken }: { broken: boolean }) {
@@ -26,9 +26,11 @@ async function codedRows(page: Page, { broken }: { broken: boolean }) {
   await expect(health.locator(".simple-code")).toHaveText("F-03");
   // Home lists broken links in their own card (named with their codes there), not among these rows.
   if (!broken) return;
+  // Its two broken links wait as one row (simple-home-qa-nov12 #3), which names both.
   const digest = rows.and(page.locator('[data-kind="broken_link"]')).filter({ hasText: "Weekly alert digest" });
-  await expect(digest).toHaveCount(2);
-  for (const k of [0, 1]) await expect(digest.nth(k).locator(".simple-code")).toHaveText("F-06");
+  await expect(digest).toHaveCount(1);
+  await expect(digest).toHaveAttribute("data-breaks", "2");
+  await expect(digest.locator(".simple-code")).toHaveText("F-06");
 }
 
 test.describe("desktop", () => {
