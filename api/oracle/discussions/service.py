@@ -401,6 +401,8 @@ class Labels:
         self.missing: set[Any] = set()
         #: Every feature's code by its id, read once (:meth:`_item_name`).
         self.codes: dict[uuid.UUID, str] | None = None
+        #: A checkpoint's item titles by key, read once (:meth:`_run_item`).
+        self.titles: dict[uuid.UUID, dict[str, Any]] = {}
 
     async def get(self, model: type, id_: Any) -> Any:
         key = (model, uuid.UUID(str(id_)))
@@ -461,16 +463,18 @@ class Labels:
         from oracle.runs import actions, feature_set
         from oracle.runs.service import _scope_of
 
-        title = None
-        if cp is not None:
+        if cp is None:
+            return await self._item_name(key, None)
+        if cp.id not in self.titles:
+            titles: dict[str, Any] = {}
             scope = await _scope_of(self.db, cp)
             if scope is not None:
-                rows = await feature_set.scope_items(self.db, scope.id)
-                title = next((i.title for i in rows if i.key == key), None)
-            if title is None:
+                titles = {i.key: i.title for i in await feature_set.scope_items(self.db, scope.id)}
+            else:
                 found = await actions._file(self.db, run, cp)
-                items = actions._context(found).items or {}
-                title = (items.get(key) or {}).get("title")
+                titles = {k: i.get("title") for k, i in actions._context(found).items.items()}
+            self.titles[cp.id] = titles
+        title = self.titles[cp.id].get(key)
         return await self._item_name(key, title if isinstance(title, str) else None)
 
     async def _of(self, d: Discussion) -> tuple[str, str]:
