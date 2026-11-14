@@ -105,14 +105,15 @@ const sameUnit = (a?: string | null, b?: string | null) =>
 
 /**
  * The prediction's own measure when its unit is not its goal's (an enabler predicted in
- * "% done" under a revenue goal): "Done (% of the work)", "Events"; null when they agree or
- * either has none, so the line names the goal's metric.
+ * "% done" under a revenue goal): "Done (% of the work)", "Events"; null when they agree,
+ * either has none or it is a bare "%", so the line names the goal's metric.
  */
 function ownMeasure(unit?: string | null, goalUnit?: string | null): string | null {
   const u = (unit ?? "").trim();
   if (!u || !(goalUnit ?? "").trim() || sameUnit(u, goalUnit)) return null;
   const rest = u.replace(/^%\s*/, "");
-  if (!rest) return "Percent";
+  // A bare "%" names no measure of its own: the goal's metric stays on the line.
+  if (!rest) return null;
   const name = rest.charAt(0).toUpperCase() + rest.slice(1);
   if (rest === u) return name;
   return /^(done|complete|completed)$/i.test(rest) ? `${name} (% of the work)` : `${name} (%)`;

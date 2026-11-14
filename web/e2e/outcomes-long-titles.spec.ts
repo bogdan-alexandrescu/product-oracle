@@ -123,7 +123,7 @@ test("a prediction in its own unit names its own measure, the goal's metric behi
   await row(page, MOVE).click();
   const metric = inspector(page).getByTestId("outcome-metric");
   await expect(metric).toHaveText("Done (% of the work)");
-  await expect(inspector(page)).not.toContainText("Company revenue per day");
+  await expect(page.getByText(/Company revenue per day/).filter({ visible: true })).toHaveCount(0);
   await inspector(page).getByRole("button", { name: "About Goal metric" }).click();
   await expect(page.getByText(/Company revenue per day/).filter({ visible: true })).toBeVisible();
 });
