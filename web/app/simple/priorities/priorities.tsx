@@ -1678,6 +1678,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   const dragRow = drag ? rows.find((r) => r.code === drag.code) : undefined;
   const pending = dragRow && drag ? dragTo(dragRow, drag.dx, drag.dy) : null;
   const listed = byLine(data).filter((r) => quad === null || quadrant(r) === quad);
+  const heldKey = (r: Row) => (r.after ? rows.find((x) => x.code === r.after!.code)?.own_key || null : null);
   const split = lineSplit(listed);
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -1919,13 +1920,15 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                       {r.own_key}
                     </span>
                   )}
-                  <span className="min-w-0 flex-[1_0.001_auto] truncate" data-testid="prio-title" title={r.title}>
+                  <span className="min-w-0 flex-1 truncate" data-testid="prio-title" title={r.title}>
                     {r.title}
                   </span>
                   {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}
                   {r.after ? (
-                    <span data-testid="side-held" title={`After ${r.after.title}, which it needs`} className="min-w-6 shrink truncate rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
-                      after {rows.find((x) => x.code === r.after!.code)?.own_key || r.after.title}
+                    // The name keeps its room: the pill names the feature it needs by code, else says "after" (its name is in
+                    // the tip and on the selected row's second line).
+                    <span data-testid="side-held" title={`After ${r.after.title}, which it needs`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
+                      after{heldKey(r) ? ` ${heldKey(r)}` : <span className="sr-only"> {r.after.title}</span>}
                     </span>
                   ) : (
                     r.oracle_rank != null &&
@@ -1938,6 +1941,11 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   {!r.above_line && <MissesTag data={data} compact />}
                   <span className="flex-none tabular-nums text-text2" title="Score">{r.score == null ? "–" : fmt(r.score, 2)}</span>
                 </button>
+                {isSelected && r.after && !heldKey(r) && (
+                  <span data-testid="side-after" className="block truncate px-2 pl-[34px] text-[13px] text-text2">
+                    after {r.after.title}
+                  </span>
+                )}
                 {isSelected && (
                   <span data-testid="side-numbers" className="block px-2 pb-1 pl-[34px] text-[13px] tabular-nums text-text">
                     {r.effort == null ? `goal value ${fmt(r.goal_value)} · PM-owned, no score` : `goal value ${fmt(r.goal_value)} · confidence ${fmt(r.confidence, 2)} · ${weeksWords(r.effort)} · score ${fmt(r.score, 2)}`}
@@ -2427,7 +2435,7 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
   const nowWeeks = (r: Row) => (r.horizon === "now" ? (r.effort ?? 0) : 0);
   // A goal with no feature this quarter (one just added) still has its card, before No goal, as with a dated plan.
   const extra: Bucket[] = (gb?.goals ?? [])
-    .filter((g) => !data.buckets.some((b) => !b.no_goal && sameGoal(g.title, b.title)))
+    .filter((g) => !kr.krs.parentOf(g.id) && !kr.krs.parentOf(g.title) && !data.buckets.some((b) => !b.no_goal && sameGoal(g.title, b.title)))
     .sort((a, b) => a.order - b.order)
     .map((g) => ({ key: g.id, title: g.title, weeks: 0, share: 0, codes: [], no_goal: false, position: null }));
   const drawn = [...data.buckets.filter((b) => !b.no_goal), ...extra, ...data.buckets.filter((b) => b.no_goal)];

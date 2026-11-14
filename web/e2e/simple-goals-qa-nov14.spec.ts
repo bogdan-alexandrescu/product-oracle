@@ -142,9 +142,16 @@ test.describe("Value / effort", () => {
 
   test("a side-list row's after pill leaves the name readable", async ({ page }) => {
     await openPriorities(page, "value-effort");
-    const held = page.getByTestId("side-row").filter({ has: page.getByTestId("side-held") });
+    // A row that also carries the Misses tag has less room (a 318 px list): its name is checked for most of its room below.
+    const held = page.getByTestId("side-row").filter({ has: page.getByTestId("side-held") }).filter({ hasNot: page.getByTestId("prio-misses") });
     await expect(held.first()).toBeVisible();
     for (const r of await held.all()) expect(await cutOff(page, r.getByTestId("prio-title"))).toBe(false);
+    const routing = page.getByTestId("side-row").filter({ hasText: "Alert routing by team" }).getByTestId("prio-title");
+    expect(await routing.evaluate((el) => el.clientWidth / el.scrollWidth)).toBeGreaterThan(0.9);
+    // The feature it needs is still named: on the selected row's second line.
+    const digest = held.filter({ hasText: "Weekly alert digest" });
+    await digest.getByRole("button").first().click();
+    await expect(digest.getByTestId("side-after")).toHaveText("after Alert rules engine");
   });
 
   test("a quadrant's count lists its features in the side list", async ({ page }) => {

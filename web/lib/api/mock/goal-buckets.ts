@@ -462,7 +462,7 @@ function roadmapGoalBuckets(simple: BucketsSimple): GoalBucketsDb {
   const name = (k: string) => GOALS[k] ?? k;
   // With no dated plan the plan's own goals and features are none of the company's (archived goals stay).
   const base = seedGoalBuckets();
-  const planned = simple.plan || !items.length ? base : { goals: base.goals.filter((g) => g.archived), features: [] };
+  const planned = !items.length ? base : { goals: base.goals.filter((g) => g.archived), features: [] };
   const db = seedGoalBucketsWith(planned, [...new Set(items.map((i) => name(i.goal!)))], items.map((i) => ({ key: i.key, title: i.title, goals: [name(i.goal!)] })));
   addMapGoals(db, simple);
   return { ...db, lazy: db.goals.map((g) => g.id), lazy_links: db.features.flatMap((f) => f.goal_ids.map((g) => linkOf(f.id, g))) };
@@ -480,7 +480,7 @@ function addMapGoals(db: GoalBucketsDb, simple: BucketsSimple): void {
 
 /** The goal buckets' db, its seeded owners matched to the members by email. */
 export function goalBucketsDb(simple: BucketsSimple, people: GoalPeople = []): GoalBucketsDb {
-  const db = (simple.goal_buckets ??= goalKeyResultsBuckets(simple) ?? roadmapGoalBuckets(simple));
+  const db = (simple.goal_buckets ??= goalKeyResultsBuckets(simple) ?? (simple.plan ? lazyGoalBuckets() : roadmapGoalBuckets(simple)));
   // The map's goals join once the map is read (server.ts sets map_goals), whichever page seeded the store first.
   if (!simple.plan) addMapGoals(db, simple);
   for (const g of db.goals) {
