@@ -8555,11 +8555,13 @@ async function route(db: Db, req: Request): Promise<Response> {
     // roadmap-milestones: its fourth goal names its work on every load.
     if (db.simple_roadmap?.items.some((i) => i.key === "pricing-faq")) GOALS["win-teams"] = "Win larger teams";
     knowGoalParents(db.baseline.entities);
-    // As the API, whose goals are all stored from the start: the goal buckets are seeded (once the goals' names are known)
-    // before a read ranks goals, so the first Roadmap read numbers milestones that share a day as every later one does.
+    // As the API, whose goals are all stored from the start: before the goal buckets are seeded (lazily, by whichever
+    // page reads them first), goals rank as the buckets will hold them, read off a copy that is not kept, so the first
+    // Roadmap read numbers milestones that share a day as every later one does.
     if (db.simple_roadmap && !db.simple_roadmap.goal_buckets) {
-      goalBucketsDb(db.simple_roadmap, db.members.map((x) => ({ id: x.id, name: displayName(x.email, x.name), email: x.email, role: x.role, disabled: x.status === "disabled" })));
-      knowCompanyGoals([...baselineGoals, ...bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key)))]);
+      const preview = { ...db.simple_roadmap, goal_buckets: undefined };
+      goalBucketsDb(preview);
+      knowCompanyGoals([...baselineGoals, ...bucketGoalsInOrder(preview, new Set(baselineGoals.map((e) => e.key)))]);
     }
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served a page built from its own sections (vqa B-13), with its own draft and changes.

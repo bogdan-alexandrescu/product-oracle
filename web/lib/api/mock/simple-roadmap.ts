@@ -386,8 +386,7 @@ export function trackGoal(db: SimpleDb, track: string): { goal_id: string | null
   // QA Nov 14: the seed ties one track to a goal (TRACK_GOALS) till a person picks or clears one.
   const seed = TRACK_GOALS[track];
   const id = st && "goal" in st ? st.goal : seed ? stableUuid(`goal-bucket/${seed}`) : null;
-  // Till its goal bucket is made (the plan's goals join the buckets lazily), the seed's goal is named as the plan names it.
-  if (id && !db.goal_buckets?.goals.some((x) => x.id === id) && !(st && "goal" in st) && planGoalNames().includes(seed)) return { goal_id: id, goal_name: seed };
+  if (id && !db.goal_buckets && !(st && "goal" in st) && planGoalNames().includes(seed)) return { goal_id: id, goal_name: seed };
   const g = id ? db.goal_buckets?.goals.find((x) => x.id === id && !x.archived && !x.trashed) : undefined;
   return { goal_id: g?.id ?? null, goal_name: g?.title ?? null };
 }
