@@ -53,3 +53,44 @@ async def test_an_approver_changes_an_outcomes_goal(client, owner, runtime):  # 
     assert moved["goal_id"] == other and moved["prediction"] == pay["prediction"]
     record = (await client.get("/v1/priorities/calibration", headers=auth)).json()
     assert {g["goal_id"]: g["n"] for g in record["goals"]} == {other: 1}
+
+
+async def _goal(tenant_id: uuid.UUID, title: str, attrs: dict) -> str:
+    async with tenant_session(tenant_id) as s:
+        row = Entity(type="goal", key=f"goal-{uuid.uuid4().hex[:6]}", title=title,
+                     status="confirmed", origin="user", attrs=attrs)  # fmt: skip
+        s.add(row)
+        await s.commit()
+        return str(row.id)
+
+
+async def test_a_moved_outcome_takes_its_new_goals_metric(client, owner, runtime):  # noqa: F811
+    """protects=moving an outcome to another goal names the new goal's metric in its
+    prediction; with no predicted value yet its unit becomes the new goal's, while a written
+    prediction keeps its own figures and unit; fails_when=the old goal's metric stays, or a
+    written prediction's unit is replaced; no_claim=the inspector (outcomes-goal-follow)."""
+    tenant_id, auth = owner
+    by_item = await outcome_world(client, auth, runtime, tenant_id)
+    other = await _goal(tenant_id, "Fewer failed payments",
+                        {"metric": "Failed payments per 100 orders", "unit": "failed payments"})  # fmt: skip
+
+    async def move(outcome: dict) -> dict:
+        url = f"/v1/outcomes/{outcome['id']}"
+        lock = (await client.get(url, headers=auth)).json()["lock_version"]
+        resp = await client.patch(url, json={"goal_id": other, "lock_version": lock}, headers=auth)
+        assert resp.status_code == 200, resp.text
+        return resp.json()["prediction"]
+
+    written = by_item["payment-step"]["prediction"]
+    assert written["predicted_value"] is not None
+    moved = await move(by_item["payment-step"])
+    assert moved["metric"] == "Failed payments per 100 orders"
+    assert {k: v for k, v in moved.items() if k != "metric"} == {
+        k: v for k, v in written.items() if k != "metric"
+    }
+
+    open_ = by_item["shipping-step"]
+    assert open_["prediction"].get("predicted_value") is None
+    moved = await move(open_)
+    assert moved["metric"] == "Failed payments per 100 orders"
+    assert moved["unit"] == "failed payments"
