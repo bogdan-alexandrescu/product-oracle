@@ -8,7 +8,7 @@ import { Button, Chip, type ChipKind, type Column, confirmInPage, DataTable, typ
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CATEGORY_LABEL } from "@/app/intakes/[id]/_lib";
-import { formatDate } from "@/lib/format";
+import { formatDate, goalFigure } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -79,26 +79,11 @@ function stateOf(o: Outcome): State {
   return o.status;
 }
 
-/** A unit's word in the singular: "events" → "event", "failed payments per 100 orders" → "failed payment per 100 orders". */
-function singular(unit: string): string {
-  const [head, ...per] = unit.split(/(?= per )/);
-  const one = head.replace(/[A-Za-z]{3,}$/, (w) =>
-    /(ss|us|is|series|news)$/i.test(w) || !/s$/i.test(w)
-      ? w
-      : /[^aeiou]ies$/i.test(w)
-        ? `${w.slice(0, -3)}y`
-        : /(ch|sh|x|z)es$/i.test(w)
-          ? w.slice(0, -2)
-          : w.slice(0, -1),
-  );
-  return [one, ...per].join("");
-}
+/** The API's word for a goal with no metric (quality.capture.UNSET): it has none to show behind an (i). */
+const UNSET = "Not set yet";
 
-/** "42%", "3 events", "1 event": a unit with a plural reads singular for 1. */
-const figure = (v: number | null | undefined, unit?: string | null) =>
-  v == null
-    ? null
-    : `${v}${unit === "%" ? "%" : unit ? ` ${Math.abs(v) === 1 ? singular(unit) : unit}` : ""}`;
+/** "42%", "$1,200", "1 event": the goal figure every page and the API write. */
+const figure = (v: number | null | undefined, unit?: string | null) => (v == null ? null : goalFigure(v, unit));
 
 const sameUnit = (a?: string | null, b?: string | null) =>
   (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
@@ -871,7 +856,7 @@ function OutcomeInspector({
                 ))}
               </select>
             ) : (
-              <span className="truncate text-text2" title={goal}>
+              <span className="truncate text-text2 max-[600px]:whitespace-normal max-[600px]:break-words" title={goal}>
                 {goal}
               </span>
             )
@@ -886,13 +871,13 @@ function OutcomeInspector({
             own ? (
               // A prediction in its own unit names its own measure; the goal's is behind the (i).
               <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-text2" title={own} data-testid="outcome-metric">
+                <span className="truncate text-text2 max-[600px]:whitespace-normal max-[600px]:break-words" title={own} data-testid="outcome-metric">
                   {own}
                 </span>
-                <InfoTip label="Goal metric">{p.metric}</InfoTip>
+                {p.metric !== UNSET && <InfoTip label="Goal metric">{p.metric}</InfoTip>}
               </span>
             ) : (
-              <span className="truncate text-text2" title={p.metric} data-testid="outcome-metric">
+              <span className="truncate text-text2 max-[600px]:whitespace-normal max-[600px]:break-words" title={p.metric} data-testid="outcome-metric">
                 {p.metric}
               </span>
             )
