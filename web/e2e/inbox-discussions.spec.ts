@@ -91,6 +91,9 @@ test("the badge equals New + Open with discussion rows present", async ({ page }
   await inboxAs(page, APPROVER);
   // Saved carts' mention and changes, the goals interview's and the priorities' changes.
   await expect(group(page, "new").locator("tr[data-row]")).toHaveCount(4);
+  // hotfix 3: the rows show at once, the counts only once every read they add up has arrived;
+  // read the tabs once the New tab shows its count, not before (a tab without one reads 0).
+  await expect(tab(page, "New")).toHaveText(/\d/);
   const total = (await tabCount(page, "New")) + (await tabCount(page, "Seen"));
   await expect(badge(page)).toHaveText(String(total));
   await expect(page.getByText(`${total} waiting`)).toBeVisible();
