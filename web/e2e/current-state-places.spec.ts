@@ -89,7 +89,8 @@ for (const size of ["desktop", "phone"] as const) {
       await tap(title.getByRole("button", { name: "What Exists means" }));
       const card = reply.getByTestId("cs-mark-card");
       await expect(card).toBeVisible();
-      await expect(card).toContainText("Weekly alert digest");
+      // The card names the feature by its code and name, as the title does (visual QA Nov 14).
+      await expect(card).toContainText(/F-\d+ Weekly alert digest/);
       await expect(card).toContainText("Runs today");
     });
 
