@@ -10,7 +10,7 @@ from fastapi.routing import APIRoute
 from oracle.auth.deps import get_principal
 from oracle.auth.models import ROLES
 from oracle.authz import require_role, require_role_now
-from oracle.capabilities import DECIDED_PER_ITEM, EVERY_MEMBER, operation_roles
+from oracle.capabilities import DECIDED_PER_ITEM, EVERY_MEMBER, lead_roles, operation_roles
 from oracle.main import app
 from tests.test_members import MATRIX, _template, token_with_role
 from tests.test_members import world as members_world  # noqa: F401  (the fixture)
@@ -65,6 +65,22 @@ def test_operation_roles_cover_every_signed_in_route():
     assert roles["list_sources"] == "viewer"
     # A router-level viewer check under a route's approver check: the higher one counts.
     assert roles["create_source"] == "commenter"
+
+
+def test_role_maps_match_fastapis_dependency_trees():
+    """The role maps read the routes' declared dependencies (no route is built for them):
+    they equal what the dependency trees FastAPI builds say."""
+    roles, leads = {}, {}
+    for _, r in _routes():
+        calls = list(_calls(r.dependant))
+        if get_principal in calls:
+            named = [c.min_role for c in calls if getattr(c, "min_role", None)]
+            roles[r.name] = max(named, key=ROLES.index, default="viewer")
+        for c in calls:
+            if getattr(c, "lead_role", None):
+                leads[r.name] = c.lead_role
+    assert operation_roles(app) == roles
+    assert lead_roles(app) == leads
 
 
 def test_openapi_carries_each_operations_role():

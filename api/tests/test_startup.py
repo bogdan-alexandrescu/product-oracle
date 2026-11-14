@@ -26,11 +26,20 @@ no_claim=<what green does not prove>.
   interpreter, as a new instance does) loads no MCP SDK, PDF reader, SQL parser or
   template engine; fails_when=a route module imports one at its top again (Cloud Run, Nov
   13: the app's import took 13.9 s of a 20 s start); no_claim=they still load when used.
-- test_app_import_within_budget: protects=importing the app on one CPU (taskset -c 0, as
-  Cloud Run's one vCPU), cold, with collection off as oracle.startup does, stays under
-  IMPORT_BUDGET_S; fails_when=the import goes back to building every route's dependency tree
-  and fields at declaration (2.9-3.0 s on the lane's machine on one CPU, 2.2-2.3 s after);
-  no_claim=Cloud Run's own time.
+- test_app_import_within_budget: protects=importing the app and then reading the role map
+  (the first page load's GET /v1/me/capabilities) on one CPU (taskset -c 0, as Cloud Run's
+  one vCPU), cold, with collection off as oracle.startup does, stays under IMPORT_BUDGET_S,
+  the role map alone under ROLE_MAP_BUDGET_S; fails_when=the import goes back to building
+  every route's dependency tree and fields at declaration, or the role map builds them at
+  the first request instead; no_claim=Cloud Run's own time.
+- test_role_map_builds_no_route: protects=the role map (GET /v1/me/capabilities, read on
+  every page load) builds no route; fails_when=it reads route.dependant, which builds all
+  500+ routes inside the async handler (1.1-2.0 s on one CPU, the event loop blocked).
+- test_a_route_read_during_its_build_waits_for_it: protects=a second thread reading a route
+  that another thread is building gets the built part; fails_when=it gets AttributeError.
+- test_a_failed_build_is_tried_again: protects=a route whose build raises raises the same
+  error on the next read, and builds once the cause is gone; fails_when=it is left with
+  neither its declaration nor its build (AttributeError on every read).
 - test_routes_are_built_at_first_use: protects=importing the app builds no included route's
   dependency tree, fields or handler (FastAPI builds them again per inclusion at the first
   request); fails_when=a router goes back to fastapi.APIRouter's eager routes.
@@ -264,8 +273,11 @@ def test_app_import_leaves_heavy_libraries_unloaded():
 
 
 # The lane's machine on one CPU (taskset -c 0): 2.9-3.0 s before (every route built at
-# declaration), 2.2-2.3 s after; the budget leaves headroom over the after.
-IMPORT_BUDGET_S = 2.7
+# declaration), 2.2-2.4 s after when the host is quiet (3.5 s once under load). The first
+# page load reads the role map (GET /v1/me/capabilities): 1.1-2.0 s when it built every
+# route's dependency tree, 0.04-0.07 s from the declared dependencies.
+IMPORT_BUDGET_S = 3.0
+ROLE_MAP_BUDGET_S = 0.3
 ONE_CPU = ["taskset", "-c", "0"] if shutil.which("taskset") else []
 
 
@@ -273,9 +285,11 @@ ONE_CPU = ["taskset", "-c", "0"] if shutil.which("taskset") else []
 def test_app_import_within_budget():
     code = (
         "import gc, time; gc.disable(); t = time.perf_counter(); import oracle.main; "
-        "print(time.perf_counter() - t)"
+        "i = time.perf_counter(); from oracle.capabilities import capabilities; "
+        "capabilities(oracle.main.app, 'viewer', engineering_lead=True); "
+        "print(i - t, time.perf_counter() - i)"
     )
-    took = []
+    took, role_map = [], []
     for _ in range(3):
         out = subprocess.run(
             [*ONE_CPU, sys.executable, "-c", code],
@@ -284,7 +298,10 @@ def test_app_import_within_budget():
             text=True,
             check=True,
         )
-        took.append(float(out.stdout.strip().splitlines()[-1]))
+        imported, roles = map(float, out.stdout.strip().splitlines()[-1].split())
+        took.append(imported + roles)
+        role_map.append(roles)
+    assert min(role_map) < ROLE_MAP_BUDGET_S, role_map
     assert min(took) < IMPORT_BUDGET_S, took
 
 
@@ -324,6 +341,62 @@ def test_declared_settings_match_fastapis_build():
     out = subprocess.run([sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == "[]"
+
+
+def test_role_map_builds_no_route():
+    code = _ROUTES + (
+        "from oracle.capabilities import capabilities\n"
+        "capabilities(oracle.main.app, 'viewer', engineering_lead=True)\n"
+        "print(sorted(r.path for r in included if 'dependant' in vars(r)))\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "[]"
+
+
+def _endpoint() -> dict:
+    return {}
+
+
+def test_a_route_read_during_its_build_waits_for_it(monkeypatch):
+    import threading
+
+    from fastapi.routing import APIRoute
+
+    from oracle.routing import LazyAPIRoute
+
+    real, started = APIRoute.__init__, threading.Event()
+
+    def slow(self, *args, **kwargs):
+        started.set()
+        time.sleep(0.2)
+        real(self, *args, **kwargs)
+
+    monkeypatch.setattr(APIRoute, "__init__", slow)
+    route = LazyAPIRoute("/x", _endpoint)
+    first = threading.Thread(target=lambda: route.dependant)
+    first.start()
+    started.wait()
+    assert route.dependant.call is _endpoint
+    first.join()
+
+
+def test_a_failed_build_is_tried_again(monkeypatch):
+    from fastapi.routing import APIRoute
+
+    from oracle.routing import LazyAPIRoute
+
+    def boom(self, *args, **kwargs):
+        raise RuntimeError("build failed")
+
+    route = LazyAPIRoute("/x", _endpoint)
+    with monkeypatch.context() as patch:
+        patch.setattr(APIRoute, "__init__", boom)
+        with pytest.raises(RuntimeError, match="build failed"):
+            route.dependant  # noqa: B018 (the read builds)
+        with pytest.raises(RuntimeError, match="build failed"):
+            route.dependant  # noqa: B018
+    assert route.dependant.call is _endpoint
 
 
 def test_a_failed_check_stops_the_start(served, monkeypatch):
