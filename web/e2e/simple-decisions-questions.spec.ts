@@ -225,7 +225,8 @@ for (const phone of [false, true]) {
         await expect(q5).not.toContainText("Q5");
         await expect(q5.getByTestId("question-due")).toHaveText("Late · due Fri Oct 16");
         await expect(q5.getByTestId("question-due")).toHaveAttribute("data-late", "true");
-        await expect(q5).toContainText("Blocks Health log, first milestone");
+        // simple-home-qa-nov14 #3: the blocked feature reads its code with its name, as on Decisions.
+        await expect(q5).toContainText("Blocks F-03 Health log, first milestone");
         await expect(q5.getByRole("button", { name: "Another answer" })).toBeVisible();
         await expect(q5.getByRole("button", { name: "Ask Oracle" })).toBeVisible();
         await q5.getByRole("button", { name: "Decide as recommended" }).click();
