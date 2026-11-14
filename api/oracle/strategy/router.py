@@ -9,12 +9,13 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 from sqlalchemy import select
 
 from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import has_role, recheck_caller, require_role, require_role_now
+from oracle.routing import APIRouter
 from oracle.runs import extensions
 from oracle.strategy import brief, drift
 from oracle.strategy.models import StrategyFinding

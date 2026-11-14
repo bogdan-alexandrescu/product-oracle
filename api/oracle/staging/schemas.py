@@ -4,7 +4,9 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from oracle.base_model import BaseModel
 
 Source = Literal["suggestion", "next_draft_change", "checkpoint_action"]
 # row: a review screen's row action (D8); discussion: staged from a discussion (G4);

@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +42,7 @@ from oracle.integrations import slack_api, slack_oauth
 from oracle.integrations.models import CompanyIntegration
 from oracle.members.names import display_name
 from oracle.models import Tenant
+from oracle.routing import APIRouter
 from oracle.slack.models import DiscussionSlackLink, SlackEventSeen
 from oracle.tenancy import tenant_session, unscoped_session
 

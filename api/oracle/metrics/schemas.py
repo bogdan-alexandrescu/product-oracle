@@ -4,7 +4,9 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import Field, StringConstraints, model_validator
+
+from oracle.base_model import BaseModel
 
 Kind = Literal["output", "input"]
 Direction = Literal["up", "down"]

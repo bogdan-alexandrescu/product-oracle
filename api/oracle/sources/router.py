@@ -20,7 +20,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_, select
 
@@ -30,6 +30,7 @@ from oracle.authz import require_role
 from oracle.connections.models import Connection
 from oracle.connections.providers import reconnect_reason
 from oracle.connections.router import endpoint_url as connection_endpoint
+from oracle.routing import APIRouter
 from oracle.sources import coverage, items, service, store, uploads
 from oracle.sources import search as search_service
 from oracle.sources import sync as sync_engine

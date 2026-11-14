@@ -5,13 +5,14 @@ Its own router (not oracle.runs'): it reads runs through GET /v1/runs' visibilit
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import Depends
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.discussions import research as discussion_research
 from oracle.rebuilds import service
 from oracle.rebuilds.schemas import RebuildsOut
+from oracle.routing import APIRouter
 from oracle.runs import service as runs_service
 
 router = APIRouter(prefix="/v1", tags=["runs"])

@@ -3,12 +3,13 @@
 import uuid
 from typing import Annotated, Literal
 
-from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import ConfigDict, StringConstraints
 from sqlalchemy import select
 
 from oracle.auth.deps import CurrentPrincipal, TenantDB
+from oracle.base_model import BaseModel
 from oracle.preferences.models import UserPreference
+from oracle.routing import APIRouter
 
 DocumentView = Literal["brief", "full"]
 # #723: the mode a person works in, Simple or Detailed; unset until they switch.

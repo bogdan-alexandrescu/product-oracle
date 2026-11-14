@@ -43,8 +43,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from pydantic import BaseModel
-
+from oracle.base_model import BaseModel
 from oracle.modules.evaluator import ConditionError, Evaluation, evaluate
 from oracle.quality.learned import Nudge
 from oracle.v2.contract import ALWAYS, FieldDefinition, ModuleContract

@@ -13,8 +13,10 @@ from datetime import datetime
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field, create_model, field_validator
+from pydantic import Field, create_model, field_validator
 from pydantic.json_schema import models_json_schema
+
+from oracle.base_model import BaseModel
 
 # Fixed per webhook at creation; a breaking payload change adds a new one.
 API_VERSION = "2026-10-25"
@@ -100,6 +102,7 @@ def payload_model(event_type: str, data: type[BaseModel]) -> type[BaseModel]:
     """The envelope of one event type: ``WebhookEvent_<type>``."""
     return create_model(
         f"WebhookEvent_{event_type.replace('.', '_')}",
+        __base__=BaseModel,
         __doc__=f"The body Oracle posts for a {event_type} event.",
         id=(str, Field(description="evt_<ulid>: unique, the receivers' idempotency key")),
         type=(Literal[event_type], ...),  # type: ignore[valid-type]

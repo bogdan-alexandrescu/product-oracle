@@ -30,15 +30,16 @@ from datetime import UTC, date, datetime
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel
+from fastapi import HTTPException, Query, status
 
 from oracle.auth.deps import TenantDB
+from oracle.base_model import BaseModel
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.connections.router import FirefliesHttp, UserPrincipal
 from oracle.live import budget
 from oracle.live.fireflies import backend_of
+from oracle.routing import APIRouter
 from oracle.sources import base
 from oracle.sources.connectors import fireflies
 from oracle.sources.connectors.fireflies import FirefliesConnector, Meeting

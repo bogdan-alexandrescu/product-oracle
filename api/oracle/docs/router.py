@@ -5,7 +5,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB, body_type
@@ -30,6 +30,7 @@ from oracle.docs.schemas import (
 from oracle.http import read_capped_body
 from oracle.jobs import service as jobs_service
 from oracle.review.schemas import ConflictResponse
+from oracle.routing import APIRouter
 from oracle.runs import feature_set
 from oracle.runs.schemas import PrdScopeOut
 

@@ -30,6 +30,7 @@ const TITLE = "Team invites";
 const NAME = `F-05 ${TITLE}`;
 // The span of F-05's slices: F-05a's start (M1) to F-05b's end (M2).
 const SPAN = { start: "2026-11-09", end: "2026-12-11", words: "Nov 9 – Dec 11" };
+const SUGGESTS = "Oracle suggests ";
 
 const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 
@@ -68,9 +69,11 @@ for (const [where, use] of [
         const row = tray.getByTestId("tray-date").filter({ hasText: `${TITLE}:` });
         await expect(row).toHaveCount(1);
         const words = row.locator("span").first();
-        // One suggestion for the item: the span of its two slices, not its first slice's dates.
-        await expect(words).toHaveText(`${NAME}: ${SPAN.words}`);
-        const shown = (await words.textContent())!.slice(`${NAME}: `.length).trim();
+        // One suggestion for the item: the span of its two slices, not its first slice's dates,
+        // after its own estimate, as an item with no dates of its own reads (QA Nov 12 #6).
+        await expect(words).toHaveText(new RegExp(`^${NAME}: No dates yet · estimated [^·]+ · ${SUGGESTS}${SPAN.words}$`));
+        const text = (await words.textContent())!;
+        const shown = text.slice(text.indexOf(SUGGESTS) + SUGGESTS.length).trim();
 
         await row.getByRole("button", { name: "Accept" }).click();
         await expect(page.getByText("Dates accepted in your working draft")).toBeVisible();

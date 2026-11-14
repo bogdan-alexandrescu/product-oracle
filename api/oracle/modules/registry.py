@@ -26,10 +26,11 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import Field, ValidationError, field_validator
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle.base_model import BaseModel
 from oracle.modules.catalog import (
     MANIFEST_FORMAT,
     Manifest,

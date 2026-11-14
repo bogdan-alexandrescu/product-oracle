@@ -3,8 +3,9 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from oracle.base_model import BaseModel
 from oracle.baseline.goal_order import goal_position
 from oracle.baseline.goals import GoalCheck, goal_check
 

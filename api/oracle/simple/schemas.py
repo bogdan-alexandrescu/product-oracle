@@ -5,7 +5,9 @@ import datetime as dt
 import uuid
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
+
+from oracle.base_model import BaseModel
 
 DateSource = Literal["typed", "accepted", "engineering", "tracker", "estimated"]
 RoadmapGroup = Literal["goal", "track", "prd"]

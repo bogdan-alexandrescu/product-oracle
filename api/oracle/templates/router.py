@@ -6,11 +6,12 @@ start drafts; only owners set the company default.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import require_role, require_role_now
+from oracle.routing import APIRouter
 from oracle.templates import service
 from oracle.templates.schemas import (
     DraftDefaults,

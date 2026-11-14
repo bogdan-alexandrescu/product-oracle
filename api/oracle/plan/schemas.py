@@ -5,8 +5,7 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel
-
+from oracle.base_model import BaseModel
 from oracle.roadmap.schemas import EntityRef, Horizon, TrackerRecordRef, TrackHealth, TrackStatus
 from oracle.simple.schemas import SimpleDecidedRef
 

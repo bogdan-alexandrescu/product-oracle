@@ -6,7 +6,7 @@ Inbox's Done). Company-scoped: another company's report is a 404. Run tokens are
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,7 @@ from oracle.reports.schemas import (
     AlignmentReportListItem,
     AlignmentReportOut,
 )
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1", tags=["reports"])
 

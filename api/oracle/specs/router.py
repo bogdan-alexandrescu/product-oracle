@@ -12,11 +12,12 @@ Importing this module registers the ``specs.lineage`` change handler and the
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import Depends, HTTPException, Response, status
 
 from oracle import changes, wording
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
+from oracle.routing import APIRouter
 from oracle.runs import extensions
 from oracle.specs import lineage, service
 from oracle.specs.schemas import (

@@ -2,9 +2,10 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from oracle import wording
+from oracle.base_model import BaseModel
 from oracle.roadmap.schemas import DraftRoadmapSummary
 
 DocumentStatus = Literal["draft", "in_review", "approved"]

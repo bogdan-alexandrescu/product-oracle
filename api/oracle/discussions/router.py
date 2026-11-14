@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Awaitable
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
@@ -61,6 +61,7 @@ from oracle.discussions.schemas import (
 )
 from oracle.jobs import service as jobs_service
 from oracle.priorities.schemas import PushbackOut
+from oracle.routing import APIRouter
 from oracle.slack import bridge
 
 router = APIRouter(

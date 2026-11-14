@@ -44,7 +44,6 @@ from datetime import UTC, datetime, timedelta
 from functools import lru_cache, partial
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,6 +51,7 @@ from sqlalchemy.orm import aliased
 
 from oracle import audit, autonomy
 from oracle.authz import has_role
+from oracle.base_model import BaseModel
 from oracle.claude_accounts.pool import readable_refusal
 from oracle.company_time import DEFAULT_ZONE
 from oracle.config import get_settings

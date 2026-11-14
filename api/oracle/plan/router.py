@@ -6,13 +6,14 @@ oracle.mcp.scopes), and people's MCP clients get ``get_plan`` and
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.docs import service as docs_service
 from oracle.plan import service
 from oracle.plan.schemas import ItemHistoryOut, PlanOut, PlanScope
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1/plan", tags=["plan"])
 

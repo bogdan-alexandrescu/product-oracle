@@ -20,9 +20,10 @@ refused (the ``simple`` area is in no run-token scope, oracle.mcp.scopes).
 
 import uuid
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import HTTPException, Query
 
 from oracle.auth.deps import TenantDB
+from oracle.routing import APIRouter
 from oracle.simple import changes, chat, drafts
 from oracle.simple.changes_router import CONFLICT, Commenter, Reader, _one_commit
 from oracle.simple.schemas import (

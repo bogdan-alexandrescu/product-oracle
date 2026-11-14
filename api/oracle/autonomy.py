@@ -23,12 +23,13 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ConfigDict, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.autonomy_models import OracleAction
+from oracle.base_model import BaseModel
 from oracle.tenant_settings import TenantSetting
 
 Level = Literal["observe", "draft", "recommend", "act"]

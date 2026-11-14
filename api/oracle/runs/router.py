@@ -14,7 +14,7 @@ import uuid
 from collections.abc import Awaitable
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
 
 from oracle import wording
@@ -25,6 +25,7 @@ from oracle.connections.router import ProviderHttp
 from oracle.discussions import replies as discussion_replies
 from oracle.discussions import research as discussion_research
 from oracle.jobs.worker import run_pending as run_llm_jobs
+from oracle.routing import APIRouter
 from oracle.runs import actions, agent_questions, service
 from oracle.runs.schemas import (
     ActionIn,

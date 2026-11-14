@@ -14,12 +14,13 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.auth.models import User
 from oracle.authz import has_role, require_role
+from oracle.routing import APIRouter
 from oracle.simple import goal_map
 from oracle.simple.goal_map import (
     AreaIn,
