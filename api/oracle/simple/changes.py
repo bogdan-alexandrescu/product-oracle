@@ -632,6 +632,17 @@ def _writes(c: SimpleChange, item_ids: set[str], fields: set[str] | None) -> boo
     return bool(fields & set(c.after))
 
 
+async def _declined_match(db: AsyncSession, row: Any, shown: dict[str, Any]) -> bool:
+    """A feature the item points at but declined as its match (Its own feature): its Ground
+    Truth flag reads no feature, so a set_feature seen as none is current."""
+    from oracle.baseline.fixes import DECLINED, marked
+
+    if not shown.get("feature_id"):
+        return False
+    feature = await db.get(Entity, uuid.UUID(shown["feature_id"]))
+    return feature is not None and marked(feature, DECLINED, row)
+
+
 async def _oracle_filled(db: AsyncSession, item_id: str, fields: tuple[str, ...]) -> bool:
     """roadmap-edit-fixes: whether Oracle's draft of a new item filled these fields and no
     person has written them since. A person who saw them empty (the panel opened while Oracle
@@ -890,7 +901,11 @@ async def _plan(
         shown = SHOWN[op](entry)
         seen = {f: body.before[f] for f in fields}
         if seen != shown and not (
-            all(v is None for v in seen.values()) and await _oracle_filled(db, str(row.id), fields)
+            all(v is None for v in seen.values())
+            and (
+                await _declined_match(db, row, shown)
+                or await _oracle_filled(db, str(row.id), fields)
+            )
         ):
             raise await _conflict(db, shown, {str(row.id)}, "Changed since you saw it")
     if op == "set_status":
