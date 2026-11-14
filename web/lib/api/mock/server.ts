@@ -5360,6 +5360,12 @@ function activeMember(db: Db, userId: string): boolean {
   return db.members.some((m) => m.id === userId && m.status !== "disabled");
 }
 
+/** changes._apply's set_feature: a person's link to a match the item declined (Its own feature) clears the decline. */
+const undeclines = (db: Db): SimpleChangesCtx["linked"] => (item, featureId) => {
+  const e = db.baseline.entities.find((x) => x.id === featureId && x.type === "feature");
+  if (e) mark(e, DECLINED, item, false);
+};
+
 /** service.link_new_feature: the new feature's goal (a supports link) and its roadmap item's feature (set_feature, as the person). */
 async function linkNewFeature(db: Db, me: { id: string; role: Schemas["Me"]["role"] }, featureId: string, fields: Record<string, unknown>) {
   const goal = typeof fields.serves === "string" ? db.baseline.entities.find((e) => e.id === fields.serves && e.type === "goal") : undefined;
@@ -5376,7 +5382,7 @@ async function linkNewFeature(db: Db, me: { id: string; role: Schemas["Me"]["rol
   const names = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
   const body = { op: "set_feature", target: { item_id: item }, before: { feature_id: was }, after: { feature_id: featureId } };
   const req = new Request("http://mock/v1/simple/changes", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
-  await routeSimpleChanges(simple, { id: me.id, role: me.role, owners, names, roles }, req, ["v1", "simple", "changes"], new URLSearchParams());
+  await routeSimpleChanges(simple, { id: me.id, role: me.role, owners, names, roles, linked: undeclines(db) }, req, ["v1", "simple", "changes"], new URLSearchParams());
 }
 
 /** /v1/baseline/... through ./baseline.ts, with the caller and the lookups it needs. */
@@ -7857,6 +7863,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const call = (path: string, body: unknown) =>
       routeBaselineFor(db, me, new Request(new URL(path, req.url), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), path.split("/").filter(Boolean), new URLSearchParams());
     let feature: typeof same | undefined = same;
+    const joined = !!same && same.status !== "confirmed";
     if (same) {
       mark(same, DECLINED, it, false);
       mark(same, UNCONFIRMED, it, false);
@@ -7876,6 +7883,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     }
     if (!feature) return json(404, { detail: "No such feature" });
     if (feature.id !== was?.id) await linkNewFeature(db, me, feature.id, { roadmap_item_id: p[3] });
+    // A proposal of the item's name, maybe shared with other items: confirmed for this item only.
+    if (joined) confirmedFor(db.simple_roadmap, feature, p[3], true);
     const got = ANY_CODE.test(feature.key) ? feature.key : null;
     return json(200, { status: "done", feature: { id: feature.id, code: got, name: feature.title }, code: got, proposal_id: null } satisfies Schemas["GroundTruthFixOut"]);
   }
@@ -8650,7 +8659,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       const why = d && readOnlyWhy(db, d);
       if (why) return json(409, { detail: why });
     }
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced, ladder: ladderMilestones(db, { id: me.id, role: me.role, name: simpleNames[me.id] ?? me.email }, bin.trash, bin.now) }, r, p, q);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced, ladder: ladderMilestones(db, { id: me.id, role: me.role, name: simpleNames[me.id] ?? me.email }, bin.trash, bin.now), linked: undeclines(db) }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
@@ -8760,7 +8769,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       reviews.propose(b.title, b.approver_id, doc, id, made.number);
       return id;
     };
-    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, ...askFiling, proposeTo: (d: string | null) => reviews.proposeTo(d),
+    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, ...askFiling, linked: undeclines(db), proposeTo: (d: string | null) => reviews.proposeTo(d),
       // ask_actions.slack_reach: whether Slack sends a pinged person the message (connected, and their review-requested ping on).
       slackReach: (id: string): "on" | "off" | "none" => {
         const install = ensureReports(db, db.user_id, reportLive(db, me)).integration;

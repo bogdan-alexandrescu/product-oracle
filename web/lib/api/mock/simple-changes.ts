@@ -125,6 +125,8 @@ export interface SimpleChangesCtx {
   /** every-field-editable: the Goal ladder's key results (goal-map.ts ladderMilestones), the same
    * track_milestones in the API: an edit_goal_milestone may name one. */
   ladder?: LadderMilestones;
+  /** changes._apply's set_feature: a person's link to a match the item declined (Its own feature) wins over the decline. */
+  linked?: (item: SimpleDb["items"][number], featureId: string) => void;
 }
 
 /** every-field-editable: a Goal ladder key result as an edit_goal_milestone reads and writes it. */
@@ -1193,10 +1195,14 @@ function moveFeature(db: SimpleDb, key: string, goalIds: string[]): void {
   touchFeature(gb, f.id);
 }
 
-function apply(db: SimpleDb, c: Change, values: Values, undo = false): void {
+function apply(db: SimpleDb, c: Change, values: Values, undo = false, ctx?: Pick<SimpleChangesCtx, "linked">): void {
   if (KEYED.includes(c.op)) for (const [id, v] of Object.entries(values)) write(db, keyOf(db, id)!, v as Values, c.target);
   else write(db, keyOf(db, c.target.item_id)!, values, c.target);
   if (c.op === "set_goals") moveFeature(db, keyOf(db, c.target.item_id)!, values.goal_ids as string[]);
+  if (c.op === "set_feature" && typeof values.feature_id === "string") {
+    const it = db.items.find((x) => x.key === keyOf(db, c.target.item_id));
+    if (it) ctx?.linked?.(it, values.feature_id);
+  }
   if (c.op === "accept_date_suggestion") {
     const s = db.suggestions.find((x) => x.id === c.target.suggestion_id);
     // plan-model: a slice's suggestion is decided with the item's other open slices (and undone with them).
@@ -1735,7 +1741,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     const drafts = intoDrafts(db, change, session!);
     if (drafts instanceof Response) return drafts;
     change.draft_ids = drafts;
-    apply(db, change, after);
+    apply(db, change, after, false, ctx);
     flags = flagsFor(db, touched(change));
     session!.last_change_at = now;
   } else {
@@ -1854,7 +1860,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       if (!back) return conflict(db, ctx, now_, touched(c), "Changed since");
       const drafts = intoDrafts(db, c, s, true);
       if (drafts instanceof Response) return drafts;
-      apply(db, c, back, true);
+      apply(db, c, back, true, ctx);
       undone = { before: now_, after: back };
     } else {
       const now_ = current(db, c, c.after);
@@ -1867,7 +1873,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       if (taken) return json(409, { detail: taken });
       const drafts = intoDrafts(db, c, s, true);
       if (drafts instanceof Response) return drafts;
-      apply(db, c, c.before, true);
+      apply(db, c, c.before, true, ctx);
     }
     const u: Change = { ...c, id: crypto.randomUUID(), before: undone?.before ?? c.after, after: undone?.after ?? c.before, status: "undone", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now, undoes_id: c.id, routed_to: [], decided_by: null, decided_at: null };
     db.changes!.push(u);
@@ -1982,7 +1988,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     if (drafts instanceof Response) return drafts;
     c.draft_ids = drafts;
     session.last_change_at = now;
-    apply(db, c, c.after);
+    apply(db, c, c.after, false, ctx);
   }
   Object.assign(c, { status: p[4] === "accept" ? "accepted" : "declined", decided_by: ctx.id, decided_at: now, decision_reason: body.reason ?? null });
   return json(200, { change: view(db, ctx, c), flags: TARGETS[c.op] || KEY_DATE_OPS.includes(c.op) || c.op === MAP_LINK_OP ? [] : flagsFor(db, touched(c)) });
