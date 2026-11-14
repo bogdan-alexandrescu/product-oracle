@@ -71,8 +71,8 @@ async def test_a_moved_outcome_takes_its_new_goals_metric(client, owner, runtime
     written prediction's unit is replaced; no_claim=the inspector (outcomes-goal-follow)."""
     tenant_id, auth = owner
     by_item = await outcome_world(client, auth, runtime, tenant_id)
-    other = await _goal(tenant_id, "Fewer failed payments",
-                        {"metric": "Failed payments per 100 orders", "unit": "failed payments"})  # fmt: skip
+    measure = {"metric": "Failed payments per 100 orders", "unit": "failed payments"}
+    other = await _goal(tenant_id, "Fewer failed payments", measure)
 
     async def move(outcome: dict) -> dict:
         url = f"/v1/outcomes/{outcome['id']}"
