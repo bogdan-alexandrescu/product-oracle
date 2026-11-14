@@ -15,6 +15,7 @@ Test cards (protects / fails_when / no_claim):
 - test_figure_words_singular_for_one: protects=a unit with a plural reads singular for 1 or -1
   ("1 event", "1 failed payment per 100 orders", "-1 day"), as the web's goalFigure, so a
   prediction's threshold and every export agree with the pages; fails_when=it reads "1 events";
+  a "%" unit ("1 % of orders") or an all-caps word ("1 NPS") keeps its words;
   no_claim=other languages or irregular plurals.
 - test_goal_buckets_read_money_and_count_goals: protects=Goal buckets read a usd goal as
   "$50,000" and a shops goal as "1,200 shops"; fails_when=they read "50000 usd" or "1200
@@ -74,6 +75,10 @@ def test_figure_words_singular_for_one():
         (1, "boxes", "1 box"),
         (1, "status", "1 status"),
         (1, "% done", "1 % done"),
+        (1, "% of orders", "1 % of orders"),
+        (1, "% of users", "1 % of users"),
+        (1, "NPS", "1 NPS"),
+        (1, "SMS", "1 SMS"),
         (1, "%", "1%"),
         (1, "usd", "$1"),
         (2, "events", "2 events"),
