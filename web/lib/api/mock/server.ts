@@ -172,7 +172,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith, withKeyResultBuckets } from "./goal-buckets";
+import { bucketGoalsInOrder, goalBucketsDb, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith, withKeyResultBuckets } from "./goal-buckets";
 import { proposeGoalDelete, restoreCodeTaken, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import {
@@ -8549,6 +8549,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     // goal-order: Simple's goals follow the baseline's one goal order (and the place Move up or Move
     // down stored on a bucket goal the baseline does not hold).
     const baselineGoals = db.baseline.entities.filter((e) => e.type === "goal");
+    // As the API, whose goals are all stored from the start: the goal buckets are seeded before the goal order is read,
+    // so the first Roadmap read ranks goals (and numbers milestones that share a day) as every later one does.
+    if (db.simple_roadmap) goalBucketsDb(db.simple_roadmap, db.members.map((x) => ({ id: x.id, name: displayName(x.email, x.name), email: x.email, role: x.role, disabled: x.status === "disabled" })));
     knowCompanyGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
     knowGoalOrderGoals(db.baseline.entities);
