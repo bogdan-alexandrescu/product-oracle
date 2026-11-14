@@ -127,6 +127,14 @@ export interface SimpleChangesCtx {
   ladder?: LadderMilestones;
   /** changes._apply's set_feature: a person's link to a match the item declined (Its own feature) wins over the decline. */
   linked?: (item: SimpleDb["items"][number], featureId: string) => void;
+  /** changes._declined_match: whether the item declined this feature as its match (Its own feature). */
+  declined?: (item: SimpleDb["items"][number], featureId: string) => boolean;
+}
+
+/** changes._declined_match: a feature the item points at but declined reads as none in its Ground Truth flag, so a set_feature seen as none is current. */
+function declinedMatch(db: SimpleDb, ctx: SimpleChangesCtx, key: string, now_: Values): boolean {
+  const it = db.items.find((x) => x.key === key);
+  return !!it && typeof now_.feature_id === "string" && !!ctx.declined?.(it, now_.feature_id);
 }
 
 /** every-field-editable: a Goal ladder key result as an edit_goal_milestone reads and writes it. */
@@ -1575,7 +1583,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       // roadmap-edit-fixes: the read shows a title's code apart from its name.
       const s = seed(seen, key);
       if (!same(seenNow, { title: codedTitle(s.title, prdCode(s.section))[1] })) return conflict(db, ctx, now_, [String(target.item_id)], lead);
-    } else if (!same(seenNow, now_) && !(Object.values(seenNow).every((v) => v == null) && oracleFilled(db, String(target.item_id), fields)))
+    } else if (!same(seenNow, now_) && !(Object.values(seenNow).every((v) => v == null) && (oracleFilled(db, String(target.item_id), fields) || declinedMatch(seen, ctx, key, now_))))
       // roadmap-edit-fixes: Oracle's draft landed after the person saw the field empty.
       return conflict(db, ctx, now_, [String(target.item_id)], lead);
     const a = body.after ?? {};

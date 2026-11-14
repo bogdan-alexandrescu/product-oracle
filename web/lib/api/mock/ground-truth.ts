@@ -207,7 +207,7 @@ export const DECLINED = "_declined_items";
 export const UNCONFIRMED = "_unconfirmed_items";
 type MockItem = SimpleDb["items"][number];
 const markOf = (s: Pick<MockItem, "roadmap" | "key">) => `${s.roadmap}/${s.key}`;
-const marked = (e: Entity, kind: string, s: MockItem) => ((e.attrs?.[kind] as string[] | undefined) ?? []).includes(markOf(s));
+export const marked = (e: Entity, kind: string, s: MockItem) => ((e.attrs?.[kind] as string[] | undefined) ?? []).includes(markOf(s));
 export function mark(e: Entity, kind: string, s: MockItem, on: boolean): void {
   const { [kind]: had, ...rest } = (e.attrs ?? {}) as Record<string, unknown>;
   const marks = [...((had as string[] | undefined) ?? []).filter((m) => m !== markOf(s)), ...(on ? [markOf(s)] : [])];
