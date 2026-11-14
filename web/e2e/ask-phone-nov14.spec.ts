@@ -97,7 +97,7 @@ test("row 4: on a phone the Goal map's feature names wrap, not cut", async ({ pa
   await page.setViewportSize(PHONE);
   await login(page);
   await page.goto("/simple/goals");
-  const names = page.getByTestId("goal-map-feature-name");
+  const names = page.getByTestId("gm-chip-name");
   await expect(names.first()).toBeVisible();
   const cut = await names.evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent));
   expect(cut).toEqual([]);

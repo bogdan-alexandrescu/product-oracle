@@ -1027,9 +1027,12 @@ export function DiscussionThread({
             data-testid="discussion-people"
             aria-expanded={showPeople}
             onClick={() => setShowPeople((s) => !s)}
-            className="rounded-full border border-line-strong px-2 py-0.5 text-[13px] font-medium text-text hover:bg-surface2"
+            className="group inline-flex items-center rounded-full text-[13px] font-medium text-text"
           >
-            {plural(d.participants.length, "person", "people")}
+            {/* The sheet's 44 px touch target is the button; the pill stays chip height (ask-phone QA row 6). */}
+            <span data-testid="discussion-people-pill" className="rounded-full border border-line-strong px-2 py-0.5 group-hover:bg-surface2">
+              {plural(d.participants.length, "person", "people")}
+            </span>
           </button>
           {!open && <Chip kind="na">Closed</Chip>}
           {d.slack &&
