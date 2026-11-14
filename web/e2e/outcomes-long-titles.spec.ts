@@ -146,6 +146,20 @@ test("a figure of 1 reads with its unit in the singular", async ({ page }) => {
   await expect(panel).not.toContainText("1 events");
 });
 
+test("a figure of 1 keeps the noun after its unit's \"of\" plural, as a person types it", async ({ page }) => {
+  // protects=a prediction of 1 in "percent of orders" reads "1 percent of orders" in the panel (the
+  // web's goalFigure, as the API's figure_words); fails_when="1 percent of order"; no_claim=other languages.
+  await start(page);
+  await row(page, EXPORT).click();
+  const form = inspector(page).getByTestId("prediction-form");
+  await form.getByLabel("Baseline").fill("0");
+  await form.getByLabel("Predicted").fill("1");
+  await form.getByLabel("Unit").fill("percent of orders");
+  await form.getByRole("button", { name: "Save prediction" }).click();
+  await expect(inspector(page)).toContainText("→ 1 percent of orders");
+  await expect(inspector(page)).not.toContainText(/1 percent of order(?!s)/);
+});
+
 test("a prediction in its own unit names its own measure, the goal's metric behind an (i)", async ({ page }) => {
   // protects=an enabler predicted in % done shows "Done (% of the work)" on its Metric line and
   // the goal's metric only in its tip; fails_when=the line names the goal's revenue metric;

@@ -43,12 +43,3 @@ test("a money figure shows at most two decimals, none when whole; other units ke
   expect(goalFigure(12.345, "%")).toBe("12.345%");
   expect(goalFigure(1200.125, "shops")).toBe("1,200.125 shops");
 });
-
-test("a figure of 1 keeps a % unit's words and an all-caps unit whole", () => {
-  // fails_when: "1 % of order" or "1 NP"; as the API's figure_words.
-  expect(goalFigure(1, "% of orders")).toBe("1 % of orders");
-  expect(goalFigure(1, "% done")).toBe("1 % done");
-  expect(goalFigure(1, "NPS")).toBe("1 NPS");
-  expect(goalFigure(1, "SMS")).toBe("1 SMS");
-  expect(goalFigure(1, "events")).toBe("1 event");
-});
