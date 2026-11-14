@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { InfoTip } from "@/components/ds/InfoTip";
 import { toast } from "@/components/ds/Toast";
-import { NotInGt } from "@/components/simple/FeatureName";
+import { Named, NotInGt } from "@/components/simple/FeatureName";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { fixChange, OP_WORDS, type BrokenLink, type FixOp } from "@/lib/simple-home";
@@ -249,14 +249,10 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
           <span className="text-text2">{WAITING_KIND[item.kind]} · </span>
           {ref && open ? (
             <button type="button" className="text-left hover:underline" data-testid="waiting-feature" onClick={() => open({ id: ref.id, code: ref.code ?? "", name: ref.title, prd: ref.prd })}>
-              {code && <><code className="simple-code">{code}</code>{" "}</>}
-              {item.title}
+              <Named item={{ code, title: item.title }} />
             </button>
           ) : (
-            <>
-              {code && <><code className="simple-code">{code}</code>{" "}</>}
-              {item.title}
-            </>
+            <Named item={{ code, title: item.title }} />
           )}
           {/* simple-home-qa-nov14 #1: a roadmap item with no code is flagged, never hidden. */}
           {ref && <NotInGt item={ref} />}

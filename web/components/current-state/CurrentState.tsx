@@ -314,7 +314,7 @@ export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; ph
             </div>
             {isOpen && (
               <div className="mx-4 mb-3 rounded-lg border border-line bg-surface p-3 text-[14px]" data-testid="cs1-check">
-                <p className="mb-2 font-semibold">Is {f.title} still true today?</p>
+                <p className="mb-2 font-semibold">Is {featureName(f)} still true today?</p>
                 <ul className="mb-3 space-y-1.5">
                   <Line ok={ok(files)}>Code map: {files?.count ?? 0} files still in place</Line>
                   <Line ok={ok(prs)}>{prs?.count ?? 0} merged pull requests, none reverted</Line>
