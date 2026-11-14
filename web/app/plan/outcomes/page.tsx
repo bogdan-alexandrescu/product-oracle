@@ -510,6 +510,8 @@ function PredictionForm({
       />
     </label>
   );
+  // An outcome that needs a prediction: Save waits for a predicted value.
+  const empty = !want.trim() && o.needs_prediction;
   function save() {
     const b = num(baseline),
       w = num(want),
@@ -583,7 +585,7 @@ function PredictionForm({
         />
       </label>
       <div className="col-span-2">
-        <Button type="submit" variant="primary" disabled={busy}>
+        <Button type="submit" variant="primary" disabled={busy || empty} title={empty ? "Add a predicted value first" : undefined}>
           Save prediction
         </Button>
       </div>
@@ -967,7 +969,7 @@ function OutcomeInspector({
           tools={
             <InfoTip label="How Oracle reads the actual">
               The first goal value recorded on or after the prediction&apos;s
-              date, else the latest one.
+              date, else the latest one. {CAVEAT}
             </InfoTip>
           }
         >
@@ -988,7 +990,6 @@ function OutcomeInspector({
                 : "No readable goal value"}
               {prop.note ? ` · ${prop.note}` : ""}
             </span>
-            <span className="text-text2">{CAVEAT}</span>
           </div>
           {canApprove && o.status === "tracking" && !assessing && (
             <div className="mt-2 flex flex-wrap gap-2">

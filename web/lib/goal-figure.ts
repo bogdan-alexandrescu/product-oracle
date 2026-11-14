@@ -5,11 +5,14 @@
 export const CURRENCY_SIGNS: Record<string, string> = { usd: "$", eur: "€", gbp: "£", $: "$", "€": "€", "£": "£" };
 
 /** A unit's word in the singular (as the API's goals.singular_unit): "events" → "event",
- * "failed payments per 100 orders" → "failed payment per 100 orders", "stories" → "story"; a "%"
+ * "failed payments per 100 orders" → "failed payment per 100 orders", "stories" → "story", "percent of
+ * orders" → "percent of orders" (the noun after "of" stays plural); a "%"
  * unit ("% of orders") and an all-caps word ("NPS") stay as they are. */
 export function singularUnit(unit: string): string {
   if (unit.startsWith("%")) return unit;
-  const [head, ...per] = unit.split(/(?= per )/);
+  // What follows " per " or " of " stays as it is: "1 percent of orders", "1 failed payment per 100 orders".
+  const at = unit.search(/ (?:per|of) /);
+  const [head, ...per] = at < 0 ? [unit] : [unit.slice(0, at), unit.slice(at)];
   const one = head.replace(/[A-Za-z]{3,}$/, (w) =>
     /^[A-Z]+$/.test(w) || /(ss|us|is|series|news)$/i.test(w) || !/s$/i.test(w)
       ? w
