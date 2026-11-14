@@ -139,7 +139,7 @@ for (const size of ["desktop", "phone"] as const) {
       for (let i = 0; i < n; i += 1) {
         const l = lines.nth(i);
         await expect(l.getByTestId("cs-mark"), "every line's feature is on the roadmap").toHaveCount(1);
-        await expect(l.getByTestId("cs-mark")).toHaveText(/^(New|In progress|Exists|Exists · proof old)$/);
+        await expect(l.getByTestId("cs-mark")).toHaveText(/^(New|In progress|Exists|Exists · checked [A-Z][a-z]{2} \d{1,2})$/);
         await pillAfter(l.getByTestId("part-build-name"), l.getByTestId("cs-mark"));
       }
       // The pill is that feature's: its card names the line's feature.
@@ -192,7 +192,8 @@ for (const size of ["desktop", "phone"] as const) {
         [m1, "Setup checklist", "In progress", "Being built", /4 merged pull requests/],
         [m1, "Sample data import", "New", "Nothing built yet", /No merged pull requests or done tasks yet/],
         [row("Milestone M2 · 5 roadmap items"), "Welcome video", "Exists", "Runs today, with proof", /11 merged pull requests/],
-        [row("No milestone · 2 roadmap items"), "Alert routing by team", "Exists · proof old", "more than 30 days old", /4 merged pull requests/],
+        // simple-home-qa-nov14 #5: an old proof reads the day it was checked, never "proof old".
+        [row("No milestone · 2 roadmap items"), "Alert routing by team", "Exists · checked Sep 11", "more than 30 days old", /4 merged pull requests/],
       ];
       for (const [r, name, word, means, proof] of kinds) {
         const it = item(r, name);

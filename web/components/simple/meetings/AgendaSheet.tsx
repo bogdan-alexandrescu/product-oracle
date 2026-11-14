@@ -14,6 +14,7 @@ import { useRef, useState } from "react";
 
 import { InfoTip, Sheet, toast } from "@/components/ds";
 import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentState";
+import { NotInGt } from "@/components/simple/FeatureName";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
@@ -38,14 +39,17 @@ export function agendaSentence(words: string[]): string {
 }
 
 /** A feature's code (from the meeting's roadmap slice: the agenda row carries none), else "". */
+/** A feature's code: "" when it has none (it is flagged), undefined while not known. */
 type CodeOf = (featureId: string) => string | null | undefined;
 
 /** A feature's code and name open the one feature panel (in the sheet, a dialog, it closes the sheet
  * first: `onOpen`); a topic is plain text. QA Nov 12 (#2): its code first. */
 function Name({ x, onOpen, codeOf }: { x: Row; onOpen?: () => void; codeOf?: CodeOf }) {
   const open = useOpenFeature();
-  const code = x.feature_id ? codeOf?.(x.feature_id) || "" : "";
+  const known = x.feature_id ? codeOf?.(x.feature_id) : undefined;
+  const code = known || "";
   return x.feature_id ? (
+    <>
     <button
       type="button"
       data-feature={x.feature_id}
@@ -63,6 +67,9 @@ function Name({ x, onOpen, codeOf }: { x: Row; onOpen?: () => void; codeOf?: Cod
       )}
       {x.title}
     </button>
+    {/* simple-home-qa-nov14 #1: a feature with no code is flagged, never hidden. */}
+    {known === "" && <NotInGt />}
+    </>
   ) : (
     <span>{x.title}</span>
   );

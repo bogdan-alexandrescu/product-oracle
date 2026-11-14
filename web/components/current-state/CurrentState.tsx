@@ -12,7 +12,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 
 import { Button, InfoTip, PageHeader } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatInZone, useCompanyZone } from "@/lib/dates";
+import { calendarDay, formatInZone, todayIn, useCompanyZone } from "@/lib/dates";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 export type FeatureState = Schemas["FeatureStateOut"];
@@ -42,11 +42,20 @@ const TONE: Record<Mark, string> = {
 /** The pill's word: in a narrow spot (compact), the old-proof word is cut short. */
 export const pillWord = (mark: Mark, compact = false) => (compact && mark === "exists_old" ? "Exists ·!" : MARK_WORD[mark]);
 
-/** The word pill. compact: a narrow spot (a roadmap bar), where the old-proof word is cut short. */
-export function FeaturePill({ mark, compact = false }: { mark: Mark; compact?: boolean }) {
+/** E-16: a Current-state pill's words in Simple: a feature that runs reads "Exists", with the day
+ * its proof was last checked ("Exists · checked Sep 3") when that is old, never the internal "proof old". */
+export function markWords(f: Pick<FeatureState, "mark" | "checked_at">, compact: boolean, today: string): string {
+  if (f.mark !== "exists_old") return pillWord(f.mark, compact);
+  if (compact || !f.checked_at) return "Exists";
+  const same = f.checked_at.slice(0, 4) === today.slice(0, 4);
+  return `Exists · checked ${calendarDay(f.checked_at, same ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
+/** The word pill. compact: a narrow spot (a roadmap bar), where the old-proof word is cut short; words: Simple's (markWords). */
+export function FeaturePill({ mark, compact = false, words }: { mark: Mark; compact?: boolean; words?: string }) {
   return (
-    <span data-testid="cs-mark" data-mark={mark} title={MARK_WORD[mark]} className={`inline-flex flex-none items-center whitespace-nowrap rounded-full px-2 py-px text-[12px] font-semibold uppercase tracking-wide ${TONE[mark]}`}>
-      {pillWord(mark, compact)}
+    <span data-testid="cs-mark" data-mark={mark} title={words ?? MARK_WORD[mark]} className={`inline-flex flex-none items-center whitespace-nowrap rounded-full px-2 py-px text-[12px] font-semibold uppercase tracking-wide ${TONE[mark]}`}>
+      {words ?? pillWord(mark, compact)}
     </span>
   );
 }
@@ -54,8 +63,11 @@ export function FeaturePill({ mark, compact = false }: { mark: Mark; compact?: b
 const proof = (f: FeatureState, kind: Schemas["FeatureProofOut"]["kind"]) => f.proofs.find((p) => p.kind === kind);
 
 /** The pill as a button: clicking it says what the mark means and its proof. */
-export function PillButton({ f, compact = false }: { f: FeatureState; compact?: boolean }) {
+export function PillButton({ f, compact = false, checked = false }: { f: FeatureState; compact?: boolean; checked?: boolean }) {
   const [open, setOpen] = useState(false);
+  const zone = useCompanyZone();
+  // simple-home-qa-nov14 #5: in Simple, an old proof reads "Exists · checked Sep 3".
+  const words = checked ? markWords(f, compact, todayIn(zone)) : undefined;
   const box = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -78,9 +90,9 @@ export function PillButton({ f, compact = false }: { f: FeatureState; compact?: 
         }}
         className={`inline-flex items-center rounded-md ${open ? "ring-2 ring-accent ring-offset-2" : ""}`}
         aria-expanded={open}
-        aria-label={`What ${MARK_WORD[f.mark]} means`}
+        aria-label={`What ${words ?? MARK_WORD[f.mark]} means`}
       >
-        <FeaturePill mark={f.mark} compact={compact} />
+        <FeaturePill mark={f.mark} compact={compact} words={words} />
       </button>
       {open && <MarkCard f={f} />}
     </span>
@@ -572,10 +584,10 @@ export function useFeatureMarks(): Map<string, FeatureState> | null {
 
 /** A feature's pill wherever it is named, from FeatureMarks; nothing until the states are read.
  * By the feature's id, or by a roadmap item's id (the feature the item stands for). */
-export function MarkFor({ featureId, itemId, compact = false }: { featureId?: string | null; itemId?: string | null; compact?: boolean }) {
+export function MarkFor({ featureId, itemId, compact = false, checked = false }: { featureId?: string | null; itemId?: string | null; compact?: boolean; checked?: boolean }) {
   const marks = useContext(FeatureMarks);
   const f = featureId ? marks?.get(featureId) : itemId ? marks?.get(`item:${itemId}`) : undefined;
-  return f ? <PillButton f={f} compact={compact} /> : null;
+  return f ? <PillButton f={f} compact={compact} checked={checked} /> : null;
 }
 
 export type ShowKind = "new" | "in_progress" | "exists";

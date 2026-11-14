@@ -355,7 +355,7 @@ function PlanMarks({ prd, children }: { prd?: string; children: ReactNode }) {
 function SliceMark({ s }: { s: Slice }) {
   const items = useContext(SliceItems);
   const id = items?.get(s.code) ?? items?.get(`feature:${s.feature_code}`);
-  return id ? <MarkFor itemId={id} /> : null;
+  return id ? <MarkFor itemId={id} checked /> : null;
 }
 
 /**
@@ -413,7 +413,7 @@ function NoMilestone({ loose }: { loose: Loose[] }) {
               )}
               {/* OP1: an item with no code is flagged, never hidden. */}
               {!x.code && <NotInGt />}
-              <MarkFor itemId={x.id} />
+              <MarkFor itemId={x.id} checked />
             </span>
           </li>
         ))}

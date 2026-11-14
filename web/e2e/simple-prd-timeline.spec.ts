@@ -292,7 +292,7 @@ for (const phone of [false, true]) {
         const bulk = builds.getByRole("listitem").filter({ hasText: "F-07" });
         // The name, its feature's Current-state pill right after it (cs2-b), then "· flow below".
         await expect(bulk.getByTestId("part-build-name")).toHaveText("Bulk import");
-        await expect(bulk).toContainText(/Bulk import(New|In progress|Exists|Exists · proof old) · flow below/);
+        await expect(bulk).toContainText(/Bulk import(New|In progress|Exists|Exists · checked [A-Z][a-z]{2} \d{1,2}) · flow below/);
         await expect(bulk).toContainText("Imports people and projects from a spreadsheet");
         await expect(part.getByTestId("part-flow").filter({ hasText: "F-07 Bulk import" })).toBeVisible();
         await expect(builds).toContainText("Team invites, part 2 of 2");

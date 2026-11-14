@@ -6,8 +6,7 @@ import { MkLegend } from "./_mk";
 import { TrackHead } from "./_trackbands";
 import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
-import { FeatureMarks, pillWord, type FeatureState } from "@/components/current-state/CurrentState";
-import { calendarDay } from "@/lib/dates";
+import { FeatureMarks, markWords, type FeatureState } from "@/components/current-state/CurrentState";
 import { useMsBand } from "./_milestones";
 import { itemName, NOT_IN_GT, NotInGt } from "./_gtflag";
 import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
@@ -1134,16 +1133,6 @@ function drawPhases(g: SVGGElement, phases: Item["phases"], sc: Scale, x: number
     r.dataset.start = p.start;
     r.dataset.end = p.end;
   }
-}
-
-/** E-16: a Current-state pill's words on the roadmap: a feature that runs reads "Exists",
- * with the day its proof was last checked ("Exists · checked Sep 3") when that is old,
- * never the internal "proof old". */
-function markWords(f: FeatureState, compact: boolean, today: string): string {
-  if (f.mark !== "exists_old") return pillWord(f.mark, compact);
-  if (compact || !f.checked_at) return "Exists";
-  const same = f.checked_at.slice(0, 4) === today.slice(0, 4);
-  return `Exists · checked ${calendarDay(f.checked_at, same ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
 const MARK_TONE: Record<FeatureState["mark"], string> = {

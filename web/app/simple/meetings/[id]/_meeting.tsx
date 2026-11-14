@@ -18,12 +18,14 @@ import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { opWords } from "../../roadmap/_card";
+import { estimateOnly, estimateWords } from "../../roadmap/_lib";
 import { usePhone } from "../../priorities/priorities";
 import { DeliveryLine, emailWords, slackWords } from "../_delivery";
 import { DecidedItem, LINK, momentWords } from "../_flow";
 import { DraftDates } from "./_draft";
 import { CHECK, SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
 import { AgendaSheet } from "@/components/simple/meetings/AgendaSheet";
+import { NotInGt } from "@/components/simple/FeatureName";
 import { OpenFeatureContext } from "@/components/simple/OpenFeature";
 import { FeaturePanel, type PanelFeature } from "../../roadmap/_panel";
 
@@ -207,7 +209,11 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const proposalWords = useProposalWords(m);
   // QA Nov 12 (#2): every feature in the meeting reads its code before its name (the roadmap item's own).
   const roadmap = useMeetingRoadmap(m);
-  const codeOf = (id: string) => roadmap.data?.items.find((i) => i.id === id)?.code ?? "";
+  // simple-home-qa-nov14 #1: "" for an item with no code (flagged), undefined while not known.
+  const codeOf = (id: string) => {
+    const i = roadmap.data?.items.find((x) => x.id === id);
+    return i ? (i.code ?? "") : undefined;
+  };
   // qa4-simple-decide-17: the meeting's toasts sit at the bottom, clear of the header's steps and clock.
   useEffect(() => setToastPlace("corner"), []);
   // qa4-simple-decide-2: Approve publishes: it lists the edits it takes and asks first.
@@ -451,13 +457,27 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   );
 }
 
+/**
+ * simple-home-qa-nov14 #4: a roadmap item's dates in the Roadmap step; one with only Oracle's
+ * estimate reads as the Roadmap page reads it, with Oracle's suggested span when it has one,
+ * never the horizon's window as if someone set it.
+ */
+function spanOf(i: Schemas["SimpleRoadmapItem"], zone: string): string {
+  if (!estimateOnly(i)) return `${dayWords(i.start.date, zone)} – ${dayWords(i.end.date, zone)}`;
+  return i.suggestion ? estimateWords(i.suggestion.start_date, i.suggestion.end_date) : estimateWords(i.start.date, i.end.date);
+}
+
 /** A feature's code and name that open its panel (build-feature-panel; QA Nov 12 #2: its code first). */
 function FeatureName({ id, code, title, open, strong = false }: { id: string; code?: string | null; title: string; open: (f: PanelFeature) => void; strong?: boolean }) {
   return (
-    <button type="button" className="text-left hover:underline" onClick={() => open({ id, code: code ?? "", name: title })}>
-      {code && <><code className="simple-code">{code}</code>{" "}</>}
-      {strong ? <strong>{title}</strong> : title}
-    </button>
+    <>
+      <button type="button" className="text-left hover:underline" onClick={() => open({ id, code: code ?? "", name: title })}>
+        {code && <><code className="simple-code">{code}</code>{" "}</>}
+        {strong ? <strong>{title}</strong> : title}
+      </button>
+      {/* simple-home-qa-nov14 #1: a feature with no code is flagged, never hidden. */}
+      <NotInGt item={{ code }} />
+    </>
   );
 }
 
@@ -590,7 +610,7 @@ function RoadmapSlice({ m, reload, refresh, open }: { m: Meeting; reload: () => 
           <li key={i.id} data-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
             {/* QA Nov 12 (#1): on a phone the name takes its own row; the buttons wrap below it. */}
             <span className="min-w-0 flex-1 max-[600px]:basis-full">
-              <FeatureName id={i.id} code={i.code} title={i.title} open={open} strong /> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
+              <FeatureName id={i.id} code={i.code} title={i.title} open={open} strong /> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{spanOf(i, zone)}</span>
             </span>
             {/* qa-simple-decide-45: a cut item comes back with Restore. */}
             {m.can.change && i.status === "cut" && (
