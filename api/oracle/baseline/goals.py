@@ -380,12 +380,16 @@ CURRENCY_SIGNS = {"usd": "$", "eur": "€", "gbp": "£", "$": "$", "€": "€",
 
 def singular_unit(unit: str) -> str:
     """A unit's word in the singular, as the web's singularUnit: "events" -> "event", "failed
-    payments per 100 orders" -> "failed payment per 100 orders", "stories" -> "story"."""
+    payments per 100 orders" -> "failed payment per 100 orders", "stories" -> "story"; a "%"
+    unit ("% of orders") and an all-caps word ("NPS") stay as they are."""
+    if unit.startswith("%"):
+        return unit
     head, *per = re.split(r"(?= per )", unit)
 
     def one(m: re.Match[str]) -> str:
         w = m.group(0)
-        if re.search(r"(ss|us|is|series|news)$", w, re.I) or not re.search(r"s$", w, re.I):
+        plain = not re.search(r"s$", w, re.I) or re.search(r"(ss|us|is|series|news)$", w, re.I)
+        if w.isupper() or plain:
             return w
         if re.search(r"[^aeiou]ies$", w, re.I):
             return f"{w[:-3]}y"
