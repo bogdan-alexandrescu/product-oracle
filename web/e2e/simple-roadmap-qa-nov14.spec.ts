@@ -90,11 +90,12 @@ test.describe("desktop", () => {
   });
 
   test("Now / Next / Later shows the track milestone its cards are measured against (#3)", async ({ page }) => {
-    // protects: QA Nov 14 #3: the Now column has "M1 Beta · Nov 30", the milestone F-06's red flag names
-    // fails_when: the Now column shows only the goal milestones, so M1 Beta is nowhere on the page
+    // protects: QA Nov 14 #3: the Now column has the track's "Beta · Nov 30", the milestone F-06's red flag names
+    // fails_when: the Now column shows only the goal milestones, so Beta is nowhere on the page
+    // By name, not number: the Goal map's milestones are numbered on this roadmap too, so Beta's code is not M1.
     await open(page, "board");
     const now = page.getByTestId("ms-board-row").first();
-    await expect(now.getByTestId("ms-board-track")).toHaveText(["M1 Beta · Nov 30"]);
+    await expect(now.getByTestId("ms-board-track")).toHaveText([/^M\d+ Beta · Nov 30$/]);
   });
 
   test("no red late pill on a cut item or one with no dates yet (#4)", async ({ page }) => {
@@ -114,10 +115,11 @@ test.describe("desktop", () => {
   });
 
   test("a milestone's tooltip leaves out the ends it does not know (#6)", async ({ page }) => {
-    // protects: QA Nov 14 #6: hovering M3 Grow retention on the Waterfall shows its measure without "? → ?"
-    // fails_when: the tooltip reads "…: ? → ? (now 61)"
+    // protects: QA Nov 14 #6: hovering a goal milestone whose measure has no start or target (Faster activation, found by
+    // name: its number follows the Goal map's milestones, and Grow retention now shares its day behind a "+2") shows it without "? → ?"
+    // fails_when: the tooltip reads "…: ? → ? (now 3)"
     await open(page, "waterfall");
-    const label = page.getByTestId("ms-label").filter({ hasText: "M3 Grow retention" }).first();
+    const label = page.getByTestId("ms-label").filter({ hasText: /^M\d+ Faster activation$/ }).first();
     await label.scrollIntoViewIfNeeded();
     await label.hover();
     const done = page.getByTestId("ms-tip-done");
