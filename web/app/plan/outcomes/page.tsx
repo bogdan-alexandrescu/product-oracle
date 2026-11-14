@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState, useSyncExternalStore } from "react";
 
 import { DeleteMenu } from "@/components/ArtifactMenu";
-import { Button, Chip, type ChipKind, type Column, confirmInPage, DataTable, type FilterChip, FilterChips, InfoTip, Inspector, InspectorRow, InspectorSection, Notice, Page, PageHeader, PageSkeleton, Panel, Sheet, Split } from "@/components/ds";
+import { Button, Chip, type ChipKind, type Column, confirmInPage, DataTable, FilterChips, InfoTip, Inspector, InspectorRow, InspectorSection, Notice, Page, PageHeader, PageSkeleton, Panel, Sheet, Split } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CATEGORY_LABEL } from "@/app/intakes/[id]/_lib";
@@ -186,39 +186,6 @@ function Outcomes() {
     rows.find((o) => o.id === selected) ??
     shown[0];
 
-  // A state with nothing in it is dimmed and cannot be picked.
-  const filterItems: FilterChip<Filter>[] = [
-    { value: "due", label: "Check due", count: count("due"), disabled: count("due") === 0 },
-    {
-      value: "measuring",
-      label: "Measuring",
-      count: count("measuring"),
-      disabled: count("measuring") === 0,
-    },
-    {
-      value: "needs",
-      label: "Needs prediction",
-      count: count("needs"),
-      disabled: count("needs") === 0,
-    },
-    {
-      value: "assessed",
-      label: "Assessed",
-      count: count("assessed"),
-      disabled: count("assessed") === 0,
-    },
-    { value: "all", label: "All", count: rows.length },
-  ];
-  // A filter left with no rows names itself, with a way back to All (owner, Nov 13).
-  const emptyFilter = (
-    <span className="inline-flex flex-wrap items-center justify-center gap-2">
-      No outcomes in {filterItems.find((f) => f.value === current)?.label}
-      <Button variant="ghost" onClick={() => setFilter("all")}>
-        Show all
-      </Button>
-    </span>
-  );
-
   // qa4-plan-47: the item, its goal, the prediction and the actual wrap rather than cut
   // mid-word; the goal gives way first when an inspector leaves the table narrow; the
   // prediction leaves out its date when Due shows the same one.
@@ -370,7 +337,29 @@ function Outcomes() {
                   testId="outcome-filters"
                   value={current}
                   onChange={(v) => setFilter(v)}
-                  items={filterItems}
+                  // A state with nothing in it is dimmed and cannot be picked.
+                  items={[
+                    { value: "due", label: "Check due", count: count("due"), disabled: count("due") === 0 },
+                    {
+                      value: "measuring",
+                      label: "Measuring",
+                      count: count("measuring"),
+                      disabled: count("measuring") === 0,
+                    },
+                    {
+                      value: "needs",
+                      label: "Needs prediction",
+                      count: count("needs"),
+                      disabled: count("needs") === 0,
+                    },
+                    {
+                      value: "assessed",
+                      label: "Assessed",
+                      count: count("assessed"),
+                      disabled: count("assessed") === 0,
+                    },
+                    { value: "all", label: "All", count: rows.length },
+                  ]}
                 />
               )
             }
@@ -409,7 +398,7 @@ function Outcomes() {
                 if (phone) setSheet(true);
               }}
               loading={q.loading && !q.data}
-              empty={emptyFilter}
+              empty="No outcomes here. Approving a roadmap records a prediction for each item that serves a goal."
               rowProps={(o) => ({
                 "data-testid": "outcome-row",
                 "data-state": stateOf(o),
