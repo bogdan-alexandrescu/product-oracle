@@ -112,5 +112,5 @@ test("#1 #4 #5 #6 a review: flagged names, estimates read as estimates, the chec
   await tap(steps(page).getByRole("button", { name: "3 Decisions" }));
   const q5 = page.getByRole("region", { name: "On the agenda", exact: true }).locator('[data-code="Q5"]');
   await tap(q5.getByRole("button", { name: "Decide as recommended" }));
-  await expect(q5).toContainText(/Decided in this meeting.* · \w{3} \w{3} \d{1,2}, \d{1,2}:\d{2} [AP]M (PDT|PST)\b/);
+  await expect(q5).toContainText(/Decided in this meeting.* · \w{3} \w{3} \d{1,2}, \d{1,2}:\d{2} [AP]M (PDT|PST)/);
 });

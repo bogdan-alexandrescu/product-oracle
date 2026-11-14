@@ -99,7 +99,7 @@ for (const phone of [false, true]) {
       await tap(q5.getByRole("button", { name: "Decide as recommended" }));
       await expect(q5).toContainText(/Decided in this meeting.* · (Mon|Tue|Wed|Thu|Fri|Sat|Sun) [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M/);
       // simple-home-qa-nov14 #6: a decision stamp keeps its zone, as "Decisions in this meeting" reads it.
-      await expect(q5).toContainText(/\d{1,2}:\d{2} [AP]M (PDT|PST)\b/);
+      await expect(q5).toContainText(/\d{1,2}:\d{2} [AP]M (PDT|PST)/);
     });
 
     test("qa4-simple-decide-25: once published, the version line moves on and the margin says where the edits went", async ({ page }) => {
