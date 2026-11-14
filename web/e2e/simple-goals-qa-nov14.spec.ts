@@ -50,7 +50,7 @@ test.describe("Goal map", () => {
     await expect(card(page)).toBeVisible();
     await card(page).getByRole("button", { name: "Change the milestone" }).click();
     const options = card(page).getByLabel("Milestone", { exact: true }).locator("option");
-    await expect(options.filter({ hasText: /paid conversions per rep/ })).toHaveCount(3);
+    for (const name of ["3 paid conversions per rep", "6 paid conversions per rep", "10 paid conversions per rep"]) await expect(options.filter({ hasText: new RegExp(`^M\\d+ ${name}$`) }).first()).toBeAttached();
   });
 
   test("goals the roadmap serves but the map leaves out are named, each a way to it", async ({ page }) => {
@@ -91,6 +91,8 @@ test.describe("Goal buckets with no dated plan", () => {
     const buckets = page.getByTestId("goal-bucket");
     await expect(buckets.first()).toBeVisible();
     for (const title of ["Faster activation", "Grow retention"]) await expect(page.getByRole("button", { name: `Edit ${title}` })).toBeVisible();
+    // Every goal card is a goal of the one store: none is drawn without its controls.
+    for (const b of await buckets.all()) await expect(b).toHaveAttribute("data-goal-id", /.+/);
     await page.getByTestId("add-goal").getByRole("button", { name: "+ Add goal" }).click();
     const form = page.getByTestId("add-goal").getByTestId("goal-form");
     await form.getByLabel("Goal").fill("Fewer support tickets");
@@ -109,14 +111,17 @@ test.describe("Goal buckets with no dated plan", () => {
     await grip.focus();
     await page.keyboard.press("Enter");
     const live = page.getByTestId("bucket-live");
-    const shown = (await page.locator("[data-testid=goal-bucket] [aria-label^='Edit ']").evaluateAll((els) => els.map((e) => (e.getAttribute("aria-label") ?? "").replace(/^Edit /, "")))).filter((t) => t !== "Faster activation");
-    for (let n = 0; n < 6; n++) {
+    await expect(live).toContainText("Picked up Setup checklist");
+    const shown = await page.getByTestId("goal-bucket").evaluateAll((els) => els.filter((e) => e.getAttribute("data-goal-id")).map((e) => e.querySelector("[aria-label^='Edit ']")?.getAttribute("aria-label")?.replace(/^Edit /, "") ?? ""));
+    const others = shown.filter((t) => t && t !== "Faster activation");
+    expect(others.length).toBeGreaterThan(1);
+    // Each step names a goal drawn on the page, in its order there.
+    for (const t of others) {
       await page.keyboard.press("ArrowDown");
-      const said = (await live.textContent()) ?? "";
-      expect(shown.some((t) => said.includes(`, ${t}.`))).toBe(true);
-      if (said.includes("Grow retention")) break;
+      await expect(live).toContainText(`, ${t}. Enter drops it there.`);
     }
-    await expect(live).toContainText("Grow retention");
+    await page.keyboard.press("ArrowDown");
+    await expect(live).toContainText(`, Grow retention. Enter drops it there.`);
     await page.keyboard.press("Enter");
     await expect(retention.getByTestId("plan-feature").filter({ hasText: "Setup checklist" })).toHaveCount(1);
   });
@@ -126,7 +131,7 @@ test.describe("Goal buckets with no dated plan", () => {
     const row = page.getByTestId("plan-feature").filter({ hasText: "Sample data import" }).first();
     await expect(row).toBeVisible();
     await expect(row).not.toContainText("F-12");
-    await row.getByRole("button", { name: "Sample data import" }).first().click();
+    await row.getByRole("button", { name: "Sample data import", exact: true }).click();
     await expect(card(page)).toBeVisible();
     await expect(card(page)).not.toContainText("F-12");
   });
@@ -144,6 +149,7 @@ test.describe("Value / effort", () => {
 
   test("a quadrant's count lists its features in the side list", async ({ page }) => {
     await openPriorities(page, "value-effort");
+    await expect(page.getByTestId("side-row").first()).toBeVisible();
     const all = await page.getByTestId("side-row").count();
     const quick = page.getByRole("button", { name: /^Quick wins · \d+$/ });
     const n = Number(((await quick.textContent()) ?? "").replace(/\D+/g, ""));

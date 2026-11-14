@@ -1919,12 +1919,12 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                       {r.own_key}
                     </span>
                   )}
-                  <span className="min-w-[40%] flex-1 truncate" data-testid="prio-title" title={r.title}>
+                  <span className="min-w-0 flex-[1_0.001_auto] truncate" data-testid="prio-title" title={r.title}>
                     {r.title}
                   </span>
                   {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}
                   {r.after ? (
-                    <span data-testid="side-held" title={`After ${r.after.title}, which it needs`} className="min-w-0 max-w-[40%] shrink truncate rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
+                    <span data-testid="side-held" title={`After ${r.after.title}, which it needs`} className="min-w-6 shrink truncate rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
                       after {rows.find((x) => x.code === r.after!.code)?.own_key || r.after.title}
                     </span>
                   ) : (
@@ -2425,7 +2425,13 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
   };
   const moved = data.rows.filter((r) => home.has(r.code) && placedIn(r) !== home.get(r.code));
   const nowWeeks = (r: Row) => (r.horizon === "now" ? (r.effort ?? 0) : 0);
-  const all: Bucket[] = data.buckets.map((b) => {
+  // A goal with no feature this quarter (one just added) still has its card, before No goal, as with a dated plan.
+  const extra: Bucket[] = (gb?.goals ?? [])
+    .filter((g) => !data.buckets.some((b) => !b.no_goal && sameGoal(g.title, b.title)))
+    .sort((a, b) => a.order - b.order)
+    .map((g) => ({ key: g.id, title: g.title, weeks: 0, share: 0, codes: [], no_goal: false, position: null }));
+  const drawn = [...data.buckets.filter((b) => !b.no_goal), ...extra, ...data.buckets.filter((b) => b.no_goal)];
+  const all: Bucket[] = drawn.map((b) => {
     const weeks = b.weeks - moved.filter((r) => home.get(r.code) === b.key).reduce((n, r) => n + nowWeeks(r), 0) + moved.filter((r) => placedIn(r) === b.key).reduce((n, r) => n + nowWeeks(r), 0);
     const codes = [...b.codes.filter((c) => !moved.some((r) => r.code === c)), ...moved.filter((r) => placedIn(r) === b.key).map((r) => r.code)];
     return { ...b, weeks, codes };
