@@ -142,7 +142,7 @@ test("Ground Truth: the feature drawer shows links, evidence and the lock", asyn
   );
 
   // Links open the linked item in the drawer.
-  await d.getByRole("list", { name: "Depends on" }).getByRole("button", { name: /^(F-83 )?Sample data$/ }).click();
+  await d.getByRole("list", { name: "Depends on" }).getByRole("button", { name: "Sample data", exact: true }).click();
   await expect(drawer(page, "Sample data")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -455,9 +455,9 @@ test("Ground Truth: proposals by run fit a phone", async ({ page }) => {
 // proposes XS). The strings are the API's (api/tests/test_baseline_describe.py): the mock's
 // TypeScript port (lib/api/mock/describe.ts) must write the same ones.
 const SENTENCES = {
-  "Guided setup": "Set Guided setup’s effort to L (was M)",
-  "Dark mode": "Set Dark mode’s delivery status to Planned (was Idea)",
-  "Team invites": "Set Team invites’ effort to XS (was S)",
+  "Guided setup": "Set F-82 Guided setup’s effort to L (was M)",
+  "Dark mode": "Set F-81 Dark mode’s delivery status to Planned (was Idea)",
+  "Team invites": "Set F-85 Team invites’ effort to XS (was S)",
 };
 
 /**

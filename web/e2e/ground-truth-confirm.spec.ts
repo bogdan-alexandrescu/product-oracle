@@ -80,7 +80,7 @@ test("A code another feature holds offers Link to a feature on its item", async 
   await expect(sounds.getByRole("button", { name: /Use its code/ })).toHaveCount(0);
   await sounds.getByRole("button", { name: /Link to a feature/ }).click();
   await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Sheets export" }).click();
-  await expect(page.getByTestId("gt-notice")).toContainText("Linked “F-11 Alert sounds” to “Sheets export”.");
+  await expect(page.getByTestId("gt-notice")).toContainText("Linked “F-11 Alert sounds” to “F-11 Sheets export”.");
   await expect(row(page, "code_differs", "Alert sounds")).toHaveCount(0);
 });
 

@@ -64,7 +64,7 @@ for (const colorScheme of ["light", "dark"] as const)
     await picker.getByLabel("Find a feature").fill("F-12");
     await picker.getByRole("button", { name: "F-12 Digest emails" }).click();
     await expect(picker).toHaveCount(0);
-    await expect(notice(page)).toContainText("Linked “F-09 Guest seats” to “Digest emails”.");
+    await expect(notice(page)).toContainText("Linked “F-09 Guest seats” to “F-12 Digest emails”.");
     await expect(sheet(page).getByRole("heading").first()).toHaveText("Ground Truth flags · 7");
     await expect(count(page)).toHaveText("7 Ground Truth flags");
 
