@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.baseline import public_links
 from oracle.config import get_settings
+from oracle.routing import APIRouter
 from oracle.runtokens import RunToken
 from oracle.tenant_settings_api import company_timezone, get_setting
 from oracle.web import models

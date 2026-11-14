@@ -19,7 +19,7 @@ the screens need.
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -73,6 +73,7 @@ from oracle.intake.schemas import (
     SharingBulkIn,
     SharingIn,
 )
+from oracle.routing import APIRouter
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunOut
 from oracle.sources import search as source_search

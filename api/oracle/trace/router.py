@@ -12,7 +12,7 @@ Importing this module registers the ``trace.mark_stale`` change handler.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import Depends, HTTPException, Query, Response, status
 from sqlalchemy import case, func, or_, select
 
 from oracle import audit, changes
@@ -22,6 +22,7 @@ from oracle.baseline.evidence import run_versions, withheld_from
 from oracle.baseline.models import Entity, Evidence
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.routing import APIRouter
 from oracle.sources.models import Source, SourceItem
 from oracle.trace import evidence, impact, staleness, views
 from oracle.trace.outputs import FRESHNESS_ORDER, describe, recorded_reasons

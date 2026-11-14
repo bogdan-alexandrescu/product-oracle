@@ -10,7 +10,7 @@ import uuid
 from datetime import date
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import Depends, HTTPException, Query, Response, status
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
@@ -31,6 +31,7 @@ from oracle.metrics.schemas import (
     ValueIn,
     VarianceOut,
 )
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1", tags=["metrics"])
 

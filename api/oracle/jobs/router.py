@@ -13,7 +13,7 @@ import uuid
 from collections.abc import Awaitable
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import Depends, HTTPException, Query, Response
 from fastapi.responses import JSONResponse
 from markdown_it import MarkdownIt
 from markupsafe import escape
@@ -46,6 +46,7 @@ from oracle.jobs.schemas import (
     SuggestionStatus,
     VersionReports,
 )
+from oracle.routing import APIRouter
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunOut
 from oracle.v2.models import ProductIntake

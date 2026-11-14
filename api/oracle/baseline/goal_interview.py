@@ -23,7 +23,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import Field, ValidationError
 from sqlalchemy import select
@@ -49,6 +49,7 @@ from oracle.discussions.models import (
     DiscussionMessage,
 )
 from oracle.discussions.schemas import DiscussionCreate
+from oracle.routing import APIRouter
 from oracle.tenancy import tenant_session
 
 log = logging.getLogger(__name__)

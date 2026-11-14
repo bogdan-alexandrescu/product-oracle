@@ -11,10 +11,9 @@ from datetime import datetime
 from typing import Annotated, Literal
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import Depends, HTTPException, Query, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse
-from fastapi.routing import APIRoute
 from pydantic import Field, field_validator
 from sqlalchemy import func, select
 
@@ -33,6 +32,7 @@ from oracle.metrics import service as metrics_service
 from oracle.metrics.models import Metric
 from oracle.metrics.schemas import AnalyticsIn, AnalyticsOut
 from oracle.reports.alignment import CHANNEL_ID
+from oracle.routing import APIRouter, LazyAPIRoute
 from oracle.slack import bridge, outbox
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings import TenantSetting
@@ -328,7 +328,7 @@ async def test_slack_notifications(
 # as an id.
 
 
-class _NoInputRoute(APIRoute):
+class _NoInputRoute(LazyAPIRoute):
     """A route whose 422 never sends back what was sent: FastAPI's validation error echoes
     the request body in each error's ``input``, and the analytics PUT carries the key."""
 

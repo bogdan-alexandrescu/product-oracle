@@ -12,7 +12,7 @@ from typing import Annotated, Literal
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from pydantic import Field
 
@@ -34,6 +34,7 @@ from oracle.connections.providers import (
     get_provider,
     reconnect_reason,
 )
+from oracle.routing import APIRouter
 from oracle.sources.connectors import fireflies
 from oracle.tenancy import tenant_session
 

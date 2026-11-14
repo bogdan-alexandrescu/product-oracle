@@ -16,12 +16,13 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, or_, select
 
 from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import has_role, recheck_caller
+from oracle.routing import APIRouter
 from oracle.webhooks import outbox, service
 from oracle.webhooks.events import EVENT_TYPES
 from oracle.webhooks.models import Webhook, WebhookDelivery, WebhookEvent

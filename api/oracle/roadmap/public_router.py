@@ -11,7 +11,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import Depends, HTTPException, Query, Response, status
 from pydantic import Field, field_validator
 from sqlalchemy import select
 
@@ -26,6 +26,7 @@ from oracle.jobs.schemas import LlmJobOut
 from oracle.review.models import DocumentPublication
 from oracle.roadmap import leak_check, public, views
 from oracle.roadmap.models import RoadmapItem, RoadmapPublicCheck, RoadmapPublicText
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1", tags=["roadmaps"])
 

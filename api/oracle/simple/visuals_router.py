@@ -12,9 +12,10 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import Depends, HTTPException, Response, status
 
 from oracle.auth.deps import TenantDB
+from oracle.routing import APIRouter
 from oracle.simple import visuals
 from oracle.simple.changes_router import Commenter, Reader
 from oracle.simple.schemas import (

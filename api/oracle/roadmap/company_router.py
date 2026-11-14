@@ -5,7 +5,7 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import Depends, HTTPException, Response, status
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role, require_role_now
@@ -13,6 +13,7 @@ from oracle.base_model import BaseModel
 from oracle.docs import service as docs_service
 from oracle.docs.schemas import DocumentOut, PrdRef
 from oracle.roadmap import company
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1", tags=["roadmaps"])
 

@@ -11,11 +11,12 @@ checkpoint's draft revision, so a decision sent with an older one gets D8's 409
 
 import uuid
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import HTTPException, Response, status
 
 from oracle.auth.deps import CurrentPrincipal, TenantDB
 from oracle.jobs.schemas import LlmJobOut
 from oracle.jobs.service import job_out
+from oracle.routing import APIRouter
 from oracle.runs import scope_review, service
 from oracle.runs.schemas import (
     PrdScopeReview,

@@ -18,7 +18,6 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +29,7 @@ from oracle.docs.models import Document
 from oracle.members.names import display_name
 from oracle.roadmap import company
 from oracle.roadmap.models import TRACK_ORDER, ProductTrack, RoadmapItem, TrackMilestone
+from oracle.routing import APIRouter
 from oracle.simple import drafts, goal_asks, goal_buckets, plan_changes, service
 from oracle.simple.models import SimpleChange
 from oracle.simple.router import Reader

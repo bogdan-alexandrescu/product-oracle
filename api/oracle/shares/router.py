@@ -14,7 +14,7 @@ from collections import Counter
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 from pydantic import Field
 from sqlalchemy import func, select
 
@@ -29,6 +29,7 @@ from oracle.members.names import display_name
 from oracle.review.models import DocumentPublication
 from oracle.roadmap import public as roadmap_public
 from oracle.roadmap.models import RoadmapPublicCheck
+from oracle.routing import APIRouter
 from oracle.shares import service
 from oracle.shares.models import ShareLink, ShareLinkView
 

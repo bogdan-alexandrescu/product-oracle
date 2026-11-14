@@ -10,7 +10,7 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import Depends, HTTPException, Query, Request, Response, status
 
 from oracle.auth.deps import Principal, TenantDB, body_type
 from oracle.authz import recheck_caller, require_role, require_role_now, require_role_or_absent
@@ -28,6 +28,7 @@ from oracle.pricing.schemas import (
     Reason,
     Result,
 )
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1", tags=["pricing"])
 

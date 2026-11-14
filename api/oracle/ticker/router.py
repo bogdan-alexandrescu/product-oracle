@@ -42,7 +42,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import HTTPException, Request, status
 from pydantic import Field
 from sqlalchemy import select, text
 
@@ -63,6 +63,7 @@ from oracle.models import Tenant
 from oracle.requests import triage as request_triage
 from oracle.rituals import service as rituals
 from oracle.roadmap import views as track_views
+from oracle.routing import APIRouter
 from oracle.slack import outbox as slack_outbox
 from oracle.slack.outbox import OutboxTick
 from oracle.sources import background as source_sync

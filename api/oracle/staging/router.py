@@ -6,11 +6,12 @@ import uuid
 from collections.abc import Awaitable
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.jobs.service import JobError
+from oracle.routing import APIRouter
 from oracle.staging import service
 from oracle.staging.schemas import NextDraftChangeOut, StagingList, UnstageIn
 

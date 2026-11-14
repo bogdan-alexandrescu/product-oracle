@@ -47,7 +47,7 @@ from collections import defaultdict, deque
 from datetime import timedelta
 from typing import Any
 
-from fastapi import APIRouter, Request, Response
+from fastapi import Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy import func, select
@@ -55,6 +55,7 @@ from sqlalchemy import func, select
 from oracle import audit
 from oracle.config import get_settings
 from oracle.roadmap.public import PAGE_HEADERS
+from oracle.routing import APIRouter
 from oracle.shares import render, service
 from oracle.shares.models import ShareLink, ShareLinkView
 from oracle.tenancy import tenant_session, unscoped_session

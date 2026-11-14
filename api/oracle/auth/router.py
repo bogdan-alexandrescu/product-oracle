@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 
 from oracle.auth import iap, service
@@ -13,6 +13,7 @@ from oracle.capabilities import capabilities as role_capabilities
 from oracle.config import get_settings
 from oracle.members import access
 from oracle.members.leads import ENGINEERING_KINDS, decides, engineering_leads
+from oracle.routing import APIRouter
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings_api import company_timezone
 

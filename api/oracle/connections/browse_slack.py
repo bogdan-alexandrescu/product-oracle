@@ -12,7 +12,7 @@ import uuid
 from typing import Annotated, Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import HTTPException, Query, status
 
 from oracle.auth.deps import TenantDB
 from oracle.base_model import BaseModel
@@ -20,6 +20,7 @@ from oracle.connections import browse
 from oracle.connections.browse import open_connection, provider_error, unreachable
 from oracle.connections.models import Connection
 from oracle.connections.router import ProviderHttp, UserPrincipal
+from oracle.routing import APIRouter
 from oracle.sources.base import ConnectorError
 from oracle.sources.connectors.slack import _Slack, is_dm
 

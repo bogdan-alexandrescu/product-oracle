@@ -10,7 +10,7 @@ import time
 from typing import Annotated
 from urllib.parse import quote, urlsplit
 
-from fastapi import APIRouter, Form, HTTPException, Query, Request, status
+from fastapi import Form, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from oracle.audit import record
@@ -32,6 +32,7 @@ from oracle.mcp.oauth.schemas import (
     TokenOut,
 )
 from oracle.mcp.oauth.service import AuthorizationRequest, OAuthError
+from oracle.routing import APIRouter
 from oracle.tenancy import tenant_session
 
 router = APIRouter(tags=["oauth"])

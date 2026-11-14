@@ -30,7 +30,7 @@ from collections.abc import Mapping
 from datetime import date, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import HTTPException, status
 from pydantic import Field, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +46,7 @@ from oracle.baseline.goals import figure_words, unit_ok
 from oracle.baseline.models import Edge, Entity
 from oracle.config import get_settings
 from oracle.roadmap.models import RoadmapItem
+from oracle.routing import APIRouter
 from oracle.simple.router import Approver, Reader
 from oracle.trash.filter import INCLUDE_TRASHED
 

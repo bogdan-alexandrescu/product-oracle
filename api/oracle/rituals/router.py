@@ -10,7 +10,7 @@ ask Oracle for a summary. Each route is an MCP tool by its operation id.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import Depends, Query, Response, status
 from fastapi.responses import PlainTextResponse
 
 from oracle.auth.deps import Principal, TenantDB
@@ -27,6 +27,7 @@ from oracle.rituals.schemas import (
     SummarySettingsIn,
     SummarySettingsOut,
 )
+from oracle.routing import APIRouter
 from oracle.runs.schemas import RunOut
 
 router = APIRouter(prefix="/v1", tags=["rituals"])

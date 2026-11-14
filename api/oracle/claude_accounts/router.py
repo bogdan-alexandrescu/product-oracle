@@ -16,7 +16,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 from pydantic import ConfigDict, Field
 from sqlalchemy import select
 
@@ -57,6 +57,7 @@ from oracle.claude_accounts.oauth import (
 from oracle.claude_accounts.sweep import get_token_endpoint, liveness, refresher_for
 from oracle.claude_accounts.sweep import sweep as run_sweep
 from oracle.company_time import company_time_zone
+from oracle.routing import APIRouter
 
 router = APIRouter(prefix="/v1/claude-accounts", tags=["claude-accounts"])
 
