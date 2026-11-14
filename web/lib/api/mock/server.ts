@@ -7946,7 +7946,10 @@ async function route(db: Db, req: Request): Promise<Response> {
     blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
     queueReview: (documentId, n) => queueQualityReview(llm, documentId, n),
     job: (id) => llm.db.jobs.find((j) => j.id === id),
-    isGoal: (id) => db.baseline.entities.some((e) => e.id === id && e.type === "goal"),
+    goalAttrs: (id) => {
+      const goal = db.baseline.entities.find((e) => e.id === id && e.type === "goal");
+      return goal ? (goal.attrs ?? {}) : null;
+    },
     // outcomes-edit (quality.outcomes.trash_outcome): the row waits in a Trash entry.
     trash: (row, reason) => {
       const at = now();
