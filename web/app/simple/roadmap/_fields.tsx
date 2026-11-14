@@ -409,7 +409,8 @@ export function PanelFields({
         canChange={canChange}
         value={
           <>
-            {yearSpan(item.start.date, item.end.date)} ·{" "}
+            {/* simple-home-qa-nov14 #4: Oracle's one estimate: its suggested span when it has one, never the horizon's window beside it. */}
+            {item.estimated && item.suggestion ? yearSpan(item.suggestion.start_date, item.suggestion.end_date) : yearSpan(item.start.date, item.end.date)} ·{" "}
             <span data-testid="card-dates-kind">{datesKind(item)}</span>{" "}
             {/* QA Nov 12 #10: the circled (i) every other why on the page uses. */}
             <InfoTip label="these dates" align="start" testId="card-dates-why">

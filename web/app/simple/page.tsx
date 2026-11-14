@@ -25,7 +25,8 @@ import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds 
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { DecisionSheetHost, SheetHandle, showOutdated, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
 import { Named } from "./roadmap/_fields";
-import { FeaturePanel, useItemChanged } from "./roadmap/_panel";
+import { FeaturePanel, itemFor, useItemChanged } from "./roadmap/_panel";
+import { FeatureFoundContext, OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
 import { MsCard, MsProvider, MsToast, renameOf, useMilestones } from "./roadmap/_milestones";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
@@ -388,6 +389,15 @@ export default function SimpleHome() {
     openItem: (id) => setOpened(roadmap.data?.items.find((i) => i.id === id) ?? null),
   });
   const renameMs = renameOf(ms);
+  const featureItem = useCallback(
+    (f: Parameters<OpenFeature>[0]) => {
+      const items = roadmap.data?.items ?? [];
+      return (f.id ? items.find((i) => i.id === f.id) : undefined) ?? itemFor(items, f);
+    },
+    [roadmap.data],
+  );
+  const openFeature = useCallback((f: Parameters<OpenFeature>[0]) => setOpened(featureItem(f) ?? null), [featureItem]);
+  const featureFound = useCallback((f: Parameters<OpenFeature>[0]) => !!featureItem(f), [featureItem]);
   const planNames = useMemo(() => new Map((roadmap.data?.items ?? []).map((i) => [i.id, i.title])), [roadmap.data]);
   // qa4-simple-home-12: every working draft of mine, each with its own count (one roadmap's draft never hides another's).
   // home-draft-in-review: a draft sent for review shows to whoever approves it (its can_approve) and
@@ -686,6 +696,9 @@ export default function SimpleHome() {
 
   return (
     <SimplePage title="Home">
+      {/* simple-home-qa-nov14 #2, #3: a feature a waiting row names or a decision blocks opens its panel here, as on Decisions. */}
+      <OpenFeatureContext.Provider value={openFeature}>
+      <FeatureFoundContext.Provider value={featureFound}>
       {/* eq2 b: the question titles on Home open the same decision sheet as on Decisions. */}
       <DecisionSheetHost onChanged={reloadAll}>
       <SheetHandle sheetRef={sheetRef} />
@@ -1465,6 +1478,8 @@ export default function SimpleHome() {
       </>
       )}
       </DecisionSheetHost>
+      </FeatureFoundContext.Provider>
+      </OpenFeatureContext.Provider>
     </SimplePage>
   );
 }

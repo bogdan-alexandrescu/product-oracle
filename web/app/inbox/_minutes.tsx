@@ -1,6 +1,6 @@
 "use client";
 
-import { LinkButton } from "@/components/ds";
+import { InfoTip, LinkButton } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
 
 import type { StatedNeed } from "./_needs";
@@ -22,7 +22,15 @@ export function minutesRows(rows: Minutes[]): StatedNeed[] {
         {m.title}
       </span>
     ),
-    context: <span className="text-text2">{m.decisions === 1 ? "1 decision" : `${m.decisions} decisions`}</span>,
+    context: (
+      <span className="text-text2">
+        {m.decisions === 1 ? "1 decision" : `${m.decisions} decisions`}{" "}
+        {/* simple-home-qa-nov14: why the row is shown but not in Needs you's count, behind its (i). */}
+        <InfoTip label={`${m.title}: not counted`} testId="minutes-not-counted">
+          Not counted in Needs you: nothing waits on you here.
+        </InfoTip>
+      </span>
+    ),
     at: m.sent_at,
     state: m.state,
     counted: false,
