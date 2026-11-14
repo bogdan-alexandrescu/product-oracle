@@ -19,6 +19,10 @@ Test cards (protects / fails_when / no_claim):
 - test_a_person_may_link_the_declined_match_again: protects=a person who links an item back to
   the match it declined (now in the Ground Truth) has it linked, its flag gone; fails_when=the
   decline overrides the person's own link.
+- test_a_declined_row_links_back_as_it_reads: protects=the flag of an item whose match was
+  declined names no feature, and a person's link from that row (before: none, as it reads) is
+  taken while the item still points at the declined match; fails_when=the link is refused as
+  changed since seen.
 - test_a_shared_proposal_keeps_the_other_item_flagged: protects=confirming the shared proposal
   from Chat alerts' flag clears Chat alerts only; Forum alerts stays flagged with Confirm it
   until it is confirmed from its own flag; fails_when=Forum alerts leaves the list while it is
@@ -145,6 +149,31 @@ async def test_a_person_may_link_the_declined_match_again(client):
     body = {"op": "set_feature", "target": {"item_id": x["forum"]},
             "before": {"feature_id": r.json()["feature"]["id"]},
             "after": {"feature_id": x["proposal"]}}  # fmt: skip
+    c = await client.post("/v1/simple/changes", json=body, headers=w["ctx"].as_("owner"))
+    assert c.status_code in (200, 201), c.text
+    assert _flag(await _check(client, w["ctx"]), x["forum"]) is None
+
+
+async def test_a_declined_row_links_back_as_it_reads(client):
+    w = await world()
+    x = await shared(w)
+    r = await client.post(own(x["forum"]), headers=w["ctx"].as_("owner"))
+    assert r.status_code == 200, r.text
+    confirm = f"/v1/baseline/entities/{x['proposal']}/confirm"
+    c = await client.post(confirm, params={"item_id": x["chat"]}, headers=w["ctx"].as_("approver"))
+    assert c.status_code == 200, c.text
+    # Its own feature's link is undone (declined on Home): the item points at the declined match.
+    async with tenant_session(w["ctx"].tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft).where(SimpleDraft.overlay.has_key(x["forum"])))
+        overlay = dict(d.overlay)
+        overlay[x["forum"]] = {**overlay[x["forum"]], "feature_id": x["proposal"]}
+        d.overlay = overlay
+        await s.commit()
+    flag = _flag(await _check(client, w["ctx"]), x["forum"])
+    assert flag is not None and flag["feature"] is None
+    # Link to a feature from that row: before is what the row reads, no feature.
+    body = {"op": "set_feature", "target": {"item_id": x["forum"]},
+            "before": {"feature_id": None}, "after": {"feature_id": x["proposal"]}}  # fmt: skip
     c = await client.post("/v1/simple/changes", json=body, headers=w["ctx"].as_("owner"))
     assert c.status_code in (200, 201), c.text
     assert _flag(await _check(client, w["ctx"]), x["forum"]) is None
