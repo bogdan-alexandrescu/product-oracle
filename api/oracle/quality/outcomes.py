@@ -349,14 +349,16 @@ async def update_outcome(
     if data.goal_id is not None and data.goal_id != row.goal_id:
         # outcomes-edit: the prediction is kept as written (its figures are the owner's), even
         # when its unit is not the new goal's: changing the goal never loses it. It names the
-        # new goal's metric, and with no predicted value yet it takes the new goal's unit.
+        # new goal's metric ("Not set yet" when it has none: never the old goal's), and with
+        # no predicted value yet it takes the new goal's unit.
+        from oracle.quality.capture import UNSET
+
         goal = await _entity(db, data.goal_id, "goal", "goal_id")
         before_goal = row.goal_id
         row.goal_id = data.goal_id
         attrs = goal.attrs or {}
         prediction = dict(row.prediction or {})
-        if attrs.get("metric"):
-            prediction["metric"] = attrs["metric"]
+        prediction["metric"] = str(attrs.get("metric") or "").strip()[:300] or UNSET
         if prediction.get("predicted_value") is None:
             prediction["unit"] = attrs.get("unit") or None
         row.prediction = prediction

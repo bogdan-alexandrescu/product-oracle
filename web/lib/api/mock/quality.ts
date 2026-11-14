@@ -816,13 +816,13 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
       }
       if (data.owner_id) o.owner_id = data.owner_id;
       // outcomes-edit: another goal, in any state; the prediction stays as written, naming the
-      // new goal's metric, and with no predicted value yet it takes the new goal's unit.
+      // new goal's metric ("Not set yet" when it has none, never the old goal's), and with no predicted value yet it takes the new goal's unit.
       if (data.goal_id && data.goal_id !== o.goal_id) {
         const attrs = ctx.goalAttrs?.(data.goal_id);
         if (!attrs) return fail(422, `goal_id ${data.goal_id} is not a goal`);
         o.goal_id = data.goal_id;
         const p = { ...o.prediction };
-        if (typeof attrs.metric === "string" && attrs.metric) p.metric = attrs.metric;
+        p.metric = (typeof attrs.metric === "string" && attrs.metric.trim().slice(0, 300)) || "Not set yet";
         if (p.predicted_value == null) p.unit = typeof attrs.unit === "string" && attrs.unit ? attrs.unit : null;
         o.prediction = p;
       }
