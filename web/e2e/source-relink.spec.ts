@@ -38,8 +38,12 @@ async function disconnect(page: Page, provider: string) {
 async function connectToken(page: Page, provider: string, token: string) {
   const card = await connections(page, provider);
   await card
-    .getByRole("button", { name: /Paste a token|Add another account/ })
+    .getByRole("button", { name: /^(Paste a token|Add another account|Connect)$/ })
     .click();
+  // A provider with sign-in first offers the choice of signing in or a token.
+  const choice = card.getByRole("group", { name: /^Add an? / });
+  await expect(card.getByLabel("Token", { exact: true }).or(choice)).toBeVisible();
+  if (await choice.isVisible()) await choice.getByRole("button", { name: "Paste a token" }).click();
   await card.getByLabel("Token", { exact: true }).fill(token);
   await card.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(

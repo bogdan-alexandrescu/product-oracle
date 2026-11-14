@@ -31,6 +31,7 @@ import {
   type Item,
   type Milestone,
   yearSpan,
+  codedFlag,
 } from "./_lib";
 
 /** What a change asks the engine, built by the page and sent through `act`. */
@@ -513,7 +514,7 @@ type FeatureRef = { id: string; code: string; title: string };
 function FeatureLink({ f, onOpen }: { f: FeatureRef; onOpen?: (id: string) => void }) {
   const words = (
     <>
-      {f.code && <span className="simple-code mr-1">{f.code}</span>}
+      {f.code && <><span className="simple-code mr-px">{f.code}</span>{" "}</>}
       {f.title}
     </>
   );
@@ -793,19 +794,22 @@ function Part({ title, children, testId }: { title: string; children: React.Reac
 }
 
 /** Where the widened card sits beside its talk (pick C): 16 px from the page's top and foot, its
- * right edge 22 px inside the page (the rail and the Ask dock stay clear). */
-function useTalkPlace(on: boolean): number {
+ * right edge 22 px inside the page (the rail and the Ask dock stay clear). Measured from the card's
+ * own containing block, which is not the window inside the side panel. */
+function useTalkPlace(on: boolean, ref: React.RefObject<HTMLDivElement | null>): number {
   const [right, setRight] = useState(66);
   useLayoutEffect(() => {
     if (!on) return;
     const read = () => {
       const r = document.querySelector("main")?.getBoundingClientRect();
-      setRight(r ? Math.max(8, Math.round(window.innerWidth - r.right) + 22) : 22);
+      const el = ref.current;
+      const edge = el ? el.getBoundingClientRect().right + (parseFloat(getComputedStyle(el).right) || 0) : window.innerWidth;
+      setRight(r ? Math.max(8, Math.round(edge - r.right) + 22) : 22);
     };
     read();
     window.addEventListener("resize", read);
     return () => window.removeEventListener("resize", read);
-  }, [on]);
+  }, [on, ref]);
   return right;
 }
 
@@ -923,7 +927,7 @@ export function FloatingCard({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   const beside = talk && !phone;
-  const talkRight = useTalkPlace(beside);
+  const talkRight = useTalkPlace(beside, ref);
   // A widened card (a proposal's flow) keeps inside the roadmap, not the 380 px card's left.
   const [left, setLeft] = useState<number | null>(null);
   const baseLeft = typeof style.left === "number" ? style.left : null;
@@ -997,7 +1001,7 @@ export function FloatingCard({
           <NameEdit item={item} act={act} done={() => setRenaming(false)} />
         ) : (
           <>
-            {item.code && <span className="simple-code mr-1.5">{item.code}</span>}
+            {item.code && <><span className="simple-code mr-0.5">{item.code}</span>{" "}</>}
             <h2 className="inline">
               {item.title}
               {item.draft && item.status !== "merged" && (
@@ -1256,7 +1260,8 @@ export function FloatingCard({
             <section className="mt-3 space-y-1" data-testid="card-flags" data-waits>
               {flags.map((f) => (
                 <div key={`${f.kind}-${f.subject}`}>
-                  <FlagLine flag={f} />
+                  {/* QA Nov 12 #5: the milestone by its code and name ("M1 Beta"). */}
+                  <FlagLine flag={codedFlag(item, f, milestones, planned)} />
                   {f.state === "red" && (
                     <FixButtons
                       item={item}

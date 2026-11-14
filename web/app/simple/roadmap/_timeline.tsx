@@ -39,6 +39,8 @@ import {
   shortDay,
   datesFrom,
   spanWords,
+  estimateOnly,
+  estimateWords,
   type Format,
   type GanttUnit,
   type Item,
@@ -49,6 +51,9 @@ import {
   yearSpan,
   drawnKeyDates,
   partsTree,
+  codedFlag,
+  type GoalMilestone,
+  type Milestone,
 } from "./_lib";
 
 /** One row of the chart: a group's heading (its metric line) or an item. */
@@ -1058,7 +1063,7 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
             <Arrows data={data} l={l} sc={sc} moved={moved} />
             {l.rows.map((r) =>
               r.kind === "item" ? (
-                <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} flash={flash.has(r.item.id)} canDrag={canDrag} phased={format === "waterfall"} gantt={gantt} compact={compact} pulled={gantt && !!pulled?.has(r.item.id)} width={chartW} {...bars} />
+                <Bar key={r.item.id} item={r.item} milestones={data.goal_milestones} planned={data.milestones} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} flash={flash.has(r.item.id)} canDrag={canDrag} phased={format === "waterfall"} gantt={gantt} compact={compact} pulled={gantt && !!pulled?.has(r.item.id)} width={chartW} {...bars} />
               ) : null,
             )}
             <PreviewGhost l={l} sc={sc} items={items} preview={preview} data={data} />
@@ -1291,6 +1296,9 @@ function Arrows({ data, l, sc, moved }: { data: Roadmap; l: Layout; sc: Scale; m
 
 type BarProps = {
   item: Item;
+  /** QA Nov 12 #5: the roadmap's milestones, so a reason names one with its code ("M1 Beta"). */
+  milestones?: readonly GoalMilestone[];
+  planned?: readonly Milestone[];
   y: number;
   h: number;
   sc: Scale;
@@ -1318,7 +1326,7 @@ type BarProps = {
   onSuggestion: (item: Item, anchor: { x: number; y: number }) => void;
 };
 
-const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phased, gantt = false, compact = false, pulled = false, width, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: BarProps) {
+const Bar = memo(function Bar({ item, milestones, planned: roadmapMs, y, h, sc, span, open, flash, canDrag, phased, gantt = false, compact = false, pulled = false, width, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: BarProps) {
   const [start, end] = span ?? barSpan(item);
   const kind = barKind(item);
   const red = broken(item).length > 0;
@@ -1343,7 +1351,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
   const sliced = !phased && planned(item);
   const fixed = closedItem(item) || planned(item);
   // qa4-simple-roadmap-30: each red flag in its own words ("ends Jun 8, after its milestone 'Beta'"), as Now / Next / Later says it.
-  const label = `${itemName(item)}: ${yearSpan(start, end, " to ")}, ${item.estimated ? "Estimated by Oracle" : datesFrom(item)}${item.estimate_pending ? ", estimate pending" : ""}${phaseWords}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
+  const label = `${itemName(item)}: ${!span && estimateOnly(item) ? estimateWords(start, end) : `${yearSpan(start, end, " to ")}, ${item.estimated ? "Estimated by Oracle" : datesFrom(item)}`}${item.estimate_pending ? ", estimate pending" : ""}${phaseWords}${red ? `, ${broken(item).map((f) => codedFlag(item, f, milestones, roadmapMs).reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
   // finding 49: the suggestion's dashed outline is clamped to the chart's own width (its dates
   // can run past the chart's span); a small arrow says it continues past the edge.
   const sx = sc.x(s?.start_date ?? start);

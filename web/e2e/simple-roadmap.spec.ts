@@ -155,10 +155,10 @@ for (const [where, use] of [
       });
 
       /**
-       * Card simple-roadmap-card: protects = clicking a bar opens D8's floating card by the
-       * bar (a bottom sheet on a phone) with the outcome, owner, dates and their source,
+       * Card simple-roadmap-card: protects = clicking a bar opens D8's floating card (in the side panel on a desktop, QA Nov 12 #11;
+       * a bottom sheet on a phone) with the outcome, owner, dates and their source,
        * status, dependencies both ways, top reasons, open decisions, proposals and "Open
-       * the detailed view"; fails_when = the card is docked, a field is missing or the
+       * the detailed view"; fails_when = a desktop card floats over the chart (QA Nov 12 #11: it sits in the side panel), a field is missing or the
        * link reads otherwise; no_claim = the reasons' wording (the API's test).
        */
       test("a bar opens the floating card", async ({ page }) => {
@@ -180,17 +180,15 @@ for (const [where, use] of [
         // The owner's pick C: a desktop card's foot has Talk to Oracle; a phone's sheet has it as a tab.
         await expect(card.getByRole(where === "phone" ? "tab" : "button", { name: "Talk to Oracle" })).toBeVisible();
         if (where === "desktop") {
-          const c = (await card.boundingBox())!;
-          const b = (await body(page, "alert-digest").boundingBox())!;
-          // BGD (Nov 10): the card fits the viewport, below its bar where it fits, else above
-          // it, else as high as it needs (its details scrolling inside).
+          // QA Nov 12 #11: on a desktop the card sits in the side panel beside the chart, as on
+          // the Timeline, inside the viewport (its details scrolling inside), never over its bar.
+          const panel = page.getByTestId("item-panel");
+          await expect(panel).toContainText("Weekly alert digest");
+          const c = (await panel.boundingBox())!;
+          const chart = (await page.getByTestId("simple-chart").boundingBox())!;
           const vh = page.viewportSize()!.height;
-          expect(c.y).toBeGreaterThanOrEqual(15);
-          expect(c.y + c.height).toBeLessThanOrEqual(vh - 15);
-          expect(Math.abs(c.x - b.x)).toBeLessThan(24);
-          if (b.y + b.height + c.height <= vh - 16) expect(Math.abs(c.y - (b.y + b.height))).toBeLessThan(24);
-          else if (b.y - 6 - c.height >= 16) expect(Math.abs(c.y + c.height - b.y)).toBeLessThan(24);
-          else expect(Math.abs(c.y - 16)).toBeLessThan(2);
+          expect(c.x).toBeGreaterThanOrEqual(chart.x + chart.width - 1);
+          expect(c.y + c.height).toBeLessThanOrEqual(vh);
         }
         await card.getByRole("button", { name: "Close" }).click();
         await expect(card).toHaveCount(0);

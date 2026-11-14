@@ -43,6 +43,9 @@ import {
   quarters,
   shortDay,
   spanWords,
+  estimateOnly,
+  estimateWords,
+  codedFlag,
   type Flag,
   type Item,
   type Roadmap,
@@ -364,7 +367,8 @@ export function ConflictPanel({
               {itemName(i)}
             </button>
             <InfoTip label={itemName(i)} align="start" testId="conflict-why">
-              {f.reason}
+              {/* QA Nov 12 #5: the milestone by its code and name ("M1 Beta"). */}
+              {codedFlag(i, f, data.goal_milestones, data.milestones).reason}
             </InfoTip>
           </span>
         )}
@@ -573,7 +577,8 @@ function DayChart(props: TimelineProps) {
       const need = whole != null && whole - at <= MS_FIT_STEP ? needOf(words) : 56;
       const left = whole != null && need > 56 ? whole : clear(fit ? at : Math.max(at, sl));
       const next = gems.find((g) => g - 12 >= left + 4);
-      return { m, at, words, left, need, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
+      // A label too short for its words at All 3 years keeps its code and name ("M1 Beta"), its day in its tip.
+      return { m, at, words, short: joinedWords(m, joined), left, need, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
     });
   const msGroups: { head: (typeof marks)[number]; more: (typeof marks)[number][]; room: number }[] = [];
   for (const k of marks) {
@@ -970,7 +975,7 @@ function DayChart(props: TimelineProps) {
               />
             ) : null,
           )}
-          {msGroups.map(({ head: { m, left, words }, more, room }) => (
+          {msGroups.map(({ head: { m, left, words, short }, more, room }) => (
             <div
               key={m.id}
               // QA Nov 12 #8: a same-day count (the band's) keeps clear of a label and its chip.
@@ -991,7 +996,8 @@ function DayChart(props: TimelineProps) {
                 className="min-w-0 cursor-pointer overflow-hidden rounded-full border border-line bg-surface px-2 text-xs leading-4 text-ellipsis whitespace-nowrap text-text hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
                 style={{ maxWidth: room < Infinity ? room : undefined }}
               >
-                {words}
+                {/* QA Nov 12 #8: never "M1 B…" at All 3 years: its code and name where its words would be cut. */}
+                {fit && room < needOf(words) ? short : words}
               </button>
               {more.length > 0 && (
                 <div className="group relative flex-none">
@@ -1323,6 +1329,13 @@ const TimelineRow = memo(function TimelineRow({
     () => (live ? liveBreaks(byId, live.id, live.start, live.end) : NO_WARN),
     [live, byId],
   );
+  // QA Nov 12 #6: an item with only Oracle's estimate reads "No dates yet · estimated …" at every
+  // zoom: on its bar where the words fit whole, else beside it.
+  const guess = !live && estimateOnly(i);
+  const words = guess ? estimateWords(ds, de, today) : spanWords(ds, de, today);
+  const room = bx + bw - Math.max(bx, sl);
+  const onBar = !fit && room > (guess ? words.length * 6.5 + 16 : 120);
+  const besideW = words.length * 6.5 + 8;
   return (
     <div
       data-testid="timeline-row"
@@ -1399,7 +1412,8 @@ const TimelineRow = memo(function TimelineRow({
             data-start={ds}
             data-end={de}
             data-live={live ? (liveWarn.length ? "broken" : "ok") : undefined}
-            aria-label={`${itemName(i)}, ${spanWords(ds, de, today)}${canChange && planned(i) && !closedItem(i) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${still ? "" : ". Arrows move it a week, Shift+arrows a month; Escape cancels"}`}
+            data-estimate-only={guess ? "true" : undefined}
+            aria-label={`${itemName(i)}, ${words}${canChange && planned(i) && !closedItem(i) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${still ? "" : ". Arrows move it a week, Shift+arrows a month; Escape cancels"}`}
             onClick={() => on.bar(i, sel)}
             onPointerDown={(e) => on.down(e, i)}
             onPointerMove={on.move}
@@ -1424,7 +1438,7 @@ const TimelineRow = memo(function TimelineRow({
               outlineOffset: 2,
             }}
           />
-          {!fit && bx + bw - Math.max(bx, sl) > 120 && (
+          {onBar && (
             <span
               className="pointer-events-none absolute top-[9px] z-[11] flex px-1.5"
               style={{
@@ -1433,19 +1447,19 @@ const TimelineRow = memo(function TimelineRow({
               }}
             >
               <span className="min-w-0 truncate rounded bg-surface px-1 text-xs leading-4 text-text">
-                {spanWords(ds, de, today)}
+                {words}
               </span>
             </span>
           )}
           {/* roadmap-decide: an item with no dates of its own (Oracle's estimate on both ends) whose
            * bar has no room for its dates says so beside it, never a bare unlabeled pill. */}
-          {!live && i.start.estimated && i.end.estimated && (fit || bx + bw - Math.max(bx, sl) <= 120) && (
+          {guess && !onBar && (
             <span
               data-testid="bar-no-dates"
               className="pointer-events-none absolute top-[9px] z-[11] rounded bg-surface px-1 text-xs leading-4 whitespace-nowrap text-text2"
-              style={bx + bw + 96 <= trackW ? { left: bx + bw + 4 } : bx >= 96 ? { left: bx - 92 } : { left: Math.max(bx, 0) + 4 }}
+              style={bx + bw + besideW <= trackW ? { left: bx + bw + 4 } : bx >= besideW ? { right: trackW - bx + 4 } : { left: Math.max(bx, 0) + 4 }}
             >
-              No dates yet
+              {words}
             </span>
           )}
           {live && (
@@ -1627,7 +1641,7 @@ function QuarterList(props: TimelineProps) {
                         <NotInGt item={i} className="mt-0.5 h-5! px-2! text-xs!" />
                         <span data-testid="timeline-row-dates" className="block text-xs text-text2">
                           {/* tb-mk: the dates only; the band's header names the track's goal. */}
-                          {spanWords(i.start.date, i.end.date, data.today)}
+                          {estimateOnly(i) ? estimateWords(i.start.date, i.end.date, data.today) : spanWords(i.start.date, i.end.date, data.today)}
                         </span>
                         {brokenFlag(i) && (
                           <span className="block text-xs text-crit">

@@ -116,21 +116,22 @@ function readsWhole(scheme: "light" | "dark") {
   });
 
   test(`${scheme}: a milestone's label stays clear of the names column at every zoom`, async ({ page }) => {
-    // protects: the "◆ M1 Beta · Nov 30" label, at 3 months, 6 months, 1 year and All, and after sliding the chart till its line is left of the names column, starts at or right of the names column, ends inside the chart, reads whole, and is not covered by the + Milestone hint
+    // protects: the "◆ M1 Beta · Nov 30" label, at 3 months, 6 months, 1 year and All, and after sliding the chart till its line is left of the names column, starts at or right of the names column, ends inside the chart, reads whole (at All, where it has no room, its code and name), and is not covered by the + Milestone hint
     // fails_when: the label sits over the names column, runs past the chart's right edge, reads differently, or the hint covers it
     // no_claim: other milestones or two close ones (the next test); this runs in light and dark at 1440 wide
     await open(page, scheme);
     const head = page.getByTestId("timeline-names-head");
-    const label = page.getByTestId("timeline-milestone").filter({ hasText: "Beta · Nov 30" });
+    const label = page.getByTestId("timeline-milestone").filter({ hasText: "M1 Beta" });
     // The label reads whole: all of it between the names column and the chart's right edge.
-    const clear = async () => {
+    const clear = async (z: string) => {
       const h = (await head.boundingBox())!;
       const v = (await page.getByTestId("timeline-scroll").boundingBox())!;
       const b = (await label.boundingBox())!;
       expect(b.x, "the label starts right of the names column").toBeGreaterThanOrEqual(h.x + h.width);
       expect(b.x + b.width).toBeLessThanOrEqual(v.x + v.width);
-      // roadmap-milestone-codes: its roadmap code first.
-      await expect(label).toHaveText("◆ M1 Beta · Nov 30");
+      // roadmap-milestone-codes: its roadmap code first. QA Nov 12 #8: at All 3 years, where its
+      // words have no room, it keeps its code and name ("M1 Beta"), never "M1 B…".
+      await expect(label).toHaveText(z === "all" ? /^(◆ M1 Beta · Nov 30|M1 Beta)$/ : "◆ M1 Beta · Nov 30");
       // The "+ Milestone" hint on the axis keeps off it.
       const hint = page.getByTestId("ms-add-hint");
       if (await hint.isVisible()) {
@@ -141,7 +142,7 @@ function readsWhole(scheme: "light" | "dark") {
     for (const z of ["3m", "6m", "1y", "all"]) {
       await page.getByTestId(`zoom-${z}`).click();
       await expect(label).toBeVisible();
-      await clear();
+      await clear(z);
       if (z === "all") continue;
       // Slide the chart until the milestone's line sits just left of the names column.
       const h = (await head.boundingBox())!;
@@ -149,7 +150,7 @@ function readsWhole(scheme: "light" | "dark") {
       const moved = await slide(page, line - (h.x + h.width) + 20);
       expect(line - moved).toBeLessThan(h.x + h.width);
       await expect(label).toBeVisible();
-      await clear();
+      await clear(z);
     }
   });
 }

@@ -57,9 +57,7 @@ function isActive(pathname: string, d: Dest): boolean {
  * as the roadmap counts them, dates to confirm, suggested features, proposals and drafts sent to me); Meetings only a
  * meeting live now (an upcoming one waits on nobody).
  * Inbox counts what waits on me as /inbox's "N waiting" does (lib/waiting,
- * inbox-meeting-proposals); what of it the Roadmap tab does not count already (Oracle's dates,
- * goal suggestions, one-pager wordings, question proposals) is "Inbox beyond the tabs", which
- * More sums. Read when the rail mounts, on a route change and whenever something waiting changes.
+ * inbox-meeting-proposals), and More carries it as it is. Read when the rail mounts, on a route change and whenever something waiting changes.
  */
 function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; failed: Set<string> } | null {
   const pathname = usePathname();
@@ -171,9 +169,6 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   // PR 1320 re-review: a one-pager number fix (set_section_number) is the one-pager's, not the
   // roadmap's: it counts in the Inbox beyond the tabs, as a one-pager wording does.
   const asks = items.filter((i) => (i.kind === "proposal" && i.op !== "set_section_number") || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
-  // inbox-meeting-proposals fix: the Inbox's part the Roadmap tab counts too (a proposal on a
-  // PRD question or a one-pager line or number is not the roadmap's: lib/inbox-counts).
-  const inboxRoadmap = inbox?.roadmap ?? 0;
   const all = inbox ? waitingCount(inbox, questions ?? []) : 0;
   // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now.
   // counts-failed-part: a failed meetings read shows no number, never the last one it read.
@@ -187,15 +182,13 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
       "Roadmap suggested": suggested,
       "Roadmap asks": asks,
       Inbox: all,
-      // What waits in the Inbox beyond what the tabs count (More sums it).
-      "Inbox beyond the tabs": Math.max(0, all - inboxRoadmap),
       Meetings: live,
       "Meetings live": live,
     },
     failed: new Set([
       ...(waiting ? [] : ["Decisions"]),
       ...(waiting && goalSuggestions ? [] : ["Roadmap"]),
-      ...(inbox && questions ? [] : ["Inbox", "Inbox beyond the tabs"]),
+      ...(inbox && questions ? [] : ["Inbox"]),
       ...(meetings ? [] : ["Meetings"]),
     ]),
   };
@@ -377,16 +370,14 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   const moreActive = moreDests.some((d) => isActive(pathname, d));
   // qa-simple-home-29: the phone shows the rail's counts too; More sums the counts in its sheet.
   const countOf = (d: Dest) => counts?.[d.label] ?? 0;
-  // inbox-meeting-proposals owner: the Inbox's count repeats what the tabs count (Roadmap's proposals), so More's sum takes
-  // only the rest of it (fix: Oracle's dates, a goal's suggestions, a one-pager wording, a question's proposal light More).
-  const summed = moreDests.filter((d) => d.label !== "Inbox");
-  const inboxRest = moreDests.some((d) => d.label === "Inbox") ? (counts?.["Inbox beyond the tabs"] ?? 0) : 0;
-  const moreCount = summed.reduce((sum, d) => sum + countOf(d), 0) + inboxRest;
+  // simple-home-qa-nov12 #17: More carries the Inbox's own count, so it is the number the Inbox says
+  // (what of it the Roadmap tab counts too is counted there as well).
+  const moreCount = moreDests.reduce((sum, d) => sum + countOf(d), 0);
   // qa4-simple-home-22: a count that needs nothing from you (Meetings with none live) is grey on the phone as on the rail; More is
   // yellow only when something in it waits on you.
   const quietOf = (d: Dest) => d.label === "Meetings" && !counts?.["Meetings live"];
-  const moreQuiet = inboxRest === 0 && summed.every((d) => countOf(d) === 0 || quietOf(d));
-  const moreFailed = summed.some((d) => failedOf(d.label)) || (moreDests.some((d) => d.label === "Inbox") && failedOf("Inbox beyond the tabs"));
+  const moreQuiet = moreDests.every((d) => countOf(d) === 0 || quietOf(d));
+  const moreFailed = moreDests.some((d) => failedOf(d.label));
   const shownOf = (d: Dest) => countOf(d) > 0 || failedOf(d.label);
   const tabBadge = (id: string, n: number, words: string, quiet = false, failed = false) =>
     (n > 0 || failed) && (

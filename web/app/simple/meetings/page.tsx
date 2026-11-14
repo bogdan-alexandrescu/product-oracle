@@ -57,9 +57,9 @@ function Meetings() {
     if (o) setSheet(o.occurrence_id ? { occurrence: o.occurrence_id } : { ritual: o });
   }
   if (!SIMPLE_MODE) notFound();
-  // qa-simple-decide-50: the zone is said once, in the lead; the rows show the day and time.
   // qa-simple-decide-31: the one day-and-time format of Meetings, a meeting and Decisions.
-  const when = (at: string) => momentWords(at, zone);
+  // simple-home-13: with the zone's short name, as Home writes it ("Mon Oct 26, 9:00 AM PDT").
+  const when = (at: string) => momentWords(at, zone, false, true);
   // qa-simple-decide-8: Start review only for who may start one (an owner, or a review's own owner).
   // A PRD's own decider may start its review too, so the PRDs' can_start counts as well.
   const mayStart = can("start_simple_meeting", !!q.data?.upcoming.some((o) => o.can_start) || !!opts.data?.prds.some((p) => p.can_start));
@@ -94,7 +94,7 @@ function Meetings() {
               {q.data.live.map((m) => (
                 <li key={m.id} className="flex flex-wrap items-center justify-between gap-2">
                   <span>
-                    <strong>{m.title}</strong> · started <span className="whitespace-nowrap">{when(m.started_at)}</span> by {m.presenter.name} · {m.decisions} {m.decisions === 1 ? "decision" : "decisions"}
+                    <strong>{m.title}</strong> · started <span className="inline-block whitespace-nowrap">{when(m.started_at)}</span> by {m.presenter.name} · {m.decisions} {m.decisions === 1 ? "decision" : "decisions"}
                   </span>
                   <Link className={`${LINK} ${TAP}`} href={`/simple/meetings/${m.id}`}>Join</Link>
                 </li>
@@ -108,7 +108,7 @@ function Meetings() {
                 <li key={o.occurrence_id ?? `${o.ritual_id}|${o.due_at}`} data-testid="meetings-upcoming-row" className="flex flex-wrap items-center justify-between gap-2">
                   <span>
                     {/* qa4-simple-decide-34: a time and "Pre-read" never break across lines on a phone. */}
-                    <strong>{o.ritual_title}</strong> · <span className="whitespace-nowrap">{when(o.due_at)}</span> · {o.length_min} min · {o.attendees.map((a) => a.name).join(", ")}
+                    <strong>{o.ritual_title}</strong> · <span className="inline-block whitespace-nowrap">{when(o.due_at)}</span> · {o.length_min} min · {o.attendees.map((a) => a.name).join(", ")}
                     {/* qa-simple-decide-37: its pre-read and agenda before it starts. */}
                     {o.occurrence_id ? (
                       <>
@@ -139,7 +139,7 @@ function Meetings() {
                   {/* qa4-simple-decide-7: the start, labelled, as Decisions dates a meeting by its start;
                       qa4-simple-decide-21: the count once, the minutes' summary says it when sent. */}
                   <p data-testid="meetings-past-row">
-                    <Link className={`${LINK} ${TAP}`} href={`/simple/meetings/${m.id}`}>{m.title}</Link> · started <span className="whitespace-nowrap">{when(m.started_at)}</span>
+                    <Link className={`${LINK} ${TAP}`} href={`/simple/meetings/${m.id}`}>{m.title}</Link> · started <span className="inline-block whitespace-nowrap">{when(m.started_at)}</span>
                     {!m.summary && ` · ${m.decisions} ${m.decisions === 1 ? "decision" : "decisions"}`}
                   </p>
                   {m.summary ? <p className="simple-small">{m.summary}</p> : <p className="simple-small">Minutes not sent yet.</p>}

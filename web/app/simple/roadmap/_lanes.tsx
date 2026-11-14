@@ -35,7 +35,13 @@ import {
   placedSlices,
   type Slice,
   yearSpan,
+  estimateOnly,
+  estimateWords,
   drawnKeyDates,
+  codedFlag,
+  type Flag,
+  type GoalMilestone,
+  type Milestone,
 } from "./_lib";
 import { CALL_H, RH } from "./_pitch";
 import { ellipsize, monthTick, ordinal, PreviewGhost, previewSpan, useAppliedFlash, usePreview, type Layout } from "./_timeline";
@@ -1030,6 +1036,8 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
                     key={u.item.id}
                     unit={u}
                     item={u.item}
+                    milestones={data.goal_milestones}
+                    planned={data.milestones}
                     lane={l.key}
                     y={geo[n].top + 4 + l.line[u.row] + 4}
                     sc={sc}
@@ -1072,6 +1080,9 @@ type PillProps = {
   unit: Unit;
   /** The unit's item. */
   item: Item;
+  /** QA Nov 12 #5: the roadmap's milestones, so a reason names one with its code ("M1 Beta"). */
+  milestones?: readonly GoalMilestone[];
+  planned?: readonly Milestone[];
   /** Its lane's key. */
   lane: string;
   /** The pills' top. */
@@ -1099,7 +1110,7 @@ type PillProps = {
 };
 
 /** One item in its lane: its pieces as B2's pills (a planned feature's slices on one row, joined by a dotted line). */
-const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, flash, canDrag, cut, place, room, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: PillProps) {
+const Pill = memo(function Pill({ unit, item, milestones, planned: roadmapMs, lane, y, sc, width, span, open, flash, canDrag, cut, place, room, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: PillProps) {
   const { pieces } = unit;
   const [start, end] = span ?? barSpan(item);
   const kind = barKind(item);
@@ -1122,7 +1133,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
   const mark = left >= 10 ? left : Math.min(width - 10, Math.max(sc.x(s?.end_date ?? end), x1) + sc.px + 12);
   // QA2 finding 14: a reader's words, not the API's raw enum (sourceWord, from ./_lib).
   // qa4-simple-roadmap-30: each red flag in its own words ("ends Jun 8, after its milestone 'Beta'"), as Now / Next / Later says it.
-  const label = `${item.title}: ${yearSpan(start, end, " to ")}, ${item.estimated ? sourceWord("estimated") : datesFrom(item)}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
+  const label = `${item.title}: ${!span && estimateOnly(item) ? estimateWords(start, end) : `${yearSpan(start, end, " to ")}, ${item.estimated ? sourceWord("estimated") : datesFrom(item)}`}${red ? `, ${broken(item).map((f) => codedFlag(item, f, milestones, roadmapMs).reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
   const strokeOf = (base: string) => (red ? "var(--crit)" : amber ? "var(--warn)" : base);
   const strokeW = red || amber || open ? 2.5 : 1.5;
   // fix4 qa-simple-roadmap-31: the suggestion's outline is drawn under the pill (its fill hides
@@ -1273,7 +1284,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
             })}
           </>
         ) : (
-          <PlainPiece item={item} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} stroke={strokeOf} strokeW={strokeW} besideAt={s && mark > x1 ? mark + 12 : x1 + 6} room={room} stop={item.milestone?.date ? sc.x(item.milestone.date) : undefined} />
+          <PlainPiece item={item} flags={broken(item).map((f) => codedFlag(item, f, milestones, roadmapMs))} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} stroke={strokeOf} strokeW={strokeW} besideAt={s && mark > x1 ? mark + 12 : x1 + 6} room={room} stop={item.milestone?.date ? sc.x(item.milestone.date) : undefined} />
         )}
         {/* fix4 qa-simple-roadmap-4: a track's milestone sits on the pill's top edge at its date,
             above the pill's name, never over it. */}
@@ -1342,7 +1353,7 @@ function pillWords(name: string, code: string | null | undefined, b: { x: number
 }
 
 /** An item with no plan as one pill: its title, cut with "…" to the pill, or beside a pill too short for it; a draft says so ("Draft · Setup tips"), a cut item is struck through (its place in the return queue on hover). */
-function PlainPiece({ item, piece, b, y, cut, place, stroke, strokeW, besideAt, room, stop }: { item: Item; piece: Piece; b: { x: number; w: number }; y: number; cut: boolean; place?: number; stroke: (base: string) => string; strokeW: number; besideAt: number; room: number; stop?: number }) {
+function PlainPiece({ item, flags, piece, b, y, cut, place, stroke, strokeW, besideAt, room, stop }: { item: Item; flags: Flag[]; piece: Piece; b: { x: number; w: number }; y: number; cut: boolean; place?: number; stroke: (base: string) => string; strokeW: number; besideAt: number; room: number; stop?: number }) {
   const c = look(piece, item, cut);
   const draft = item.draft && !cut;
   // fix4 qa-simple-roadmap-3/15: the title alone (no "F-06", no "#1"); a draft's reads "Draft · <title>".
@@ -1352,8 +1363,9 @@ function PlainPiece({ item, piece, b, y, cut, place, stroke, strokeW, besideAt, 
   const { words, beside } = pillWords(full, piece.code, b, room, besideAt, stop);
   const w = words ? textWidth(words, 12, beside ? 600 : 650) : 0;
   const tag = draft && words.startsWith("Draft");
-  // qa4-simple-roadmap-30: its red flags' own words, as Now / Next / Later writes them on its card.
-  const hover = `${full}${place != null ? ` · ${ordinal(place)} to come back if room opens` : ""}${broken(item).map((f) => ` · ${f.reason}`).join("")}`;
+  // qa4-simple-roadmap-30: its red flags' own words, as Now / Next / Later writes them on its card
+  // (QA Nov 12 #5: a milestone with its code).
+  const hover = `${full}${place != null ? ` · ${ordinal(place)} to come back if room opens` : ""}${flags.map((f) => ` · ${f.reason}`).join("")}`;
   return (
     <>
       <title>{hover}</title>
@@ -1702,7 +1714,7 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                       {p.name}
                       {item.draft && !closedItem(item) && <span className="ml-1.5 rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag">Draft</span>}
                     </span>
-                    <span className={`text-[12.5px] whitespace-nowrap ${red.length ? "font-[650] text-crit" : "text-text-faint"}`} title={red[0]?.reason}>
+                    <span className={`text-[12.5px] whitespace-nowrap ${red.length ? "font-[650] text-crit" : "text-text-faint"}`} title={red[0] && codedFlag(item, red[0], data.goal_milestones, data.milestones).reason}>
                       <i aria-hidden className="mr-[5px] inline-block h-[9px] w-[9px] rounded-full align-[0]" style={p.pm || !p.milestone ? { border: `1.5px ${p.pm || c.dash ? "dashed" : "solid"} ${c.stroke}`, background: p.pm ? "transparent" : c.fill } : { background: mLine(p.milestone) }} />
                       {red.length ? "⚠ " : ""}
                       {dm(p.start)} – {dm(p.end)}

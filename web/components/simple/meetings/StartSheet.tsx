@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { Button, useFocusTrap } from "@/components/ds";
+import { Button, InfoTip, useFocusTrap } from "@/components/ds";
 import { Icon } from "@/components/ds/Icon";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -20,10 +20,10 @@ type Origin = Schemas["SimpleMeetingIn"]["origin"] & string;
 
 const LENGTHS = [15, 30, 45, 60, 90, 120];
 
-/** qa4-simple-decide-19: the Meetings page's day and time ("Mon Nov 2, 9:00 AM", as its momentWords),
- * no zone letters: the page lead names the zone. Local, so the sheet does not pull in a page's module. */
+/** The Meetings page's day and time with the zone's short name ("Mon Nov 2, 9:00 AM PDT", as its
+ * momentWords; simple-home-13). Local, so the sheet does not pull in a page's module. */
 const moment = (at: string, zone: string) =>
-  `${formatInZone(at, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "")}, ${formatInZone(at, zone, { hour: "numeric", minute: "2-digit" }).replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`;
+  `${formatInZone(at, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "")}, ${formatInZone(at, zone, { hour: "numeric", minute: "2-digit" })}`;
 
 /** The design system's form controls (qa-simple-prd-46, qa-simple-decide): a box or dot in the
  * accent (CHECK) and Simple's select (SimpleSelect), never the browser's bare ones. */
@@ -181,12 +181,16 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, roadma
     <div className="space-y-4">
       {occ && (
         <p data-testid="start-occurrence">
-          {/* qa4-simple-decide-19: the one day-and-time format of Meetings ("Mon Nov 2, 9:00 AM"), no zone letters: the page lead names the zone. */}
+          {/* The one day-and-time format of Meetings ("Mon Nov 2, 9:00 AM PDT"). */}
           <strong>{occ.ritual_title}</strong> · {moment(occ.due_at, zone)}
         </p>
       )}
       <section aria-label="What is reviewed">
-        <h3 className="font-semibold">What is reviewed</h3>
+        {/* simple-goalmap-OP8: each heading's explanation in an (i) beside it, not prose under it. */}
+        <h3 className="flex items-center gap-1.5 font-semibold">
+          What is reviewed
+          <InfoTip label="What is reviewed" align="start">The PRD, its roadmap slice, its open decisions</InfoTip>
+        </h3>
         {from && (
           <p data-testid="start-from">
             {from}: the review covers {chosen ? chosen.document.title : "a PRD"} and its part of the draft.
@@ -202,7 +206,6 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, roadma
             </SimpleSelect>
           </label>
         )}
-        <p className="simple-small">The PRD, its roadmap slice, its open decisions</p>
       </section>
       {chosen && !chosen.can_start ? (
         <div role="status" className="space-y-2" data-testid="start-not-allowed">
@@ -218,8 +221,10 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, roadma
         <>
           <fieldset>
             {/* The roadmap lane's plain words for the attendee boxes; they list people by name, not roles. */}
-            <legend className="font-semibold">Who attends</legend>
-            <p className="simple-small">The people invited to the review; they see its chat and its decisions.</p>
+            <legend className="flex items-center gap-1.5 font-semibold">
+              Who attends
+              <InfoTip label="Who attends" align="start">The people invited to the review; they see its chat and its decisions.</InfoTip>
+            </legend>
             <div className="mt-1 grid gap-1 sm:grid-cols-2">
               {options.members.map((m) => (
                 <label key={m.id} className={CHOICE}>
@@ -232,9 +237,13 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, roadma
             {occ && <p className="simple-small">The people ticked here also attend the next reviews of {occ.ritual_title}.</p>}
           </fieldset>
           <fieldset>
-            <legend className="font-semibold">Who changes things in the chat</legend>
-            {/* fix4 qa-simple-roadmap-23: each choice explained in one line. */}
-            <p className="simple-small" data-testid="start-change-mode-help">Who may move dates and edit the plan by asking the review&apos;s chat; everyone else can still comment.</p>
+            <legend className="flex items-center gap-1.5 font-semibold">
+              Who changes things in the chat
+              {/* fix4 qa-simple-roadmap-23: what the choice means, in one line. */}
+              <InfoTip label="Who changes things in the chat" align="start" testId="start-change-mode-help">
+                Who may move dates and edit the plan by asking the review&apos;s chat; everyone else can still comment.
+              </InfoTip>
+            </legend>
             {([["everyone", "Everyone except viewers"], ["presenter", "Only the presenter"], ["named", "Presenter plus one or two people"]] as const).map(([v, label]) => (
               <div key={v}>
                 <label className={CHOICE}>

@@ -186,11 +186,10 @@ for (const phone of [false, true]) {
       await page.goto("/simple/decisions");
       const rows = page.getByTestId("questions-mine").getByRole("listitem", { name: /^Broken link: / });
       await expect(rows.first()).toBeVisible();
-      const names = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
-      // Each row names its own flag, even when one item has two.
-      expect(new Set(names).size).toBe(names.length);
+      // simple-home-qa-nov12 #3: an item's broken links are one row, which counts each of its breaks.
+      const breaks = await rows.evaluateAll((els) => els.reduce((n, e) => n + Number(e.getAttribute("data-breaks")), 0));
       await nav(page, "Home").click();
-      await expect(page.getByTestId("home-summary-broken-links").locator(".simple-number")).toHaveText(String(names.length));
+      await expect(page.getByTestId("home-summary-broken-links").locator(".simple-number")).toHaveText(String(breaks));
     });
 
     test("A commenter's broken-links tile says it counts the links they can propose fixes for", async ({ page }) => {
@@ -382,7 +381,8 @@ for (const phone of [false, true]) {
       await nav(page, "Decisions").click();
       const rows = page.getByTestId("questions-mine").getByTestId("waiting-item");
       await expect(rows.first()).toBeVisible();
-      const kinds = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")));
+      // simple-home-qa-nov12 #3: an item's broken links are one row, which counts each of its breaks.
+      const kinds = await rows.evaluateAll((els) => els.flatMap((e) => Array<string | null>(Number(e.getAttribute("data-breaks") ?? 1)).fill(e.getAttribute("data-kind"))));
       const named = ALL_WORDS.flatMap(([kind, one, many]) => {
         const n = kinds.filter((k) => k === kind).length;
         return n ? [`${n} ${n === 1 ? one : many}`] : [];

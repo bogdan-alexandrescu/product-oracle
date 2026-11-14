@@ -12,7 +12,7 @@ export const NOT_IN_GT = "Not in the Ground Truth";
 export function Named({ item }: { item: { code?: string | null; title: string } }) {
   return (
     <>
-      {item.code && <span className="simple-code mr-1.5">{item.code}</span>}
+      {item.code && <><span className="simple-code mr-0.5">{item.code}</span>{" "}</>}
       {item.title}
     </>
   );

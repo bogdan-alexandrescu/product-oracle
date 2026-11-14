@@ -193,19 +193,19 @@ test.describe("desktop", () => {
   });
 
   /**
-   * #47: on the Gantt the item card floats with a dimmed backdrop behind it on desktop;
-   * clicking the backdrop closes the card, the same as its own close button. (The Timeline
-   * opens an item in a side panel that dims nothing.)
+   * #47, re-pointed by QA Nov 12 #11 (the owner's pick): on a desktop the Gantt's item card
+   * sits in the side panel beside the chart, as on the Timeline, and dims nothing; its own
+   * Close button closes it.
    */
-  test("the Gantt's item card shows a backdrop and closes when it is clicked", async ({ page }) => {
+  test("the Gantt's item card sits in the side panel with no backdrop and closes with Close", async ({ page }) => {
     await open(page);
     await gantt(page);
     await bar(page, "alert-rules").click();
     const card = page.getByTestId("floating-card");
     await expect(card).toBeVisible();
-    const backdrop = page.getByTestId("floating-card-backdrop");
-    await expect(backdrop).toBeVisible();
-    await page.mouse.click(420, 870);
+    await expect(page.getByTestId("item-panel")).toContainText("Alert rules engine");
+    await expect(page.getByTestId("floating-card-backdrop")).toHaveCount(0);
+    await card.getByRole("button", { name: "Close" }).click();
     await expect(card).not.toBeVisible();
   });
 

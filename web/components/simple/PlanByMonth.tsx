@@ -319,7 +319,7 @@ export function PlanByMonth({
                     // one-feature-panel: the name (its code first) opens the feature's panel.
                     const name = (
                       <>
-                        {it?.code && <span className="simple-code mr-1.5">{it.code}</span>}
+                        {it?.code && <><span className="simple-code mr-0.5">{it.code}</span>{" "}</>}
                         {it?.title}
                       </>
                     );

@@ -56,7 +56,8 @@ test.describe("desktop", () => {
   test("the owner adds a topic and a feature, renames, reorders by arrows and drag, removes with Undo", async ({ page }) => {
     test.setTimeout(90_000);
     await startReview(page);
-    await expect(strip(page)).toContainText(/Now: F-06\s?Weekly alert digest/);
+    // BR (E): a code and its name read apart, "F-06 Weekly alert digest", never "F-06Weekly alert digest".
+    await expect(strip(page).getByTestId("agenda-now")).toHaveText("Now: F-06 Weekly alert digest");
     await expect(strip(page)).toContainText("Next: Mobile alert push");
     await expect(strip(page)).toContainText("Item 2 of 5");
     await tap(strip(page).getByRole("button", { name: "Edit agenda" }));

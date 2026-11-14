@@ -745,7 +745,7 @@ function AttachDrawer({ map, milestone, codes, mcode, onClose, onSave }: { map: 
           {list.map((i) => (
             <li key={i.id}>
               <button type="button" aria-describedby={i.from ? `gm-from-${i.id}` : undefined} onClick={() => setFeature(i.id)} className={`w-full rounded-xl border px-3 py-2 text-left font-semibold ${feature === i.id ? "border-accent bg-accent-soft" : "border-line"}`}>
-                {i.code && <span className="simple-code mr-1">{i.code}</span>}
+                {i.code && <><span className="simple-code">{i.code}</span>{" "}</>}
                 {i.name}
               </button>
               {i.from && (

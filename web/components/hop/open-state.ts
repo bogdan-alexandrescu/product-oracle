@@ -43,12 +43,20 @@ function openFor(who: string | null): boolean {
   return !!s && !!who && (s === "1" || s === who);
 }
 
+/** The page a linked discussion opened the panel on (askThread): the page change that brought it there keeps it open. */
+let openedOn: string | null = null;
 /** `remember` false: opened for one question (Simple's Ask Oracle): not reopened on the next page load (qa-simple-decide-10). */
 let transient = false;
 export function setPanelOpen(next: boolean, remember = true) {
   transient = next && !remember;
+  openedOn = null;
   if (next && !openFor(user)) focusAsk = true;
   stored = next ? (user ?? "1") : null;
+  // A linked discussion it showed is let go with it: the next opening starts on its chats.
+  if (!next && linked) {
+    linked = null;
+    linkedListeners.forEach((l) => l());
+  }
   // Words no box took while it was open are dropped, never shown typed in later.
   if (!next && draft) {
     draft = "";
@@ -98,7 +106,7 @@ export function askWith(text: string) {
 
 /** Leaving the page that opened the panel for one question (Simple's Ask Oracle, a goal's Suggest) closes it (the shell, on every page change). */
 export function closeTransientPanel() {
-  if (transient && readStored()) setPanelOpen(false);
+  if (transient && readStored() && openedOn !== window.location.pathname) setPanelOpen(false);
 }
 
 /** Takes the typed-in words (they are cleared). */
@@ -126,4 +134,38 @@ export function takeAskFocus(): boolean {
   const f = focusAsk;
   focusAsk = false;
   return f;
+}
+
+/**
+ * ask-phone-12: a linked discussion (`?discussion=<id>`, the Inbox's Review changes) opens in
+ * the panel on desktop, the one place for threads: its id, and whether to land on its changes.
+ * Opened for it alone, the panel is not remembered and its question box does not take focus.
+ */
+export type LinkedThread = { id: string; changes: boolean };
+let linked: LinkedThread | null = null;
+const linkedListeners = new Set<() => void>();
+
+export function askThread(next: LinkedThread) {
+  if (linked?.id !== next.id || linked.changes !== next.changes) {
+    linked = next;
+    linkedListeners.forEach((l) => l());
+  }
+  if (!readStored()) {
+    setPanelOpen(true, false);
+    focusAsk = false;
+    openedOn = window.location.pathname;
+  }
+}
+
+export function useLinkedThread(): LinkedThread | null {
+  return useSyncExternalStore(
+    (l) => {
+      linkedListeners.add(l);
+      return () => {
+        linkedListeners.delete(l);
+      };
+    },
+    () => linked,
+    () => null,
+  );
 }

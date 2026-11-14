@@ -19,7 +19,7 @@ import { calendarDay, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
-import { useWaitingList, WaitingRow } from "@/components/simple/WaitingItems";
+import { foldWaiting, useWaitingList, WaitingRow } from "@/components/simple/WaitingItems";
 
 import { DeliveryLine, emailWords, slackWords } from "../meetings/_delivery";
 import { DecidedItem, LINK, momentWords } from "../meetings/_flow";
@@ -376,7 +376,9 @@ function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["S
         ) : (
           <ul>
             {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} linked={x.id === linked} listCode={repeated.has(x.code.toUpperCase())} />)}
-            {extra.map((i) => <WaitingRow key={i.key} item={i} />)}
+            {foldWaiting(extra).map((r) => (
+              <WaitingRow key={r.key} item={r.item} links={r.links} />
+            ))}
           </ul>
         )}
         {mine.length > FIRST && (

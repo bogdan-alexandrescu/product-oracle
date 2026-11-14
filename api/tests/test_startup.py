@@ -53,6 +53,21 @@ no_claim=<what green does not prove>.
   again (.dockerignore drops __pycache__, and UV_COMPILE_BYTECODE covers only installed
   packages, not the editable app: 6.4 s against 4.5 s for the app's import on one CPU);
   no_claim=the image build itself (not run by the tests).
+- test_merge_revision_means_full_upgrade: protects=two heads, or a merge revision (a tuple
+  down_revision), make the head unknown; fails_when=one of the heads, or the merge's id
+  read without its parents, is taken for the head.
+- test_tuple_down_revision_means_full_upgrade: protects=a one-parent tuple down_revision
+  makes the head unknown; fails_when=the file is skipped and its parent taken for head.
+- test_unreadable_script_file_stops_the_start: protects=a revision file that can not be
+  read raises (the start exits 1, as Alembic would); fails_when=the error is swallowed and
+  the file left out of the head.
+- test_rolled_back_image_exits_1_without_serving: protects=an older image started against
+  a database a newer one migrated exits 1 before serving, as `alembic upgrade head` did;
+  fails_when=the unknown revision is ignored and the old app serves the newer schema;
+  no_claim=Cloud Run's handling of the failed revision.
+
+No test depends on the PORT of the process running them: the image's default port is read
+in a fresh process without it.
 """
 
 import asyncio
@@ -123,7 +138,7 @@ def served(monkeypatch):
     calls: list[tuple[object, set[str]]] = []
 
     def fake_run(app, **kwargs):
-        assert kwargs.get("port") == 8000
+        assert kwargs.get("port") == startup.PORT
         calls.append((app, _stored()))
 
     monkeypatch.setattr(startup, "database_url", lambda: SCRATCH_URL)
@@ -290,6 +305,44 @@ def test_unreadable_script_means_full_upgrade(tmp_path: Path):
     assert startup.script_head(tmp_path) is None
 
 
+def _copy_versions(to: Path) -> None:
+    for path in (API_DIR / "migrations" / "versions").glob("*.py"):
+        (to / path.name).write_text(path.read_text())
+
+
+def test_merge_revision_means_full_upgrade(tmp_path: Path):
+    _copy_versions(tmp_path)
+    head = _head()
+    parent = ScriptDirectory.from_config(_cfg()).get_revision(head).down_revision
+    # A branch beside the head (two heads), then a merge revision joining them: its
+    # down_revision is a tuple.
+    (tmp_path / "9998_side.py").write_text(
+        f'"""Side."""\nrevision = "9998_side"\ndown_revision = "{parent}"\n'
+    )
+    assert startup.script_head(tmp_path) is None  # two heads
+    (tmp_path / "9999_merge.py").write_text(
+        f'"""Merge."""\nrevision = "9999_merge"\ndown_revision = ("{head}", "9998_side")\n'
+    )
+    assert startup.script_head(tmp_path) is None
+
+
+def test_tuple_down_revision_means_full_upgrade(tmp_path: Path):
+    _copy_versions(tmp_path)
+    # One parent, written as a one-item tuple (Alembic accepts it): not a plain string.
+    (tmp_path / "9999_tuple.py").write_text(
+        f'"""Tuple."""\nrevision: str = "9999_tuple"\n'
+        f'down_revision: tuple[str, ...] = ("{_head()}",)\n'
+    )
+    assert startup.script_head(tmp_path) is None
+
+
+def test_unreadable_script_file_stops_the_start(tmp_path: Path):
+    _copy_versions(tmp_path)
+    (tmp_path / "9999_bad.py").write_bytes(b'revision = "9999_bad"\n\xff\xfe\n')
+    with pytest.raises(UnicodeDecodeError):
+        startup.script_head(tmp_path)
+
+
 def _oracle_loggers() -> list[logging.Logger]:
     return [
         logger
@@ -317,7 +370,18 @@ def test_image_starts_through_startup():
     cmd = [line for line in dockerfile.splitlines() if line.startswith("CMD")]
     assert cmd == ['CMD ["python", "-m", "oracle.startup"]']
     assert "alembic upgrade" not in cmd[0]
-    assert startup.PORT == 8000
+    # The default port, read in a fresh process without PORT (the one running the tests may
+    # have its own).
+    env = {k: v for k, v in os.environ.items() if k != "PORT"}
+    got = subprocess.run(
+        [sys.executable, "-c", "from oracle import startup; print(startup.PORT)"],
+        cwd=API_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert got.stdout.strip() == "8000"
 
 
 def test_image_ships_the_apps_bytecode():
@@ -364,3 +428,35 @@ def test_start_as_the_image_does_serves_at_head(at_head, tmp_path: Path):
     assert status == 200, log
     assert f"[oracle.startup] database at head {_head()}: no migration to run" in log
     assert "Running upgrade" not in log
+
+
+async def _set_stored(revision: str) -> None:
+    engine = create_async_engine(SCRATCH_URL)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("UPDATE alembic_version SET version_num = :v"), {"v": revision})
+    finally:
+        await engine.dispose()
+
+
+def test_rolled_back_image_exits_1_without_serving(at_head, tmp_path: Path):
+    # A newer image migrated the database to a revision this image's scripts do not have.
+    asyncio.run(_set_stored("9999_from_a_newer_image"))
+    out = tmp_path / "start.log"
+    env = {**os.environ, "ORACLE_DATABASE_URL": SCRATCH_URL, "PORT": str(_free_port())}
+    try:
+        with out.open("w") as log_file:
+            proc = subprocess.run(
+                [sys.executable, "-m", "oracle.startup"],
+                cwd=API_DIR,
+                env=env,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                timeout=90,
+            )
+    finally:
+        asyncio.run(_set_stored(_head()))
+    log = out.read_text()
+    assert proc.returncode == 1, log
+    assert "9999_from_a_newer_image" in log
+    assert "Uvicorn running" not in log

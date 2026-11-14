@@ -11,7 +11,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * -11: a question decided in the meeting keeps its code (Q5), open questions get no D- code.
  * -15/-16: the roadmap step reads Now, Next, Later, Cut, its Move buttons line up, and a move
  * says what moved. -17: the toast keeps clear of the steps and the clock. -19: the meeting's
- * one time format, no zone letters. -20: "Ended … Pacific Time". -23: attendee chips have a
+ * one time format, no zone letters. -20: "Ended … PDT" (simple-home-13). -23: attendee chips have a
  * visible Mark away / Mark here. -24: "Decisions in this meeting". -27: the back link and the
  * title share a baseline. -31: Accept and Decline one height. -32: Connect Slack looks like a
  * link. -39: a decision's link is named by its code and words.
@@ -146,10 +146,10 @@ for (const phone of [false, true]) {
       await expect(page.getByRole("heading", { name: "All decisions" })).toHaveCount(0);
     });
 
-    test("qa4-simple-decide-20: an ended meeting reads Ended <day, time> Pacific Time, no nested brackets", async ({ page }) => {
+    test("qa4-simple-decide-20: an ended meeting reads Ended <day, time PDT>, no nested brackets", async ({ page }) => {
       await pastMeeting(page);
       const ended = page.getByTestId("meeting-ended-at");
-      await expect(ended).toContainText(/^Ended \w{3} \w{3} \d+, \d+:\d{2} [AP]M Pacific Time · /);
+      await expect(ended).toContainText(/^Ended \w{3} \w{3} \d+, \d+:\d{2} [AP]M P[DS]T · /);
       await expect(ended).not.toContainText("(");
     });
 
