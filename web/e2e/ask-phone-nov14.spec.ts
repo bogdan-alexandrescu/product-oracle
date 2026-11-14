@@ -125,7 +125,10 @@ for (const [where, size] of [["desktop", DESKTOP], ["phone", PHONE]] as const) {
     await login(page);
     await page.goto("/simple/roadmap");
     const panel = await openAsk(page);
-    await panel.getByRole("textbox", { name: "Message Oracle" }).fill("what is Weekly alert digest about?");
+    const box = panel.getByRole("textbox", { name: "Message Oracle" });
+    // The person's rights are read (a question goes to Oracle's Ask only then).
+    await expect(box).toHaveAttribute("placeholder", "Ask about the roadmap, or ask for a change…");
+    await box.fill("what is Weekly alert digest about?");
     await panel.getByRole("button", { name: "Send" }).click();
     await expect(panel.getByTestId("ask-chat-thread").getByTestId("ask-answer").last()).toHaveAttribute("data-status", "complete", { timeout: 15_000 });
     await panel.getByTestId("ask-share").click();
