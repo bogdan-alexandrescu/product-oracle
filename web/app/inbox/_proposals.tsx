@@ -178,7 +178,7 @@ export function dateSuggestionRows(rows: DateSuggestion[], seenBefore: string | 
     // simple-home-qa-nov12 #6: on a phone the why sits behind its (i), not printed on every row.
     context: (
       <>
-        <span className="block truncate text-text2 max-[600px]:hidden" data-testid="date-suggestion-basis">
+        <span className="block truncate text-text2 max-[600px]:hidden" data-testid="date-suggestion-basis" title={s.basis}>
           {s.basis}
         </span>
         <span className="min-[601px]:hidden">

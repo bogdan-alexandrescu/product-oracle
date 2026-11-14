@@ -661,7 +661,7 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
       if (!token && reconnectReason(row.provider, row.scopes)) {
         // Signs in again for drive.readonly, as the real API's authorize_url would.
         const who = identity(row.provider, "oauth-token");
-        if (typeof who !== "string") upsert(db, email, row.provider, "oauth", { ...who, account_id: row.account_id });
+        if (typeof who !== "string") upsert(db, email, row.provider, "oauth", { ...who, account_id: row.account_id }, row.account_label);
         return json(200, { connection: out(db, row), authorize_url: `/settings/connections?connected=${row.provider}` });
       }
       Object.assign(row, { status: "active", last_error: null, updated_at: now() });

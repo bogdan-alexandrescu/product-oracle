@@ -306,10 +306,10 @@ export function DragGhost({ code, name, weeks, style, className = "" }: { code: 
 }
 
 /**
- * A task's pencil and ⋯ (Edit task, Cut from the roadmap), for who may change it (./task-edit). A feature with no
- * roadmap item has the same pencil and ⋯ (`editLabel` "Edit feature", no cut): they open its feature panel.
+ * A task's pencil and ⋯ (Edit feature, Cut from the roadmap), for who may change it (./task-edit): each is a feature.
+ * A feature with no roadmap item has the same pencil and ⋯ (no cut): they open its feature panel.
  */
-export function TaskActions({ name, onEdit, onCut, disabled, editLabel = "Edit task" }: { name: string; onEdit: () => void; onCut?: () => void; disabled?: boolean; editLabel?: string }) {
+export function TaskActions({ name, onEdit, onCut, disabled, editLabel = "Edit feature" }: { name: string; onEdit: () => void; onCut?: () => void; disabled?: boolean; editLabel?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -497,7 +497,7 @@ export function FeatureRows({
               {f.weeks == null ? "PM-owned" : weeksWords(f.weeks)}
             </span>
             {/* PR6: every feature row has the same pencil and ⋯, for who may change it; one with no roadmap item opens its feature panel. */}
-            {task && (task.actions(f) ?? (grips && onOpen ? <TaskActions name={f.name} editLabel="Edit feature" onEdit={() => onOpen(f)} /> : null))}
+            {task && (task.actions(f) ?? (grips && onOpen ? <TaskActions name={f.name} onEdit={() => onOpen(f)} /> : null))}
           </li>
         );
       })}

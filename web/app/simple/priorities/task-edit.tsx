@@ -134,7 +134,7 @@ export function TaskForm({
       </Field>
       <div className="mt-1 flex items-center gap-2">
         <button type="submit" className={PRIMARY} disabled={!done || busy}>
-          Save task
+          Save
         </button>
         <button type="button" className={BTN} onClick={onCancel}>
           Cancel
@@ -448,7 +448,7 @@ export function useBucketTasks({
       <TaskForm
         start={startOf(t)}
         milestones={options}
-        title="Edit task"
+        title="Edit feature"
         goal={goal}
         onCancel={() => setEditing(null)}
         onSave={async (f) => {
