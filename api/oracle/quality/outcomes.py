@@ -348,10 +348,18 @@ async def update_outcome(
         row.owner_id = data.owner_id
     if data.goal_id is not None and data.goal_id != row.goal_id:
         # outcomes-edit: the prediction is kept as written (its figures are the owner's), even
-        # when its unit is not the new goal's: changing the goal never loses it.
-        await _entity(db, data.goal_id, "goal", "goal_id")
+        # when its unit is not the new goal's: changing the goal never loses it. It names the
+        # new goal's metric, and with no predicted value yet it takes the new goal's unit.
+        goal = await _entity(db, data.goal_id, "goal", "goal_id")
         before_goal = row.goal_id
         row.goal_id = data.goal_id
+        attrs = goal.attrs or {}
+        prediction = dict(row.prediction or {})
+        if attrs.get("metric"):
+            prediction["metric"] = attrs["metric"]
+        if prediction.get("predicted_value") is None:
+            prediction["unit"] = attrs.get("unit") or None
+        row.prediction = prediction
         await audit.record(
             db, principal, "outcome.goal_changed", "outcome_record", row.id,
             {"from": str(before_goal), "to": str(data.goal_id)},

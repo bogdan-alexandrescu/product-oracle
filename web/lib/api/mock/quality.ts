@@ -38,8 +38,8 @@ export interface QualityContext {
   job?: (id: string) => Schemas["LlmJobOut"] | undefined;
   /** outcomes-edit (quality.outcomes.trash_outcome): the removed row waits in a Trash entry. */
   trash?: (row: Outcome, reason: string | null) => Schemas["TrashEntryOut"];
-  /** Whether a baseline entity is a goal (quality.outcomes._entity). */
-  isGoal?: (id: string) => boolean;
+  /** A goal's attrs (metric, unit), or null when the entity is not a goal (quality.outcomes._entity). */
+  goalAttrs?: (id: string) => Record<string, unknown> | null;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -772,10 +772,16 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
         if (data.prediction.confidence) o.confidence_at_prediction = CONFIDENCE_WORDS[data.prediction.confidence];
       }
       if (data.owner_id) o.owner_id = data.owner_id;
-      // outcomes-edit: another goal, in any state; the prediction stays as written.
+      // outcomes-edit: another goal, in any state; the prediction stays as written, naming the
+      // new goal's metric, and with no predicted value yet it takes the new goal's unit.
       if (data.goal_id && data.goal_id !== o.goal_id) {
-        if (!ctx.isGoal?.(data.goal_id)) return fail(422, `goal_id ${data.goal_id} is not a goal`);
+        const attrs = ctx.goalAttrs?.(data.goal_id);
+        if (!attrs) return fail(422, `goal_id ${data.goal_id} is not a goal`);
         o.goal_id = data.goal_id;
+        const p = { ...o.prediction };
+        if (typeof attrs.metric === "string" && attrs.metric) p.metric = attrs.metric;
+        if (p.predicted_value == null) p.unit = typeof attrs.unit === "string" && attrs.unit ? attrs.unit : null;
+        o.prediction = p;
       }
       Object.assign(o, { updated_at: new Date().toISOString(), lock_version: o.lock_version + 1 });
       return json(200, o);
