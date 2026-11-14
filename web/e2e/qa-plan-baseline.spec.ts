@@ -137,7 +137,7 @@ test("proposals: Details read 'Change: Delivery status → Planned'", async ({ p
   await openBaseline(page);
   await page.getByRole("tab", { name: /Proposals/ }).click();
   const dark = page.getByTestId("proposal").filter({ hasText: "Dark mode" });
-  await expect(dark.getByTestId("proposal-summary")).toHaveText("Set Dark mode’s delivery status to Planned (was Idea)");
+  await expect(dark.getByTestId("proposal-summary")).toHaveText("Set F-81 Dark mode’s delivery status to Planned (was Idea)");
   await dark.getByText("Details", { exact: true }).click();
   await expect(dark.getByTestId("proposal-op")).toHaveText("Change:");
   await expect(dark.getByLabel("Proposed fields")).toHaveText("delivery status → Planned");

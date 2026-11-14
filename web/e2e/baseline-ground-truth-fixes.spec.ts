@@ -80,7 +80,7 @@ for (const [viewport, who] of [
       await open(page, who);
       await openKind(page, "prd_feature_missing");
       await linkTo(page, "Guest seats", "F-12", "F-12 Digest emails");
-      await expect(notice(page)).toContainText("Linked “F-09 Guest seats” to “Digest emails”.");
+      await expect(notice(page)).toContainText("Linked “F-09 Guest seats” to “F-12 Digest emails”.");
       await expect(count(page, "prd_feature_missing")).toHaveCount(0);
       // Its roadmap item F-09a is the linked feature's now: not flagged either.
       await expect(count(page, "unlinked_item")).toContainText("2");
@@ -93,12 +93,12 @@ for (const [viewport, who] of [
       await openKind(page, "slice_parent_missing");
       await linkTo(page, "Usage report", "Sheets", "F-11 Sheets export");
       if (who) {
-        await expect(notice(page)).toContainText("Sent linking “F-15a Usage report” to “Sheets export” for approval.");
+        await expect(notice(page)).toContainText("Sent linking “F-15a Usage report” to “F-11 Sheets export” for approval.");
         await expect(count(page, "slice_parent_missing")).toContainText("2");
         await expect(total(page)).toHaveText("9");
       } else {
         // The item is linked; the other slice, F-15b Usage chart, is still flagged.
-        await expect(notice(page)).toContainText("Linked “F-15a Usage report” to “Sheets export”.");
+        await expect(notice(page)).toContainText("Linked “F-15a Usage report” to “F-11 Sheets export”.");
         await expect(count(page, "slice_parent_missing")).toContainText("1");
         await expect(row(page, "Usage chart")).toContainText("F-15b");
         await expect(total(page)).toHaveText("8");
@@ -122,7 +122,7 @@ for (const [viewport, colorScheme] of [
     await expect(count(page, "no_code")).toContainText("1");
     await openKind(page, "prd_feature_missing");
     await linkTo(page, "Guest seats", "Audit", "F-02 Audit log");
-    await expect(notice(page)).toContainText("Asked an approver to link “F-09 Guest seats” to “Audit log”.");
+    await expect(notice(page)).toContainText("Asked an approver to link “F-09 Guest seats” to “F-02 Audit log”.");
     await expect(total(page)).toHaveText("9");
     // Each stays on its flag as waiting for an approver, with no second ask, also after a reload.
     await page.reload();
@@ -143,7 +143,7 @@ for (const [viewport, colorScheme] of [
     await page.setViewportSize(viewport);
     await page.goto("/baseline?tab=proposals");
     const proposals = page.getByTestId("proposal");
-    for (const summary of ["Give “Smart search” a feature code", "Link the PRD’s F-09 Guest seats to “Audit log”"]) {
+    for (const summary of ["Give “Smart search” a feature code", "Link the PRD’s F-09 Guest seats to “F-02 Audit log”"]) {
       const accept = proposals.filter({ hasText: summary }).getByRole("button", { name: "Accept" });
       await accept.click();
       await expect(accept).toHaveCount(0);
