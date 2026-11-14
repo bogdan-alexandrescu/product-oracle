@@ -5,6 +5,8 @@ without changes here. A call goes through the whole app (middleware, dependencie
 role checks) with the caller's credentials, so MCP can do exactly what REST allows.
 """
 
+from __future__ import annotations
+
 import base64
 import copy
 import json
@@ -14,18 +16,24 @@ import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, unquote
 
 import httpx
-import mcp_types as types
 from fastapi import FastAPI
 from fastapi.routing import iter_route_contexts
 from starlette.routing import Match
 
 from oracle.auth.deps import READ_ONLY
+from oracle.lazy import LazyModule
 from oracle.mcp import scopes
 from oracle.mcp.auth import McpCaller
+
+if TYPE_CHECKING:
+    import mcp_types as types
+else:
+    # The MCP SDK loads at the first MCP call, not with the app.
+    types = LazyModule("mcp_types")
 
 HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 # Signing in and out belongs to browsers; an MCP client already holds a credential.

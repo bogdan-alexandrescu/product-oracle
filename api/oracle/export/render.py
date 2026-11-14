@@ -27,10 +27,9 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markdown_it import MarkdownIt
 from markdown_it.rules_inline import StateInline
 from markupsafe import Markup, escape
@@ -48,6 +47,9 @@ from oracle.docs.schemas import VersionSource
 from oracle.raw_tokens import citation_labels, markdown_footnotes, strip_raw_tokens
 from oracle.swarm.settings import get_runtime_settings
 from oracle.templates.models import Template, TemplateVersion, Theme
+
+if TYPE_CHECKING:
+    from jinja2 import Environment
 
 HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE / "templates"
@@ -1042,7 +1044,10 @@ def stylesheet() -> str:
 
 
 @cache
-def _jinja() -> Environment:
+def _jinja() -> "Environment":
+    # jinja2 loads at the first export, not with the app.
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+
     return Environment(
         loader=FileSystemLoader(TEMPLATES),
         autoescape=select_autoescape(["html", "j2"]),

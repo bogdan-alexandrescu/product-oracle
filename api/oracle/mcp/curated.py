@@ -6,24 +6,32 @@ before that. Calls go through :func:`oracle.mcp.tools.call_operation`, so roles 
 run-token scopes apply exactly as for the generated tools.
 """
 
+from __future__ import annotations
+
 import copy
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import mcp_types as types
 from fastapi import FastAPI
 from sqlalchemy import select
 
 from oracle import confidence
 from oracle.docs.schemas import CITATION_CONTRACT_MARK, with_citation_contract
+from oracle.lazy import LazyModule
 from oracle.mcp import compact
 from oracle.mcp.auth import McpCaller
 from oracle.mcp.tools import Operation, ToolError, call_operation, to_result
 from oracle.runs.flows import PROPOSAL_REASON_CODES
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings import TenantSetting
+
+if TYPE_CHECKING:
+    import mcp_types as types
+else:
+    # The MCP SDK loads at the first MCP call, not with the app.
+    types = LazyModule("mcp_types")
 
 CONFIDENCE_GUIDANCE = (
     "Every piece of evidence carries a confidence from 0 to 1 (source kind, freshness, "
