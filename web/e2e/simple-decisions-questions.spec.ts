@@ -9,12 +9,15 @@ import { expect, test, type Page } from "./test";
 
 const region = (page: Page, name: string) => page.getByRole("region", { name, exact: true });
 /** "Waiting for you" says its count in the yellow chip beside its title (none when nothing waits):
- * `n` questions, and (home-waiting-one-list) everything else waiting on the person, each a row there. */
+ * `n` questions, and (home-waiting-one-list) everything else waiting on the person, each a row there
+ * (a feature's broken links fold into one row that counts each). */
 async function waiting(page: Page, n: number) {
   const mine = region(page, "Waiting for you");
   const chip = mine.getByTestId("questions-mine-count");
   await expect(mine.getByTestId("waiting-item").first().or(mine.getByText("Nothing waits on you."))).toBeVisible();
-  const others = await mine.getByTestId("waiting-item").count();
+  // A folded row (one per feature) counts each of its broken links (data-breaks).
+  let others = 0;
+  for (const r of await mine.getByTestId("waiting-item").all()) others += Number((await r.getAttribute("data-breaks")) ?? 1);
   if (n + others > 0) await expect(chip).toHaveText(String(n + others));
   else await expect(chip).toHaveCount(0);
 }
