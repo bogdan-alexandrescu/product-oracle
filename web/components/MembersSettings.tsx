@@ -910,7 +910,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     {
       key: "signin",
       header: "Last sign-in",
-      width: "104px",
+      width: "116px",
       // Beside an open panel the table keeps its room for names; the panel shows the date.
       narrow: "laptop",
       // On a phone the cell says it in words: "Signed in Oct 20, 2026", or "Never signed in".

@@ -69,7 +69,8 @@ test("#5 Members' Last sign-in shows its whole date", async ({ page }) => {
 /** #7: fails when a goal bucket's feature row offers "Edit task" and a "Save task" form. */
 test("#7 the goal buckets edit a feature, not a task", async ({ page }) => {
   await open(page, "/simple/priorities?tab=buckets");
-  const row = page.getByTestId("plan-feature").filter({ has: page.getByTestId("task-actions") }).first();
+  const first = page.getByTestId("plan-feature").filter({ has: page.getByTestId("task-actions") }).first();
+  const row = page.locator(`[data-testid="plan-feature"][data-code="${await first.getAttribute("data-code")}"]`);
   await row.getByRole("button", { name: /^More for / }).click();
   await expect(row.getByRole("menuitem")).toHaveText(["Edit feature", "Cut from the roadmap"]);
   await row.getByRole("menuitem", { name: "Edit feature" }).click();
