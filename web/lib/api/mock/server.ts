@@ -8440,7 +8440,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
   if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   // roadmap-milestone-codes: the Goal map's milestones as they are now (moved, renamed, in Trash).
-  if (db.goal_map && db.simple_roadmap.map_milestones) db.simple_roadmap.map_milestones.milestones = goalMapMilestones(db.goal_map);
+  // simple-goals: in every scenario with a map, as the API's map milestones are its roadmap's TrackMilestone rows (on the
+  // roadmap its features join: knowGoalMapItems), so they carry their codes and the feature panel's picker lists them.
+  if (db.goal_map) (db.simple_roadmap.map_milestones ??= { roadmap: db.simple_roadmap.company_roadmap ?? "onboarding-roadmap", milestones: [] }).milestones = goalMapMilestones(db.goal_map);
   // simple-replaced-prds: the PRDs marked replaced, whose items no longer feed Simple (service.load).
   markReplaced(db, db.simple_roadmap);
   const roadmapItems = db.simple_roadmap;
@@ -8668,7 +8670,14 @@ async function route(db: Db, req: Request): Promise<Response> {
       const read = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, new Request("http://mock/v1/simple/roadmap"), ["v1", "simple", "roadmap"], new URLSearchParams());
       const body = read && read.ok ? ((await read.json()) as { items: { id: string; title: string; status: string; goal?: { id: string } | null }[] }) : { items: [] };
       return body.items;
-    }, () => db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ ...e, title: bucketTitle(e) })), (goalId) => !!db.simple_roadmap?.goal_buckets?.goals.some((g) => g.id === goalId && g.trashed));
+    }, () => {
+      const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ ...e, title: bucketTitle(e) }));
+      // simple-goals: one goal store, as the API's: a goal the roadmap's features serve is a Baseline goal too (here with
+      // no number to aim at, so off the map and named there), never left out in silence.
+      const served = [...new Set((db.simple_roadmap?.items ?? []).filter((i) => !i.trashed && !i.draft && i.goal && GOALS[i.goal]).map((i) => i.goal!))];
+      const known = new Set(goals.map((g) => g.title.toLowerCase()));
+      return [...goals, ...served.filter((k) => !known.has(GOALS[k].toLowerCase())).map((k) => ({ id: stableUuid(`simple-goal/${k}`), key: k, title: GOALS[k], status: "confirmed", attrs: {} }))];
+    }, (goalId) => !!db.simple_roadmap?.goal_buckets?.goals.some((g) => g.id === goalId && g.trashed));
     // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
     if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
     // pre-demo QA P-6: the panel reads the goal each feature serves on the map (one link, service._ladder_goals).

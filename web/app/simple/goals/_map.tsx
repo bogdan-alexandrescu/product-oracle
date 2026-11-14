@@ -143,7 +143,7 @@ interface Ctx {
   /** The chip just moved (its ringOf key), ringed. */
   moved: string | null;
   act: ReturnType<typeof useActs>;
-  onAttach: (milestone: string) => void;
+  onAttach: (milestone: string, track?: string | null) => void;
   /** Each PRD milestone's PRD: its menu opens it (never Trash). */
   prdOf: Map<string, NonNullable<Schemas["SimpleGoalMilestone"]["prd"]>>;
   go: (href: string) => void;
@@ -664,7 +664,15 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
               {t.name}
             </span>
             {goals.map((g) => (
-              <ul key={g.id} className="flex min-h-10 flex-col gap-1 border-t border-line py-1.5" data-testid="gm-cell" data-track={t.id ?? "none"} data-goal={g.id}>
+              <ul key={g.id} className="group flex min-h-10 flex-col gap-1 border-t border-line py-1.5" data-testid="gm-cell" data-track={t.id ?? "none"} data-goal={g.id}>
+                {/* simple-goals: an empty cell adds a feature of its track to its goal's first milestone (out of sight at rest, as a chip's ⋯). */}
+                {c.map.can_edit && !chips.some((f) => f.goal === g.id && f.track === t.id) && all.some((m) => m.goal === g.id) && (
+                  <li className="sr-only group-hover:not-sr-only group-focus-within:not-sr-only max-[600px]:not-sr-only">
+                    <button type="button" data-testid="gm-cell-add" className="text-[13px] font-semibold text-accent-ink hover:underline" onClick={() => c.onAttach(all.find((m) => m.goal === g.id)!.id, t.id)}>
+                      + Add a feature
+                    </button>
+                  </li>
+                )}
                 {inOrder(chips.filter((f) => f.goal === g.id && f.track === t.id)).map((f) => (
                   <li
                     key={f.id}
@@ -677,7 +685,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                     style={{ borderLeft: `3px solid ${t.color}` }}
                   >
                     <button type="button" onClick={() => c.onOpen(f)} className="min-w-0 flex-1 text-left">
-                      <span className="block truncate hover:underline" title={`${c.codes.get(f.id) ?? ""} ${f.name}`.trim()}>
+                      <span data-testid="gm-chip-name" className="block truncate hover:underline max-[600px]:whitespace-normal max-[600px]:line-clamp-2" title={`${c.codes.get(f.id) ?? ""} ${f.name}`.trim()}>
                         <FeatureName item={{ code: c.codes.get(f.id), title: f.name }} />
                       </span>
                       <span className="block truncate text-[11.5px] text-text2" title={f.ms.length ? f.ms.map((m) => mWords(m, c)).join(" · ") : undefined}>
@@ -702,7 +710,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
  * A feature already on another milestone of the same goal is offered as a move from there (never a
  * second link the grid would not show); one already on this milestone is left out.
  */
-function AttachDrawer({ map, milestone, codes, mcode, onClose, onSave }: { map: GoalMap; milestone: string; codes: Map<string, string>; mcode: Map<string, string>; onClose: () => void; onSave: (feature: string, milestone: string, expected: string, from: string | null) => void }) {
+function AttachDrawer({ map, milestone, track, codes, mcode, onClose, onSave }: { map: GoalMap; milestone: string; track?: string | null; codes: Map<string, string>; mcode: Map<string, string>; onClose: () => void; onSave: (feature: string, milestone: string, expected: string, from: string | null) => void }) {
   const roadmap = useQuery("simple-roadmap:goal-map", () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })));
   const [m, setM] = useState(milestone);
   const [search, setSearch] = useState("");
@@ -715,7 +723,9 @@ function AttachDrawer({ map, milestone, codes, mcode, onClose, onSave }: { map: 
   const goal = map.milestones.find((x) => x.id === m)?.goal;
   const sameGoal = (id: string) => [...map.milestones].sort(byDate).find((x) => x.id !== m && x.goal === goal && on.get(id)?.milestones.includes(x.id)) ?? null;
   const named = (roadmap.data?.items ?? []).map((i) => ({ id: i.id, code: codes.get(i.id) ?? i.code ?? "", name: on.get(i.id)?.name ?? i.title, from: sameGoal(i.id) }));
-  const list = named.filter((i) => !on.get(i.id)?.milestones.includes(m) && (!term || `${i.code} ${i.name}`.toLowerCase().includes(term)));
+  // From an empty cell: its track's features only.
+  const ofTrack = new Set((roadmap.data?.items ?? []).filter((i) => !track || i.track?.id === track).map((i) => i.id));
+  const list = named.filter((i) => ofTrack.has(i.id) && !on.get(i.id)?.milestones.includes(m) && (!term || `${i.code} ${i.name}`.toLowerCase().includes(term)));
   const from = list.find((i) => i.id === feature)?.from ?? null;
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/20 max-[600px]:items-end">
@@ -804,6 +814,7 @@ export function GoalMapPage() {
   const [moved, setMoved] = useState<string | null>(null);
   const [panel, setPanel] = useState<Chip | null>(null);
   const [attach, setAttach] = useState<string | null>(null);
+  const [attachTrack, setAttachTrack] = useState<string | null>(null);
   const [edit, setEdit] = useState<Edit | null>(null);
   const [prd, setPrd] = useState<{ name: string; problem: string } | null>(null);
   const canPrd = useCanStartPrd();
@@ -852,7 +863,10 @@ export function GoalMapPage() {
 
   if (!map || !roadmap.data) return <div className="simple-page" role="status">{q.error ? errorMessage(q.error) : roadmap.error ? errorMessage(roadmap.error) : "Loading the goal map…"}</div>;
 
-  const c: Ctx = { map, codes, mcode, tracks, onOpen: setPanel, menu, setMenu, setMover, renaming, setRenaming, moved, act, onAttach: setAttach, prdOf, go: (href) => router.push(href), onEdit: setEdit, canPrd };
+  const c: Ctx = { map, codes, mcode, tracks, onOpen: setPanel, menu, setMenu, setMover, renaming, setRenaming, moved, act, onAttach: (m, track) => {
+      setAttach(m);
+      setAttachTrack(track ?? null);
+    }, prdOf, go: (href) => router.push(href), onEdit: setEdit, canPrd };
   const add = async (feature: string, milestone: string, expected: string, from: string | null) => {
     const name = map.features.find((x) => x.id === feature)?.name ?? roadmap.data?.items.find((i) => i.id === feature)?.title ?? "";
     if (await act.add(feature, name, milestone, expected, from)) setAttach(null);
@@ -917,10 +931,24 @@ export function GoalMapPage() {
             </Link>
           </p>
         )}
+        {/* simple-goals: with no goal asked, every goal left off the map is named once, each a way to it. */}
+        {map && !asked && map.off_map.length > 0 && (
+          <p data-testid="gm-off-map-all" className="simple-small flex flex-wrap items-center gap-x-2 rounded-xl border border-line px-3 py-1.5">
+            <span>Not on the map yet:</span>
+            {map.off_map.map((g) => (
+              <Link key={g.id} data-testid="gm-off-map-goal" href={`/simple/priorities?goal=${encodeURIComponent(g.key)}&name=${encodeURIComponent(g.name)}`} className="font-semibold text-accent-ink hover:underline">
+                {g.name}
+              </Link>
+            ))}
+            <InfoTip label="Not on the map yet" testId="gm-off-map-info">
+              No number to aim at
+            </InfoTip>
+          </p>
+        )}
         <TracksGrid chips={chips} lines={folded?.lines ?? new Map()} c={c} />
         {mover && <MovePicker f={mover} c={c} onClose={() => setMover(null)} />}
       </div>
-      {attach && <AttachDrawer map={map} milestone={attach} codes={codes} mcode={mcode} onClose={() => setAttach(null)} onSave={(f, m, e, from) => void add(f, m, e, from)} />}
+      {attach && <AttachDrawer map={map} milestone={attach} track={attachTrack} codes={codes} mcode={mcode} onClose={() => setAttach(null)} onSave={(f, m, e, from) => void add(f, m, e, from)} />}
       {edit && <Editor map={map} edit={edit} onClose={() => setEdit(null)} onSave={(x) => void save(x)} />}
       {prd && <NewPrdSheet prefill={prd} onClose={() => setPrd(null)} onStarted={() => toast({ message: `New PRD started: “${prd.name}”` })} />}
       {panel && (
