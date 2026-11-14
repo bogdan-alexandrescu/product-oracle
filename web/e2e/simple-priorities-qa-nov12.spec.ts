@@ -5,7 +5,7 @@ import { chartCodes } from "./vxe-counts";
 /**
  * QA findings, Nov 12, 2026 (docs/qa/2026-11-12/simple-goalmap.md), Simple's Priorities, ranked list and
  * Value / effort, driven through the UI on the mock as the owner.
- * PR1: a feature shows its real code (F-12 for Sample data import), never made-up letters; one with no code
+ * PR1: a feature shows its real code (F-06 for Weekly alert digest), never made-up letters; one with no code
  * is flagged "Not in the Ground Truth". PR2: PM-owned work reads as a short "PM-owned" tag, its why behind an (i).
  * PR3: the NEW pill stays on the title's line. PR4: on a phone the row's ⋯ is pinned top-right.
  * PR5: the quadrant names have a background, so a dashed middle line never runs through them.
@@ -23,7 +23,7 @@ async function open(page: Page, theme: "light" | "dark", tab = ""): Promise<void
 
 const row = (page: Page, key: string) => page.locator(`[data-testid="prio-row"][data-code="${key}"]`);
 const side = (page: Page, key: string) => page.locator(`[data-testid="side-row"][data-code="${key}"]`);
-/** A real Ground Truth code ("F-12"), never letters made up from a name ("ARB"). */
+/** A real Ground Truth code ("F-06"), never letters made up from a name ("ARB"). */
 const REAL_CODE = /^[A-Z]{1,3}-\d+[a-j]?$/;
 
 test.describe("1440 light", () => {
@@ -34,12 +34,15 @@ test.describe("1440 light", () => {
     // fails_when: a row with no code has no flag, a coded row is flagged, or a made-up code chip shows on a row
     // no_claim: the flag's look
     await open(page, "light");
-    const coded = row(page, "setup-import");
-    await expect(coded.getByTestId("prio-own-key")).toHaveText("F-12");
+    const coded = row(page, "alert-digest");
+    await expect(coded.getByTestId("prio-own-key")).toHaveText("F-06");
     await expect(coded.getByTestId("not-in-gt")).toHaveCount(0);
     const uncoded = row(page, "alert-sso");
     await expect(uncoded.getByTestId("prio-own-key")).toHaveCount(0);
     await expect(uncoded.getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
+    // Sample data import has no Ground Truth code either: no code, flagged like its siblings.
+    await expect(row(page, "setup-import").getByTestId("prio-own-key")).toHaveCount(0);
+    await expect(row(page, "setup-import").getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
     await expect(page.getByTestId("prio-row").getByTestId("prio-code")).toHaveCount(0);
   });
 
@@ -50,9 +53,11 @@ test.describe("1440 light", () => {
     await open(page, "light", "value-effort");
     await expect(page.getByTestId("vxe-point").first()).toBeVisible();
     const codes = await chartCodes(page);
-    expect(codes["setup-import"]).toBe("F-12");
+    expect(codes["alert-digest"]).toBe("F-06");
+    expect(codes["setup-import"]).toBeNull();
     for (const [key, c] of Object.entries(codes)) expect(c === null || REAL_CODE.test(c), `${key} shows ${c}`).toBe(true);
-    await expect(side(page, "setup-import").getByTestId("side-code")).toHaveText("F-12");
+    await expect(side(page, "alert-digest").getByTestId("side-code")).toHaveText("F-06");
+    await expect(side(page, "setup-import").getByTestId("side-code")).toHaveCount(0);
     await expect(side(page, "alert-sso").getByTestId("side-code")).toHaveCount(0);
     // The side row has no room for the flag: it shows under the row once the row is selected.
     await side(page, "alert-sso").getByRole("button").first().click();

@@ -6,7 +6,7 @@ import { expect, test, type Locator, type Page } from "./test";
 /*
  * QA pass 2, simple-plan (/simple/priorities): the Ranked list, Value / effort, Goal buckets and
  * the suggestions drawer, driven through the UI as a person would, on the mock's default company
- * (nine features; Sample data import F-12 needs Setup checklist, Alert routing by team needs
+ * (nine features; Sample data import needs Setup checklist, Alert routing by team needs
  * Alert history export; the draft Team invite nudges) and its "simple-plan" scenario (a dated
  * plan, Nov 2 – Feb 12). Desktop 1440x900 and phone 390x844, light and dark.
  */
@@ -58,9 +58,9 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
   test("a move says where the item lands, by name; a move that changes nothing is refused", async ({ page }) => {
     await setUp(page);
     await open(page);
-    await dragRow(page, "Sample data import (F-12)", 0);
-    const dialog = page.getByRole("dialog", { name: "Why move Sample data import (F-12)" });
-    await expect(dialog.getByRole("heading")).toHaveText("Move Sample data import (F-12) to rank 2");
+    await dragRow(page, "Sample data import", 0);
+    const dialog = page.getByRole("dialog", { name: "Why move Sample data import" });
+    await expect(dialog.getByRole("heading")).toHaveText("Move Sample data import to rank 2");
     await expect(dialog).toContainText("It needs Setup checklist (#1), so it can go no higher than #2.");
     await expect(dialog).not.toContainText("setup-import");
     await expect(dialog).not.toContainText("override");
@@ -70,7 +70,7 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
     await expect(dialog.getByRole("alert")).toHaveText("Say why in one line.");
     await dialog.getByLabel("Reason").fill("Sales demos need it");
     await move.click();
-    await expect(toast(page, "Moved Sample data import (F-12) to rank 2")).toBeVisible();
+    await expect(toast(page, "Moved Sample data import to rank 2")).toBeVisible();
     await expect(row(page, "setup-import").getByTestId("prio-rank")).toHaveText("2");
 
     await dragRow(page, "Alert routing by team", 5);
@@ -225,8 +225,10 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
       const shares = await page.getByTestId("bucket-share").allTextContents();
       expect(shares.reduce((n, s) => n + Number(s.replace("%", "")), 0)).toBe(100);
       const activation = page.locator('[data-testid="goal-bucket"][data-key="faster-activation"]');
-      // qa4-simple-plan-12: each code a chip beside its name.
-      await expect(activation.getByTestId("bucket-features").locator("li").filter({ hasText: "Sample data import" }).getByTestId("prio-code")).toHaveText("F-12");
+      // qa4-simple-plan-12: each code a chip beside its name (Weekly alert digest's F-06); Sample data import has none.
+      const retention = page.locator('[data-testid="goal-bucket"][data-key="grow-retention"]');
+      await expect(retention.getByTestId("bucket-features").locator("li").filter({ hasText: "Weekly alert digest" }).getByTestId("prio-code")).toHaveText("F-06");
+      await expect(activation.getByTestId("bucket-features").locator("li").filter({ hasText: "Sample data import" }).getByTestId("prio-code")).toHaveCount(0);
       // PR1 (QA Nov 12): a feature with no Ground Truth code shows no made-up initials, it is flagged.
       await expect(activation.getByTestId("bucket-features").locator("li").filter({ hasText: "Setup checklist" }).getByTestId("prio-code").filter({ hasText: /^SC$/ })).toHaveCount(0);
       // A card with weeks this quarter names its features; only a goal with none says "Nothing this quarter"

@@ -44,7 +44,7 @@ const FEATURES: Record<string, { value: number; effort: number; code?: string }>
   "alert-replay": { value: 3, effort: 4 },
   "alert-sso": { value: 3, effort: 2 },
   "setup-checklist": { value: 4, effort: 2 },
-  "setup-import": { value: 6, effort: 3, code: "F-12" },
+  "setup-import": { value: 6, effort: 3 },
   "setup-video": { value: 0, effort: 1 },
   "price-tiers": { value: 0, effort: 3 },
   // kr-in-priorities: the "goal-key-results" scenario's feature on a key result (server.ts).
