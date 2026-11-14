@@ -34,6 +34,19 @@ no_claim=<what green does not prove>.
 - test_a_failed_check_stops_the_start: protects=the head check, run beside the app's
   import, still decides before anything is served; fails_when=its error is lost in its
   thread and the server starts on a database it could not read.
+- test_head_check_runs_outside_the_importing_process: protects=the head check runs in its
+  own process, so it never holds the importing interpreter's GIL; fails_when=it goes back to a
+  thread beside the import (Cloud Run, Nov 13: "migrations checked in 11.7 s, app imported in
+  19.6 s", both slowed by sharing one interpreter on one CPU); no_claim=the time it takes.
+- test_a_failed_import_does_not_wait_on_the_check: protects=an app import that fails ends
+  the start at once, its check stopped; fails_when=the process stays alive waiting on the
+  check's database connection (a non-daemon thread, or a check process left running).
+- test_defer_build_only_on_oracles_models: protects=only Oracle's own pydantic models build
+  at first use; fails_when=defer_build is set on pydantic's BaseModel, deferring the SDKs'
+  and FastAPI's models too (two threadpool threads can then race to build one), or an Oracle
+  model is left out of the project base.
+- test_lazy_module_imports_once: protects=a LazyModule imports its module at the first read
+  only; fails_when=every attribute read goes through importlib again.
 - test_script_head_is_alembics_head: protects=the head read from the scripts' text is the
   one Alembic computes; fails_when=the cheap parse drifts from Alembic (a stale head would
   skip a migration).
@@ -272,6 +285,78 @@ def test_a_failed_check_stops_the_start(served, monkeypatch):
         startup.main()
 
     assert served == []
+
+
+def test_head_check_runs_outside_the_importing_process(at_head, served, monkeypatch, tmp_path):
+    seen = tmp_path / "check.txt"
+
+    def recording(connect_args):
+        seen.write_text(str(os.getpid()))
+        return True
+
+    monkeypatch.setattr(startup, "at_head", recording)
+
+    startup.main()
+
+    assert int(seen.read_text()) != os.getpid()
+    assert len(served) == 1
+
+
+def test_a_failed_import_does_not_wait_on_the_check():
+    code = (
+        "import sys, time\n"
+        "from oracle import startup\n"
+        "startup.at_head = lambda connect_args: time.sleep(60) or True\n"
+        "sys.modules['oracle.main'] = None\n"
+        "startup.main()\n"
+    )
+    started = time.monotonic()
+    out = subprocess.run(
+        [sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True, timeout=30
+    )
+    assert out.returncode != 0
+    assert "ImportError" in out.stderr, out.stderr
+    assert time.monotonic() - started < 20
+
+
+def test_defer_build_only_on_oracles_models():
+    code = (
+        "import pydantic, pydantic_settings, oracle.main\n"
+        "from oracle.base_model import BaseModel\n"
+        "def every(cls):\n"
+        "    for sub in cls.__subclasses__():\n"
+        "        yield sub\n"
+        "        yield from every(sub)\n"
+        "print(pydantic.BaseModel.model_config.get('defer_build'))\n"
+        "print(BaseModel.model_config.get('defer_build'))\n"
+        "print(sorted({c.__module__ + '.' + c.__qualname__ for c in every(pydantic.BaseModel)\n"
+        "    if c.__module__.startswith('oracle.') and '[' not in c.__qualname__\n"
+        "    and not issubclass(c, (BaseModel, pydantic_settings.BaseSettings))}))\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=API_DIR, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    pydantics, oracles, left_out = out.stdout.strip().splitlines()
+    assert pydantics == "None"
+    assert oracles == "True"
+    assert left_out == "[]"
+
+
+def test_lazy_module_imports_once(monkeypatch):
+    import importlib
+    import json
+
+    from oracle.lazy import LazyModule
+
+    imported: list[str] = []
+    real = importlib.import_module
+    monkeypatch.setattr(
+        importlib, "import_module", lambda name: imported.append(name) or real(name)
+    )
+    lazy = LazyModule("json")
+
+    assert lazy.dumps is json.dumps
+    assert lazy.loads is json.loads
+    assert imported == ["json"]
 
 
 def test_script_head_is_alembics_head():
