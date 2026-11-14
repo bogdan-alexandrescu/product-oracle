@@ -1797,6 +1797,11 @@ function seedRoadmapMilestonesHardScenario(): Db {
     rm.items.push({ key, title, horizon: "later", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", start, end: start + 25 + (i % 5) * 6 });
     rm.ids[key] = stableUuid(`simple-item/${key}`);
   });
+  // QA Nov 14 #4: an item with no dates yet is never late from its estimate, so the two gated
+  // items have typed dates, each ending after its milestone (Jan 25 and Jan 5, 2027).
+  const set = (key: string, f: Partial<(typeof rm.items)[number]>) => Object.assign(rm.items.find((i) => i.key === key)!, f);
+  set("alert-sso", { start: 50, end: 95, source: "typed" });
+  set("setup-ideas", { start: 30, end: 75, source: "typed" });
   rm.goal_milestones = [
     ...seedOwnMilestones(),
     { id: stableUuid("simple-gm/m3"), roadmap: "alerts-roadmap", code: "M3", name: "Teams set 3 rules in week 1", date: "2027-01-20", goal: "grow-retention", gates: ["alert-sso"], counts_when: "Holds 7 days in a row", progress: "not_started" },

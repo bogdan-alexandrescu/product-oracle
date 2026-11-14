@@ -14,7 +14,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { addDays, calendarDay } from "@/lib/dates";
 import { joinedNames, joinedWords } from "@/lib/milestone-code";
 
-import { decide as decideChange, shortDay, type Item, type KeyDate, type Roadmap } from "./_lib";
+import { closedItem, decide as decideChange, estimateOnly, shortDay, type Item, type KeyDate, type Roadmap } from "./_lib";
 import { doneLine, isMeasured, kindName, MK_KINDS, MK_STATUS, MkIcon, MkStatusMark, type MkKind, type MkStatus } from "./_mk";
 import { msEdge, msFill, msInk } from "./_timeline";
 
@@ -36,6 +36,8 @@ export type MsRow = { id: string; title: string; lane: string; y: number; h: num
 export type MsLane = { key: string; title: string; y0: number; y1: number };
 
 const day = (d: string) => shortDay(d);
+/** QA Nov 14 #4: an item that ends after a milestone's day is late, unless it is cut or its dates are only an estimate. */
+const endsAfter = (i: Item | undefined, date: string): boolean => !!i && !closedItem(i) && !estimateOnly(i) && i.end.date > date;
 const fullDay = (d: string) => calendarDay(d, { month: "short", day: "numeric", year: "numeric" });
 const words = (m: { code: string; roadmap_code?: string | null; name: string }) => `${msCode(m)} ${m.name}`;
 
@@ -203,7 +205,7 @@ export function useMilestones({
   // A milestone is added only where the reader's change applies (POST answers 403 elsewhere).
   const applies = new Set((data.key_date_roadmaps ?? []).filter((r) => r.applies).map((r) => r.roadmap.id));
   const canAddTo = (goal: string | null) => applies.has(roadmapOf(goal) ?? "");
-  const lateOf = (ids: string[], date: string) => ids.filter((id) => (items.get(id)?.end.date ?? "") > date).length;
+  const lateOf = (ids: string[], date: string) => ids.filter((id) => endsAfter(items.get(id), date)).length;
   const fresh = (date: string, goal: string | null, second = false): Draft => ({ id: null, code: nextCode(date, second ? 1 : 0), name: "", date, goal_id: goal, item_ids: [], counts_when: RULES[0], second, prd: false, k: null });
   const done = async (t: Toast) => {
     await reload();
@@ -1348,7 +1350,7 @@ export function MsCard() {
   const rights = !own || own.can_change ? "change" : own.can_propose ? "propose" : "read";
   const reads = rights === "read";
   const head = !d.id ? (d.second ? "Next milestone" : "New milestone") : reads ? `${d.code} ${d.name}` : `Edit ${d.code}`;
-  const late = (id: string) => (ms.items.get(id)?.end.date ?? "") > d.date;
+  const late = (id: string) => endsAfter(ms.items.get(id), d.date);
   // milestone-rename: a goal's own milestone: its name, in place (its date and measure are the goal's);
   // home-milestone-rename: any milestone renamed from Home, the same card.
   if (own?.goal_target || (own && d.only === "name"))

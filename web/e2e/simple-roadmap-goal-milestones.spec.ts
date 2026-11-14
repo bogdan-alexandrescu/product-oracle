@@ -100,9 +100,10 @@ test.describe("milestones on the Timeline", () => {
     await card(page).getByLabel("Date").fill("2027-01-20");
     await card(page).getByLabel("Builds toward", { exact: true }).selectOption({ label: "Grow retention" });
     await page.locator('[data-testid="timeline-bar"][aria-label^="Mobile alert push,"]').click();
-    await page.locator('[data-testid="timeline-bar"][aria-label^="Alert routing by team,"]').click();
+    await page.locator('[data-testid="timeline-bar"][aria-label^="Alert history export,"]').click();
     await expect(card(page).getByTestId("ms-waits-chip")).toHaveCount(2);
-    await expect(card(page).getByTestId("ms-waits-chip").filter({ hasText: "Alert routing by team" })).toContainText("after it");
+    await expect(card(page).getByTestId("ms-waits-chip").filter({ hasText: "Alert history export" })).toContainText("after it");
+    // QA Nov 14 #4: an item with no dates yet (Alert routing by team) is never late from its estimate.
     await card(page).getByLabel("It counts when").selectOption("Holds 7 days in a row on one live team");
     // The new milestone's dashed line runs through every band, as a saved one's does.
     await spansChart(page, page.getByTestId("ms-new-line"));
