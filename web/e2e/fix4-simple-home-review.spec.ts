@@ -68,14 +68,15 @@ test.describe("desktop", () => {
     await shareBesideName(page);
   });
 
-  test("fix4 review: a question's Blocks line on Home names the feature and milestone, no code", async ({ page }) => {
-    // fails_when: a code (F-03, M1) shows in the Blocks line
+  test("fix4 review: a question's Blocks line on Home names the feature with its code and the milestone", async ({ page }) => {
+    // fails_when: a milestone code (M1) shows in the Blocks line, or the feature is named without its code
+    // (simple-home-qa-nov14 #3: every feature shows its code with its name, as on Decisions)
     await signIn(page, ADMIN.email, "simple-home");
     // build-rundecide RD3 a: a PRD's questions wait in its own "Waiting for you" card.
     const blocks = home(page).locator('[data-testid="home-decisions"], [data-testid="home-prd-waiting"]').locator(".simple-meta").filter({ hasText: "Blocks " }).first();
     await expect(blocks).toBeVisible();
-    await expect(blocks).toHaveText(/Blocks [A-Z][a-z][^:]*, \w+ milestone$/);
-    await expect(blocks).not.toHaveText(/\b[A-Z]{1,3}-?\d/);
+    await expect(blocks).toHaveText(/Blocks F-\d+ [A-Z][a-z][^:]*, \w+ milestone$/);
+    await expect(blocks).not.toHaveText(/\bM\d/);
   });
 });
 

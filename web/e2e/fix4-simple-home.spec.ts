@@ -118,8 +118,9 @@ test.describe("desktop", () => {
     await expect(home(page).getByTestId("home-goal").first()).toBeVisible();
     await expect(home(page).getByTestId("home-goal").locator(".simple-code")).toHaveCount(0);
     await expect(home(page).getByTestId("home-question").first()).toBeVisible();
-    await expect(home(page).getByTestId("home-question").locator(".simple-code")).toHaveCount(0);
-    await expect(home(page).getByTestId("home-prd-waiting").first()).not.toContainText(/Blocks M\d|\b[A-Z]{1,3}-\d+\s/);
+    // simple-home-qa-nov14 #3: a question's own code stays off Home; the feature it blocks reads its code with its name.
+    await expect(home(page).getByTestId("home-question").locator(".simple-code")).toHaveCount(await home(page).getByTestId("home-question").getByTestId("question-blocks-feature").count());
+    await expect(home(page).getByTestId("home-prd-waiting").first()).not.toContainText(/Blocks M\d|\bQ\d+\s/);
     await expect(home(page).getByTestId("home-since")).not.toContainText(/\b[A-Z]{1,3}-\d+\s/);
     await expect(home(page).getByTestId("home-decisions-count")).toHaveCount(0);
     await expect(home(page).getByTestId("home-proposals-count")).toHaveCount(0);
