@@ -231,6 +231,49 @@ export function seedOutcomes(owner: string, goalId: string, roadmapVersionId: st
   return rows;
 }
 
+/**
+ * The "outcomes-long" scenario (synthetic): outcomes with long titles on a key result with a long
+ * name, to check the inspector's room beside a long table: one needs a prediction (its form open), one holds at 1
+ * event with a long Why, one with a short Why, and an enabler predicted in its own unit (% done).
+ */
+export function seedLongOutcomes(owner: string, goalId: string): Outcome[] {
+  const now = Date.now();
+  const by = isoDay(now + 60 * DAY);
+  const metric = "Company revenue per day across every self-serve plan and region, net of refunds";
+  // A long table, as a workspace with many outcomes has: the panel stays in view beside it.
+  const earlier = Array.from({ length: 16 }, (_, i) => outcomeRow({
+    title: `Earlier billing bet ${i + 1}`, goal_id: goalId, status: "held", assessed_at: new Date(now - (20 + i) * DAY).toISOString(),
+    prediction: { metric, baseline: "1,000 USD", predicted: "1,100 USD", threshold: null, by: isoDay(now - (30 + i) * DAY), unit: "USD" },
+  }, owner));
+  return [
+    ...earlier,
+    outcomeRow({
+      title: "Let a team admin export every invoice, credit note and refund of the last three years as one file from the billing page, with the tax lines and the team names on every row",
+      goal_id: goalId, status: "predicted", needs_prediction: true, roadmap_item_key: "invoice-export",
+      prediction: { metric, baseline: null, predicted: "Not set yet", threshold: null, by, unit: "USD", direction: "increase" },
+    }, owner),
+    outcomeRow({
+      title: "Warn each team admin about failed card payments, retries and the accounts that are about to lose access",
+      goal_id: goalId, status: "predicted", roadmap_item_key: "payment-warnings",
+      prediction: {
+        metric, baseline: "3 events", predicted: "0 events", threshold: "1 event", by, unit: "events", direction: "hold",
+        baseline_value: 3, predicted_value: 0, threshold_value: 1, confidence: "medium",
+        why: "Most failed payments come from cards that expired, and the retry job already handles those, so we expect almost no new events once the warning ships",
+      },
+    }, owner),
+    outcomeRow({
+      title: "Show the plan price with tax in every country on the checkout page before the team admin confirms",
+      goal_id: goalId, status: "predicted", roadmap_item_key: "tax-prices",
+      prediction: { metric, baseline: "1,200 USD", predicted: "1,300 USD", threshold: null, by, unit: "USD", direction: "increase", baseline_value: 1200, predicted_value: 1300, why: "Fewer carts left" },
+    }, owner),
+    outcomeRow({
+      title: "Move the billing service to the new payments platform before the old provider's contract ends in the spring",
+      goal_id: goalId, status: "predicted", roadmap_item_key: "payments-move",
+      prediction: { metric, baseline: "0 % done", predicted: "100 % done", threshold: null, by, unit: "% done", direction: "increase", baseline_value: 0, predicted_value: 100 },
+    }, owner),
+  ];
+}
+
 /** The learnings an assessment drafts, in the API's words (oracle.quality.outcomes.draft_learnings). */
 function draftLearnings(o: Outcome, verdict: Schemas["AssessmentIn"]["verdict"]): Schemas["DraftedLearning"][] {
   const draft = (applies_to: "question_category" | "module", target: string, statement: string, direction: Schemas["LearningDraft"]["direction"]) =>
@@ -773,13 +816,13 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
       }
       if (data.owner_id) o.owner_id = data.owner_id;
       // outcomes-edit: another goal, in any state; the prediction stays as written, naming the
-      // new goal's metric, and with no predicted value yet it takes the new goal's unit.
+      // new goal's metric ("Not set yet" when it has none, never the old goal's), and with no predicted value yet it takes the new goal's unit.
       if (data.goal_id && data.goal_id !== o.goal_id) {
         const attrs = ctx.goalAttrs?.(data.goal_id);
         if (!attrs) return fail(422, `goal_id ${data.goal_id} is not a goal`);
         o.goal_id = data.goal_id;
         const p = { ...o.prediction };
-        if (typeof attrs.metric === "string" && attrs.metric) p.metric = attrs.metric;
+        p.metric = (typeof attrs.metric === "string" && attrs.metric.trim().slice(0, 300)) || "Not set yet";
         if (p.predicted_value == null) p.unit = typeof attrs.unit === "string" && attrs.unit ? attrs.unit : null;
         o.prediction = p;
       }

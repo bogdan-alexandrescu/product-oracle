@@ -50,7 +50,10 @@ async def test_an_approver_changes_an_outcomes_goal(client, owner, runtime):  # 
     resp = await client.patch(url, json=body, headers=auth)
     assert resp.status_code == 200, resp.text
     moved = resp.json()
-    assert moved["goal_id"] == other and moved["prediction"] == pay["prediction"]
+    assert moved["goal_id"] == other
+    # Its figures stay as written; the new goal has no metric, so none is named.
+    kept = {k: v for k, v in moved["prediction"].items() if k != "metric"}
+    assert kept == {k: v for k, v in pay["prediction"].items() if k != "metric"}
     record = (await client.get("/v1/priorities/calibration", headers=auth)).json()
     assert {g["goal_id"]: g["n"] for g in record["goals"]} == {other: 1}
 
@@ -94,3 +97,23 @@ async def test_a_moved_outcome_takes_its_new_goals_metric(client, owner, runtime
     moved = await move(open_)
     assert moved["metric"] == "Failed payments per 100 orders"
     assert moved["unit"] == "failed payments"
+
+
+async def test_a_goal_with_no_metric_clears_the_old_metric(client, owner, runtime):  # noqa: F811
+    """protects=moving an outcome to a goal that has no metric does not leave the old goal's
+    metric on the prediction: it reads "Not set yet"; the figures stay as written;
+    fails_when=the old goal's metric stays on the Metric line; no_claim=the inspector."""
+    tenant_id, auth = owner
+    by_item = await outcome_world(client, auth, runtime, tenant_id)
+    other = await _goal(tenant_id, "Fewer support tickets", {})
+    pay = by_item["payment-step"]
+    url = f"/v1/outcomes/{pay['id']}"
+    lock = (await client.get(url, headers=auth)).json()["lock_version"]
+    resp = await client.patch(url, json={"goal_id": other, "lock_version": lock}, headers=auth)
+    assert resp.status_code == 200, resp.text
+    moved = resp.json()["prediction"]
+    assert pay["prediction"]["metric"] != "Not set yet"
+    assert moved["metric"] == "Not set yet"
+    assert {k: v for k, v in moved.items() if k != "metric"} == {
+        k: v for k, v in pay["prediction"].items() if k != "metric"
+    }

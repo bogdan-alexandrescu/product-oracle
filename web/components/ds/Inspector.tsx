@@ -164,12 +164,35 @@ export function InspectorSection({
   );
 }
 
-/** One line in an inspector list: label left, value right. */
-export function InspectorRow({ children, value }: { children: ReactNode; value?: ReactNode }) {
+/**
+ * One line in an inspector list: label left, value right. `fit`: the label keeps its width and
+ * the value gets the rest, so a long value truncates inside the panel. `stacked`: the label,
+ * then the value below it, left-aligned and wrapping (a sentence a person wrote).
+ */
+export function InspectorRow({
+  children,
+  value,
+  fit = false,
+  stacked = false,
+}: {
+  children: ReactNode;
+  value?: ReactNode;
+  fit?: boolean;
+  stacked?: boolean;
+}) {
+  if (stacked)
+    return (
+      <div className="flex flex-col gap-0.5 py-1.5">
+        <span>{children}</span>
+        {value != null && <span className="min-w-0 font-semibold break-words">{value}</span>}
+      </div>
+    );
   return (
     <div className="flex min-h-8 items-center gap-2.5">
-      <span className="min-w-0 flex-1 truncate">{children}</span>
-      {value != null && <span className="tnum flex-none font-semibold">{value}</span>}
+      <span className={fit ? "flex-none whitespace-nowrap" : "min-w-0 flex-1 truncate"}>{children}</span>
+      {value != null && (
+        <span className={`tnum font-semibold ${fit ? "flex min-w-0 flex-1 justify-end" : "flex-none"}`}>{value}</span>
+      )}
     </div>
   );
 }

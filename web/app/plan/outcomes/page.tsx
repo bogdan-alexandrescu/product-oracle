@@ -79,8 +79,45 @@ function stateOf(o: Outcome): State {
   return o.status;
 }
 
+/** A unit's word in the singular: "events" → "event", "failed payments per 100 orders" → "failed payment per 100 orders". */
+function singular(unit: string): string {
+  const [head, ...per] = unit.split(/(?= per )/);
+  const one = head.replace(/[A-Za-z]{3,}$/, (w) =>
+    /(ss|us|is|series|news)$/i.test(w) || !/s$/i.test(w)
+      ? w
+      : /[^aeiou]ies$/i.test(w)
+        ? `${w.slice(0, -3)}y`
+        : /(ch|sh|x|z)es$/i.test(w)
+          ? w.slice(0, -2)
+          : w.slice(0, -1),
+  );
+  return [one, ...per].join("");
+}
+
+/** "42%", "3 events", "1 event": a unit with a plural reads singular for 1. */
 const figure = (v: number | null | undefined, unit?: string | null) =>
-  v == null ? null : `${v}${unit === "%" ? "%" : unit ? ` ${unit}` : ""}`;
+  v == null
+    ? null
+    : `${v}${unit === "%" ? "%" : unit ? ` ${Math.abs(v) === 1 ? singular(unit) : unit}` : ""}`;
+
+const sameUnit = (a?: string | null, b?: string | null) =>
+  (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+
+/**
+ * The prediction's own measure when its unit is not its goal's (an enabler predicted in
+ * "% done" under a revenue goal): "Done (% of the work)", "Events"; null when they agree,
+ * either has none or it is a bare "%", so the line names the goal's metric.
+ */
+function ownMeasure(unit?: string | null, goalUnit?: string | null): string | null {
+  const u = (unit ?? "").trim();
+  if (!u || !(goalUnit ?? "").trim() || sameUnit(u, goalUnit)) return null;
+  const rest = u.replace(/^%\s*/, "");
+  // A bare "%" names no measure of its own: the goal's metric stays on the line.
+  if (!rest) return null;
+  const name = rest.charAt(0).toUpperCase() + rest.slice(1);
+  if (rest === u) return name;
+  return /^(done|complete|completed)$/i.test(rest) ? `${name} (% of the work)` : `${name} (%)`;
+}
 
 /** The predicted level: "at most 0 restrictions" for a hold bet (outcomes-edit). */
 const target = (p: Prediction) => {
@@ -167,6 +204,9 @@ function Outcomes() {
 
   const rows = q.data ?? [];
   const goals = new Map((goalsQ.data ?? []).map((g) => [g.id, g.title]));
+  const goalUnits = new Map(
+    (goalsQ.data ?? []).map((g) => [g.id, typeof g.attrs?.unit === "string" ? g.attrs.unit : null]),
+  );
   const inFilter = (o: Outcome, f: Filter) => {
     const s = stateOf(o);
     if (f === "all") return true;
@@ -296,6 +336,7 @@ function Outcomes() {
       key={`${active.id}-${active.lock_version}-${active.status}-${active.assessments.length}`}
       o={active}
       goal={goals.get(active.goal_id) ?? "its goal"}
+      goalUnit={goalUnits.get(active.goal_id) ?? null}
       goals={(goalsQ.data ?? []).filter((g) => g.status !== "rejected")}
       counted={counted.get(active.goal_id) ?? null}
       canApprove={canApprove}
@@ -489,8 +530,7 @@ function PredictionForm({
       w = num(want),
       t = num(line);
     const u = unit.trim() || null;
-    const shown = (v: number | null) =>
-      v == null ? null : `${v}${u === "%" ? "%" : u ? ` ${u}` : ""}`;
+    const shown = (v: number | null) => figure(v, u);
     onSave({
       ...p,
       baseline_value: b,
@@ -683,6 +723,7 @@ function AssessmentForm({
 function OutcomeInspector({
   o,
   goal,
+  goalUnit,
   goals,
   counted,
   canApprove,
@@ -690,6 +731,8 @@ function OutcomeInspector({
 }: {
   o: Outcome;
   goal: string;
+  /** The goal's unit: a prediction in another unit names its own measure. */
+  goalUnit: string | null;
   /** The company goals the outcome can be moved to (outcomes-edit, owner Nov 13). */
   goals: { id: string; title: string }[];
   counted: number | null;
@@ -748,6 +791,7 @@ function OutcomeInspector({
   const drafts = last?.learnings ?? [];
 
   const now = prop ? figure(prop.actual_value, p.unit) : null;
+  const own = ownMeasure(p.unit, goalUnit);
   const signal = o.ship_signal;
   return (
     <Inspector
@@ -755,6 +799,8 @@ function OutcomeInspector({
       title={o.title}
       label={`Outcome ${o.title}`}
       testId="outcome-inspector"
+      // Beside the table it stays in view: taller than the window, it scrolls on its own.
+      className="xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto"
       chips={<StateChip o={o} hero />}
       // outcomes-edit (owner, Nov 13): Delete… moves it to Settings › Trash, which restores it.
       action={
@@ -801,7 +847,8 @@ function OutcomeInspector({
               // outcomes-edit: another company goal; the prediction stays as written.
               <select
                 aria-label="Goal"
-                className="h-8 max-w-full rounded-lg border border-line-strong bg-surface px-2 text-sm"
+                title={goal}
+                className="h-8 w-full min-w-0 truncate rounded-lg border border-line-strong bg-surface px-2 text-sm"
                 value={o.goal_id}
                 disabled={busy}
                 data-testid="outcome-goal"
@@ -824,13 +871,33 @@ function OutcomeInspector({
                 ))}
               </select>
             ) : (
-              <span className="text-text2">{goal}</span>
+              <span className="truncate text-text2" title={goal}>
+                {goal}
+              </span>
             )
           }
+          fit
         >
           Goal
         </InspectorRow>
-        <InspectorRow value={<span className="text-text2">{p.metric}</span>}>
+        <InspectorRow
+          fit
+          value={
+            own ? (
+              // A prediction in its own unit names its own measure; the goal's is behind the (i).
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-text2" title={own} data-testid="outcome-metric">
+                  {own}
+                </span>
+                <InfoTip label="Goal metric">{p.metric}</InfoTip>
+              </span>
+            ) : (
+              <span className="truncate text-text2" title={p.metric} data-testid="outcome-metric">
+                {p.metric}
+              </span>
+            )
+          }
+        >
           Metric
         </InspectorRow>
         {p.threshold_value != null && (
@@ -858,6 +925,7 @@ function OutcomeInspector({
         )}
         {p.why && (
           <InspectorRow
+            stacked
             value={
               <span className="text-text2" data-testid="outcome-why" data-user-content>
                 {p.why}
