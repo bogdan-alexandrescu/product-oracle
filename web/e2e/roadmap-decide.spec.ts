@@ -48,10 +48,15 @@ async function stripCount(page: Page): Promise<number> {
   return Number(/(\d+) broken link/.exec(words)?.[1] ?? NaN);
 }
 
+/** A tile's number: under a filter it reads "1 of 3", what the list shows of the whole roadmap's (QA Nov 14 #7). */
+const tileHere = (t: string) => Number(/^\s*(\d+)/.exec(t)?.[1] ?? NaN);
+const tileWhole = (t: string) => Number(/of (\d+)/.exec(t)?.[1] ?? tileHere(t));
+
+/** Needs a decision's Broken links tile: the whole roadmap's count. */
 async function trayLinks(page: Page): Promise<number> {
   await page.getByTestId("needs-decision").click();
   const tile = tray(page).getByTestId("tray-counter").filter({ hasText: "Broken links" });
-  const n = Number(await tile.locator("b").innerText());
+  const n = tileWhole(await tile.locator("b").innerText());
   await tray(page).getByRole("button", { name: "Close" }).click();
   return n;
 }
@@ -422,10 +427,12 @@ test("under a filter, Needs a decision says N here, M in all on one basis, and 1
   await expect(scope).toContainText("in your roadmaps' working drafts");
   await expect(scope).not.toContainText("this roadmap's working draft");
   const tiles = await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts();
-  // The tiles count the whole roadmap, as the "in all" does and the button does, the suggested features it lists in a tile of their own (pre-demo QA S-6).
+  // The tiles count what the filters show "of" the whole roadmap's (QA Nov 14 #7): their wholes add up to the "in all"
+  // and the button, their own numbers to the "here"; the suggested features in a tile of their own (pre-demo QA S-6).
   const suggested = await tray(page).getByTestId("tray-suggested").getByTestId("goal-suggestion").count();
-  await expect(tray(page).getByTestId("tray-counter").filter({ hasText: "Suggested features" }).locator("b")).toHaveText(String(suggested));
-  expect(tiles.reduce((n, t) => n + Number(t), 0)).toBe(Number(m![2]));
+  expect(tileHere(await tray(page).getByTestId("tray-counter").filter({ hasText: "Suggested features" }).locator("b").innerText())).toBe(suggested);
+  expect(tiles.reduce((n, t) => n + tileWhole(t), 0)).toBe(Number(m![2]));
+  expect(tiles.reduce((n, t) => n + tileHere(t), 0)).toBe(Number(m![1]));
   expect(button).toBe(Number(m![2]));
   expect(Number(m![1])).toBeLessThan(Number(m![2]));
   const here = await tray(page).getByTestId("tray-links-here").innerText();
