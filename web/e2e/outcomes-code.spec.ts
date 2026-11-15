@@ -45,6 +45,21 @@ test("the Item column and the panel show the item's code before its title", asyn
   await expect(inspector(page).getByTestId("not-in-gt")).toHaveCount(0);
 });
 
+test("the Track outcome form's Item picker names each item by its code and name", async ({ page }) => {
+  // protects=the Item picker lists a coded item as "F-31 Alert routing by team" (the code once;
+  // the "plan-section-code" scenario) and flags each uncoded one ("Threshold alerts on spend ·
+  // Not in the Ground Truth"), as the table names them; fails_when=an option shows its title
+  // alone; no_claim=which code an item has (the API's pytest).
+  await openOutcomes(page, "plan-section-code");
+  await page.getByRole("button", { name: "Track outcome" }).click();
+  const options = page.getByTestId("track-outcome-form").getByLabel("Item").locator("option:not([value=''])");
+  await expect(options.first()).toBeAttached();
+  const words = await options.allTextContents();
+  expect(words).toContain("Threshold alerts on spend · Not in the Ground Truth");
+  expect(words).toContain("F-31 Alert routing by team");
+  for (const w of words) expect(w, `${w} reads its code or its flag`).toMatch(/^F-\d+[a-z]? (?!F-)\S| · Not in the Ground Truth$/);
+});
+
 test("an item with no code keeps its name and is flagged Not in the Ground Truth", async ({ page }) => {
   // protects=an uncoded roadmap item's outcome shows its name with the flag, in the row and the
   // panel, and an outcome of no roadmap item carries none; fails_when=the flag is missing, or
@@ -67,7 +82,7 @@ test("an outcome tracked for an item with no code is flagged at once", async ({ 
   await openOutcomes(page);
   await page.getByRole("button", { name: "Track outcome" }).click();
   const form = page.getByTestId("track-outcome-form");
-  await form.getByLabel("Item").selectOption({ label: "Threshold alerts on spend" });
+  await form.getByLabel("Item").selectOption({ label: "Threshold alerts on spend · Not in the Ground Truth" });
   await form.getByLabel("Expected effect").fill("+5 weekly active teams");
   await form.getByLabel("Metric").fill("Weekly active teams");
   await form.getByRole("button", { name: "Track outcome" }).click();

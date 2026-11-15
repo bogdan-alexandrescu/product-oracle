@@ -36,7 +36,7 @@ async function trackOutcome(page: Page, metric?: string) {
   await page.goto("/plan/outcomes");
   await visible(page, "outcomes-empty").getByRole("button", { name: "Track outcome" }).click();
   const form = visible(page, "track-outcome-form");
-  await form.getByLabel("Item").selectOption({ label: "Threshold alerts on spend" });
+  await form.getByLabel("Item").selectOption({ label: "Threshold alerts on spend · Not in the Ground Truth" });
   await expect(form.getByLabel("Goal").locator("option:checked")).toHaveText("Raise activation");
   await form.getByLabel("Expected effect").fill("+5 points");
   if (metric) await form.getByLabel("Metric").fill(metric);
