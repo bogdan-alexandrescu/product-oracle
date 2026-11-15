@@ -345,7 +345,7 @@ async def test_quarter_add_is_estimated_in_its_quarter(client):
 
     async def ask(kind, payload):
         return {"outcome": "Find saved searches fast.", "feature_key": None, "depends_on": [],
-                "start_date": "2027-01-11", "end_date": "2027-02-19", "basis": "Two sprints."}  # fmt: skip
+                "start_date": "2027-01-11", "end_date": "2027-02-19", "basis": "x"}  # fmt: skip
 
     async with tenant_session(w.ctx.tenant_id) as s:
         job = await s.scalar(select(LlmJob).where(LlmJob.kind == "item_draft"))
