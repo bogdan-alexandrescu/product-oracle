@@ -704,6 +704,8 @@ COPIED = (
     "applied",
     # feature-parts: a part stays part of its parent on the next version.
     "parent_key",
+    # roadmap-dates: a quarter add keeps its quarter, so its estimate stays in it.
+    "picked_quarter",
 )
 
 
