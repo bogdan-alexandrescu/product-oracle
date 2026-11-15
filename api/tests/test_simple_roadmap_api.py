@@ -706,10 +706,9 @@ async def test_accept_edit_dismiss(client):
 
 async def test_published_estimate_is_the_open_drafts_accepted_dates(client):
     """Review (join d91b93b): until its draft publishes, a viewer's undated item reads the dates
-    the working draft holds for it: an edit's typed dates, not Oracle's; once the draft is
-    discarded, the abandoned dates go and its estimate is Later's window again."""
-    from oracle.simple.models import SimpleDraft
-
+    the working draft holds for it: an edit's typed dates, not Oracle's; once the edit is
+    undone (through the undo route, as a person does), the abandoned dates go and the
+    estimate is Oracle's reopened suggestion again."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -732,14 +731,11 @@ async def test_published_estimate_is_the_open_drafts_accepted_dates(client):
     a = by_key(await get(client, ctx, "viewer"))["a"]
     assert a["estimated"] is True
     assert (a["start"]["date"], a["end"]["date"]) == ("2026-11-02", "2026-11-30")
-    async with tenant_session(ctx.tenant_id) as s:
-        for d in await s.scalars(select(SimpleDraft).where(SimpleDraft.status == "working")):
-            d.status = "discarded"
-        await s.commit()
+    undo = await client.post(f"/v1/simple/changes/{r.json()['change']['id']}/undo", headers=owner)
+    assert undo.status_code == 201, undo.text
     a = by_key(await get(client, ctx, "viewer"))["a"]
     assert a["estimated"] is True
-    assert (a["start"]["date"], a["end"]["date"]) not in (
-        ("2026-11-02", "2026-11-30"), (sug["start_date"], sug["end_date"]))  # fmt: skip
+    assert (a["start"]["date"], a["end"]["date"]) == (sug["start_date"], sug["end_date"])
 
 
 async def test_migration_columns():

@@ -409,6 +409,7 @@ async def load(
                 DocumentVersion.document_id,
                 DocumentVersion.number,
                 DocumentVersion.approved_at,
+                drafts._withdrawn().label("withdrawn"),
             ).where(DocumentVersion.document_id.in_(roadmap_ids))
         )
     ).all()
@@ -419,7 +420,13 @@ async def load(
             .distinct()
         )
     )
-    shown = _versions(versions, with_items, await drafts.submitted_versions(db))
+    # roadmap-speed: drafts.submitted_versions from the open drafts (read once, the accepted
+    # dates below read them too) and the versions above, no read of its own.
+    open_drafts = await drafts.open_drafts(db)
+    hidden = {d.version_id for d in open_drafts if d.status == "submitted" and d.version_id} | {
+        v.id for v in versions if v.approved_at is None and v.withdrawn
+    }
+    shown = _versions(versions, with_items, hidden)
     rows: list[RoadmapItem] = []
     if shown:
         rows = list(
@@ -544,10 +551,6 @@ async def load(
         if s.slice_code is not None and first.slice_code is not None:
             a, b = spans.get(s.item_id, (s.start_date, s.end_date))
             spans[s.item_id] = (min(a, s.start_date), max(b, s.end_date))
-    # join (roadmap-dates): an accepted suggestion is no longer offered, but until its draft
-    # publishes the dates, the published undated item keeps the dates an open draft holds for
-    # it (an edit's typed ones; the latest accept), never a discarded draft's.
-    decided = await _accepted_in_open_drafts(db, {r.id for r in rows})
     # roadmap-speed: the roadmaps' policies as drafts.who reads them (once per read); the
     # counts read the policies alone.
     deciders = (
@@ -569,18 +572,37 @@ async def load(
         for k in m.item_keys or []:
             track_ms.setdefault((m.track_id, k), m)
 
+    sourced: dict[uuid.UUID, tuple[ProductTrack | None, list[TrackerRecord], Any]] = {}
     for row in rows:
-        roadmap = docs[row.roadmap_document_id]
-        prd = docs.get(row.prd_document_id) if row.prd_document_id else None
         track = tracks.get(row.track_id) if row.track_id else None
         if track is None and row.prd_document_id is not None:
             t = track_of_prd.get(row.prd_document_id)
-            if t is not None and t.roadmap_document_id == roadmap.id:
+            if t is not None and t.roadmap_document_id == row.roadmap_document_id:
                 track = t
         recs = (
             records.get((track.id, row.item_key), []) if track is not None else []
         ) or prd_records.get((row.prd_document_id, row.item_key), [])
-        cands = _candidates(row, recs, bases_by_key, bases_by_ref)
+        sourced[row.id] = (track, recs, _candidates(row, recs, bases_by_key, bases_by_ref))
+    # join (roadmap-dates): an accepted suggestion is no longer offered, but until its draft
+    # publishes the dates, the published undated item keeps the dates an open draft holds for
+    # it (an edit's typed ones; the latest accept), never a discarded draft's. roadmap-speed:
+    # read only for the undated items no open suggestion dates, and not at all when none is.
+    decided = await _accepted_in_open_drafts(
+        db,
+        [d.id for d in open_drafts],
+        {
+            r.id
+            for r in rows
+            if open_drafts
+            and r.id not in suggestions
+            and dates.resolve(sourced[r.id][2], windows["later"], effort.get(r.id)).undated
+        },
+    )
+
+    for row in rows:
+        roadmap = docs[row.roadmap_document_id]
+        prd = docs.get(row.prd_document_id) if row.prd_document_id else None
+        track, recs, cands = sourced[row.id]
         # roadmap-dates: an undated item's estimate is its open suggestion's span (the span
         # of its slices'), else its picked quarter, else Later's window.
         sug = suggestions.get(row.id)
@@ -1009,13 +1031,13 @@ async def _blockers(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, co
 
 
 async def _accepted_in_open_drafts(
-    db: AsyncSession, item_ids: set[uuid.UUID]
+    db: AsyncSession, open_ids: list[uuid.UUID], item_ids: set[uuid.UUID]
 ) -> dict[uuid.UUID, tuple[date, date]]:
     """join (roadmap-dates): the dates each item's latest accept (or edit) of Oracle's
-    suggestion wrote into a working or submitted draft, by item id."""
-    from oracle.simple.models import SimpleChange, SimpleDraft
+    suggestion wrote into a working or submitted draft (``open_ids``), by item id."""
+    from oracle.simple.models import SimpleChange
 
-    if not item_ids:
+    if not item_ids or not open_ids:
         return {}
     undone = select(SimpleChange.undoes_id).where(SimpleChange.undoes_id.is_not(None))
     out: dict[uuid.UUID, tuple[date, date]] = {}
@@ -1026,12 +1048,7 @@ async def _accepted_in_open_drafts(
             SimpleChange.status.in_(("applied", "accepted")),
             SimpleChange.target["item_id"].astext.in_([str(i) for i in item_ids]),
             SimpleChange.id.not_in(undone),
-            select(SimpleDraft.id)
-            .where(
-                SimpleDraft.id == any_(SimpleChange.draft_ids),
-                SimpleDraft.status.in_(("working", "submitted")),
-            )
-            .exists(),
+            SimpleChange.draft_ids.overlap(open_ids),
         )
         .order_by(SimpleChange.seq)
     ):
