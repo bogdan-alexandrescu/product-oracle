@@ -12,7 +12,7 @@ import { expect, test, type Page } from "./test";
  * "simple-plan" (dated): goals Reliability, Growth, Activation and Revenue. Invented data.
  *
  * Card tasks-roadmap-goal: protects = with no dated plan ("goal-buckets-undated"), a bucket for one
- * of the roadmap's own goals (Grow retention, not one of the plan's) has "+ Add a task" and a grip
+ * of the roadmap's own goals (Grow retention, not one of the plan's) has "+ Add a feature" and a grip
  * on each task, as the plan's goals do: a task added there shows as a Draft, one of its tasks moves
  * to Growth by keys, and Undo puts it back; fails_when = that bucket has no add row or no grips.
  */
@@ -85,7 +85,7 @@ test("with no dated plan, a bucket for one of the roadmap's own goals takes new 
   await expect(retention.locator("[data-code]").first()).toBeVisible();
 
   const add = retention.getByTestId("add-task");
-  await add.getByRole("button", { name: "+ Add a task" }).click();
+  await add.getByRole("button", { name: "+ Add a feature" }).click();
   const form = add.getByTestId("task-form");
   await expect(form).toContainText("Goal: Grow retention");
   await form.getByLabel("Name").fill("Saved wishlists");
