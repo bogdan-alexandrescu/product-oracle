@@ -215,6 +215,7 @@ async def rows(
         if not access.can_read(seat) or not await access.can_read_subject(db, principal, d):
             continue
         seen_ok[d.id] = (d, parts, seat)
+    await labels.prime(d for d, _p, _s in seen_ok.values())
     people_ids = {
         u for _d, parts, _s in seen_ok.values() for u, p in parts.items() if p.left_at is None
     }

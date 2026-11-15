@@ -246,6 +246,7 @@ async def build(db: AsyncSession, run: Run, reader: uuid.UUID | None) -> list[di
     staged = await _staged(db, run, ids)
     decided = await _decided(db, ids)
     labels = Labels(db)
+    await labels.prime(ds)
     out = []
     for d in ds:
         label, _url = await labels.of(d)
