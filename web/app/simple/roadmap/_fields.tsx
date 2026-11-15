@@ -22,8 +22,10 @@ import {
   datesFrom,
   goalMilestoneWords,
   milestoneWords,
+  nextQuarter,
   partsWords,
   placeable,
+  quarterOf,
   statusWord,
   yearSpan,
   type GoalMilestone,
@@ -182,6 +184,14 @@ function refs<T extends { id: string }>(
 
 /** Why the item has its dates, for the (i) beside them. */
 function datesReason(item: Item): string {
+  // roadmap-dates: an undated item's estimate is Oracle's suggestion, else the quarter it was added to.
+  const picked = item.picked_quarter ? quarterOf(item.picked_quarter) : null;
+  if (item.estimated && item.suggestion) {
+    const out = picked && (item.start.date < picked.start || item.end.date >= nextQuarter(picked.start));
+    return `Oracle suggested these dates: ${item.suggestion.basis}${out ? ` They fall outside ${picked.label}, the quarter it was added to: there is no room for it there.` : ""} Set dates to override them.`;
+  }
+  if (item.estimated && picked)
+    return `Oracle estimated these dates as ${picked.label}, the quarter it was added to, until it suggests dates. Set dates to override them.`;
   if (item.estimated)
     return `Oracle estimated these dates from the ${item.horizon} window and what the feature depends on. Set dates to override them.`;
   if (item.source === "typed")
@@ -409,8 +419,8 @@ export function PanelFields({
         canChange={canChange}
         value={
           <>
-            {/* simple-home-qa-nov14 #4: Oracle's one estimate: its suggested span when it has one, never the horizon's window beside it. */}
-            {item.estimated && item.suggestion ? yearSpan(item.suggestion.start_date, item.suggestion.end_date) : yearSpan(item.start.date, item.end.date)} ·{" "}
+            {/* simple-home-qa-nov14 #4, roadmap-dates: Oracle's one estimate, its suggested span when it has one (the item's own dates). */}
+            {yearSpan(item.start.date, item.end.date)} ·{" "}
             <span data-testid="card-dates-kind">{datesKind(item)}</span>{" "}
             {/* QA Nov 12 #10: the circled (i) every other why on the page uses. */}
             <InfoTip label="these dates" align="start" testId="card-dates-why">

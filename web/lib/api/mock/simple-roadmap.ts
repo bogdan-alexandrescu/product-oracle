@@ -825,9 +825,10 @@ export function quarterWindows(today: string): Record<Horizon, [string, string]>
 }
 
 /** dates.horizon_of: Now when the dates touch this quarter (started earlier and still running,
- * or overdue), Next when they start next quarter, Later after that; undated: Later. */
-export function horizonOfDates(r: { start: Dated; end: Dated }, q: Record<Horizon, [string, string]>): Horizon {
-  if (r.start.estimated && r.end.estimated) return "later";
+ * or overdue), Next when they start next quarter, Later after that; undated: by its suggestion's
+ * or picked quarter's start (roadmap-dates), else Later. */
+export function horizonOfDates(r: { start: Dated; end: Dated; basis?: EstimateBasis }, q: Record<Horizon, [string, string]>): Horizon {
+  if (r.start.estimated && r.end.estimated && !r.basis) return "later";
   if (r.start.date <= q.now[1]) return "now";
   return r.start.date <= q.next[1] ? "next" : "later";
 }
@@ -1127,7 +1128,11 @@ function leadDays(db: SimpleDb, s: SeedItem): number {
   return weeks && weeks > 0 ? Math.max(1, Math.floor(weeks * 7 + 0.5)) : 28;
 }
 
-function resolve(db: SimpleDb, s: SeedItem): { start: Dated; end: Dated } {
+/** roadmap-dates (dates.Resolved.basis): where an undated bar's estimate comes from. */
+type EstimateBasis = "suggestion" | "quarter";
+type Resolved = { start: Dated; end: Dated; basis?: EstimateBasis };
+
+function resolve(db: SimpleDb, s: SeedItem): Resolved {
   const own = db.own[s.key];
   if (own) {
     const source = own.source ?? "accepted";
@@ -1146,7 +1151,12 @@ function resolve(db: SimpleDb, s: SeedItem): { start: Dated; end: Dated } {
   const q = quarterWindows(today);
   const end0 = s.end !== undefined && s.source ? addDays(at, s.end) : null;
   const start0 = s.start !== undefined && s.source ? addDays(at, s.start) : null;
-  if (!end0 && !start0) return { start: { date: q.later[0], source: "estimated", estimated: true }, end: { date: q.later[1], source: "estimated", estimated: true } };
+  if (!end0 && !start0) {
+    // roadmap-dates: Oracle's open suggestion, else the quarter it was added to, else Later's window.
+    const sug = itemSuggestion(db, db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`));
+    const [a, b, basis]: [string, string, EstimateBasis | undefined] = sug ? [sug.start_date, sug.end_date, "suggestion"] : s.quarter ? [s.quarter.start, s.quarter.end, "quarter"] : [q.later[0], q.later[1], undefined];
+    return { start: { date: a, source: "estimated", estimated: true }, end: { date: b, source: "estimated", estimated: true }, ...(basis ? { basis } : {}) };
+  }
   const source = s.source!;
   if (start0 && end0) return { start: { date: start0, source, estimated: false }, end: { date: end0, source, estimated: false } };
   if (end0) return { start: { date: addDays(end0, 1 - leadDays(db, s)), source: "estimated", estimated: true }, end: { date: end0, source, estimated: false } };
@@ -1188,7 +1198,7 @@ export function readColumn(db: SimpleDb, key: string): { start: string; end: str
  * bar (walkb-roadmap review) moves to start that day, keeping its length. Dependencies first;
  * changes `all` in place.
  */
-function afterDependencies(all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>): void {
+function afterDependencies(all: Map<string, { s: SeedItem; r: Resolved }>): void {
   const done = new Set<string>();
   const visit = (key: string) => {
     const x = all.get(key);
@@ -1202,7 +1212,7 @@ function afterDependencies(all: Map<string, { s: SeedItem; r: { start: Dated; en
     const day = addDays(latest, 1);
     if (x.r.end.estimated) {
       const end = addDays(day, span(x.r.start.date, x.r.end.date) - 1);
-      x.r = { start: { date: day, source: "estimated", estimated: true }, end: { date: end, source: "estimated", estimated: true } };
+      x.r = { start: { date: day, source: "estimated", estimated: true }, end: { date: end, source: "estimated", estimated: true }, basis: x.r.basis };
       return;
     }
     x.r = { start: { date: day < x.r.end.date ? day : x.r.end.date, source: "estimated", estimated: true }, end: x.r.end };
@@ -1590,6 +1600,9 @@ export function itemSuggestion(db: SimpleDb, itemId: string): Suggestion | undef
   return { ...first, start_date: start, end_date: end };
 }
 
+/** dates.quarter_word: "Q2 2027". */
+const quarterWord = (first: string) => `Q${Math.floor((Number(first.slice(5, 7)) - 1) / 3) + 1} ${first.slice(0, 4)}`;
+
 /** oracle.simple.suggestions.regenerate: one open suggestion per undated item (plan-model: per slice of a planned one). */
 function regenerate(db: SimpleDb, today: string): number {
   const resolved = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s) }]));
@@ -1629,10 +1642,12 @@ function regenerate(db: SimpleDb, today: string): number {
       }
       continue;
     }
-    // board-quarters: an undated item is Later's, so its suggestion starts with Later's window.
-    const window = quarterWindows(today).later;
+    // board-quarters: an undated item is Later's, so its suggestion starts with Later's window;
+    // roadmap-dates: one added to a quarter, inside that quarter (from today on).
+    const q = s.quarter;
+    const window: [string, string] = q ? [q.start < today ? today : q.start, q.end] : quarterWindows(today).later;
     let start = window[0];
-    let why = "starts with the Later window";
+    let why = q ? `starts with the ${quarterWord(q.start)} window` : "starts with the Later window";
     const deps = (s.depends ?? []).map((k) => resolved.get(k)).filter((x) => x !== undefined);
     const latest = deps.sort((a, b) => (a.r.end.date < b.r.end.date ? 1 : -1))[0];
     if (latest && addDays(latest.r.end.date, 1) > start) {
@@ -1850,6 +1865,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     return {
       id: db.ids[s.key], key: s.key, title, outcome: s.outcome ?? null, note: s.note ?? null, horizon: horizonOfDates(r, quarterWindows(today)),
       estimate_pending: !!s.estimate_pending,
+      picked_quarter: s.quarter?.start ?? null,
       // Its feature's code (F-12), else its own (codedTitle: the title's, else its PRD section's), as service.load's Entry.code.
       code: (s.feature_id && db.feature_codes?.[s.feature_id]) || code,
       // every-field-editable (service.item_out): a code set_code may not change, and where it comes from.
