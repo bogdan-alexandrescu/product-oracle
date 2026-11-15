@@ -1,3 +1,5 @@
+import { CODED_OLD_PROOF_SCENARIO } from "../lib/api/mock/currentstate";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -251,3 +253,17 @@ for (const size of ["desktop", "phone"] as const) {
     });
   });
 }
+
+// protects = Check again's question names a feature with a Ground Truth code by its code and name, as its row does;
+// fails_when = the question reads the name alone ("Is Invoice reminders still true today?");
+// no_claim = features with no code (the default story's old-proof row, above).
+test("Check again asks about a coded feature by its code and name", async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, CODED_OLD_PROOF_SCENARIO] as const);
+  await login(page);
+  await page.goto("/ground-truth?view=current");
+  const row = page.getByTestId("cs1-row").filter({ hasText: "Invoice reminders" });
+  await expect(row).toContainText("F-47 Invoice reminders");
+  await expect(row).toContainText("Proof is 52 days old");
+  await row.getByRole("button", { name: "Check again" }).click();
+  await expect(page.getByTestId("cs1-check").locator("p").first()).toHaveText("Is F-47 Invoice reminders still true today?");
+});

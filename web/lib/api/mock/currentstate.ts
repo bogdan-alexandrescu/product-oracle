@@ -6,6 +6,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { MOCK_SCENARIO_KEY } from "./ids";
+
 type State = Schemas["FeatureStateOut"];
 type Proof = Schemas["FeatureProofOut"];
 type Row = { feature_id: string; item_id?: string | null; code: string; own_key?: string | null; title: string; milestone?: string | null; goal?: { title: string } | null };
@@ -50,6 +52,21 @@ function proofs(files: number, prs: number, done: number, total: number, value: 
  * the Goal map's features in it, later items moved the ranks after them).
  */
 const STORY_RUNNING = ["alert-digest", "alert-sso", "setup-video"];
+
+/**
+ * "current-state-coded" (MOCK_SCENARIO_KEY): the default story plus one more feature that runs
+ * today with old proof and a Ground Truth code (F-47), so Check again's question names it by
+ * its code and name.
+ */
+export const CODED_OLD_PROOF_SCENARIO = "current-state-coded";
+const CODED_OLD_PROOF: Row = { feature_id: "feature-coded-old-proof", code: "F-47", title: "Invoice reminders" };
+
+function codedRows(db: CurrentStateDb, rows: Row[], today: number): Row[] {
+  if (typeof localStorage === "undefined" || localStorage.getItem(MOCK_SCENARIO_KEY) !== CODED_OLD_PROOF_SCENARIO) return rows;
+  const at = new Date(today - 52 * DAY).toISOString();
+  db.states[CODED_OLD_PROOF.feature_id] ??= { status: "current", shipped_at: new Date(today - 190 * DAY).toISOString(), checked_at: at, moved_at: null, move_how: null, not_yet_at: null, answer: null, answered_at: null, proofs: proofs(5, 2, 4, 4, "88% paid on time", at, MONTH[new Date(today - 82 * DAY).getUTCMonth()]) };
+  return [...rows, CODED_OLD_PROOF];
+}
 
 /** The seed: which of the rows run today (the story's items, else by rank) and which are being built (by rank). */
 export function seedCurrentState(rows: Row[], today: number): CurrentStateDb {
@@ -129,6 +146,7 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 /** /v1/feature-states (api/oracle/currentstate/router.py). Writes need the approver role (confirm_entity). */
 export async function routeCurrentState(db: CurrentStateDb, rows: Row[], mayMove: boolean, req: Request, p: string[], today: number): Promise<Response | null> {
   if (p[1] !== "feature-states") return null;
+  rows = codedRows(db, rows, today);
   const m = req.method;
   if (p.length === 2 && m === "GET") return json(200, featureStatesOut(db, rows, mayMove, today));
   if (p.length !== 4 || m !== "POST") return null;
