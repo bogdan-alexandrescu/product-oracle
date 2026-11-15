@@ -2009,14 +2009,14 @@ export const DISCUSSION_RECORD = "d15c0000-0000-4000-8000-0000000000b1";
 
 /**
  * The "discussion-record" scenario (G3 Record with F3 Date bases): the approver's open
- * discussion on the PRD's guest-checkout item, Oracle's reply, and the basis_record change it
+ * discussion on the PRD's public-signup item, Oracle's reply, and the basis_record change it
  * proposed (a team estimate that supports 2026-12-15).
  */
 export function seedDiscussionRecord(ctx: Omit<DiscussionsContext, "me" | "db">, prd: { id: string; title: string; slug: string; name?: (key: string) => string }, version: number): DiscussionsDb {
   const db = emptyDiscussions();
   const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
   const at = "2026-10-22T10:00:00Z";
-  const item = "guest-checkout";
+  const item = "public-signup";
   db.discussions.push({
     id: DISCUSSION_RECORD,
     subject_kind: "roadmap_item",

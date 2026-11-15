@@ -221,7 +221,7 @@ async function seedRejectedDraft(page: Page, withProblems = false): Promise<stri
       error = `prd.md was rejected: ${problems.map((p) => `[${p.code}] ${p.message}`).join("; ")}`;
       summary = "Oracle refused prd.md: 24 citations use source 'x', which isn't accepted; 102 references fail because of them.";
     }
-    const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "guest-checkout", document_id: null, created_at: at, started_at: at };
+    const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "public-signup", document_id: null, created_at: at, started_at: at };
     const segments: S[] = run.segments;
     for (const s of segments) {
       Object.assign(s, {
@@ -278,7 +278,7 @@ test("a rejected draft: Retry import imports it, and the segment links the PRD",
   await expect(review.getByRole("button", { name: "Request changes" })).toBeEnabled();
 
   await retry.click();
-  await expect(prd).toContainText(/Imported as (?!guest-checkout).+ v1/);
+  await expect(prd).toContainText(/Imported as (?!public-signup).+ v1/);
   await expect(prd).not.toContainText("Draft not imported");
   await expect(retry).toHaveCount(0);
   // Nothing is decided: the review still waits for a person, who may approve it now.
@@ -289,7 +289,7 @@ test("a rejected draft: Retry import imports it, and the segment links the PRD",
   await expect(review.getByTestId("cannot-approve")).toHaveCount(0);
 
   await prd.getByRole("link", { name: / v1$/ }).click();
-  await expect(page).toHaveURL(/\/documents\/guest-checkout\/v\/1$/);
+  await expect(page).toHaveURL(/\/documents\/public-signup\/v\/1$/);
 });
 
 const SUMMARY = "Oracle refused prd.md: 24 citations use source 'x', which isn't accepted; 102 references fail because of them.";
@@ -322,7 +322,7 @@ test("a rejected draft reads Draft rejected, with one summary line and every pro
 
   // The runs list says it too.
   await page.getByTestId("nav-runs").click();
-  const row = page.locator('[data-testid="run-row"][data-document="guest-checkout"]');
+  const row = page.locator('[data-testid="run-row"][data-document="public-signup"]');
   await expect(row.getByTestId("run-draft-rejected")).toHaveText("Draft rejected");
   await expect(row.getByTestId("run-draft-rejected")).toHaveAttribute("title", SUMMARY);
   await expect(page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByTestId("run-draft-rejected")).toHaveCount(0);

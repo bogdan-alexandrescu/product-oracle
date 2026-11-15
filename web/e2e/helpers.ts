@@ -282,7 +282,7 @@ export async function seedSentBack(page: Page): Promise<string> {
           { code: "unknown_citation", message: "[c:j1] in section 'goals' is not defined in front matter 'citations'", section_key: "goals", cite_key: "j1", line: 20 },
         ];
         const error = `prd.md was rejected: ${problems.map((p) => `[${p.code}] ${p.message}`).join("; ")}`;
-        const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "guest-checkout", document_id: null, created_at: at, started_at: at };
+        const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "public-signup", document_id: null, created_at: at, started_at: at };
         const segments: S[] = run.segments;
         for (const s of segments) {
           Object.assign(s, {

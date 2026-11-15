@@ -114,7 +114,7 @@ test.describe("phone", () => {
   test("qa4-docs-48: a card shows one dash per empty field, and the info icon stays beside its label", async ({ page }) => {
     await openRoadmap(page);
     await visible(page, "items-filter").getByRole("button", { name: /^All/ }).click();
-    for (const key of ["cart-review", "guest-checkout", "shipping-step"]) {
+    for (const key of ["cart-review", "public-signup", "shipping-step"]) {
       const text = await row(page, key).evaluate((el) => (el as HTMLElement).innerText.replace(/\s+/g, " "));
       expect(text, key).toContain("Depends on");
       expect(text, key).not.toMatch(/—\s*—/);

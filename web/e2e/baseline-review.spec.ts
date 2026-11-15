@@ -255,7 +255,7 @@ test("at 390 px rows are cards and the bottom bar shows the tally and Approve", 
 test("a run with no items says it has none, not that all of them are handled", async ({ page }) => {
   await page.clock.setSystemTime(new Date("2026-10-27T12:00:00Z"));
   await seeded(page, "no-document");
-  // guest-checkout's Ground Truth to PRD run (the "no-document" scenario) created no Ground Truth items.
+  // public-signup's Ground Truth to PRD run (the "no-document" scenario) created no Ground Truth items.
   await page.goto("/ground-truth?run=7a11c0de-0000-4000-8000-0000000000e1");
   const band = page.getByTestId("from-run-band");
   await expect(band).toContainText("From run · Ground Truth to PRD");

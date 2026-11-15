@@ -44,7 +44,7 @@ test("a draft Oracle sent back reads Revising on the run page and the runs list,
 
   // The runs list says Revising too, with the summary on hover, and no Draft rejected.
   await page.getByTestId("nav-runs").click();
-  const row = page.locator('[data-testid="run-row"][data-document="guest-checkout"]');
+  const row = page.locator('[data-testid="run-row"][data-document="public-signup"]');
   await expect(row.getByTestId("run-sent-back")).toHaveText("Revising");
   await expect(row.getByTestId("run-sent-back")).toHaveAttribute("title", `${REVISING}. ${SUMMARY}`);
   await expect(row.getByTestId("run-draft-rejected")).toHaveCount(0);
@@ -87,7 +87,7 @@ test("a clean revision clears Revising: the draft is imported and the review wai
 
   // The writer's revision finishes; Oracle imports it as the review opens.
   await page.getByRole("button", { name: "Refresh progress" }).click();
-  await expect(prd).toContainText(/Imported as (?!guest-checkout).+ v1/);
+  await expect(prd).toContainText(/Imported as (?!public-signup).+ v1/);
   await expect(prd.getByTestId("segment-state")).toHaveText("Succeeded");
   await expect(prd.getByTestId("draft-sent-back")).toHaveCount(0);
   await expect(prd).not.toContainText("Revising");
@@ -95,7 +95,7 @@ test("a clean revision clears Revising: the draft is imported and the review wai
   const review = prd.getByTestId("checkpoint-prd_review");
   await expect(prd.getByTestId("checkpoint-waiting")).toBeVisible();
   // D10: the imported draft's review is decided in its version; the run page links there.
-  await expect(review.getByRole("link", { name: "Open review" })).toHaveAttribute("href", /^\/documents\/guest-checkout\/v\/1\?run_review=/);
+  await expect(review.getByRole("link", { name: "Open review" })).toHaveAttribute("href", /^\/documents\/public-signup\/v\/1\?run_review=/);
   await expect(review.getByTestId("cannot-approve")).toHaveCount(0);
 
   // The Inbox: the review is a decision now, counted; the Revising row is gone.
@@ -108,7 +108,7 @@ test("a clean revision clears Revising: the draft is imported and the review wai
 
   // The runs list: neither Revising nor Draft rejected.
   await page.getByTestId("nav-runs").click();
-  const row = page.locator('[data-testid="run-row"][data-document="guest-checkout"]');
+  const row = page.locator('[data-testid="run-row"][data-document="public-signup"]');
   await expect(row).toBeVisible();
   await expect(row.getByTestId("run-sent-back")).toHaveCount(0);
   await expect(row.getByTestId("run-draft-rejected")).toHaveCount(0);

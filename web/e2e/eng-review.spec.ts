@@ -148,7 +148,7 @@ test("started from the UI: a run from the sheet waits at its Engineering check a
   await expect(line).toContainText("3 features · 1 blocking");
   await line.getByRole("link", { name: "Review" }).click();
 
-  for (const key of ["price-early", "guest-checkout", "saved-cards"]) await verdict(page, key, "Feasible");
+  for (const key of ["price-early", "public-signup", "saved-cards"]) await verdict(page, key, "Feasible");
   await row(page, "price-early").getByRole("button").first().click();
   await inspector(page).getByRole("textbox", { name: /^Answer:/ }).fill("Yes, within 150 ms.");
   await inspector(page).getByRole("button", { name: "Answer" }).click();

@@ -5150,7 +5150,7 @@ function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): Discus
   return discussions;
 }
 
-/** G3 "discussion-record": Oracle's proposed date basis in an open discussion on checkout-redesign v2's guest-checkout item. */
+/** G3 "discussion-record": Oracle's proposed date basis in an open discussion on checkout-redesign v2's public-signup item. */
 function seedDiscussionRecordScenario(db: Db): DiscussionsDb {
   const prd = findDocument(db, "checkout-redesign")!;
   return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { ...prd, name: (key) => itemName(db, key, undefined, versionItemTitle(db, prd.id, 2, key)) }, 2);

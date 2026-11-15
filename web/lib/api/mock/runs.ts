@@ -1223,13 +1223,13 @@ const LOCAL_FEATURE_SET: FeatureSetSpec = {
       requirements: [{ key: "price-early-total", text: "The cart shows the total with delivery before checkout", acceptance: ["Delivery cost is included"] }],
     },
     {
-      key: "guest-checkout",
+      key: "public-signup",
       title: "Public signup",
       summary: "First-time buyers pay without an account",
       goals: [{ key: "g.activation", contribution: 3 }],
       depends_on: ["price-early"],
       confidence: 0.7,
-      requirements: [{ key: "guest-checkout-email", text: "A guest gives an email address only", acceptance: ["No password is asked for"] }],
+      requirements: [{ key: "public-signup-email", text: "A guest gives an email address only", acceptance: ["No password is asked for"] }],
     },
     {
       key: "order-tracking",
@@ -1388,7 +1388,7 @@ const LOCAL_ORDER: OrderSpec = {
   method: "goal_weighted",
   order: [
     { key: "price-early", score: 4.8, explanation: "G1 weight 3 x contribution 2 x confidence 0.8 / effort 1" },
-    { key: "guest-checkout", score: 6.3, explanation: "Needs price-early first; G1 weight 3 x contribution 3 x 0.7 / 1" },
+    { key: "public-signup", score: 6.3, explanation: "Needs price-early first; G1 weight 3 x contribution 3 x 0.7 / 1" },
     { key: "order-tracking", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 1" },
   ],
 };
@@ -3353,7 +3353,7 @@ export const OLD_NO_DOCUMENT_RUN = "7a11c0de-0000-4000-8000-0000000000e2";
 
 /**
  * The "no-document" scenario (#583 review): two Baseline to PRD runs approved past a refused PRD
- * draft, so they finished with no document: guest-checkout's just now, and old-checkout's on
+ * draft, so they finished with no document: public-signup's just now, and old-checkout's on
  * Oct 1, before the No document row shipped (NO_DOCUMENT_SINCE), which gets no Inbox row.
  */
 export function seedNoDocumentRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
@@ -3381,7 +3381,7 @@ export function seedNoDocumentRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
     refresh(r);
   };
   make(OLD_NO_DOCUMENT_RUN, "old-checkout", "2026-10-01T09:00:00Z");
-  make(NO_DOCUMENT_RUN, "guest-checkout", new Date().toISOString());
+  make(NO_DOCUMENT_RUN, "public-signup", new Date().toISOString());
 }
 
 /** B2: the run's Confirm the baseline stop as GET /v1/baseline/from-run reads it, or null. */
@@ -4211,7 +4211,7 @@ const VERDICT_WORDS: Record<string, string> = { feasible: "Feasible", feasible_w
 /** The local runtime's briefs: one per feature of its feature set (LOCAL_FEATURE_SET). */
 const LOCAL_BRIEFS: Brief[] = [
   { key: "price-early", title: "Show the price early", approach: "Compute the total on the cart page from the existing pricing call.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Can the pricing call answer within 200 ms?", blocking: true }] },
-  { key: "guest-checkout", title: "Public signup", approach: "A guest session that carries the cart to payment.", size: "l", depends_on: ["price-early"], questions: [] },
+  { key: "public-signup", title: "Public signup", approach: "A guest session that carries the cart to payment.", size: "l", depends_on: ["price-early"], questions: [] },
   { key: "saved-cards", title: "Plan limits", approach: "Store the payment provider's card token on the account.", size: "s", depends_on: [], questions: [] },
 ];
 
@@ -4464,7 +4464,7 @@ const BASIS_KINDS = ["estimate", "capacity", "commitment"];
 const LOCAL_DATES: DatesSpec = {
   items: [
     { key: "price-early", title: "Show the price early", section: "features", size: "m", proposed: { kind: "estimate", reference: "est-price-early", supports_date: "2026-11-27" }, confidence: "medium", assumptions: ["The pricing call answers within 200 ms"], no_date_reason: null },
-    { key: "guest-checkout", title: "Public signup", section: "features", size: "l", proposed: null, confidence: null, assumptions: [], no_date_reason: "Sized once the price step ships" },
+    { key: "public-signup", title: "Public signup", section: "features", size: "l", proposed: null, confidence: null, assumptions: [], no_date_reason: "Sized once the price step ships" },
   ],
   others: [{ key: "saved-cards", title: "Plan limits", horizon: "next" }],
 };
@@ -4478,7 +4478,7 @@ const SEEDED_DATES: DatesSpec = {
     { key: "cart-review", title: "Cart review step", section: null, size: "m", proposed: null, confidence: null, assumptions: [], no_date_reason: "Waits on the provider's sandbox" },
   ],
   others: [
-    { key: "guest-checkout", title: "Public signup", horizon: "next" },
+    { key: "public-signup", title: "Public signup", horizon: "next" },
     { key: "saved-cards", title: "Plan limits", horizon: "next" },
     { key: "gift-wrap", title: "Gift wrap", horizon: "later" },
   ],

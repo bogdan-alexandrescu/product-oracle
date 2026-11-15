@@ -48,7 +48,7 @@ test("#6: each roadmap item shows its feature code before its name, and one with
   const cart = row(page, "cart-review");
   await expect(cart).toContainText("F-41 Cart review shows the full price");
   await expect(cart.getByTestId("not-in-ground-truth")).toHaveCount(0);
-  for (const key of ["guest-checkout", "shipping-step", "bulk-import"]) {
+  for (const key of ["public-signup", "shipping-step", "bulk-import"]) {
     await expect(row(page, key).getByTestId("not-in-ground-truth")).toHaveText(
       "Not in the Ground Truth",
     );

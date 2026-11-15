@@ -127,7 +127,7 @@ function checkOf(items: Item[], problems: DraftRoadmapCheck["problems"] = []): D
 }
 
 const CART: ItemSeed = { key: "cart-review", title: "Cart review shows the full price", outcome: "Buyers see the whole price before they start checkout", horizon: "now", section: "s-5-1", rank: 1, confidence: "high", milestone: { name: "Beta" }, feature: { key: "F-41", title: "Cart review shows the full price" } };
-const GUEST: ItemSeed = { key: "guest-checkout", title: "Public signup", outcome: "First-time buyers check out without an account", horizon: "next", section: "scope", rank: 3, confidence: "medium" };
+const GUEST: ItemSeed = { key: "public-signup", title: "Public signup", outcome: "First-time buyers check out without an account", horizon: "next", section: "scope", rank: 3, confidence: "medium" };
 
 /** checkout-redesign v1: four items, no problems. */
 function seedV1(): ItemSeed[] {

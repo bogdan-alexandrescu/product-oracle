@@ -127,7 +127,7 @@ test("approve with a No date: the Decisions page counts the proposed date taken 
 test("next and later: only in the collapsed read-only group, with no date actions", async ({ page }) => {
   // protects=Next and Later items carry no dates (O4) and no actions; fails_when=they show as rows, the group is open on arrival, or it offers Accept, Change or No date; no_claim=the Roadmap shape rules themselves.
   await openDatesAsLead(page);
-  for (const key of ["guest-checkout", "saved-cards", "gift-wrap"]) await expect(row(page, key)).toHaveCount(0);
+  for (const key of ["public-signup", "saved-cards", "gift-wrap"]) await expect(row(page, key)).toHaveCount(0);
   const others = page.getByTestId("dates-others");
   await expect(others.locator("summary")).toHaveText("Next 2 · Later 1 (Next and Later items have no dates)");
   await expect(others.getByTestId("dates-other").first()).toBeHidden();
