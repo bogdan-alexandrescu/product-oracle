@@ -1433,7 +1433,7 @@ function unknownGoalMessage(feature: string, goal: string | undefined | null): s
 function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goals: Set<string> | null, goalTitle?: (key: string) => string | undefined): PriorityCheck {
   const live = ranking(given.method).features;
   const titleOf = (k: string) => live.find((f) => f.key === k)?.title ?? (scope ?? []).find((f) => f.key === k)?.title ?? given.order.find((o) => o.key === k && o.title)?.title ?? k;
-  // As the API's _feature (detailed-b 2): "F-2 Usage alerts" for a code-shaped key, else the name.
+  // As the API's _feature (detailed-b 2): "F-08 Usage dashboard" for a code-shaped key, else the name.
   const feature = (k: string) => {
     const t = titleOf(k).trim();
     return !t || t === k ? k : /^(?:[A-Z][A-Z0-9]*(?:[-.][A-Z0-9]+)+[a-j]?|[A-Z]{1,4}\d+)$/.test(k) ? `${k} ${t}` : t;
@@ -3435,28 +3435,28 @@ export const PRIORITY_STALE_GOAL_RUN = "7a11c0de-0000-4000-8000-0000000000cd";
 const SAVED_ADDRESSES_ORDER: OrderSpec = {
   method: "goal_weighted",
   order: [
-    { key: "F-5", score: 1.8, explanation: "Saved addresses read the lookup first; G1 weight 3 x contribution 1 x 0.6 / 3" },
-    { key: "F-4", score: 0.6, explanation: "Alerts keep teams active; ranked early on purpose: G2 weight 2 x contribution 1 x 0.3 / 1" },
-    { key: "F-2", score: 8.1, explanation: "Needs F-5 first; G1 weight 3 x contribution 3 x 0.9 / 1" },
+    { key: "F-07", score: 1.8, explanation: "Saved addresses read the lookup first; G1 weight 3 x contribution 1 x 0.6 / 3" },
+    { key: "F-08", score: 0.6, explanation: "Alerts keep teams active; ranked early on purpose: G2 weight 2 x contribution 1 x 0.3 / 1" },
+    { key: "F-02", score: 8.1, explanation: "Needs F-07 first; G1 weight 3 x contribution 3 x 0.9 / 1" },
     { key: "N-1", title: "Address book per account", goal: "g.activation", weight: 3, contribution: 2, confidence: 0.7, effort: 1, score: 4.2, explanation: "New in this PRD. Every other address feature needs the book first." },
     { key: "N-2", title: "Default delivery address", depends_on: ["N-1"], goal: "g.activation", weight: 3, contribution: 3, confidence: 0.6, effort: 2, score: 2.7, explanation: "New in this PRD. Asked for in 14 interviews." },
     { key: "N-3", title: "Address check at checkout", depends_on: ["N-1"], goal: "g.paid-conversion", weight: 2, contribution: 2, confidence: 0.6, effort: 1, score: 2.4, explanation: "New in this PRD. Wrong addresses are the top reason a paid order fails." },
-    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "F-01", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
     { key: "N-4", title: "Import addresses from a spreadsheet, with a preview before saving", depends_on: ["N-1"], goal: "g.activation", weight: 3, contribution: 2, confidence: 0.6, effort: 2, score: 1.8, explanation: "New in this PRD. Large customers keep addresses in sheets." },
     // Its goal named with no contribution: Approve order proposes the link, the contribution assumed.
     { key: "N-5", title: "Shared team addresses", goal: "g.paid-conversion", weight: 2, confidence: 0.6, effort: 1, score: 1.2, explanation: "New in this PRD. Teams re-type the same office address." },
-    { key: "F-7", score: 1, explanation: "G2 weight 2 x contribution 2 x 0.5 / 2" },
+    { key: "F-12", score: 1, explanation: "G2 weight 2 x contribution 2 x 0.5 / 2" },
     { key: "N-6", title: "Address labels and notes", goal: "g.paid-conversion", weight: 2, contribution: 3, confidence: 0.3, effort: 4, score: 0.45, explanation: "New in this PRD. A guess: no evidence yet." },
   ],
 };
 
-/** Usage alerts: F-2 ranked above F-5, which it depends on (before_prerequisite, blocking). */
+/** Usage alerts: F-02 ranked above F-07, which it depends on (before_prerequisite, blocking). */
 const USAGE_ALERTS_ORDER: OrderSpec = {
   method: "goal_weighted",
   order: [
-    { key: "F-2", score: 8.1, explanation: "G1 weight 3 x contribution 3 x 0.9 / 1" },
-    { key: "F-5", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 3" },
-    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "F-02", score: 8.1, explanation: "G1 weight 3 x contribution 3 x 0.9 / 1" },
+    { key: "F-07", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 3" },
+    { key: "F-01", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
   ],
 };
 
@@ -3464,7 +3464,7 @@ const USAGE_ALERTS_ORDER: OrderSpec = {
 const GIFT_NOTES_ORDER: OrderSpec = {
   method: "goal_weighted",
   order: [
-    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "F-01", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
     { key: "N-7", title: "Gift notes at checkout", confidence: 0.5, effort: 1, score: 0.5, explanation: "New in this PRD. Buyers ask to add a note to a gift." },
     { key: "N-8", title: "Gift wrap choice", goal: "g.no-such-goal", weight: 1, contribution: 2, confidence: 0.5, effort: 1, score: 1, explanation: "New in this PRD. Buyers pick a wrap." },
   ],
@@ -3474,7 +3474,7 @@ const GIFT_NOTES_ORDER: OrderSpec = {
 const GIFT_RECEIPTS_ORDER: OrderSpec = {
   method: "goal_weighted",
   order: [
-    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "F-01", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
     { key: "N-8", title: "Gift wrap choice", goal: "g.no-such-goal", weight: 1, contribution: 2, confidence: 0.5, effort: 1, score: 1, explanation: "New in this PRD. Buyers pick a wrap." },
   ],
 };
@@ -3483,15 +3483,15 @@ const GIFT_RECEIPTS_ORDER: OrderSpec = {
 const scopeFeature = (key: string, title: string): PrdScopeOut["features"][number] => ({
   id: `scope-${key}`, key, title, decision: "include", origin: "agent", goals: [], depends_on: [], blocker_keys: [], flags: [], requirements: [],
 });
-const GIFT_RECEIPTS_SCOPE = [scopeFeature("F-1", "Saved addresses at checkout"), scopeFeature("N-8", "Gift wrap choice"), scopeFeature("N-9", "Gift receipt by email")];
+const GIFT_RECEIPTS_SCOPE = [scopeFeature("F-01", "Setup checklist"), scopeFeature("N-8", "Gift wrap choice"), scopeFeature("N-9", "Gift receipt by email")];
 
-/** Gift cards: Saved addresses at checkout ranked twice (duplicate_key): one problem, said once. */
+/** Gift cards: Setup checklist ranked twice (duplicate_key): one problem, said once. */
 const GIFT_CARDS_ORDER: OrderSpec = {
   method: "goal_weighted",
   order: [
-    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
-    { key: "F-5", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 3" },
-    { key: "F-1", score: 2.25, explanation: "Ranked again by mistake" },
+    { key: "F-01", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "F-07", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 3" },
+    { key: "F-01", score: 2.25, explanation: "Ranked again by mistake" },
   ],
 };
 
@@ -3499,7 +3499,7 @@ const GIFT_CARDS_ORDER: OrderSpec = {
 const GIFT_BOXES_ORDER: OrderSpec = {
   method: "goal_weighted",
   order: [
-    { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "F-01", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
     { key: "N-10", title: "Gift box sizes", goal: "g.early-churn", weight: 0.2, contribution: 1, confidence: 0.5, effort: 1, score: 0.1, explanation: "New in this PRD. Buyers pick a box that fits." },
   ],
 };
