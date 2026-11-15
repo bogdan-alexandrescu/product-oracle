@@ -150,7 +150,7 @@ async def list_outcomes(
 
 @router.get("/outcomes/{outcome_id}", response_model=OutcomeOut)
 async def get_outcome(outcome_id: uuid.UUID, db: TenantDB) -> OutcomeOut:
-    return OutcomeOut.model_validate(await _call(outcomes.get_outcome(db, outcome_id)))
+    return await outcomes.outcome_out(db, await _call(outcomes.get_outcome(db, outcome_id)))
 
 
 @router.patch("/outcomes/{outcome_id}", response_model=OutcomeOut)

@@ -65,6 +65,54 @@ async def _entity(db: AsyncSession, entity_id: uuid.UUID, type_: str, label: str
     return entity
 
 
+async def outs(db: AsyncSession, rows: list[OutcomeRecord]) -> list[OutcomeOut]:
+    """The outcomes as the API gives them, each with its roadmap item's Ground Truth code
+    (outcomes-code: ``roadmap_item_code``, the item's feature's code, else its PRD
+    section's, as the roadmap reads it: :func:`oracle.roadmap.codes.code_of`); None for an
+    outcome of no roadmap item, or of one with no code. One read of the items and the codes."""
+    from sqlalchemy import or_, tuple_
+
+    from oracle.roadmap import codes
+    from oracle.roadmap.models import RoadmapItem
+
+    out = [OutcomeOut.model_validate(r) for r in rows]
+    ids = {r.roadmap_item_id for r in rows if r.roadmap_item_id}
+    keyed = {
+        (r.roadmap_version_id, r.roadmap_item_key)
+        for r in rows
+        if not r.roadmap_item_id and r.roadmap_version_id and r.roadmap_item_key
+    }
+    if not ids and not keyed:
+        return out
+    # A trashed item still names its outcome.
+    found = list(
+        await db.scalars(
+            select(RoadmapItem)
+            .where(
+                or_(
+                    RoadmapItem.id.in_(ids),
+                    tuple_(RoadmapItem.roadmap_version_id, RoadmapItem.item_key).in_(keyed),
+                )
+            )
+            .execution_options(**{INCLUDE_TRASHED: True})
+        )
+    )
+    by_feature = await codes.feature_codes(db) if any(i.feature_id for i in found) else {}
+    by_id = {i.id: i for i in found}
+    by_key = {(i.roadmap_version_id, i.item_key): i for i in found}
+    for row, o in zip(rows, out, strict=True):
+        item = by_id.get(row.roadmap_item_id) or by_key.get(
+            (row.roadmap_version_id, row.roadmap_item_key)
+        )
+        o.roadmap_item_code = codes.code_of(item, by_feature) if item else None
+    return out
+
+
+async def outcome_out(db: AsyncSession, row: OutcomeRecord) -> OutcomeOut:
+    """One outcome as the API gives it (:func:`outs`)."""
+    return (await outs(db, [row]))[0]
+
+
 async def create_outcome(
     db: AsyncSession, principal: "Principal", data: OutcomeCreate
 ) -> OutcomeOut:
@@ -145,7 +193,7 @@ async def create_outcome(
         {"goal_id": str(data.goal_id), "document_id": str(document_id) if document_id else None},
     )
     await db.refresh(row)
-    return OutcomeOut.model_validate(row)
+    return await outcome_out(db, row)
 
 
 async def list_outcomes(
@@ -189,7 +237,7 @@ async def list_outcomes(
     rows = await db.scalars(
         stmt.order_by(OutcomeRecord.created_at.desc(), OutcomeRecord.id).limit(limit).offset(offset)
     )
-    return [OutcomeOut.model_validate(r) for r in rows]
+    return await outs(db, list(rows))
 
 
 async def get_outcome(db: AsyncSession, outcome_id: uuid.UUID) -> OutcomeRecord:
@@ -280,7 +328,7 @@ async def decide_learning(
         {"applies_to": draft.applies_to, "target": draft.target},
     )  # fmt: skip
     await db.refresh(row)
-    return OutcomeOut.model_validate(row)
+    return await outcome_out(db, row)
 
 
 async def assess(
@@ -318,7 +366,7 @@ async def assess(
     )
     await db.refresh(row)
     return AssessmentResult(
-        outcome=OutcomeOut.model_validate(row),
+        outcome=await outcome_out(db, row),
         suggested_learnings=draft_learnings(row, data.verdict),
     )
 
@@ -368,7 +416,7 @@ async def update_outcome(
         )  # fmt: skip
     await db.flush()
     await db.refresh(row)
-    return OutcomeOut.model_validate(row)
+    return await outcome_out(db, row)
 
 
 def confidence_of(prediction: "OutcomeCreate | OutcomeUpdate") -> float | None:
@@ -425,7 +473,7 @@ async def mark_shipped(
     at = data.at or _now()
     await shipping.ship(db, row, "manual", at, note=data.note, actor=principal)
     await db.refresh(row)
-    return OutcomeOut.model_validate(row)
+    return await outcome_out(db, row)
 
 
 VERDICT_WORDS = {

@@ -33694,6 +33694,8 @@ export interface components {
             roadmap_version_id?: string | null;
             /** Roadmap Item Key */
             roadmap_item_key?: string | null;
+            /** Roadmap Item Code */
+            roadmap_item_code?: string | null;
             /** Experiment Id */
             experiment_id?: string | null;
             prediction: components["schemas"]["Prediction"];

@@ -344,6 +344,8 @@ class OutcomeOut(BaseModel):
     prd_version_id: uuid.UUID | None = None
     roadmap_version_id: uuid.UUID | None = None
     roadmap_item_key: str | None = None
+    # outcomes-code: the roadmap item's Ground Truth code ("F-12"); None with no item or no code.
+    roadmap_item_code: str | None = None
     experiment_id: uuid.UUID | None = None
     prediction: Prediction
     module_keys: list[str]

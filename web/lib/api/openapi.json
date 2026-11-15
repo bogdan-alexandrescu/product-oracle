@@ -101914,6 +101914,17 @@
             ],
             "title": "Roadmap Item Key"
           },
+          "roadmap_item_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Item Code"
+          },
           "experiment_id": {
             "anyOf": [
               {
