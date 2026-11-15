@@ -317,7 +317,7 @@ export function NewPrdSheet({ onClose, onStarted, prefill }: { onClose: () => vo
         <p className="simple-small">Say what it is in your own words. Oracle then asks a few questions, one at a time, and drafts it.</p>
         <label className="flex flex-col gap-1.5">
           <span className={LABEL}>Name</span>
-          <input className={FIELD} placeholder="For example: Saved shipping addresses" value={name} maxLength={200} onChange={(e) => setName(e.target.value)} autoFocus />
+          <input className={FIELD} placeholder="For example: Bulk import from a file" value={name} maxLength={200} onChange={(e) => setName(e.target.value)} autoFocus />
         </label>
         <label className="flex flex-col gap-1.5">
           <span className={LABEL}>The problem</span>

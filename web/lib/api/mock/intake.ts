@@ -1264,7 +1264,7 @@ function inboxQuestions(db: V2Db, ctx: IntakeContext): Schemas["InboxQuestion"][
 // --- the "before-drafting" scenario (C5) ---------------------------------------------------
 
 /** The brief the "before-drafting" scenario seeds: a fixed id, so a test opens its page. */
-export const BEFORE_DRAFTING = { intakeId: "c5000000-0000-4000-8000-000000000001", title: "Saved shipping addresses" } as const;
+export const BEFORE_DRAFTING = { intakeId: "c5000000-0000-4000-8000-000000000001", title: "Bulk import from a file" } as const;
 
 /**
  * The "before-drafting" scenario's brief, by `authorId` (the signed-in owner), with two
