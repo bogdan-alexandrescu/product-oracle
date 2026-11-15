@@ -131678,6 +131678,18 @@
             "title": "Estimate Pending",
             "default": false
           },
+          "picked_quarter": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Picked Quarter"
+          },
           "date_basis": {
             "anyOf": [
               {

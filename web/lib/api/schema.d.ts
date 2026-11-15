@@ -44473,6 +44473,8 @@ export interface components {
              * @default false
              */
             estimate_pending: boolean;
+            /** Picked Quarter */
+            picked_quarter?: string | null;
             /** Date Basis */
             date_basis?: string | null;
             suggestion?: components["schemas"]["DateSuggestionOut"] | null;
