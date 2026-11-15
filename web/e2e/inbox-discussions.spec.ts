@@ -105,7 +105,7 @@ test("the badge equals New + Open with discussion rows present", async ({ page }
 // who cannot read the discussion (test_discussion_inbox.py checks it).
 test("a question asked from a discussion names it and opens it", async ({ page }) => {
   await inboxAs(page, APPROVER);
-  const row = page.getByTestId("inbox-tab-new").locator("tr[data-row]").filter({ hasText: "How long should a guest's cart last?" });
+  const row = page.getByTestId("inbox-tab-new").locator("tr[data-row]").filter({ hasText: "How long should a guest's link last?" });
   await expect(row).toContainText(`From discussion ${TITLE}`);
   await row.getByRole("link", { name: "Open discussion" }).click();
   await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\?discussion=/);

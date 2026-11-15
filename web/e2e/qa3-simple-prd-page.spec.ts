@@ -143,7 +143,7 @@ test.describe("desktop, no plan", () => {
     await page.getByRole("button", { name: "Edit “Sharing a cart with someone" }).click();
     const box = page.getByLabel("New wording for");
     await expect(box).toBeFocused();
-    expect(await box.evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart)).toBe("Sharing a cart with someone else.".length);
+    expect(await box.evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart)).toBe("Paying admins for each new team.".length);
     await page.keyboard.press("Escape");
     await expect(box).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Edit “Sharing a cart with someone" })).toBeFocused();
@@ -165,7 +165,7 @@ test.describe("desktop, no plan", () => {
     expect((await text.boundingBox())!.width).toBe(before);
     await page.getByRole("button", { name: /Too many emails: one reminder per cart/ }).click();
     const sources = page.getByRole("region", { name: /Sources of “Too many emails/ });
-    await expect(sources.getByTestId("source-line")).toHaveText("Too many emails: one reminder per cart, never more.");
+    await expect(sources.getByTestId("source-line")).toHaveText("Too many emails: one email per new team, never more.");
   });
 
   test("the same header as a plan's, its status as the list's; the strip's legend (p3-16, 15)", async ({ page }) => {

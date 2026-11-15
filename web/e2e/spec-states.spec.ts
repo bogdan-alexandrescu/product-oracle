@@ -66,12 +66,12 @@ test("spec: a source an edit added is listed under Added sources, apart from Ora
   const oracle = page.getByTestId("sources-list").filter({ visible: true });
   await expect(oracle.getByRole("listitem")).toHaveCount(1);
   await expect(oracle).toContainText("Annual billing PRD, version 1");
-  await expect(oracle).not.toContainText("Carrier quote latency");
+  await expect(oracle).not.toContainText("Tax quote latency");
   const added = page.getByTestId("added-sources").filter({ visible: true });
   await expect(added.getByText("Added sources")).toBeVisible();
   await expectAdded(added.getByTestId("spec-state"));
   await expect(added.getByRole("listitem")).toHaveCount(1);
-  await expect(added.getByRole("listitem")).toContainText("Carrier quote latency, p95");
+  await expect(added.getByRole("listitem")).toContainText("Tax quote latency, p95");
 });
 
 test("spec: a full engineering spec labels only the section outside the template as added", async ({ page }) => {

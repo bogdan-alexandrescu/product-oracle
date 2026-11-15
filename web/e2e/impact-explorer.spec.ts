@@ -58,8 +58,8 @@ test("impact: an owner sees the lineage, picks an output and settles it, then pr
 test("impact: reconciling needs a reason, as the API says", async ({ page }) => {
   await scenario(page, "impact");
   await openImpact(page, "approver@example.com");
-  await page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-output").filter({ hasText: "Cart wireframes" }).click();
-  const r = row(page, "Cart wireframes");
+  await page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-output").filter({ hasText: "Plan page wireframes" }).click();
+  const r = row(page, "Plan page wireframes");
   await r.getByRole("button", { name: "Reconcile…" }).click();
   await r.getByRole("button", { name: "Reconcile", exact: true }).click();
   await expect(r.getByRole("alert")).toContainText(/reconciling needs a reason/i);
@@ -98,12 +98,12 @@ test("impact: the table view lists outputs by category with the inspector's depe
   await inspector.getByRole("link", { name: "Recorded change" }).first().click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
   const graph = page.getByRole("region", { name: "Lineage" });
-  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Deleted" })).toContainText("Public signup keeps the cart");
+  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Deleted" })).toContainText("Public signup keeps the yearly price");
   await page.getByRole("button", { name: "Table" }).click();
   await page.getByRole("grid", { name: "Affected outputs" }).getByText("Acceptance tests").first().click();
   const tests = page.getByRole("complementary", { name: /Acceptance tests/ });
-  await expect(tests.getByTestId("dependency").filter({ hasText: "Public signup keeps the cart" })).toContainText("Deleted");
-  await expect(tests.getByText("Public signup keeps the cart was deleted")).toBeVisible();
+  await expect(tests.getByTestId("dependency").filter({ hasText: "Public signup keeps the yearly price" })).toContainText("Deleted");
+  await expect(tests.getByText("Public signup keeps the yearly price was deleted")).toBeVisible();
   await page.goBack();
   await page.getByRole("button", { name: "Table" }).click();
 
@@ -206,11 +206,11 @@ test("impact: a review row (a source's permission changed) offers only Mark revi
   await scenario(page, "impact");
   await openImpact(page);
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
-  await page.getByRole("grid", { name: "Affected outputs" }).getByText("Early shipping cost brief").click();
-  await page.getByRole("complementary", { name: /Early shipping cost brief/ }).getByRole("link", { name: "Recorded change" }).click();
+  await page.getByRole("grid", { name: "Affected outputs" }).getByText("Early yearly price brief").click();
+  await page.getByRole("complementary", { name: /Early yearly price brief/ }).getByRole("link", { name: "Recorded change" }).click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
-  await page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-output").filter({ hasText: "Early shipping cost brief" }).click();
-  const r = row(page, "Early shipping cost brief");
+  await page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-output").filter({ hasText: "Early yearly price brief" }).click();
+  const r = row(page, "Early yearly price brief");
   await expect(r.getByTestId("plan-action")).toHaveText("Plan: review");
   await expect(r.getByTestId("plan-how")).toContainText("Check the claims that relied on the changed source");
   await expect(r.getByRole("button", { name: /Accept regeneration|Reconcile/ })).toHaveCount(0);
@@ -225,15 +225,15 @@ test("impact: the table view filters its outputs: all, potentially stale, approv
   const table = page.getByRole("grid", { name: "Affected outputs" });
   const filter = page.getByRole("group", { name: "Filter outputs" });
   await expect(filter.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "true");
-  await expect(table).toContainText("Cart wireframes");
+  await expect(table).toContainText("Plan page wireframes");
   await filter.getByRole("button", { name: /^Potentially stale/ }).click();
   await expect(table).toContainText("Checkout flow");
-  await expect(table).not.toContainText("Cart wireframes");
+  await expect(table).not.toContainText("Plan page wireframes");
   await filter.getByRole("button", { name: /^Approved/ }).click();
-  await expect(table).toContainText("Early shipping cost brief");
+  await expect(table).toContainText("Early yearly price brief");
   await expect(table).not.toContainText("Checkout flow");
   await filter.getByRole("button", { name: /^All/ }).click();
-  await expect(table).toContainText("Cart wireframes");
+  await expect(table).toContainText("Plan page wireframes");
 });
 
 test.describe("phone, once", () => {
@@ -251,8 +251,8 @@ test.describe("phone, once", () => {
     await page.getByRole("dialog", { name: /Checkout flow/ }).getByRole("button", { name: /^Close/ }).click();
 
     await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
-    await page.getByRole("grid", { name: "Affected outputs" }).getByText("Cart wireframes").click();
-    await expect(page.getByRole("dialog", { name: /Cart wireframes/ }).getByText("1 · Settle staleness")).toBeVisible();
+    await page.getByRole("grid", { name: "Affected outputs" }).getByText("Plan page wireframes").click();
+    await expect(page.getByRole("dialog", { name: /Plan page wireframes/ }).getByText("1 · Settle staleness")).toBeVisible();
     await expect(page.getByText("1 · Settle staleness")).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Accept regeneration" })).toHaveCount(1);
   });

@@ -125,7 +125,7 @@ test.describe("desktop", () => {
   test("qa4-docs-58: the brief Summary names the goal in words, with no goal code", async ({ page }) => {
     await openVersion(page, CARTS);
     const summary = section(page, "summary").first();
-    await expect(summary).toContainText("It serves the retention goal.");
+    await expect(summary).toContainText("It serves the growth goal.");
     await expect(summary).not.toContainText("G2");
   });
 });

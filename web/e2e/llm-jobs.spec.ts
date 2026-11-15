@@ -181,7 +181,7 @@ test("reports on a version: write, read both tabs, export", async ({ page }) => 
 
   await reports.getByRole("tab", { name: "What changed since v1" }).click();
   const changes = reports.getByRole("region", { name: "What changed" });
-  await expect(changes).toContainText("5.3 Bulk import");
+  await expect(changes).toContainText("5.3 Seat count");
   await expect(reports.getByTestId("new-sources")).toContainText("Q3 support ticket export");
 
   const download = page.waitForEvent("download");
@@ -251,11 +251,11 @@ test("a new comment queues review comments, and Oracle's suggestion appears on i
       const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
       while (walker.nextNode()) {
         const node = walker.currentNode as Text;
-        const at = node.data.indexOf("One invoice per workspace");
+        const at = node.data.indexOf("One click for a teammate to join");
         if (at >= 0) {
           const range = document.createRange();
           range.setStart(node, at);
-          range.setEnd(node, at + "One invoice per workspace".length);
+          range.setEnd(node, at + "One click for a teammate to join".length);
           window.getSelection()!.removeAllRanges();
           window.getSelection()!.addRange(range);
           return;

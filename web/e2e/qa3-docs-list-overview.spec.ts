@@ -146,11 +146,11 @@ test.describe("desktop", () => {
     await openDoc(page, "checkout-redesign");
     const briefs = page.getByTestId("tech-briefs");
     const specs = page.getByTestId("engineering-specs");
-    await expect(briefs).toContainText("Early shipping cost: technical brief");
-    await expect(specs).not.toContainText("Early shipping cost: technical brief");
+    await expect(briefs).toContainText("Early yearly price: technical brief");
+    await expect(specs).not.toContainText("Early yearly price: technical brief");
     // qa4-docs-8: only the full engineering spec is under Engineering specs.
     await expect(specs.getByTestId("engineering-spec")).toHaveCount(1);
-    await expect(specs.getByTestId("engineering-spec")).toContainText("Early shipping cost: engineering spec");
+    await expect(specs.getByTestId("engineering-spec")).toContainText("Early yearly price: engineering spec");
     // The two feature briefs and the requested technical brief, all in one card.
     await expect(briefs.getByRole("listitem")).toHaveCount(3);
   });

@@ -30,9 +30,9 @@ const notice = (page: Page) => page.getByTestId("inbox-acted");
 const METRIC = "Add a metric that shows the outbound check works";
 const ROLES = "Add custom roles to the first release";
 const QUANTIFY = "Can we quantify the demand from the sales calls?";
-const QUESTION = "Who can see a workspace's billing page?";
+const QUESTION = "Can an invited teammate join as a viewer instead?";
 const REMARK = "The scope reads well as it is.";
-const ADDRESS = "Should the most recently used address be selected by default?";
+const ADDRESS = "Should the current seat count be selected by default?";
 const DEPOT = "Depot handover needs a count check";
 const FAILED = "Limit how many times a customer can move a failed delivery.";
 
@@ -177,7 +177,7 @@ for (const [width, height] of [
     await openTab(page, "Feedback");
     await feedbackState(page, "Done");
     const answered = page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: QUESTION });
-    await expect(answered.getByTestId("comment")).toContainText("Workspace owners and billing admins see it; members do not.");
+    await expect(answered.getByTestId("comment")).toContainText("Yes: the admin picks the role on the invite; editor is the default.");
   });
 
   test("a row without a suggestion offers Stage for agents (first), Decline and Open; Decline declines the item", async ({ page }) => {

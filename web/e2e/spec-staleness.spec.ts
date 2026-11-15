@@ -53,7 +53,7 @@ test("Reconcile opens Regenerate from the PRD with the changed sections named, a
   const panel = stale(page);
   await panel.getByRole("button", { name: "Reconcile" }).click();
   const regen = panel.getByRole("group", { name: "Regenerate from the PRD" });
-  await expect(regen).toContainText('"5.2 Shipping step"');
+  await expect(regen).toContainText('"5.2 Billing step"');
   // Opening it changed nothing: the label stays.
   await expect(panel).toContainText("Potentially stale");
   await regen.getByRole("button", { name: "Cancel" }).click();

@@ -110,7 +110,7 @@ test("evidence: the approver's section view lists links strongest first, the dra
   await expect(insp.getByText("“Week-1 activation rises once the cost shows early.”")).toBeVisible();
   await expect(insp.getByText("Stale link", { exact: true })).toBeVisible();
   // The draft's own citation in this section.
-  await expect(insp.getByTestId("evidence-citation")).toContainText("Q4 goals: activation and retention");
+  await expect(insp.getByTestId("evidence-citation")).toContainText("Q4 goals: activation and growth");
 
   const before = await links.count();
   await links.filter({ hasText: "Usage export" }).getByRole("button", { name: "Remove" }).click();
@@ -259,13 +259,13 @@ test("evidence: a section counts as unsupported only when nothing under it is su
   await expect(select.locator("option", { hasText: "5. Proposed flow" })).toHaveText("5. Proposed flow");
   // qa4-docs-42: the opening section reads as the Introduction, not the PRD's title.
   await expect(select.locator("option", { hasText: "Introduction" })).toHaveText("Introduction");
-  await expect(select.locator("option", { hasText: "5.1 Cart review" })).toHaveText("5.1 Cart review · unsupported");
+  await expect(select.locator("option", { hasText: "5.1 Plan review" })).toHaveText("5.1 Plan review · unsupported");
 
   // The section view and its "No links or citations" filter follow the same rule.
   await page.getByRole("group", { name: "Evidence view" }).getByRole("button", { name: "Sections" }).click();
   await page.getByRole("group", { name: "Sections shown" }).getByRole("button", { name: /No links or citations/ }).click();
   const table = page.getByRole("grid", { name: "Sections" });
-  await expect(table.getByRole("row", { name: /5\.1 Cart review/ })).toBeVisible();
+  await expect(table.getByRole("row", { name: /5\.1 Plan review/ })).toBeVisible();
   await expect(table.getByRole("row", { name: /5\. Proposed flow/ })).toHaveCount(0);
   await expect(table.getByRole("row", { name: /Introduction/ })).toHaveCount(0);
 });

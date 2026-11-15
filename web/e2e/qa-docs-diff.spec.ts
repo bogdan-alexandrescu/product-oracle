@@ -42,10 +42,10 @@ for (const [name, viewport] of [
     test("qa-docs-11: a rewritten sentence reads as one removed phrase, then one added phrase", async ({ page }) => {
       await openDiff(page);
       const words = problem(page).getByTestId("word-diff");
-      await expect(words.locator("del")).toHaveText(["Most start over; many give up."]);
-      await expect(words.locator("ins")).toHaveText(["More than half start over."]);
+      await expect(words.locator("del")).toHaveText(["Most never find signup; many give up."]);
+      await expect(words.locator("ins")).toHaveText(["More than half never find signup."]);
       expect(await interleaved(words)).toEqual([]);
-      await expect(words).toContainText("Shoppers build a cart on their phone, then lose it when they move to a laptop.");
+      await expect(words).toContainText("Admins tell other teams about us, then send them to the home page.");
     });
 
     test("qa-docs-28: no status code, no Open items before there are items, no section anchors", async ({ page }) => {
@@ -90,8 +90,8 @@ test.describe("review: readable word diff", () => {
   });
 
   test("a rewritten sentence still reads as one removed phrase, then one added phrase", () => {
-    const ops = read("Most start over; many give up.", "More than half start over.");
-    expect(ops.filter((w) => w.op === "delete").map((w) => w.text.trim())).toEqual(["Most start over; many give up."]);
-    expect(ops.filter((w) => w.op === "insert").map((w) => w.text.trim())).toEqual(["More than half start over."]);
+    const ops = read("Most never find signup; many give up.", "More than half never find signup.");
+    expect(ops.filter((w) => w.op === "delete").map((w) => w.text.trim())).toEqual(["Most never find signup; many give up."]);
+    expect(ops.filter((w) => w.op === "insert").map((w) => w.text.trim())).toEqual(["More than half never find signup."]);
   });
 });

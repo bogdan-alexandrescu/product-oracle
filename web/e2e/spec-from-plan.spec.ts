@@ -159,10 +159,10 @@ test("the PRD overview lists its engineering specs and requests one for an item"
   // qa-docs-29: the seeded technical brief is listed under Tech briefs, not Engineering specs;
   // qa4-docs-8: the full engineering spec is the one under Engineering specs.
   await expect(page.getByTestId("engineering-specs").getByTestId("engineering-spec")).toHaveCount(1);
-  await expect(page.getByTestId("engineering-specs").getByTestId("engineering-spec")).toContainText("Early shipping cost: engineering spec");
+  await expect(page.getByTestId("engineering-specs").getByTestId("engineering-spec")).toContainText("Early yearly price: engineering spec");
   const seeded = page.getByTestId("tech-briefs");
   await expect(seeded.getByTestId("engineering-spec")).toHaveCount(1);
-  await expect(seeded.getByTestId("engineering-spec").first()).toContainText("Early shipping cost: technical brief");
+  await expect(seeded.getByTestId("engineering-spec").first()).toContainText("Early yearly price: technical brief");
   await expect(seeded.getByTestId("engineering-spec").first()).toContainText("Potentially stale");
 
   await page.goto("/documents/usage-alerts");

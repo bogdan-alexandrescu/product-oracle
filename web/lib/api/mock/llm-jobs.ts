@@ -314,7 +314,7 @@ function runReports(ctx: LlmContext, doc: Doc, v: Version, since: number | null)
         : "This is the first version.",
       sections: changed,
       new_sources: since
-        ? [{ title: "Q3 support ticket export", kind: "upload", about: "Shipping step", url: null, added_at: v.created_at }]
+        ? [{ title: "Q3 support ticket export", kind: "upload", about: "Billing step", url: null, added_at: v.created_at }]
         : [],
     },
   };
@@ -442,7 +442,7 @@ export function seedLlm(ctx: Omit<LlmContext, "db"> & { db?: LlmDb }): LlmDb {
         group_key: "demand figure",
         kind: "section_text",
         section_key: "problem",
-        text: `${problem.body_md.replace(/[ \t]*\[c:[^\]]*\]/g, "")} Seven in ten sales calls with teams this quarter asked for shared editing.`,
+        text: `${problem.body_md.replace(/[ \t]*\[c:[^\]]*\]/g, "")} Seven in ten sales calls with teams this quarter asked to invite teammates.`,
         rationale: "Two reviewers ask for the size of the demand; the headline number goes in the body and its source in Sources and data points.",
         created_at: "2026-10-13T11:05:40Z",
       }),

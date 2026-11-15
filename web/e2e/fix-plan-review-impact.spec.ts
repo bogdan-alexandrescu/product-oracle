@@ -68,7 +68,7 @@ test("impact: a recorded change on a deleted Ground Truth item highlights Ground
   // A change on a deleted Ground Truth item (a requirement) belongs with Ground Truth, never PRDs,
   // when it is opened on its own (qa-plan-12: opened from a PRD's Impact, it stays with PRDs).
   const nav = await openRecordedChange(page, "Acceptance tests", true);
-  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Requirement “Public signup keeps the cart” deleted");
+  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Requirement “Public signup keeps the yearly price” deleted");
   await expect(nav.getByTestId("nav-baseline")).toHaveAttribute("aria-current", "page");
   await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
   // Back twice (the change opened on its own, then from the table) is the PRD's Impact again.
@@ -80,7 +80,7 @@ test("impact: a recorded change on a deleted Ground Truth item highlights Ground
 
 test("impact: a recorded change on a source's permission leaves the rail quiet", async ({ page }) => {
   // A change on a source's permission belongs with neither PRDs nor Ground Truth: the rail stays quiet.
-  const nav = await openRecordedChange(page, "Early shipping cost brief", true);
+  const nav = await openRecordedChange(page, "Early yearly price brief", true);
   await expect(page.getByText(/^Impact:/).filter({ visible: true })).toBeVisible();
   await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
   await expect(nav.getByTestId("nav-baseline")).not.toHaveAttribute("aria-current", "page");

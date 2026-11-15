@@ -24,7 +24,7 @@ async function withFamily(page: Page) {
 
 const PRD = "Usage alerts PRD";
 const ROADMAP = "Usage alerts roadmap";
-const BRIEF = "Early shipping cost: technical brief";
+const BRIEF = "Early yearly price: technical brief";
 
 const prdRow = (page: Page, title: string) => page.getByTestId("document-row").filter({ hasText: title });
 

@@ -679,7 +679,7 @@ export function seedQualityScenario(
   };
   job.output = storeModelReview(s.v2, job, s.versionId, [
     { criterion: "problem_clarity", status: "pass", rationale: "The problem names the teams who share work and the calls that asked for it.", section_keys: ["problem"] },
-    { criterion: "goal_alignment", status: "pass", rationale: "Shared editing maps to the activation goal.", section_keys: [] },
+    { criterion: "goal_alignment", status: "pass", rationale: "Team invites map to the growth goal.", section_keys: [] },
     { criterion: "evidence_provenance", status: "warning", rationale: "One cited figure is older than the last release.", section_keys: [] },
     { criterion: "blocker_feasibility", status: "warning", rationale: "The permissions migration has no stated fallback.", section_keys: [] },
     { criterion: "scope_testability", status: "critical", rationale: "Acceptance criteria describe intent (\"feels easy\") rather than tests; non-goals are missing.", section_keys: ["solution"] },

@@ -22,7 +22,7 @@ const OTHER = "/simple/one-pagers/checkout-redesign";
 const LINE_2 = "A setup checklist that shows the next step";
 
 // vqa B-13, C-13: each PRD's one-pager is built from its own sections, so its first bet is its own.
-const OTHER_BET = "In scope: the cart summary, the shipping step and the order review page on web.";
+const OTHER_BET = "In scope: the plan page, the billing step and the order review page on web.";
 
 async function editLine2(page: Page, text: string) {
   // The first bet's Edit names the line.

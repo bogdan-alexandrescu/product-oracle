@@ -26,14 +26,14 @@ const canvas = (page: Page) => page.getByTestId("design-canvas").filter({ visibl
 async function openFlow(page: Page) {
   await page.goto(BRIEF);
   const design = page.getByTestId("spec-design").filter({ visible: true });
-  await design.getByRole("link", { name: /Early shipping cost: user flows/ }).click();
+  await design.getByRole("link", { name: /Early yearly price: user flows/ }).click();
   await expect(page).toHaveURL(new RegExp(`/specs/${SPEC_ID}/design/${FLOW}$`));
 }
 
 test("an approver opens the flow from the tech brief: sandboxed canvas, Approve off while potentially stale", async ({ page }) => {
   await login(page, "approver@example.com");
   await openFlow(page);
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Early shipping cost: user flows");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Early yearly price: user flows");
   // It belongs with its tech brief: the rail marks PRDs.
   await expect(page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
   const frame = canvas(page).locator("iframe");
@@ -45,7 +45,7 @@ test("an approver opens the flow from the tech brief: sandboxed canvas, Approve 
   const panel = inspector(page);
   // qa4-docs-share-42: the status pills show once, in the page header; the panel names the staleness on its own line.
   await expect(panel).toContainText("May be stale");
-  await expect(page.getByTestId("stale-notice").filter({ visible: true })).toContainText('Section "5.2 Shipping step" changed in Annual billing PRD');
+  await expect(page.getByTestId("stale-notice").filter({ visible: true })).toContainText('Section "5.2 Billing step" changed in Annual billing PRD');
   await expect(panel.getByRole("button", { name: "Approve" })).toBeDisabled();
   await expect(page.getByTestId("stale-notice").filter({ visible: true }).getByRole("link", { name: "Open the tech brief" })).toHaveAttribute("href", BRIEF);
 
@@ -68,7 +68,7 @@ test("annotations are numbered as Oracle labels them, with a thread each and the
   await expect(notes.getByTestId("annotation").first()).toContainText("The quote shows before the address step.");
   await expect(notes.getByTestId("annotation").first()).toContainText("No comments on this annotation yet.");
   // Mockup A: each annotation names its requirements.
-  await expect(notes.getByTestId("annotation").first()).toContainText("Show shipping cost on the cart");
+  await expect(notes.getByTestId("annotation").first()).toContainText("Show the yearly price on the plan page");
 
   // C's filter, with counts: annotations with no comments.
   await expect(notes.getByRole("button", { name: "All 2" })).toBeVisible();
@@ -118,14 +118,14 @@ test("a viewer reads the review without composer or verdicts", async ({ page }) 
 test("wireframes: switch screens, compare 2-4 side by side, see the sanitised notice, and an owner approves", async ({ page }) => {
   await login(page);
   await openFlow(page);
-  await page.getByRole("navigation", { name: "Design artifacts" }).getByRole("link", { name: /Early shipping cost: wireframes/ }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Early shipping cost: wireframes");
+  await page.getByRole("navigation", { name: "Design artifacts" }).getByRole("link", { name: /Early yearly price: wireframes/ }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Early yearly price: wireframes");
   const files = page.getByRole("group", { name: "Files" });
-  await expect(files.getByRole("button", { name: "Cart 1" })).toHaveAttribute("aria-pressed", "true");
+  await expect(files.getByRole("button", { name: "Plan page 1" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.frameLocator('[data-testid="design-canvas"] iframe').first().locator(".oracle-annotations")).toContainText("1. The quote shows before the address step.");
-  await files.getByRole("button", { name: "Cart 2" }).click();
-  await expect(canvas(page).locator("iframe")).toHaveAttribute("title", "Cart 2");
-  await expect(page.getByTestId("sanitised").filter({ visible: true })).toContainText("A part that isn't allowed was removed from Cart 2 for safety.");
+  await files.getByRole("button", { name: "Plan page 2" }).click();
+  await expect(canvas(page).locator("iframe")).toHaveAttribute("title", "Plan page 2");
+  await expect(page.getByTestId("sanitised").filter({ visible: true })).toContainText("A part that isn't allowed was removed from Plan page 2 for safety.");
 
   // B's compare: every screen side by side.
   await page.getByRole("button", { name: "Side by side" }).click();
@@ -146,9 +146,9 @@ test("wireframes: switch screens, compare 2-4 side by side, see the sanitised no
 test("approving v2 supersedes v1: v1 links to v2, names who approved it, and still takes comments", async ({ page }) => {
   await login(page);
   await openFlow(page);
-  await page.getByRole("navigation", { name: "Design artifacts" }).getByRole("link", { name: /Early shipping cost: wireframes · v2/ }).click();
+  await page.getByRole("navigation", { name: "Design artifacts" }).getByRole("link", { name: /Early yearly price: wireframes · v2/ }).click();
   // The flow's review stays in the page, hidden, once v2 shows: its Approve is not the one to press.
-  await expect(inspector(page)).toContainText("Early shipping cost: wireframes v2");
+  await expect(inspector(page)).toContainText("Early yearly price: wireframes v2");
   await inspector(page).getByRole("button", { name: "Approve" }).click();
   await expect(page.getByTestId("page-header").filter({ visible: true })).toContainText("Approved");
 
@@ -214,7 +214,7 @@ test("while a regeneration runs, the design page says so and links the run", asy
   await stale.getByRole("button", { name: "Reconcile" }).click();
   await stale.getByRole("button", { name: "Regenerate from the PRD" }).click();
   await expect(stale).toContainText("regeneration running");
-  await page.getByTestId("spec-design").filter({ visible: true }).getByRole("link", { name: /Early shipping cost: user flows/ }).click();
+  await page.getByTestId("spec-design").filter({ visible: true }).getByRole("link", { name: /Early yearly price: user flows/ }).click();
   await expect(page.getByTestId("stale-notice").filter({ visible: true })).toContainText("regeneration running");
   await expect(page.getByTestId("stale-notice").filter({ visible: true }).getByRole("link", { name: "Open the run" })).toHaveAttribute("href", /^\/runs\//);
 });
@@ -239,7 +239,7 @@ test.describe("phone", () => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
     await page.getByRole("button", { name: "Review the design" }).click();
-    const sheet = page.getByRole("dialog", { name: /Review · Early shipping cost: user flows/ });
+    const sheet = page.getByRole("dialog", { name: /Review · Early yearly price: user flows/ });
     await expect(sheet.getByRole("button", { name: "Approve" })).toBeDisabled();
     await expect(sheet.getByTestId("annotation")).toHaveCount(2);
   });

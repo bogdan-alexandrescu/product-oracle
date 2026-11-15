@@ -89,7 +89,7 @@ test.describe("desktop", () => {
       .getByTestId("engineering-spec")
       .first();
     const link = spec.getByRole("link", {
-      name: "Open Early shipping cost: technical brief",
+      name: "Open Early yearly price: technical brief",
     });
     await expect(link).toHaveText("Open technical brief"); // qa4-docs-share-44
     // The brief's record names v1; an edit made v2, the latest.

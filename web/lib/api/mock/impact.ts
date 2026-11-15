@@ -64,7 +64,7 @@ export function seedImpact(v2: V2Db, ctx: ImpactSeedContext, large: boolean): vo
   };
 
   const deleted: DeletedEntity = {
-    id: ctx.uuid(), type: "requirement", key: "R-90", title: "Public signup keeps the cart", status: "confirmed",
+    id: ctx.uuid(), type: "requirement", key: "R-90", title: "Public signup keeps the yearly price", status: "confirmed",
     locked: false, confidence: 0.82, deleted_at: "2026-10-21T09:00:00Z",
   };
   v2.deleted_entities = [deleted];
@@ -75,7 +75,7 @@ export function seedImpact(v2: V2Db, ctx: ImpactSeedContext, large: boolean): vo
     id: revoked, subject_kind: "source_permission", subject_id: ctx.uuid(), subject_ref: "source:interviews", document_id: null,
     cause: "source_permission", actor: `user:${ctx.userId}`, data: {}, handled_by: ["trace.mark_stale"], created_at: AT,
   } as Schemas["ChangeEventOut"]);
-  output("tech_brief", "Early shipping cost brief", "approved", "potentially_stale", [
+  output("tech_brief", "Early yearly price brief", "approved", "potentially_stale", [
     { upstream_section_key: "problem" },
     { upstream_section_key: "users", caused_by_change_id: revoked },
   ]);
@@ -83,7 +83,7 @@ export function seedImpact(v2: V2Db, ctx: ImpactSeedContext, large: boolean): vo
     { upstream_section_key: "scope" },
     ...(ctx.entity ? [{ upstream_version_id: null, upstream_entity_id: ctx.entity.id }] : []),
   ]);
-  output("wireframe", "Cart wireframes", "draft", "under_review", [{ upstream_section_key: "scope" }]);
+  output("wireframe", "Plan page wireframes", "draft", "under_review", [{ upstream_section_key: "scope" }]);
   // Recorded: deleting R-90 marked the tests built on it, and on the risks section that linked it.
   const change = ctx.uuid();
   v2.change_events.push({

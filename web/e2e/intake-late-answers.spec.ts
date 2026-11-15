@@ -103,7 +103,7 @@ test("a late answer leaves the PRD's feedback when its finding goes back to priv
     await feedbackState(page, "Open");
     await showAll(page);
     // Loaded: the open comment on the address cards is listed whatever the late answer does.
-    await expect(page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: "most recently used address" })).toHaveCount(1);
+    await expect(page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: "current seat count" })).toHaveCount(1);
     return page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: REPLY });
   };
   await expect(await listed()).toHaveCount(1);

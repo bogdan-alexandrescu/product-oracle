@@ -17,10 +17,10 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
   await expect(page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^New/ })).toHaveAttribute("aria-selected", "true");
   const feedback = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback");
   // Feedback is one row per item, with its document and what to do.
-  const comment = feedback.locator("tr[data-row]").filter({ hasText: "Should the most recently used address be selected by default?" });
+  const comment = feedback.locator("tr[data-row]").filter({ hasText: "Should the current seat count be selected by default?" });
   await expect(comment).toContainText("Annual billing PRD");
   await expect(comment.getByRole("button", { name: "Decline", exact: true })).toBeVisible();
-  await expect(comment.getByRole("link", { name: /^Open Should the most recently used address/ })).toBeVisible();
+  await expect(comment.getByRole("link", { name: /^Open Should the current seat count/ })).toBeVisible();
 
   // Approve the cost from the inbox: the run starts and leaves the list.
   await page.getByTestId("inbox-approvals").getByRole("button", { name: "Approve $53.00" }).click();

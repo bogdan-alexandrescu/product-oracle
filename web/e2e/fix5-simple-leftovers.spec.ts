@@ -57,7 +57,7 @@ for (const [name, device] of [
     test("the roadmap diff writes a milestone's day month first", async ({ page }) => {
       await login(page);
       await page.goto("/documents/checkout-redesign/diff?from=1&to=2");
-      const item = visible(page, "diff-item").filter({ hasText: "Shipping step" });
+      const item = visible(page, "diff-item").filter({ hasText: "Billing step" });
       await expect(item).toContainText("Date: Nov 30, 2026 → none");
       await expect(visible(page, "diff-items")).not.toContainText(GB_DAY);
     });

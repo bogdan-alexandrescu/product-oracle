@@ -63,12 +63,12 @@ test.describe("desktop", () => {
     await openDoc(page, "checkout-redesign");
     const specs = page.getByTestId("engineering-specs");
     await expect(specs.getByTestId("engineering-spec")).toHaveCount(1);
-    await expect(specs.getByTestId("engineering-spec")).toContainText("Early shipping cost: engineering spec");
+    await expect(specs.getByTestId("engineering-spec")).toContainText("Early yearly price: engineering spec");
     await expect(specs.getByTestId("engineering-specs-empty")).toHaveCount(0);
     await expect(specs).not.toContainText("No full engineering spec yet");
     // The technical brief stays under Tech briefs.
-    await expect(page.getByTestId("tech-briefs")).toContainText("Early shipping cost: technical brief");
-    await specs.getByRole("link", { name: "Open Early shipping cost: engineering spec" }).click();
+    await expect(page.getByTestId("tech-briefs")).toContainText("Early yearly price: technical brief");
+    await specs.getByRole("link", { name: "Open Early yearly price: engineering spec" }).click();
     await expect(page).toHaveURL(/\/documents\/checkout-redesign-early-shipping-cost-engineering-spec\/v\/1$/);
   });
 
@@ -155,7 +155,7 @@ test.describe("desktop", () => {
   test("qa4-docs-30: a tech brief's freshness and a spec's state say potentially stale the same way", async ({ page }) => {
     await openDoc(page, "checkout-redesign");
     const briefs = page.getByTestId("tech-briefs");
-    const spec = briefs.getByTestId("engineering-spec").filter({ hasText: "Early shipping cost: technical brief" });
+    const spec = briefs.getByTestId("engineering-spec").filter({ hasText: "Early yearly price: technical brief" });
     await expect(spec).toContainText("Potentially stale");
     await expect(briefs.getByText("Stale", { exact: true })).toHaveCount(0);
   });

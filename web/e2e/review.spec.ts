@@ -41,9 +41,9 @@ test("open a version: sections in order with citation chips", async ({ page }) =
     "3 Users and jobs",
     "4 Scope",
     "5 Proposed flow",
-    "5.1 Cart review",
-    "5.2 Shipping step",
-    "5.3 Bulk import",
+    "5.1 Plan review",
+    "5.2 Billing step",
+    "5.3 Seat count",
     "6 Risks and open questions",
     "7 Success metrics",
   ]);
@@ -56,9 +56,9 @@ test("open a version: sections in order with citation chips", async ({ page }) =
     "Users and jobs",
     "Scope",
     "Proposed flow",
-    "Cart review",
-    "Shipping step",
-    "Bulk import",
+    "Plan review",
+    "Billing step",
+    "Seat count",
     "Risks and open questions",
     "Success metrics",
   ]);
@@ -68,8 +68,8 @@ test("open a version: sections in order with citation chips", async ({ page }) =
   await expect(chip).toHaveText(/Slack/);
   await chip.hover();
   const card = page.getByRole("tooltip");
-  await expect(card).toContainText("#product thread on checkout drop-off");
-  await expect(card).toContainText("Most users who abandon do it at the shipping step");
+  await expect(card).toContainText("#product thread on yearly plans");
+  await expect(card).toContainText("Most teams who ask for a discount ask for a yearly price");
   await expect(card.getByRole("link", { name: /Open source/ })).toHaveAttribute("href", /example\.slack\.com/);
 });
 
@@ -201,8 +201,8 @@ test("open the diff: section badges and word-level changes", async ({ page }) =>
   const HEADINGS: Record<string, string> = {
     "goal-trace": "1. Goal trace",
     problem: "2. Problem",
-    "s-5-2": "5.2 Shipping step",
-    "s-5-3": "5.3 Bulk import",
+    "s-5-2": "5.2 Billing step",
+    "s-5-3": "5.3 Seat count",
     risks: "6. Risks and open questions",
     metrics: "7. Success metrics",
     rollout: "8. Rollout",

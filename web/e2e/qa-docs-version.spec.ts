@@ -37,7 +37,7 @@ test.describe("desktop", () => {
   test("qa-docs-5: the technical brief's versions load with no console error", async ({ page }) => {
     const errors = collectErrors(page);
     await openVersion(page, BRIEF_V1);
-    await expect(page.getByTestId("doc-header")).toContainText("Early shipping cost: technical brief");
+    await expect(page.getByTestId("doc-header")).toContainText("Early yearly price: technical brief");
     await page.goto(BRIEF_V2);
     await expect(page.getByTestId("document-sections")).toBeVisible();
     expect(errors).toEqual([]);
@@ -230,7 +230,7 @@ test.describe("phone", () => {
     await openVersion(page, BRIEF_V1);
     const h1 = page.getByTestId("doc-header").getByRole("heading", { level: 1 });
     await expect(h1).toBeVisible();
-    await expect(h1).toContainText("Early shipping cost: technical brief");
+    await expect(h1).toContainText("Early yearly price: technical brief");
     const cut = await h1.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
     expect(cut).toBe(false);
   });

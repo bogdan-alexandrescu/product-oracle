@@ -6,9 +6,9 @@ import { login } from "./helpers";
 // E3b Roadmap diffs for PRD drafts: a PRD draft's Roadmap tab compared with the previous
 // draft or the approved plan, item by item.
 //
-// The default mock seeds checkout-redesign v1 (Cart review and Shipping step in Now, Guest
+// The default mock seeds checkout-redesign v1 (Plan review and Billing step in Now, Guest
 // checkout in Next, One-tap wallet pay in Later) and v2 (Public signup moved to Now, the
-// Shipping step's date removed, Bulk import new, wallet pay gone). The "approved-plan"
+// Billing step's date removed, Bulk import new, wallet pay gone). The "approved-plan"
 // scenario adds usage-alerts-roadmap v1 approved (Behaviour in Now, Success metrics in Next)
 // and usage-alerts v2, a draft whose items move Behaviour to Next and add Spend limits.
 
@@ -36,7 +36,7 @@ test("a draft's Roadmap tab opens on what changed since the previous draft", asy
   await expect(visible(page, "filter-changed")).toHaveText("Changed4");
   await expect(visible(page, "items-compare-summary")).toHaveText("Since draft v1: 1 new · 1 dropped · 1 moved · 1 changed");
   await expect(row(page, "Public signup").getByTestId("item-change")).toHaveText("Next → Now");
-  await expect(row(page, "Shipping step").getByTestId("item-change")).toHaveText("Date removed");
+  await expect(row(page, "Billing step").getByTestId("item-change")).toHaveText("Date removed");
   await expect(row(page, "Bulk import").getByTestId("item-change")).toHaveText("New");
   const ghost = visible(page, "roadmap-item-ghost");
   await expect(ghost).toHaveCount(1);
@@ -49,10 +49,10 @@ test("a draft's Roadmap tab opens on what changed since the previous draft", asy
   });
   expect(group).toBe("later");
   // The unchanged item waits for All.
-  await expect(row(page, "Cart review")).toHaveCount(0);
+  await expect(row(page, "Plan review")).toHaveCount(0);
   await chip(page, /^All/).click();
   await expect(page).toHaveURL(/filter=all/);
-  await expect(row(page, "Cart review")).toHaveCount(1);
+  await expect(row(page, "Plan review")).toHaveCount(1);
 });
 
 // Card draft-inspector (#177 criterion 7): protects = the inspector says what changed since

@@ -7,8 +7,8 @@ import { login } from "./helpers";
 // versions compared item by item, as a roadmap version's Items tab compares them.
 //
 // The default mock seeds checkout-redesign v1 and v2 draft items (Public signup moved to
-// Now, the Shipping step's date removed, Bulk import new, One-tap wallet pay dropped,
-// Cart review unchanged). The "roadmap-diff" scenario: usage-alerts-roadmap v2 adds Spend
+// Now, the Billing step's date removed, Bulk import new, One-tap wallet pay dropped,
+// Plan review unchanged). The "roadmap-diff" scenario: usage-alerts-roadmap v2 adds Spend
 // limits, moves Behaviour to Next and drops Usage exports. saved-carts has no draft items.
 
 const visible = (page: Page, testId: string) => page.getByTestId(testId).filter({ visible: true });
@@ -26,16 +26,16 @@ test("the PRD diff page shows what changed in the roadmap items", async ({ page 
   await expect(visible(page, "diff-items-summary")).toHaveText("Since draft v1: 1 new · 1 dropped · 1 moved · 1 changed");
   await expect(visible(page, "diff-item")).toHaveCount(4);
   await expect(item(page, "Public signup").getByTestId("item-change")).toHaveText("Next → Now");
-  await expect(item(page, "Shipping step").getByTestId("item-change")).toHaveText("Date removed");
+  await expect(item(page, "Billing step").getByTestId("item-change")).toHaveText("Date removed");
   await expect(item(page, "Bulk import").getByTestId("item-change")).toHaveText("New");
   const dropped = item(page, "One-tap wallet pay");
   await expect(dropped).toHaveAttribute("data-change", "dropped");
   await expect(dropped.locator("s")).toHaveText("One-tap wallet pay");
   // The unchanged item waits for the Unchanged toggle, as unchanged sections do.
-  await expect(item(page, "Cart review")).toHaveCount(0);
+  await expect(item(page, "Plan review")).toHaveCount(0);
   await panel.getByLabel("Show unchanged items").check();
-  await expect(item(page, "Cart review")).toHaveCount(1);
-  await expect(item(page, "Cart review")).toHaveAttribute("data-change", "unchanged");
+  await expect(item(page, "Plan review")).toHaveCount(1);
+  await expect(item(page, "Plan review")).toHaveAttribute("data-change", "unchanged");
   await panel.getByRole("link", { name: "Open items" }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/roadmap$/);
 });
@@ -47,7 +47,7 @@ test("an item on the diff page lists what changed", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/diff?from=1&to=2");
   await expect(item(page, "Public signup")).toContainText("Horizon: Next → Now");
-  await expect(item(page, "Shipping step")).toContainText("Date: Nov 30, 2026 → none");
+  await expect(item(page, "Billing step")).toContainText("Date: Nov 30, 2026 → none");
 });
 
 // Card roadmap-diff-items: protects = a roadmap's diff page compares its versions' items too,

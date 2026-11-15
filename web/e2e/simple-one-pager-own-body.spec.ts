@@ -33,7 +33,7 @@ test("Team invites PRD's one-pager shows its own Problem and scope, not Guided s
   await expect(problem).not.toContainText(GUIDED_SETUP_PROBLEM);
 
   const bets = page.getByRole("region", { name: "What we will build" });
-  await expect(bets).toContainText("Create a workspace and invite members");
+  await expect(bets).toContainText("Invite teammates by email");
   await expect(bets).not.toContainText("A setup checklist that shows the next step");
 
   // C-13: no roadmap item of this mock names Team invites, so its span is its own: none.

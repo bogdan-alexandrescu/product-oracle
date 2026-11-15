@@ -20,7 +20,7 @@ import { login } from "./helpers";
 
 const NEW_PERSON = "new.person@example.com";
 const METRIC = "Add a metric that shows the outbound check works";
-const ADDRESS = "Should the most recently used address be selected by default?";
+const ADDRESS = "Should the current seat count be selected by default?";
 
 const tabs = (page: Page) => page.getByTestId("inbox-state-tabs");
 const tab = (page: Page, name: string) => tabs(page).getByRole("tab", { name: new RegExp(`^${name}`) });

@@ -151,7 +151,7 @@ test("Open PRD section goes to the Document tab with the item's section open", a
   await expect(page).toHaveURL(new RegExp(`${PRD}/v/2#s-5-3$`));
   await expect(visible(page, "version-tab-document")).toHaveAttribute("aria-current", "page");
   await expect(section(page, "s-5-3")).toBeVisible();
-  await expect(section(page, "s-5-3")).toContainText("5.3 Bulk import");
+  await expect(section(page, "s-5-3")).toContainText("5.3 Seat count");
 });
 
 // Card draft-phone: protects = at 390 px the tab bar fits, rows stack, a tap opens the

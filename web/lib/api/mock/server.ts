@@ -2364,15 +2364,15 @@ function seedSuggestions(): Db {
   const w2 = findVersion(db, findDocument(db, "team-workspaces")!, 2)!;
   const replies: [string, Schemas["TextQuoteSelector"], "answer" | "none", string | null, string][] = [
     [
-      "Who can see a workspace's billing page?",
-      { exact: "One invoice per workspace", prefix: "", suffix: ", with seats" },
+      "Can an invited teammate join as a viewer instead?",
+      { exact: "One click for a teammate to join", prefix: "", suffix: ", as an editor" },
       "answer",
-      "Workspace owners and billing admins see it; members do not.",
-      "The roles section says who manages billing.",
+      "Yes: the admin picks the role on the invite; editor is the default.",
+      "The roles section says what each role can do.",
     ],
     [
       "The scope reads well as it is.",
-      { exact: "Move existing projects into a workspace", prefix: "", suffix: "." },
+      { exact: "Resend or cancel an invite that is still open", prefix: "", suffix: "." },
       "none",
       null,
       "A remark that approves the section: nothing to change.",
@@ -3074,25 +3074,25 @@ function seed(): Db {
   addComment(db, c1, {
     section_key: "problem",
     anchor: {
-      exact: "Most abandonment happens at the shipping step",
-      prefix: "Buyers leave checkout when the total changes late in the flow. ",
-      suffix: ", right after shipping cost appears",
+      exact: "Most drop-off happens at the billing step",
+      prefix: "Admins leave the plan page when the yearly price shows up late in the flow. ",
+      suffix: ", right after the monthly total appears",
     },
     body: "Can we put a number on this? A funnel figure would make the case much stronger.",
   }, at("2026-10-16T15:02:00Z"));
   addComment(db, c1, {
     section_key: "s-5-2",
     anchor: {
-      exact: "Each option shows its price and delivery window",
-      prefix: "Replace the free-text shipping options with three clear choices: standard, express and pickup. ",
+      exact: "Each option shows its price and renewal date",
+      prefix: "Replace the free-text billing options with three clear choices: monthly, yearly and yearly by invoice. ",
       suffix: " before it is selected.",
     },
-    body: "Which option is preselected? Defaulting to the cheapest one would match the cart estimate.",
+    body: "Which option is preselected? Defaulting to yearly would match the plan page.",
   }, at("2026-10-16T15:10:00Z"));
   addReview(db, c1, "goal-trace", { verdict: "approved", note: "Clear link to G1." }, at("2026-10-16T15:20:00Z"));
   addReview(db, c1, "metrics", {
     verdict: "changes_requested",
-    note: "Add a guardrail metric so we notice if a faster checkout increases refunds.",
+    note: "Add a guardrail metric so we notice if yearly plans increase refunds.",
   }, at("2026-10-16T15:24:00Z"));
   addReview(db, c1, "rollout", {
     verdict: "rejected",
@@ -3100,7 +3100,7 @@ function seed(): Db {
   }, at("2026-10-16T15:26:00Z"));
   const notes: Record<string, string> = {
     problem: "Added the September funnel numbers to §2.",
-    "s-5-2": "The cheapest option is now preselected, see §5.2.",
+    "s-5-2": "The yearly option is now preselected, see §5.2.",
     metrics: "Added a refund-rate guardrail and a stop rule.",
     rollout: "Removed; the rollout now lives in the launch plan.",
   };
@@ -3118,10 +3118,10 @@ function seed(): Db {
     section_key: "s-5-3",
     anchor: {
       exact: "Choosing a card fills the form",
-      prefix: "eir imported rows as cards on the shipping step. ",
-      suffix: " and recalculates the shipping options in place.",
+      prefix: "eir current seats as cards on the billing step. ",
+      suffix: " and recalculates the yearly price in place.",
     },
-    body: "Should the most recently used address be selected by default?",
+    body: "Should the current seat count be selected by default?",
   }, at("2026-10-17T09:40:00Z"));
   docs.get("checkout-redesign")!.status = "in_review";
 
@@ -3141,7 +3141,7 @@ function seed(): Db {
   const w2 = ver("team-workspaces", 2);
   addComment(db, w2, {
     section_key: "problem",
-    anchor: { exact: "Requests for shared editing come up in most sales conversations", prefix: "around. ", suffix: " with teams" },
+    anchor: { exact: "Requests to invite teammates come up in most sales conversations", prefix: "around. ", suffix: " with teams" },
     body: "Say how many teams asked for this; a number would make the case.",
   }, at("2026-10-13T10:50:00Z"));
   addComment(db, w2, {
@@ -4957,7 +4957,7 @@ function load(): Db {
   // #711 "long-title": the saved-carts PRD under a title as long as real PRD titles are.
   if (scenario === "long-title") {
     const carts = db.documents.find((d) => d.slug === "saved-carts");
-    if (carts) carts.title = "Referral link for returning buyers PRD";
+    if (carts) carts.title = "Referral link for new teams PRD";
   }
   // PR 1300 review: saved-carts v2's Problem is one paragraph longer than a slide (E-9).
   if (scenario === "long-paragraph") {
@@ -5012,7 +5012,7 @@ function load(): Db {
     if (first) {
       db.review_v2.patches.push({
         ...first, id: "p0000000-0000-4000-8000-000000000002", section_key: "launch-checklist", heading: "Launch checklist",
-        base_hash: hash("launch-checklist"), body_md: "Tell support a day before the cart change ships.",
+        base_hash: hash("launch-checklist"), body_md: "Tell support a day before the plan page change ships.",
       });
     }
   }
@@ -5143,7 +5143,7 @@ function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): Discus
   const at = "2026-10-21T08:25:00Z";
   ensureV2(db).questions.push({
     id: uuid(), gap_id: null, intake_id: null, document_id: doc.id, checkpoint_id: null, item_ref: null, entity_id: null,
-    module_key: null, category: "general", prompt: "How long should a guest's cart last?", rationale: null, priority: 100,
+    module_key: null, category: "general", prompt: "How long should a guest's link last?", rationale: null, priority: 100,
     batch: null, asked_to: db.members.find((m) => m.email === "approver@example.com")!.id, asked_by: null, section_key: null,
     status: "asked", created_at: at, updated_at: at, discussion_id: d.id, discussion_title: d.title,
   });

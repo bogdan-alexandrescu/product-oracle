@@ -43,9 +43,9 @@ test("inbox: one feedback row per item, saying what waits and linking to its sec
 
   // A comment without a suggestion: Decline, and Open to its section.
   const checkout = page.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Annual billing PRD" });
-  await expect(checkout).toContainText("most recently used address");
+  await expect(checkout).toContainText("current seat count");
   await expect(checkout.getByRole("button", { name: "Decline", exact: true })).toBeVisible();
-  await expect(checkout.getByRole("link", { name: /^Open Should the most recently used address/ })).toHaveAttribute(
+  await expect(checkout.getByRole("link", { name: /^Open Should the current seat count/ })).toHaveAttribute(
     "href",
     "/documents/checkout-redesign/v/2?feedback=open#s-5-3",
   );
@@ -174,14 +174,14 @@ test("comment feedback items: Resolve and Reopen at the top", async ({ page }) =
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2?feedback=open#s-5-3");
   const comment = item(page, "s-5-3");
-  await expect(comment).toContainText("most recently used address");
+  await expect(comment).toContainText("current seat count");
   const resolve = comment.getByRole("button", { name: "Resolve", exact: true });
   await expect(resolve).toBeInViewport();
   await resolve.click();
   // Open only: the resolved item leaves the list; Done shows it, with Reopen.
   await expect(items(page)).toHaveCount(0);
   await feedbackState(page, "Done");
-  const done = item(page, "s-5-3").filter({ hasText: "most recently used address" });
+  const done = item(page, "s-5-3").filter({ hasText: "current seat count" });
   await expect(done.getByTestId("feedback-state-chip")).toHaveText("Done");
   await done.getByRole("button", { name: "Reopen" }).click();
   await expect(done).toHaveCount(0);
@@ -195,11 +195,11 @@ test("on a slow network, the author's Resolve waits for their role: it resolves 
   await page.evaluate(([key, path]) => localStorage.setItem(key, path), [MOCK_SLOW_KEY, "/v1/me/capabilities"]);
   await page.goto("/documents/checkout-redesign/v/2?feedback=open#s-5-3");
   const comment = item(page, "s-5-3");
-  await expect(comment).toContainText("most recently used address");
+  await expect(comment).toContainText("current seat count");
   await comment.getByRole("button", { name: "Resolve", exact: true }).click();
   await expect(items(page)).toHaveCount(0);
   await feedbackState(page, "Done");
-  const done = item(page, "s-5-3").filter({ hasText: "most recently used address" });
+  const done = item(page, "s-5-3").filter({ hasText: "current seat count" });
   await expect(done.getByTestId("feedback-state-chip")).toHaveText("Done");
   // The item itself is resolved: Reopen, nothing left to resolve or stage.
   await expect(done.getByRole("button", { name: "Reopen" })).toBeVisible();

@@ -21,7 +21,7 @@ test("X-9: the Sources slide lists each source by title, without its kind", asyn
   await expect(slide.locator(".slide-title")).toHaveText("Sources and data points");
   const items = slide.locator(".slide-sources li");
   await expect(items).toHaveCount(2);
-  await expect(items.locator(".src-title")).toHaveText(["Cart abandonment survey", "Repeat orders, Q3 review"]);
+  await expect(items.locator(".src-title")).toHaveText(["Referral survey", "New teams, Q3 review"]);
   await expect(items.nth(0)).toContainText(/retrieved Oct\s15,\s2026,\s3:00\sAM\sPDT/);
   await expect(slide.locator(".src-kind")).toHaveCount(0);
   for (const kind of ["web", "gdocs"]) await expect(slide.locator(".slide-sources")).not.toContainText(kind);

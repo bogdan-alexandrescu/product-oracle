@@ -86,7 +86,7 @@ test.describe("desktop", () => {
     await page.goto(CHECKOUT);
     await openTab(page, "Sources");
     const list = page.getByTestId("sources-list").filter({ visible: true });
-    await expect(list.getByRole("listitem").filter({ hasText: "#product thread on checkout drop-off" }).getByTestId("source-label")).toHaveText(
+    await expect(list.getByRole("listitem").filter({ hasText: "#product thread on yearly plans" }).getByTestId("source-label")).toHaveText(
       "Slack · High confidence",
     );
     await expect(list).not.toContainText("0.82");
@@ -96,7 +96,7 @@ test.describe("desktop", () => {
 
   test("qa4-docs-39: someone else's feedback shows its author's name beside the avatar", async ({ page }) => {
     await openFeedback(page, CHECKOUT, "commenter@example.com");
-    const item = feedbackItem(page, "most recently used address");
+    const item = feedbackItem(page, "current seat count");
     await expect(item.getByTestId("feedback-author")).toHaveText("Avery Stone");
     await expect(item.getByRole("img", { name: "Avery Stone" })).toHaveText("AS");
   });

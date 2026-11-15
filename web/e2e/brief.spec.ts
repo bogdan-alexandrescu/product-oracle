@@ -42,7 +42,7 @@ test("brief: a document opens on its brief; Full switches, and the choice is rem
   await expect(section(page, "summary").getByTestId("layer-badge")).toHaveCount(0);
   // Presenter notes belong to Present mode: the document does not show the notes block.
   await expect(section(page, "summary").first()).toContainText("approve the beta scope");
-  await expect(section(page, "summary").first()).not.toContainText("Open with how many carts");
+  await expect(section(page, "summary").first()).not.toContainText("Open with how many new teams");
   await expect(section(page, "summary").first().locator("pre")).toHaveCount(0);
   // The detail is not shown.
   await expect(section(page, "feature-detail")).toHaveCount(0);
@@ -121,32 +121,32 @@ test("expand: a feature row and a milestone show their detail in place; comments
   await page.goto("/documents/saved-carts/v/2");
   const items = await openSection(page, "brief-items");
 
-  await items.getByRole("button", { name: "Expand Save cart" }).click();
-  const detail = section(page, "feature-save-cart");
+  await items.getByRole("button", { name: "Expand Copy link" }).click();
+  const detail = section(page, "feature-copy-link");
   await expect(detail).toBeVisible();
   await expect(detail.getByTestId("layer-badge")).toHaveText("Detail");
-  await expect(detail).toContainText("I want my cart kept when I leave");
-  await expect(items.getByRole("button", { name: "Collapse Save cart" })).toHaveAttribute("aria-expanded", "true");
+  await expect(detail).toContainText("I want a link I can copy");
+  await expect(items.getByRole("button", { name: "Collapse Copy link" })).toHaveAttribute("aria-expanded", "true");
   // The milestone in the same table expands too, and so does the outcome-level roadmap's.
   await items.getByRole("button", { name: "Expand Beta" }).click();
-  await expect(section(page, "milestone-beta")).toContainText("Exit: two weeks without a lost cart");
+  await expect(section(page, "milestone-beta")).toContainText("Exit: two weeks without a broken link");
   // Expanded detail is content only: the open section keeps the one review bar.
   await expect(page.getByTestId("review-bar").filter({ visible: true })).toHaveCount(1);
 
   // Comment on the expanded detail: anchored there, labelled Detail in the panel.
-  await selectText(page, "feature-save-cart", "my cart kept when I leave");
+  await selectText(page, "feature-copy-link", "a link I can copy");
   await page.getByRole("button", { name: /^Comment(\s+c)?$/ }).click();
   const dialog = page.getByRole("dialog", { name: "New comment" });
   await dialog.getByLabel("Comment").fill("Kept for how long?");
   await dialog.getByLabel("Comment").press("Control+Enter");
   await expect(dialog).toBeHidden();
-  await expect(detail.locator("mark.hl-comment")).toHaveText("my cart kept when I leave");
+  await expect(detail.locator("mark.hl-comment")).toHaveText("a link I can copy");
   const detailComment = page.getByTestId("comment").filter({ hasText: "Kept for how long?" });
   await expect(detailComment.getByTestId("layer-badge")).toHaveText("Detail");
 
   // And on a brief section: labelled Brief.
   await openSection(page, "problem");
-  await selectText(page, "problem", "lose it when they move to a laptop");
+  await selectText(page, "problem", "send them to the home page");
   await page.getByRole("button", { name: /^Comment(\s+c)?$/ }).click();
   await dialog.getByLabel("Comment").fill("How often?");
   await dialog.getByLabel("Comment").press("Control+Enter");
@@ -174,11 +174,11 @@ test("expand: a feature row and a milestone show their detail in place; comments
   // Back on the brief, Collapse hides the detail again; a comment on it opens it from the panel.
   await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Brief" }).click();
   await openSection(page, "brief-items");
-  await items.getByRole("button", { name: "Collapse Save cart" }).click();
-  await expect(section(page, "feature-save-cart")).toHaveCount(0);
+  await items.getByRole("button", { name: "Collapse Copy link" }).click();
+  await expect(section(page, "feature-copy-link")).toHaveCount(0);
   await showAll(page);
-  await detailComment.getByRole("button", { name: /Show comment in Save cart/ }).click();
-  await expect(section(page, "feature-save-cart")).toBeVisible();
+  await detailComment.getByRole("button", { name: /Show comment in Copy link/ }).click();
+  await expect(section(page, "feature-copy-link")).toBeVisible();
 });
 
 test("present: one brief section per slide, keyboard and click navigation, Expand overlay, presenter view", async ({
@@ -201,7 +201,7 @@ test("present: one brief section per slide, keyboard and click navigation, Expan
   await page.keyboard.press("ArrowRight");
   await expect(counter).toHaveText("2 / 10");
   await expect(present.getByRole("heading", { name: "Summary" })).toBeVisible();
-  await expect(present.getByText("Open with how many carts")).toHaveCount(0); // notes never on the slide
+  await expect(present.getByText("Open with how many new teams")).toHaveCount(0); // notes never on the slide
   await page.getByTestId("audience-view").click();
   await expect(counter).toHaveText("3 / 10");
   await page.keyboard.press("ArrowLeft");
@@ -215,16 +215,16 @@ test("present: one brief section per slide, keyboard and click navigation, Expan
   await expect(present.getByRole("region", { name: "Slide 5 of 10: Features by milestone" })).toBeVisible();
 
   // Expand a feature on the slide: its detail opens in an overlay for questions.
-  await present.getByRole("button", { name: "Expand Save cart" }).click();
-  const overlay = page.getByRole("dialog", { name: "Detail: Save cart" });
+  await present.getByRole("button", { name: "Expand Copy link" }).click();
+  const overlay = page.getByRole("dialog", { name: "Detail: Copy link" });
   await expect(overlay).toBeVisible();
-  await expect(overlay).toContainText("I want my cart kept when I leave");
+  await expect(overlay).toContainText("I want a link I can copy");
   await page.keyboard.press("ArrowRight"); // ignored while the overlay is open
   await page.keyboard.press("Escape");
   await expect(overlay).toBeHidden();
   await expect(counter).toHaveText("5 / 10");
   await present.getByRole("button", { name: "Expand Beta" }).click();
-  await expect(page.getByRole("dialog", { name: "Detail: Beta" })).toContainText("two weeks without a lost cart");
+  await expect(page.getByRole("dialog", { name: "Detail: Beta" })).toContainText("two weeks without a broken link");
   await page.getByRole("button", { name: "Close" }).click();
 
   // Presenter view: the current slide, the next one and the notes.
@@ -235,7 +235,7 @@ test("present: one brief section per slide, keyboard and click navigation, Expan
   await expect(page.getByTestId("presenter-notes")).toHaveText("No notes for this slide.");
   await page.keyboard.press("Home");
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByTestId("presenter-notes")).toHaveText("Open with how many carts are lost when a session ends.");
+  await expect(page.getByTestId("presenter-notes")).toHaveText("Open with how many new teams come from a colleague today.");
   await expect(presenter.getByRole("region", { name: "Slide 3 of 10: Goal trace" })).toBeVisible();
   await page.getByRole("button", { name: "Audience view" }).click();
   await expect(page.getByTestId("audience-view")).toBeVisible();
@@ -249,7 +249,7 @@ test("present: a slide without a notes block says so in the presenter view", asy
   // Slide 2 (Summary) has a notes block; Problem (slide 4) and the title slide do not.
   await page.goto("/documents/saved-carts/v/2/present?view=presenter&slide=2");
   const notes = page.getByTestId("presenter-notes");
-  await expect(notes).toHaveText("Open with how many carts are lost when a session ends.");
+  await expect(notes).toHaveText("Open with how many new teams come from a colleague today.");
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
   await expect(page.getByTestId("slide-counter")).toHaveText("4 / 10");

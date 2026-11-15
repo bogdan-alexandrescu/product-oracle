@@ -87,7 +87,7 @@ for (const view of VIEWS) {
         const save = form.getByRole("button", { name: "Save", exact: true });
         await expect(save).toBeDisabled();
         await form.getByLabel("Name").fill("Partner page");
-        await form.getByLabel("Outcome: what changes for people").fill("Shoppers pick up where they left off");
+        await form.getByLabel("Outcome: what changes for people").fill("Partners find their own page from the website");
         await form.getByLabel("Milestone").selectOption({ index: 1 });
         await expect(save).toBeEnabled();
         await save.click();
@@ -237,7 +237,7 @@ for (const view of VIEWS) {
           await expect(ghost).toContainText("Partner page");
           await expect(ghost).toContainText("Draft");
           await expect(ghost.getByTestId("prio-code")).toHaveCount(0);
-          await expect(ghost).not.toContainText("saved-carts");
+          await expect(ghost).not.toContainText("partner-page");
           await expect(ghost).not.toContainText("PM-owned");
           await page.mouse.up();
         } else {

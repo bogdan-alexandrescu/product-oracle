@@ -126,14 +126,14 @@ function checkOf(items: Item[], problems: DraftRoadmapCheck["problems"] = []): D
   return { items: items.length, by_horizon: { now: n("now"), next: n("next"), later: n("later") }, problems };
 }
 
-const CART: ItemSeed = { key: "cart-review", title: "Cart review shows the full price", outcome: "Buyers see the whole price before they start checkout", horizon: "now", section: "s-5-1", rank: 1, confidence: "high", milestone: { name: "Beta" }, feature: { key: "F-41", title: "Cart review shows the full price" } };
-const GUEST: ItemSeed = { key: "public-signup", title: "Public signup", outcome: "First-time buyers check out without an account", horizon: "next", section: "scope", rank: 3, confidence: "medium" };
+const CART: ItemSeed = { key: "cart-review", title: "Plan review shows the yearly price", outcome: "Admins see the yearly price before they pay", horizon: "now", section: "s-5-1", rank: 1, confidence: "high", milestone: { name: "Beta" }, feature: { key: "F-41", title: "Plan review shows the yearly price" } };
+const GUEST: ItemSeed = { key: "public-signup", title: "Public signup", outcome: "New admins sign up without talking to sales", horizon: "next", section: "scope", rank: 3, confidence: "medium" };
 
 /** checkout-redesign v1: four items, no problems. */
 function seedV1(): ItemSeed[] {
   return [
     CART,
-    { key: "shipping-step", title: "Shipping step on one screen", outcome: "Buyers choose a shipping option without leaving the step", horizon: "now", section: "s-5-2", rank: 2, confidence: "medium", milestone: { name: "Beta", date: "2026-11-30", date_source: "EST-1", basis_ids: [] } },
+    { key: "shipping-step", title: "Billing step on one screen", outcome: "Admins choose a billing option without leaving the step", horizon: "now", section: "s-5-2", rank: 2, confidence: "medium", milestone: { name: "Beta", date: "2026-11-30", date_source: "EST-1", basis_ids: [] } },
     GUEST,
     { key: "wallet-pay", title: "One-tap wallet pay", outcome: "Returning buyers pay in one tap", horizon: "later", section: "scope", rank: 4, confidence: "low" },
   ];
@@ -144,11 +144,11 @@ function seedV2(): ItemSeed[] {
   return [
     CART,
     { ...GUEST, horizon: "now", rank: 2 },
-    { key: "shipping-step", title: "Shipping step on one screen", outcome: "Buyers choose a shipping option without leaving the step", horizon: "now", section: "s-5-2", rank: 3, confidence: "medium", milestone: { name: "Beta" } },
+    { key: "shipping-step", title: "Billing step on one screen", outcome: "Admins choose a billing option without leaving the step", horizon: "now", section: "s-5-2", rank: 3, confidence: "medium", milestone: { name: "Beta" } },
     {
       key: "bulk-import",
       title: "Bulk import",
-      outcome: "Returning buyers pick an imported row instead of typing it",
+      outcome: "Paying admins bring their seats in one file instead of typing them",
       horizon: "next",
       section: "s-5-3",
       rank: 4,
