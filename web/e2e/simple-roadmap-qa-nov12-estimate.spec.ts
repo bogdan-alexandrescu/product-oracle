@@ -5,7 +5,7 @@ import { expect, test, type Page } from "./test";
  * Visual QA, Nov 12, 2026 (docs/qa/2026-11-12/simple-roadmap.md #6), driven as a person does
  * against the mock's invented data (mock clock: Oct 22, 2026): an item with only Oracle's
  * estimate (Health log, no dates of its own) reads one way everywhere it is shown: "No dates
- * yet · estimated Apr 1, 2027 – Oct 22, 2028", on the Timeline at every zoom, the Gantt, the
+ * yet · estimated Apr 1 – Apr 28, 2027", on the Timeline at every zoom, the Gantt, the
  * Waterfall, the board, the Needs a decision tray and the exports. Dates read month first.
  */
 
@@ -15,7 +15,7 @@ declare global {
   }
 }
 
-const WORDS = "No dates yet · estimated Apr 1, 2027 – Oct 22, 2028";
+const WORDS = "No dates yet · estimated Apr 1 – Apr 28, 2027";
 const KEY = "setup-health-log";
 
 async function open(page: Page, format: "timeline" | "gantt" | "waterfall" | "board") {
@@ -52,7 +52,7 @@ async function exported(page: Page): Promise<string> {
 test.use({ viewport: { width: 1440, height: 900 } });
 
 test("#6: an item with only Oracle's estimate reads the same on the Timeline at every zoom and in its export", async ({ page }) => {
-  // protects: Health log's row on the Timeline reads "No dates yet · estimated Apr 1, 2027 – Oct 22, 2028" at 3 months, 6 months, 1 year and All 3 years, and the Timeline's PNG says the same
+  // protects: Health log's row on the Timeline reads "No dates yet · estimated Apr 1 – Apr 28, 2027" at 3 months, 6 months, 1 year and All 3 years, and the Timeline's PNG says the same
   // fails_when: a zoom shows the span alone, "No dates yet" alone, or the export shows the span alone
   test.setTimeout(120_000);
   await open(page, "timeline");
@@ -68,7 +68,7 @@ test("#6: an item with only Oracle's estimate reads the same on the Timeline at 
 });
 
 test("#6: the Gantt and the Waterfall say the same on the item's bar", async ({ page }) => {
-  // protects: Health log's bar on the Gantt and the Waterfall is named "… No dates yet · estimated Apr 1, 2027 – Oct 22, 2028"
+  // protects: Health log's bar on the Gantt and the Waterfall is named "… No dates yet · estimated Apr 1 – Apr 28, 2027"
   // fails_when: the bar's words give the span with no "No dates yet"
   await open(page, "gantt");
   await expect(page.locator(`[data-testid="bar"][data-item="${KEY}"]`).first()).toHaveAttribute("aria-label", new RegExp(`Health log: ${WORDS}`));
@@ -78,7 +78,7 @@ test("#6: the Gantt and the Waterfall say the same on the item's bar", async ({ 
 });
 
 test("#6: the board's card and its export say the same", async ({ page }) => {
-  // protects: Health log's board card reads "No dates yet · estimated Apr 1, 2027 – Oct 22, 2028", never "No dates"; the board's PNG says the same
+  // protects: Health log's board card reads "No dates yet · estimated Apr 1 – Apr 28, 2027", never "No dates"; the board's PNG says the same
   // fails_when: the card reads "No dates" or the export gives the span alone
   test.setTimeout(90_000);
   await open(page, "board");
@@ -87,7 +87,7 @@ test("#6: the board's card and its export say the same", async ({ page }) => {
 });
 
 test("#6: the Needs a decision tray names the item's estimate the same way beside Oracle's dates", async ({ page }) => {
-  // protects: in the tray's Dates to confirm, Health log's line reads "No dates yet · estimated Apr 1, 2027 – Oct 22, 2028" with Oracle's suggested dates after it
+  // protects: in the tray's Dates to confirm, Health log's line reads "No dates yet · estimated Apr 1 – Apr 28, 2027" with Oracle's suggested dates after it
   // fails_when: the line gives Oracle's suggestion alone, as if it were the item's dates
   await open(page, "timeline");
   await page.getByTestId("needs-decision").click();
