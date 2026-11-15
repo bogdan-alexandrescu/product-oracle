@@ -101,8 +101,14 @@ async def regenerate(db: AsyncSession) -> int:
         wanted = _planned(e, view)
         if wanted is None:
             deps = [(by_id[d].row.title, by_id[d].resolved.end.date) for d in e.depends_on]
-            s = dates.suggest(e.window, deps, durations.get(e.row.confidence, []),
-                              e.row.confidence, e.horizon)  # fmt: skip
+            # roadmap-dates: inside the quarter the item was added to (from today on), else
+            # Later's window, never the column the suggestion itself puts it in.
+            window, word = read.windows["later"], "later"
+            if e.row.picked_quarter is not None:
+                q0, q1 = dates.quarter_window(e.row.picked_quarter)
+                window, word = (max(q0, read.today), q1), dates.quarter_word(q0)
+            s = dates.suggest(window, deps, durations.get(e.row.confidence, []),
+                              e.row.confidence, word)  # fmt: skip
             wanted = [(None, _inside(s, view))]
         codes = {c for c, _ in wanted}
         for r in rows:

@@ -571,6 +571,9 @@ class RoadmapItem(Trashable, TenantScoped, Base):
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
     date_source: Mapped[str | None] = mapped_column(Text)
+    # roadmap-dates: the first day of the quarter Quick Add put it in; an undated item is
+    # estimated inside it until Oracle suggests dates (null: none picked).
+    picked_quarter: Mapped[date | None] = mapped_column(Date)
     accepted_risks: Mapped[list[dict[str, Any]]] = _json("[]")
     draft: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
                                         server_default=false())  # fmt: skip

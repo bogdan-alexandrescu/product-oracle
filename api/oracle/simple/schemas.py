@@ -337,6 +337,9 @@ class SimpleRoadmapItem(BaseModel):
     estimated: bool
     # A re-plan resized it: its date waits on a new estimate from its owner.
     estimate_pending: bool = False
+    # roadmap-dates: the first day of the quarter Quick Add put it in (an undated item is
+    # estimated inside it until Oracle suggests dates); null: none picked.
+    picked_quarter: dt.date | None = None
     # approved-roadmap-to-simple: the applied roadmap version's words for the dates
     # ("engineering estimate", "founder commitment", "set by <person>"); null when the
     # dates are not the version's (none applied, or a person changed them since).

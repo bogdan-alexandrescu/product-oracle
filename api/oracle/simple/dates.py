@@ -10,9 +10,11 @@ suggestion. Pure functions: the caller (oracle.simple.service) gathers the candi
    basis scoped to the item (its key, or a tracker issue matched to it). An end date only;
 3. tracker dates: the ``target_date`` of a tracker record matched to the item. An end
    date only;
-4. else estimated: its column's window on the company's day (board-quarters: Now this
-   calendar quarter, Next the next, Later from the quarter after; an item's column comes
-   from its dates, :func:`horizon_of`, an undated one Later's).
+4. else estimated (roadmap-dates, QA Nov 14): Oracle's open date suggestion's span; else
+   the quarter the item was added to (``roadmap_items.picked_quarter``); else its column's
+   window on the company's day (board-quarters: Now this calendar quarter, Next the next,
+   Later from the quarter after; an item's column comes from its dates, :func:`horizon_of`,
+   an undated one's from its suggestion or quarter, else Later's).
 
 An item's own dates stored with ``date_source`` ``engineering`` or ``tracker`` rank with that
 source. Ties within a source: the most recently updated candidate wins. A start that no
@@ -79,6 +81,9 @@ class Candidate:
 class Resolved:
     start: Dated
     end: Dated
+    # roadmap-dates: where an undated bar's estimate comes from (Oracle's suggestion, the
+    # picked quarter); None: its column's window, or a bar a source dates.
+    basis: Literal["suggestion", "quarter"] | None = None
 
     @property
     def estimated(self) -> bool:
@@ -150,12 +155,24 @@ def add_months(day: date, months: int) -> date:
 def horizon_of(r: Resolved, wins: dict[str, tuple[date, date]]) -> str:
     """The column an item's dates put it in: Now when they touch this quarter (work
     started earlier and still running, or overdue), Next when it starts next quarter,
-    Later when it starts after that; an undated item (both dates Oracle's estimate) Later."""
-    if r.undated:
+    Later when it starts after that; an undated item (both dates Oracle's estimate) by its
+    suggestion's or picked quarter's start, else Later."""
+    if r.undated and r.basis is None:
         return "later"
     if r.start.date <= wins["now"][1]:
         return "now"
     return "next" if r.start.date <= wins["next"][1] else "later"
+
+
+def quarter_window(first: date) -> tuple[date, date]:
+    """The calendar quarter starting on ``first`` (a picked quarter's first day)."""
+    q0 = date(first.year, 3 * ((first.month - 1) // 3) + 1, 1)
+    return q0, add_months(q0, 3) - DAY
+
+
+def quarter_word(first: date) -> str:
+    """ "Q2 2027"."""
+    return f"Q{(first.month - 1) // 3 + 1} {first.year}"
 
 
 def _quarter(day: date, wins: dict[str, tuple[date, date]]) -> int:
@@ -188,15 +205,26 @@ def resolve_by_dates(
     candidates: list[Candidate],
     wins: dict[str, tuple[date, date]],
     effort_weeks: float | None = None,
+    suggested: tuple[date, date] | None = None,
+    quarter: date | None = None,
 ) -> tuple[Resolved, str]:
     """board-quarters: an item's dates and the column they put it in; a bar no source dates
-    is Later's estimate, a part no source gives is estimated in its own column's window."""
+    is Oracle's ``suggested`` span, else the picked ``quarter`` (its first day), else Later's
+    estimate (roadmap-dates); a part no source gives is estimated in its own column's window."""
     if not ("next" in wins and "later" in wins):
         # roadmap-speed: board() keeps given windows, so a caller holding all three (the
         # roadmap read, per item) skips deriving them.
         wins = board(wins)
     r = resolve(candidates, wins["later"], effort_weeks)
     if r.undated:
+        if suggested is not None or quarter is not None:
+            span = suggested or quarter_window(quarter)  # type: ignore[arg-type]
+            r = Resolved(
+                Dated(span[0], "estimated", True),
+                Dated(span[1], "estimated", True),
+                "suggestion" if suggested is not None else "quarter",
+            )
+            return r, horizon_of(r, wins)
         return r, "later"
     h = horizon_of(r, wins)
     r = resolve(candidates, wins[h], effort_weeks)
@@ -280,6 +308,7 @@ def after_dependencies[K](
                 r = Resolved(
                     Dated(day, "estimated", True),
                     Dated(day + (r.end.date - r.start.date), "estimated", True),
+                    r.basis,
                 )
             else:
                 r = Resolved(Dated(min(day, r.end.date), "estimated", True), r.end)

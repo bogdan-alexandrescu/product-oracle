@@ -577,7 +577,15 @@ async def load(
             records.get((track.id, row.item_key), []) if track is not None else []
         ) or prd_records.get((row.prd_document_id, row.item_key), [])
         cands = _candidates(row, recs, bases_by_key, bases_by_ref)
-        resolved, horizon = dates.resolve_by_dates(cands, windows, effort.get(row.id))
+        # roadmap-dates: an undated item's estimate is its open suggestion's span (the span
+        # of its slices'), else its picked quarter, else Later's window.
+        sug = suggestions.get(row.id)
+        suggested = spans.get(row.id) or (
+            (sug.start_date, sug.end_date) if sug is not None else None
+        )
+        resolved, horizon = dates.resolve_by_dates(
+            cands, windows, effort.get(row.id), suggested, row.picked_quarter
+        )
         milestone = _milestone(row, track, track_ms)
         entries.append(
             Entry(
@@ -1391,6 +1399,7 @@ def item_out(
         source=r.source,
         estimated=r.estimated,
         estimate_pending=row.estimate_pending,
+        picked_quarter=row.picked_quarter,
         date_basis=approved_roadmap.date_basis(row),
         suggestion=suggestion_out(e.suggestion, row, may, e.suggestion_span)
         if e.suggestion is not None
