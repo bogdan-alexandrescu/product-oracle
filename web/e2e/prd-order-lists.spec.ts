@@ -53,7 +53,7 @@ test.describe("every list of PRDs follows a move on One-pagers", () => {
 
   test("Simple › Decisions' PRD filter", async ({ page }) => {
     await login(page);
-    const order = await moveUp(page, TEAM, 2);
+    const order = await moveUp(page, TEAM);
     expect(order.indexOf(TEAM)).toBeLessThan(order.indexOf("Referral link PRD"));
     await page.goto("/simple/decisions");
     await inOrder(page.getByRole("combobox", { name: "PRD", exact: true }).locator("option"), order, 7);
@@ -114,7 +114,7 @@ test.describe("every list of PRDs follows a move on One-pagers", () => {
     await expect(prds).toHaveCount(3);
     const got = (await prds.allInnerTexts()).map((t) => t.split("\n")[0].trim());
     expect(got).toEqual(order.filter((t) => got.includes(t)));
-    expect(got).toEqual([TEAM, "Clinic outreach PRD", "Annual billing PRD"]);
+    expect(got).toEqual([TEAM, "Annual billing PRD", "Clinic outreach PRD"]);
   });
 
   test("the Roadmap card's PRD picker", async ({ page }) => {
