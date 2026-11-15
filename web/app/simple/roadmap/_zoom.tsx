@@ -262,9 +262,9 @@ export interface TimelineProps extends Common {
 const LABEL_W = 232;
 /** A milestone label's "+N" chip, about its width. */
 const MS_CHIP_W = 30;
-/** QA Nov 12 #8: at All 3 years a milestone label keeps up to this much of its words (px), */
+/** QA Nov 12 #8: at All 3 years a milestone label keeps up to this much of its words (px). */
 const MS_FIT_W = 180;
-/** stepping at most this far (px) past its day to clear the diamonds. */
+/** Short of All 3 years, a label steps at most this far (px) past its day to clear the diamonds. */
 const MS_FIT_STEP = 120;
 const fullDay = (d: string) => calendarDay(d, { month: "short", day: "numeric", year: "numeric" });
 const ROW_H = 34;
@@ -582,7 +582,7 @@ function DayChart(props: TimelineProps) {
   };
   // QA Nov 12 #8: at All 3 years the days sit a pixel or so apart, so a label cut to its 56 px
   // ("M1 B…") says nothing. There a label keeps its whole words (up to MS_FIT_W): it steps past
-  // the diamonds that would cut it (unless that takes it far from its day), and a label that would
+  // the diamonds that would cut it (while it stays inside the chart), and a label that would
   // cut the one before folds into that one's "+N" chip, as the 3 months' crowded labels do.
   const needOf = (words: string) => (fit ? Math.min(16 + words.length * 7, MS_FIT_W) : 56);
   const marks = (data.milestones ?? [])
@@ -591,8 +591,10 @@ function DayChart(props: TimelineProps) {
     .map((m) => {
       const at = x(m.date as string);
       const words = `◆ ${joinedWords(m, joined)} · ${shortDay(m.date as string)}`;
+      // At All 3 years the whole chart is in sight (no slide can lose a label), so a label steps
+      // past a row of diamonds (one a month) as far as it needs to read whole, inside the chart.
       const whole = fit ? clear(at, needOf(words)) : null;
-      const need = whole != null && whole - at <= MS_FIT_STEP ? needOf(words) : 56;
+      const need = whole != null && whole + 4 + needOf(words) <= trackW ? needOf(words) : 56;
       const left = whole != null && need > 56 ? whole : near(fit ? at : Math.max(at, sl));
       const next = [...gems, ...(pill ? [pill[0] + 12] : [])].sort((a, b) => a - b).find((g) => g - 12 >= left + 4);
       // A label too short for its words at All 3 years keeps its code and name ("M1 Beta"), its day in its tip.

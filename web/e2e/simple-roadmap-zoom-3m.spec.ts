@@ -149,11 +149,16 @@ function readsWhole(scheme: "light" | "dark") {
       // far from its day, where the slide below would take its day out of sight and the label with it.
       const day = (await page.locator('[data-testid="timeline-milestone-line"][data-day="2026-11-30"]').boundingBox())!;
       expect((await label.boundingBox())!.x - day.x, "the label starts by its day").toBeLessThanOrEqual(40);
-      // Slide the chart until the milestone's line sits just left of the names column.
+      // Slide the chart until the milestone's line sits just left of the names column. Where the
+      // chart ends too soon for that (1 year: it spans little more than a year, so it slides only a
+      // little), it slides all the way to its end.
       const h = (await head.boundingBox())!;
       const line = (await label.boundingBox())!.x - 4;
-      const moved = await slide(page, line - (h.x + h.width) + 20);
-      expect(line - moved).toBeLessThan(h.x + h.width);
+      const want = line - (h.x + h.width) + 20;
+      const room = await page.getByTestId("timeline-scroll").evaluate((el) => el.scrollWidth - el.clientWidth - el.scrollLeft);
+      const moved = await slide(page, want);
+      if (want <= room) expect(line - moved).toBeLessThan(h.x + h.width);
+      else expect(moved, "the chart slides to its end").toBeGreaterThanOrEqual(room - 1);
       await expect(label).toBeVisible();
       await clear(z);
     }
