@@ -704,6 +704,45 @@ async def test_accept_edit_dismiss(client):
     assert r.json()["open"] == 0
 
 
+
+async def test_published_estimate_is_the_open_drafts_accepted_dates(client):
+    """Review (join d91b93b): until its draft publishes, a viewer's undated item reads the dates
+    the working draft holds for it: an edit's typed dates, not Oracle's; once the draft is
+    discarded, the abandoned dates go and its estimate is Later's window again."""
+    from oracle.simple.models import SimpleDraft
+
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, _, rv = await seed.roadmap("payments")
+        await seed.item(rv, pv, "a")
+        await s.commit()
+        await suggestions.regenerate(s)
+        await s.commit()
+    owner = ctx.as_("owner")
+    before = by_key(await get(client, ctx, "viewer"))["a"]
+    assert before["estimated"] is True
+    sug = (await client.get(SUGGESTIONS, headers=owner)).json()[0]
+    assert (before["start"]["date"], before["end"]["date"]) == (sug["start_date"], sug["end_date"])
+    r = await client.post(
+        f"{SUGGESTIONS}/{sug['id']}/edit",
+        headers=owner,
+        json={"start_date": "2026-11-02", "end_date": "2026-11-30"},
+    )
+    assert r.status_code == 200, r.text
+    a = by_key(await get(client, ctx, "viewer"))["a"]
+    assert a["estimated"] is True
+    assert (a["start"]["date"], a["end"]["date"]) == ("2026-11-02", "2026-11-30")
+    async with tenant_session(ctx.tenant_id) as s:
+        for d in await s.scalars(select(SimpleDraft).where(SimpleDraft.status == "working")):
+            d.status = "discarded"
+        await s.commit()
+    a = by_key(await get(client, ctx, "viewer"))["a"]
+    assert a["estimated"] is True
+    assert (a["start"]["date"], a["end"]["date"]) not in (
+        ("2026-11-02", "2026-11-30"), (sug["start_date"], sug["end_date"]))  # fmt: skip
+
+
 async def test_migration_columns():
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
