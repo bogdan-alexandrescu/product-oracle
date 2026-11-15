@@ -66,8 +66,9 @@ for (const phone of [false, true]) {
         await expect(later).not.toContainText("Oct 22, 2027");
         // walkb-roadmap (e4cdf478): an estimated item starts the day after what it depends on
         // ends, keeping its length. Welcome video has no dates of its own, so its card says so;
-        // its estimate (Later's window moved past In-app tour) is the Timeline's (QA Nov 12 #6: one wording in every format).
-        await expect(boardCard(page, "setup-video").getByTestId("board-dates")).toHaveText("No dates yet · estimated Sep 15, 2027 – Apr 7, 2029");
+        // its estimate is the Timeline's (QA Nov 12 #6: one wording in every format); roadmap-dates:
+        // Oracle's suggestion (after In-app tour), not Later's window.
+        await expect(boardCard(page, "setup-video").getByTestId("board-dates")).toHaveText("No dates yet · estimated Sep 15 – Oct 30, 2027");
       });
     });
   }
