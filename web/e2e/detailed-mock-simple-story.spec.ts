@@ -79,3 +79,29 @@ test("detailed inbox: discussions and Oracle's actions name Simple's features", 
   await expect(page.getByTestId("inbox-discussions").first()).toContainText("F-12 Referral link: keep links for guests?");
   for (const old of OLD_NAMES) await expect(page.getByText(old)).toHaveCount(0);
 });
+
+/**
+ * detailed-story (re-review): each renamed PRD and its brief tells its Simple feature's story in its body, not only in its
+ * title: what a person reads is about yearly prices, invites and referral links, never the older story's carts, shipping
+ * or workspaces. Invented data.
+ */
+const OLD_STORY = /\b(carts?|shipping|shoppers?|workspaces?|checkout|carrier)\b/i;
+const BODIES: [string, string, RegExp][] = [
+  ["/documents/checkout-redesign/v/1", "Annual billing PRD", /yearly price/],
+  ["/documents/checkout-redesign/v/2", "Annual billing PRD", /yearly price/],
+  ["/documents/team-workspaces/v/2", "Team invites PRD", /invite teammates/],
+  ["/documents/saved-carts/v/1", "Referral link PRD", /referral links? /],
+  ["/documents/saved-carts/v/2", "Referral link PRD", /referral links? /],
+  ["/documents/checkout-redesign-early-shipping-cost-spec/v/2", "Early yearly price", /yearly price/],
+];
+
+for (const [url, title, story] of BODIES) {
+  test(`detailed PRD body: ${url} tells ${title}'s story, none of the older one`, async ({ page }) => {
+    await login(page);
+    await page.goto(url);
+    await expect(page.getByRole("heading", { level: 1 }).first()).toContainText(title);
+    const body = page.getByTestId("document-sections").filter({ visible: true }).first();
+    await expect(body).toContainText(story);
+    await expect(body).not.toContainText(OLD_STORY);
+  });
+}
