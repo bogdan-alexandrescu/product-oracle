@@ -6,8 +6,8 @@ import { login } from "./helpers";
 /**
  * Cross-PRD dependencies follow-ups: the Engineering check names a dependency it cannot take in
  * words a person reads, and a Ground Truth feature in no PRD can be added to a PRD from the check.
- * On the mock layer ("eng-check-no-prd": the first brief, Guided setup, also depends on Export
- * logs, a Ground Truth feature no PRD holds; the second, Sample data, on a code Oracle cannot find;
+ * On the mock layer ("eng-check-no-prd": the first brief, Setup checklist, also depends on Export
+ * logs, a Ground Truth feature no PRD holds; the second, Sample data import, on a code Oracle cannot find;
  * "eng-check-add-to-prd": Export logs alone), driven from the Inbox.
  *
  * Test cards:
@@ -46,10 +46,10 @@ async function checkProblems(page: Page) {
   await expect(noPrd.getByText("Features in no PRD yet", { exact: true })).toBeVisible();
   const item = noPrd.getByTestId("no-prd-item");
   await expect(item).toHaveCount(1);
-  await expect(item).toContainText("Export logs is in no PRD yet: Guided setup depends on it");
+  await expect(item).toContainText("Export logs is in no PRD yet: Setup checklist depends on it");
   const problems = page.getByTestId("briefs-problem");
   await expect(problems).not.toContainText("Export logs");
-  await expect(problems.filter({ hasText: 'Sample data (f.sample-data) depends on "made-up-feature", a feature Oracle cannot find in any PRD or in Ground Truth' })).toHaveCount(1);
+  await expect(problems.filter({ hasText: 'Sample data import (f.sample-data) depends on "made-up-feature", a feature Oracle cannot find in any PRD or in Ground Truth' })).toHaveCount(1);
   await expect(page.getByText(/features\[\d\]/)).toHaveCount(0);
   await expect(page.getByText("export-logs")).toHaveCount(0);
 }

@@ -123,8 +123,8 @@ for (const [name, size] of [
     await page.setViewportSize(size);
     await openCheck(page);
     // EC1 b (owner, Nov 1): the list shows the name; the key shows only in small type by the title in the pane.
-    await expect(briefRow(page, "f.guided-setup").getByRole("button").first()).toContainText("Guided setup");
-    await expect(briefRow(page, "f.sample-data").getByRole("button").first()).toContainText("Sample data");
+    await expect(briefRow(page, "f.guided-setup").getByRole("button").first()).toContainText("Setup checklist");
+    await expect(briefRow(page, "f.sample-data").getByRole("button").first()).toContainText("Sample data import");
     const table = page.getByRole("region", { name: "Features" });
     for (const key of ["f.guided-setup", "f.sample-data", "f.saved-carts"]) await expect(table).not.toContainText(key);
   });
@@ -140,10 +140,10 @@ test("check: no code map reads in plain words, the panel names what a feature de
   await expect(page.getByRole("region", { name: "Features" })).not.toContainText("No code map");
   await briefRow(page, "f.saved-carts").getByRole("button").first().click();
   const panel = page.getByTestId("brief-inspector");
-  await expect(panel).toHaveAccessibleName("Brief: Saved carts");
+  await expect(panel).toHaveAccessibleName("Brief: Referral link");
   await expect(panel).toContainText(guess);
   await expect(panel).not.toContainText("No code map");
-  await expect(panel).toContainText("Depends on Guided setup");
+  await expect(panel).toContainText("Depends on Setup checklist");
   await expect(panel).not.toContainText("f.guided-setup");
   // EC1 b (owner, Nov 4): a quiet accent link after "None for this feature.", not grey text and not a button below.
   await expect(panel.getByRole("button", { name: "Ask the architect" })).toHaveClass(/text-accent/);
