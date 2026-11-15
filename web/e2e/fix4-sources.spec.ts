@@ -69,8 +69,8 @@ test("qa-work-34: Used in says 'Feature'; the kind's date says it is the newest"
   await openCoverage(page);
   const ins = page.getByTestId("coverage-inspector");
   const used = ins.getByRole("list", { name: "Used in" });
-  const dark = used.getByRole("listitem").filter({ hasText: "Dark mode" });
-  await expect(dark.getByText("Feature", { exact: true })).toBeVisible();
+  const report = used.getByRole("listitem").filter({ hasText: "Setup error report" });
+  await expect(report.getByText("Feature", { exact: true })).toBeVisible();
   await expect(used.getByText("feature", { exact: true })).toHaveCount(0);
   await expect(ins.getByTestId("coverage-kinds")).toContainText(/Messages\s*2\s*· newest [A-Z][a-z]{2} \d{1,2}, \d{4}/);
 });
