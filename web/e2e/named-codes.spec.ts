@@ -45,12 +45,12 @@ test("Plan, Ground Truth and Priorities draw names, never a place code or a slug
   expect(await mainText(page)).not.toMatch(BARE);
 
   await page.goto("/priorities");
-  const row = page.getByTestId("priority-row-F-1");
+  const row = page.getByTestId("priority-row-F-01");
   await expect(row.getByTestId("code-chip")).toHaveAccessibleName("G-A Activation");
   // Depends on: the feature's name, not its key.
-  await expect(page.getByTestId("priority-row-F-2")).toContainText("Address lookup service");
-  await row.getByRole("button", { name: /Saved addresses at checkout/ }).click();
-  const ex = page.getByTestId("explanation-F-1");
+  await expect(page.getByTestId("priority-row-F-02")).toContainText("Bulk import");
+  await row.getByRole("button", { name: /Setup checklist/ }).click();
+  const ex = page.getByTestId("explanation-F-01");
   await expect(ex.getByRole("list", { name: "Steps" })).toContainText("Goal value = 3×2 (G-A Activation) = 6");
   expect(await mainText(page)).not.toMatch(BARE);
 });
@@ -126,8 +126,8 @@ test.describe("on a phone", () => {
 test("the Confidence panel shows source titles, no id in the card either; a citation chip opens its card", async ({ page }) => {
   await login(page);
   await page.goto("/priorities");
-  await page.getByTestId("priority-row-F-1").getByRole("button", { name: /Saved addresses at checkout/ }).click();
-  const ex = page.getByTestId("explanation-F-1");
+  await page.getByTestId("priority-row-F-01").getByRole("button", { name: /Setup checklist/ }).click();
+  const ex = page.getByTestId("explanation-F-01");
   const ev = ex.getByTestId("evidence-chip").filter({ hasText: "Interview 07" });
   await expect(ev).toBeVisible();
   await expect(ev).toContainText("Sep 12");

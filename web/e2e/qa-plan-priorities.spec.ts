@@ -38,7 +38,7 @@ async function notCut(el: Locator) {
 
 test("qa-plan-7: the row's ▲ ▼ ⋯ never cover its flags", async ({ page }) => {
   await open(page);
-  for (const key of ["F-4", "F-7", "F-6"]) {
+  for (const key of ["F-08", "F-12", "F-06"]) {
     const row = rowOf(page, key);
     const actions = row.getByTestId("row-actions");
     // Hover again if the rows were still settling when the mouse first arrived.
@@ -57,11 +57,11 @@ test("qa-plan-7: the row's ▲ ▼ ⋯ never cover its flags", async ({ page }) 
 test("qa-plan-13: inputs, MoSCoW and formulas in words and body font; the cycle banner too", async ({ page }) => {
   await open(page);
   const banner = page.getByTestId("cycles-banner");
-  await expect(banner).toContainText("Bulk export");
+  await expect(banner).toContainText("Referral link");
   expect(await mono(banner.locator("span.font-medium").first())).toBe(false);
 
-  await rowOf(page, "F-1").getByRole("button", { name: /Saved addresses at checkout/ }).click();
-  const ex = page.getByTestId("explanation-F-1");
+  await rowOf(page, "F-01").getByRole("button", { name: /Setup checklist/ }).click();
+  const ex = page.getByTestId("explanation-F-01");
   await expect(ex.getByRole("row", { name: /^Effort\b/ }).getByRole("cell", { name: "The feature", exact: true })).toBeVisible();
   await expect(ex).not.toContainText("attrs.");
   expect(await mono(ex.getByRole("list", { name: "Steps" }))).toBe(false);
@@ -69,12 +69,12 @@ test("qa-plan-13: inputs, MoSCoW and formulas in words and body font; the cycle 
   await page.getByRole("radiogroup", { name: "Ranking method" }).getByRole("radio", { name: "MoSCoW" }).click();
   await expect(page.getByTestId("formula")).toContainText("Must have (4)");
   expect(await mono(page.getByTestId("formula"))).toBe(false);
-  await rowOf(page, "F-1").getByRole("button", { name: /Saved addresses at checkout/ }).click();
-  const steps = page.getByTestId("explanation-F-1").getByRole("list", { name: "Steps" });
+  await rowOf(page, "F-01").getByRole("button", { name: /Setup checklist/ }).click();
+  const steps = page.getByTestId("explanation-F-01").getByRole("list", { name: "Steps" });
   await expect(steps).toContainText("Must have = 4; ties broken by goal value 6");
-  await expect(page.getByTestId("explanation-F-1").getByRole("cell", { name: "Must have", exact: true })).toBeVisible();
-  await expect(page.getByTestId("explanation-F-1")).toContainText("The feature");
-  await expect(page.getByTestId("explanation-F-1")).not.toContainText("tie-break");
+  await expect(page.getByTestId("explanation-F-01").getByRole("cell", { name: "Must have", exact: true })).toBeVisible();
+  await expect(page.getByTestId("explanation-F-01")).toContainText("The feature");
+  await expect(page.getByTestId("explanation-F-01")).not.toContainText("tie-break");
 });
 
 test("qa-plan-20: every row out of score order says why in the row", async ({ page }) => {
@@ -99,15 +99,15 @@ test("qa-plan-20: every row out of score order says why in the row", async ({ pa
       if (out) expect(r.why, `${method} ${r.key} is out of score order`).toBeGreaterThan(0);
     });
   }
-  // RICE: Dark mode (600) sits last because it serves no goal; Usage alerts has no reach.
+  // RICE: Setup error report (600) sits last because it serves no goal; Usage dashboard has no reach.
   await methods.getByRole("radio", { name: "RICE" }).click();
-  await expect(rowOf(page, "F-6").getByTestId("rank-reason")).toHaveText("Ranked lower: no confirmed goal");
-  await expect(rowOf(page, "F-4").getByTestId("rank-reason")).toHaveText("Not scored: no Reach");
+  await expect(rowOf(page, "F-06").getByTestId("rank-reason")).toHaveText("Ranked lower: no confirmed goal");
+  await expect(rowOf(page, "F-08").getByTestId("rank-reason")).toHaveText("Not scored: no Reach");
   // MoSCoW: Could have (2) above Should have (3) for a dependency.
   await methods.getByRole("radio", { name: "MoSCoW" }).click();
   // docs/ground-truth.md: a feature reads its code with its name.
-  await expect(rowOf(page, "F-5").getByTestId("rank-reason")).toHaveText(
-    "Ranked higher: F-2 Shipping cost shown in the cart depends on it",
+  await expect(rowOf(page, "F-07").getByTestId("rank-reason")).toHaveText(
+    "Ranked higher: F-02 Sample data import depends on it",
   );
 });
 
@@ -140,12 +140,12 @@ test("qa-plan-39: the snapshot note is labelled and sits beside Save snapshot", 
 test("qa-plan-40: scores in one style and body font; the Move dialog names the source and date", async ({ page }) => {
   await open(page);
   await page.getByRole("radiogroup", { name: "Ranking method" }).getByRole("radio", { name: "RICE" }).click();
-  await expect(rowOf(page, "F-2").getByTestId("score")).toHaveText("5,400");
-  await expect(rowOf(page, "F-8").getByTestId("score")).toHaveText("83");
-  expect(await mono(rowOf(page, "F-2").getByTestId("score"))).toBe(false);
+  await expect(rowOf(page, "F-02").getByTestId("score")).toHaveText("5,400");
+  await expect(rowOf(page, "F-13").getByTestId("score")).toHaveText("83");
+  expect(await mono(rowOf(page, "F-02").getByTestId("score"))).toBe(false);
 
   await page.getByRole("radiogroup", { name: "Ranking method" }).getByRole("radio", { name: "Goal-weighted" }).click();
-  const row = rowOf(page, "F-5");
+  const row = rowOf(page, "F-07");
   await row.hover();
   await row.getByRole("button", { name: "Move down", exact: true }).click();
   const chip = page.getByRole("dialog").getByTestId("evidence-chip").first();
@@ -158,8 +158,8 @@ test("qa-plan-40: scores in one style and body font; the Move dialog names the s
 
 test("qa-plan-41: no evidence ids; the confidence line in words", async ({ page }) => {
   await open(page);
-  await rowOf(page, "F-5").getByRole("button", { name: "Address lookup service" }).click();
-  const ex = page.getByTestId("explanation-F-5");
+  await rowOf(page, "F-07").getByRole("button", { name: "Bulk import" }).click();
+  const ex = page.getByTestId("explanation-F-07");
   await ex.getByRole("button", { name: "About Confidence used" }).click();
   await expect(ex.getByTestId("confidence-explain")).toHaveText("Average of 1 evidence item: 60%");
   await ex.getByTestId("evidence-chip").first().click();
@@ -173,23 +173,23 @@ test("qa-plan-42 / prod-4: Goal and Depends on read in full, every goal whole", 
   await page.addInitScript((key) => localStorage.setItem(key, "named-codes"), MOCK_SCENARIO_KEY);
   await page.setViewportSize({ width: 1800, height: 1000 });
   await open(page);
-  for (const key of ["F-1", "F-2", "F-7"]) {
+  for (const key of ["F-01", "F-02", "F-12"]) {
     const goals = rowOf(page, key).getByTestId("row-goals");
     await expect(goals.getByTestId("code-chip").first()).toBeVisible();
     for (const name of await goals.getByTestId("code-name").all()) await notCut(name);
     await notCut(goals);
   }
-  const deps = rowOf(page, "F-2").getByTestId("row-deps");
+  const deps = rowOf(page, "F-02").getByTestId("row-deps");
   await expect(deps).toBeVisible();
   // docs/ground-truth.md: a feature reads its code with its name.
-  await expect(deps).toHaveText("F-5 Address lookup service");
+  await expect(deps).toHaveText("F-07 Bulk import");
   await notCut(deps);
 });
 
 test("prod-5: a source titled by its ref reads as words", async ({ page }) => {
   await open(page);
-  await rowOf(page, "F-1").getByRole("button", { name: /Saved addresses at checkout/ }).click();
-  const ex = page.getByTestId("explanation-F-1");
+  await rowOf(page, "F-01").getByRole("button", { name: /Setup checklist/ }).click();
+  const ex = page.getByTestId("explanation-F-01");
   await expect(ex.getByTestId("evidence-chip").filter({ hasText: "Pull request #920 in svc-backend" })).toBeVisible();
   await expect(ex).not.toContainText("svc-backend#920");
 });
@@ -199,11 +199,11 @@ test.describe("phone", () => {
 
   test("qa-plan-14: tapping a feature opens it in a bottom sheet", async ({ page }) => {
     await open(page);
-    await rowOf(page, "F-1").getByRole("button", { name: /Saved addresses at checkout/ }).click();
+    await rowOf(page, "F-01").getByRole("button", { name: /Setup checklist/ }).click();
     const sheet = page.getByTestId("priority-sheet");
     const dialog = sheet.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByTestId("explanation-F-1")).toBeVisible();
+    await expect(dialog.getByTestId("explanation-F-01")).toBeVisible();
     const box = (await dialog.boundingBox())!;
     expect(Math.round(box.y + box.height)).toBeGreaterThanOrEqual(800);
     expect(box.y).toBeGreaterThan(0);
@@ -213,7 +213,7 @@ test.describe("phone", () => {
 
   test("qa-plan-7: on a phone the row's buttons sit in reach, no sideways scroll", async ({ page }) => {
     await open(page);
-    const row = rowOf(page, "F-4");
+    const row = rowOf(page, "F-08");
     await expect(row.getByRole("button", { name: "More actions" })).toBeVisible();
     const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(sideways).toBeLessThanOrEqual(0);

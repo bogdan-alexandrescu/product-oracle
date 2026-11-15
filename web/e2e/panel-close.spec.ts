@@ -28,7 +28,7 @@ async function openPriorities(page: Page) {
   await page.evaluate(() => document.fonts.ready);
 }
 
-// docs/ground-truth.md: a feature reads its code with its name ("F-5 Address lookup service").
+// docs/ground-truth.md: a feature reads its code with its name ("F-07 Bulk import").
 const row = (page: Page, title: string) =>
   page.locator('tr[data-testid^="priority-row-"]').filter({ has: page.getByTestId("feature-name").getByText(title, { exact: true }) });
 
@@ -71,9 +71,9 @@ test.describe("desktop", () => {
 
   test("Priorities: the × closes the panel, the table takes its room, focus back on the row", async ({ page }) => {
     await openPriorities(page);
-    const top = row(page, "F-5 Address lookup service");
+    const top = row(page, "F-07 Bulk import");
     await expect(top).toHaveAttribute("aria-selected", "true");
-    await expect(featurePanel(page).getByRole("heading", { name: "F-5 Address lookup service" })).toBeVisible();
+    await expect(featurePanel(page).getByRole("heading", { name: "F-07 Bulk import" })).toBeVisible();
     // The × sits in the panel's head, after the page in Tab order.
     await expect(featurePanel(page).getByRole("button", { name: "Close the details" })).toBeVisible();
 
@@ -99,9 +99,9 @@ test.describe("desktop", () => {
     await close(page).click();
     await expect(featurePanel(page)).toBeHidden();
 
-    const guided = row(page, "F-9 Guided first project with sample tasks");
+    const guided = row(page, "F-21 Guided first project with sample tasks");
     await guided.getByTestId("feature-name").click();
-    await expect(featurePanel(page).getByRole("heading", { name: "F-9 Guided first project with sample tasks" })).toBeVisible();
+    await expect(featurePanel(page).getByRole("heading", { name: "F-21 Guided first project with sample tasks" })).toBeVisible();
     await expect(guided).toHaveAttribute("aria-selected", "true");
     await expect.poll(() => width(table)).toBeLessThan(open + 2);
 
@@ -210,14 +210,14 @@ test.describe("phone", () => {
   test("Priorities: no ×; a feature opens in the bottom sheet, which closes as before", async ({ page }) => {
     await openPriorities(page);
     await expect(close(page)).toBeHidden();
-    await row(page, "F-9 Guided first project with sample tasks").getByRole("button", { name: /^F-9 Guided first project with sample tasks/ }).click();
+    await row(page, "F-21 Guided first project with sample tasks").getByRole("button", { name: /^F-21 Guided first project with sample tasks/ }).click();
     const sheet = page.getByTestId("priority-sheet");
     await expect(sheet.getByRole("dialog")).toBeVisible();
     await expect(close(page)).toBeHidden();
     // pc1-a-phone-390: the sheet's title is bold and whole: it wraps (on as many lines as its
     // words take at this text width, which differs by system) and is never cut with an
     // ellipsis, clipped, or run under the header's buttons.
-    const title = sheet.getByRole("heading", { level: 2, name: "F-9 Guided first project with sample tasks", exact: true }).first();
+    const title = sheet.getByRole("heading", { level: 2, name: "F-21 Guided first project with sample tasks", exact: true }).first();
     const look = await title.evaluate((e) => {
       const s = getComputedStyle(e);
       const box = e.getBoundingClientRect();
@@ -265,12 +265,12 @@ test("mock: the long-goals features show in their scenario only", () => {
   g.localStorage = { getItem: (k: string) => store.get(k) ?? null };
   try {
     expect(keys()).toHaveLength(14);
-    expect(keys()).toContain("F-9");
+    expect(keys()).toContain("F-21");
     store.set(MOCK_SCENARIO_KEY, "default");
     expect(keys()).toHaveLength(8);
-    expect(keys()).not.toContain("F-9");
+    expect(keys()).not.toContain("F-21");
   } finally {
     delete g.localStorage;
   }
-  expect(keys()).not.toContain("F-9");
+  expect(keys()).not.toContain("F-21");
 });

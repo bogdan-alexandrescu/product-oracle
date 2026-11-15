@@ -139,11 +139,11 @@ test("qa-onboarding-22, 23, qa-work-3, 31: a new company's first brief, from New
   // New PRD: a title and the problem, then Continue.
   await page.goto("/documents/new?kind=prd");
   await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
-  await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses at checkout");
+  await page.getByRole("textbox", { name: "Title" }).fill("Setup checklist");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Returning buyers retype their address at every checkout.");
   await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Saved addresses at checkout" })).toBeAttached();
+  await expect(page.getByRole("heading", { level: 1, name: "Setup checklist" })).toBeAttached();
 
   // qa-onboarding-22: the line under the title says Oracle asked its questions.
   const thread = page.getByTestId("intake-thread");

@@ -24,8 +24,8 @@ test("qa-plan-5: the Feature column keeps its room beside the docked inspector w
   await expect.poll(() => page.evaluate(() => window.innerWidth - document.documentElement.clientWidth)).toBeGreaterThanOrEqual(15);
   // Every column filled (goal chips and flags come with the explanations), so the widths have settled.
   await page.waitForLoadState("networkidle");
-  await expect(page.getByTestId("priority-row-F-5").getByTestId("row-goals")).toBeVisible();
-  const cell = page.getByTestId("priority-row-F-5").locator("td").filter({ has: page.locator("button[aria-controls]") });
+  await expect(page.getByTestId("priority-row-F-07").getByTestId("row-goals")).toBeVisible();
+  const cell = page.getByTestId("priority-row-F-07").locator("td").filter({ has: page.locator("button[aria-controls]") });
   expect((await cell.boundingBox())!.width).toBeGreaterThan(130);
   // The room is not taken from the rank or the score: each reads whole, here and in RICE's
   // thousands (the train re-review found ranks cut to "1…" at 32 px).
@@ -44,6 +44,6 @@ test("qa-plan-5: the Feature column keeps its room beside the docked inspector w
   const rice = page.getByRole("radiogroup", { name: "Ranking method" }).getByRole("radio", { name: "RICE", exact: true });
   await rice.click();
   await expect(rice).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400");
+  await expect(page.getByTestId("priority-row-F-02").getByTestId("score")).toHaveText("5,400");
   expect(await whole("score"), "a RICE score is cut").toEqual([]);
 });

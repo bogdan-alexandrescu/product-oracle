@@ -12,7 +12,7 @@ import { login, signOut } from "./helpers";
  */
 
 const APPROVER = "approver@example.com";
-const FORMULA = ["F-5", "F-2", "F-1", "F-7", "F-8", "F-4", "F-3", "F-6"];
+const FORMULA = ["F-07", "F-02", "F-01", "F-12", "F-13", "F-08", "F-05", "F-06"];
 
 async function rankedKeys(page: Page) {
   const rows = page.locator('tr[data-testid^="priority-row-"]');
@@ -65,11 +65,11 @@ async function pinAt(page: Page, key: string, title: string, rank: number) {
 
 test("move up with a reason: the row moves, shows who moved it and Oracle's rank", async ({ page }) => {
   await open(page);
-  const row = page.getByTestId("priority-row-F-1");
-  await rowAction(page, "F-1", "Move up");
+  const row = page.getByTestId("priority-row-F-01");
+  await rowAction(page, "F-01", "Move up");
   const s = sheet(page);
   await expect(s).toBeVisible();
-  await expect(s).toContainText("Move above F-2 Shipping cost shown in the cart");
+  await expect(s).toContainText("Move above F-02 Sample data import");
   const save = s.getByRole("button", { name: "Save", exact: true });
   await expect(save).toBeDisabled();
   await s.getByLabel("Why?").fill("A launch partner needs it in the first release");
@@ -77,7 +77,7 @@ test("move up with a reason: the row moves, shows who moved it and Oracle's rank
   await save.click();
   await expect(s).toBeHidden();
 
-  await expectOrder(page, ["F-5", "F-1", "F-2", "F-7", "F-8", "F-4", "F-3", "F-6"]);
+  await expectOrder(page, ["F-07", "F-01", "F-02", "F-12", "F-13", "F-08", "F-05", "F-06"]);
   await expect(row.getByTestId("override-chip")).toHaveText("Moved by Priya Raman");
   await expect(row.getByTestId("formula-rank")).toHaveText("3");
   await expect(page.getByRole("columnheader", { name: "Oracle #" })).toBeVisible();
@@ -85,49 +85,49 @@ test("move up with a reason: the row moves, shows who moved it and Oracle's rank
 
 test("pushback on a pin: take Oracle's advice, then keep my change", async ({ page }) => {
   await open(page);
-  await pinAt(page, "F-6", "Dark mode", 1);
+  await pinAt(page, "F-06", "Setup error report", 1);
   await sheet(page).getByLabel("Why?").fill("Our largest account asked for it this quarter");
   await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
 
   const s = sheet(page);
   await expect(s).toContainText("Oracle disagrees");
   const rule = s.getByTestId("pushback-no_confirmed_goal");
-  await expect(rule).toContainText("Dark mode serves no confirmed goal");
-  await expect(rule).toContainText("Address lookup service serves");
+  await expect(rule).toContainText("Setup error report serves no confirmed goal");
+  await expect(rule).toContainText("Bulk import serves");
   await s.getByRole("button", { name: "Take Oracle's advice" }).click();
   await expect(s).toBeHidden();
   await expectOrder(page, FORMULA);
 
-  await pinAt(page, "F-6", "Dark mode", 1);
+  await pinAt(page, "F-06", "Setup error report", 1);
   await sheet(page).getByLabel("Why?").fill("Our largest account asked for it this quarter");
   await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
   await expect(sheet(page).getByTestId("pushback")).toBeVisible();
   await sheet(page).getByRole("button", { name: "Keep my change" }).click();
   await expect(sheet(page)).toBeHidden();
-  await expectOrder(page, ["F-6", "F-5", "F-2", "F-1", "F-7", "F-8", "F-4", "F-3"]);
-  await expect(page.getByTestId("priority-row-F-6").getByTestId("override-chip")).toHaveText(
+  await expectOrder(page, ["F-06", "F-07", "F-02", "F-01", "F-12", "F-13", "F-08", "F-05"]);
+  await expect(page.getByTestId("priority-row-F-06").getByTestId("override-chip")).toHaveText(
     "Pinned #1 by Priya Raman",
   );
   const log = page.getByTestId("change-log");
   await expect(log.getByRole("listitem")).toHaveCount(1);
-  await expect(log).toContainText("Dark mode");
+  await expect(log).toContainText("Setup error report");
   await expect(log).toContainText("kept after pushback");
 });
 
 test("remove my change in the inspector; the log keeps it as removed", async ({ page }) => {
   await open(page);
-  await rowAction(page, "F-7", "Move up");
+  await rowAction(page, "F-12", "Move up");
   await sheet(page).getByLabel("Why?").fill("Support load doubles without it");
   await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
-  await expectOrder(page, ["F-5", "F-2", "F-7", "F-1", "F-8", "F-4", "F-3", "F-6"]);
+  await expectOrder(page, ["F-07", "F-02", "F-12", "F-01", "F-13", "F-08", "F-05", "F-06"]);
 
-  await page.getByTestId("priority-row-F-7").getByRole("button", { name: "Bulk export" }).click();
+  await page.getByTestId("priority-row-F-12").getByRole("button", { name: "Referral link" }).click();
   const change = page.getByTestId("your-change");
   await expect(change).toContainText("Support load doubles without it");
   await expect(change).toContainText("Priya Raman");
   await change.getByRole("button", { name: "Remove my change" }).click();
   await expectOrder(page, FORMULA);
-  await expect(page.getByTestId("priority-row-F-7").getByTestId("override-chip")).toHaveCount(0);
+  await expect(page.getByTestId("priority-row-F-12").getByTestId("override-chip")).toHaveCount(0);
 
   const log = page.getByTestId("change-log");
   await expect(log.getByRole("listitem")).toHaveCount(0);
@@ -138,55 +138,55 @@ test("remove my change in the inspector; the log keeps it as removed", async ({ 
 
 test("Oracle's order shows the formula; switching back shows the changes", async ({ page }) => {
   await open(page);
-  await pinAt(page, "F-3", "Shared projects", 2);
+  await pinAt(page, "F-05", "Team invites", 2);
   await sheet(page).getByLabel("Why?").fill("The design partner pilot starts in November");
   await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
-  // Shared projects rises five places past scores far above its own: keep it.
+  // Team invites rises five places past scores far above its own: keep it.
   await expect(sheet(page).getByTestId("pushback-against_score")).toContainText("Score 0.13 against 8.1");
   await sheet(page).getByRole("button", { name: "Keep my change" }).click();
-  await expectOrder(page, ["F-5", "F-3", "F-2", "F-1", "F-7", "F-8", "F-4", "F-6"]);
+  await expectOrder(page, ["F-07", "F-05", "F-02", "F-01", "F-12", "F-13", "F-08", "F-06"]);
 
   const order = page.getByRole("radiogroup", { name: "Order" });
   await order.getByRole("radio", { name: "Oracle's order" }).click();
   await expectOrder(page, FORMULA);
   await expect(page.getByTestId("override-chip")).toHaveCount(0);
   await order.getByRole("radio", { name: "With your changes" }).click();
-  await expectOrder(page, ["F-5", "F-3", "F-2", "F-1", "F-7", "F-8", "F-4", "F-6"]);
+  await expectOrder(page, ["F-07", "F-05", "F-02", "F-01", "F-12", "F-13", "F-08", "F-06"]);
 });
 
 test("a commenter sees the changes but cannot move or pin", async ({ page }) => {
   await open(page);
-  await rowAction(page, "F-1", "Move up");
+  await rowAction(page, "F-01", "Move up");
   await sheet(page).getByLabel("Why?").fill("A launch partner needs it in the first release");
   await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByTestId("priority-row-F-1").getByTestId("override-chip")).toBeVisible();
+  await expect(page.getByTestId("priority-row-F-01").getByTestId("override-chip")).toBeVisible();
   await signOut(page);
 
   await login(page, "commenter@example.com");
   await page.goto("/priorities");
-  const row = page.getByTestId("priority-row-F-1");
+  const row = page.getByTestId("priority-row-F-01");
   await expect(row.getByTestId("override-chip")).toHaveText("Moved by Priya Raman");
   await row.hover();
   await expect(page.getByRole("button", { name: /^Move (up|down)$/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "More actions" })).toHaveCount(0);
   await expect(page.getByTestId("row-actions")).toHaveCount(0);
   await expect(page.getByTestId("change-log").getByRole("listitem")).toHaveCount(1);
-  await row.getByRole("button", { name: "Saved addresses at checkout" }).click();
+  await row.getByRole("button", { name: "Setup checklist" }).click();
   await expect(page.getByTestId("your-change")).toBeVisible();
   await expect(page.getByTestId("your-change").getByRole("button", { name: "Remove my change" })).toHaveCount(0);
 });
 
 test("a dependency holds a pin below its prerequisite and offers to move it too", async ({ page }) => {
   await open(page);
-  await pinAt(page, "F-2", "Shipping cost shown in the cart", 1);
+  await pinAt(page, "F-02", "Sample data import", 1);
   await sheet(page).getByLabel("Why?").fill("Cart abandonment spikes on shipping surprises");
   await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
-  const held = page.getByTestId("priority-row-F-2");
-  await expect(held.getByTestId("held-chip")).toHaveText("Held below F-5 Address lookup service");
-  await held.getByRole("button", { name: "Shipping cost shown in the cart" }).click();
+  const held = page.getByTestId("priority-row-F-02");
+  await expect(held.getByTestId("held-chip")).toHaveText("Held below F-07 Bulk import");
+  await held.getByRole("button", { name: "Sample data import" }).click();
   const change = page.getByTestId("your-change");
-  await expect(change).toContainText("Held below F-5 Address lookup service: it depends on it");
-  await change.getByRole("button", { name: "Move F-5 Address lookup service too" }).click();
+  await expect(change).toContainText("Held below F-07 Bulk import: it depends on it");
+  await change.getByRole("button", { name: "Move F-07 Bulk import too" }).click();
   await expect(sheet(page).getByLabel("Why?")).toHaveValue("Cart abandonment spikes on shipping surprises");
 });
 
@@ -194,8 +194,8 @@ test("at 390 px the sheet is a bottom sheet and the row card shows the chip", as
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page, APPROVER);
   await page.goto("/priorities");
-  const row = page.getByTestId("priority-row-F-1");
-  await rowAction(page, "F-1", "Move up");
+  const row = page.getByTestId("priority-row-F-01");
+  await rowAction(page, "F-01", "Move up");
   const s = sheet(page);
   await expect(s).toBeVisible();
   const box = (await s.boundingBox())!;
@@ -212,8 +212,8 @@ test("at 390 px the sheet is a bottom sheet and the row card shows the chip", as
 
 test("Oracle reads the reason: a contradiction shows its evidence; keep stores it", async ({ page }) => {
   await open(page);
-  const row = page.getByTestId("priority-row-F-1");
-  await rowAction(page, "F-1", "Move up");
+  const row = page.getByTestId("priority-row-F-01");
+  await rowAction(page, "F-01", "Move up");
   await sheet(page).getByLabel("Why?").fill("customers keep asking");
   await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
   const s = sheet(page);
@@ -225,12 +225,12 @@ test("Oracle reads the reason: a contradiction shows its evidence; keep stores i
   await s.getByRole("button", { name: "Take Oracle's advice" }).click();
   await expectOrder(page, FORMULA);
 
-  await rowAction(page, "F-1", "Move up");
+  await rowAction(page, "F-01", "Move up");
   await sheet(page).getByLabel("Why?").fill("customers keep asking");
   await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
   await sheet(page).getByRole("button", { name: "Keep my change" }).click();
-  await expectOrder(page, ["F-5", "F-1", "F-2", "F-7", "F-8", "F-4", "F-3", "F-6"]);
-  await row.getByRole("button", { name: "Saved addresses at checkout" }).click();
+  await expectOrder(page, ["F-07", "F-01", "F-02", "F-12", "F-13", "F-08", "F-05", "F-06"]);
+  await row.getByRole("button", { name: "Setup checklist" }).click();
   const change = page.getByTestId("your-change");
   await expect(change).toContainText("Reason checked by Oracle");
   await expect(change).toContainText("kept after pushback");
@@ -238,20 +238,20 @@ test("Oracle reads the reason: a contradiction shows its evidence; keep stores i
 
 test("when the reason check does not run, Oracle checked the numbers only", async ({ page }) => {
   await open(page);
-  const row = page.getByTestId("priority-row-F-1");
-  await rowAction(page, "F-1", "Move up");
+  const row = page.getByTestId("priority-row-F-01");
+  await rowAction(page, "F-01", "Move up");
   await sheet(page).getByLabel("Why?").fill("slow-check: the partner's launch date");
   await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Oracle checked the numbers only this time.")).toBeVisible();
-  await expectOrder(page, ["F-5", "F-1", "F-2", "F-7", "F-8", "F-4", "F-3", "F-6"]);
-  await row.getByRole("button", { name: "Saved addresses at checkout" }).click();
+  await expectOrder(page, ["F-07", "F-01", "F-02", "F-12", "F-13", "F-08", "F-05", "F-06"]);
+  await row.getByRole("button", { name: "Setup checklist" }).click();
   await expect(page.getByTestId("your-change")).toContainText("Numbers only");
 });
 
 test("cite evidence: the feature's own items, at most five, shown on the stored change", async ({ page }) => {
   await open(page);
-  const row = page.getByTestId("priority-row-F-1");
-  await rowAction(page, "F-1", "Move up");
+  const row = page.getByTestId("priority-row-F-01");
+  await rowAction(page, "F-01", "Move up");
   const s = sheet(page);
   const picker = s.getByRole("group", { name: "Cite evidence (optional)" });
   const boxes = picker.getByRole("checkbox");
@@ -263,7 +263,7 @@ test("cite evidence: the feature's own items, at most five, shown on the stored 
   await s.getByLabel("Why?").fill("A launch partner needs it in the first release");
   await s.getByRole("button", { name: "Save", exact: true }).click();
   await expect(s).toBeHidden();
-  await row.getByRole("button", { name: "Saved addresses at checkout" }).click();
+  await row.getByRole("button", { name: "Setup checklist" }).click();
   const cited = page.getByTestId("your-change").getByTestId("cited-evidence");
   await expect(cited.getByRole("listitem")).toHaveCount(5);
   await expect(cited).toContainText("Interview 07");

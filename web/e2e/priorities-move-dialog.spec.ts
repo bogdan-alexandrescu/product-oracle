@@ -13,11 +13,11 @@ async function moveUp(page: Page, size: { width: number; height: number }) {
   await page.setViewportSize(size);
   await login(page);
   await page.goto("/priorities");
-  await expect(page.getByTestId("priority-row-F-2")).toBeVisible();
-  await page.getByTestId("priority-row-F-2").getByRole("button", { name: "Move up" }).click();
+  await expect(page.getByTestId("priority-row-F-02")).toBeVisible();
+  await page.getByTestId("priority-row-F-02").getByRole("button", { name: "Move up" }).click();
   const dialog = page.getByTestId("override-sheet");
-  await expect(dialog).toContainText("Move F-2 Shipping cost shown in the cart");
-  await expect(dialog.getByTestId("move-target")).toHaveText("Move above F-5 Address lookup service");
+  await expect(dialog).toContainText("Move F-02 Sample data import");
+  await expect(dialog.getByTestId("move-target")).toHaveText("Move above F-07 Bulk import");
   await expect(dialog.getByRole("button", { name: "Save" })).toBeVisible();
   return dialog;
 }

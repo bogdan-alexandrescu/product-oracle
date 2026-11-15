@@ -25,16 +25,16 @@ for (const width of [1440, 1512]) {
     await login(page, APPROVER);
     await page.goto("/priorities");
     await expect(rows(page).first()).toBeVisible();
-    await rowOf(page, "F-5").getByRole("button", { name: "Address lookup service" }).click();
-    await expect(page.getByTestId("explanation-F-5")).toBeVisible();
+    await rowOf(page, "F-07").getByRole("button", { name: "Bulk import" }).click();
+    await expect(page.getByTestId("explanation-F-07")).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Confidence" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Depends on" })).toBeVisible();
-    const deps = rowOf(page, "F-2").getByTestId("row-deps");
+    const deps = rowOf(page, "F-02").getByTestId("row-deps");
     await expect(deps).toBeVisible();
     // docs/ground-truth.md: a feature reads its code with its name.
-    await expect(deps).toHaveText("F-5 Address lookup service");
+    await expect(deps).toHaveText("F-07 Bulk import");
     await notCut(deps);
-    const name = rowOf(page, "F-5").getByRole("button", { name: "Address lookup service" });
+    const name = rowOf(page, "F-07").getByRole("button", { name: "Bulk import" });
     expect((await name.boundingBox())!.width).toBeGreaterThan(80);
     // The table fits its panel: nothing pushed off its right edge.
     await notCut(page.locator("table").first());
@@ -57,7 +57,7 @@ test("qa-plan-20: a row below a feature a person moved says who moved it, not a 
   await login(page, APPROVER);
   await page.goto("/priorities");
   await expect(rows(page).first()).toBeVisible();
-  const row = rowOf(page, "F-1");
+  const row = rowOf(page, "F-01");
   await row.evaluate((e) => e.scrollIntoView({ block: "center" }));
   await row.hover();
   await row.getByRole("button", { name: "Move up", exact: true }).click();
@@ -66,8 +66,8 @@ test("qa-plan-20: a row below a feature a person moved says who moved it, not a 
   await s.getByRole("button", { name: "Save", exact: true }).click();
   await expect(s).toBeHidden();
   await expect(row.getByTestId("override-chip")).toHaveText("Moved by Priya Raman");
-  const why = rowOf(page, "F-2").getByTestId("rank-reason");
+  const why = rowOf(page, "F-02").getByTestId("rank-reason");
   await expect(why.first()).toBeVisible();
-  await expect(rowOf(page, "F-2").getByTestId("row-flags")).toContainText("moved by Priya Raman");
-  await expect(rowOf(page, "F-2").getByTestId("row-flags")).not.toContainText("dependency");
+  await expect(rowOf(page, "F-02").getByTestId("row-flags")).toContainText("moved by Priya Raman");
+  await expect(rowOf(page, "F-02").getByTestId("row-flags")).not.toContainText("dependency");
 });

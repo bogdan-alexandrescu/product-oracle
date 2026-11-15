@@ -76,13 +76,13 @@ test("new PRD: browser Back with typed words asks first; Keep editing keeps them
   await page.goto("/documents");
   await page.getByRole("link", { name: "New PRD" }).filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/documents\/new\?kind=prd$/);
-  await title(page).fill("Saved addresses at checkout");
+  await title(page).fill("Setup checklist");
 
   await page.goBack();
   await expect(leave(page)).toBeVisible();
   await expect(page).toHaveURL(/\/documents\/new\?kind=prd$/);
   await leave(page).getByRole("button", { name: "Keep editing" }).click();
-  await expect(title(page)).toHaveValue("Saved addresses at checkout");
+  await expect(title(page)).toHaveValue("Setup checklist");
 
   await page.goBack();
   await expect(leave(page)).toBeVisible();

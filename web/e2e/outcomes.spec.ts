@@ -80,8 +80,8 @@ test("Priorities shows the track record and each feature's factor line", async (
   await start(page);
   await page.goto("/priorities");
   await expect(page.getByTestId("track-record")).toContainText("Track record ×0.77 · 3 of 6 held");
-  await page.getByTestId("priority-row-F-1").getByRole("button", { name: /Saved addresses at checkout/ }).click();
-  const ex = page.getByTestId("explanation-F-1");
+  await page.getByTestId("priority-row-F-01").getByRole("button", { name: /Setup checklist/ }).click();
+  const ex = page.getByTestId("explanation-F-01");
   await expect(ex.getByTestId("track-record-line")).toContainText("×0.77");
   await expect(ex.getByRole("list", { name: "Steps" })).toContainText("track record 0.77");
 });

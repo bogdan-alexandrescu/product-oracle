@@ -67,7 +67,7 @@ for (const [name, viewport] of [["desktop", DESKTOP], ["phone", PHONE]] as const
       await start(page, LONG_GOAL_SCENARIO, "approver@example.com");
       await page.goto("/priorities");
       await expect(page.locator('tr[data-testid^="priority-row-"]')).toHaveCount(8);
-      const row = page.getByTestId("priority-row-F-3");
+      const row = page.getByTestId("priority-row-F-05");
       const chip = row.locator('[data-testid="row-goals"]').filter({ visible: true }).getByTestId("code-name");
       await expect(chip).toHaveText(LONG_GOAL_NAME);
       await chip.scrollIntoViewIfNeeded();

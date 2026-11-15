@@ -18,7 +18,7 @@ import { login } from "./helpers";
  *   fails_when=the chip is missing on a phone or the page scrolls sideways.
  */
 
-const ORDER = ["F-5", "F-4", "F-2", "N-1", "N-2", "N-3", "F-1", "N-4", "N-5", "F-7", "N-6"];
+const ORDER = ["F-07", "F-08", "F-02", "N-1", "N-2", "N-3", "F-01", "N-4", "N-5", "F-12", "N-6"];
 const NEW = ["N-1", "N-2", "N-3", "N-4", "N-5", "N-6"];
 
 async function openOrder(page: Page) {
@@ -82,7 +82,7 @@ test.describe("phone", () => {
     await openOrder(page);
     await expect(page.getByTestId("new-features-note")).toContainText("This order ranks the 6 features Saved addresses adds");
     for (const key of NEW) await expect(page.getByTestId(`priority-row-${key}`).getByText("New in this PRD")).toBeVisible();
-    await expect(page.getByTestId("priority-row-F-5").getByText("New in this PRD")).toHaveCount(0);
+    await expect(page.getByTestId("priority-row-F-07").getByText("New in this PRD")).toHaveCount(0);
     const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(sideways).toBeLessThanOrEqual(0);
   });

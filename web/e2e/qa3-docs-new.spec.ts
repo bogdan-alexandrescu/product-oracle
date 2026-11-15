@@ -69,7 +69,7 @@ for (const [name, viewport, home] of [
   test(`qa-onboarding-1 / qa-onboarding-42 (${name}): typed words on New PRD ask before the nav leaves them`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await newPrdFromHome(page);
-    await title(page).fill("Saved addresses at checkout");
+    await title(page).fill("Setup checklist");
     await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Returning buyers retype");
 
     // Home in the rail (the tab bar on a phone): it asks first.
@@ -81,7 +81,7 @@ for (const [name, viewport, home] of [
     // Keep editing keeps every word.
     await leave(page).getByRole("button", { name: "Keep editing" }).click();
     await expect(leave(page)).toHaveCount(0);
-    await expect(title(page)).toHaveValue("Saved addresses at checkout");
+    await expect(title(page)).toHaveValue("Setup checklist");
     await expect(page).toHaveURL(/\/documents\/new\?kind=prd$/);
 
     // Discard leaves, and the words are gone when New PRD opens again.
@@ -100,7 +100,7 @@ for (const [name, viewport, home] of [
 test("qa-onboarding-1: a reload asks the browser's question; a draft that went through leaves without asking", async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await newPrdFromHome(page);
-  await title(page).fill("Saved addresses at checkout");
+  await title(page).fill("Setup checklist");
 
   const asked: string[] = [];
   page.on("dialog", (d) => {
@@ -110,7 +110,7 @@ test("qa-onboarding-1: a reload asks the browser's question; a draft that went t
   // Dismissed: the page stays, with its words.
   await page.reload({ timeout: 3_000 }).catch(() => {});
   await expect.poll(() => asked).toContain("beforeunload");
-  await expect(title(page)).toHaveValue("Saved addresses at checkout");
+  await expect(title(page)).toHaveValue("Setup checklist");
 
   // Continue goes on to Before drafting and nothing asks.
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Returning buyers retype their address at every checkout.");

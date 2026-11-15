@@ -157,7 +157,7 @@ test.describe("RP1 a: the run's priority order", () => {
     await expect(page.getByText("11 in the run's order")).toHaveCount(0);
     await expect(page.locator("main")).not.toContainText("Outside this PRD's scope");
 
-    await page.getByTestId("priority-row-F-2").getByRole("button").first().click();
+    await page.getByTestId("priority-row-F-02").getByRole("button").first().click();
     const panel = page.getByTestId("priority-inspector");
     const tiles = panel.locator("dl").first().locator(":scope > div");
     await expect(tiles).toHaveCount(4);
@@ -175,9 +175,9 @@ test.describe("RP1 a: the run's priority order", () => {
   test("Approve order puts the new features on the baseline as proposed and on live Priorities", async ({ page }) => {
     await openOrder(page);
     // Only a real move among the live features differs from live: the new features ranked
-    // above Saved addresses at checkout do not move it (as the frame draws it).
-    await expect(page.getByTestId("priority-row-F-4").getByTestId("problem-differs_from_live")).toBeVisible();
-    await expect(page.getByTestId("priority-row-F-1").getByTestId("problem-differs_from_live")).toHaveCount(0);
+    // above Setup checklist do not move it (as the frame draws it).
+    await expect(page.getByTestId("priority-row-F-08").getByTestId("problem-differs_from_live")).toBeVisible();
+    await expect(page.getByTestId("priority-row-F-01").getByTestId("problem-differs_from_live")).toHaveCount(0);
     const band = page.getByTestId("snapshot-band");
     await band.getByRole("button", { name: "Approve order" }).click();
     await expect(band).toContainText("Saved for Saved addresses");
@@ -309,7 +309,7 @@ test.describe("RP1 a: the run's priority order", () => {
     await expect(band.getByTestId("cannot-approve")).toHaveText("1 blocking problem left. Order problems cannot be waived: request changes so the run fixes it.");
     const list = band.getByRole("list", { name: "Blocking problems" });
     await expect(list.getByRole("listitem")).toHaveCount(1);
-    await expect(list.getByRole("listitem")).toHaveText("Saved addresses at checkout is ranked 2 times");
+    await expect(list.getByRole("listitem")).toHaveText("Setup checklist is ranked 2 times");
   });
 });
 

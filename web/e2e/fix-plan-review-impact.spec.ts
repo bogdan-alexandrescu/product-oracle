@@ -115,14 +115,14 @@ test("impact: past 15 outputs, a category still finds its upstream once names ar
 
 // The mock's features (lib/api/mock/lane-f.ts) by key and title, as their rows name them.
 const FEATURES: [string, string][] = [
-  ["F-1", "Saved addresses at checkout"],
-  ["F-2", "Shipping cost shown in the cart"],
-  ["F-3", "Shared projects"],
-  ["F-4", "Usage alerts"],
-  ["F-5", "Address lookup service"],
-  ["F-6", "Dark mode"],
-  ["F-7", "Bulk export"],
-  ["F-8", "Scheduled exports"],
+  ["F-01", "Setup checklist"],
+  ["F-02", "Sample data import"],
+  ["F-05", "Team invites"],
+  ["F-08", "Usage dashboard"],
+  ["F-07", "Bulk import"],
+  ["F-06", "Setup error report"],
+  ["F-12", "Referral link"],
+  ["F-13", "Public signup"],
 ];
 
 /** The Score column's number style (scoreText: whole for RICE and MoSCoW, else two decimals), worked out here from the shown figures. */
@@ -143,7 +143,7 @@ async function pickMethod(page: Page, name: string) {
 }
 
 async function stepsOf(page: Page, key: string, title: string) {
-  // docs/ground-truth.md: a feature shows its code with its name ("F-1 Saved addresses at checkout").
+  // docs/ground-truth.md: a feature shows its code with its name ("F-01 Setup checklist").
   await page.getByTestId(`priority-row-${key}`).getByRole("button", { name: `${key} ${title}`, exact: true }).click();
   const steps = page.getByTestId(`explanation-${key}`).getByRole("list", { name: "Steps" });
   await expect(steps).toBeVisible();
@@ -184,9 +184,9 @@ test("priorities: a score step's arithmetic is true, confidence a percent in eve
   await page.goto("/priorities");
   await expect(page.locator('tr[data-testid^="priority-row-"]').first()).toBeVisible();
 
-  const f2 = (m: string) => pickMethod(page, m).then(() => stepsOf(page, "F-2", "Shipping cost shown in the cart"));
+  const f2 = (m: string) => pickMethod(page, m).then(() => stepsOf(page, "F-02", "Sample data import"));
   expect(await f2("RICE")).toEqual(["Score = 6,000 × 1 × 90% ÷ 1 = 5,400"]);
-  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400");
+  await expect(page.getByTestId("priority-row-F-02").getByTestId("score")).toHaveText("5,400");
   expect(await f2("Goal-weighted")).toEqual([
     "Goal value = 3×3 (Raise activation) = 9",
     "Score = 9 × 90% ÷ 1 = 8.10",
@@ -204,11 +204,11 @@ test("priorities: with a track record, the confidence step and the formula read 
   await expect(page.getByTestId("track-record")).toContainText("Track record ×0.77");
 
   await pickMethod(page, "Goal-weighted");
-  const steps = await stepsOf(page, "F-1", "Saved addresses at checkout");
+  const steps = await stepsOf(page, "F-01", "Setup checklist");
   expect(steps).toContain("Confidence = 75% × track record 0.77 = 57.8%");
   expect(steps).toContain("Score = 6 × 57.8% ÷ 2 = 1.73");
   await pickMethod(page, "RICE");
-  expect(await stepsOf(page, "F-1", "Saved addresses at checkout")).toEqual([
+  expect(await stepsOf(page, "F-01", "Setup checklist")).toEqual([
     "Confidence = 75% × track record 0.77 = 57.8%",
     "Score = 4,000 × 2 × 57.8% ÷ 2 = 2,312",
   ]);
@@ -254,7 +254,7 @@ test("priorities: confidence reads as one percent in the ring, the section, the 
   await page.goto("/priorities");
   await expect(page.locator('tr[data-testid^="priority-row-"]').first()).toBeVisible();
   await pickMethod(page, "Goal-weighted");
-  await confidenceReads(page, "F-2", "Shipping cost shown in the cart", "90%");
+  await confidenceReads(page, "F-02", "Sample data import", "90%");
 });
 
 test("priorities: with a track record, confidence reads as the same percent to the tenth everywhere", async ({ page }) => {
@@ -265,9 +265,9 @@ test("priorities: with a track record, confidence reads as the same percent to t
   await page.goto("/priorities");
   await expect(page.getByTestId("track-record")).toContainText("Track record ×0.77");
   await pickMethod(page, "Goal-weighted");
-  await confidenceReads(page, "F-1", "Saved addresses at checkout", "57.8%");
+  await confidenceReads(page, "F-01", "Setup checklist", "57.8%");
   // The words say where the figure came from: the evidence's average, then the track record.
-  await expect(page.getByTestId("explanation-F-1").getByTestId("confidence-explain")).toHaveText(
+  await expect(page.getByTestId("explanation-F-01").getByTestId("confidence-explain")).toHaveText(
     "Average of 7 evidence items: 75%; after the track record ×0.77, 57.8%",
   );
 });
@@ -278,7 +278,7 @@ test("priorities: the Changes log names a retired override's anchor by the API's
   await page.goto("/priorities");
   await expect(page.locator('tr[data-testid^="priority-row-"]').first()).toBeVisible();
   const log = page.getByTestId("change-log");
-  const row = log.getByRole("listitem").filter({ hasText: "Saved addresses at checkout" });
+  const row = log.getByRole("listitem").filter({ hasText: "Setup checklist" });
   // The API's title, with its code before it as every feature reads (docs/ground-truth.md).
   await expect(row).toContainText("Moved above F-99 Shipping carrier picker");
 });

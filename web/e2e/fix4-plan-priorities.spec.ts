@@ -4,9 +4,9 @@ import { login } from "./helpers";
 
 /*
  * QA findings on /priorities and /simple/priorities, round 4, driven through the UI on the
- * mock layer as a person would. /priorities' goal-weighted order: #1 Address lookup service
- * (F-5, ranked higher for Shipping cost shown in the cart), #2 F-2, #3 F-1 ... #8 Dark mode
- * (F-6). Under RICE, Shipping cost shown in the cart (F-2) scores 5,400.
+ * mock layer as a person would. /priorities' goal-weighted order: #1 Bulk import
+ * (F-07, ranked higher for Sample data import), #2 F-02, #3 F-01 ... #8 Setup error report
+ * (F-06). Under RICE, Sample data import (F-02) scores 5,400.
  */
 
 const APPROVER = "approver@example.com";
@@ -43,7 +43,7 @@ test.describe("desktop", () => {
   test("qa-plan-6: the inspector's RICE score fits its tile", async ({ page }) => {
     await open(page);
     await method(page, "RICE");
-    for (const key of ["F-2", "F-6"]) {
+    for (const key of ["F-02", "F-06"]) {
       await pick(page, key);
       const tile = page.getByTestId("priority-inspector").getByTestId("inspector-score");
       await expect(tile).toBeVisible();
@@ -90,7 +90,7 @@ test.describe("desktop", () => {
       await page.addInitScript((t) => localStorage.setItem("oracle-theme", t), scheme);
       await page.emulateMedia({ colorScheme: scheme });
       await open(page);
-      const row = rowOf(page, "F-5");
+      const row = rowOf(page, "F-07");
       await expect(row).toHaveAttribute("aria-selected", "true");
       const chip = row.getByTestId("rank-reason").first();
       await expect(chip).toHaveAttribute("data-kind", "acc");
@@ -104,7 +104,7 @@ test.describe("desktop", () => {
 
   test("qa-plan-49: a flag is one short line; its full sentence is in the tooltip", async ({ page }) => {
     await open(page);
-    for (const key of ["F-5", "F-6", "F-7"]) {
+    for (const key of ["F-07", "F-06", "F-12"]) {
       const chips = rowOf(page, key).getByTestId("row-flags").locator("[data-kind]");
       const n = await chips.count();
       expect(n, key).toBeGreaterThan(0);
@@ -114,10 +114,10 @@ test.describe("desktop", () => {
         expect(await fits(chips.nth(i)), `${key}: a flag is cut`).toBe(true);
       }
     }
-    const why = rowOf(page, "F-5").getByTestId("rank-reason");
+    const why = rowOf(page, "F-07").getByTestId("rank-reason");
     // docs/ground-truth.md: a feature reads its code with its name.
-    await expect(why).toHaveAttribute("title", /^Ranked higher: F-2 Shipping cost shown in the cart depends on it\./);
-    await expect(why).toHaveText("Ranked higher: F-2 Shipping cost shown in the cart depends on it");
+    await expect(why).toHaveAttribute("title", /^Ranked higher: F-02 Sample data import depends on it\./);
+    await expect(why).toHaveText("Ranked higher: F-02 Sample data import depends on it");
   });
 
   test("qa-plan-50: MoSCoW and RICE scores are whole numbers; goal-weighted keeps two places", async ({ page }) => {
@@ -126,19 +126,19 @@ test.describe("desktop", () => {
     const moscow = await rows(page).getByTestId("score").allInnerTexts();
     for (const s of moscow) expect(s.trim()).toMatch(/^(\d+|—)$/);
     await method(page, "RICE");
-    await expect(rowOf(page, "F-2").getByTestId("score")).toHaveText("5,400");
+    await expect(rowOf(page, "F-02").getByTestId("score")).toHaveText("5,400");
     for (const s of await rows(page).getByTestId("score").allInnerTexts()) expect(s.trim()).toMatch(/^([\d,]+|—)$/);
-    await pick(page, "F-2");
+    await pick(page, "F-02");
     await expect(page.getByTestId("inspector-score")).toContainText("5,400");
     await expect(page.getByTestId("inspector-score")).not.toContainText("5,400.00");
     await method(page, "Goal-weighted");
-    await expect(rowOf(page, "F-2").getByTestId("score")).toHaveText("8.10");
+    await expect(rowOf(page, "F-02").getByTestId("score")).toHaveText("8.10");
   });
 
   test("qa-plan-51: an input read from the feature says 'The feature', not its name again", async ({ page }) => {
     await open(page);
-    await pick(page, "F-1");
-    const ex = page.getByTestId("explanation-F-1");
+    await pick(page, "F-01");
+    const ex = page.getByTestId("explanation-F-01");
     const effort = ex.getByRole("row", { name: /^Effort\b/ });
     await expect(effort.getByRole("cell").nth(2)).toHaveText("The feature");
     await expect(ex).not.toContainText("(from the feature)");
@@ -150,12 +150,12 @@ test.describe("phone", () => {
 
   test("qa-plan-52: each card shows the feature's confidence", async ({ page }) => {
     await open(page);
-    for (const key of ["F-5", "F-2", "F-1"]) {
+    for (const key of ["F-07", "F-02", "F-01"]) {
       const conf = rowOf(page, key).getByTestId("phone-confidence");
       await expect(conf).toBeVisible();
       await expect(conf).toHaveText(/^\d+(\.\d)?%$/);
     }
-    await expect(rowOf(page, "F-5")).toContainText("Confidence");
+    await expect(rowOf(page, "F-07")).toContainText("Confidence");
   });
 });
 
