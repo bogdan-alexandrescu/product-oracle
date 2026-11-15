@@ -1,5 +1,6 @@
 import { expect, test } from "./test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /**
@@ -54,4 +55,27 @@ test("detailed ground truth: every coded feature is Simple's and the goals are S
   for (const old of ["Raise activation", "Grow paid conversion", "Guided setup", "Saved carts", "Dark mode"]) {
     await expect(page.getByText(old)).toHaveCount(0);
   }
+});
+
+/**
+ * detailed-story (review): Detailed's PRDs, discussions and Oracle's actions tell Simple's story too: the PRDs are
+ * named for Simple's features and no older story name is left on the PRD list or the Inbox. Invented data.
+ */
+const OLD_NAMES = ["Checkout redesign", "Team workspaces", "Saved carts", "Saved addresses", "Guest checkout", "One-page checkout"];
+
+test("detailed PRDs: the PRD list names Simple's features, none of the older story's", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents");
+  for (const prd of ["Self-serve checkout PRD", "Team invites PRD", "Referral link PRD"]) {
+    await expect(page.getByRole("link", { name: prd }).first()).toBeVisible();
+  }
+  for (const old of OLD_NAMES) await expect(page.getByText(old)).toHaveCount(0);
+});
+
+test("detailed inbox: discussions and Oracle's actions name Simple's features", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "discussions"), MOCK_SCENARIO_KEY);
+  await login(page, "viewer@example.com");
+  await page.goto("/inbox");
+  await expect(page.getByTestId("inbox-discussions").first()).toContainText("F-12 Referral link: keep links for guests?");
+  for (const old of OLD_NAMES) await expect(page.getByText(old)).toHaveCount(0);
 });
