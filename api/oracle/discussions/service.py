@@ -8,12 +8,13 @@ holds ids and lengths, never message text.
 import re
 import uuid
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any
 
 from pydantic import ConfigDict, Field, ValidationError
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy import update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
@@ -404,12 +405,52 @@ class Labels:
         self.codes: dict[uuid.UUID, str] | None = None
         #: A checkpoint's item titles by key, read once (:meth:`_run_item`).
         self.titles: dict[uuid.UUID, dict[str, Any]] = {}
+        #: Every feature's id and title by its key, read once (:meth:`_item_name`).
+        self.features: dict[str, tuple[uuid.UUID, str]] | None = None
+        #: A roadmap version's item titles by key, by (document id, version number), read
+        #: once for every label of a list (:meth:`prime`).
+        self.items: dict[tuple[uuid.UUID, int], dict[str, str]] = {}
 
     async def get(self, model: type, id_: Any) -> Any:
         key = (model, uuid.UUID(str(id_)))
         if key not in self.rows:
             self.rows[key] = await self.db.get(model, key[1])
         return self.rows[key]
+
+    async def prime(self, ds: Iterable[Discussion]) -> None:
+        """Read the item titles of every roadmap version ``ds`` name in one query, so a
+        list's labels do not read one per label."""
+        want = set()
+        for d in ds:
+            if d.subject_kind != "roadmap_item":
+                continue
+            try:
+                want.add((uuid.UUID(str(d.subject["document_id"])), int(d.subject["version"])))
+            except (KeyError, TypeError, ValueError):
+                continue
+        await self._read_items(want)
+
+    async def _read_items(self, want: set[tuple[uuid.UUID, int]]) -> None:
+        from oracle.docs.models import DocumentVersion
+        from oracle.roadmap.models import RoadmapItem
+
+        want = want - self.items.keys()
+        if not want:
+            return
+        rows = await self.db.execute(
+            select(
+                DocumentVersion.document_id,
+                DocumentVersion.number,
+                RoadmapItem.item_key,
+                RoadmapItem.title,
+            )
+            .join(DocumentVersion, DocumentVersion.id == RoadmapItem.roadmap_version_id)
+            .where(tuple_(DocumentVersion.document_id, DocumentVersion.number).in_(want))
+        )
+        for w in want:
+            self.items[w] = {}
+        for doc_id, number, key, title in rows:
+            self.items[(doc_id, number)].setdefault(key, title)
 
     async def of(self, d: Discussion) -> tuple[str, str]:
         try:
@@ -432,32 +473,26 @@ class Labels:
         from oracle.baseline.fixes import _codes
         from oracle.baseline.models import Entity
 
-        feature = await self.db.scalar(
-            select(Entity).where(Entity.type == "feature", Entity.key == key).limit(1)
-        )
-        name = (title or (feature.title if feature else "") or "").strip() or key
+        if self.features is None:
+            rows = await self.db.execute(
+                select(Entity.key, Entity.id, Entity.title).where(Entity.type == "feature")
+            )
+            self.features = {}
+            for k, i, t in rows:
+                self.features.setdefault(k, (i, t))
+        feature = self.features.get(key)
+        name = (title or (feature[1] if feature else "") or "").strip() or key
         if feature is None:
             return name
         if self.codes is None:
             self.codes = await _codes(self.db)
-        code = self.codes.get(feature.id)
+        code = self.codes.get(feature[0])
         return f"{code} {name}" if code else name
 
     async def _roadmap_item(self, doc: Any, s: dict[str, Any]) -> str:
-        from oracle.docs.models import DocumentVersion
-        from oracle.roadmap.models import RoadmapItem
-
-        title = await self.db.scalar(
-            select(RoadmapItem.title)
-            .join(DocumentVersion, DocumentVersion.id == RoadmapItem.roadmap_version_id)
-            .where(
-                DocumentVersion.document_id == doc.id,
-                DocumentVersion.number == s["version"],
-                RoadmapItem.item_key == s["item_key"],
-            )
-            .limit(1)
-        )
-        return await self._item_name(s["item_key"], title)
+        version = (doc.id, int(s["version"]))
+        await self._read_items({version})
+        return await self._item_name(s["item_key"], self.items[version].get(s["item_key"]))
 
     async def _run_item(self, run: Any, cp: Any, key: str) -> str:
         """A checkpoint item's name: its feature-set scope row's title, else its item file's."""
@@ -914,6 +949,7 @@ async def list_discussions(
     stats = await _stats(db, principal, readable_rows)
     users = await users_by_id(db, {d.started_by for d in readable_rows})
     labels = Labels(db)
+    await labels.prime(readable_rows)
     out: list[DiscussionSummary | HiddenDiscussion] = []
     for d, seat in shown:
         if seat is None:
