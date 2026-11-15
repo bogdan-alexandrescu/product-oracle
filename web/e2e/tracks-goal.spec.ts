@@ -36,8 +36,9 @@ test.describe("Tracks: a track's PRD and goal", () => {
 
     await sheet(page).getByRole("button", { name: "Change Guided setup track" }).click();
     const guided = row(page, "Guided setup track");
-    await guided.getByLabel("Goal", { exact: true }).selectOption({ label: "Growth" });
-    await expect(toasts(page)).toContainText("Guided setup track's goal is now Growth");
+    // With no dated plan the company's goals are the roadmap's own (Grow retention, ...), not the plan's.
+    await guided.getByLabel("Goal", { exact: true }).selectOption({ label: "Grow retention" });
+    await expect(toasts(page)).toContainText("Guided setup track's goal is now Grow retention");
 
     await page.reload();
     await expect(page.getByTestId("simple-roadmap")).toBeVisible();
@@ -48,7 +49,7 @@ test.describe("Tracks: a track's PRD and goal", () => {
     await expect(added.getByTestId("track-prd")).toHaveCount(0);
     await expect(added.getByLabel("Goal", { exact: true }).locator("option:checked")).toHaveText("No goal");
     await sheet(page).getByRole("button", { name: "Change Guided setup track" }).click();
-    await expect(row(page, "Guided setup track").getByLabel("Goal", { exact: true }).locator("option:checked")).toHaveText("Growth");
+    await expect(row(page, "Guided setup track").getByLabel("Goal", { exact: true }).locator("option:checked")).toHaveText("Grow retention");
   });
 
   test("an Add with no name is off and says why in its tooltip", async ({ page }) => {
