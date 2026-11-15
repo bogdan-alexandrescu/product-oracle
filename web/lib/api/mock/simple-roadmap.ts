@@ -1153,7 +1153,8 @@ function resolve(db: SimpleDb, s: SeedItem): Resolved {
   const start0 = s.start !== undefined && s.source ? addDays(at, s.start) : null;
   if (!end0 && !start0) {
     // roadmap-dates: Oracle's open suggestion, else the quarter it was added to, else Later's window.
-    const sug = itemSuggestion(db, db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`));
+    const id = db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`);
+    const sug = itemSuggestion(db, id) ?? acceptedInOpenDraft(db, id);
     const [a, b, basis]: [string, string, EstimateBasis | undefined] = sug ? [sug.start_date, sug.end_date, "suggestion"] : s.quarter ? [s.quarter.start, s.quarter.end, "quarter"] : [q.later[0], q.later[1], undefined];
     return { start: { date: a, source: "estimated", estimated: true }, end: { date: b, source: "estimated", estimated: true }, ...(basis ? { basis } : {}) };
   }
@@ -1163,6 +1164,18 @@ function resolve(db: SimpleDb, s: SeedItem): Resolved {
   const start: Dated = { date: start0!, source, estimated: false };
   const w = q[horizonOfDates({ start, end: { date: start0!, source, estimated: false } }, q)];
   return { start, end: { date: start0! > w[1] ? addDays(start0!, 41) : w[1], source: "estimated", estimated: true } };
+}
+
+/** join (service._accepted_in_open_drafts): the dates the item's latest accept (or edit) of
+ * Oracle's suggestion wrote into a working or submitted draft, a reader of the published roadmap's estimate. */
+function acceptedInOpenDraft(db: SimpleDb, itemId: string): { start_date: string; end_date: string } | undefined {
+  const open = new Set((db.drafts ?? []).filter((d) => OPEN_DRAFT.includes(d.out.status)).map((d) => d.out.id));
+  const cs = db.changes ?? [];
+  const c = cs
+    .filter((x) => x.op === "accept_date_suggestion" && ["applied", "accepted"].includes(x.status) && x.target.item_id === itemId && (x.draft_ids ?? []).some((d) => open.has(d)) && !cs.some((u) => u.undoes_id === x.id))
+    .at(-1);
+  const a = c?.after.start_date, b = c?.after.end_date;
+  return typeof a === "string" && typeof b === "string" ? { start_date: a, end_date: b } : undefined;
 }
 
 /**
