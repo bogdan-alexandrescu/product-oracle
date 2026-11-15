@@ -239,7 +239,7 @@ const pct = (n: number | null | undefined) => (n == null ? null : Math.round(n *
 /** A goal as words: its code and name ("G-B Growth"), never its key. */
 const goalText = (key: string, title: string) => (isUnknownGoal({ goal: key, title }) ? "Unknown goal" : namedText(named(title, key)));
 
-/** A ranked feature as words: its code and name ("F-5 Address lookup service"). */
+/** A ranked feature as words: its code and name ("F-07 Bulk import"). */
 const featureWords = (f: { key: string; title: string }) => namedText(named(f.title, f.key));
 
 /** A feature key as words: the ranked feature's code and name (detailed-b 1). */

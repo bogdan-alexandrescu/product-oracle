@@ -13,7 +13,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { dayText, evidenceName, sourceName } from "./words";
 
-/** A feature as words: its code and name ("F-5 Address lookup service", detailed-b 1). */
+/** A feature as words: its code and name ("F-07 Bulk import", detailed-b 1). */
 const words = (f: { key: string; title: string }) => namedText(named(f.title, f.key));
 
 type RankedFeature = Schemas["RankedFeature"];
