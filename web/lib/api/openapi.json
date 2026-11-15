@@ -103388,6 +103388,17 @@
             "type": "string",
             "title": "Title"
           },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
           "outcome": {
             "anyOf": [
               {

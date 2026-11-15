@@ -161,6 +161,9 @@ class PlanItem(BaseModel):
     id: uuid.UUID
     key: str
     title: str
+    # outcomes-code: the item's Ground Truth code (oracle.roadmap.codes.code_of), None when
+    # it has none.
+    code: str | None = None
     outcome: str | None = None
     horizon: Horizon
     position: int

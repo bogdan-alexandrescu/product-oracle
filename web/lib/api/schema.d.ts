@@ -34195,6 +34195,8 @@ export interface components {
             key: string;
             /** Title */
             title: string;
+            /** Code */
+            code?: string | null;
             /** Outcome */
             outcome?: string | null;
             /**
