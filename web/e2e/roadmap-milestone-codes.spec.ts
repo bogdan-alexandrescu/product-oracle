@@ -158,9 +158,11 @@ test("a Roadmap filter keeps each shown milestone's code", async ({ page }) => {
 test("the band's +N lists the milestones it folds by name and day, and each opens its card", async ({ page }) => {
   await open(page);
   await page.getByTestId("zoom-all").click();
-  const more = page.getByTestId("ms-band-more").first();
+  // The first "+N" that folds a roadmap's own milestone (a PRD's one may fold alone, first).
+  const host = page.locator("[data-ms-more]").filter({ has: page.locator('[data-testid="ms-band-entry"]:not([data-prd])') }).first();
+  const more = host.getByTestId("ms-band-more");
   await expect(more).toBeVisible();
-  const list = more.locator("xpath=..").getByTestId("ms-band-list");
+  const list = host.getByTestId("ms-band-list");
   await expect(list).toBeHidden();
   await more.focus();
   await expect(list).toBeVisible();
