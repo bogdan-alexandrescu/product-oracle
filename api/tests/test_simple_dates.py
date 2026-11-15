@@ -213,3 +213,42 @@ def test_median_is_of_whole_days():
     assert dates.median_days([10, 11]) == 11
     assert dates.median_days([10, 20, 60]) == 20
     assert dates.median_days([]) == dates.FALLBACK_DAYS
+
+
+# roadmap-dates (QA Nov 14): an undated item's estimate is Oracle's suggestion, else the
+# quarter it was added to, else the horizon window; the estimate may put it in any column.
+HZ = {"short_quarters": 1, "medium_quarters": 2, "long_from_months": 12, "long_to_months": 24}
+
+
+def test_undated_estimate_is_the_suggestion_then_the_quarter_then_the_window():
+    w = dates.windows(HZ, date(2026, 11, 10))
+    sug = (date(2027, 1, 4), date(2027, 2, 14))
+    q4 = date(2026, 10, 1)
+    r, h = dates.resolve_by_dates([], w, None, suggested=sug, quarter=q4)
+    assert (r.start.date, r.end.date) == sug and r.estimated and r.source == "estimated"
+    assert h == "next" and dates.horizon_of(r, w) == "next"
+    r, h = dates.resolve_by_dates([], w, None, quarter=q4)
+    assert (r.start.date, r.end.date) == (q4, date(2026, 12, 31)) and r.estimated
+    assert h == "now" and dates.horizon_of(r, w) == "now"
+    r, h = dates.resolve_by_dates([], w, None)
+    assert (r.start.date, r.end.date) == w["later"] and h == "later"
+    # Accepted dates win over all of them.
+    own = [Candidate(date(2027, 5, 1), date(2027, 5, 20), "accepted")]
+    r, h = dates.resolve_by_dates(own, w, None, suggested=sug, quarter=q4)
+    assert (r.start.date, r.end.date) == (date(2027, 5, 1), date(2027, 5, 20))
+    assert not r.estimated and h == "later"
+    # A dependency's move keeps where the estimate came from (its column follows it).
+    r, _ = dates.resolve_by_dates([], w, None, suggested=sug)
+    moved = dates.after_dependencies({"a": r, "b": _typed_r(date(2026, 11, 1), date(2027, 4, 9))},
+                                     {"a": ["b"]})  # fmt: skip
+    assert moved["a"].start.date == date(2027, 4, 10)
+    assert dates.horizon_of(moved["a"], w) == "later"
+
+
+def _typed_r(start: date, end: date) -> dates.Resolved:
+    return dates.Resolved(Dated(start, "typed", False), Dated(end, "typed", False))
+
+
+def test_quarter_window_and_its_word():
+    assert dates.quarter_window(date(2026, 10, 1)) == (date(2026, 10, 1), date(2026, 12, 31))
+    assert dates.quarter_word(date(2027, 4, 1)) == "Q2 2027"
