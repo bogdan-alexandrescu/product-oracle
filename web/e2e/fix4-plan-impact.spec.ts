@@ -6,7 +6,7 @@ import { login } from "./helpers";
 /*
  * fix4 QA findings on the Impact explorer (/impact/entities/<id>, /impact/changes/<id> and a
  * PRD version's Impact), driven through the UI on the mock API. The "impact" scenario gives
- * checkout-redesign's v1 downstream outputs; "Checkout flow (user flow)" rests on the Guided
+ * annual-billing's v1 downstream outputs; "Checkout flow (user flow)" rests on the Guided
  * setup feature, and the acceptance tests on requirement R-90, since deleted.
  */
 
@@ -25,9 +25,9 @@ async function openWhatIf(page: Page, key: string, title: string) {
 /** PRDs > Annual billing > v2 > Impact. */
 async function openVersionImpact(page: Page) {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await page.getByRole("link", { name: "Impact", exact: true }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
 }
 
 /** ... > Impact > Table > Acceptance tests > "Recorded change" (the R-90 deletion). */
@@ -91,7 +91,7 @@ test.describe("desktop", () => {
     await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
     await expect(nav.getByTestId("nav-baseline")).not.toHaveAttribute("aria-current", "page");
     await back.click();
-    await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
+    await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
   });
 
   test("qa-plan-41: the output's kind reads 'User flow' everywhere its title says user flow", async ({ page }) => {
@@ -176,7 +176,7 @@ test.describe("phone", () => {
   test("qa-plan-62: a recorded change's full title is in the page body", async ({ page }) => {
     await scenario(page, "impact");
     await login(page);
-    await page.goto("/documents/checkout-redesign/v/2/impact");
+    await page.goto("/documents/annual-billing/v/2/impact");
     // On a phone the table is the way to an output's sheet.
     await page.getByRole("button", { name: /Acceptance tests v1/ }).first().click();
     await page.getByRole("dialog").getByRole("link", { name: "Recorded change" }).first().click();

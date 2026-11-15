@@ -18,7 +18,7 @@ const rulesSaid = (page: Page) =>
   page.getByTestId("quality-inspector").getByTestId("evaluator").filter({ hasText: "Rules" }).first();
 
 test("a PRD's goal check names the goal it serves by its name, with the code beside it", async ({ page }) => {
-  await openQuality(page, "/documents/team-workspaces/v/2/quality");
+  await openQuality(page, "/documents/team-invites/v/2/quality");
   await page.locator('[data-testid="criterion-row"][data-key="goal_alignment"]').click();
   await expect(rulesSaid(page)).toContainText("serves a confirmed goal: Activation (g.activation)");
 });

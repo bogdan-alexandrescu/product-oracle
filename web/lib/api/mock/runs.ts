@@ -2908,7 +2908,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
   big.status = "awaiting_approval";
 
   // Spent past 1.5x its estimate.
-  const over = make("feedback_loop", "team-workspaces", {}, "2026-10-16T17:00:00Z");
+  const over = make("feedback_loop", "team-invites", {}, "2026-10-16T17:00:00Z");
   from(over.created_at);
   launch(full, over);
   over.overrun_ceiling_usd = 13.5;
@@ -2918,13 +2918,13 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
   over.status = "paused_overrun";
 
   // A finished feedback loop.
-  const done = make("feedback_loop", "checkout-redesign", { checkpoints: { prd_review: false } }, "2026-10-16T09:00:00Z");
+  const done = make("feedback_loop", "annual-billing", { checkpoints: { prd_review: false } }, "2026-10-16T09:00:00Z");
   done.segments[0].attempts.push({ attempt: 1, workflow_id: "mock-wf-done", submitted_at: "2026-10-16T09:00:00Z", cost_usd: 8.1, note: null, state: "succeeded" });
   Object.assign(done.segments[0], {
     status: "succeeded",
     cost_usd: 8.1,
     artifacts: ["prd.md"],
-    draft_import: { document_id: done.document_id, slug: "checkout-redesign", version: 2, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null },
+    draft_import: { document_id: done.document_id, slug: "annual-billing", version: 2, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null },
   });
   db.artifacts[`${done.id}|1|prd.md`] = fileContent("prd.md", "next_draft", 1);
   done.checkpoints.push({
@@ -2936,7 +2936,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
 
   // A finished Baseline to PRD run whose agents proposed baseline changes (./baseline.ts).
   const off = { baseline_confirm: false, feature_set: false, priority_order: false, prd_review: false };
-  const proposer = make("baseline_to_prd", "saved-carts", { checkpoints: off }, "2026-10-16T08:00:00Z");
+  const proposer = make("baseline_to_prd", "referral-link", { checkpoints: off }, "2026-10-16T08:00:00Z");
   proposer.id = AGENT_RUN;
   from(proposer.created_at);
   for (const seg of proposer.segments) {
@@ -2951,11 +2951,11 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
 }
 
 /**
- * #561 review, the "stored-refusals" scenario: a feedback loop on checkout-redesign that failed
+ * #561 review, the "stored-refusals" scenario: a feedback loop on annual-billing that failed
  * on Oct 18, its segment and the run on a refusal stored before #403's wording.
  */
 export function seedStoredRefusalRun(db: RunsDb, ctx: Omit<RunsContext, "db">, error: string): RunOut {
-  const run = seedRun(ctx, db, "feedback_loop", "checkout-redesign", { checkpoints: { prd_review: false } }, "2026-10-18T23:00:00Z");
+  const run = seedRun(ctx, db, "feedback_loop", "annual-billing", { checkpoints: { prd_review: false } }, "2026-10-18T23:00:00Z");
   const at = "2026-10-18T23:12:00Z";
   run.segments[0].attempts.push({ attempt: 1, workflow_id: null, submitted_at: "2026-10-18T23:00:00Z", cost_usd: 0, note: null, state: "failed" });
   Object.assign(run.segments[0], { status: "failed", started_at: "2026-10-18T23:00:00Z", finished_at: at, error });
@@ -2969,11 +2969,11 @@ export const KEY_RENEWED_NOTE =
   "Key renewed at Oct 21, 2026, 3:10 AM PDT: the step started after its key expired while it waited in SwarmCloud's queue";
 
 /**
- * The "key-renewed" scenario: a SwarmCloud feedback loop on checkout-redesign whose first step waited in
+ * The "key-renewed" scenario: a SwarmCloud feedback loop on annual-billing whose first step waited in
  * SwarmCloud's queue past its key, was parked, and went on once Oracle renewed the key.
  */
 export function seedKeyRenewedRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
-  const run = seedRun(ctx, db, "feedback_loop", "checkout-redesign", { checkpoints: { prd_review: false } }, "2026-10-20T03:00:00Z");
+  const run = seedRun(ctx, db, "feedback_loop", "annual-billing", { checkpoints: { prd_review: false } }, "2026-10-20T03:00:00Z");
   run.segments[0].attempts.push({ attempt: 1, workflow_id: "mock-wf-key-renewed", submitted_at: "2026-10-20T03:00:00Z", cost_usd: 0, note: null, state: "running" });
   Object.assign(run.segments[0], { status: "running", started_at: "2026-10-20T03:00:00Z" });
   Object.assign(run, { status: "running", started_at: "2026-10-20T03:00:00Z", runtime: "swarmcloud", notes: [KEY_RENEWED_NOTE] });
@@ -3241,7 +3241,7 @@ export function seedEngCheckUnmappedRun(db: RunsDb, ctx: Omit<RunsContext, "db">
     cites: {
       "f.guided-setup": [["module:onboarding", "touches[0].ref"], ["module:storefront", "touches[1].ref"]],
       "f.sample-data": [["module:storefront", "touches[0].ref"], ["model:catalogue", "reuse"]],
-      "f.saved-carts": [["module:storefront", "reuse"]],
+      "f.referral-link": [["module:storefront", "reuse"]],
     },
     repos: ["https://github.com/example/shop-app.git"],
     unmapped: named ? ["example/shop-web"] : [],
@@ -3552,8 +3552,8 @@ export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
   seedAtPriority(db, ctx, PRIORITY_ROWLESS_RUN, "gift-receipts", "2026-10-18T07:00:00Z", GIFT_RECEIPTS_ORDER, "Gift receipts", GIFT_RECEIPTS_SCOPE);
   seedAtPriority(db, ctx, PRIORITY_DUPLICATE_RUN, "gift-cards", "2026-10-18T06:00:00Z", GIFT_CARDS_ORDER, "Gift cards");
   seedAtPriority(db, ctx, PRIORITY_STALE_GOAL_RUN, "gift-boxes", "2026-10-18T05:00:00Z", GIFT_BOXES_ORDER, "Gift boxes");
-  const checkout = ctx.documents.find((d) => d.slug === "checkout-redesign");
-  const earlier = db.runs.find((r) => r.document_slug === "checkout-redesign") ?? db.runs[0];
+  const checkout = ctx.documents.find((d) => d.slug === "annual-billing");
+  const earlier = db.runs.find((r) => r.document_slug === "annual-billing") ?? db.runs[0];
   const spec: OrderSpec = { method: "goal_weighted", order: ranking("goal_weighted").features.slice(0, 4).map((f) => ({ key: f.key, score: f.score ?? 0, explanation: "As the live ranking" })) };
   const check = checkOrder(spec, null, goalSet(ctx), ctx.goalTitle);
   const snap = proposeOrder({ ...ctx, db }, earlier, 0, 1, spec, check);
@@ -4219,7 +4219,7 @@ const LOCAL_BRIEFS: Brief[] = [
 const SEEDED_BRIEFS: Brief[] = [
   { key: "f.guided-setup", title: "Setup checklist", approach: "Reuse the onboarding checklist and add the test-order step.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Does the payment sandbox take test orders without a live account?", blocking: true }, { id: "q2", question: "Show the checklist on phones too?", blocking: false }] },
   { key: "f.sample-data", title: "Sample data import", approach: "A fixed catalogue copied into the new store on first sign-in.", size: "s", depends_on: [], questions: [] },
-  { key: "f.saved-carts", title: "Referral link", approach: "Keep the cart server-side and sync it on sign-in.", size: "l", depends_on: ["f.guided-setup"], questions: [] },
+  { key: "f.referral-link", title: "Referral link", approach: "A referral link per owner, kept on the server and shown in setup.", size: "l", depends_on: ["f.guided-setup"], questions: [] },
 ];
 
 /** What a brief file says of the code maps: the ids each feature cites (with where: touches[i].ref or reuse) and the repositories it names. */
@@ -5573,12 +5573,12 @@ export function seedRunDecisions(db: RunsDb, ctx: Omit<RunsContext, "db">, peopl
   if (many)
     plans.push(
       {
-        doc: "saved-carts",
+        doc: "referral-link",
         created_at: "2026-10-11T16:00:00Z",
         stops: [o("feature_set", 2, "2026-10-12T17:00:00Z", "Checklist first, sample project second."), a("eng_review", 3, "2026-10-13T17:00:00Z"), o("priority_order", 4, "2026-10-14T17:00:00Z"), a("prd_review", 5, "2026-10-16T17:00:00Z"), o("eng_dates", 6, "2026-10-17T17:00:00Z")],
       },
       {
-        doc: "team-workspaces",
+        doc: "team-invites",
         created_at: "2026-10-23T16:00:00Z",
         stops: [
           o("feature_set", 2, "2026-10-24T17:00:00Z", "Seats only; no usage pricing this quarter."),
@@ -5588,7 +5588,7 @@ export function seedRunDecisions(db: RunsDb, ctx: Omit<RunsContext, "db">, peopl
         ],
       },
       {
-        doc: "checkout-redesign",
+        doc: "annual-billing",
         created_at: "2026-10-26T16:00:00Z",
         stops: [o("feature_set", 2, "2026-10-27T17:00:00Z"), a("eng_review", 3, "2026-10-28T17:00:00Z", "Host it ourselves, behind the same sign-in."), o("priority_order", 4, "2026-10-29T17:00:00Z"), a("prd_review", 5, "2026-10-30T17:00:00Z")],
       },

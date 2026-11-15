@@ -6,7 +6,7 @@ import { login } from "./helpers";
 /**
  * The Impact explorer and targeted regeneration plan (v2 screen 2): B's lineage graph and
  * plan sidebar, A's table and inspector as a second view, C's three stages on each plan row.
- * The "impact" scenario gives checkout-redesign's v1 six downstream outputs (invented data).
+ * The "impact" scenario gives annual-billing's v1 six downstream outputs (invented data).
  */
 const scenario = (page: Page, name: string) =>
   page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, name]);
@@ -14,9 +14,9 @@ const scenario = (page: Page, name: string) =>
 /** Opens v2 of the checkout PRD and its Impact screen from the version's toolbar. */
 async function openImpact(page: Page, email?: string, n = 2) {
   await login(page, email);
-  await page.goto(`/documents/checkout-redesign/v/${n}`);
+  await page.goto(`/documents/annual-billing/v/${n}`);
   await page.getByRole("link", { name: "Impact", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/documents/checkout-redesign/v/${n}/impact$`));
+  await expect(page).toHaveURL(new RegExp(`/documents/annual-billing/v/${n}/impact$`));
 }
 
 const plan = (page: Page) => page.getByRole("complementary", { name: "Regeneration plan" });
@@ -156,9 +156,9 @@ test("impact: a version nothing was built on is empty, and a missing one says so
   await scenario(page, "impact");
   await openImpact(page, undefined, 1);
   await expect(page.getByText("No outputs depend on what v1 changed. Nothing to regenerate.")).toBeVisible();
-  await page.goto("/documents/checkout-redesign/v/9/impact");
+  await page.goto("/documents/annual-billing/v/9/impact");
   // The API's words for a missing version (docs.service.get_version_row).
-  await expect(page.getByRole("alert").filter({ hasText: "not found" })).toContainText("version 9 of 'checkout-redesign' not found");
+  await expect(page.getByRole("alert").filter({ hasText: "not found" })).toContainText("version 9 of 'annual-billing' not found");
 });
 
 test("impact: past 15 outputs the graph groups them by category, and a cut-off walk says so", async ({ page }) => {
@@ -181,7 +181,7 @@ test.describe("phone", () => {
   test("impact: on a phone the graph is a grouped list and a row opens its sheet", async ({ page }) => {
     await scenario(page, "impact");
     await login(page);
-    await page.goto("/documents/checkout-redesign/v/2/impact");
+    await page.goto("/documents/annual-billing/v/2/impact");
     await expect(page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-subject")).toBeHidden();
     const list = page.getByRole("region", { name: "Affected outputs" });
     await expect(list.getByText("From Scope", { exact: false }).first()).toBeVisible();
@@ -242,7 +242,7 @@ test.describe("phone, once", () => {
   test("impact: on a phone an output's steps are drawn once, in its sheet, in either view", async ({ page }) => {
     await scenario(page, "impact");
     await login(page);
-    await page.goto("/documents/checkout-redesign/v/2/impact");
+    await page.goto("/documents/annual-billing/v/2/impact");
     await page.getByRole("region", { name: "Affected outputs" }).getByRole("button", { name: /Checkout flow/ }).click();
     await expect(page.getByRole("dialog", { name: /Checkout flow/ }).getByText("1 · Settle staleness")).toBeVisible();
     await expect(page.getByText("1 · Settle staleness")).toHaveCount(1);

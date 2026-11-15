@@ -12,7 +12,7 @@ import type { Schemas } from "@/lib/api/client";
 import { stableUuid } from "./ids";
 import { roadmapOut, type SeedItem, type SimpleDb } from "./simple-roadmap";
 
-export const SAVED_CARTS = { slug: "saved-carts", title: "Referral link" };
+export const SAVED_CARTS = { slug: "referral-link", title: "Referral link" };
 
 type DraftRow = [string, string, SeedItem["horizon"], string, string, string];
 
@@ -45,7 +45,7 @@ export function seedMeetingDraftDates(db: SimpleDb, prdId: string, version = 1):
  * workspaces in draft, and two drafts the layer leaves out: Online deposits' PRD was replaced,
  * Clinic outreach's run was cancelled.
  */
-export const WORKSPACES = { slug: "team-workspaces", title: "Team invites" };
+export const WORKSPACES = { slug: "team-invites", title: "Team invites" };
 export const WORKSPACES_DRAFT: DraftRow[] = [
   ["W-1", "Invite a whole team", "now", "2026-11-16", "2026-12-11", "Lena Fischer"],
   ["W-2", "Team roles and rights", "next", "2026-12-14", "2027-02-05", "Kofi Mensah"],

@@ -55,7 +55,7 @@ test("inbox: cancel a run paused on overrun", async ({ page }) => {
   await page.getByRole("alertdialog", { name: "Cancel run" }).getByRole("button", { name: "Cancel run" }).click();
   await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
   await page.goto("/runs");
-  await expect(page.locator('[data-testid="run-row"][data-document="team-workspaces"]')).toContainText("Cancelled");
+  await expect(page.locator('[data-testid="run-row"][data-document="team-invites"]')).toContainText("Cancelled");
 });
 
 test("inbox: retry importing a run's output Oracle stopped trying to import", async ({ page }) => {

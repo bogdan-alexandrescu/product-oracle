@@ -45,7 +45,7 @@ test("an invited viewer reads the discussion and the row moves to Done", async (
   await expect(row.getByRole("button", { name: "Join" })).toHaveCount(0);
   const before = Number(await badge(page).innerText());
   await row.getByRole("link", { name: "Read" }).click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\?discussion=/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\?discussion=/);
   await expect(thread(page)).toContainText(TITLE);
   // The thread marks itself read once drawn; the rail's badge dropping is the sign it was.
   // qa-company-4: the viewer's only counted item is this one, so the badge goes once it is read.
@@ -108,6 +108,6 @@ test("a question asked from a discussion names it and opens it", async ({ page }
   const row = page.getByTestId("inbox-tab-new").locator("tr[data-row]").filter({ hasText: "How long should a guest's link last?" });
   await expect(row).toContainText(`From discussion ${TITLE}`);
   await row.getByRole("link", { name: "Open discussion" }).click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\?discussion=/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\?discussion=/);
   await expect(thread(page)).toContainText(TITLE);
 });

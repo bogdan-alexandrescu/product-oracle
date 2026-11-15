@@ -18,13 +18,13 @@ const title = (page: Page) => page.getByRole("textbox", { name: "Title" });
 test("role badge: a commenter on Quality reads that they can rate and save this check too; elsewhere, comment", async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await login(page, "commenter@example.com");
-  await page.goto("/documents/saved-carts/v/2/quality");
+  await page.goto("/documents/referral-link/v/2/quality");
   const badge = page.getByTestId("role-badge").filter({ visible: true });
   await expect(badge).toHaveText("Commenter: can comment, rate and save this check");
   // The page offers what the badge says.
   await expect(page.getByRole("button", { name: /Save this check/ }).filter({ visible: true }).first()).toBeVisible();
 
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   await expect(page.getByTestId("role-badge").filter({ visible: true })).toHaveText("Commenter: can comment");
 });
 
@@ -48,7 +48,7 @@ test("evidence: Stale only lets go once no stale link is left, so the table is n
   await page.setViewportSize(DESKTOP);
   await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "evidence"] as const);
   await login(page, "approver@example.com");
-  await page.goto("/documents/checkout-redesign/v/2/evidence");
+  await page.goto("/documents/annual-billing/v/2/evidence");
   const m = page.getByTestId("evidence-matrix");
   await expect(m).toBeVisible();
   const staleChip = page.getByRole("button", { name: /^Stale only/ });

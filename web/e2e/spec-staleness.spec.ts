@@ -12,7 +12,7 @@ import { login } from "./helpers";
  * the spec, hidden for the others (#370). On the mock layer, driven as a person would.
  */
 
-const SPEC = "/documents/checkout-redesign-early-shipping-cost-spec/v/1";
+const SPEC = "/documents/annual-billing-early-yearly-price-spec/v/1";
 
 const stale = (page: Page) => page.getByTestId("spec-staleness").filter({ visible: true });
 

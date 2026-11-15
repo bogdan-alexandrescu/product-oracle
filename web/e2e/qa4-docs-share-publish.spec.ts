@@ -48,7 +48,7 @@ test.describe("desktop", () => {
   });
 
   test("qa4-docs-share-11: the advisory blocker check does not pass while the hard check has an open critical blocker", async ({ page }) => {
-    await open(page, "checkout-redesign");
+    await open(page, "annual-billing");
     await expect(page.locator('[data-testid="hard-check"][data-key="critical_blockers"]')).toHaveAttribute("data-status", "critical");
     const advisory = page.locator('[data-testid="advisory"][data-key="blocker_feasibility"]');
     await expect(advisory).toBeVisible();
@@ -86,14 +86,14 @@ test.describe("desktop", () => {
     await expect(x.getByText("Failed", { exact: true })).toBeVisible();
     await expect(option).toContainText("Rejected");
 
-    await page.goto("/documents/checkout-redesign/publish");
+    await page.goto("/documents/annual-billing/publish");
     await expect(page.getByTestId("publish-readiness")).toBeVisible();
     const advisory = page.locator('[data-testid="advisory"][data-key="blocker_feasibility"]');
     await expect(advisory).toHaveAttribute("data-status", "critical");
   });
 
   test("qa4-docs-share-52: a blocker's Resolve and Open blocker go to the same place", async ({ page }) => {
-    await open(page, "checkout-redesign");
+    await open(page, "annual-billing");
     const row = page.getByTestId("block-row").filter({ hasText: "Critical blocker" }).first();
     await row.click();
     const resolve = await row.getByRole("link", { name: "Resolve" }).getAttribute("href");
@@ -103,7 +103,7 @@ test.describe("desktop", () => {
   });
 
   test("qa4-docs-share-54: the disabled Publish is explained in words on the page", async ({ page }) => {
-    await open(page, "checkout-redesign");
+    await open(page, "annual-billing");
     await expect(page.getByTestId("publish-button")).toBeDisabled();
     await expect(page.getByText("Publishing waits for 1 critical blocker")).toBeVisible();
   });
@@ -112,7 +112,7 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test("qa4-docs-share-55: a viewer is told advisory criticals never block publishing", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await open(page, "checkout-redesign", "viewer");
+    await open(page, "annual-billing", "viewer");
     const advisory = page.getByRole("region", { name: "Advisory" });
     await expect(advisory).toContainText("critical");
     await expect(advisory.getByText("Advice only: these never block publishing")).toBeVisible();

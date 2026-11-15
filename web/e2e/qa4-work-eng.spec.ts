@@ -126,7 +126,7 @@ for (const [name, size] of [
     await expect(briefRow(page, "f.guided-setup").getByRole("button").first()).toContainText("Setup checklist");
     await expect(briefRow(page, "f.sample-data").getByRole("button").first()).toContainText("Sample data import");
     const table = page.getByRole("region", { name: "Features" });
-    for (const key of ["f.guided-setup", "f.sample-data", "f.saved-carts"]) await expect(table).not.toContainText(key);
+    for (const key of ["f.guided-setup", "f.sample-data", "f.referral-link"]) await expect(table).not.toContainText(key);
   });
 }
 
@@ -138,7 +138,7 @@ test("check: no code map reads in plain words, the panel names what a feature de
   // EC1 b (owner, Nov 1): said once, in the pane, not on every row of the list.
   await expect(briefRow(page, "f.guided-setup")).not.toContainText(guess);
   await expect(page.getByRole("region", { name: "Features" })).not.toContainText("No code map");
-  await briefRow(page, "f.saved-carts").getByRole("button").first().click();
+  await briefRow(page, "f.referral-link").getByRole("button").first().click();
   const panel = page.getByTestId("brief-inspector");
   await expect(panel).toHaveAccessibleName("Brief: Referral link");
   await expect(panel).toContainText(guess);

@@ -5,7 +5,7 @@ import { login } from "./helpers";
 // QA pass 3, docs lane: the Quality screen of Referral link v2 (no saved check, no model review
 // and no ratings in the mock until a test makes them through the screen), and its Publish page.
 
-const URL = "/documents/saved-carts/v/2/quality";
+const URL = "/documents/referral-link/v/2/quality";
 const PEOPLE = { owner: undefined, commenter: "commenter@example.com", viewer: "viewer@example.com" } as const;
 type Who = keyof typeof PEOPLE;
 
@@ -112,7 +112,7 @@ for (const viewport of [
     test("qa-docs-60: Publish and Quality name the same verdict the same way", async ({ page }) => {
       await open(page);
       await expect(page.getByTestId("blocked-chip")).toHaveText("Not blocked");
-      await page.goto("/documents/saved-carts/publish");
+      await page.goto("/documents/referral-link/publish");
       await expect(page.getByTestId("publish-readiness")).toBeVisible();
       await expect(page.getByTestId("blocks-chip")).toHaveText("Not blocked");
     });

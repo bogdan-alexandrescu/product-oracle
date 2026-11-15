@@ -6,7 +6,7 @@ import { login } from "./helpers";
 
 async function openImpact(page: Page) {
   await login(page);
-  await page.goto("/documents/saved-carts/v/2/impact");
+  await page.goto("/documents/referral-link/v/2/impact");
   await expect(page.getByTestId("impact-empty")).toBeVisible();
 }
 
@@ -31,7 +31,7 @@ for (const [name, viewport] of [
     await expect(page.getByRole("heading", { level: 1 })).toContainText("v2");
     await expect(page.getByText(/^← /)).toHaveCount(0);
 
-    await page.goto("/documents/saved-carts/v/2/quality");
+    await page.goto("/documents/referral-link/v/2/quality");
     await expect(page.getByRole("navigation", { name: "Breadcrumb" }).filter({ visible: true }).getByRole("link", { name: "Referral link PRD" })).toBeVisible();
   });
 }

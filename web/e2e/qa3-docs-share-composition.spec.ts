@@ -4,15 +4,15 @@ import { login } from "./helpers";
 
 /*
  * QA pass 3 (docs lane), the Composition screen of a PRD (qa-docs-41 … 49). The mock leaves
- * saved-carts without a composition (Oracle's recommendation only, Value and cost economics
- * left out because its condition does not hold) and seeds checkout-redesign with revision 1.
+ * referral-link without a composition (Oracle's recommendation only, Value and cost economics
+ * left out because its condition does not hold) and seeds annual-billing with revision 1.
  */
 
 const OWNER = "admin@example.com";
 const APPROVER = "approver@example.com";
 const VIEWER = "viewer@example.com";
 
-async function open(page: Page, email: string, slug = "saved-carts", tab?: string) {
+async function open(page: Page, email: string, slug = "referral-link", tab?: string) {
   await login(page, email);
   await page.goto(`/documents/${slug}/composition${tab ? `?tab=${tab}` : ""}`);
   await expect(page.getByRole("heading", { level: 1, name: "Composition" })).toBeVisible();
@@ -68,7 +68,7 @@ test.describe("desktop", () => {
   });
 
   test("qa-docs-45: the default packs count the packs shown; plain intro; Save waits for a change", async ({ page }) => {
-    await open(page, OWNER, "saved-carts", "policy");
+    await open(page, OWNER, "referral-link", "policy");
     const board = page.getByTestId("policy-board");
     await expect(board).toBeVisible();
     const packs = board.getByRole("region", { name: "Default packs" });
@@ -90,7 +90,7 @@ test.describe("desktop", () => {
   });
 
   test("qa-docs-46: an empty History says how a revision is made", async ({ page }) => {
-    await open(page, VIEWER, "saved-carts", "history");
+    await open(page, VIEWER, "referral-link", "history");
     await expect(page.getByTestId("history-empty")).toContainText("No revisions yet");
     await expect(page.getByTestId("history-empty")).toContainText("Use these modules");
   });
@@ -122,7 +122,7 @@ test.describe("desktop", () => {
   });
 
   test("qa-docs-48: a previewed recommendation says it is a preview", async ({ page }) => {
-    await open(page, VIEWER, "checkout-redesign");
+    await open(page, VIEWER, "annual-billing");
     await expect(page.getByTestId("preview-banner")).toHaveCount(0);
     await page.getByRole("button", { name: "Preview recommendation" }).click();
     const banner = page.getByTestId("preview-banner");
@@ -141,14 +141,14 @@ test.describe("desktop", () => {
   });
 
   test("qa-docs-49: on a PRD with a composition the viewer's banner is plain", async ({ page }) => {
-    await open(page, VIEWER, "checkout-redesign");
+    await open(page, VIEWER, "annual-billing");
     await expect(page.getByTestId("read-only")).toHaveText("You can look at this composition and preview a recommendation. Only an approver can change or publish it.");
     await expect(page.getByTestId("legacy-notice")).toHaveCount(0);
   });
 
   test("qa-docs-43, qa-docs-48: the source chip and the preview banner show in dark", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" });
-    await open(page, VIEWER, "checkout-redesign");
+    await open(page, VIEWER, "annual-billing");
     await page.getByRole("button", { name: "Preview recommendation" }).click();
     const banner = page.getByTestId("preview-banner");
     await expect(banner).toBeVisible();

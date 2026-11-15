@@ -155,7 +155,7 @@ test("a commenter sees the PRD overview's Engineering specs without Request spec
 // fails_when = a spec is missing, its state is wrong, or the panel offers no request.
 test("the PRD overview lists its engineering specs and requests one for an item", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign");
+  await page.goto("/documents/annual-billing");
   // qa-docs-29: the seeded technical brief is listed under Tech briefs, not Engineering specs;
   // qa4-docs-8: the full engineering spec is the one under Engineering specs.
   await expect(page.getByTestId("engineering-specs").getByTestId("engineering-spec")).toHaveCount(1);

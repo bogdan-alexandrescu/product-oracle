@@ -7,9 +7,9 @@ import { login, openSection, openTab, outlineRow } from "./helpers";
 // brief; Clinic outreach v5, a PRD without one; the early shipping cost technical brief) and a
 // PRD's Review settings, driven as a person.
 
-const CARTS = "/documents/saved-carts/v/2";
+const CARTS = "/documents/referral-link/v/2";
 const OUTREACH = "/documents/clinic-outreach/v/5";
-const TECH_BRIEF = "/documents/checkout-redesign-early-shipping-cost-spec/v/2";
+const TECH_BRIEF = "/documents/annual-billing-early-yearly-price-spec/v/2";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
@@ -192,7 +192,7 @@ test.describe("desktop", () => {
 
   test("qa-docs-28: Review settings opens as a side panel on a wide screen, with no drag handle", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/checkout-redesign");
+    await page.goto("/documents/annual-billing");
     await page.getByRole("button", { name: "Review settings" }).click();
     const dialog = page.getByRole("dialog", { name: "Review settings" });
     await expect(dialog).toBeVisible();
@@ -211,7 +211,7 @@ test.describe("phone", () => {
 
   test("qa-docs-28: on a phone Review settings stays the bottom sheet", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/checkout-redesign");
+    await page.goto("/documents/annual-billing");
     await page.getByRole("button", { name: "Review settings" }).click();
     const dialog = page.getByRole("dialog", { name: "Review settings" });
     await expect(dialog).toBeVisible();

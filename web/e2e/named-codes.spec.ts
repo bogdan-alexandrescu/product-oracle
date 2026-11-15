@@ -140,7 +140,7 @@ test("the Confidence panel shows source titles, no id in the card either; a cita
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
 
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const cite = (await openSection(page, "problem")).getByTestId("cite-c4");
   await cite.click();
   await expect(card).toBeVisible();
@@ -257,7 +257,7 @@ test("keyboard: Tab passes the chip; Enter opens the card, Tab leaves it; Escape
 
 test("keyboard: a citation chip's card takes focus on open, Tab leaves it, and Escape gives focus back", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const problem = await openSection(page, "problem");
   const cite = problem.getByTestId("cite-c4");
   const card = page.getByTestId("code-card");

@@ -202,7 +202,7 @@ export function seedDecisions(ctx: DecisionsContext): DecisionsDb {
     created_at: longAgo(40),
     review_at: day(50),
     source: { kind: "document_version", id: ctx.uuid() },
-    subjects: [{ kind: "document", id: ctx.uuid(), ref: "checkout-redesign" }],
+    subjects: [{ kind: "document", id: ctx.uuid(), ref: "annual-billing" }],
   });
   add({
     title: "Accept the partner API quota risk for launch",

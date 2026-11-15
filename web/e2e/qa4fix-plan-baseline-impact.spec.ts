@@ -34,9 +34,9 @@ const scenario = (page: Page, name: string) =>
 /** PRDs > Annual billing > v2 > Impact. */
 async function openVersionImpact(page: Page, signIn = true) {
   if (signIn) await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await page.getByRole("link", { name: "Impact", exact: true }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
 }
 
 /** ... > Impact > Table > an output > its "Recorded change". */

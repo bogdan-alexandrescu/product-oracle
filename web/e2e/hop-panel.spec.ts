@@ -31,8 +31,8 @@ async function expectWhyNot(row: Locator, reason: string) {
   await expect(row.getByRole("button", { name: "Stage" })).toHaveAttribute("aria-describedby", (await tip.getAttribute("id"))!);
 }
 
-const DOC = "/documents/checkout-redesign/v/2";
-const DOC_HOME = "/documents/checkout-redesign";
+const DOC = "/documents/annual-billing/v/2";
+const DOC_HOME = "/documents/annual-billing";
 const LOCKED_DOC = "/documents/usage-alerts/v/1";
 const COMMENTER = "commenter@example.com";
 const APPROVER = "approver@example.com";

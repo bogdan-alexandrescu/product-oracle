@@ -657,7 +657,7 @@ export function seedQualityScenario(
       })),
     );
   };
-  s.quality.check_errors = { "team-workspaces": { downstream_consistency: "artifact dependency lookup timed out" } };
+  s.quality.check_errors = { "team-invites": { downstream_consistency: "artifact dependency lookup timed out" } };
   report("rules", s.owner, "2026-10-20T09:41:00Z",
     CRITERIA.map((c) => [c.key, RULES[c.key][0], RULES[c.key][1], RULES[c.key][2]]),
     { blocked: false, blocking: [], errors: ["downstream_consistency"] });

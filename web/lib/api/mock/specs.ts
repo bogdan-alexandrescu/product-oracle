@@ -44,8 +44,8 @@ const I = {
 function prdSectionDependency(id: string): Schemas["TraceDependency"] {
   return {
     id, freshness: "potentially_stale", caused_by_change_id: null, stale_since: AT, reconciled_by: null, reconciled_at: null, note: null,
-    upstream: { document_slug: "checkout-redesign", document_kind: "prd", version_number: 1, section_key: "s-5-2", deleted: false },
-    reasons: ["section s-5-2 changed in checkout-redesign"],
+    upstream: { document_slug: "annual-billing", document_kind: "prd", version_number: 1, section_key: "s-5-2", deleted: false },
+    reasons: ["section s-5-2 changed in annual-billing"],
   };
 }
 
@@ -231,10 +231,10 @@ export function seedSpecs({ approver, named = [] }: { approver?: SpecPerson; nam
   ];
   const spec: Spec = {
     request: request(I.request, "tech_brief", "Early yearly price: technical brief", {
-      document_slug: "checkout-redesign-early-shipping-cost-spec", depth: "brief", design: true, screens: 2,
+      document_slug: "annual-billing-early-yearly-price-spec", depth: "brief", design: true, screens: 2,
       engineering_approver_ids: named.map((x) => x.id), document_id: I.document, design_request_ids: { user_flow: I.flowRequest, wireframe: I.wireRequest },
     }),
-    document_slug: "checkout-redesign-early-shipping-cost-spec",
+    document_slug: "annual-billing-early-yearly-price-spec",
     document_id: I.document,
     prd: null,
     depth: "brief",
@@ -259,8 +259,8 @@ export function seedSpecs({ approver, named = [] }: { approver?: SpecPerson; nam
     }),
     design: [design("user_flow"), design("wireframe", I.wireVersion, 2)],
     stale: [
-      { kind: "artifact_version", category: "engineering_spec", artifact_kind: "tech_brief", document_kind: null, artifact_version_id: I.specVersion, request_id: I.request, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early yearly price: technical brief", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [prdSectionDependency(I.specDependency)], reasons: ["section s-5-2 changed in checkout-redesign"] },
-      { kind: "artifact_version", category: "wireframe", artifact_kind: "user_flow", document_kind: null, artifact_version_id: I.flowVersion, request_id: I.flowRequest, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early yearly price: user flows", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [], reasons: ["section s-5-2 changed in checkout-redesign"] },
+      { kind: "artifact_version", category: "engineering_spec", artifact_kind: "tech_brief", document_kind: null, artifact_version_id: I.specVersion, request_id: I.request, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early yearly price: technical brief", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [prdSectionDependency(I.specDependency)], reasons: ["section s-5-2 changed in annual-billing"] },
+      { kind: "artifact_version", category: "wireframe", artifact_kind: "user_flow", document_kind: null, artifact_version_id: I.flowVersion, request_id: I.flowRequest, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early yearly price: user flows", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [], reasons: ["section s-5-2 changed in annual-billing"] },
     ],
     run_id: I.run,
     run_status: "succeeded",
@@ -276,7 +276,7 @@ export function seedSpecs({ approver, named = [] }: { approver?: SpecPerson; nam
     : [];
   // qa4-docs-8: the full engineering spec document has its spec request, as in the API (a
   // spec document is only ever written by one), so the PRD lists it under Engineering specs.
-  const fullSlug = "checkout-redesign-early-shipping-cost-engineering-spec";
+  const fullSlug = "annual-billing-early-yearly-price-engineering-spec";
   const fullRequest = {
     ...request(I.fullRequest, "engineering_spec", "Early yearly price: engineering spec", {
       document_slug: fullSlug, depth: "full", design: false, screens: 0, engineering_approver_ids: named.map((x) => x.id), document_id: I.fullDocument,

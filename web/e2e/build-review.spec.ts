@@ -115,11 +115,11 @@ for (const phone of [false, true]) {
       await expect(page.getByTestId("one-pager-line-text").filter({ hasText: "A setup checklist that shows the next step" })).toBeVisible();
 
       await switchTo(page, "commenter@example.com");
-      await page.goto("/documents/checkout-redesign");
+      await page.goto("/documents/annual-billing");
       const give = page.getByRole("link", { name: "Give feedback" }).first();
       await expect(give).toBeVisible();
       await give.click();
-      await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/\d+/);
+      await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/\d+/);
     });
 
     test("QV3: Present asks what to present and shows it clean with a top line", async ({ page }) => {

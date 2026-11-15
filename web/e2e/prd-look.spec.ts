@@ -7,7 +7,7 @@ import { login, section, selectText } from "./helpers";
 // 720 px column, with a contents rail that stays in view, lights the section being read and
 // shows each section's review state; the review bar shows on the section being read only.
 
-const CARTS = "/documents/saved-carts/v/2";
+const CARTS = "/documents/referral-link/v/2";
 const BIG = "/documents/platform-handbook/v/1";
 
 const DESKTOP = [

@@ -61,7 +61,7 @@ for (const { name, viewport, scheme } of [
       // A move that fails says so on its own line, and the order stays.
       await page.goto("/simple/one-pagers");
       await onePagers(page);
-      await page.evaluate(() => localStorage.setItem("po-mock-fail-once", "POST /v1/documents/checkout-redesign/move"));
+      await page.evaluate(() => localStorage.setItem("po-mock-fail-once", "POST /v1/documents/annual-billing/move"));
       await moveUp(page, CHECKOUT);
       await expect(page.getByRole("alert").filter({ hasText: "Oracle could not move the PRD. Try again." })).toBeVisible();
       expect(await onePagers(page)).toEqual(before);

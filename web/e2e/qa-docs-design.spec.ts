@@ -38,7 +38,7 @@ test("qa-docs-35: the design page names sections, documents and requirements in 
   await expect(panel.getByTestId("version-meta")).toContainText("Oracle · See how it was made");
 
   // No ids, keys, slugs, hashes or media types on screen.
-  for (const raw of ["s-5-2", "checkout-redesign", "req-yearly-price", "cost-early", "c3000000", "sha256", "image/svg+xml", "prd_to_spec", "claude-code", "→"]) {
+  for (const raw of ["s-5-2", "annual-billing", "req-yearly-price", "cost-early", "c3000000", "sha256", "image/svg+xml", "prd_to_spec", "claude-code", "→"]) {
     await expect(main.getByText(raw, { exact: false }).filter({ visible: true })).toHaveCount(0);
   }
 

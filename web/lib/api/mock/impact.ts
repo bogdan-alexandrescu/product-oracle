@@ -1,6 +1,6 @@
 /**
  * The "impact" and "impact-large" scenarios (v2 screen 2, the Impact explorer): outputs
- * built on checkout-redesign v1, in every category and freshness, a roadmap version among
+ * built on annual-billing v1, in every category and freshness, a roadmap version among
  * them, one resting on a baseline item that was since deleted. "impact-large" adds enough
  * outputs to group the lineage by category, and a walk cut off at its limit. Invented
  * data only; the trace mock (./trace.ts) turns these rows into ImpactReports.
@@ -12,7 +12,7 @@ type Dep = Schemas["ArtifactDependencyOut"];
 const AT = "2026-10-20T10:00:00Z";
 
 export interface ImpactSeedContext {
-  /** checkout-redesign v1: what the outputs were built from. */
+  /** annual-billing v1: what the outputs were built from. */
   versionId: string;
   /** usage-alerts-roadmap v1, whose plan row is a roadmap run. */
   roadmapVersionId: string | null;

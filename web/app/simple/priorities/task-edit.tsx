@@ -306,7 +306,7 @@ export function dependentsOf(rows: Row[], code: string): string[] {
   return rows.filter((r) => r.depends_on.some((d) => d.toLowerCase() === code.toLowerCase())).map((r) => r.title);
 }
 
-/** A code people know ("F-27"), not an item's raw key ("saved-carts"): a draft shows no chip until it has one. */
+/** A code people know ("F-27"), not an item's raw key ("referral-link"): a draft shows no chip until it has one. */
 export const knownCode = (code: string) => /^[a-z]+\d*-\d+[a-z]?$/i.test(code);
 
 /** A task's row where the plan does not place it (an added draft; every task with no dated plan), as FeatureRows draws a feature's. */

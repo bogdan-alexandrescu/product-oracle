@@ -8,7 +8,7 @@ import { readableWords, wordDiff } from "../lib/diff";
 
 async function openDiff(page: Page) {
   await login(page);
-  await page.goto("/documents/saved-carts/diff?from=1&to=2");
+  await page.goto("/documents/referral-link/diff?from=1&to=2");
   await expect(page.getByRole("heading", { name: "Changes from v1 to v2" })).toBeVisible();
 }
 
@@ -59,7 +59,7 @@ for (const [name, viewport] of [
       await expect(section).not.toContainText("#problem");
       await expect(page.getByTestId("diff-section").filter({ hasText: "#" })).toHaveCount(0);
       await section.getByRole("link", { name: "View Problem in v2" }).click();
-      await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2/);
+      await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2/);
     });
   });
 }

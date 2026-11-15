@@ -80,7 +80,7 @@ test("evidence links: a viewer gets no Add evidence link control", async ({ page
   await expect(d.getByRole("button", { name: /^Refresh/ })).toHaveCount(0);
 
   await page.keyboard.press("Escape");
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openSection(page, "goal-trace");
   await expect(page.getByRole("button", { name: /Actions for/ }).filter({ visible: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Add evidence link/ }).filter({ visible: true })).toHaveCount(0);
@@ -88,7 +88,7 @@ test("evidence links: a viewer gets no Add evidence link control", async ({ page
 
 test("evidence links: a commenter cites a Google Doc from a document section", async ({ page }) => {
   await login(page, "commenter@example.com");
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const goalTrace = await openSection(page, "goal-trace");
   // The section's ⋯ menu holds Add evidence link (and Refine section, for approvers).
   await sectionAction(goalTrace, "1. Goal trace", "Add evidence link to 1. Goal trace");

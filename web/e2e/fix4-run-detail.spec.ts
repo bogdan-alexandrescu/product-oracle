@@ -23,7 +23,7 @@ async function openRun(page: Page, document: string, email?: string) {
 const box = async (l: Locator) => (await l.boundingBox())!;
 
 test("qa-work-4: a run paused over budget names its estimate and limit together, in the banner and the panel", async ({ page }) => {
-  await openRun(page, "team-workspaces");
+  await openRun(page, "team-invites");
   // detailed-b 20: who may resume reads it from the pill and Resume; no line says it again.
   await expect(page.getByTestId("run-overrun-held")).toHaveCount(0);
   // F-39: what Resume allows sits behind the Overrun (i).
@@ -34,7 +34,7 @@ test("qa-work-4: a run paused over budget names its estimate and limit together,
 });
 
 test("qa-work-5: a paused run does not read as done; its held PRD review says Held: over budget", async ({ page }) => {
-  await openRun(page, "team-workspaces");
+  await openRun(page, "team-invites");
   const done = page.getByTestId("segments-done");
   await expect(done).toContainText("Paused");
   await expect(done).not.toHaveText(/^\d+ of \d+ done$/);
@@ -57,10 +57,10 @@ test("qa-work-16: an items check with no problems says No problems, capitalised"
 });
 
 test("qa-work-18, 19: a finished run names its import by the document's title, its file as a raw file", async ({ page }) => {
-  await openRun(page, "checkout-redesign");
+  await openRun(page, "annual-billing");
   const segment = page.getByTestId("segment-timeline").locator("li").filter({ hasText: "Imported as" }).first();
   await expect(segment.getByRole("link", { name: "Annual billing PRD v2" })).toBeVisible();
-  await expect(segment).not.toContainText("checkout-redesign v2");
+  await expect(segment).not.toContainText("annual-billing v2");
   const files = segment.getByRole("group", { name: "Raw file" });
   await expect(files.getByTestId("artifacts-raw-label")).toHaveText("Raw file:");
   await files.getByRole("button", { name: "PRD draft" }).click();
@@ -68,7 +68,7 @@ test("qa-work-18, 19: a finished run names its import by the document's title, i
 });
 
 test("qa-work-20: the run's document reads For <document> on a document that exists and one the run writes", async ({ page }) => {
-  await openRun(page, "team-workspaces");
+  await openRun(page, "team-invites");
   const doc = header(page).getByTestId("run-document");
   await expect(doc).toHaveText("Team invites PRD");
   await expect(doc.locator("xpath=..")).toHaveText(/^For\s*Team invites PRD$/);
@@ -102,7 +102,7 @@ test("qa-work-21, 23: pending checkpoints are plain text, role chips one style, 
 
 test("qa-work-22: the actions stay on the title's line on every run, the cost approval's too", async ({ page }) => {
   await login(page);
-  for (const doc of ["team-onboarding", "usage-alerts-v2", "team-workspaces"]) {
+  for (const doc of ["team-onboarding", "usage-alerts-v2", "team-invites"]) {
     // Signed in once: each run from the Runs list.
     await page.goto("/runs");
     await page.locator(`[data-testid="run-row"][data-document="${doc}"]`).getByRole("link").first().click();

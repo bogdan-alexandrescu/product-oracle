@@ -170,7 +170,7 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
     );
 
   if (evQ.error && !data) {
-    // The API's 404: "version 7 of 'checkout-redesign' not found".
+    // The API's 404: "version 7 of 'annual-billing' not found".
     const notFound = /^version \d+ of .* not found$/i.test(evQ.error);
     return notFound ? (
       <Panel testId="evidence-not-found">

@@ -26,7 +26,7 @@ export type Names = {
   words: (text: string) => string;
 };
 
-/** "checkout-redesign@2#metrics" → { slug, n, key }. */
+/** "annual-billing@2#metrics" → { slug, n, key }. */
 export function parseRef(ref: string | null | undefined): { slug: string; n: number | null; key: string | null } | null {
   const m = ref ? /^([a-z0-9][\w-]*)@(\d+)(?:#(.+))?$/i.exec(ref) : null;
   return m ? { slug: m[1], n: Number(m[2]), key: m[3] ?? null } : null;
@@ -116,7 +116,7 @@ export function useNames(report: Report | undefined, extraSlug?: string | null):
       const list = keys.split(", ").map((k) => `“${section(k)}”`);
       return list.length === 1 ? `the ${list[0]} section` : `the ${list.join(", ")} sections`;
     });
-    // Longest first, so "checkout-redesign-spec" is not read as "checkout-redesign".
+    // Longest first, so "annual-billing-spec" is not read as "annual-billing".
     for (const slug of [...slugs].sort((a, b) => b.length - a.length)) {
       t = t.replace(new RegExp(`(^|[\\s(])${escape(slug)}(?=$|[\\s),.;:])`, "g"), (_, pre: string) => `${pre}${doc(slug)}`);
     }

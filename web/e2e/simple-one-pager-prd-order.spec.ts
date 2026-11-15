@@ -27,14 +27,14 @@ async function seed(page: Page) {
     const doc = (slug: string) => db.documents.find((d: { slug: string }) => d.slug === slug);
     const ref = (slug: string) => ({ id: doc(slug).id, slug, title: doc(slug).title });
     const item = rm.items.find((x: { key: string }) => x.key === "alert-export");
-    item.from_prd = { slug: "checkout-redesign", title: doc("checkout-redesign").title };
+    item.from_prd = { slug: "annual-billing", title: doc("annual-billing").title };
     const owner = db.members.find((m: { role: string }) => m.role === "owner");
     const items = rm.items.filter((x: { roadmap: string }) => x.roadmap === "alerts-roadmap");
     (rm.drafts ??= []).push({
       roadmap: "alerts-roadmap",
       published: { items: structuredClone(items), own: {}, key_dates: [] },
       prds: {
-        "checkout-redesign": { prd: ref("checkout-redesign"), version: 1, keys: ["alert-export"], key_dates: [] },
+        "annual-billing": { prd: ref("annual-billing"), version: 1, keys: ["alert-export"], key_dates: [] },
         "usage-alerts": { prd: ref("usage-alerts"), version: 1, keys: ["alert-rules"], key_dates: [] },
       },
       out: {

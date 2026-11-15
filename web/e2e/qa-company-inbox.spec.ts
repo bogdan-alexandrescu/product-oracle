@@ -99,7 +99,7 @@ test("runs are named in words: no short id, slug, section key or code font", asy
   await expect(overrun(page)).toContainText("Team invites");
   await expect(page.getByTestId("inbox-approvals")).toContainText("Usage alerts v2");
   await expect(needs).not.toContainText("usage-alerts-v2");
-  await expect(needs).not.toContainText("team-workspaces");
+  await expect(needs).not.toContainText("team-invites");
   await expect(needs).not.toContainText(/#s-\d/);
   await expect(needs.getByRole("columnheader", { name: "Run" })).toHaveCount(0);
 });

@@ -25,7 +25,7 @@ async function setup(page: Page, scope: "Approved + drafts" | "Approved only") {
   await expect(bar.getByRole("button", { name: scope })).toHaveAttribute("aria-pressed", "true");
   // Simple's card link (its &roadmap= is the Simple lane's part): the Plan opened by it, with the
   // card's own PRD id (the mock's item.prd for the Annual billing roadmap).
-  await page.goto(`/plan?item=threshold-alerts&prd=${stableUuid("simple-prd/checkout-redesign-roadmap")}&roadmap=checkout-redesign-roadmap`);
+  await page.goto(`/plan?item=threshold-alerts&prd=${stableUuid("simple-prd/annual-billing-roadmap")}&roadmap=annual-billing-roadmap`);
 }
 
 const picked = (page: Page) => page.locator('[data-testid="plan-row"][aria-selected="true"]').filter({ visible: true });

@@ -10,7 +10,7 @@ import { login, openTab } from "./helpers";
  */
 test("a stored Claude-pool refusal on a PRD's Reports row reads like the time it happened", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   await openTab(page, "History");
   const reports = page.getByTestId("history-reports").filter({ visible: true }).getByTestId("reports-panel");
 

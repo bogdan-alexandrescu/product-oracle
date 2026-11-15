@@ -18,7 +18,7 @@ import { login, openSection } from "./helpers";
  * names a feature with its code; fails_when=the name shows alone. no_claim=visual taste.
  */
 
-const DOC = "/documents/checkout-redesign/v/2";
+const DOC = "/documents/annual-billing/v/2";
 const COMMENTER = "commenter@example.com";
 const PHONE = { width: 390, height: 844 };
 

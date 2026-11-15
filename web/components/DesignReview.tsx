@@ -85,7 +85,7 @@ export function designHref(specId: string, versionId: string): string {
 const MEDIA: Record<string, string> = { "image/svg+xml": "Drawing (SVG)", "text/html": "Web page (HTML)" };
 
 
-/** A PRD slug the reasons name ("section s-5-2 changed in checkout-redesign v2"). */
+/** A PRD slug the reasons name ("section s-5-2 changed in annual-billing v2"). */
 const SLUG_IN_REASON = /\b(?:in|of) ([a-z0-9]+(?:-[a-z0-9]+)+)\b/;
 
 /**

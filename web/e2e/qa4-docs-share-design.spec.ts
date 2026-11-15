@@ -88,7 +88,7 @@ test.describe("desktop", () => {
 
   test("qa4-docs-share-44: the PRD overview calls a technical brief by that name", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/checkout-redesign");
+    await page.goto("/documents/annual-billing");
     const row = page.getByTestId("tech-briefs").getByTestId("engineering-spec").first();
     await expect(row).toContainText("Early yearly price: technical brief");
     await expect(row).toContainText("Open technical brief");
@@ -97,7 +97,7 @@ test.describe("desktop", () => {
 
   test("qa4-docs-share-46: What it touches reads as words, not kind and change values", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/checkout-redesign");
+    await page.goto("/documents/annual-billing");
     await page.getByTestId("tech-briefs").getByRole("link", { name: "Show the full price early" }).click();
     await expect(page).toHaveURL(/\/briefs\/[0-9a-f-]+$/);
     const touches = page.getByRole("table", { name: "What it touches" });

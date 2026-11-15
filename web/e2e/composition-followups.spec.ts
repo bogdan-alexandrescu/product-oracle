@@ -11,7 +11,7 @@ import { login } from "./helpers";
 
 const EMAILS = { owner: "admin@example.com", approver: "approver@example.com", commenter: "commenter@example.com" };
 
-async function openComposition(page: Page, who: keyof typeof EMAILS, slug = "checkout-redesign") {
+async function openComposition(page: Page, who: keyof typeof EMAILS, slug = "annual-billing") {
   await login(page, EMAILS[who]);
   await page.goto(`/documents/${slug}`);
   await page.getByRole("link", { name: "Composition" }).first().click();
@@ -86,7 +86,7 @@ test("the header says which role the person views as", async ({ page }) => {
 });
 
 test("the legacy notice names the packs by title", async ({ page }) => {
-  await openComposition(page, "approver", "team-workspaces");
+  await openComposition(page, "approver", "team-invites");
   await expect(page.getByTestId("legacy-notice")).toContainText("from General Tech Startup.");
 });
 

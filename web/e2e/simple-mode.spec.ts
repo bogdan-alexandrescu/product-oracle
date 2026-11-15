@@ -101,12 +101,12 @@ for (const [role, landing] of [
 }
 
 test("signed out, a deep link signs in and returns to it, in either mode", async ({ page }) => {
-  await page.goto("/simple/one-pagers/checkout-redesign");
+  await page.goto("/simple/one-pagers/annual-billing");
   await expect(page).toHaveURL(/\/login\?next=/);
   await page.getByLabel("Email").fill(EMAILS.owner);
   await page.getByLabel("Password").fill(ADMIN.password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expectSimple(page, "/simple/one-pagers/checkout-redesign");
+  await expectSimple(page, "/simple/one-pagers/annual-billing");
 
   await signOut(page);
   await page.goto("/plan");
@@ -200,7 +200,7 @@ test("the chosen mode is remembered across a reload and the next sign-in", async
 
 const PAIRS: [detailed: string, simple: string][] = [
   ["/home", "/simple"],
-  ["/documents/checkout-redesign", "/simple/one-pagers/checkout-redesign"],
+  ["/documents/annual-billing", "/simple/one-pagers/annual-billing"],
   // qa-shell-5: the PRDs list and the One-pagers list match both ways.
   ["/documents", "/simple/one-pagers"],
   ["/plan", "/simple/roadmap"],
@@ -249,11 +249,11 @@ test("a /simple link opens in Simple for an owner whose saved mode is Detailed",
   await expectSimple(page, "/simple/one-pagers");
   await expect(page.getByRole("heading", { level: 1, name: "One-pagers" })).toBeVisible();
   await page.getByRole("link", { name: "Annual billing PRD" }).click();
-  await expectSimple(page, "/simple/one-pagers/checkout-redesign");
+  await expectSimple(page, "/simple/one-pagers/annual-billing");
   // S5's one-pager is the page the list opens.
   await expect(page.getByTestId("one-pager")).toBeVisible();
   await page.getByTestId("one-pager").getByRole("link", { name: "Open in Detailed", exact: true }).first().click();
-  await expectDetailed(page, "/documents/checkout-redesign");
+  await expectDetailed(page, "/documents/annual-billing");
 
   // The saved mode is still Detailed: the next landing is Detailed's Home.
   await page.goto("/");
@@ -372,18 +372,18 @@ test("phone: Simple's rail is a tab bar and a More drawer, every page fits 390 p
     await expect(page).toHaveURL(new RegExp(`${path}$`));
     await fits();
   }
-  await page.goto("/simple/one-pagers/checkout-redesign");
+  await page.goto("/simple/one-pagers/annual-billing");
   await expect(page.getByTestId("one-pager")).toBeVisible();
   await fits();
 
   // The switch lives in the More drawer on a phone, and works there.
   await bar.getByRole("button", { name: "More" }).click();
   await page.getByRole("dialog", { name: "More" }).getByRole("radio", { name: "Detailed" }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing$/);
   await expect(page.getByTestId("tab-bar")).toBeVisible();
   await page.getByTestId("tab-more").click();
   await expect(page.getByRole("dialog", { name: "More" }).getByRole("radio", { name: "Detailed" })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByRole("dialog", { name: "More" })).not.toContainText("Studio");
   await page.getByRole("dialog", { name: "More" }).getByRole("radio", { name: "Simple" }).click();
-  await expect(page).toHaveURL(/\/simple\/one-pagers\/checkout-redesign$/);
+  await expect(page).toHaveURL(/\/simple\/one-pagers\/annual-billing$/);
 });

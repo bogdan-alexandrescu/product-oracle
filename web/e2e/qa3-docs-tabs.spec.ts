@@ -7,7 +7,7 @@ import { login } from "./helpers";
  * text diff of Referral link v1 -> v2, driven as a person would on the mock.
  */
 
-const DOC = "/documents/saved-carts";
+const DOC = "/documents/referral-link";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
@@ -15,7 +15,7 @@ async function openEvidence(page: Page, email?: string) {
   await login(page, email);
   await page.goto(`${DOC}/v/2`);
   await page.getByTestId("version-tab-evidence").filter({ visible: true }).click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\/evidence/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/evidence/);
   await expect(page.getByTestId("evidence-coverage")).toBeVisible();
 }
 
@@ -239,7 +239,7 @@ async function openPresent(page: Page) {
   // On a phone Present sits behind the version's More.
   if ((page.viewportSize()?.width ?? 1366) <= 600) await page.getByTestId("version-more").click();
   await page.getByRole("link", { name: "Present" }).filter({ visible: true }).first().click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\/present$/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/present$/);
   await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
 }
 

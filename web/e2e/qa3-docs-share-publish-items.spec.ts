@@ -9,9 +9,9 @@ import { contrast } from "./contrast-helpers";
 // tab (default scenario: Behaviour's text writes GA Dec 15, 2026, whose schedule basis ENG-413
 // was withdrawn, so Approve version is blocked; v1 has no earlier version).
 
-const CARTS = "saved-carts";
-const CARTS_V2 = "/documents/saved-carts/v/2";
-const TECH_BRIEF_V1 = "/documents/checkout-redesign-early-shipping-cost-spec/v/1";
+const CARTS = "referral-link";
+const CARTS_V2 = "/documents/referral-link/v/2";
+const TECH_BRIEF_V1 = "/documents/annual-billing-early-yearly-price-spec/v/1";
 const ITEMS = "/documents/usage-alerts-roadmap/v/1/items";
 
 const visible = (page: Page, testId: string) => page.getByTestId(testId).filter({ visible: true });

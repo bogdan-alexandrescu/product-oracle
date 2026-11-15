@@ -134,7 +134,7 @@ for (const phone of [false, true]) {
 
         test(`a skeleton PRD's one-pager shows no template guidance, as ${role} (${where})`, async ({ page }) => {
           await setUp(page, scheme, EMAILS[role]);
-          await page.goto("/simple/one-pagers/checkout-redesign");
+          await page.goto("/simple/one-pagers/annual-billing");
           await expect(page.getByRole("heading", { level: 1, name: "Annual billing PRD" })).toBeVisible();
           const article = page.locator("article");
           await expect(page.getByTestId("one-pager-empty-block")).toHaveCount(5);

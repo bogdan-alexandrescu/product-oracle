@@ -7,8 +7,8 @@ import { login, openSection } from "./helpers";
 // Version 1 is the brief Oracle wrote; version 2 is an edit that added "Rollout notes" (not
 // in the template), "Proposed architecture" (a template section a brief does not have) and
 // a source. The version view opens one section at a time (the strip picks it).
-const BRIEF = "/documents/checkout-redesign-early-shipping-cost-spec";
-const FULL = "/documents/checkout-redesign-early-shipping-cost-engineering-spec";
+const BRIEF = "/documents/annual-billing-early-yearly-price-spec";
+const FULL = "/documents/annual-billing-early-yearly-price-engineering-spec";
 const ADDED = "Proposed · added in an edit";
 
 async function expectAdded(label: Locator) {
@@ -99,7 +99,7 @@ test("spec: the diff shows an added section's state", async ({ page }) => {
 
 test("spec: a PRD's sections carry no spec state", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openSection(page, "problem");
   await expect(page.getByTestId("spec-state")).toHaveCount(0);
   await page.getByRole("tab", { name: /^Sources/ }).filter({ visible: true }).click();

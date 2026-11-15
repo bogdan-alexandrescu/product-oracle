@@ -12,7 +12,7 @@ import { login } from "./helpers";
 const APPROVER = "approver@example.com";
 const VIEWER = "viewer@example.com";
 
-async function open(page: Page, email: string, slug = "checkout-redesign") {
+async function open(page: Page, email: string, slug = "annual-billing") {
   await login(page, email);
   await page.goto(`/documents/${slug}/composition`);
   await expect(page.getByRole("heading", { level: 1, name: "Composition" })).toBeVisible();
@@ -49,7 +49,7 @@ async function expectNothingCut(target: Locator) {
 
 test("qa-docs-1: confirming keeps the brief sections, revision after revision", async ({ page }) => {
   // fails_when=the outline after a confirm loses the brief ("This PRD has no brief layer.").
-  await open(page, APPROVER, "saved-carts");
+  await open(page, APPROVER, "referral-link");
   await page.getByRole("button", { name: "Use these modules" }).click();
   let dialog = page.getByRole("dialog", { name: "Confirm revision 1" });
   const before = await briefHeadings(dialog);
@@ -93,7 +93,7 @@ test("qa-docs-1: a brief-layer module's section sits in the brief, before the fu
 });
 
 test("qa-docs-14: the Confirm action reads in full, once", async ({ page }) => {
-  await open(page, APPROVER, "team-workspaces");
+  await open(page, APPROVER, "team-invites");
   const action = page.getByRole("button", { name: "Use these modules" });
   await expect(action).toHaveText("Use these modules");
   await expectNothingCut(action);

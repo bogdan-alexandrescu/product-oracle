@@ -6,9 +6,9 @@ import { login } from "./helpers";
 
 async function openPresent(page: Page) {
   await login(page);
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   await page.getByRole("link", { name: "Present" }).filter({ visible: true }).first().click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\/present$/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/present$/);
   await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
 }
 
@@ -49,7 +49,7 @@ test.describe("desktop", () => {
     }
     // Exit still leads back to the version, with its rail.
     await page.getByRole("link", { name: "Exit" }).click();
-    await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2$/);
+    await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2$/);
     await expect(page.getByTestId("user-menu")).toBeVisible();
   });
 });
@@ -59,7 +59,7 @@ test.describe("phone", () => {
 
   test("qa-docs-6: the slide fills the screen's width, its title and footer in full", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/saved-carts/v/2/present");
+    await page.goto("/documents/referral-link/v/2/present");
     await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
     const slide = (await page.getByTestId("audience-view").locator(".current-slide").boundingBox())!;
     expect(slide.x).toBeGreaterThanOrEqual(0);
@@ -81,7 +81,7 @@ test("qa-docs-6 / qa-docs-30: dark theme, the phone slide fits and its banner re
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: "dark" });
   await login(page);
-  await page.goto("/documents/saved-carts/v/2/present");
+  await page.goto("/documents/referral-link/v/2/present");
   await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
   const slide = (await page.getByTestId("audience-view").locator(".current-slide").boundingBox())!;
   expect(slide.x + slide.width).toBeLessThanOrEqual(390);

@@ -112,7 +112,7 @@ test("who decides: the run page tells the lead the check waits for them, an appr
 test("title as is: the run names its PRD by its title, with no PRD added", async ({ page }) => {
   await login(page);
   for (const [slug, written] of [
-    ["team-workspaces", ""],
+    ["team-invites", ""],
     ["usage-alerts-v2", " (written by this run)"],
   ]) {
     await page.goto("/runs");

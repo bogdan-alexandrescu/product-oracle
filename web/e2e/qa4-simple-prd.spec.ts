@@ -50,7 +50,7 @@ test.describe("desktop", () => {
     const meta = page.getByTestId("one-pager-meta");
     await expect(meta).toContainText("Version 2");
     await expect(meta).not.toContainText("Oct 20");
-    await expect(page.getByRole("link", { name: "Open in Detailed" })).toHaveAttribute("href", "/documents/saved-carts");
+    await expect(page.getByRole("link", { name: "Open in Detailed" })).toHaveAttribute("href", "/documents/referral-link");
 
     await page.getByRole("button", { name: "Edit “Carts for guests without" }).click();
     // qa4-simple-prd-16: the editor and its Save come into view.

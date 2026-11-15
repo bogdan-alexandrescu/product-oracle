@@ -16,7 +16,7 @@ import { login } from "./helpers";
  */
 
 const PHONE = { width: 390, height: 844 };
-const DOC = "/documents/checkout-redesign";
+const DOC = "/documents/annual-billing";
 
 const rail = (page: Page) => page.getByTestId("app-nav");
 
@@ -24,9 +24,9 @@ test.describe("switchTarget (qa-shell-5)", () => {
   test("the PRDs list and the One-pagers list match both ways; a PRD and its one-pager still do", () => {
     expect(switchTarget("/documents", "simple")).toBe("/simple/one-pagers");
     expect(switchTarget("/simple/one-pagers", "detailed")).toBe("/documents");
-    expect(switchTarget("/documents/checkout-redesign", "simple")).toBe("/simple/one-pagers/checkout-redesign");
-    expect(switchTarget("/documents/checkout-redesign/v/2", "simple", "/documents")).toBe("/simple/one-pagers/checkout-redesign");
-    expect(switchTarget("/simple/one-pagers/checkout-redesign", "detailed")).toBe("/documents/checkout-redesign");
+    expect(switchTarget("/documents/annual-billing", "simple")).toBe("/simple/one-pagers/annual-billing");
+    expect(switchTarget("/documents/annual-billing/v/2", "simple", "/documents")).toBe("/simple/one-pagers/annual-billing");
+    expect(switchTarget("/simple/one-pagers/annual-billing", "detailed")).toBe("/documents/annual-billing");
     // A roadmap's document page has no one-pager: Plan's match, Simple's Roadmap.
     expect(switchTarget("/documents/usage-alerts-roadmap", "simple", "/plan")).toBe("/simple/roadmap");
     expect(switchTarget("/documents/vision", "simple", "/company/strategy")).toBe("/simple");

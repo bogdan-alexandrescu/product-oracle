@@ -23,7 +23,7 @@ const scenario = (page: Page, name: string) =>
 
 async function openImpact(page: Page, n = 2) {
   await login(page);
-  await page.goto(`/documents/checkout-redesign/v/${n}/impact`);
+  await page.goto(`/documents/annual-billing/v/${n}/impact`);
 }
 
 test("impact: the lineage names a Ground Truth item's kind, not its raw key", async ({ page }) => {
@@ -54,7 +54,7 @@ test("impact: the lineage names a Ground Truth item's kind, not its raw key", as
 async function openRecordedChange(page: Page, output: string, alone: boolean) {
   await scenario(page, "impact");
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2/impact");
+  await page.goto("/documents/annual-billing/v/2/impact");
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
   const table = page.getByRole("grid", { name: "Affected outputs" });
   await table.getByText(output).first().click();
@@ -74,7 +74,7 @@ test("impact: a recorded change on a deleted Ground Truth item highlights Ground
   // Back twice (the change opened on its own, then from the table) is the PRD's Impact again.
   await page.goBack();
   await page.goBack();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
   await expect(page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" })).toBeVisible();
 });
 

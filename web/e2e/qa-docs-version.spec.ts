@@ -7,9 +7,9 @@ import { contrast } from "./contrast-helpers";
 // QA pass 1, docs lane: the version page /documents/<doc>/v/<n> (Referral link v2, a PRD with a
 // brief; the early shipping cost technical brief, v1 earlier and v2 latest), driven as a person.
 
-const CARTS = "/documents/saved-carts/v/2";
-const BRIEF_V1 = "/documents/checkout-redesign-early-shipping-cost-spec/v/1";
-const BRIEF_V2 = "/documents/checkout-redesign-early-shipping-cost-spec/v/2";
+const CARTS = "/documents/referral-link/v/2";
+const BRIEF_V1 = "/documents/annual-billing-early-yearly-price-spec/v/1";
+const BRIEF_V2 = "/documents/annual-billing-early-yearly-price-spec/v/2";
 const PHONE = { width: 390, height: 844 };
 
 /** Errors in the console and uncaught ones (React's hydration error #418 among them). */

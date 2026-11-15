@@ -120,7 +120,7 @@ test("the staged chips name each change by its feature, with a count only past t
   await expect(bar.getByTestId("staged-more")).toHaveCount(0);
   await expect(bar).not.toContainText("changes staged");
 
-  await verdict(page, "f.saved-carts", "Feasible");
+  await verdict(page, "f.referral-link", "Feasible");
   await expect(bar.getByTestId("staged-chip")).toHaveCount(3);
   await expect(bar.getByTestId("staged-more")).toHaveText("1 more change");
   await expect(bar.getByTestId("staged-more")).toHaveAttribute(

@@ -2,9 +2,9 @@ import { expect, test, type Page } from "./test";
 
 import { login, openSection, section, selectText, showAll } from "./helpers";
 
-// O1f: every document has a brief layer and a full layer. The saved-carts fixture has a
+// O1f: every document has a brief layer and a full layer. The referral-link fixture has a
 // brief (summary, goals, problem, features by milestone, roadmap, non-goals, top risks,
-// decisions); checkout-redesign has none.
+// decisions); annual-billing has none.
 const BRIEF = [
   "Summary",
   "Goal trace",
@@ -32,7 +32,7 @@ test("brief: a document opens on its brief; Full switches, and the choice is rem
   page,
 }) => {
   await login(page);
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   await expect(sections(page)).toHaveAttribute("data-view", "brief");
   await expect(stripItems(page)).toHaveText(headingsAre(BRIEF));
   await expect(page.getByTestId("view-note")).toContainText("Brief: 8 of 20 sections");
@@ -63,7 +63,7 @@ test("brief: a document opens on its brief; Full switches, and the choice is rem
   await savedView(page, "full");
   await page.reload();
   await expect(sections(page)).toHaveAttribute("data-view", "full");
-  await page.goto("/documents/saved-carts/v/1");
+  await page.goto("/documents/referral-link/v/1");
   await expect(sections(page)).toHaveAttribute("data-view", "full");
   await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Brief" }).click();
   await expect(sections(page)).toHaveAttribute("data-view", "brief");
@@ -74,7 +74,7 @@ test("brief: a document opens on its brief; Full switches, and the choice is rem
   await expect(sections(page)).toHaveAttribute("data-view", "full");
 
   // A version without a brief shows every section, with no view switch or Present.
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openSection(page, "s-5-3");
   await expect(page.getByRole("group", { name: "Document view" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Present" })).toHaveCount(0);
@@ -87,7 +87,7 @@ test("a link to a detail section opens the full document at it, once; the brief 
   // Its own member: the mock keeps one saved view per member, and this test saves one.
   await login(page, "viewer@example.com");
   // A roadmap item's link to its PRD feature: the feature is detail, not in the brief.
-  await page.goto("/documents/saved-carts/v/2#s-feature-detail");
+  await page.goto("/documents/referral-link/v/2#s-feature-detail");
   await expect(sections(page)).toHaveAttribute("data-view", "full");
   await expect(section(page, "feature-detail")).toBeInViewport();
   // Not saved as the user's choice, and not forced again on the way back to the brief.
@@ -100,16 +100,16 @@ test("a link to a detail section opens the full document at it, once; the brief 
   await expect(page.getByTestId("document-sections").filter({ visible: true })).toBeVisible();
   await page.evaluate(() =>
     (window as unknown as { next: { router: { push: (href: string) => void } } }).next.router.push(
-      "/documents/saved-carts/v/2#s-feature-detail",
+      "/documents/referral-link/v/2#s-feature-detail",
     ),
   );
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2#s-feature-detail$/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2#s-feature-detail$/);
   await expect(sections(page)).toHaveAttribute("data-view", "full");
   await expect(section(page, "feature-detail")).toBeInViewport();
 
   // A brief section's link keeps the brief (a fresh load, not a same-page hash change).
   await page.goto("about:blank");
-  await page.goto("/documents/saved-carts/v/2#s-problem");
+  await page.goto("/documents/referral-link/v/2#s-problem");
   await expect(sections(page)).toHaveAttribute("data-view", "brief");
   await expect(section(page, "problem")).toBeInViewport();
 });
@@ -118,7 +118,7 @@ test("expand: a feature row and a milestone show their detail in place; comments
   page,
 }) => {
   await login(page);
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   const items = await openSection(page, "brief-items");
 
   await items.getByRole("button", { name: "Expand Copy link" }).click();
@@ -185,9 +185,9 @@ test("present: one brief section per slide, keyboard and click navigation, Expan
   page,
 }) => {
   await login(page);
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   await page.getByRole("link", { name: "Present" }).click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\/present$/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/present$/);
   const present = page.getByTestId("present-mode");
   const counter = page.getByTestId("slide-counter");
   // Title slide, one slide per brief section, then Sources and data points.
@@ -241,13 +241,13 @@ test("present: one brief section per slide, keyboard and click navigation, Expan
   await expect(page.getByTestId("audience-view")).toBeVisible();
 
   await page.getByRole("link", { name: "Exit" }).click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2$/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2$/);
 });
 
 test("present: a slide without a notes block says so in the presenter view", async ({ page }) => {
   await login(page);
   // Slide 2 (Summary) has a notes block; Problem (slide 4) and the title slide do not.
-  await page.goto("/documents/saved-carts/v/2/present?view=presenter&slide=2");
+  await page.goto("/documents/referral-link/v/2/present?view=presenter&slide=2");
   const notes = page.getByTestId("presenter-notes");
   await expect(notes).toHaveText("Open with how many new teams come from a colleague today.");
   await page.keyboard.press("ArrowRight");
@@ -261,14 +261,14 @@ test("present: a slide without a notes block says so in the presenter view", asy
 
 test("present: viewers present too; a version without a brief has nothing to present", async ({ page }) => {
   await login(page, "viewer@example.com");
-  await page.goto("/documents/saved-carts/v/2/present?view=presenter&slide=4");
+  await page.goto("/documents/referral-link/v/2/present?view=presenter&slide=4");
   await expect(page.getByTestId("presenter-view")).toBeVisible();
   await expect(page.getByTestId("slide-counter")).toHaveText("4 / 10");
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   await expect(page.getByRole("link", { name: "Present" })).toBeVisible();
   await expect(section(page, "summary").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
 
-  await page.goto("/documents/checkout-redesign/v/2/present");
+  await page.goto("/documents/annual-billing/v/2/present");
   await expect(page.getByTestId("present-mode")).toContainText(
     "Version 2 of Annual billing PRD has no brief to present: open the full PRD instead.",
   );
@@ -276,13 +276,13 @@ test("present: viewers present too; a version without a brief has nothing to pre
 
 test("exports: Brief, Full and Deck downloads", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   const cases: [string, string][] = [
-    ["Export brief PDF", "saved-carts-v2-brief.pdf"],
-    ["Export brief HTML", "saved-carts-v2-brief.html"],
-    ["Export deck PDF", "saved-carts-v2-deck.pdf"],
-    ["Export deck PPTX", "saved-carts-v2-deck.pptx"],
-    ["Export Markdown (.md)", "saved-carts-v2.md"],
+    ["Export brief PDF", "referral-link-v2-brief.pdf"],
+    ["Export brief HTML", "referral-link-v2-brief.html"],
+    ["Export deck PDF", "referral-link-v2-deck.pdf"],
+    ["Export deck PPTX", "referral-link-v2-deck.pptx"],
+    ["Export Markdown (.md)", "referral-link-v2.md"],
   ];
   for (const [name, file] of cases) {
     // e2e-pdf-export: each download closes the menu; it opens again for the next.
@@ -293,7 +293,7 @@ test("exports: Brief, Full and Deck downloads", async ({ page }) => {
     await expect(page.getByRole("button", { name })).toBeHidden();
   }
   // Without a brief only the full exports are offered.
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Export brief PDF" })).toHaveCount(0);
@@ -301,7 +301,7 @@ test("exports: Brief, Full and Deck downloads", async ({ page }) => {
 
 test("diff: each section says its layer, and the brief can be compared alone", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/saved-carts/diff?from=1&to=2");
+  await page.goto("/documents/referral-link/diff?from=1&to=2");
   const changed = page.getByTestId("diff-section").filter({ hasText: "Problem" });
   await expect(changed.getByTestId("layer-badge")).toHaveText("Brief");
   await page.getByLabel("Show unchanged sections").check();

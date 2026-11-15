@@ -24,7 +24,7 @@ export function sizeText(size: string): string {
 export type PrdWords = { slug: string | null; title: string | null; heading: (key: string) => string | null };
 
 /**
- * A staleness reason in words ("section s-5-2 changed in checkout-redesign" reads
+ * A staleness reason in words ("section s-5-2 changed in annual-billing" reads
  * 'Section "5.2 Shipping step" changed in Annual billing PRD'): section headings and the
  * PRD's title, never keys or slugs (qa-docs-18).
  */

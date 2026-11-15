@@ -12,7 +12,7 @@ import { login } from "./helpers";
  * layer as a person would, per role and per state.
  */
 
-const BRIEF = "/documents/checkout-redesign-early-shipping-cost-spec/v/1";
+const BRIEF = "/documents/annual-billing-early-yearly-price-spec/v/1";
 const SPEC_ID = "c3000000-0000-4000-8000-000000000001";
 const FLOW = "c3000000-0000-4000-8000-000000000012";
 const WIRE = "c3000000-0000-4000-8000-000000000013";

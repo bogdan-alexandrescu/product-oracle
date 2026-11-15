@@ -389,7 +389,7 @@ test("review panel: three tabs; Feedback is one list by state, scope and kind, w
 
 test("review panel: Sources counts the version's sources; no tab bar scrolls sideways", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const panel = page.getByTestId("review-panel");
   await expect(panel.getByRole("tab", { name: /^Sources/ })).toHaveText(/Sources\s*5/);
   await openTab(page, "Sources");

@@ -134,7 +134,7 @@ test.describe("desktop", () => {
   }) => {
     await sharing(page);
     // Nothing on a PRD's page links to a public version.
-    await page.goto("/documents/saved-carts");
+    await page.goto("/documents/referral-link");
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
       "Referral link PRD",
     );
@@ -143,7 +143,7 @@ test.describe("desktop", () => {
     );
     await expect(page.locator('a[href$="/public"]')).toHaveCount(0);
 
-    await page.goto("/documents/saved-carts/public");
+    await page.goto("/documents/referral-link/public");
     const note = page.getByTestId("public-check-not-roadmap");
     await expect(note).toContainText("Only a roadmap has a public version");
     await expect(note).toContainText("Referral link PRD is a PRD");
@@ -152,7 +152,7 @@ test.describe("desktop", () => {
     );
     await expect(
       page.getByRole("link", { name: "Back to the PRD" }),
-    ).toHaveAttribute("href", "/documents/saved-carts");
+    ).toHaveAttribute("href", "/documents/referral-link");
     await expect(
       page.getByRole("link", { name: "Back to the roadmap" }),
     ).toHaveCount(0);

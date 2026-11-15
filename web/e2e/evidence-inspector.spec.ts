@@ -12,7 +12,7 @@ import { login } from "./helpers";
  * and one to the approved Usage alerts PRD v1.
  */
 
-const DOC = "/documents/checkout-redesign";
+const DOC = "/documents/annual-billing";
 
 async function open(page: Page, email?: string, scenario = "evidence") {
   await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario] as const);
@@ -24,7 +24,7 @@ async function evidenceTab(page: Page, email?: string) {
   await open(page, email);
   await page.goto(`${DOC}/v/2`);
   await page.getByTestId("version-tab-evidence").filter({ visible: true }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/evidence/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/evidence/);
   await expect(page.getByTestId("evidence-matrix")).toBeVisible();
 }
 

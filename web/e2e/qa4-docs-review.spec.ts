@@ -7,8 +7,8 @@ import { login, openTab, showAll } from "./helpers";
 // (one a duplicate, one pushed back) and a paused agents' run; Annual billing v2 has
 // scored sources and comments by the owner.
 
-const WORKSPACES = "/documents/team-workspaces/v/2";
-const CHECKOUT = "/documents/checkout-redesign/v/2";
+const WORKSPACES = "/documents/team-invites/v/2";
+const CHECKOUT = "/documents/annual-billing/v/2";
 const DESKTOP = { width: 1440, height: 900 };
 
 const feedbackItem = (page: Page, text: string) => page.getByTestId("feedback-item").filter({ visible: true, hasText: text });

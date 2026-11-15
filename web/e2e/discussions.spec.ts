@@ -7,15 +7,15 @@ import { login, openSection, openTab, section, sectionAction, signOut } from "./
  * G1 Discussion model through the UI, on the mock layer ("discussions" scenario): a thread
  * per subject, open by default, private when its starter says so, made open again by the
  * starter alone after a warning naming what it exposes. The scenario seeds one private
- * discussion the commenter started with the approver on team-workspaces v2's Problem, with
- * 3 messages from the 2 of them; checkout-redesign has none.
+ * discussion the commenter started with the approver on team-invites v2's Problem, with
+ * 3 messages from the 2 of them; annual-billing has none.
  *
  * Each test's card: protects=<the observable>; fails_when=<the wrong result>; no_claim=<what
  * green does not prove>. The real API's rules are covered by api/tests/test_discussions*.py.
  */
 
-const DOC = "/documents/checkout-redesign/v/2";
-const SEEDED = "/documents/team-workspaces/v/2";
+const DOC = "/documents/annual-billing/v/2";
+const SEEDED = "/documents/team-invites/v/2";
 const SEEDED_TITLE = "Problem: who owns the admin role?";
 const COMMENTER = "commenter@example.com";
 const APPROVER = "approver@example.com";

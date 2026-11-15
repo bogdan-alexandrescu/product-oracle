@@ -49,7 +49,7 @@ export const SHOP_BRIEFS: Brief[] = [
     questions: [],
   },
   {
-    key: "f.saved-carts",
+    key: "f.referral-link",
     title: "Referral link",
     size: "l",
     depends_on: ["f.guided-setup"],
@@ -132,7 +132,7 @@ export const SHOP_BRIEFS: Brief[] = [
     key: "f.returns-portal",
     title: "Self-serve returns",
     size: "xl",
-    depends_on: ["f.saved-carts"],
+    depends_on: ["f.referral-link"],
     approach: lines(
       "Let buyers start a return from their order page, choose the lines and a reason, and get a label, without writing to the shop.",
       "A new returns module owns a return: its order, lines, reasons, status (requested, approved, in transit, received, refunded) and label.",
@@ -220,7 +220,7 @@ export const SHOP_BRIEFS: Brief[] = [
     key: "f.abandoned-email",
     title: "Abandoned cart email",
     size: "m",
-    depends_on: ["f.saved-carts"],
+    depends_on: ["f.referral-link"],
     approach: lines(
       "Email a signed-in buyer who left items in their cart for 4 hours, once, with the items and a link back.",
       "Keeps the cart on the server: a job every 15 minutes finds carts untouched for 4 hours with no order since.",

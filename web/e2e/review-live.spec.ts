@@ -13,7 +13,7 @@ import { login, openSection, signOut } from "./helpers";
  */
 
 const RUN_VERSION = "/documents/usage-alerts/v/2";
-const PLAIN_VERSION = "/documents/checkout-redesign/v/2";
+const PLAIN_VERSION = "/documents/annual-billing/v/2";
 const bar = (page: Page) => page.getByTestId("run-review-bar").filter({ visible: true });
 const barText = (page: Page) => bar(page).getByTestId("run-review-text");
 

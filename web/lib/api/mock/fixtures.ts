@@ -535,7 +535,7 @@ const CARTS_V2: SectionSeed[] = CARTS_V1.map((s) =>
     : s,
 );
 
-// E1: the technical brief Oracle wrote from checkout-redesign v1 (version 1), then an edit
+// E1: the technical brief Oracle wrote from annual-billing v1 (version 1), then an edit
 // (version 2) added "Rollout notes" (not in the spec template) and "Proposed architecture"
 // (a template section a technical brief does not have): both read "Proposed · added in an
 // edit", and so does the source the edit cited.
@@ -546,7 +546,7 @@ const SPEC_ORACLE_CITATIONS: CitationSeed[] = [
   {
     id: "prd-checkout",
     source: "upload",
-    ref: "/documents/checkout-redesign/v/1",
+    ref: "/documents/annual-billing/v/1",
     title: "Annual billing PRD, version 1",
     excerpt: "Show the yearly price on the plan page, before the billing step.",
     retrieved_at: "2026-10-17T09:00:00Z",
@@ -575,7 +575,7 @@ const SPEC_REQUIREMENTS: SectionSeed = {
   key: "requirements",
   level: 2,
   heading: "Product requirements",
-  body: `${REQUIREMENTS_NOTE}\n\nFrom PRD [Annual billing PRD](/documents/checkout-redesign/v/1), version 1.\n\n- **req-yearly-price: Show the yearly price on the plan page** (requirement id \`5b0c…\`)\n  PRD section: [5.2 Billing step](/documents/checkout-redesign/v/1#s-5-2)`,
+  body: `${REQUIREMENTS_NOTE}\n\nFrom PRD [Annual billing PRD](/documents/annual-billing/v/1), version 1.\n\n- **req-yearly-price: Show the yearly price on the plan page** (requirement id \`5b0c…\`)\n  PRD section: [5.2 Billing step](/documents/annual-billing/v/1#s-5-2)`,
 };
 const SPEC_ROLLOUT: SectionSeed = {
   key: "rollout-notes",
@@ -609,7 +609,7 @@ const SPEC_SOURCES: SectionSeed = {
   key: "sources",
   level: 2,
   heading: "Sources and data points",
-  body: "- Product requirements: PRD checkout-redesign version 1, approved 2026-10-17.\n- Code capability map: not available; the approach rests on the assumptions listed above.",
+  body: "- Product requirements: PRD annual-billing version 1, approved 2026-10-17.\n- Code capability map: not available; the approach rests on the assumptions listed above.",
 };
 const SPEC_V1: SectionSeed[] = [
   SPEC_TITLE("technical brief"), SPEC_SUMMARY, SPEC_REQUIREMENTS, SPEC_APPROACH, SPEC_OPEN,
@@ -689,7 +689,7 @@ const OUTREACH_V5 = revise(OUTREACH_V4, {
 
 export const DOCUMENTS: DocumentSeed[] = [
   {
-    slug: "checkout-redesign",
+    slug: "annual-billing",
     title: "Annual billing PRD",
     template: "oracle-default",
     template_version: "1",
@@ -712,7 +712,7 @@ export const DOCUMENTS: DocumentSeed[] = [
     ],
   },
   {
-    slug: "team-workspaces",
+    slug: "team-invites",
     title: "Team invites PRD",
     template: "oracle-default",
     template_version: "1",
@@ -722,7 +722,7 @@ export const DOCUMENTS: DocumentSeed[] = [
     ],
   },
   {
-    slug: "saved-carts",
+    slug: "referral-link",
     title: "Referral link PRD",
     template: "oracle-default",
     template_version: "2",
@@ -790,7 +790,7 @@ export const DOCUMENTS: DocumentSeed[] = [
   },
   // E1: a technical brief; version 2 is an edit that added sections and a source.
   {
-    slug: "checkout-redesign-early-shipping-cost-spec",
+    slug: "annual-billing-early-yearly-price-spec",
     title: "Early yearly price: technical brief",
     kind: "spec",
     depth: "brief",
@@ -801,7 +801,7 @@ export const DOCUMENTS: DocumentSeed[] = [
         sections: SPEC_V1,
         citations: SPEC_ORACLE_CITATIONS,
         brief: ["summary", "requirements", "approach", "open-decisions"],
-        source: { slug: "checkout-redesign", version: 1 },
+        source: { slug: "annual-billing", version: 1 },
       },
       {
         number: 2,
@@ -809,13 +809,13 @@ export const DOCUMENTS: DocumentSeed[] = [
         sections: SPEC_V2,
         citations: [...SPEC_ORACLE_CITATIONS, ...SPEC_ADDED_CITATIONS],
         brief: SPEC_BRIEF_KEYS,
-        source: { slug: "checkout-redesign", version: 1 },
+        source: { slug: "annual-billing", version: 1 },
       },
     ],
   },
   // E1: a full engineering spec with a section and a source added in an edit.
   {
-    slug: "checkout-redesign-early-shipping-cost-engineering-spec",
+    slug: "annual-billing-early-yearly-price-engineering-spec",
     title: "Early yearly price: engineering spec",
     kind: "spec",
     depth: "full",
@@ -826,7 +826,7 @@ export const DOCUMENTS: DocumentSeed[] = [
         sections: FULL_SPEC_V1,
         citations: [...SPEC_ORACLE_CITATIONS, ...SPEC_ADDED_CITATIONS],
         brief: ["summary", "requirements", "approach", "open-decisions"],
-        source: { slug: "checkout-redesign", version: 1 },
+        source: { slug: "annual-billing", version: 1 },
       },
     ],
   },

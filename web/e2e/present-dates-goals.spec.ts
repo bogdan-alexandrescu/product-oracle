@@ -10,13 +10,13 @@ const ISO = /\d{4}-\d{2}-\d{2}/;
 
 async function openPresent(page: Page) {
   await login(page);
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   await page
     .getByRole("link", { name: "Present" })
     .filter({ visible: true })
     .first()
     .click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\/present$/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/present$/);
   await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
 }
 
@@ -64,11 +64,11 @@ test("E-15: a version without a brief names the PRD by its title", async ({
   page,
 }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2/present");
+  await page.goto("/documents/annual-billing/v/2/present");
   await expect(page.getByTestId("present-mode")).toContainText(
     "Version 2 of Annual billing PRD has no brief to present: open the full PRD instead.",
   );
   await expect(page.getByTestId("present-mode")).not.toContainText(
-    "checkout-redesign",
+    "annual-billing",
   );
 });

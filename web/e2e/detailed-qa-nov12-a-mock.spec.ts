@@ -36,7 +36,7 @@ test("#7: the default Ground Truth shows Setup checklist's code in its panel, an
 
 test("#18: the PRD's Goal trace names its goal, never a place code", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const trace = await openSection(page, "goal-trace");
   await expect(trace).toContainText("Serves Activation");
   await expect(trace).not.toContainText("G1 (");

@@ -7,7 +7,7 @@ import { login, openSection, openTab, sectionAction, signOut } from "./helpers";
  * G2 Live replies through the UI, on the mock layer ("discussion-replies" scenario): Oracle
  * answers in a discussion as it writes. The mock streams a canned answer in 5 pieces (the
  * first after a short think, the rest 150 ms apart) that cites the seed's "Activation"
- * goal. The scenario seeds, on team-workspaces v2's Problem: the commenter's private
+ * goal. The scenario seeds, on team-invites v2's Problem: the commenter's private
  * discussion with the approver, an open one whose Oracle reply failed for want of a Claude
  * account, and one whose intake has 2 of the commenter's private findings.
  *
@@ -17,8 +17,8 @@ import { login, openSection, openTab, sectionAction, signOut } from "./helpers";
  * api/tests/test_discussion_replies.py.
  */
 
-const DOC = "/documents/checkout-redesign/v/2";
-const SEEDED = "/documents/team-workspaces/v/2";
+const DOC = "/documents/annual-billing/v/2";
+const SEEDED = "/documents/team-invites/v/2";
 const PRIVATE_TITLE = "Problem: who owns the admin role?";
 const FAILED_TITLE = "Caps: ship without detection?";
 const NOTICE_TITLE = "F-07 Bulk import: what the intake found";

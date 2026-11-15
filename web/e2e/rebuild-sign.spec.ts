@@ -121,12 +121,12 @@ async function start(page: Page) {
 
 const chip = (page: Page) => page.getByTestId("rb-chip").filter({ visible: true });
 
-const PRD = "/documents/checkout-redesign";
+const PRD = "/documents/annual-billing";
 
 test("a running rebuild: the chip beside the version says its step and time left, opens the run's steps and updates by itself", async ({ page }) => {
   await start(page);
-  const { ids, latest } = await seedRuns(page, [{ slug: "checkout-redesign", state: "running", step: 2, minutes: 40 }], { open: PRD });
-  const v = latest["checkout-redesign"] + 1;
+  const { ids, latest } = await seedRuns(page, [{ slug: "annual-billing", state: "running", step: 2, minutes: 40 }], { open: PRD });
+  const v = latest["annual-billing"] + 1;
   await expect(chip(page)).toHaveText(new RegExp(`^Rebuilding v${v} · step 2 of \\d+ · about 40 min$`));
   await chip(page).click();
   const pop = page.getByTestId("rb-popover");
@@ -146,7 +146,7 @@ test("a running rebuild: the chip beside the version says its step and time left
 
 test("a scheduled rebuild says when it starts", async ({ page }) => {
   await start(page);
-  await seedRuns(page, [{ slug: "checkout-redesign", state: "scheduled", startAt: "2026-10-29T16:00:00Z" }], { open: PRD });
+  await seedRuns(page, [{ slug: "annual-billing", state: "scheduled", startAt: "2026-10-29T16:00:00Z" }], { open: PRD });
   await expect(chip(page)).toHaveText(/^Rebuild scheduled Thu, Oct 29, \d{1,2}:00 [AP]M/);
   await chip(page).click();
   await expect(page.getByTestId("rb-popover")).toContainText("Set up by");
@@ -154,7 +154,7 @@ test("a scheduled rebuild says when it starts", async ({ page }) => {
 
 test("a rebuild at a stop says who it waits on and their action", async ({ page }) => {
   await start(page);
-  await seedRuns(page, [{ slug: "checkout-redesign", state: "waiting", step: 3 }], { open: PRD });
+  await seedRuns(page, [{ slug: "annual-billing", state: "waiting", step: 3 }], { open: PRD });
   await expect(chip(page)).toHaveText(/^Waiting on .+ · step 3 of \d+$/);
   await chip(page).click();
   const pop = page.getByTestId("rb-popover");
@@ -164,7 +164,7 @@ test("a rebuild at a stop says who it waits on and their action", async ({ page 
 
 test("a rebuild that stopped says where", async ({ page }) => {
   await start(page);
-  await seedRuns(page, [{ slug: "checkout-redesign", state: "failed", step: 3, error: "Two sections came back empty" }], { open: PRD });
+  await seedRuns(page, [{ slug: "annual-billing", state: "failed", step: 3, error: "Two sections came back empty" }], { open: PRD });
   await expect(chip(page)).toHaveText(/^Rebuild stopped at step 3 of \d+$/);
   await chip(page).click();
   await expect(page.getByTestId("rb-popover")).toContainText("Two sections came back empty at");
@@ -175,19 +175,19 @@ test("the Detailed page says 'ready: review it' while the new version waits for 
   // Frame a-detailed-done: the document's own page keeps saying it until the version is
   // approved, though it was opened.
   await start(page);
-  const { latest } = await seedRuns(page, [{ slug: "checkout-redesign", state: "done" }], { open: PRD });
-  const v = latest["checkout-redesign"] + 1;
+  const { latest } = await seedRuns(page, [{ slug: "annual-billing", state: "done" }], { open: PRD });
+  const v = latest["annual-billing"] + 1;
   await expect(chip(page)).toHaveText(`v${v} ready: review it`);
   await chip(page).click();
   await page.getByTestId("rb-popover").getByRole("link", { name: `Review v${v}` }).click();
-  await expect(page).toHaveURL(new RegExp(`/documents/checkout-redesign/v/${v}`));
+  await expect(page).toHaveURL(new RegExp(`/documents/annual-billing/v/${v}`));
   await page.goto(PRD);
   await expect(chip(page)).toHaveText(`v${v} ready: review it`);
 });
 
 test("a run at a stop or not started re-reads once a minute, not every 5 s", async ({ page }) => {
   await start(page);
-  const { ids } = await seedRuns(page, [{ slug: "checkout-redesign", state: "waiting", step: 3 }], { open: PRD });
+  const { ids } = await seedRuns(page, [{ slug: "annual-billing", state: "waiting", step: 3 }], { open: PRD });
   await expect(chip(page)).toContainText("Waiting on");
   // It moves on between two reads: the sign, at a stop, reads again only after a minute.
   await page.evaluate((id) => {
@@ -208,8 +208,8 @@ test("a run at a stop or not started re-reads once a minute, not every 5 s", asy
 test("two runs on one PRD: the chip counts the other, the popover shows both", async ({ page }) => {
   await start(page);
   await seedRuns(page, [
-    { slug: "checkout-redesign", state: "running", step: 2, minutes: 40 },
-    { slug: "checkout-redesign", state: "scheduled" },
+    { slug: "annual-billing", state: "running", step: 2, minutes: 40 },
+    { slug: "annual-billing", state: "scheduled" },
   ], { open: PRD });
   await expect(chip(page)).toContainText("+1 run");
   await chip(page).click();
@@ -219,7 +219,7 @@ test("two runs on one PRD: the chip counts the other, the popover shows both", a
 test("Approve ends 'ready: review it' on the Detailed page", async ({ page }) => {
   await start(page);
   // A PRD with no blocker holding its publish.
-  const slug = "saved-carts";
+  const slug = "referral-link";
   const { latest } = await seedRuns(page, [{ slug, state: "done" }], { open: `/documents/${slug}`, only: true });
   const v = latest[slug] + 1;
   await expect(chip(page)).toHaveText(`v${v} ready: review it`);
@@ -240,7 +240,7 @@ test("Approve ends 'ready: review it' on the Detailed page", async ({ page }) =>
 
 test("a hidden tab stops reading; shown again, it reads at once", async ({ page }) => {
   await start(page);
-  const { ids } = await seedRuns(page, [{ slug: "checkout-redesign", state: "running", step: 2, minutes: 40 }], { open: PRD });
+  const { ids } = await seedRuns(page, [{ slug: "annual-billing", state: "running", step: 2, minutes: 40 }], { open: PRD });
   await expect(chip(page)).toContainText("step 2 of");
   await page.evaluate(() => {
     Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
@@ -259,7 +259,7 @@ test("a hidden tab stops reading; shown again, it reads at once", async ({ page 
 
 test("no run on the PRD: no chip", async ({ page }) => {
   await start(page);
-  await seedRuns(page, [], { clear: ["checkout-redesign"], open: PRD, only: true });
+  await seedRuns(page, [], { clear: ["annual-billing"], open: PRD, only: true });
   await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
   await page.waitForTimeout(1500);
   await expect(page.getByTestId("rb-chip")).toHaveCount(0);
@@ -270,7 +270,7 @@ test.describe("on a phone", () => {
 
   test("the chip fits and its popover sits inside the screen", async ({ page }) => {
     await start(page);
-    await seedRuns(page, [{ slug: "checkout-redesign", state: "waiting", step: 3 }], { open: PRD });
+    await seedRuns(page, [{ slug: "annual-billing", state: "waiting", step: 3 }], { open: PRD });
     await expect(chip(page)).toBeVisible();
     await chip(page).click();
     const box = await page.getByTestId("rb-popover").boundingBox();

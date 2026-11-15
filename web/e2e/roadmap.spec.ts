@@ -156,7 +156,7 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
 test("build roadmap from the PRD view, into a new roadmap", async ({ page }) => {
   await login(page);
   // Not approved: no Build roadmap.
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await expect(page.getByTestId("document-sections").filter({ visible: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Build roadmap" })).toHaveCount(0);
 

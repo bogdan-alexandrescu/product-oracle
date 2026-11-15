@@ -9,7 +9,7 @@ import { login } from "./helpers";
  * driven as a person would on the mock (invented data).
  */
 
-const DOC = "/documents/checkout-redesign";
+const DOC = "/documents/annual-billing";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
@@ -17,14 +17,14 @@ async function openEvidence(page: Page) {
   await login(page);
   await page.goto(`${DOC}/v/2`);
   await page.getByTestId("version-tab-evidence").filter({ visible: true }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/evidence/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/evidence/);
 }
 
 async function openImpact(page: Page) {
   await login(page);
   await page.goto(`${DOC}/v/2`);
   await page.getByRole("link", { name: "Impact", exact: true }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
 }
 
 const row = (page: Page, key: string) => page.locator(`[data-testid="criterion-row"][data-key="${key}"]`);
@@ -132,7 +132,7 @@ test.describe("desktop", () => {
   test("qa4-docs-15: a review already running says when it started", async ({ page }) => {
     await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "quality-job-running"] as const);
     await login(page);
-    await page.goto("/documents/team-workspaces/v/2/quality");
+    await page.goto("/documents/team-invites/v/2/quality");
     await expect(page.getByTestId("job-active")).toContainText(/^Oracle is reviewing v2, started (?:[A-Z][a-z]{2} \d{1,2}, )?\d{1,2}:\d{2} [AP]M/);
     await expect(page.getByTestId("job-active")).not.toContainText(/\d{4}-\d{2}-\d{2}/);
   });

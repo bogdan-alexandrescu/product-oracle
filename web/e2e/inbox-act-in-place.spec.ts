@@ -171,7 +171,7 @@ for (const [width, height] of [
 
     // The answer is a reply on the comment's thread in the document.
     await row(page, QUESTION, "done").getByRole("link", { name: /^Open/ }).click();
-    await expect(page).toHaveURL(/\/documents\/team-workspaces\/v\/2/);
+    await expect(page).toHaveURL(/\/documents\/team-invites\/v\/2/);
     // On a phone the review panel is a sheet behind its Review button.
     if (page.viewportSize()!.width <= 600) await page.getByRole("button", { name: /^Review ·/ }).filter({ visible: true }).click();
     await openTab(page, "Feedback");

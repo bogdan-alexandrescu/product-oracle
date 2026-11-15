@@ -6,7 +6,7 @@ import { login, openSection, section } from "./helpers";
 // #347: people type into PRD sections by hand, and review the agent rewrites held because
 // their section was approved (Accept or Reject, with a reason).
 
-const DOC = "/documents/checkout-redesign/v/2";
+const DOC = "/documents/annual-billing/v/2";
 const NEW_TEXT = "Buyers leave checkout when shipping cost appears late [c:c1]. Show the full total on the cart.";
 
 async function openEditor(page: Page, key: string, heading: string) {

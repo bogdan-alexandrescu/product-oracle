@@ -26,7 +26,7 @@ test("new run: Escape closes the document suggestions first, then the dialog", a
   await field.fill("team");
   const suggestions = dialog.getByRole("listbox", { name: "Document suggestions" });
   await expect(suggestions).toBeVisible();
-  await expect(suggestions.getByRole("option", { name: /team-workspaces/ })).toBeVisible();
+  await expect(suggestions.getByRole("option", { name: /team-invites/ })).toBeVisible();
 
   await field.press("Escape");
   await expect(suggestions).toHaveCount(0);
@@ -46,7 +46,7 @@ test("new run: picking a document suggestion fills the field", async ({ page }) 
   const dialog = page.getByRole("dialog", { name: "New run" });
   const field = dialog.getByRole("combobox", { name: "PRD document" });
   await field.fill("team-work");
-  await dialog.getByRole("option", { name: /team-workspaces/ }).click();
-  await expect(field).toHaveValue("team-workspaces");
+  await dialog.getByRole("option", { name: /team-invites/ }).click();
+  await expect(field).toHaveValue("team-invites");
   await expect(dialog.getByRole("listbox", { name: "Document suggestions" })).toHaveCount(0);
 });

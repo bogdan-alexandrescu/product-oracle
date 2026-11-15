@@ -59,7 +59,7 @@ for (const phone of [false, true]) {
 
       test("a goal code reads with its name beside it", async ({ page }) => {
         await login(page);
-        await page.goto("/simple/one-pagers/saved-carts");
+        await page.goto("/simple/one-pagers/referral-link");
         const outcomes = page.getByRole("region", { name: "Outcomes and how we measure them" });
         await expect(outcomes.getByText("G2 Retention: more repeat orders within 30 days.")).toBeVisible();
         await expect(outcomes.getByText("G2 (retention)")).toHaveCount(0);

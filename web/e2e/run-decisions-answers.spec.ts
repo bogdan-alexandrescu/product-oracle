@@ -40,7 +40,7 @@ test("the run page lists the answered questions under the Engineering review sto
   await inboxRow.getByRole("link", { name: "Review" }).click();
   await expect(page.getByTestId("brief-row")).toHaveCount(3);
 
-  for (const key of ["f.guided-setup", "f.sample-data", "f.saved-carts"]) await verdict(page, key, "Feasible");
+  for (const key of ["f.guided-setup", "f.sample-data", "f.referral-link"]) await verdict(page, key, "Feasible");
   await row(page, "f.guided-setup").getByRole("button").first().click();
   await answer(page, /^Answer: Does the payment sandbox/, "Yes, the sandbox takes test orders.");
   await answer(page, /^Answer: Show the checklist on phones/, "Phones come in the second release.");

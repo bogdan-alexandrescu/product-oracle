@@ -29,9 +29,9 @@ const chip = (page: Page, name: RegExp) =>
 
 async function openRoadmap(page: Page) {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await visible(page, "version-tab-roadmap").click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/roadmap/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/roadmap/);
   await expect(visible(page, "draft-roadmap-status")).toHaveAttribute(
     "data-status",
     "ready",

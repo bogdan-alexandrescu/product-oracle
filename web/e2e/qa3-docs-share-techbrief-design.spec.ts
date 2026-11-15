@@ -9,8 +9,8 @@ import { login } from "./helpers";
  * and wireframes. Driven through the UI as a person would.
  */
 
-const BRIEF_V1 = "/documents/checkout-redesign-early-shipping-cost-spec/v/1";
-const BRIEF_V2 = "/documents/checkout-redesign-early-shipping-cost-spec/v/2";
+const BRIEF_V1 = "/documents/annual-billing-early-yearly-price-spec/v/1";
+const BRIEF_V2 = "/documents/annual-billing-early-yearly-price-spec/v/2";
 const SPEC_ID = "c3000000-0000-4000-8000-000000000001";
 const FLOW = `/specs/${SPEC_ID}/design/c3000000-0000-4000-8000-000000000012`;
 const WIRE = `/specs/${SPEC_ID}/design/c3000000-0000-4000-8000-000000000013`;
@@ -36,7 +36,7 @@ test.describe("desktop", () => {
     const reasons = visible(page, "spec-staleness").getByTestId("spec-staleness-reasons");
     await expect(reasons).toHaveText('Section "5.2 Billing step" changed in Annual billing PRD');
     await expect(visible(page, "spec-staleness")).not.toContainText("s-5-2");
-    await expect(visible(page, "spec-staleness")).not.toContainText("checkout-redesign");
+    await expect(visible(page, "spec-staleness")).not.toContainText("annual-billing");
   });
 
   test("qa-docs-19: a wireframe's annotation reads '1. <note>', numbered once, no ids or keys", async ({ page }) => {

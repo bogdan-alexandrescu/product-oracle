@@ -11,8 +11,8 @@ const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1440, height: 900 };
 const ROADMAP = "/documents/usage-alerts-roadmap/v/1";
 const ITEMS = `${ROADMAP}/items`;
-const CARTS = "/documents/saved-carts/v/2";
-const BRIEF_V2 = "/documents/checkout-redesign-early-shipping-cost-spec/v/2";
+const CARTS = "/documents/referral-link/v/2";
+const BRIEF_V2 = "/documents/annual-billing-early-yearly-price-spec/v/2";
 
 const visible = (page: Page, testId: string) => page.getByTestId(testId).filter({ visible: true });
 
@@ -78,7 +78,7 @@ for (const scheme of ["light", "dark"] as const) {
     test("qa-docs-5: Ask for feedback's Send with no title is an outlined button with a hint", async ({ page }) => {
       await asRole(page, "approver");
       await login(page);
-      await page.goto("/documents/checkout-redesign");
+      await page.goto("/documents/annual-billing");
       const panel = page.getByTestId("campaigns");
       await panel.getByRole("button", { name: "Ask for feedback" }).click();
       const send = panel.getByRole("button", { name: "Send" });
@@ -141,7 +141,7 @@ for (const scheme of ["light", "dark"] as const) {
     // qa-docs-12: no internal grouping key on a suggestion card.
     test("qa-docs-12: a suggestion card shows its classification, not Oracle's grouping key", async ({ page }) => {
       await login(page);
-      await page.goto("/documents/team-workspaces/v/2");
+      await page.goto("/documents/team-invites/v/2");
       await openTab(page, "Feedback");
       await showAll(page);
       const card = page
@@ -157,7 +157,7 @@ for (const scheme of ["light", "dark"] as const) {
     test("qa-docs-25: a version's Impact has no unexplained Preview badge", async ({ page }) => {
       await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "impact"] as const);
       await login(page);
-      await page.goto("/documents/checkout-redesign/v/2");
+      await page.goto("/documents/annual-billing/v/2");
       await page.getByRole("link", { name: "Impact", exact: true }).click();
       await expect(page.getByText("Preview: v2 marks nothing stale.")).toBeVisible();
       const header = page.locator("header[data-page-header]").filter({ visible: true });

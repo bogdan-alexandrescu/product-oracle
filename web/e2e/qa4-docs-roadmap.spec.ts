@@ -6,7 +6,7 @@ import { login } from "./helpers";
 // lib/api/mock/draft-roadmap.ts: 4 items, 3 Now and 1 Next; Bulk import carries a GA date
 // with no confirmed schedule; v1's One-tap wallet pay was dropped), driven as a person.
 
-const VERSION = "/documents/checkout-redesign/v/2";
+const VERSION = "/documents/annual-billing/v/2";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
@@ -20,7 +20,7 @@ async function openRoadmap(page: Page, email?: string) {
   await login(page, email);
   await page.goto(VERSION);
   await visible(page, "version-tab-roadmap").click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/roadmap/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/roadmap/);
   await expect(visible(page, "draft-roadmap-status")).toHaveAttribute("data-status", "ready");
 }
 

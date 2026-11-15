@@ -94,7 +94,7 @@ test("coverage: Used in leads to the Ground Truth item and to the document versi
 
   await page.goBack();
   await used.getByRole("link", { name: /Annual billing PRD/ }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2$/);
 });
 
 test("coverage: a search shows Results; Coverage brings the table back with the same source", async ({ page }) => {

@@ -9,7 +9,7 @@ import { login } from "./helpers";
 // paragraph longer than a slide goes on continuation slides, every sentence once, none
 // clipped (the mock's "long-paragraph" scenario).
 
-const SLIDE = "/documents/saved-carts/v/2/present";
+const SLIDE = "/documents/referral-link/v/2/present";
 const current = (page: Page) => page.getByTestId("audience-view").locator(".current-slide");
 
 /** The line boxes each match of ``date`` (spaces or no-break spaces between its parts) takes. */

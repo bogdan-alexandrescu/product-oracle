@@ -188,8 +188,8 @@ test("a decision the owner took: Driver is the owner, About names the document, 
       name: "Annual billing PRD",
       exact: true,
     }),
-  ).toHaveAttribute("href", "/documents/checkout-redesign");
-  await expect(inspector(page)).not.toContainText("checkout-redesign");
+  ).toHaveAttribute("href", "/documents/annual-billing");
+  await expect(inspector(page)).not.toContainText("annual-billing");
   await expect(peopleRow(page, "Decided")).toHaveText(/[A-Z][a-z]{2} \d{1,2}, \d{4}$/);
   await expect(inspector(page)).not.toContainText(/\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec) \d{4}/);
   await expect(row(page, PUBLISH)).toContainText(/[A-Z][a-z]{2} \d{1,2}, \d{4}/);

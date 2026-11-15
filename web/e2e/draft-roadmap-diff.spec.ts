@@ -6,14 +6,14 @@ import { login } from "./helpers";
 // E3b Roadmap diffs for PRD drafts: a PRD draft's Roadmap tab compared with the previous
 // draft or the approved plan, item by item.
 //
-// The default mock seeds checkout-redesign v1 (Plan review and Billing step in Now, Guest
+// The default mock seeds annual-billing v1 (Plan review and Billing step in Now, Guest
 // checkout in Next, One-tap wallet pay in Later) and v2 (Public signup moved to Now, the
 // Billing step's date removed, Bulk import new, wallet pay gone). The "approved-plan"
 // scenario adds usage-alerts-roadmap v1 approved (Behaviour in Now, Success metrics in Next)
 // and usage-alerts v2, a draft whose items move Behaviour to Next and add Spend limits.
 
-const V1 = "/documents/checkout-redesign/v/1/roadmap";
-const V2 = "/documents/checkout-redesign/v/2/roadmap";
+const V1 = "/documents/annual-billing/v/1/roadmap";
+const V2 = "/documents/annual-billing/v/2/roadmap";
 const ALERTS_V2 = "/documents/usage-alerts/v/2/roadmap";
 
 // Next keeps recently visited routes mounted (hidden): only the visible page's elements.
@@ -27,7 +27,7 @@ const chip = (page: Page, name: RegExp) => visible(page, "items-filter").getByRo
 // no_claim = the real API (mocked; its rows are covered by pytest).
 test("a draft's Roadmap tab opens on what changed since the previous draft", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await visible(page, "version-tab-roadmap").click();
   await expect(page).toHaveURL(new RegExp(`${V2}$`));
   await expect(visible(page, "compare-previous")).toHaveText("Draft v1");

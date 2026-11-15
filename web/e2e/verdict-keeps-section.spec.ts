@@ -13,8 +13,8 @@ import { login, openSection } from "./helpers";
  * fails_when = the save's answer opens the reviewed section again.
  */
 
-const CARTS = "/documents/saved-carts/v/2";
-const SAVE = "PUT /v1/documents/saved-carts/versions/2/sections/summary/review";
+const CARTS = "/documents/referral-link/v/2";
+const SAVE = "PUT /v1/documents/referral-link/versions/2/sections/summary/review";
 
 test("a section opened while a verdict saves stays the current one when the save lands", async ({ page }) => {
   await login(page);

@@ -10,7 +10,7 @@ import { login, openSection, signOut } from "./helpers";
  * comment was. A private thread stays a discussion. The API's rule:
  * api/tests/test_discuss_whole_draft.py.
  */
-const DOC = "/documents/checkout-redesign/v/2";
+const DOC = "/documents/annual-billing/v/2";
 const REMARK = "The goals don't match the problem statement.";
 const PHONE = { width: 390, height: 844 };
 

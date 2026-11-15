@@ -5,7 +5,7 @@ import { login } from "./helpers";
 
 /*
  * QA plan findings on the Impact explorer (qa-plan-10, 58, 59, 60, 61), on the mock API.
- * The "impact" scenario gives checkout-redesign's v1 downstream outputs; a recorded change
+ * The "impact" scenario gives annual-billing's v1 downstream outputs; a recorded change
  * edited the Success metrics section in v2, and the Bulk import tech brief was built on it.
  */
 
@@ -15,9 +15,9 @@ const scenario = (page: Page, name: string) =>
 /** The checkout PRD's v2 Impact screen, opened from the version's toolbar. */
 async function openVersionImpact(page: Page) {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await page.getByRole("link", { name: "Impact", exact: true }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
 }
 
 /** The recorded change behind the Bulk import tech brief, opened from its inspector. */
@@ -40,7 +40,7 @@ test("qa-plan-10/61: a recorded change is named in words, in the heading and the
   await expect(graph.getByTestId("lineage-subject")).toContainText(SUBJECT);
   await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Success metrics" })).toBeVisible();
   const main = page.locator("main");
-  await expect(main).not.toContainText("checkout-redesign@2");
+  await expect(main).not.toContainText("annual-billing@2");
   await expect(main).not.toContainText("#metrics");
   await expect(main).not.toContainText("section metrics changed");
 
@@ -75,7 +75,7 @@ test("qa-plan-59: a recorded change leads back to its version, with PRDs highlig
   await expect(back).toHaveText("‹ Impact of Annual billing PRD v2");
   await expect(back).toBeVisible();
   await back.click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
 });
 
 test("qa-plan-59/61: a Ground Truth item's what-if reads 'Impact: Setup checklist' and leads back to Ground Truth", async ({ page }) => {
@@ -111,7 +111,7 @@ test.describe("phone", () => {
   test("qa-plan-60: on a phone the lineage says how big the plan is and to tap an output", async ({ page }) => {
     await scenario(page, "impact");
     await login(page);
-    await page.goto("/documents/checkout-redesign/v/2/impact");
+    await page.goto("/documents/annual-billing/v/2/impact");
     const list = page.getByRole("region", { name: "Affected outputs" });
     await expect(list.getByTestId("impact-phone-hint")).toHaveText(
       "The regeneration plan has 6 proposals. Tap an output to see its proposal and act on it.",

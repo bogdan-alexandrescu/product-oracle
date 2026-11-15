@@ -14,7 +14,7 @@ import { login, openSection, sectionAction } from "./helpers";
  * api/tests/test_discussion_first_reply.py.
  */
 
-const DOC = "/documents/checkout-redesign/v/2";
+const DOC = "/documents/annual-billing/v/2";
 const COMMENTER = "commenter@example.com";
 const ASK = "Can caps ship without detection?";
 

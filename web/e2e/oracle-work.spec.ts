@@ -29,7 +29,7 @@ for (const width of [1366, 390]) {
 
     test("the PRD overview shows versions only, no Oracle machinery", async ({ page }) => {
       await login(page);
-      await page.goto("/documents/team-workspaces");
+      await page.goto("/documents/team-invites");
       await expect(page.getByTestId("versions-table")).toBeVisible();
       await expect(page.getByTestId("version-inspector")).toBeVisible();
       await expect(page.getByTestId("jobs-panel")).toHaveCount(0);
@@ -41,7 +41,7 @@ for (const width of [1366, 390]) {
 
     test("History has Oracle's work: plain switches an owner toggles", async ({ page }) => {
       await login(page);
-      await page.goto("/documents/team-workspaces/v/2");
+      await page.goto("/documents/team-invites/v/2");
       await openHistory(page, phone);
       const fold = oracleWork(page);
       await expect(fold.getByRole("button", { name: "Oracle's work", exact: true })).toHaveAttribute("aria-expanded", "true");
@@ -66,7 +66,7 @@ for (const width of [1366, 390]) {
 
     test("an approver sees no Oracle switches (only owners turn them off), but still runs its work", async ({ page }) => {
       await login(page, "approver@example.com");
-      await page.goto("/documents/team-workspaces/v/2");
+      await page.goto("/documents/team-invites/v/2");
       await openHistory(page, phone);
       const fold = oracleWork(page);
       // An approver may queue Oracle's work (create_llm_job), so the run-now buttons show...
@@ -81,7 +81,7 @@ for (const width of [1366, 390]) {
 
     test("Suggest changes now and Write reports now queue jobs named in plain words", async ({ page }) => {
       await login(page);
-      await page.goto("/documents/checkout-redesign/v/2");
+      await page.goto("/documents/annual-billing/v/2");
       await openHistory(page, phone);
       const panel = jobsPanel(page);
       await expect(panel).toContainText("Oracle hasn't worked on this version yet.");
@@ -96,7 +96,7 @@ for (const width of [1366, 390]) {
 
     test("a job's account, tokens and cost show only after Details", async ({ page }) => {
       await login(page);
-      await page.goto("/documents/team-workspaces/v/2");
+      await page.goto("/documents/team-invites/v/2");
       await openHistory(page, phone);
       const row = job(page, "Suggestions");
       await expect(row).toContainText("3 feedback items handled · 1 pushback");
@@ -112,11 +112,11 @@ for (const width of [1366, 390]) {
 
     test("the overview inspector links to Oracle's work on the version, for approvers", async ({ page }) => {
       await login(page);
-      await page.goto("/documents/team-workspaces");
+      await page.goto("/documents/team-invites");
       const link = page.getByTestId("version-inspector").getByRole("link", { name: "Oracle's work on v2" });
-      await expect(link).toHaveAttribute("href", "/documents/team-workspaces/v/2?tab=history#oracle-work");
+      await expect(link).toHaveAttribute("href", "/documents/team-invites/v/2?tab=history#oracle-work");
       await link.click();
-      await expect(page).toHaveURL(/\/documents\/team-workspaces\/v\/2\?tab=history#oracle-work$/);
+      await expect(page).toHaveURL(/\/documents\/team-invites\/v\/2\?tab=history#oracle-work$/);
       const fold = oracleWork(page);
       await expect(fold.getByRole("button", { name: "Oracle's work", exact: true })).toBeVisible();
       await expect(fold.getByTestId("llm-job-settings")).toBeInViewport();
@@ -125,7 +125,7 @@ for (const width of [1366, 390]) {
 
     test("a commenter does not run Oracle's work, so the overview offers no link", async ({ page }) => {
       await login(page, "commenter@example.com");
-      await page.goto("/documents/team-workspaces");
+      await page.goto("/documents/team-invites");
       await expect(page.getByTestId("version-inspector")).toBeVisible();
       await expect(page.getByRole("link", { name: /^Oracle's work on/ })).toHaveCount(0);
     });

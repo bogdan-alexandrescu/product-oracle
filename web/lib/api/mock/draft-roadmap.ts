@@ -2,7 +2,7 @@
  * E1 Roadmap per PRD draft, in the mock: every PRD version's items-only roadmap (a
  * `draft_roadmaps` row each), the four routes, the summary on VersionOut, the queue a new
  * PRD version joins, and the tick that moves a derivation queued -> running -> ready (one
- * step per tick) with canned items. Seeded on checkout-redesign v1 and v2 (synthetic
+ * step per tick) with canned items. Seeded on annual-billing v1 and v2 (synthetic
  * placeholders); every other PRD version reads `none`.
  */
 import type { Schemas } from "@/lib/api/client";
@@ -64,7 +64,7 @@ const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner
 const UNVERIFIED =
   "a date needs a verified estimate, capacity or commitment recorded for this PRD (and item) that supports it (record one with POST /v1/schedule-bases); Oracle never invents dates";
 const CANNOT_START = "The person who imported this draft can no longer start runs. An approver can derive again.";
-const SEED_PRD = "checkout-redesign";
+const SEED_PRD = "annual-billing";
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -129,7 +129,7 @@ function checkOf(items: Item[], problems: DraftRoadmapCheck["problems"] = []): D
 const CART: ItemSeed = { key: "cart-review", title: "Plan review shows the yearly price", outcome: "Admins see the yearly price before they pay", horizon: "now", section: "s-5-1", rank: 1, confidence: "high", milestone: { name: "Beta" }, feature: { key: "F-41", title: "Plan review shows the yearly price" } };
 const GUEST: ItemSeed = { key: "public-signup", title: "Public signup", outcome: "New admins sign up without talking to sales", horizon: "next", section: "scope", rank: 3, confidence: "medium" };
 
-/** checkout-redesign v1: four items, no problems. */
+/** annual-billing v1: four items, no problems. */
 function seedV1(): ItemSeed[] {
   return [
     CART,
@@ -139,7 +139,7 @@ function seedV1(): ItemSeed[] {
   ];
 }
 
-/** checkout-redesign v2: public signup moved to Now, the shipping date removed, imported rows new, wallet pay gone. */
+/** annual-billing v2: public signup moved to Now, the shipping date removed, imported rows new, wallet pay gone. */
 function seedV2(): ItemSeed[] {
   return [
     CART,
@@ -164,7 +164,7 @@ const V2_PROBLEMS: DraftRoadmapCheck["problems"] = [
   { code: "unverified_date", item: "bulk-import", message: "the Dec 15, 2026 date has no confirmed schedule behind it yet" },
 ];
 
-/** The seeded rows: checkout-redesign v1 and v2, ready. */
+/** The seeded rows: annual-billing v1 and v2, ready. */
 export function seedDraftRoadmaps(ctx: DraftRoadmapContext): DraftRoadmapDb {
   const db: DraftRoadmapDb = { rows: [], off: [] };
   const doc = ctx.documents.find((d) => d.slug === SEED_PRD);
@@ -230,15 +230,15 @@ export function seedApprovedPlanDraft(ctx: DraftRoadmapContext, db: DraftRoadmap
   });
 }
 
-/** #561 review, the "stored-refusals" scenario: checkout-redesign v2's items failed on Oct 18 on a refusal stored before #403's wording. */
+/** #561 review, the "stored-refusals" scenario: annual-billing v2's items failed on Oct 18 on a refusal stored before #403's wording. */
 export function seedStoredRefusalDraft(ctx: DraftRoadmapContext, db: DraftRoadmapDb, error: string) {
-  const doc = ctx.documents.find((d) => d.slug === "checkout-redesign");
+  const doc = ctx.documents.find((d) => d.slug === "annual-billing");
   const r = doc && rowOf(db, doc.id, 2);
   if (!r) return;
   Object.assign(r, { status: "failed", requested_at: "2026-10-18T23:12:00Z", ready_at: null, error, check: null, items: [] });
 }
 
-/** Canned items for a derivation that finishes: the seed's for checkout-redesign v1/v2, else one per subsection. */
+/** Canned items for a derivation that finishes: the seed's for annual-billing v1/v2, else one per subsection. */
 function cannedItems(ctx: DraftRoadmapContext, doc: Doc, v: Version): { items: Item[]; problems: DraftRoadmapCheck["problems"] } {
   if (doc.slug === SEED_PRD && (v.number === 1 || v.number === 2)) {
     const seeds = v.number === 1 ? seedV1() : seedV2();

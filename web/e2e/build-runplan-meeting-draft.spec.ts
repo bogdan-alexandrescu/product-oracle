@@ -96,7 +96,7 @@ test.describe("desktop", () => {
     await expect(slice).not.toContainText("Draft from the run");
 
     // The items are on the Simple roadmap now.
-    await page.goto("/simple/roadmap?prd=saved-carts");
+    await page.goto("/simple/roadmap?prd=referral-link");
     // vqa-simple-runs: the Timeline's bars move by drag and arrow keys since train AH (the owner's answer), and say so in their name.
     await expect(page.getByRole("button", { name: /^Turn a cart into a quote, May 3 – Jun 25, 2027\. Arrows move it/ })).toBeVisible();
 
@@ -106,7 +106,7 @@ test.describe("desktop", () => {
     const inspector = page.getByTestId("decision-inspector").filter({ visible: true });
     await expect(inspector).toContainText("Referral link dates approved: 6 items on the roadmap");
     await inspector.getByRole("link", { name: "Referral link PRD" }).click();
-    await expect(page).toHaveURL(/\/documents\/saved-carts$/);
+    await expect(page).toHaveURL(/\/documents\/referral-link$/);
     await expect(page.getByRole("heading", { name: "Referral link", level: 1 })).toBeVisible();
     await expect(page.getByText("Not found")).toHaveCount(0);
   });

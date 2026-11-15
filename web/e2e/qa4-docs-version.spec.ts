@@ -6,9 +6,9 @@ import { login, openSection, section } from "./helpers";
 // held rewrite, Team invites v2 with a changed approved section, Referral link v2 with a
 // brief), driven as a person on the mock.
 
-const CHECKOUT = "/documents/checkout-redesign/v/2";
-const WORKSPACES = "/documents/team-workspaces/v/2";
-const CARTS = "/documents/saved-carts/v/2";
+const CHECKOUT = "/documents/annual-billing/v/2";
+const WORKSPACES = "/documents/team-invites/v/2";
+const CARTS = "/documents/referral-link/v/2";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 

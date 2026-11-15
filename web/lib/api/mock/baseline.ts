@@ -423,7 +423,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
   });
   // Each got its code when it joined the Ground Truth (fixes.code_on_join): the slug it was
   // proposed under stays its alias, so a run's briefs that name it by that slug still find it.
-  const joined: [EntityRow, string][] = [[dark, "f.dark-mode"], [guided, "f.guided-setup"], [sample, "f.sample-data"], [carts, "f.saved-carts"], [invites, "f.team-invites"]];
+  const joined: [EntityRow, string][] = [[dark, "f.dark-mode"], [guided, "f.guided-setup"], [sample, "f.sample-data"], [carts, "f.referral-link"], [invites, "f.team-invites"]];
   for (const [e, slug] of joined) {
     const shot = { type: e.type, key: e.key, title: e.title, body: e.body, attrs: e.attrs, status: e.status };
     s.revisions!.push({ id: uuid(), entity_id: e.id, edge_id: null, before: { ...shot, key: slug }, after: shot, actor: "system", reason: null, created_at: "2026-09-01T09:00:00Z" });

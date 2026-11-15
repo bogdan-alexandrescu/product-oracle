@@ -264,7 +264,7 @@ export function seedV2(documentId: string, versionId: string | null, userId: str
       { id: I.blockerEvent, blocker_id: I.blocker, option_id: I.option, experiment_id: I.experiment, kind: "experiment_started", from_status: "open", to_status: "mitigating", reason: null, actor: `user:${userId}`, data: {}, summary: "Experiment started", created_at: AT },
     ],
     change_events: [
-      { id: I.change, subject_kind: "document_section", subject_id: null, subject_ref: "checkout-redesign@2#metrics", document_id: documentId, cause: "section_edited", actor: `user:${userId}`, data: {}, handled_by: [], created_at: AT },
+      { id: I.change, subject_kind: "document_section", subject_id: null, subject_ref: "annual-billing@2#metrics", document_id: documentId, cause: "section_edited", actor: `user:${userId}`, data: {}, handled_by: [], created_at: AT },
     ],
     section_links: [
       { id: I.link, document_id: documentId, version_id: versionId, section_key: "metrics", section_hash: null, composition_revision: 1, module_key: null, kind: "implements", entity_id: I.requirement, evidence_id: null, source_item_id: null, precision: "section", claim: null, created_by: null, created_at: AT },

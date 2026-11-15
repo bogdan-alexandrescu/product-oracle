@@ -50,7 +50,7 @@ test("runs list shows each run with its status, and cost only on the approval an
   const approval = rows.and(page.locator('[data-document="usage-alerts-v2"]'));
   await expect(approval).toContainText("Awaiting cost approval");
   await expect(approval.locator('[data-cost="prominent"]')).toContainText("estimated");
-  const overrun = rows.and(page.locator('[data-document="team-workspaces"]'));
+  const overrun = rows.and(page.locator('[data-document="team-invites"]'));
   await expect(overrun).toContainText("Paused: over budget");
   await expect(overrun.locator('[data-cost="prominent"]')).toHaveText("$14.20 of $9.00 estimated");
 });
@@ -537,7 +537,7 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
     await expect(page.getByText(`Run ${short("team-onboarding")}`)).toHaveCount(0);
     await context.close();
   }
-  expect(Object.keys(ids[0]!).sort()).toEqual(["checkout-redesign", "saved-carts", "team-onboarding", "team-workspaces", "usage-alerts-v2"]);
+  expect(Object.keys(ids[0]!).sort()).toEqual(["annual-billing", "referral-link", "team-onboarding", "team-invites", "usage-alerts-v2"]);
   expect(ids[1]).toEqual(ids[0]);
   expect(dates[1]).toEqual(dates[0]);
 });

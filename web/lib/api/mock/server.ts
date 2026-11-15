@@ -628,10 +628,10 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "run-discussions" as "feature-set" plus an open discussion and a private one (the approver's,
  * with the owner) on that run's waiting checkpoint (G5, ./discussions.ts seedRunDiscussions);
  * "discussion-change-kinds" as "feature-set" plus the approver's open discussion on that run's
- * saved-carts item, with Oracle's priority move, ask and decision (G3, ./discussions.ts
+ * referral-link item, with Oracle's priority move, ask and decision (G3, ./discussions.ts
  * seedDiscussionChangeKinds);
  * "discussions" as the default company plus one private discussion the commenter started
- * with the approver on team-workspaces v2's Problem, 3 messages from the 2 of them (G1,
+ * with the approver on team-invites v2's Problem, 3 messages from the 2 of them (G1,
  * ./discussions.ts);
  * "mail-off" as the default company with no invite sender configured (invites are not
  * emailed); "mail-fails" where every first invite email fails (Resend sends it);
@@ -899,7 +899,7 @@ function seedQuestions(): Db {
   const db = seed();
   const v2 = ensureV2(db);
   const approver = db.members.find((m) => m.email === "approver@example.com")!;
-  const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
+  const prd = db.documents.find((d) => d.slug === "annual-billing")!;
   const at = (iso: string) => ({ created_at: iso, updated_at: iso });
   const intake = uuid();
   const gap = uuid();
@@ -983,7 +983,7 @@ function seedLateAnswersScenario(): Db {
   const db = seedBeforeDraftingScenario();
   const v2 = ensureV2(db);
   const intake = v2.intakes.find((i) => i.id === BEFORE_DRAFTING.intakeId)!;
-  const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
+  const prd = db.documents.find((d) => d.slug === "annual-billing")!;
   Object.assign(intake, { status: "converted", document_id: prd.id });
   const mine = new Set(v2.questions.filter((x) => x.intake_id === intake.id).map((x) => x.id));
   v2.intake_runs = {
@@ -1336,7 +1336,7 @@ function seedSimpleWalkScenario(): Db {
   db.simple_one_pager = seedWalkOnePager();
   // P4: Guided setup was brought in by the Approver, not the company's owner: its owner.
   db.simple_one_pager.owner = db.members.find((m) => m.email === "approver@example.com")?.id;
-  const skeleton = db.documents.find((d) => d.kind === "prd" && d.slug === "checkout-redesign");
+  const skeleton = db.documents.find((d) => d.kind === "prd" && d.slug === "annual-billing");
   if (skeleton) db.simple_one_pagers = { [skeleton.id]: seedSkeletonOnePager({ id: skeleton.id, slug: skeleton.slug, title: skeleton.title }) };
   return db;
 }
@@ -1917,13 +1917,13 @@ function seedPlanSameKeyScenario(): Db {
   const alerts = db.documents.find((d) => d.slug === "usage-alerts-roadmap")!;
   db.versions.find((v) => v.document_id === alerts.id && v.number === 1)!.approved_at ??= "2026-10-05T09:00:00Z";
   alerts.status = "approved";
-  const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
+  const prd = db.documents.find((d) => d.slug === "annual-billing")!;
   const at = "2026-10-20T09:00:00Z";
-  const roadmap: DocumentRow = { id: uuid(), slug: "checkout-redesign-roadmap", title: "Annual billing roadmap", status: "in_review", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at };
+  const roadmap: DocumentRow = { id: uuid(), slug: "annual-billing-roadmap", title: "Annual billing roadmap", status: "in_review", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at };
   db.documents.push(roadmap);
   for (const n of [1, 2] as const) {
     const pv = db.versions.find((v) => v.document_id === prd.id && v.number === n)!;
-    const v = buildVersion(roadmap, { number: n, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: "A clearer checkout, one page at a time." }], citations: [] });
+    const v = buildVersion(roadmap, { number: n, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: "A yearly price, shown before the team pays." }], citations: [] });
     if (n === 1) v.approved_at = at;
     v.source = versionSource(prd, pv);
     db.versions.push(v);
@@ -2361,7 +2361,7 @@ function seedSuggestions(): Db {
   });
   // D14: a question Oracle answered and a remark with nothing to change, on Team invites,
   // so the Inbox has a row of every kind to act on (Send answer, Close).
-  const w2 = findVersion(db, findDocument(db, "team-workspaces")!, 2)!;
+  const w2 = findVersion(db, findDocument(db, "team-invites")!, 2)!;
   const replies: [string, Schemas["TextQuoteSelector"], "answer" | "none", string | null, string][] = [
     [
       "Can an invited teammate join as a viewer instead?",
@@ -3070,7 +3070,7 @@ function seed(): Db {
   const at = (iso: string) => ({ created_at: iso });
 
   // Annual billing: v1 was reviewed, v2 answered that feedback.
-  const c1 = ver("checkout-redesign", 1);
+  const c1 = ver("annual-billing", 1);
   addComment(db, c1, {
     section_key: "problem",
     anchor: {
@@ -3114,7 +3114,7 @@ function seed(): Db {
       });
     }
   }
-  addComment(db, ver("checkout-redesign", 2), {
+  addComment(db, ver("annual-billing", 2), {
     section_key: "s-5-3",
     anchor: {
       exact: "Choosing a card fills the form",
@@ -3123,13 +3123,13 @@ function seed(): Db {
     },
     body: "Should the current seat count be selected by default?",
   }, at("2026-10-17T09:40:00Z"));
-  docs.get("checkout-redesign")!.status = "in_review";
+  docs.get("annual-billing")!.status = "in_review";
 
   // Team invites: an approved section changed in v2.
-  const w1 = ver("team-workspaces", 1);
+  const w1 = ver("team-invites", 1);
   addReview(db, w1, "roles", { verdict: "approved", note: null }, at("2026-10-12T16:00:00Z"));
   addReview(db, w1, "scope", { verdict: "approved", note: null }, at("2026-10-12T16:02:00Z"));
-  ver("team-workspaces", 2).warnings = [
+  ver("team-invites", 2).warnings = [
     {
       code: "locked_section_changed",
       message: "Sections approved in v1 changed in this version:",
@@ -3138,7 +3138,7 @@ function seed(): Db {
     },
   ];
   // Review comments on v2, which Oracle's review job has already handled (./llm-jobs.ts).
-  const w2 = ver("team-workspaces", 2);
+  const w2 = ver("team-invites", 2);
   addComment(db, w2, {
     section_key: "problem",
     anchor: { exact: "Requests to invite teammates come up in most sales conversations", prefix: "around. ", suffix: " with teams" },
@@ -3154,7 +3154,7 @@ function seed(): Db {
     anchor: { exact: "Three fixed roles", prefix: "", suffix: ": owner" },
     body: "Add custom roles to the first release; big teams will ask for them.",
   }, at("2026-10-13T11:00:00Z"));
-  docs.get("team-workspaces")!.status = "in_review";
+  docs.get("team-invites")!.status = "in_review";
 
   // Clinic outreach (C1e): feedback in every state; the suggestions are in ./llm-jobs.ts.
   addComment(db, ver("clinic-outreach", 3), {
@@ -3206,7 +3206,7 @@ function seed(): Db {
   // that PRD has a derived roadmap and a spec (deleting it takes both to Trash). As the spec
   // import makes it: through its spec request, with no source on the brief's versions.
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === "trash-family") {
-    const brief = docs.get("checkout-redesign-early-shipping-cost-spec")!;
+    const brief = docs.get("annual-billing-early-yearly-price-spec")!;
     for (const v of db.versions) if (v.document_id === brief.id) v.source = null;
     db.specs ??= specsSeed(db);
     for (const s of db.specs.specs) if (s.document_slug === brief.slug) s.request.source_document_id = docs.get("usage-alerts")!.id;
@@ -4954,23 +4954,23 @@ function load(): Db {
     if (merged && into) db.autonomy.actions.push(seedRequestDid(db.user_id, uuid(), merged, into));
   }
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
-  // #711 "long-title": the saved-carts PRD under a title as long as real PRD titles are.
+  // #711 "long-title": the referral-link PRD under a title as long as real PRD titles are.
   if (scenario === "long-title") {
-    const carts = db.documents.find((d) => d.slug === "saved-carts");
+    const carts = db.documents.find((d) => d.slug === "referral-link");
     if (carts) carts.title = "Referral link for new teams PRD";
   }
-  // PR 1300 review: saved-carts v2's Problem is one paragraph longer than a slide (E-9).
+  // PR 1300 review: referral-link v2's Problem is one paragraph longer than a slide (E-9).
   if (scenario === "long-paragraph") {
-    const carts = db.documents.find((d) => d.slug === "saved-carts");
+    const carts = db.documents.find((d) => d.slug === "referral-link");
     const problem = carts && docVersions(db, carts).find((v) => v.number === 2)?.sections.find((s) => s.section_key === "problem");
     if (problem) {
       problem.body_md = Array.from({ length: 30 }, (_, i) => `Sentence ${i + 1} says the referral link for returning buyers keeps its items for thirty days.`).join(" ");
       problem.body_text = problem.body_md;
     }
   }
-  // PR 1300 review round 3: saved-carts v2's Problem holds a 40-line code block, one line on its slide.
+  // PR 1300 review round 3: referral-link v2's Problem holds a 40-line code block, one line on its slide.
   if (scenario === "long-code") {
-    const carts = db.documents.find((d) => d.slug === "saved-carts");
+    const carts = db.documents.find((d) => d.slug === "referral-link");
     const problem = carts && docVersions(db, carts).find((v) => v.number === 2)?.sections.find((s) => s.section_key === "problem");
     if (problem) {
       problem.body_md = "Steps to try:\n\n```\n" + Array.from({ length: 40 }, (_, i) => `step ${i + 1} of the rollout`).join("\n") + "\n```";
@@ -4981,7 +4981,7 @@ function load(): Db {
   // indented one, a four-backtick fence holding a ``` line, a one-line fence right after a
   // paragraph line and an empty fence; round 4: a fence opening on a list item's line.
   if (scenario === "code-kinds") {
-    const carts = db.documents.find((d) => d.slug === "saved-carts");
+    const carts = db.documents.find((d) => d.slug === "referral-link");
     const problem = carts && docVersions(db, carts).find((v) => v.number === 2)?.sections.find((s) => s.section_key === "problem");
     if (problem) {
       problem.body_md =
@@ -4994,7 +4994,7 @@ function load(): Db {
   }
   // Round 5 ("code-in-lists"): a fence in a tab-indented list, and one under a list marker alone on its line.
   if (scenario === "code-in-lists") {
-    const carts = db.documents.find((d) => d.slug === "saved-carts");
+    const carts = db.documents.find((d) => d.slug === "referral-link");
     const problem = carts && docVersions(db, carts).find((v) => v.number === 2)?.sections.find((s) => s.section_key === "problem");
     if (problem) {
       problem.body_md =
@@ -5126,16 +5126,16 @@ function addApprovedPlan(db: Db) {
   prd.updated_at = p2.created_at;
 }
 
-/** "discussions": the commenter's private discussion with the approver on team-workspaces v2's Problem. */
+/** "discussions": the commenter's private discussion with the approver on team-invites v2's Problem. */
 function seedDiscussionsScenario(db: Db, seed: typeof seedDiscussions = seedDiscussions): DiscussionsDb {
-  const doc = findDocument(db, "team-workspaces")!;
+  const doc = findDocument(db, "team-invites")!;
   const heading = findVersion(db, doc, 2)!.sections.find((s) => s.section_key === "problem")!.heading;
   return seed({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, doc.id, `${doc.title} · ${heading}`, `/documents/${doc.slug}/v/2#problem`);
 }
 
-/** G6: the "discussions" seed plus the open discussion on saved-carts v2 whose rows wait in the Inbox. */
+/** G6: the "discussions" seed plus the open discussion on referral-link v2 whose rows wait in the Inbox. */
 function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): DiscussionsDb {
-  const doc = findDocument(db, "saved-carts")!;
+  const doc = findDocument(db, "referral-link")!;
   const ctx = { members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now };
   seedDiscussionInbox(ctx, discussions, doc.id, doc.title, `/documents/${doc.slug}/v/2`);
   // Criterion 7: a question Oracle asked the approver from that discussion names it.
@@ -5150,13 +5150,13 @@ function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): Discus
   return discussions;
 }
 
-/** G3 "discussion-record": Oracle's proposed date basis in an open discussion on checkout-redesign v2's public-signup item. */
+/** G3 "discussion-record": Oracle's proposed date basis in an open discussion on annual-billing v2's public-signup item. */
 function seedDiscussionRecordScenario(db: Db): DiscussionsDb {
-  const prd = findDocument(db, "checkout-redesign")!;
+  const prd = findDocument(db, "annual-billing")!;
   return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { ...prd, name: (key) => itemName(db, key, undefined, versionItemTitle(db, prd.id, 2, key)) }, 2);
 }
 
-/** G3 "discussion-change-kinds": Oracle's priority move, ask and decision on the feature-set stop's saved-carts item. */
+/** G3 "discussion-change-kinds": Oracle's priority move, ask and decision on the feature-set stop's referral-link item. */
 function seedDiscussionChangeKindsScenario(db: Db): DiscussionsDb {
   const run = db.runs!.runs.find((r) => r.id === FEATURE_SET_RUN)!;
   const cp = run.checkpoints.find((c) => c.status === "pending")!;
@@ -6981,9 +6981,9 @@ function goalLinks(db: Db): V2Db["section_links"] {
       claim: null, created_by: db.user_id, created_at: v.created_at,
     });
   };
-  link("checkout-redesign", "goal-trace", "g.activation");
-  link("checkout-redesign", "goal-trace", "g.paid-conversion");
-  link("team-workspaces", "scope", "F-05");
+  link("annual-billing", "goal-trace", "g.activation");
+  link("annual-billing", "goal-trace", "g.paid-conversion");
+  link("team-invites", "scope", "F-05");
   return out;
 }
 
@@ -6993,7 +6993,7 @@ function goalLinks(db: Db): V2Db["section_links"] {
  * feature and a stale link to a proposed one; and one link on the approved Usage alerts v1.
  */
 function evidenceLinks(db: Db): V2Db["section_links"] {
-  const doc = findDocument(db, "checkout-redesign");
+  const doc = findDocument(db, "annual-billing");
   if (!doc) return [];
   const v2 = docVersions(db, doc)[1];
   const alerts = findDocument(db, "usage-alerts");
@@ -7082,7 +7082,7 @@ function ensureQuality(db: Db): QualityDb {
   if (db.quality) return db.quality;
   db.quality = seedQuality();
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY) ?? "";
-  const doc = findDocument(db, "team-workspaces");
+  const doc = findDocument(db, "team-invites");
   const v = doc && findVersion(db, doc, 2);
   const id = (email: string) => db.members.find((m) => m.email === email)?.id ?? db.user_id;
   if (scenario.startsWith("quality") && doc && v && db.llm) {

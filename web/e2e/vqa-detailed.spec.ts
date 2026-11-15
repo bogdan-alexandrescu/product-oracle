@@ -19,7 +19,7 @@ test.describe("phone", () => {
     // protects=the phone drawer's height; fails_when=it shrinks to one short rewrite and leaves
     // the page's toolbar showing above it; no_claim=its look on a desktop.
     await login(page);
-    await page.goto("/documents/checkout-redesign/v/2");
+    await page.goto("/documents/annual-billing/v/2");
     await page.getByRole("button", { name: /^Held rewrites/ }).filter({ visible: true }).click();
     const drawer = page.getByRole("dialog", { name: "Held rewrites" });
     await expect(drawer).toBeVisible();
@@ -52,7 +52,7 @@ test("QD1 a: a held rewrite's card does not repeat the drawer's intro", async ({
   // protects=the stock reason is said once, in the intro; fails_when=every card repeats "An
   // agent draft rewrote this approved section…"; no_claim=a rewrite with its own reason.
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await page.getByRole("button", { name: /^Held rewrites/ }).filter({ visible: true }).click();
   const drawer = page.getByRole("dialog", { name: "Held rewrites" });
   await expect(drawer.getByTestId("held-intro")).toContainText("The approved text was kept until someone decides.");
@@ -93,7 +93,7 @@ test("QD1 a review: a card hides the stock reason by the patch's flag, whatever 
   // rewords that reason and every card shows it again; no_claim=a rewrite with its own reason.
   await page.addInitScript((key) => localStorage.setItem(key, "held-reworded"), MOCK_SCENARIO_KEY);
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await page.getByRole("button", { name: /^Held rewrites/ }).filter({ visible: true }).click();
   const drawer = page.getByRole("dialog", { name: "Held rewrites" });
   await expect(drawer.getByTestId("held-intro")).toContainText("The approved text was kept until someone decides.");

@@ -199,7 +199,7 @@ test("a section's Record a decision opens Propose decision about that section", 
   // on the way or the new decision is not findable by its subject; no_claim=the mock's
   // section ids stand in for the API's.
   await login(page, COMMENTER);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const goalTrace = await openSection(page, "goal-trace");
   await sectionAction(goalTrace, "1. Goal trace", "Record a decision about 1. Goal trace");
   await expect(page).toHaveURL(/\/company\/decisions\?subject=section/);

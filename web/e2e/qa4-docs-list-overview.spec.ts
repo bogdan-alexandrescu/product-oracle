@@ -4,7 +4,7 @@ import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 // QA pass 4, docs lane: the PRDs list (/documents) with its Regenerate and Delete dialogs and
-// its Ideas tab, a PRD's overview (/documents/checkout-redesign) and New PRD, driven as a person.
+// its Ideas tab, a PRD's overview (/documents/annual-billing) and New PRD, driven as a person.
 
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
@@ -47,7 +47,7 @@ test.describe("desktop", () => {
   test.use({ viewport: DESKTOP });
 
   test("qa4fix-docs: the overview's changed-sections warning names the sections by heading", async ({ page }) => {
-    await openDoc(page, "team-workspaces");
+    await openDoc(page, "team-invites");
     const inspector = page.getByTestId("version-inspector");
     await expect(inspector.getByRole("listitem").filter({ hasText: "Sections approved in v1" })).toHaveText(
       "Sections approved in v1 changed in this version: 3. Scope",
@@ -60,7 +60,7 @@ test.describe("desktop", () => {
   });
 
   test("qa4-docs-8: the engineering spec the PRD has is listed under Engineering specs", async ({ page }) => {
-    await openDoc(page, "checkout-redesign");
+    await openDoc(page, "annual-billing");
     const specs = page.getByTestId("engineering-specs");
     await expect(specs.getByTestId("engineering-spec")).toHaveCount(1);
     await expect(specs.getByTestId("engineering-spec")).toContainText("Early yearly price: engineering spec");
@@ -69,11 +69,11 @@ test.describe("desktop", () => {
     // The technical brief stays under Tech briefs.
     await expect(page.getByTestId("tech-briefs")).toContainText("Early yearly price: technical brief");
     await specs.getByRole("link", { name: "Open Early yearly price: engineering spec" }).click();
-    await expect(page).toHaveURL(/\/documents\/checkout-redesign-early-shipping-cost-engineering-spec\/v\/1$/);
+    await expect(page).toHaveURL(/\/documents\/annual-billing-early-yearly-price-engineering-spec\/v\/1$/);
   });
 
   test("qa4-docs-14: End campaign asks first, and Cancel keeps the campaign open", async ({ page }) => {
-    await openDoc(page, "checkout-redesign");
+    await openDoc(page, "annual-billing");
     const campaign = page.getByTestId("campaigns").getByRole("listitem").filter({ hasText: "Company-wide feedback" });
     await expect(campaign).toContainText("Open");
     await campaign.getByRole("button", { name: "End campaign Company-wide feedback" }).click();
@@ -96,7 +96,7 @@ test.describe("desktop", () => {
     await dialog.getByRole("button", { name: "Estimate" }).click();
     const inputs = dialog.getByTestId("regenerate-inputs");
     await expect(inputs).toHaveText("Referral link PRD, latest version (v2)");
-    await expect(inputs).not.toContainText("saved-carts");
+    await expect(inputs).not.toContainText("referral-link");
     const price = dialog.getByTestId("regenerate-estimate");
     await expect(price).toHaveText("$18.00");
     const font = (el: Element) => getComputedStyle(el).fontFamily;
@@ -153,7 +153,7 @@ test.describe("desktop", () => {
   });
 
   test("qa4-docs-30: a tech brief's freshness and a spec's state say potentially stale the same way", async ({ page }) => {
-    await openDoc(page, "checkout-redesign");
+    await openDoc(page, "annual-billing");
     const briefs = page.getByTestId("tech-briefs");
     const spec = briefs.getByTestId("engineering-spec").filter({ hasText: "Early yearly price: technical brief" });
     await expect(spec).toContainText("Potentially stale");
@@ -189,7 +189,7 @@ test.describe("phone", () => {
   });
 
   test("qa4-docs-14: the End campaign confirm fits 390 px", async ({ page }) => {
-    await openDoc(page, "checkout-redesign");
+    await openDoc(page, "annual-billing");
     const campaign = page.getByTestId("campaigns").getByRole("listitem").filter({ hasText: "Company-wide feedback" });
     await campaign.getByRole("button", { name: "End campaign Company-wide feedback" }).click();
     const ask = page.getByTestId("end-campaign-dialog");

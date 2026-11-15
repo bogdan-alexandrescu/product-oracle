@@ -157,7 +157,7 @@ test("phone row actions: every row action a table has on desktop stays on the ph
     "/runs",
     "/inbox",
     "/documents",
-    "/documents/checkout-redesign",
+    "/documents/annual-billing",
     "/ground-truth",
     "/priorities",
     "/settings/members",

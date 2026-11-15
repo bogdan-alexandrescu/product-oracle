@@ -419,7 +419,7 @@ export const SPENT = "No Claude account can take this call: every Claude account
 export function seedLlm(ctx: Omit<LlmContext, "db"> & { db?: LlmDb }): LlmDb {
   const db: LlmDb = { jobs: [], suggestions: [], disabled: {} };
   const c = { ...ctx, db };
-  const doc = ctx.documents.find((d) => d.slug === "team-workspaces");
+  const doc = ctx.documents.find((d) => d.slug === "team-invites");
   const v = doc && versionsOf(c, doc).at(-1);
   if (!doc || !v) return db;
   const items = ctx.feedback.filter((f) => f.document_id === doc.id && f.raised_on_version === v.number);
@@ -510,7 +510,7 @@ export function seedLlm(ctx: Omit<LlmContext, "db"> & { db?: LlmDb }): LlmDb {
 
 /** #556 item 2: Referral link v2's reports failed on Oct 18 with a refusal stored before #403's wording. */
 function seedStoredRefusal(c: LlmContext) {
-  const doc = c.documents.find((d) => d.slug === "saved-carts");
+  const doc = c.documents.find((d) => d.slug === "referral-link");
   const v = doc && versionsOf(c, doc).find((x) => x.number === 2);
   if (!doc || !v) return;
   c.db.jobs.push(

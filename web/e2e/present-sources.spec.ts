@@ -9,9 +9,9 @@ test.use({ viewport: { width: 1440, height: 900 } });
 
 test("X-9: the Sources slide lists each source by title, without its kind", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   await page.getByRole("link", { name: "Present" }).filter({ visible: true }).first().click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\/present$/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/present$/);
   const counter = page.getByTestId("slide-counter");
   await expect(counter).toHaveText("1 / 10");
   await page.keyboard.press("End");

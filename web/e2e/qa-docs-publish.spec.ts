@@ -60,7 +60,7 @@ for (const viewport of [
     test("qa-docs-3: the headline says what is still open, as the dialog does", async ({
       page,
     }) => {
-      await open(page, "saved-carts");
+      await open(page, "referral-link");
       await expect(page.getByTestId("blocks-chip")).toHaveText("Not blocked");
       const headline = page.getByTestId("publish-ready");
       await expect(headline).toHaveText(
@@ -77,7 +77,7 @@ for (const viewport of [
     test("qa-docs-23: a viewer is told who can publish, not 'Ready to publish'", async ({
       page,
     }) => {
-      await open(page, "saved-carts", "viewer");
+      await open(page, "referral-link", "viewer");
       await expect(page.getByTestId("publish-ready")).toHaveText(
         "Only an approver or owner can publish v2",
       );
@@ -88,7 +88,7 @@ for (const viewport of [
     test("qa-docs-57: check names wrap in full; a hard check that does not apply shows N/A, not a tick", async ({
       page,
     }) => {
-      await open(page, "saved-carts");
+      await open(page, "referral-link");
       const name = page
         .getByText("Validation plan, success metrics and decision thresholds", {
           exact: true,

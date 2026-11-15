@@ -179,7 +179,7 @@ test.describe("desktop", () => {
     await expect(menu.getByRole("menuitem", { name: /^Open/ })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await row(page, "Referral link PRD").getByRole("link", { name: "v2", exact: true }).click();
-    await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2$/);
+    await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2$/);
   });
 
   test("qa-docs-43: the delete dialog names the draft run in words, not its flow", async ({
@@ -257,7 +257,7 @@ test.describe("phone", () => {
     await expect(inspector(page)).toHaveCount(0);
     // The status cell, not the title link: a tap anywhere on the row opens it.
     await row(page, "Referral link PRD").locator("td").nth(1).click();
-    await expect(page).toHaveURL(/\/documents\/saved-carts$/);
+    await expect(page).toHaveURL(/\/documents\/referral-link$/);
     await expect(
       page.getByRole("heading", { level: 1, name: "Referral link PRD" }),
     ).toBeVisible();

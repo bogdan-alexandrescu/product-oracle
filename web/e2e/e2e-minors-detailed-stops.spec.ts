@@ -269,7 +269,7 @@ for (const [name, viewport] of [
 
     test("review bar: one Approve per bar, and the saved date never sits under the buttons", async ({ page }) => {
       await login(page);
-      await page.goto("/documents/saved-carts/v/2");
+      await page.goto("/documents/referral-link/v/2");
       await expect(page.getByTestId("document-sections")).toBeVisible();
       const summary = await openSection(page, "summary");
       const reviewBar = summary.getByTestId("review-bar");

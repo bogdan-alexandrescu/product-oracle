@@ -8,7 +8,7 @@ import { login } from "./helpers";
  * and a brief before drafting (/intakes/<id>), driven through the UI as a person would.
  */
 
-const BRIEF = "/documents/checkout-redesign-early-shipping-cost-spec/v/1";
+const BRIEF = "/documents/annual-billing-early-yearly-price-spec/v/1";
 
 const inspector = (page: Page) => page.getByRole("complementary", { name: "Design review" }).filter({ visible: true });
 

@@ -7,7 +7,7 @@ import { login } from "./helpers";
 // and no ratings in the mock until a test makes them through the screen).
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
-const URL = "/documents/saved-carts/v/2/quality";
+const URL = "/documents/referral-link/v/2/quality";
 
 async function open(page: Page, role: Role = "owner") {
   await page.addInitScript(([rk, r]) => localStorage.setItem(rk, r), [MOCK_ROLE_KEY, role] as const);

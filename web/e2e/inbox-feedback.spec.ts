@@ -47,7 +47,7 @@ test("inbox: one feedback row per item, saying what waits and linking to its sec
   await expect(checkout.getByRole("button", { name: "Decline", exact: true })).toBeVisible();
   await expect(checkout.getByRole("link", { name: /^Open Should the current seat count/ })).toHaveAttribute(
     "href",
-    "/documents/checkout-redesign/v/2?feedback=open#s-5-3",
+    "/documents/annual-billing/v/2?feedback=open#s-5-3",
   );
 
   // Home's Needs you rows are the same rows, each one Open to where it is decided (qa-company-10).
@@ -172,7 +172,7 @@ test("Feedback tab: counts open items, and shows All when the open section has n
 
 test("comment feedback items: Resolve and Reopen at the top", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2?feedback=open#s-5-3");
+  await page.goto("/documents/annual-billing/v/2?feedback=open#s-5-3");
   const comment = item(page, "s-5-3");
   await expect(comment).toContainText("current seat count");
   const resolve = comment.getByRole("button", { name: "Resolve", exact: true });
@@ -193,7 +193,7 @@ test("on a slow network, the author's Resolve waits for their role: it resolves 
   await login(page);
   // The role's capabilities answer late; the comment is the signed-in owner's own.
   await page.evaluate(([key, path]) => localStorage.setItem(key, path), [MOCK_SLOW_KEY, "/v1/me/capabilities"]);
-  await page.goto("/documents/checkout-redesign/v/2?feedback=open#s-5-3");
+  await page.goto("/documents/annual-billing/v/2?feedback=open#s-5-3");
   const comment = item(page, "s-5-3");
   await expect(comment).toContainText("current seat count");
   await comment.getByRole("button", { name: "Resolve", exact: true }).click();

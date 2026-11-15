@@ -12,7 +12,7 @@ import { login, openSection, openTab } from "./helpers";
  * Truth's review says back say no "baseline" either. Mock API; made-up data.
  */
 
-const DOC = "/documents/checkout-redesign/v/2";
+const DOC = "/documents/annual-billing/v/2";
 const SHOWN = "Ground Truth decision D-12";
 /** "baseline" naming the graph; a goal measure's starting value would read "Baseline value". */
 const OLD_NAME = /\bbaseline\b(?! value)/i;
@@ -29,7 +29,7 @@ async function citeDecision(page: Page) {
     sessionStorage.setItem("cited-o-d12", "1");
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
-    const doc = db.documents.find((d: { slug: string }) => d.slug === "checkout-redesign");
+    const doc = db.documents.find((d: { slug: string }) => d.slug === "annual-billing");
     const v = db.versions.find((x: { document_id: string; number: number }) => x.document_id === doc.id && x.number === 2);
     v.citations.push({
       id: crypto.randomUUID(),

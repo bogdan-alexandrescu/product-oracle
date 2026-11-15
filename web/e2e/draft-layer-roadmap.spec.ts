@@ -129,7 +129,7 @@ test.describe("approval", () => {
     await page.getByTestId("item-panel").getByRole("button", { name: "Leave out" }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Leave out", exact: true }).click();
     await expect(bar(page, "Turn a cart into a quote")).toHaveCount(0);
-    await page.goto("/documents/saved-carts/publish");
+    await page.goto("/documents/referral-link/publish");
     const publish = page.getByTestId("publish-button");
     await expect(publish).toBeEnabled();
     await publish.click();

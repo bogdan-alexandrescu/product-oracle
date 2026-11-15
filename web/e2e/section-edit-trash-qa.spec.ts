@@ -21,7 +21,7 @@ const SIZES = [
   { width: 390, height: 844 },
 ];
 const THEMES = ["light", "dark"] as const;
-const CARTS = "/documents/saved-carts/v/2";
+const CARTS = "/documents/referral-link/v/2";
 
 async function tap(l: Locator) {
   await l.evaluate((el) => el.scrollIntoView({ block: "center" }));

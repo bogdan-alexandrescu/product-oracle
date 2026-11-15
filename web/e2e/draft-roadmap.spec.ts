@@ -3,11 +3,11 @@ import { expect, test, type Page } from "./test";
 import { login, section, signOut } from "./helpers";
 
 // E1 Roadmap per PRD draft: every PRD version has Document and Roadmap tabs; Roadmap shows
-// the items-only roadmap Oracle derived from that draft. The mock seeds checkout-redesign
+// the items-only roadmap Oracle derived from that draft. The mock seeds annual-billing
 // v1 (4 items, no problems) and v2 (4 items: 3 Now, 1 Next; Bulk import carries an
 // unverified date) in lib/api/mock/draft-roadmap.ts.
 
-const PRD = "/documents/checkout-redesign";
+const PRD = "/documents/annual-billing";
 
 // Next keeps recently visited routes mounted (hidden): only the visible page's elements.
 const visible = (page: Page, testId: string) => page.getByTestId(testId).filter({ visible: true });

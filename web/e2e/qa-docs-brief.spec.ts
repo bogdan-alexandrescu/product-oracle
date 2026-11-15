@@ -86,7 +86,7 @@ test("qa-docs-65: one actions menu, the shared back link, no repeated category, 
 });
 
 async function openTechBrief(page: Page, title: string) {
-  await page.goto("/documents/checkout-redesign");
+  await page.goto("/documents/annual-billing");
   await page.getByTestId("tech-briefs").getByRole("link", { name: title }).click();
   await expect(page).toHaveURL(/\/briefs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText(title);
@@ -110,7 +110,7 @@ test("qa-docs-36: the tech brief names modules and the PRD in words; the rail ma
 
   // The back link names the PRD by its title.
   const back = page.locator("[data-page-header]").getByRole("link", { name: "Annual billing PRD v2" });
-  await expect(back).toHaveAttribute("href", "/documents/checkout-redesign");
+  await expect(back).toHaveAttribute("href", "/documents/annual-billing");
 
   // An unanswered question says so in plain words (qa4-docs-53).
   await expect(page.getByTestId("brief-question-q2")).toContainText("Not answered yet");

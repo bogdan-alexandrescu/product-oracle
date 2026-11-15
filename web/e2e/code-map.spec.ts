@@ -64,7 +64,7 @@ test("a brief resting on a docs-only map says so", async ({ page }) => {
   // protects=the docs-only label where a brief cites a partial map; fails_when=a brief
   // built from docs reads as resting on the code.
   await login(page);
-  await page.goto("/documents/checkout-redesign");
+  await page.goto("/documents/annual-billing");
   await page.getByTestId("tech-briefs").getByRole("link", { name: "Show the full price early" }).click();
   await expect(page.getByTestId("brief-code-map")).toContainText("Docs only: code not read");
 });

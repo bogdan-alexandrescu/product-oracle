@@ -236,7 +236,7 @@ export async function seedStuckRuns(page: Page): Promise<string> {
         "Couldn't import team-onboarding's output: DataError on 5 tries in a row, and Oracle stopped trying. Retry tries again.",
       can_retry_import: true,
     });
-    const done = runs.find((r) => r.document_slug === "checkout-redesign" && r.status === "succeeded")!;
+    const done = runs.find((r) => r.document_slug === "annual-billing" && r.status === "succeeded")!;
     done.segments[0] = { ...done.segments[0], cost_usd: 16.4 };
     Object.assign(done, {
       spent_usd: 16.4,
@@ -411,7 +411,7 @@ export async function seedConsoleHeld(page: Page): Promise<string> {
 export const DECIDED_RUN = "7a11c0de-0000-4000-8000-0000000000d1";
 
 /**
- * Seeds the mock with a finished Ground Truth to PRD run for checkout-redesign whose stops were
+ * Seeds the mock with a finished Ground Truth to PRD run for annual-billing whose stops were
  * decided in the Inbox: the Ground Truth approved with a note, the feature set sent back once and
  * approved on its second attempt, the priority order and the PRD review approved. The decision
  * log records each decided stop (H1 checkpoint records). Returns the run's id.
@@ -426,7 +426,7 @@ export async function seedDecidedRun(page: Page): Promise<string> {
       type S = Record<string, unknown> & { seq: number; checkpoint: string };
       const base = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
       const at = (minute: number) => `2026-10-15T09:${String(minute).padStart(2, "0")}:00Z`;
-      const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "checkout-redesign", created_at: at(0), started_at: at(0), finished_at: at(50) };
+      const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "annual-billing", created_at: at(0), started_at: at(0), finished_at: at(50) };
       const segments: S[] = run.segments;
       for (const s of segments) {
         Object.assign(s, {

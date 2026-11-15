@@ -16,7 +16,7 @@ async function sourceRow(page: Page, title: string): Promise<Locator> {
 
 test("Sources: each source's confidence beside it, low ones marked, a note when there is no score", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openTab(page, "Sources");
 
   const github = await sourceRow(page, "Card form loses state on back navigation");
@@ -45,7 +45,7 @@ test("Sources: each source's confidence beside it, low ones marked, a note when 
 
 test("citation card: confidence beside the source, low ones marked, the note when unscored", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const problem = await openSection(page, "problem");
 
   await problem.getByTestId("cite-c4").hover();

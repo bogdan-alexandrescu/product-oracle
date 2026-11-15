@@ -73,7 +73,7 @@ test("a proposal names the Ground Truth items, evidence and document it is about
     await expect(restsOn).not.toContainText("Cut early churn");
     await expect(restsOn.getByTestId("decision-evidence")).toHaveCount(1);
     await expect(restsOn.getByTestId("decision-evidence")).toContainText(STALL);
-    await expect(ins.getByRole("link", { name: "Annual billing PRD", exact: true })).toHaveAttribute("href", "/documents/checkout-redesign");
+    await expect(ins.getByRole("link", { name: "Annual billing PRD", exact: true })).toHaveAttribute("href", "/documents/annual-billing");
   }
 });
 

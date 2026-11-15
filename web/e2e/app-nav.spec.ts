@@ -69,7 +69,7 @@ test("app shell: each destination routes to its page", async ({ page }) => {
 
   // A document page keeps PRDs highlighted.
   await page.getByRole("link", { name: "Annual billing PRD" }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing/);
   await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
 });
 
@@ -227,7 +227,7 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
 
   // The title follows the open page; a document version draws its own wrapped H1 on a phone,
   // so the bar names where it is instead of cutting the title a second time (qa-docs-78).
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   // The page's own H1 (its sections draw an H1 of their own once they load).
   await expect(page.getByRole("heading", { level: 1, name: /Annual billing PRD/ })).toBeVisible();
   await expect(title).toHaveText("PRDs");
@@ -284,9 +284,9 @@ test("a roadmap document's pages highlight Plan; a PRD's highlight PRDs", async 
 
   // From the roadmap to a PRD inside the app: the highlight follows the document.
   await page.evaluate(() =>
-    (window as unknown as { next: { router: { push: (href: string) => void } } }).next.router.push("/documents/saved-carts/v/2"),
+    (window as unknown as { next: { router: { push: (href: string) => void } } }).next.router.push("/documents/referral-link/v/2"),
   );
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2$/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2$/);
   await expect(prds).toHaveAttribute("aria-current", "page");
   await expect(roadmap).not.toHaveAttribute("aria-current", "page");
 

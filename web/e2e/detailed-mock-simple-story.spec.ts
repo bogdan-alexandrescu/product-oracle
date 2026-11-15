@@ -87,12 +87,12 @@ test("detailed inbox: discussions and Oracle's actions name Simple's features", 
  */
 const OLD_STORY = /\b(carts?|shipping|shoppers?|workspaces?|checkout|carrier)\b/i;
 const BODIES: [string, string, RegExp][] = [
-  ["/documents/checkout-redesign/v/1", "Annual billing PRD", /yearly price/],
-  ["/documents/checkout-redesign/v/2", "Annual billing PRD", /yearly price/],
-  ["/documents/team-workspaces/v/2", "Team invites PRD", /invite teammates/],
-  ["/documents/saved-carts/v/1", "Referral link PRD", /referral links? /],
-  ["/documents/saved-carts/v/2", "Referral link PRD", /referral links? /],
-  ["/documents/checkout-redesign-early-shipping-cost-spec/v/2", "Early yearly price", /yearly price/],
+  ["/documents/annual-billing/v/1", "Annual billing PRD", /yearly price/],
+  ["/documents/annual-billing/v/2", "Annual billing PRD", /yearly price/],
+  ["/documents/team-invites/v/2", "Team invites PRD", /invite teammates/],
+  ["/documents/referral-link/v/1", "Referral link PRD", /referral links? /],
+  ["/documents/referral-link/v/2", "Referral link PRD", /referral links? /],
+  ["/documents/annual-billing-early-yearly-price-spec/v/2", "Early yearly price", /yearly price/],
 ];
 
 for (const [url, title, story] of BODIES) {
