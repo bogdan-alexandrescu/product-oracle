@@ -2446,10 +2446,11 @@ async def inbox_rows(
     read_: service.Read | None = None
     if waiting:
         # inbox-counts: the light read routes as the full one does (the items, their tracks'
-        # owners and the roadmaps' deciders); the plain read is read once per read
-        # (drafts.one_read), shared with the drafts pass below when I see no drafts.
+        # owners and the roadmaps' deciders), without the accepted dates routing never needs
+        # (main-ci); the plain read is read once per read (drafts.one_read), shared with the
+        # drafts pass below when I see no drafts.
         read_ = (
-            await service.load(db, light=True)
+            await service.load(db, light=True, routing=True)
             if counting
             else await drafts.once("roadmap_read", lambda: service.load(db))
         )
