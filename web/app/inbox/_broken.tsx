@@ -9,7 +9,9 @@ import { foldWaiting, useWaitingList, WaitingRow } from "@/components/simple/Wai
  * outside "Needs you", as Home's and Decisions' counts already hold them.
  */
 export function BrokenLinks() {
-  const { data } = useWaitingList();
+  // simple-call-budget: the rail's Decisions count reads the same list a moment before; this
+  // takes that answer (stale-ok), so moving to the Inbox reads it no more.
+  const { data } = useWaitingList({ staleOk: true });
   const links = (data?.items ?? []).filter((i) => i.kind === "broken_link");
   if (!links.length) return null;
   const rows = foldWaiting(links);

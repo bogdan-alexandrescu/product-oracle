@@ -2,11 +2,10 @@ import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /**
- * Card call-budget-leaving-page: protects = a page the person is leaving reads nothing again
- * while the next one loads: moving from Home to the Inbox reads the waiting list (Home's and the
- * rail's, one shared read) only the once it was read on Home; fails_when = the page left behind,
- * still drawn once the URL has changed, reads its lists again (GET /v1/simple/decisions/waiting,
- * which only the rail counts on the Inbox); no_claim = the rail's own re-reads after a change.
+ * Card call-budget-leaving-page: protects = moving from Home to the Inbox reads the waiting list
+ * only the once it was read on Home: the Inbox's broken links take the rail's answer (one shared
+ * read), even when the Inbox's page arrives a moment late; fails_when = a part of the Inbox reads
+ * GET /v1/simple/decisions/waiting again for itself; no_claim = the reads after an action there.
  */
 
 const WAITING = "GET /v1/simple/decisions/waiting";
