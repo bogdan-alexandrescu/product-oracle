@@ -47,3 +47,17 @@ async def test_outcomes_carry_the_items_feature_code(client, owner, runtime):  #
     )
     assert shipped.status_code == 200, shipped.text
     assert shipped.json()["roadmap_item_code"] == "F-12"
+
+
+async def test_plan_items_carry_their_feature_code(client, owner, runtime):  # noqa: F811
+    """protects=GET /v1/plan gives each item its feature's code (the Track outcome form's
+    Item picker names it "F-12 Payment step"), None for an uncoded item; fails_when=the field
+    is missing or every item reads the same code; no_claim=how the web shows it."""
+    tenant_id, auth = owner
+    await outcome_world(client, auth, runtime, tenant_id)
+    await _code_feature(tenant_id, "payment-step", "F-12")
+    r = await client.get("/v1/plan", headers=auth)
+    assert r.status_code == 200, r.text
+    items = {i["key"]: i for i in r.json()["items"]}
+    assert items["payment-step"]["code"] == "F-12"
+    assert items["shipping-step"]["code"] is None
