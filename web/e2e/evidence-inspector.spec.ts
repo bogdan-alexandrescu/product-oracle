@@ -45,13 +45,13 @@ test("evidence: the owner reads the coverage matrix and links a target to an uns
   await expect(page.getByTestId("evidence-matrix").getByText("Draft citations")).toBeVisible();
   await expect(cell(page, "Usage export", "goal-trace")).toHaveAttribute("data-stale", "true");
   // qa4-docs-18: the cell says how strong the link is; its kind is in the cell's label.
-  await expect(cell(page, "Guided setup", "scope").getByRole("button")).toHaveAttribute("aria-label", /: Tests, /);
+  await expect(cell(page, "Setup checklist", "scope").getByRole("button")).toHaveAttribute("aria-label", /: Tests, /);
   // The per-section totals, in words: links and citations.
   await expect(page.getByTestId("evidence-totals").locator('td[data-section="metrics"]')).toHaveText("0 links, 0 citations");
 
   // A cell opens the target-centred inspector: every section that links it.
-  await cell(page, "Guided setup", "scope").getByRole("button").click();
-  const insp = page.getByRole("complementary", { name: "Guided setup" });
+  await cell(page, "Setup checklist", "scope").getByRole("button").click();
+  const insp = page.getByRole("complementary", { name: "Setup checklist" });
   await expect(insp.getByText("Links in v2")).toBeVisible();
   await expect(insp.getByTestId("evidence-link")).toHaveCount(1);
   await expect(insp.getByRole("button", { name: "Remove" })).toBeVisible();
@@ -64,7 +64,7 @@ test("evidence: the owner reads the coverage matrix and links a target to an uns
   await expect(page.getByText("Link added.")).toBeVisible();
   await expect(insp.getByTestId("evidence-link")).toHaveCount(2);
   await expect(column(page, "metrics")).not.toHaveAttribute("data-gap", "true");
-  await expect(cell(page, "Guided setup", "metrics").getByRole("button")).toHaveAttribute("aria-label", /: Implements, /);
+  await expect(cell(page, "Setup checklist", "metrics").getByRole("button")).toHaveAttribute("aria-label", /: Implements, /);
 });
 
 test("evidence: past 6 sections the matrix scrolls inside its panel, never the page", async ({ page }) => {
@@ -129,13 +129,13 @@ test("evidence: the approver adds a claim link from an unsupported section", asy
   await form.getByLabel("Kind").selectOption("claims");
   await expect(form.getByLabel(/^Claim/)).toBeDisabled();
   await form.getByLabel("Precision").selectOption("claim");
-  await form.getByLabel("Links to").selectOption({ label: "Guided setup · Feature" });
+  await form.getByLabel("Links to").selectOption({ label: "Setup checklist · Feature" });
   await expect(form.getByRole("button", { name: "Add link" })).toBeDisabled();
-  await form.getByLabel(/^Claim/).fill("Guided setup lifts week-1 activation.");
+  await form.getByLabel(/^Claim/).fill("Setup checklist lifts week-1 activation.");
   await form.getByRole("button", { name: "Add link" }).click();
   await expect(page.getByText("Link added.")).toBeVisible();
   await expect(insp.getByTestId("evidence-link")).toHaveCount(1);
-  await expect(insp.getByText("“Guided setup lifts week-1 activation.”")).toBeVisible();
+  await expect(insp.getByText("“Setup checklist lifts week-1 activation.”")).toBeVisible();
   await expect(table.getByRole("row", { name: /Success metrics/ })).not.toContainText("unsupported");
 });
 
@@ -162,8 +162,8 @@ for (const who of ["commenter", "viewer"] as const) {
     // role's badge in the header instead (qa-docs-22).
     await expect(page.getByText("View only", { exact: true }).filter({ visible: true })).toHaveCount(who === "viewer" ? 1 : 0);
     if (who === "commenter") await expect(page.getByTestId("role-badge").filter({ visible: true })).toHaveText("Commenter: can comment");
-    await cell(page, "Guided setup", "scope").getByRole("button").click();
-    const insp = page.getByRole("complementary", { name: "Guided setup" });
+    await cell(page, "Setup checklist", "scope").getByRole("button").click();
+    const insp = page.getByRole("complementary", { name: "Setup checklist" });
     await expect(insp.getByTestId("evidence-link")).toHaveCount(1);
     await expect(insp.getByRole("button", { name: "Remove" })).toHaveCount(0);
     await expect(insp.getByRole("form")).toHaveCount(0);
@@ -217,11 +217,11 @@ test("evidence: on a phone the matrix is a list per target, a tap opens the shee
   await page.goto(`${DOC}/v/2/evidence`);
   const list = page.getByTestId("evidence-list");
   await expect(list).toBeVisible();
-  const row = list.getByRole("button", { name: /Guided setup/ });
+  const row = list.getByRole("button", { name: /Setup checklist/ });
   await expect(row).toContainText("4. Scope");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await row.click();
-  const sheet = page.getByRole("dialog", { name: "Guided setup" });
+  const sheet = page.getByRole("dialog", { name: "Setup checklist" });
   await expect(sheet.getByTestId("evidence-link")).toHaveCount(1);
   await sheet.getByRole("button", { name: "Close" }).click();
   // The section view on a phone: stacked rows, a sheet per section.
@@ -254,8 +254,8 @@ test("evidence: a section counts as unsupported only when nothing under it is su
   await expect(page.getByTestId("evidence-unsupported")).toHaveText("4 sections unsupported");
 
   // "Link to another section" marks only those sections unsupported.
-  await cell(page, "Guided setup", "scope").getByRole("button").click();
-  const select = page.getByRole("complementary", { name: "Guided setup" }).getByRole("form", { name: "Link to another section" }).getByLabel("Section");
+  await cell(page, "Setup checklist", "scope").getByRole("button").click();
+  const select = page.getByRole("complementary", { name: "Setup checklist" }).getByRole("form", { name: "Link to another section" }).getByLabel("Section");
   await expect(select.locator("option", { hasText: "5. Proposed flow" })).toHaveText("5. Proposed flow");
   // qa4-docs-42: the opening section reads as the Introduction, not the PRD's title.
   await expect(select.locator("option", { hasText: "Introduction" })).toHaveText("Introduction");
@@ -278,11 +278,11 @@ test("evidence: the note on rendered pages shows once on a desktop", async ({ pa
 
 test("evidence: removing a target's last link in the coverage view still says Link removed.", async ({ page }) => {
   await evidenceTab(page);
-  await cell(page, "Guided setup", "scope").getByRole("button").click();
-  const insp = page.getByRole("complementary", { name: "Guided setup" });
+  await cell(page, "Setup checklist", "scope").getByRole("button").click();
+  const insp = page.getByRole("complementary", { name: "Setup checklist" });
   await insp.getByRole("button", { name: "Remove" }).click();
   await expect(page.getByText("Link removed.")).toBeVisible();
-  await expect(page.getByTestId("evidence-matrix").locator("tr[data-target]", { hasText: "Guided setup" })).toHaveCount(0);
+  await expect(page.getByTestId("evidence-matrix").locator("tr[data-target]", { hasText: "Setup checklist" })).toHaveCount(0);
 });
 
 test("evidence: every link names who made it", async ({ page }) => {
@@ -310,8 +310,8 @@ test("evidence: Cancel clears the Add a section link form", async ({ page }) => 
   const form = page.getByRole("complementary", { name: "7. Success metrics" }).getByRole("form", { name: "Add a section link" });
   await form.getByLabel("Kind").selectOption("claims");
   await form.getByLabel("Precision").selectOption("claim");
-  await form.getByLabel("Links to").selectOption({ label: "Guided setup · Feature" });
-  await form.getByLabel(/^Claim/).fill("Guided setup lifts week-1 activation.");
+  await form.getByLabel("Links to").selectOption({ label: "Setup checklist · Feature" });
+  await form.getByLabel(/^Claim/).fill("Setup checklist lifts week-1 activation.");
   await form.getByRole("button", { name: "Cancel" }).click();
   await expect(form.getByLabel("Links to")).toHaveValue("");
   await expect(form.getByLabel("Kind")).toHaveValue("evidences");
