@@ -24,6 +24,9 @@ async function codedRows(page: Page, { broken }: { broken: boolean }) {
   const rows = page.getByTestId("simple-page").getByTestId("waiting-item");
   const health = rows.and(page.locator('[data-kind="date"]')).filter({ hasText: "Health log" });
   await expect(health.locator(".simple-code")).toHaveText("F-03");
+  // The shared code-and-name (Named): its chip is the one every page draws, never a hand-built <code>.
+  await expect(health.locator("span.simple-code")).toHaveText("F-03");
+  await expect(health.locator("code")).toHaveCount(0);
   // Home lists broken links in their own card (named with their codes there), not among these rows.
   if (!broken) return;
   // Its two broken links wait as one row (simple-home-qa-nov12 #3), which names both.
@@ -55,7 +58,10 @@ test.describe("desktop", () => {
     const names = page.locator('[data-testid="date-suggestion-context"]').locator("xpath=..").getByTestId("feature-name");
     await expect(names.first()).toBeVisible();
     const n = await names.count();
-    for (let k = 0; k < Math.min(n, 5); k++) await expect(names.nth(k).locator(".simple-code")).toHaveText(CODE);
+    for (let k = 0; k < Math.min(n, 5); k++) {
+      await expect(names.nth(k).locator("span.simple-code")).toHaveText(CODE);
+      await expect(names.nth(k).locator("code")).toHaveCount(0);
+    }
   });
 
   /** #4: fails when Walk me through it's broken link step names the feature without its code. */

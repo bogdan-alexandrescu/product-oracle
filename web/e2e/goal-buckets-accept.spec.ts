@@ -89,7 +89,7 @@ test("with no dated plan, a bucket for one of the roadmap's own goals takes new 
   const form = add.getByTestId("task-form");
   await expect(form).toContainText("Goal: Grow retention");
   await form.getByLabel("Name").fill("Saved wishlists");
-  await form.getByRole("button", { name: "Save task" }).click();
+  await form.getByRole("button", { name: "Save", exact: true }).click();
   await expect(note).toContainText("Added Saved wishlists to Grow retention.");
   await expect(retention.getByTestId("plan-feature").filter({ hasText: "Saved wishlists" })).toContainText("Draft");
 

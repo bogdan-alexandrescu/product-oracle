@@ -1946,7 +1946,7 @@ export const RUN_DISCUSSION_PRIVATE = "d15c0000-0000-4000-8000-0000000000a2";
  */
 export function seedRunDiscussions(
   ctx: Omit<DiscussionsContext, "me" | "db">,
-  run: { id: string; label: string; checkpoint_id: string; checkpoint_kind: string },
+  run: { id: string; label: string; checkpoint_id: string; checkpoint_kind: string; name?: (key: string) => string },
 ): DiscussionsDb {
   const db = emptyDiscussions();
   const by = (email: string) => ctx.members.find((m) => m.email === email)!.id;
@@ -1958,7 +1958,7 @@ export function seedRunDiscussions(
     subject_kind: "checkpoint_item",
     subject: { run_id: run.id, checkpoint_id: run.checkpoint_id, checkpoint_kind: run.checkpoint_kind, item_key: item },
     subject_key: `run_item:${run.id}:${run.checkpoint_kind}:${item}`,
-    subject_label: `${run.label} · ${item}`,
+    subject_label: `${run.label} · ${run.name?.(item) ?? item}`,
     subject_url: `/runs/${run.id}`,
     document_id: null,
     run_id: run.id,
@@ -2012,7 +2012,7 @@ export const DISCUSSION_RECORD = "d15c0000-0000-4000-8000-0000000000b1";
  * discussion on the PRD's guest-checkout item, Oracle's reply, and the basis_record change it
  * proposed (a team estimate that supports 2026-12-15).
  */
-export function seedDiscussionRecord(ctx: Omit<DiscussionsContext, "me" | "db">, prd: { id: string; title: string; slug: string }, version: number): DiscussionsDb {
+export function seedDiscussionRecord(ctx: Omit<DiscussionsContext, "me" | "db">, prd: { id: string; title: string; slug: string; name?: (key: string) => string }, version: number): DiscussionsDb {
   const db = emptyDiscussions();
   const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
   const at = "2026-10-22T10:00:00Z";
@@ -2022,7 +2022,7 @@ export function seedDiscussionRecord(ctx: Omit<DiscussionsContext, "me" | "db">,
     subject_kind: "roadmap_item",
     subject: { document_id: prd.id, version, item_key: item },
     subject_key: `roadmap_item:${prd.id}:${item}`,
-    subject_label: `${prd.title} · ${item}`,
+    subject_label: `${prd.title} · ${prd.name?.(item) ?? item}`,
     subject_url: `/documents/${prd.slug}/v/${version}/items`,
     document_id: prd.id,
     run_id: null,
@@ -2069,7 +2069,7 @@ export const DISCUSSION_CHANGE_KINDS = "d15c0000-0000-4000-8000-0000000000c1";
  */
 export function seedDiscussionChangeKinds(
   ctx: Omit<DiscussionsContext, "me" | "db">,
-  run: { id: string; label: string; checkpoint_id: string; checkpoint_kind: string },
+  run: { id: string; label: string; checkpoint_id: string; checkpoint_kind: string; name?: (key: string) => string },
   features: { moved: { id: string; title: string }; above: { id: string; title: string } },
 ): DiscussionsDb {
   const db = emptyDiscussions();
@@ -2082,7 +2082,7 @@ export function seedDiscussionChangeKinds(
     subject_kind: "checkpoint_item",
     subject: { run_id: run.id, checkpoint_id: run.checkpoint_id, checkpoint_kind: run.checkpoint_kind, item_key: item },
     subject_key: `run_item:${run.id}:${run.checkpoint_kind}:${item}`,
-    subject_label: `${run.label} · ${item}`,
+    subject_label: `${run.label} · ${run.name?.(item) ?? item}`,
     subject_url: `/runs/${run.id}`,
     document_id: null,
     run_id: run.id,

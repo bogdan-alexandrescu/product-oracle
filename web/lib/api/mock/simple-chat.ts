@@ -135,7 +135,7 @@ interface Thread {
 }
 
 /** Simple's page names as the panel says them (oracle.discussions.context.page_name): never a route. */
-const PAGE_NAMES: Record<string, string> = { "": "Home", "one-pagers": "One-pager", roadmap: "Roadmap", priorities: "Priorities", meetings: "Meetings", decisions: "Decisions", prds: "One-pager" };
+const PAGE_NAMES: Record<string, string> = { "": "Home", "one-pagers": "One-pager", roadmap: "Roadmap", priorities: "Priorities", meetings: "Meetings", decisions: "Decisions", prds: "One-pager", goals: "Goal map", inbox: "Inbox" };
 export function pageName(page: string | null | undefined): string {
   const parts = pageOf(page).split("/").filter(Boolean).slice(1);
   const name = PAGE_NAMES[parts[0] ?? ""] ?? "Home";

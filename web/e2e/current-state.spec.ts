@@ -46,8 +46,11 @@ for (const size of ["desktop", "phone"] as const) {
       await expect(first).toContainText("9 files");
       await expect(first).toContainText("4 pull requests");
       await expect(first).toContainText("6/6 tasks");
+      // The check's question names its feature as the row does (its code and name, where it has a code).
+      const header = (await first.locator("span.font-medium").first().textContent())!.replace(/^!/, "").trim();
       await first.getByRole("button", { name: "Check again" }).click();
       const check = page.getByTestId("cs1-check");
+      await expect(check.locator("p").first()).toHaveText(`Is ${header} still true today?`);
       await expect(check).toContainText("still true today?");
       await expect(check).toContainText("Code map: 9 files still in place");
       await expect(check).toContainText("not read yet");

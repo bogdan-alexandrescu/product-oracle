@@ -45,9 +45,11 @@ export function flowSize(flow: Flow): string {
   return `${n} step${n === 1 ? "" : "s"} · ${flow.touches_screen ? "1 screen" : "no screen"}`;
 }
 
-/** A review meeting's moment, "Fri Oct 30, 8:18 PM" (as the meeting screen's momentWords): no zone letters, the meeting names its zone. */
-export const meetingMoment = (iso: string, zone: string): string =>
-  `${formatInZone(iso, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "")}, ${formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" }).replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`;
+/** A review meeting's moment, "Fri Oct 30, 8:18 PM" (as the meeting screen's momentWords): no zone letters, the meeting names its zone; zoned: a stamp that stands alone keeps them ("Fri Oct 30, 8:18 PM PDT"). */
+export const meetingMoment = (iso: string, zone: string, zoned = false): string => {
+  const time = formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" });
+  return `${formatInZone(iso, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "")}, ${zoned ? time : time.replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`;
+};
 
 /** qa4-simple-decide-19: true inside a review meeting, whose times read as meetingMoment. */
 export const MeetingClock = createContext(false);

@@ -32,6 +32,9 @@ function goalAt(x: number, y: number): string | null {
  * Pointer and touch (the page scrolls when the finger holds at the window's edge), and keys:
  * Enter or Space picks it up, the arrows choose a goal, Enter drops, Escape cancels.
  */
+/** The goal ids of the buckets drawn on the page, top to bottom, once each. */
+const drawnGoals = (): string[] => [...new Set([...document.querySelectorAll<HTMLElement>("[data-goal-id]:not([data-testid=archived-goal])")].map((c) => c.dataset.goalId ?? "").filter(Boolean))];
+
 export function useBucketDrag({ gb, writes }: { gb: Buckets | undefined; writes: ReturnType<typeof useBucketWrites> }) {
   const [carried, setCarried] = useState<Carried | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -50,6 +53,11 @@ export function useBucketDrag({ gb, writes }: { gb: Buckets | undefined; writes:
       setEdge(null);
       if (!to || to === c.from) {
         setSaid(`${c.f.name} stays where it was.`);
+        return;
+      }
+      // Only a goal drawn on the page takes a drop: one the page does not show is refused, not saved out of sight.
+      if (!drawnGoals().includes(to)) {
+        setSaid(`That goal is not shown here. ${c.f.name} stays where it was.`);
         return;
       }
       // The change engine applies or proposes: its note says which.
@@ -128,7 +136,10 @@ export function useBucketDrag({ gb, writes }: { gb: Buckets | undefined; writes:
   // The keys: the arrows step through the other goals, Enter drops, Escape cancels.
   useEffect(() => {
     if (carried?.by !== "keys" || !gb) return;
-    const goals = gb.goals.filter((g) => g.id !== carried.from);
+    // The goals drawn on the page, in their order there: the arrows step through what a person sees.
+    const goals = drawnGoals()
+      .map((id) => gb.goals.find((g) => g.id === id))
+      .filter((g): g is NonNullable<typeof g> => !!g && g.id !== carried.from);
     const key = (e: KeyboardEvent) => {
       const c = ref.current.carried;
       if (!c) return;

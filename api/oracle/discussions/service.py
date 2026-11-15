@@ -400,6 +400,10 @@ class Labels:
         self.rows: dict[tuple[type, uuid.UUID], Any] = {}
         #: The discussions whose subject row is missing (deleted): no page opens their thread.
         self.missing: set[Any] = set()
+        #: Every feature's code by its id, read once (:meth:`_item_name`).
+        self.codes: dict[uuid.UUID, str] | None = None
+        #: A checkpoint's item titles by key, read once (:meth:`_run_item`).
+        self.titles: dict[uuid.UUID, dict[str, Any]] = {}
 
     async def get(self, model: type, id_: Any) -> Any:
         key = (model, uuid.UUID(str(id_)))
@@ -422,6 +426,58 @@ class Labels:
         self.missing.add(d.id)
         return d.subject_kind.replace("_", " ").capitalize(), url
 
+    async def _item_name(self, key: str, title: str | None) -> str:
+        """An item as people read it: "F-12 Bulk address edit", its Ground Truth feature's
+        code and name; its own title with no feature; its key only as the last fallback."""
+        from oracle.baseline.fixes import _codes
+        from oracle.baseline.models import Entity
+
+        feature = await self.db.scalar(
+            select(Entity).where(Entity.type == "feature", Entity.key == key).limit(1)
+        )
+        name = (title or (feature.title if feature else "") or "").strip() or key
+        if feature is None:
+            return name
+        if self.codes is None:
+            self.codes = await _codes(self.db)
+        code = self.codes.get(feature.id)
+        return f"{code} {name}" if code else name
+
+    async def _roadmap_item(self, doc: Any, s: dict[str, Any]) -> str:
+        from oracle.docs.models import DocumentVersion
+        from oracle.roadmap.models import RoadmapItem
+
+        title = await self.db.scalar(
+            select(RoadmapItem.title)
+            .join(DocumentVersion, DocumentVersion.id == RoadmapItem.roadmap_version_id)
+            .where(
+                DocumentVersion.document_id == doc.id,
+                DocumentVersion.number == s["version"],
+                RoadmapItem.item_key == s["item_key"],
+            )
+            .limit(1)
+        )
+        return await self._item_name(s["item_key"], title)
+
+    async def _run_item(self, run: Any, cp: Any, key: str) -> str:
+        """A checkpoint item's name: its feature-set scope row's title, else its item file's."""
+        from oracle.runs import actions, feature_set
+        from oracle.runs.service import _scope_of
+
+        if cp is None:
+            return await self._item_name(key, None)
+        if cp.id not in self.titles:
+            titles: dict[str, Any] = {}
+            scope = await _scope_of(self.db, cp)
+            if scope is not None:
+                titles = {i.key: i.title for i in await feature_set.scope_items(self.db, scope.id)}
+            else:
+                found = await actions._file(self.db, run, cp)
+                titles = {k: i.get("title") for k, i in actions._context(found).items.items()}
+            self.titles[cp.id] = titles
+        title = self.titles[cp.id].get(key)
+        return await self._item_name(key, title if isinstance(title, str) else None)
+
     async def _of(self, d: Discussion) -> tuple[str, str]:
         from oracle.baseline.models import Conflict, Entity
         from oracle.docs.models import Document, DocumentVersion, Section
@@ -440,7 +496,7 @@ class Labels:
             if kind == "document":
                 return doc.title, url
             if kind == "roadmap_item":
-                return f"{doc.title} · {s['item_key']}", f"{url}/items"
+                return f"{doc.title} · {await self._roadmap_item(doc, s)}", f"{url}/items"
             heading = await self.db.scalar(
                 select(Section.heading)
                 .join(DocumentVersion, DocumentVersion.id == Section.version_id)
@@ -464,7 +520,7 @@ class Labels:
             cp_kind = cp.kind if cp is not None else s.get("checkpoint_kind", "")
             label = f"{flow.title if flow else run.flow} · {CHECKPOINT_LABEL.get(cp_kind, cp_kind)}"
             if kind == "checkpoint_item":
-                label += f" · {s['item_key']}"
+                label += f" · {await self._run_item(run, cp, s['item_key'])}"
             return label, f"/runs/{run.id}"
         if kind == "entity":
             entity = await self.get(Entity, s["entity_id"])

@@ -409,7 +409,8 @@ export function PanelFields({
         canChange={canChange}
         value={
           <>
-            {yearSpan(item.start.date, item.end.date)} ·{" "}
+            {/* simple-home-qa-nov14 #4: Oracle's one estimate: its suggested span when it has one, never the horizon's window beside it. */}
+            {item.estimated && item.suggestion ? yearSpan(item.suggestion.start_date, item.suggestion.end_date) : yearSpan(item.start.date, item.end.date)} ·{" "}
             <span data-testid="card-dates-kind">{datesKind(item)}</span>{" "}
             {/* QA Nov 12 #10: the circled (i) every other why on the page uses. */}
             <InfoTip label="these dates" align="start" testId="card-dates-why">
@@ -1117,7 +1118,7 @@ function needsMe(item: Item, items: Map<string, Item>): Set<string> {
   return out;
 }
 
-/** Add a dependency: a feature of the roadmap by code and name, or another PRD's feature by its key. */
+/** Add a dependency: a feature of the roadmap by code and name, or one from another PRD, searched by code and name. */
 function AddDependency({
   item,
   options,
@@ -1132,7 +1133,9 @@ function AddDependency({
 }) {
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState("");
-  const [typed, setTyped] = useState("");
+  const [search, setSearch] = useState("");
+  // goals-dep-picker: the feature from another PRD picked from the search (its id).
+  const [far, setFar] = useState("");
   if (!open)
     return (
       <button
@@ -1143,22 +1146,33 @@ function AddDependency({
         Add a dependency
       </button>
     );
-  const chosen = options.find((o) => o.id === pick);
+  // goals-dep-picker: another PRD's features, from the roadmap read the panel already has,
+  // searched by code and name (as the Goal map's Add a feature); never a raw key to know.
+  const term = search.trim().toLowerCase();
+  const otherPrd = options.filter((o) => !item.prd || o.prd?.id !== item.prd.id);
+  const found = term
+    ? otherPrd.filter((o) => `${o.code ?? ""} ${o.title}`.toLowerCase().includes(term)).slice(0, 8)
+    : [];
+  const chosen = options.find((o) => o.id === (pick || far));
   // The same roadmap: its item key; another roadmap's feature: its code (a feature key).
   const key = chosen
     ? chosen.roadmap.id === item.roadmap.id
       ? chosen.key
       : (chosen.code ?? chosen.key)
-    : typed.trim();
+    : "";
+  const close = () => {
+    setOpen(false);
+    setPick("");
+    setSearch("");
+    setFar("");
+  };
   return (
     <form
       className="mt-1"
       onSubmit={(e) => {
         e.preventDefault();
         if (!key) return;
-        setOpen(false);
-        setPick("");
-        setTyped("");
+        close();
         void add(key);
       }}
     >
@@ -1166,7 +1180,10 @@ function AddDependency({
         aria-label="Feature it depends on"
         className={INPUT}
         value={pick}
-        onChange={(e) => setPick(e.target.value)}
+        onChange={(e) => {
+          setPick(e.target.value);
+          setFar("");
+        }}
         autoFocus
       >
         <option value="">Pick a feature</option>
@@ -1178,15 +1195,39 @@ function AddDependency({
         ))}
       </select>
       {!pick && (
-        <input
-          aria-label="Or another PRD's feature key"
-          placeholder="Or another PRD's feature key, like F-12"
-          className={`${INPUT} mt-1`}
-          value={typed}
-          onChange={(e) => setTyped(e.target.value)}
-        />
+        <>
+          <input
+            aria-label="Or a feature from another PRD"
+            placeholder="Or a feature from another PRD"
+            className={`${INPUT} mt-1`}
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setFar("");
+            }}
+          />
+          {term && (
+            <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto" data-testid="card-depends-search">
+              {found.length === 0 && <li className="text-sm text-text2">No feature matches</li>}
+              {found.map((o) => (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    aria-pressed={far === o.id}
+                    disabled={loops.has(o.id)}
+                    className={`w-full rounded-md border px-2 py-1 text-left text-[15px] disabled:opacity-50 ${far === o.id ? "border-accent bg-accent-soft" : "border-line"}`}
+                    onClick={() => setFar(o.id)}
+                  >
+                    <Named item={o} />
+                    {loops.has(o.id) ? " · Needs this one: it would make a loop" : ""}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
-      <SaveCancel onCancel={() => setOpen(false)} disabled={!key} />
+      <SaveCancel onCancel={close} disabled={!key} />
     </form>
   );
 }

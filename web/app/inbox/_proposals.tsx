@@ -4,7 +4,8 @@ import Link from "next/link";
 
 import { Button, Chip, InfoTip, LinkButton } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useItemCode } from "@/components/simple/WaitingItems";
+import { Named, NotInGt } from "@/components/simple/FeatureName";
+import { useItemRef } from "@/components/simple/WaitingItems";
 import { calendarDay } from "@/lib/dates";
 import { formatDateRange, formatDateTime } from "@/lib/format";
 
@@ -22,20 +23,26 @@ const panelHref = (documentId: string, itemId: string) => `/simple/roadmap?roadm
 /** The feature's name, opening its feature panel when it is on a roadmap. */
 function FeatureName({ name, itemId, documentId }: { name: string; itemId?: string | null; documentId?: string | null }) {
   // simple-home-qa-nov12 #4: the item's code before its name, as its panel reads it.
-  const code = useItemCode(itemId);
-  const chip = code && <><code className="simple-code mr-px">{code}</code>{" "}</>;
+  const ref = useItemRef(itemId);
+  const named = <Named item={{ code: ref?.code, title: name }} />;
+  // simple-home-qa-nov14 #1: a roadmap item with no code is flagged, never hidden.
+  const flag = ref && <NotInGt item={ref} />;
   if (!itemId || !documentId)
     return (
-      <span className="min-w-0 truncate" title={name}>
-        {chip}
-        {name}
-      </span>
+      <>
+        <span className="min-w-0 truncate" title={name}>
+          {named}
+        </span>
+        {flag}
+      </>
     );
   return (
-    <Link href={panelHref(documentId, itemId)} className="min-w-0 truncate font-medium text-accent-ink underline-offset-2 hover:underline" title={`Open ${name}'s panel`} data-testid="feature-name">
-      {chip}
-      {name}
-    </Link>
+    <>
+      <Link href={panelHref(documentId, itemId)} className="min-w-0 truncate font-medium text-accent-ink underline-offset-2 hover:underline" title={`Open ${name}'s panel`} data-testid="feature-name">
+        {named}
+      </Link>
+      {flag}
+    </>
   );
 }
 
@@ -178,7 +185,7 @@ export function dateSuggestionRows(rows: DateSuggestion[], seenBefore: string | 
     // simple-home-qa-nov12 #6: on a phone the why sits behind its (i), not printed on every row.
     context: (
       <>
-        <span className="block truncate text-text2 max-[600px]:hidden" data-testid="date-suggestion-basis">
+        <span className="line-clamp-2 whitespace-normal text-text2 max-[600px]:hidden" data-testid="date-suggestion-basis" title={s.basis}>
           {s.basis}
         </span>
         <span className="min-[601px]:hidden">

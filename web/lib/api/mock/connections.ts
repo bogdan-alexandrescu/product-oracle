@@ -409,9 +409,14 @@ function json(status: number, body: unknown): Response {
 
 const now = () => new Date().toISOString();
 
-function identity(provider: string, token: string): { account_id: string; label: string; scopes: string[] } | string {
+/**
+ * The account a provider reads from a token: "bad…" and "not-…" ones it turns down. `account`, a
+ * sign-in again to an account it knows (a seeded one), reads that account and its own name.
+ */
+function identity(provider: string, token: string, account?: string): { account_id: string; label: string; scopes: string[] } | string {
   // As a provider would turn them down: "bad…" and "not-…" (e.g. "not-a-token") tokens.
   if (token.startsWith("bad") || token.startsWith("not-")) return `${PROVIDERS.find((p) => p.key === provider)?.name ?? provider} rejected the token (401)`;
+  const known = account ? seedConnections().find((c) => c.provider === provider && c.account_id === account) : undefined;
   const labels: Record<string, string> = {
     github: "example-user",
     slack: "pat in Example",
@@ -421,7 +426,7 @@ function identity(provider: string, token: string): { account_id: string; label:
   };
   const google = token.startsWith("legacy") ? ["openid", "email", DRIVE_FILE] : ["openid", "email", DRIVE_READONLY];
   const scopes = provider === "github" ? ["repo"] : provider === "google" ? google : [];
-  return { account_id: `${provider}-1`, label: labels[provider] ?? provider, scopes };
+  return { account_id: known?.account_id ?? `${provider}-1`, label: known?.account_label ?? labels[provider] ?? provider, scopes };
 }
 
 function upsert(
@@ -657,10 +662,14 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
         const who = identity(row.provider, token.trim());
         if (typeof who === "string") return json(400, { detail: who });
         if (who.account_id !== row.account_id) return json(400, { detail: "That token belongs to another account" });
+        // As the API's reconnect: save() with the token's account, its label kept only on a token connection.
+        upsert(db, email, row.provider, "token", who, row.auth_mode === "token" ? row.account_label : null);
+        return json(200, { connection: out(db, row), authorize_url: null });
       }
-      if (!token && reconnectReason(row.provider, row.scopes)) {
-        // Signs in again for drive.readonly, as the real API's authorize_url would.
-        const who = identity(row.provider, "oauth-token");
+      if (reconnectReason(row.provider, row.scopes)) {
+        // Signs in again for drive.readonly, as the real API's authorize_url would; its callback
+        // (connect_oauth) saves with no label, so the account takes the name the provider reads now.
+        const who = identity(row.provider, "oauth-token", row.account_id);
         if (typeof who !== "string") upsert(db, email, row.provider, "oauth", { ...who, account_id: row.account_id });
         return json(200, { connection: out(db, row), authorize_url: `/settings/connections?connected=${row.provider}` });
       }

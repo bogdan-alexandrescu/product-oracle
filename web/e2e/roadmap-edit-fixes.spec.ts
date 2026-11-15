@@ -90,7 +90,7 @@ for (const phone of [false, true]) {
     });
 
     for (const who of ["owner", "approver"] as const) {
-      test(`a dependency that would close a loop is refused, as the ${who} (${where})`, async ({ page }) => {
+      test(`a dependency that would close a loop cannot be added, as the ${who} (${where})`, async ({ page }) => {
         await login(page, who === "owner" ? undefined : "approver@example.com");
         // Weekly alert digest already depends on Alert rules engine.
         await open(page, "alert-rules");
@@ -101,10 +101,11 @@ for (const phone of [false, true]) {
         await expect(digest).toHaveCount(1);
         await expect(digest).toBeDisabled();
         await expect(digest).toContainText("it would make a loop");
-        // Typing the loop-making feature's key gets past the choice, and the API refuses it.
-        await panel(page).getByLabel("Or another PRD's feature key").fill("F-06");
-        await tap(panel(page).getByRole("button", { name: "Save" }));
-        await expect(page.getByText(/Not added, it would make a loop: .*Weekly alert digest already depends on .*Alert rules engine/).first()).toBeVisible();
+        // The search for another PRD's feature does not offer it as a choice either.
+        await panel(page).getByLabel("Or a feature from another PRD").fill("F-06");
+        await expect(panel(page).getByTestId("card-depends-search").getByRole("button", { name: /Weekly alert digest/, disabled: false })).toHaveCount(0);
+        await expect(panel(page).getByRole("button", { name: "Save" })).toBeDisabled();
+        await tap(panel(page).getByRole("button", { name: "Cancel" }));
         await expect(panel(page).getByTestId("card-depends")).toContainText("Nothing");
         await page.reload();
         await open(page, "alert-rules");

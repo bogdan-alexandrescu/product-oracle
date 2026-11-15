@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 
 import { Button, confirmInPage, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { useFeatureDelete } from "@/components/simple/FeatureDelete";
+import { FeatureName } from "@/components/simple/FeatureName";
 import { useFitViewport } from "@/lib/fit-viewport";
 import { FlowPanel, subjectOf, type FlowSubject } from "@/components/simple/FlowVisual";
 import { FlowDiagram, Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
@@ -343,6 +344,7 @@ export function SuggestionBody({
   onEdit,
   onDismiss,
   onEditing,
+  named,
 }: {
   item: Item;
   canAct: boolean;
@@ -350,6 +352,8 @@ export function SuggestionBody({
   onEdit: (start: string, end: string) => void;
   onDismiss: () => void;
   onEditing?: (editing: boolean) => void;
+  /** The popover names the feature it changes; the item panel's section sits under its name. */
+  named?: boolean;
 }) {
   const s = item.suggestion!;
   const [editing, setEditingState] = useState(false);
@@ -362,6 +366,11 @@ export function SuggestionBody({
   return (
     <>
       <p className="text-sm font-semibold">
+        {named && (
+          <>
+            <FeatureName item={item} />:{" "}
+          </>
+        )}
         Oracle suggests {yearSpan(s.start_date, s.end_date)}
       </p>
       <p className="mt-1 text-sm text-text2">{s.basis}</p>
@@ -458,7 +467,7 @@ export function SuggestionPopover({
       style={flip != null ? { ...style, top: flip } : style}
       className="absolute z-30 w-[340px] max-w-[92vw] rounded-xl border border-line bg-surface p-3 shadow-tip"
     >
-      <SuggestionBody item={item} canAct={canAct} onAccept={onAccept} onEdit={onEdit} onDismiss={onDismiss} onEditing={setEditing} />
+      <SuggestionBody item={item} canAct={canAct} onAccept={onAccept} onEdit={onEdit} onDismiss={onDismiss} onEditing={setEditing} named />
       <button
         type="button"
         aria-label="Close"

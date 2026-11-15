@@ -174,7 +174,7 @@ test.describe("desktop", () => {
     const admin = await as(page, "admin@example.com");
     await admin.getByRole("tab", { name: "Value / effort" }).click();
     await expect(admin.getByRole("button", { name: "#7 Alert routing by team: goal value 3, effort 2 weeks, below the line" })).toBeVisible();
-    await expect(admin.getByRole("button", { name: "#5 Sample data import (F-12): goal value 6, effort 3 weeks" })).toBeVisible();
+    await expect(admin.getByRole("button", { name: "#5 Sample data import: goal value 6, effort 3 weeks" })).toBeVisible();
     expect(await codes(admin, "side-row")).toEqual(ORACLE);
     const point = admin.locator('[data-testid="vxe-point"][data-code="setup-import"]');
     const plot = (await admin.getByTestId("vxe-plot").boundingBox())!;
@@ -185,11 +185,11 @@ test.describe("desktop", () => {
     await admin.mouse.down();
     await admin.mouse.move(at.x + at.width / 2 - (plot.width * 0.92 * 2) / 5, at.y + at.height / 2 + 3, { steps: 10 });
     await admin.mouse.up();
-    await expect(admin.getByText("Re-estimated Sample data import (F-12): effort 1 week")).toBeVisible();
-    await expect(admin.getByRole("button", { name: "#2 Sample data import (F-12): goal value 6, effort 1 week" })).toBeVisible();
+    await expect(admin.getByText("Re-estimated Sample data import: effort 1 week")).toBeVisible();
+    await expect(admin.getByRole("button", { name: "#2 Sample data import: goal value 6, effort 1 week" })).toBeVisible();
     expect((await codes(admin, "side-row"))[1]).toBe("setup-import");
     await admin.getByRole("button", { name: "Undo" }).click();
-    await expect(admin.getByRole("button", { name: "#5 Sample data import (F-12): goal value 6, effort 3 weeks" })).toBeVisible();
+    await expect(admin.getByRole("button", { name: "#5 Sample data import: goal value 6, effort 3 weeks" })).toBeVisible();
   });
 
   /**

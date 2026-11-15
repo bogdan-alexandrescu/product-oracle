@@ -919,14 +919,19 @@ function Links({
   const [removing, setRemoving] = useState<string | null>(null);
   const out = (t: EdgeOut["type"]) => detail.edges_out.filter((e) => e.type === t && e.status !== "rejected");
   const inn = (t: EdgeOut["type"]) => detail.edges_in.filter((e) => e.type === t && e.status !== "rejected");
-  const link = (id: string) => (
-    <span className="flex min-w-0 items-center gap-2">
-      {tags.has(id) && <CodeChip kind="goal" entityId={id} title={titleOf(graph, id)} codeOnly />}
-      <button type="button" className="min-w-0 truncate text-left hover:underline" onClick={() => onOpen(id)}>
-        {tags.get(id) ?? titleOf(graph, id)}
-      </button>
-    </span>
-  );
+  const link = (id: string) => {
+    // A feature end shows its Ground Truth code as a goal end does (F-85 Team invites).
+    const feature = tags.has(id) ? undefined : graph?.entities.find((e) => e.id === id && e.type === "feature");
+    return (
+      <span className="flex min-w-0 items-center gap-2">
+        {tags.has(id) && <CodeChip kind="goal" entityId={id} title={titleOf(graph, id)} codeOnly />}
+        {feature && <CodeChip kind="feature" entityId={id} entityKey={feature.key} title={feature.title} codeOnly />}
+        <button type="button" className="min-w-0 truncate text-left hover:underline" onClick={() => onOpen(id)}>
+          {tags.get(id) ?? (feature ? named(feature.title, feature.key).name : titleOf(graph, id))}
+        </button>
+      </span>
+    );
+  };
   const list = (title: string, edges: EdgeOut[], end: "src_id" | "dst_id", contribution = false) =>
     edges.length > 0 && (
       <InspectorSection label={title}>

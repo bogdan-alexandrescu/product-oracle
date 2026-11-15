@@ -142,7 +142,7 @@ test("Ground Truth: the feature drawer shows links, evidence and the lock", asyn
   );
 
   // Links open the linked item in the drawer.
-  await d.getByRole("list", { name: "Depends on" }).getByRole("button", { name: /^(F-83 )?Sample data$/ }).click();
+  await d.getByRole("list", { name: "Depends on" }).getByRole("button", { name: "Sample data", exact: true }).click();
   await expect(drawer(page, "Sample data")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -455,9 +455,9 @@ test("Ground Truth: proposals by run fit a phone", async ({ page }) => {
 // proposes XS). The strings are the API's (api/tests/test_baseline_describe.py): the mock's
 // TypeScript port (lib/api/mock/describe.ts) must write the same ones.
 const SENTENCES = {
-  "Guided setup": "Set Guided setup’s effort to L (was M)",
-  "Dark mode": "Set Dark mode’s delivery status to Planned (was Idea)",
-  "Team invites": "Set Team invites’ effort to XS (was S)",
+  "Guided setup": "Set F-82 Guided setup’s effort to L (was M)",
+  "Dark mode": "Set F-81 Dark mode’s delivery status to Planned (was Idea)",
+  "Team invites": "Set F-85 Team invites’ effort to XS (was S)",
 };
 
 /**
@@ -549,7 +549,7 @@ test("Ground Truth: proposal sentences wrap on a phone", async ({ page }) => {
 /**
  * protects: a phone whose role read is slow: the proposals do not jump once it answers.
  * fails_when: the rows are drawn before GET /v1/me/capabilities answers, so Add item,
- * Promote to blocker, the Accept help line and the Accept / Reject buttons appear above
+ * Promote to blocker and the Accept / Reject buttons appear above
  * Guided setup afterwards and push it down, out of view.
  * no_claim: other tabs (they wait for the same read); other slow reads.
  */
@@ -561,7 +561,6 @@ test("Ground Truth: proposals on a phone stay put when the role answers late", a
   await row.scrollIntoViewIfNeeded();
   const top = (await row.boundingBox())!.y;
   await expect(row.getByRole("button", { name: "Accept" })).toBeInViewport();
-  await expect(page.getByTestId("proposals-accept-help")).toBeVisible();
   expect((await row.boundingBox())!.y).toBe(top);
   await expect(row.getByRole("button", { name: "Reject" })).toBeInViewport();
 });

@@ -58,3 +58,14 @@ test("a commenter without date rights cannot record and sees why", async ({ page
   await expect(record).toBeDisabled();
   await expect(record).toHaveAccessibleDescription(RECORDERS);
 });
+
+// protects=the thread's subject names the PRD's item by its title, as the API's Labels._roadmap_item reads
+// the version's RoadmapItem; fails_when=the subject reads the raw item key ("· guest-checkout");
+// no_claim=the API's naming (pytest).
+test("the discussion's subject names the item by its title", async ({ page }) => {
+  await withScenario(page);
+  await login(page, APPROVER);
+  await openDiscussion(page);
+  await expect(thread(page)).toContainText(/· Guest checkout/);
+  await expect(thread(page)).not.toContainText("guest-checkout");
+});

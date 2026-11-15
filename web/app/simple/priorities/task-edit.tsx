@@ -13,7 +13,7 @@ export { TaskActions };
 
 /*
  * Tasks in the goal buckets (the owner, Nov 4: "edit, delete, add in place new tasks"). A task is
- * a roadmap item under a goal. "+ Add a task" and a task's pencil open GB1 a's "Pencil, form in
+ * a roadmap item under a goal. "+ Add a feature" and a task's pencil open GB1 a's "Pencil, form in
  * place" (name, outcome, milestone); its ⋯ cuts it from the roadmap. Every write is a change of
  * the change engine (POST /v1/simple/changes: add_item, edit_title, edit_outcome, set_milestone,
  * cut), applied into the roadmap's working draft or proposed, as the rest of Simple does; an
@@ -134,7 +134,7 @@ export function TaskForm({
       </Field>
       <div className="mt-1 flex items-center gap-2">
         <button type="submit" className={PRIMARY} disabled={!done || busy}>
-          Save task
+          Save
         </button>
         <button type="button" className={BTN} onClick={onCancel}>
           Cancel
@@ -399,7 +399,7 @@ export function TaskRow({
 
 /**
  * The tasks of the goal buckets, for both views: which roadmap item a feature is, its form in
- * place while edited, "+ Add a task" at a bucket's foot, and Cut from the roadmap's question.
+ * place while edited, "+ Add a feature" at a bucket's foot, and Cut from the roadmap's question.
  */
 export function useBucketTasks({
   rows,
@@ -448,7 +448,7 @@ export function useBucketTasks({
       <TaskForm
         start={startOf(t)}
         milestones={options}
-        title="Edit task"
+        title="Edit feature"
         goal={goal}
         onCancel={() => setEditing(null)}
         onSave={async (f) => {
@@ -457,14 +457,14 @@ export function useBucketTasks({
       />
     ) : null;
   const actions = (t: Task | undefined): ReactNode => (may && t ? <TaskActions name={t.name} disabled={!!editing} onEdit={() => setEditing(t.code)} onCut={() => setCutting(t)} /> : null);
-  /** "+ Add a task" at the foot of a goal's bucket, or its form in place; off while the goal buckets load. */
+  /** "+ Add a feature" at the foot of a goal's bucket, or its form in place; off while the goal buckets load. */
   const add = (goal: { id: string; title: string } | undefined, loading = false): ReactNode => {
     if (!may || (!goal && !loading)) return null;
     if (!goal)
       return (
         <li data-testid="add-task" className="pt-1">
           <button type="button" className="mt-1 flex h-9 w-full items-center gap-1.5 rounded-lg border border-dashed border-line-strong px-3 text-left text-[15px] font-[650] text-text2 disabled:opacity-40" disabled>
-            + Add a task
+            + Add a feature
           </button>
         </li>
       );
@@ -475,7 +475,7 @@ export function useBucketTasks({
           <TaskForm
             start={{ name: "", outcome: "", milestone: "" }}
             milestones={options}
-            title="New task"
+            title="New feature"
             goal={goal.title}
             onCancel={() => setEditing(null)}
             onSave={async (f) => {
@@ -484,7 +484,7 @@ export function useBucketTasks({
           />
         ) : (
           <button type="button" className="mt-1 flex h-9 w-full items-center gap-1.5 rounded-lg border border-dashed border-line-strong px-3 text-left text-[15px] font-[650] text-text2 hover:bg-surface2 disabled:opacity-40" onClick={() => setEditing(key)} disabled={!!editing}>
-            + Add a task
+            + Add a feature
           </button>
         )}
       </li>

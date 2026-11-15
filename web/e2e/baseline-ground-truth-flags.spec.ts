@@ -153,7 +153,7 @@ test.describe("as the owner", () => {
     await picker.getByLabel("Find a feature").fill("F-11");
     await picker.getByRole("button", { name: "F-11 Sheets export" }).click();
     await expect(picker).toHaveCount(0);
-    await expect(page.getByTestId("gt-notice")).toContainText("Linked “Export to sheets” to “Sheets export”.");
+    await expect(page.getByTestId("gt-notice")).toContainText("Linked “Export to sheets” to “F-11 Sheets export”.");
     await expect(row(page, "Export to sheets")).toHaveCount(0);
     await expect(total(page)).toHaveText("8");
     // The published item is linked through the roadmap's draft: its panel shows the feature.
@@ -171,7 +171,7 @@ test.describe("as the owner", () => {
     await picker.getByLabel("Find a feature").fill("Sheets");
     await picker.getByRole("button", { name: "F-11 Sheets export" }).click();
     await expect(picker).toHaveCount(0);
-    await expect(page.getByTestId("gt-notice")).toContainText("Linked “F-15a Usage report” to “Sheets export”.");
+    await expect(page.getByTestId("gt-notice")).toContainText("Linked “F-15a Usage report” to “F-11 Sheets export”.");
     await expect(row(page, "Usage report")).toHaveCount(0);
     await expect(count(page, "slice_parent_missing")).toContainText("1");
     await expect(row(page, "Usage chart")).toContainText("F-15b");

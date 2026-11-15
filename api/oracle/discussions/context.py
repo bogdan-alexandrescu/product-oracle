@@ -373,6 +373,7 @@ PAGES = {
 SIMPLE_PAGES = {
     "": "Home", "roadmap": "Roadmap", "priorities": "Priorities", "decisions": "Decisions",
     "meetings": "Meetings", "prds": "One-pager", "one-pagers": "One-pager",
+    "goals": "Goal map", "inbox": "Inbox",
 }  # fmt: skip
 OPEN_RUNS = ("awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
 

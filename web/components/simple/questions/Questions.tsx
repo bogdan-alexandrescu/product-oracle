@@ -399,8 +399,9 @@ export function QuestionRow({
   // "here": decided in this row just now (Home's PRD card): its answer, who and when, and Undo (RD3 a).
   const done = q.column === "decided" || mode === "decided" || mode === "here";
   const recommended = !!q.recommendation && writes && !done;
-  // qa4-simple-decide-19: a meeting's one moment format ("Fri Oct 30, 8:18 PM"), no zone letters: the meeting names its zone.
-  const at = q.decided_at ? meetingMoment(q.decided_at, zone) : null;
+  // qa4-simple-decide-19: a meeting's one moment format; simple-home-qa-nov14 #6: a decision stamp keeps its
+  // zone ("Sat Nov 14, 1:55 AM PST"), as the meeting's "Decisions in this meeting" card reads it.
+  const at = q.decided_at ? meetingMoment(q.decided_at, zone, true) : null;
   // qa-simple-decide-44: the answer itself, not "as recommended".
   const here = [`Decided in this meeting${q.chosen ? `: ${q.chosen}` : ""}`, q.decided_by?.name, at].filter(Boolean).join(" · ");
   const another = (label: string) => (

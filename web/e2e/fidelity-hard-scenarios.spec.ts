@@ -63,7 +63,7 @@ for (const size of SIZES) {
         await expect(page.getByTestId("simple-roadmap")).toBeVisible();
         await expect(page.getByTestId("ms-same-day").filter({ hasText: /on Dec 22$/ })).toHaveText("2 on Dec 22");
         await expect(page.getByTestId("ms-late").filter({ hasText: "Ends after M6 Teams set 3 rules in week 1" })).toBeVisible();
-        await expect(page.getByTestId("ms-late").filter({ hasText: "Ends after M4 Half of new teams invite a teammate" })).toBeVisible();
+        await expect(page.getByTestId("ms-late").filter({ hasText: "Ends after M5 Half of new teams invite a teammate" })).toBeVisible();
       });
     }
   });

@@ -76,7 +76,7 @@ for (const size of SIZES) {
       await expect(panel(page)).toBeVisible();
     });
 
-    test("a dependency that would make a loop cannot be picked, and typed is refused", async ({ page }) => {
+    test("a dependency that would make a loop cannot be picked, nor found in the search", async ({ page }) => {
       await login(page);
       await page.goto("/simple/roadmap");
       await expect(page.getByTestId("simple-roadmap")).toBeVisible();
@@ -87,9 +87,10 @@ for (const size of SIZES) {
       const looped = panel(page).getByLabel("Feature it depends on").locator("option", { hasText: "Weekly alert digest" });
       await expect(looped).toBeDisabled();
       await expect(looped).toContainText("Needs this one: it would make a loop");
-      await panel(page).getByLabel("Or another PRD's feature key").fill("F-06");
-      await tap(panel(page).getByRole("button", { name: "Save" }));
-      await expect(page.getByText(/it would make a loop: .*Weekly alert digest already depends on .*Alert rules engine/).first()).toBeVisible();
+      // The search for another PRD's feature does not let it through either.
+      await panel(page).getByLabel("Or a feature from another PRD").fill("F-06");
+      await expect(panel(page).getByTestId("card-depends-search").getByRole("button", { name: /Weekly alert digest/, disabled: false })).toHaveCount(0);
+      await expect(panel(page).getByRole("button", { name: "Save" })).toBeDisabled();
       await expect(panel(page).getByTestId("card-depends")).not.toContainText("Weekly alert digest");
     });
 

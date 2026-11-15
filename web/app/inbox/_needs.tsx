@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useId, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useId, useState, type ComponentProps, type ReactNode } from "react";
 
 import { Button, Chip, CodeText, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -833,6 +833,15 @@ const DISCUSSION_KIND: Record<InboxDiscussion["kind"], string> = {
  * Read for viewers), Mentioned you (the excerpt in quotes, Open) and, for approvers, a
  * discussion's changes proposed (Review changes opens the thread at its changes card).
  */
+/** Simple's own pages a discussion's subject link opens in, by Detailed's path (ask-phone QA row 3). */
+export const inSimple = (url: string) => url.replace(/^\/priorities(?=[?#]|$)/, "/simple/priorities");
+
+/** A discussion's link from the Inbox: the Inbox shown in Simple keeps the person in Simple. */
+function DiscussionLink({ href, ...rest }: ComponentProps<typeof LinkButton>) {
+  const simple = usePathname()?.startsWith("/simple") ?? false;
+  return <LinkButton {...rest} href={simple ? inSimple(href) : href} />;
+}
+
 export function discussionNeeds(inbox: InboxOut, seenBefore: string | null | undefined): StatedNeed[] {
   return (inbox.discussions ?? []).map((r) => {
     const done = r.state === "done";
@@ -849,9 +858,9 @@ export function discussionNeeds(inbox: InboxOut, seenBefore: string | null | und
           </span>
         ),
         action: (
-          <LinkButton variant={done ? "ghost" : "primary"} href={r.subject_url}>
+          <DiscussionLink variant={done ? "ghost" : "primary"} href={r.subject_url}>
             {r.can_write ? "Join" : "Read"}
-          </LinkButton>
+          </DiscussionLink>
         ),
       };
     if (r.kind === "mentioned")
@@ -869,9 +878,9 @@ export function discussionNeeds(inbox: InboxOut, seenBefore: string | null | und
           </span>
         ),
         action: (
-          <LinkButton href={r.subject_url} aria-label={`Open ${r.title}`}>
+          <DiscussionLink href={r.subject_url} aria-label={`Open ${r.title}`}>
             Open
-          </LinkButton>
+          </DiscussionLink>
         ),
       };
     const people = [...r.people, ...(r.people_more ? [`+${r.people_more}`] : [])].join(", ");
@@ -883,7 +892,7 @@ export function discussionNeeds(inbox: InboxOut, seenBefore: string | null | und
           {people}
         </span>
       ),
-      action: <LinkButton href={withParam(r.subject_url, "changes=1")}>Review changes</LinkButton>,
+      action: <DiscussionLink href={withParam(r.subject_url, "changes=1")}>Review changes</DiscussionLink>,
     };
   });
 }

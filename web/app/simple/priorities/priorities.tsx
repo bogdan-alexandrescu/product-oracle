@@ -21,7 +21,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
 import { ITEM_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
-import { NotInGt } from "@/components/simple/FeatureName";
+import { Named, NotInGt } from "@/components/simple/FeatureName";
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, otherGoal, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { goalKeysOf, KeyResultList, liftedMoves, topGoalBuckets, topGoalPlan, topGoalPriorities, usePriorityKeyResults, type PriorityKeyResults } from "./key-results";
@@ -1515,6 +1515,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   const byEffort = medianSplit(rows, effortOf, false);
   const quadrant = (r: Row) => (byValue.firstHalf.has(r.feature_id) ? (byEffort.firstHalf.has(r.feature_id) ? 0 : 1) : byEffort.firstHalf.has(r.feature_id) ? 2 : 3);
   const counts = [0, 1, 2, 3].map((q) => rows.filter((r) => quadrant(r) === q).length);
+  // simple-goals: a quadrant's count lists its features in the side list (again shows them all).
+  const [quad, setQuad] = useState<number | null>(null);
   const goalOf = goalOfRow(data);
   // One goal for a mark's shape and its name: the plan's, as the name reads it.
   const keyOf = goalKeyOfRow(data);
@@ -1675,7 +1677,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   // qa-simple-plan-14: what the dragged mark will take, live.
   const dragRow = drag ? rows.find((r) => r.code === drag.code) : undefined;
   const pending = dragRow && drag ? dragTo(dragRow, drag.dx, drag.dy) : null;
-  const listed = byLine(data);
+  const listed = byLine(data).filter((r) => quad === null || quadrant(r) === quad);
+  const heldKey = (r: Row) => (r.after ? rows.find((x) => x.code === r.after!.code)?.own_key || null : null);
   const split = lineSplit(listed);
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -1714,9 +1717,19 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
               </span>
             )}
             {QUADRANTS.map((q, k) => (
-              <span key={q.name} data-testid="vxe-quadrant" className={`pointer-events-none absolute whitespace-nowrap rounded bg-surface px-1 text-[15px] font-[650] leading-5 text-text-faint ${q.at}`}>
+              <button
+                key={q.name}
+                type="button"
+                data-testid="vxe-quadrant"
+                aria-pressed={quad === k}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setQuad(quad === k ? null : k);
+                }}
+                className={`absolute z-10 whitespace-nowrap rounded px-1 text-[15px] font-[650] leading-5 hover:underline ${quad === k ? "bg-accent-soft text-accent-ink" : "bg-surface text-text-faint"} ${q.at}`}
+              >
                 {q.name} · {counts[k]}
-              </span>
+              </button>
             ))}
             {rows.map((r) => {
               // A feature in a count is drawn by its count.
@@ -1912,8 +1925,14 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   </span>
                   {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}
                   {r.after ? (
-                    <span data-testid="side-held" title={`After ${r.after.title}, which it needs`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
-                      after {rows.find((x) => x.code === r.after!.code)?.own_key || r.after.title}
+                    // The name keeps its room: the pill says "after"; the feature it needs, code with name, is in the tip and on
+                    // the selected row's second line (never a code without its name).
+                    <span data-testid="side-held" title={`After ${heldKey(r) ? `${heldKey(r)} ` : ""}${r.after.title}, which it needs`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
+                      after
+                      <span className="sr-only">
+                        {" "}
+                        <Named item={{ code: heldKey(r), title: r.after.title }} />
+                      </span>
                     </span>
                   ) : (
                     r.oracle_rank != null &&
@@ -1926,6 +1945,11 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   {!r.above_line && <MissesTag data={data} compact />}
                   <span className="flex-none tabular-nums text-text2" title="Score">{r.score == null ? "–" : fmt(r.score, 2)}</span>
                 </button>
+                {isSelected && r.after && (
+                  <span data-testid="side-after" className="block truncate px-2 pl-[34px] text-[13px] text-text2">
+                    after <Named item={{ code: heldKey(r), title: r.after.title }} />
+                  </span>
+                )}
                 {isSelected && (
                   <span data-testid="side-numbers" className="block px-2 pb-1 pl-[34px] text-[13px] tabular-nums text-text">
                     {r.effort == null ? `goal value ${fmt(r.goal_value)} · PM-owned, no score` : `goal value ${fmt(r.goal_value)} · confidence ${fmt(r.confidence, 2)} · ${weeksWords(r.effort)} · score ${fmt(r.score, 2)}`}
@@ -2381,6 +2405,7 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
   // the asks), its owner, its form in place, the note with Undo and the Archived goals fold.
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
   const year = data.today.slice(0, 4);
+  const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
   // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine;
   // its preview shows a code only once it has one people know.
   const draftGrip = (t: Task, from: string | null) => {
@@ -2412,7 +2437,13 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
   };
   const moved = data.rows.filter((r) => home.has(r.code) && placedIn(r) !== home.get(r.code));
   const nowWeeks = (r: Row) => (r.horizon === "now" ? (r.effort ?? 0) : 0);
-  const all: Bucket[] = data.buckets.map((b) => {
+  // A goal with no feature this quarter (one just added) still has its card, before No goal, as with a dated plan.
+  const extra: Bucket[] = (gb?.goals ?? [])
+    .filter((g) => !kr.krs.parentOf(g.id) && !kr.krs.parentOf(g.title) && !data.buckets.some((b) => !b.no_goal && sameGoal(g.title, b.title)))
+    .sort((a, b) => a.order - b.order)
+    .map((g) => ({ key: g.id, title: g.title, weeks: 0, share: 0, codes: [], no_goal: false, position: null }));
+  const drawn = [...data.buckets.filter((b) => !b.no_goal), ...extra, ...data.buckets.filter((b) => b.no_goal)];
+  const all: Bucket[] = drawn.map((b) => {
     const weeks = b.weeks - moved.filter((r) => home.get(r.code) === b.key).reduce((n, r) => n + nowWeeks(r), 0) + moved.filter((r) => placedIn(r) === b.key).reduce((n, r) => n + nowWeeks(r), 0);
     const codes = [...b.codes.filter((c) => !moved.some((r) => r.code === c)), ...moved.filter((r) => placedIn(r) === b.key).map((r) => r.code)];
     return { ...b, weeks, codes };
@@ -2597,6 +2628,28 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
             </li>
           );
         })}
+        {/* As with a dated plan: who may add a goal adds it here, in the same tile and form. */}
+        {rights.add &&
+          (editingGoal === "new" ? (
+            <li data-testid="add-goal" className="rounded-[var(--simple-card-radius)] border-2 border-accent bg-surface p-4">
+              <GoalForm
+                start={{ title: "", measure: "", target: "", due: "" }}
+                order={nextOrder}
+                title="New goal"
+                year={year}
+                onCancel={() => setEditingGoal(null)}
+                onSave={async (f) => {
+                  if (await writes.add(f, nextOrder)) setEditingGoal(null);
+                }}
+              />
+            </li>
+          ) : (
+            <li data-testid="add-goal" className="flex min-h-[120px] items-center justify-center rounded-[var(--simple-card-radius)] border border-dashed border-line-strong bg-surface p-4">
+              <button type="button" className={BTN} onClick={() => setEditingGoal("new")} disabled={!!editingGoal}>
+                + Add goal
+              </button>
+            </li>
+          ))}
         {acts.fold(year)}
       </ul>
       {drag.edge}

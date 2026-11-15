@@ -148,6 +148,8 @@ const SIMPLE_PAGES: Record<string, string> = {
   meetings: "Meetings",
   prds: "One-pager",
   "one-pagers": "One-pager",
+  goals: "Goal map",
+  inbox: "Inbox",
 };
 
 /** "Settings · Members" for /settings/members, "General" for /, "Home" for /simple. */

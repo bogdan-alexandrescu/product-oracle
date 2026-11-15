@@ -146,7 +146,7 @@ for (const size of SIZES) {
       await expect(panel(page).getByTestId("card-owner")).toHaveText(name);
     });
 
-    test("another PRD's feature added as a dependency reads code and name and opens its panel; an unknown key is refused", async ({ page }) => {
+    test("another PRD's feature added as a dependency reads code and name and opens its panel; an unknown one is not found", async ({ page }) => {
       await login(page);
       await page.goto("/simple/roadmap");
       await expect(page.getByTestId("simple-roadmap")).toBeVisible();
@@ -160,9 +160,10 @@ for (const size of SIZES) {
       await expect(panel(page).getByTestId("card-depends")).not.toContainText("Feature F-06");
 
       await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
-      await panel(page).getByLabel("Or another PRD's feature key").fill("F-404");
-      await tap(panel(page).getByRole("button", { name: "Save" }));
-      await expect(page.getByText(/no item or feature has the key F-404/).first()).toBeVisible();
+      await panel(page).getByLabel("Or a feature from another PRD").fill("F-404");
+      await expect(panel(page).getByTestId("card-depends-search")).toHaveText("No feature matches");
+      await expect(panel(page).getByRole("button", { name: "Save" })).toBeDisabled();
+      await tap(panel(page).getByRole("button", { name: "Cancel" }));
       await expect(panel(page).getByTestId("card-depends")).not.toContainText("F-404");
 
       await tap(dep);

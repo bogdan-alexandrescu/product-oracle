@@ -85,9 +85,9 @@ test("Home's plan groups by the roadmap's current milestones, a removed one's it
     "M3 · First alert within a day · 3 items",
     "M4 · Pilot · 2 items",
     "M5 · Pilot · 2 items",
-    "M10 · Launch (beta) · 3 items",
+    "M10 · 2 items",
     "M11 · Prices live · 2 items",
-    "M9 · 2 items",
+    "M9 · Launch (beta) · 3 items",
     "Not in a milestone · 11 items",
   ]);
   const codes = labels.flatMap((l) => (l.match(/^M(\d+)(?: ·|$)/)?.[1] ? [Number(l.match(/^M(\d+)(?: ·|$)/)![1])] : []));
@@ -109,8 +109,8 @@ test("Home's plan groups by the roadmap's current milestones, a removed one's it
   // Typed texts naming Onboarding's current milestone by its code and by its name.
   expect(await itemsOf(page, "M3 · First alert within a day · 3 items")).toEqual([["Sample data import", "Setup checklist", "Welcome video"]]);
   // An undated track milestone holds its items, its name whole (with the roadmap's own milestone, one row).
-  expect(await itemsOf(page, "M10 · Launch (beta) · 3 items")).toEqual([["Alert history export", "Alert routing by team", "Weekly alert digest"]]);
-  expect(await itemsOf(page, "M9 · 2 items")).toEqual([["Health log", "Setup reminders"]]);
+  expect(await itemsOf(page, "M9 · Launch (beta) · 3 items")).toEqual([["Alert history export", "Alert routing by team", "Weekly alert digest"]]);
+  expect(await itemsOf(page, "M10 · 2 items")).toEqual([["Health log", "Setup reminders"]]);
   // Two PRDs' "Pilot" on one day: two rows, each with its own new code (never sharing one code).
   expect(await itemsOf(page, "M4 · Pilot · 2 items")).toEqual([["Lead list ranking", "Refund in one step"]]);
   expect(await itemsOf(page, "M5 · Pilot · 2 items")).toEqual([["Complaint early warning", "Rep call script hints"]]);
@@ -176,13 +176,14 @@ test("a roadmap's own milestone reads whole, one row per milestone, a bare code 
     expect(l).not.toMatch(/·\s*·/);
     expect(l).not.toMatch(/[[\]]/);
   }
-  // Onboarding's own M3 (no name) and the track's M3: one row, its code alone (now M9).
-  expect(labels.filter((l) => l.startsWith("M9"))).toEqual(["M9 · 2 items"]);
-  // Alerts' own "[Launch (beta)]" M2 and the track's "M2 · Launch (beta)": one row (now M10).
-  expect(labels.filter((l) => l.startsWith("M10 · Launch"))).toEqual(["M10 · Launch (beta) · 3 items"]);
-  // Annual billing types a bare "M3": Pricing's milestone (now M11), never Onboarding's (now M9).
+  // Two undated rows take M9 and M10 by goal order (every goal ranked from the first read, as the API's).
+  // Onboarding's own M3 (no name) and the track's M3: one row, its code alone (now M10).
+  expect(labels.filter((l) => l.startsWith("M10"))).toEqual(["M10 · 2 items"]);
+  // Alerts' own "[Launch (beta)]" M2 and the track's "M2 · Launch (beta)": one row (now M9).
+  expect(labels.filter((l) => l.startsWith("M9 · Launch"))).toEqual(["M9 · Launch (beta) · 3 items"]);
+  // Annual billing types a bare "M3": Pricing's milestone (now M11), never Onboarding's (now M10).
   expect(await itemsOf(page, "M11 · Prices live · 2 items")).toEqual([["Annual billing", "Usage meter"]]);
-  expect((await itemsOf(page, "M9 · 2 items"))[0]).not.toContain("Annual billing");
+  expect((await itemsOf(page, "M10 · 2 items"))[0]).not.toContain("Annual billing");
 });
 
 /*

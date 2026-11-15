@@ -13,7 +13,7 @@ import { expect, test, type Page } from "./test";
  * Card tasks-move: protects = with no dated plan a task's grip carries it to another goal by
  * pointer (the page scrolls at the edge on a phone) or by keys (Enter, arrows, Enter); the target
  * lights up and says where it lands; Undo puts it back; fails_when = no grip, or it stays put.
- * Card tasks-add: protects = "+ Add a task" at a bucket's foot opens the form in place (name,
+ * Card tasks-add: protects = "+ Add a feature" at a bucket's foot opens the form in place (name,
  * outcome, milestone), Save stays off with no name, the task shows in that bucket as a draft,
  * Undo removes it. Card tasks-edit: protects = a task's pencil opens the same form filled in;
  * the new name shows; Undo puts the name back. Card tasks-cut: protects = ⋯ Cut from the roadmap
@@ -80,11 +80,11 @@ for (const view of VIEWS) {
         await open(page, view, size.viewport);
         const growth = bucket(page, view, "Growth");
         const add = growth.getByTestId("add-task");
-        await add.getByRole("button", { name: "+ Add a task" }).click();
+        await add.getByRole("button", { name: "+ Add a feature" }).click();
         const form = add.getByTestId("task-form");
-        await expect(form.getByRole("heading", { name: "New task" })).toBeVisible();
+        await expect(form.getByRole("heading", { name: "New feature" })).toBeVisible();
         await expect(form).toContainText("Goal: Growth");
-        const save = form.getByRole("button", { name: "Save task" });
+        const save = form.getByRole("button", { name: "Save", exact: true });
         await expect(save).toBeDisabled();
         await form.getByLabel("Name").fill("Saved carts");
         await form.getByLabel("Outcome: what changes for people").fill("Shoppers pick up where they left off");
@@ -95,7 +95,7 @@ for (const view of VIEWS) {
         const made = growth.getByTestId("plan-feature").filter({ hasText: "Saved carts" });
         await expect(made).toBeVisible();
         await expect(made).toContainText("Draft");
-        await expect(add.getByRole("button", { name: "+ Add a task" })).toBeVisible();
+        await expect(add.getByRole("button", { name: "+ Add a feature" })).toBeVisible();
         await note(page).getByRole("button", { name: "Undo" }).click();
         await expect(note(page)).toContainText("Undone");
         await expect(made).toHaveCount(0);
@@ -106,13 +106,13 @@ for (const view of VIEWS) {
         const row = bucket(page, view, "Reliability").locator('[data-code="F-03"]');
         await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();
         const form = row.getByTestId("task-form");
-        await expect(form.getByRole("heading", { name: "Edit task" })).toBeVisible();
+        await expect(form.getByRole("heading", { name: "Edit feature" })).toBeVisible();
         await expect(form.getByLabel("Name")).toHaveValue("Setup failure alerts");
         await form.getByLabel("Name").fill("Setup failure alarms");
         await form.getByLabel("Outcome: what changes for people").fill("Teams hear about a failed setup within a minute");
         await form.getByLabel("Milestone").selectOption({ index: 1 });
         const milestone = await form.getByLabel("Milestone").inputValue();
-        await form.getByRole("button", { name: "Save task" }).click();
+        await form.getByRole("button", { name: "Save", exact: true }).click();
         await expect(note(page)).toContainText("Saved Setup failure alarms.");
         await expect(row.getByTestId("plan-feature-name")).toContainText("Setup failure alarms");
         // The form opens again with what was saved.
@@ -196,7 +196,7 @@ for (const view of VIEWS) {
           await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();
           await form.getByLabel("Milestone").selectOption({ index });
           const name = index ? await form.getByLabel("Milestone").locator("option:checked").textContent() : null;
-          await form.getByRole("button", { name: "Save task" }).click();
+          await form.getByRole("button", { name: "Save", exact: true }).click();
           await expect(form).toHaveCount(0);
           await expect(page.locator('section[aria-label="Goal buckets"]').getByRole("alert")).toHaveCount(0);
           await expect(note(page)).toContainText("Saved Setup failure alerts.");
@@ -214,9 +214,9 @@ for (const view of VIEWS) {
         await open(page, view, size.viewport);
         const growth = bucket(page, view, "Growth");
         const add = growth.getByTestId("add-task");
-        await add.getByRole("button", { name: "+ Add a task" }).click();
+        await add.getByRole("button", { name: "+ Add a feature" }).click();
         await add.getByTestId("task-form").getByLabel("Name").fill("Saved carts");
-        await add.getByTestId("task-form").getByRole("button", { name: "Save task" }).click();
+        await add.getByTestId("task-form").getByRole("button", { name: "Save", exact: true }).click();
         await expect(note(page)).toContainText("Added Saved carts to Growth.");
         const made = (goal: string) => bucket(page, view, goal).getByTestId("plan-feature").filter({ hasText: "Saved carts" });
         await expect(made("Growth")).toContainText("Draft");
@@ -261,7 +261,7 @@ for (const view of VIEWS) {
         await open(page, view, size.viewport);
         const row = bucket(page, view, "Reliability").locator('[data-code="F-03"]');
         await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();
-        await row.getByTestId("task-form").getByRole("button", { name: "Save task" }).click();
+        await row.getByTestId("task-form").getByRole("button", { name: "Save", exact: true }).click();
         await expect(row.getByTestId("task-form")).toHaveCount(0);
         await expect(note(page)).toHaveText("No changes.");
         await expect(note(page).getByRole("button", { name: "Undo" })).toHaveCount(0);
@@ -282,22 +282,22 @@ for (const view of VIEWS) {
         await expect(row).toBeVisible();
         await expect(bucket(page, view, "Growth").locator('[data-code="F-03"]')).toHaveCount(0);
         const add = bucket(page, view, "Growth").getByTestId("add-task");
-        await add.getByRole("button", { name: "+ Add a task" }).click();
+        await add.getByRole("button", { name: "+ Add a feature" }).click();
         await add.getByTestId("task-form").getByLabel("Name").fill("Gift wrap notes");
-        await add.getByTestId("task-form").getByRole("button", { name: "Save task" }).click();
+        await add.getByTestId("task-form").getByRole("button", { name: "Save", exact: true }).click();
         await expect(note(page)).toContainText("Proposed adding Gift wrap notes to Growth: it waits for a decision.");
         await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();
         await row.getByTestId("task-form").getByLabel("Name").fill("Setup failure alerts by email");
-        await row.getByTestId("task-form").getByRole("button", { name: "Save task" }).click();
+        await row.getByTestId("task-form").getByRole("button", { name: "Save", exact: true }).click();
         await expect(note(page)).toContainText("Proposed the change to Setup failure alerts by email: it waits for a decision.");
       });
 
       test("an approver proposes adding a task and moves one at once", async ({ page }) => {
         await open(page, view, size.viewport, "approver@example.com");
         const add = bucket(page, view, "Growth").getByTestId("add-task");
-        await add.getByRole("button", { name: "+ Add a task" }).click();
+        await add.getByRole("button", { name: "+ Add a feature" }).click();
         await add.getByTestId("task-form").getByLabel("Name").fill("Gift wrap notes");
-        await add.getByTestId("task-form").getByRole("button", { name: "Save task" }).click();
+        await add.getByTestId("task-form").getByRole("button", { name: "Save", exact: true }).click();
         await expect(note(page)).toContainText("Proposed adding Gift wrap notes to Growth: it waits for a decision.");
         const grip = bucket(page, view, "Reliability").locator('[data-code="F-03"]').getByTestId("feature-grip");
         await grip.focus();
@@ -315,7 +315,7 @@ for (const view of VIEWS) {
           const name = (await row.getByTestId("plan-chip").first().locator("span").nth(1).textContent())!.trim();
           await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();
           await row.getByTestId("task-form").getByLabel("Milestone").selectOption({ label: name });
-          await row.getByTestId("task-form").getByRole("button", { name: "Save task" }).click();
+          await row.getByTestId("task-form").getByRole("button", { name: "Save", exact: true }).click();
           await expect(note(page)).toContainText("Saved Setup failure alerts.");
           await expect(row.getByTestId("plan-chip").filter({ hasText: name })).toHaveCount(1);
           await expect(row.getByTestId("task-milestone")).toHaveCount(0);

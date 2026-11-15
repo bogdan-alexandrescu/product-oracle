@@ -172,7 +172,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith, withKeyResultBuckets } from "./goal-buckets";
+import { bucketGoalsInOrder, goalBucketsDb, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith, withKeyResultBuckets } from "./goal-buckets";
 import { proposeGoalDelete, restoreCodeTaken, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import {
@@ -1797,6 +1797,11 @@ function seedRoadmapMilestonesHardScenario(): Db {
     rm.items.push({ key, title, horizon: "later", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", start, end: start + 25 + (i % 5) * 6 });
     rm.ids[key] = stableUuid(`simple-item/${key}`);
   });
+  // QA Nov 14 #4: an item with no dates yet is never late from its estimate, so the two gated
+  // items have typed dates, each ending after its milestone (Jan 25 and Jan 5, 2027).
+  const set = (key: string, f: Partial<(typeof rm.items)[number]>) => Object.assign(rm.items.find((i) => i.key === key)!, f);
+  set("alert-sso", { start: 50, end: 95, source: "typed" });
+  set("setup-ideas", { start: 30, end: 75, source: "typed" });
   rm.goal_milestones = [
     ...seedOwnMilestones(),
     { id: stableUuid("simple-gm/m3"), roadmap: "alerts-roadmap", code: "M3", name: "Teams set 3 rules in week 1", date: "2027-01-20", goal: "grow-retention", gates: ["alert-sso"], counts_when: "Holds 7 days in a row", progress: "not_started" },
@@ -5147,7 +5152,7 @@ function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): Discus
 /** G3 "discussion-record": Oracle's proposed date basis in an open discussion on checkout-redesign v2's guest-checkout item. */
 function seedDiscussionRecordScenario(db: Db): DiscussionsDb {
   const prd = findDocument(db, "checkout-redesign")!;
-  return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, prd, 2);
+  return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { ...prd, name: (key) => itemName(db, key, undefined, versionItemTitle(db, prd.id, 2, key)) }, 2);
 }
 
 /** G3 "discussion-change-kinds": Oracle's priority move, ask and decision on the feature-set stop's saved-carts item. */
@@ -5161,7 +5166,7 @@ function seedDiscussionChangeKindsScenario(db: Db): DiscussionsDb {
   };
   return seedDiscussionChangeKinds(
     { members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now },
-    { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind },
+    { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind, name: (key) => itemName(db, key, run.id) },
     { moved: feature("F-84"), above: feature("F-82") },
   );
 }
@@ -5197,7 +5202,7 @@ function seedRunDiscussionsScenario(db: Db): DiscussionsDb {
   const run = db.runs!.runs.find((r) => r.id === FEATURE_SET_RUN)!;
   const cp = run.checkpoints.find((c) => c.status === "pending")!;
   const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
-  return seedRunDiscussions({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind });
+  return seedRunDiscussions({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind, name: (key) => itemName(db, key, run.id) });
 }
 
 const CHECKPOINT_NAMES: Record<string, string> = {
@@ -5247,6 +5252,29 @@ function screenPageName(path: string): string {
   return name;
 }
 
+/**
+ * An item as people read it (service.Labels._item_name): its Ground Truth feature's code and name ("F-12 Bulk address edit"),
+ * else the run's scope row's title (or the roadmap item's own, `title`), else its key.
+ */
+function itemName(db: Db, key: string, runId?: string, title?: string | null): string {
+  const feature = db.baseline.entities.find((e) => e.type === "feature" && e.key === key);
+  const row = runId ? (db.runs?.scopes?.[runId] ?? []).flatMap((x) => x.features).find((f) => f.key === key) : undefined;
+  const name = (row?.title || title || feature?.title || "").trim() || key;
+  const code = feature ? featureCodes(db.baseline.entities.filter((e) => e.type === "feature"), db.roadmap?.section_code, db.plan_edits, db)[feature.id] : undefined;
+  return code ? `${code} ${name}` : name;
+}
+
+/** A PRD version's roadmap item's own title (service.Labels._roadmap_item reads the version's RoadmapItem rows). */
+function versionItemTitle(db: Db, documentId: string, version: number, key: string): string | null {
+  const v = db.versions.find((x) => x.document_id === documentId && x.number === version);
+  const items = [
+    // Read, not stored: a discussion seed may ask before the draft roadmaps are seeded (their own ids, not the seed's).
+    ...((db.draft_roadmaps ?? seeded("item-titles", () => seedDraftRoadmaps(draftCtx(db)))).rows.find((r) => r.document_id === documentId && r.version === version)?.items ?? []),
+    ...(v ? (db.roadmap?.items[v.id] ?? db.sharing_items?.[v.id] ?? []) : []),
+  ];
+  return items.find((i) => i.item_key === key)?.title ?? null;
+}
+
 /** A discussion's subject as the API resolves it (oracle.discussions.service): documents, sections and run checkpoints are checked; other kinds are taken as given. */
 function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): SubjectInfo | { status: number; detail: string } {
   if (kind === "document" || kind === "section" || kind === "roadmap_item") {
@@ -5257,7 +5285,7 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     const url = `/documents/${doc.slug}/v/${v.number}`;
     if (kind === "document") return { key: `document:${doc.id}`, label: doc.title, url, document_id: doc.id };
     if (kind === "roadmap_item")
-      return { key: `roadmap_item:${doc.id}:${s.item_key}`, label: `${doc.title} · ${s.item_key}`, url: `${url}/items`, document_id: doc.id };
+      return { key: `roadmap_item:${doc.id}:${s.item_key}`, label: `${doc.title} · ${itemName(db, String(s.item_key), undefined, versionItemTitle(db, doc.id, v.number, String(s.item_key)))}`, url: `${url}/items`, document_id: doc.id };
     const section = v.sections.find((x) => x.section_key === s.section_key);
     if (!section) return { status: 422, detail: `Section ${s.section_key} is not in version ${v.number}` };
     // As the API: the document's own title as a section's heading is its Introduction (ask-phone QA row 3).
@@ -5271,7 +5299,7 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     if (!cp) return { status: 404, detail: "Checkpoint not found" };
     const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
     if (kind === "checkpoint") return { key: `checkpoint:${run.id}:${cp.kind}`, label, url: `/runs/${run.id}`, run_id: run.id };
-    return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
+    return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${itemName(db, String(s.item_key), run.id)}`, url: `/runs/${run.id}`, run_id: run.id };
   }
   if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
   // An intake and its gaps open on the intake's page; a PRD's own gap on its newest version (as Labels.of).
@@ -8435,7 +8463,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
   if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   // roadmap-milestone-codes: the Goal map's milestones as they are now (moved, renamed, in Trash).
-  if (db.goal_map && db.simple_roadmap.map_milestones) db.simple_roadmap.map_milestones.milestones = goalMapMilestones(db.goal_map);
+  // simple-goals: in the default scenario too (each other scenario keeps its own), as the API's map milestones are its roadmap's TrackMilestone rows (on the
+  // roadmap its features join: knowGoalMapItems), so they carry their codes and the feature panel's picker lists them.
+  if (db.goal_map && (db.simple_roadmap.map_milestones || !localStorage.getItem(MOCK_SCENARIO_KEY))) (db.simple_roadmap.map_milestones ??= { roadmap: db.simple_roadmap.company_roadmap ?? "onboarding-roadmap", milestones: [] }).milestones = goalMapMilestones(db.goal_map);
   // simple-replaced-prds: the PRDs marked replaced, whose items no longer feed Simple (service.load).
   markReplaced(db, db.simple_roadmap);
   const roadmapItems = db.simple_roadmap;
@@ -8525,6 +8555,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     // roadmap-milestones: its fourth goal names its work on every load.
     if (db.simple_roadmap?.items.some((i) => i.key === "pricing-faq")) GOALS["win-teams"] = "Win larger teams";
     knowGoalParents(db.baseline.entities);
+    // As the API, whose goals are all stored from the start: before the goal buckets are seeded (lazily, by whichever
+    // page reads them first), goals rank as the buckets will hold them, read off a copy that is not kept, so the first
+    // Roadmap read numbers milestones that share a day as every later one does.
+    if (db.simple_roadmap && !db.simple_roadmap.goal_buckets) {
+      const preview = { ...db.simple_roadmap, goal_buckets: undefined };
+      goalBucketsDb(preview);
+      knowCompanyGoals([...baselineGoals, ...bucketGoalsInOrder(preview, new Set(baselineGoals.map((e) => e.key)))]);
+    }
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served a page built from its own sections (vqa B-13), with its own draft and changes.
     const onePagerDb = await onePagerOf(db, r, p);
@@ -8663,7 +8701,14 @@ async function route(db: Db, req: Request): Promise<Response> {
       const read = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, new Request("http://mock/v1/simple/roadmap"), ["v1", "simple", "roadmap"], new URLSearchParams());
       const body = read && read.ok ? ((await read.json()) as { items: { id: string; title: string; status: string; goal?: { id: string } | null }[] }) : { items: [] };
       return body.items;
-    }, () => db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ ...e, title: bucketTitle(e) })), (goalId) => !!db.simple_roadmap?.goal_buckets?.goals.some((g) => g.id === goalId && g.trashed));
+    }, () => {
+      const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ ...e, title: bucketTitle(e) }));
+      // simple-goals: one goal store, as the API's: a goal the roadmap's features serve is a Baseline goal too (here with
+      // no number to aim at, so off the map and named there), never left out in silence. Default scenario only.
+      const served = localStorage.getItem(MOCK_SCENARIO_KEY) ? [] : [...new Set((db.simple_roadmap?.items ?? []).filter((i) => !i.trashed && !i.draft && i.goal && GOALS[i.goal]).map((i) => i.goal!))];
+      const known = new Set(goals.map((g) => g.title.toLowerCase()));
+      return [...goals, ...served.filter((k) => !known.has(GOALS[k].toLowerCase())).map((k) => ({ id: stableUuid(`simple-goal/${k}`), key: k, title: GOALS[k], status: "confirmed", attrs: {} }))];
+    }, (goalId) => !!db.simple_roadmap?.goal_buckets?.goals.some((g) => g.id === goalId && g.trashed));
     // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
     if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
     // pre-demo QA P-6: the panel reads the goal each feature serves on the map (one link, service._ladder_goals).

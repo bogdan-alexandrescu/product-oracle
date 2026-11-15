@@ -1,9 +1,10 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as KeyEvent, type ReactNode, type RefObject } from "react";
 
-import { Icon, Mark } from "@/components/ds";
+import { Button, Icon, Mark } from "@/components/ds";
+import { ShareForm } from "@/components/hop/ShareForm";
 import { SIMPLE_ASK_PANEL_ID } from "@/components/simple/SimpleShell";
 import { takeAskDraft, useAskDraft } from "@/components/hop/open-state";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -65,7 +66,7 @@ async function askLines(id: string): Promise<AskMessage[]> {
 
 /** What the empty chat invites: "Ask about the roadmap, or ask for a change." */
 function aboutWords(name: string): string {
-  const the: Record<string, string> = { Roadmap: "the roadmap", Priorities: "the priorities", Decisions: "the decisions", Meetings: "the meetings", "One-pagers": "the one-pagers", General: "anything" };
+  const the: Record<string, string> = { Roadmap: "the roadmap", Priorities: "the priorities", Decisions: "the decisions", Meetings: "the meetings", "One-pagers": "the one-pagers", "Goal map": "the goal map", Inbox: "your inbox", General: "anything" };
   return the[name] ?? name;
 }
 
@@ -95,6 +96,49 @@ function useShownHeading(on: boolean): string | null {
     };
   }, [on]);
   return on ? text : null;
+}
+
+/**
+ * Share as discussion (G7 3.1), as Detailed's panel: the chat's Oracle's Ask chat, by the person
+ * who may manage it, opens as an open discussion; its thread then opens over the page.
+ */
+function ShareAsk({ askId }: { askId: string }) {
+  const router = useRouter();
+  const pathname = usePathname() ?? "/simple";
+  const [d, setD] = useState<Schemas["DiscussionOut"] | null>(null);
+  const [sharing, setSharing] = useState(false);
+  useEffect(() => {
+    let live = true;
+    unwrap(api.GET("/v1/discussions/{discussion_id}", { params: { path: { discussion_id: askId } } }))
+      .then((x) => live && setD(x))
+      .catch(() => live && setD(null));
+    return () => {
+      live = false;
+    };
+  }, [askId]);
+  if (d?.origin !== "panel" || !d.me.can_manage) return null;
+  if (sharing)
+    return (
+      <div className="mt-3">
+        <ShareForm
+          id={askId}
+          onCancel={() => setSharing(false)}
+          onShared={(id) => {
+            setSharing(false);
+            const rest = new URLSearchParams(window.location.search);
+            rest.set("discussion", id);
+            router.push(`${pathname}?${rest}`, { scroll: false });
+          }}
+        />
+      </div>
+    );
+  return (
+    <div className="mt-3">
+      <Button variant="ghost" icon="comment" onClick={() => setSharing(true)} data-testid="ask-share">
+        Share as discussion
+      </Button>
+    </div>
+  );
 }
 
 /** The pick's history mark beside "Recent chats" (a clock with its arrow back). */
@@ -280,6 +324,7 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
             </button>
           </p>
         )}
+        below={chat.askId && can("create_discussion") ? <ShareAsk key={chat.askId} askId={chat.askId} /> : null}
         overlay={
           recent !== null && (
             <RecentMenu
@@ -411,6 +456,7 @@ function ChatView({
   onChat,
   top,
   overlay,
+  below,
 }: {
   chat: Chat;
   name: string;
@@ -424,6 +470,8 @@ function ChatView({
   top: (question: string | null) => ReactNode;
   /** The Recent chats menu, over the lines. */
   overlay: ReactNode;
+  /** Under a chat with lines: its Share as discussion. */
+  below?: ReactNode;
 }) {
   const [thread, setThread] = useState<ChatThread | null>(null);
   const [ask, setAsk] = useState<AskMessage[]>([]);
@@ -576,6 +624,7 @@ function ChatView({
               ),
             )}
           </ol>
+          {lines.length > 0 && below}
           {lines.length === 0 && (
             <p className="px-2 pt-7 pb-3 text-center text-text2" data-testid="hop-empty">
               <b className="mb-1 block text-[17px] leading-6 font-[650] text-text">Nothing yet</b>

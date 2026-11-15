@@ -25,8 +25,9 @@ export function Named({ item }: { item: { code?: string | null; title: string } 
 export function NotInGt({ item, className = "ml-1.5 h-5! px-2! text-xs!" }: { item?: { code?: string | null }; className?: string }) {
   if (item?.code) return null;
   return (
-    <Chip kind="warn" className={`shrink-0 ${className}`} data-testid="not-in-gt">
-      {NOT_IN_GT}
+    <Chip kind="warn" className={`shrink-0 ${className}`} title={NOT_IN_GT} data-testid="not-in-gt">
+      {/* A narrow row may cut the words (its title keeps them whole). */}
+      <span className="truncate">{NOT_IN_GT}</span>
     </Chip>
   );
 }

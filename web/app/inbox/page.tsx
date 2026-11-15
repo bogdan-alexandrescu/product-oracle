@@ -15,6 +15,7 @@ import { useAccessRequestRows } from "./_access";
 import { useActed } from "./_actions";
 import { allNeeds, NeedTable, SOURCE_COLUMNS, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingCount, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 import { useQuestionRows } from "./_questions";
+import { BrokenLinks } from "./_broken";
 import { minutesRows } from "./_minutes";
 import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows, trackSuggestionRows } from "./_proposals";
 import { useReminderRows } from "./_reminders";
@@ -178,6 +179,8 @@ function Inbox() {
         />
       )}
       {asked.sheet}
+      {/* simple-home-qa-nov14: the broken links Home sends here, fixed in place; hidden under ?kind= until Show all. */}
+      {!kind && path.startsWith("/simple") && <BrokenLinks />}
       {/* Owner 2026-11-10: every role sees its sources that need attention; only one that can edit a source gets Edit. */}
       {/* Sources to fix are no kind of Home's: hidden under ?kind= until Show all. */}
       {!kind && sourcesQ.data && perms.ready && <SourcesNeedingAttention sources={sourcesQ.data} mayEdit={perms.can("update_source")} />}

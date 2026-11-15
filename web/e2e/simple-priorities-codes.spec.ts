@@ -11,7 +11,7 @@ import {
 /**
  * Simple Priorities: stable item codes on Value / effort (#723; the owner's pick "Short code +
  * highlight"). Each mark shows a short code that never changes with rank (the feature's code,
- * F-12 for setup-import in the mock; one with no Ground Truth code shows none, never made-up letters, PR1); the
+ * F-06 for alert-digest in the mock; one with no Ground Truth code shows none, setup-import's included, never made-up letters, PR1); the
  * ranked side list shows the same code beside the rank; the item just moved stays highlighted
  * on the chart and in the list with "moved #a → #b" ("now #b (effort n weeks)" for a re-estimate) until the next move (an accepted proposal
  * included). Every action is driven through the UI (a mouse drag, a finger's touch drag, the
@@ -98,7 +98,7 @@ const CODES: Record<string, string | null> = {
   "alert-rules": null,
   "alert-digest": "F-06",
   "alert-mobile": null,
-  "setup-import": "F-12",
+  "setup-import": null,
   "alert-export": null,
   "alert-sso": null,
   // F-03 Health log: the Guided setup PRD's feature on the onboarding roadmap (no code of its own,
@@ -113,9 +113,9 @@ const CODES: Record<string, string | null> = {
 test.describe("desktop", () => {
   /**
    * Card simple-priorities-codes-drag: protects = each Value / effort mark shows its short
-   * stable code (F-12, ARB…), never its rank; dragging setup-import across a quadrant re-ranks
-   * it (#5 → #2) while every mark keeps its code, the side-list row with that code shows the
-   * new rank beside the code and "moved #5 → #2", the mark is highlighted, the hover card
+   * stable code (F-06; none for setup-import, never ARB…), never its rank; dragging setup-import across a quadrant re-ranks
+   * it (#5 → #2) while every mark keeps its code (or none), its side-list row shows the
+   * new rank, still with no code, and "moved #5 → #2", the mark is highlighted, the hover card
    * keeps the rank, and the legend says codes stay with the item; fails_when = a mark shows a
    * rank or another item's code after the move, the side list loses the code or the rank, or
    * the moved row is not highlighted; no_claim = the API's codes (pytest
@@ -137,17 +137,17 @@ test.describe("desktop", () => {
     ).toHaveText("5");
     await expect(
       side(admin, "setup-import").getByTestId("side-code"),
-    ).toHaveText("F-12");
-    // P-3: the mark's code with its name shows on hover.
+    ).toHaveCount(0);
+    // P-3: the mark's name shows on hover (with its code when it has one; Sample data import has none).
     await point(admin, "setup-import").hover();
     await expect(
       point(admin, "setup-import").getByTestId("vxe-name"),
-    ).toHaveText(/^#5 F-12 · Sample data import$/);
+    ).toHaveText(/^#5 Sample data import$/);
     await admin.mouse.move(0, 0);
 
     await dragLeft(admin, "setup-import", 2);
     await expect(
-      admin.getByText("Re-estimated Sample data import (F-12): effort 1 week"),
+      admin.getByText("Re-estimated Sample data import: effort 1 week"),
     ).toBeVisible();
     await expect(
       side(admin, "setup-import").getByTestId("side-rank"),
@@ -155,7 +155,7 @@ test.describe("desktop", () => {
     expect(await markCodes(admin)).toEqual(CODES);
     await expect(
       side(admin, "setup-import").getByTestId("side-code"),
-    ).toHaveText("F-12");
+    ).toHaveCount(0);
     await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
       /^now #2 \(effort [\d.]+ weeks?\)$/,
     );
@@ -169,7 +169,7 @@ test.describe("desktop", () => {
     );
     await expect(
       point(admin, "setup-import").getByTestId("vxe-name"),
-    ).toHaveText(/^#2 F-12 · /, { useInnerText: false });
+    ).toHaveText(/^#2 Sample data import$/, { useInnerText: false });
     await expect(admin.locator('[data-moved="true"]')).toHaveCount(2);
   });
 
@@ -213,14 +213,23 @@ test.describe("desktop", () => {
     const ranked = admin.locator(
       '[data-testid="prio-row"][data-code="setup-import"]',
     );
-    await expect(ranked.getByTestId("prio-own-key")).toHaveText("F-12");
+    await expect(ranked.getByTestId("prio-own-key")).toHaveCount(0);
+    await expect(ranked.getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
     await expect(ranked.getByTestId("prio-rank")).toHaveText("2");
+    await expect(
+      admin.locator('[data-testid="prio-row"][data-code="alert-digest"]').getByTestId("prio-own-key"),
+    ).toHaveText("F-06");
     await admin.getByRole("tab", { name: "Goal buckets" }).click();
     await expect(
       admin.locator(
-        '[data-testid="goal-bucket"][data-key="faster-activation"]',
+        '[data-testid="goal-bucket"][data-key="grow-retention"]',
       ),
-    ).toContainText("F-12");
+    ).toContainText("F-06");
+    await expect(
+      admin.locator(
+        '[data-testid="goal-bucket"][data-key="grow-retention"]',
+      ),
+    ).not.toContainText("alert-digest");
     await expect(
       admin.locator(
         '[data-testid="goal-bucket"][data-key="faster-activation"]',

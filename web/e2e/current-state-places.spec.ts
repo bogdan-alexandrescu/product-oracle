@@ -89,7 +89,8 @@ for (const size of ["desktop", "phone"] as const) {
       await tap(title.getByRole("button", { name: "What Exists means" }));
       const card = reply.getByTestId("cs-mark-card");
       await expect(card).toBeVisible();
-      await expect(card).toContainText("Weekly alert digest");
+      // The card names the feature by its code and name, as the title does (visual QA Nov 14).
+      await expect(card).toContainText(/F-\d+ Weekly alert digest/);
       await expect(card).toContainText("Runs today");
     });
 
@@ -139,7 +140,7 @@ for (const size of ["desktop", "phone"] as const) {
       for (let i = 0; i < n; i += 1) {
         const l = lines.nth(i);
         await expect(l.getByTestId("cs-mark"), "every line's feature is on the roadmap").toHaveCount(1);
-        await expect(l.getByTestId("cs-mark")).toHaveText(/^(New|In progress|Exists|Exists · proof old)$/);
+        await expect(l.getByTestId("cs-mark")).toHaveText(/^(New|In progress|Exists|Exists · checked [A-Z][a-z]{2} \d{1,2})$/);
         await pillAfter(l.getByTestId("part-build-name"), l.getByTestId("cs-mark"));
       }
       // The pill is that feature's: its card names the line's feature.
@@ -192,7 +193,8 @@ for (const size of ["desktop", "phone"] as const) {
         [m1, "Setup checklist", "In progress", "Being built", /4 merged pull requests/],
         [m1, "Sample data import", "New", "Nothing built yet", /No merged pull requests or done tasks yet/],
         [row("Milestone M2 · 5 roadmap items"), "Welcome video", "Exists", "Runs today, with proof", /11 merged pull requests/],
-        [row("No milestone · 2 roadmap items"), "Alert routing by team", "Exists · proof old", "more than 30 days old", /4 merged pull requests/],
+        // simple-home-qa-nov14 #5: an old proof reads the day it was checked, never "proof old".
+        [row("No milestone · 2 roadmap items"), "Alert routing by team", "Exists · checked Sep 11", "more than 30 days old", /4 merged pull requests/],
       ];
       for (const [r, name, word, means, proof] of kinds) {
         const it = item(r, name);
@@ -226,7 +228,9 @@ for (const size of ["desktop", "phone"] as const) {
       await expect(cardIn.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 
       const strip = page.getByTestId("agenda-strip");
-      await expect(page.getByTestId("agenda-next")).toHaveText("Next: Setup checklist");
+      // simple-home-qa-nov14 #1: Setup checklist has no code, so it carries the flag after its name.
+      await expect(page.getByTestId("agenda-next")).toHaveText("Next: Setup checklistNot in the Ground Truth");
+      await expect(page.getByTestId("agenda-next").getByTestId("not-in-gt")).toBeVisible();
       await expect(strip.getByTestId("cs-mark")).toHaveText("In progress");
       await pillAfter(page.getByTestId("agenda-next"), strip.getByTestId("cs-mark"));
 

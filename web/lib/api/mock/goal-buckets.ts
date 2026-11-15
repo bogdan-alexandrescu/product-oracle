@@ -451,9 +451,38 @@ function goalKeyResultsBuckets(simple: { items?: { key: string; title: string; g
   return db;
 }
 
+/**
+ * simple-goals: the default goals as the API lists them for a roadmap's company: the plan's, then every goal
+ * the roadmap's items serve (Faster activation, Grow retention, ...), each item's feature linked to its goal,
+ * so every bucket Priorities draws is a goal with its controls and every row has its grip. All lazy, as
+ * lazyGoalBuckets. Invented data.
+ */
+function roadmapGoalBuckets(simple: BucketsSimple): GoalBucketsDb {
+  const items = (simple.items ?? []).filter((i) => !i.draft && i.goal);
+  const name = (k: string) => GOALS[k] ?? k;
+  // With no dated plan the plan's own goals and features are none of the company's (archived goals stay).
+  const base = seedGoalBuckets();
+  const planned = !items.length ? base : { goals: base.goals.filter((g) => g.archived), features: [] };
+  const db = seedGoalBucketsWith(planned, [...new Set(items.map((i) => name(i.goal!)))], items.map((i) => ({ key: i.key, title: i.title, goals: [name(i.goal!)] })));
+  addMapGoals(db, simple);
+  return { ...db, lazy: db.goals.map((g) => g.id), lazy_links: db.features.flatMap((f) => f.goal_ids.map((g) => linkOf(f.id, g))) };
+}
+
+type BucketsSimple = { goal_buckets?: GoalBucketsDb; plan?: unknown; items?: { key: string; title: string; goal?: string; draft?: boolean }[]; map_goals?: Record<string, { id: string; title: string; metric?: string | null; target?: string | null }> };
+/** The Goal map's goals its features serve (map_goals), each a goal of the one store too (lazy, as the seeded ones). */
+function addMapGoals(db: GoalBucketsDb, simple: BucketsSimple): void {
+  for (const g of Object.values(simple.map_goals ?? {})) {
+    if (db.goals.some((x) => x.id === g.id || x.title.toLowerCase() === g.title.toLowerCase())) continue;
+    db.goals.push({ id: g.id, key: keyOf(g.title), title: g.title, order: db.goals.filter((x) => !x.archived).length + 1, measure: g.metric ?? null, target: g.target ?? null, due: null, archived: false });
+    (db.lazy ??= []).push(g.id);
+  }
+}
+
 /** The goal buckets' db, its seeded owners matched to the members by email. */
-export function goalBucketsDb(simple: { goal_buckets?: GoalBucketsDb; items?: { key: string; title: string; goal?: string; draft?: boolean }[] }, people: GoalPeople = []): GoalBucketsDb {
-  const db = (simple.goal_buckets ??= goalKeyResultsBuckets(simple) ?? lazyGoalBuckets());
+export function goalBucketsDb(simple: BucketsSimple, people: GoalPeople = []): GoalBucketsDb {
+  const db = (simple.goal_buckets ??= goalKeyResultsBuckets(simple) ?? (simple.plan ? lazyGoalBuckets() : roadmapGoalBuckets(simple)));
+  // The map's goals join once the map is read (server.ts sets map_goals), whichever page seeded the store first.
+  if (!simple.plan) addMapGoals(db, simple);
   for (const g of db.goals) {
     if (g.owner_email && g.owner_id === undefined) g.owner_id = people.find((x) => x.email === g.owner_email)?.id ?? null;
   }

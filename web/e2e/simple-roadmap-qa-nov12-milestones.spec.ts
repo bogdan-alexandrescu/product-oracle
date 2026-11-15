@@ -1,3 +1,4 @@
+import { MOCK_SCENARIO_KEY, ROADMAP_MILESTONES_HARD_SCENARIO } from "../lib/api/mock/server";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -112,6 +113,9 @@ test("#7: the Gantt's late chips and its \"+ Milestone\" hint sit whole inside t
   // fails_when: a late chip or the hint is cut by the chart's right edge
   // no_claim: which items are late, the chips' order
   await page.setViewportSize(DESKTOP);
+  // QA Nov 14 #4: the default seed's late chips were on a cut item and items with no dates yet,
+  // which are no longer late; the hard scenario's gated items have dates and end after their milestones.
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, ROADMAP_MILESTONES_HARD_SCENARIO] as const);
   await open(page);
   await page.getByTestId("format-gantt").click();
   const hint = page.getByTestId("ms-add-hint");
