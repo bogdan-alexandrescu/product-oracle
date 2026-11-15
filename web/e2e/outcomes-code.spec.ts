@@ -13,14 +13,15 @@ import { login } from "./helpers";
  * rejects), no_claim (what green does not prove).
  */
 
-async function openOutcomes(page: Page) {
-  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "outcomes"));
+async function openOutcomes(page: Page, scenario = "outcomes") {
+  await page.addInitScript((s) => localStorage.setItem("po-mock-scenario", s), scenario);
   await login(page);
   await page.goto("/plan");
   await page.getByTestId("plan-tabs").filter({ visible: true }).getByTestId("plan-tab-outcomes").click();
   await expect(page).toHaveURL(/\/plan\/outcomes$/);
+  // Every outcome, the measuring and the assessed ones too (a scenario with none shows neither table nor filters).
+  if (scenario !== "outcomes") return;
   await expect(page.getByTestId("outcomes-table")).toBeVisible();
-  // Every outcome, the measuring and the assessed ones too.
   await page.getByTestId("outcome-filters").getByRole("button", { name: /^All/ }).click();
 }
 
@@ -57,4 +58,45 @@ test("an item with no code keeps its name and is flagged Not in the Ground Truth
   await emails.click();
   await expect(inspector(page).getByTestId("not-in-gt")).toBeVisible();
   await expect(inspector(page).getByRole("heading").first()).toHaveText(/^Order status emails/);
+});
+
+test("an outcome tracked for an item with no code is flagged at once", async ({ page }) => {
+  // protects=a row Track outcome adds names its item as the API gives it: Threshold alerts on
+  // spend has no code (its feature's key and its PRD section are none), so it is flagged in
+  // the row and the panel; fails_when=the new row shows no flag; no_claim=a coded item's (above).
+  await openOutcomes(page);
+  await page.getByRole("button", { name: "Track outcome" }).click();
+  const form = page.getByTestId("track-outcome-form");
+  await form.getByLabel("Item").selectOption({ label: "Threshold alerts on spend" });
+  await form.getByLabel("Expected effect").fill("+5 weekly active teams");
+  await form.getByLabel("Metric").fill("Weekly active teams");
+  await form.getByRole("button", { name: "Track outcome" }).click();
+  await expect(form).toHaveCount(0);
+  const tracked = row(page, "Threshold alerts on spend");
+  await expect(tracked.getByTestId("not-in-gt")).toBeVisible();
+  await expect(tracked.locator(".simple-code")).toHaveCount(0);
+  await tracked.click();
+  await expect(inspector(page).getByRole("heading").first()).toHaveText(/^Threshold alerts on spend/);
+  await expect(inspector(page).getByTestId("not-in-gt")).toBeVisible();
+});
+
+test("an item whose title leads with its code reads the code once", async ({ page }) => {
+  // protects=Track outcome on "F-31 Alert routing by team" (the "plan-section-code" scenario:
+  // its PRD section is f-31) names the row "F-31 Alert routing by team", the code once and not
+  // flagged; fails_when="F-31 F-31 Alert routing by team" or the flag shows; no_claim=other codes.
+  await openOutcomes(page, "plan-section-code");
+  await page.getByRole("button", { name: "Track outcome" }).click();
+  const form = page.getByTestId("track-outcome-form");
+  await form.getByLabel("Item").selectOption({ label: "F-31 Alert routing by team" });
+  await form.getByLabel("Goal").selectOption({ index: 1 });
+  await form.getByLabel("Expected effect").fill("+5 weekly active teams");
+  await form.getByLabel("Metric").fill("Weekly active teams");
+  await form.getByRole("button", { name: "Track outcome" }).click();
+  await expect(form).toHaveCount(0);
+  const tracked = row(page, "Alert routing by team");
+  await expect(tracked.locator(".simple-code")).toHaveText("F-31");
+  await expect(tracked).not.toContainText("F-31 F-31");
+  await expect(tracked.getByTestId("not-in-gt")).toHaveCount(0);
+  await tracked.click();
+  await expect(inspector(page).getByRole("heading").first()).toHaveText(/^F-31\s+Alert routing by team$/);
 });
