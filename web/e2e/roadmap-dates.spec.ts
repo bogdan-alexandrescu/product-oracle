@@ -1,5 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
@@ -105,5 +105,26 @@ test.describe("desktop", () => {
     await card.click();
     await expect(panel(page).getByTestId("card-dates")).toContainText("Apr 1 – Apr 28, 2027");
     await expect(panel(page)).toContainText("Oracle suggests Apr 1 – Apr 28, 2027");
+  });
+
+  test("dates an owner accepted into the working draft stay a viewer's estimate till it publishes", async ({ page }) => {
+    // protects (review of the join): the viewer, who reads the published roadmap, still sees
+    // Health log estimated Apr 1 – Apr 28, 2027 once the owner accepted those dates into the draft;
+    // fails_when: the viewer's row falls back to Later's window (the mock read open suggestions only)
+    await openRoadmap(page);
+    const words = "No dates yet · estimated Apr 1 – Apr 28, 2027";
+    await page.getByTestId("format-timeline").click();
+    await row(page.locator("body"), "setup-health-log").getByRole("button", { name: /^F-\d+ Health log$/ }).click();
+    await expect(panel(page)).toContainText("Oracle suggests Apr 1 – Apr 28, 2027");
+    await panel(page).getByRole("button", { name: "Accept", exact: true }).click();
+    await expect(panel(page).getByTestId("card-dates")).toContainText("Apr 1 – Apr 28, 2027");
+    await expect(panel(page)).not.toContainText("Oracle suggests");
+    // An invented viewer of the mock's company signs in.
+    await signOut(page);
+    await login(page, "viewer@example.com");
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId("format-timeline").click();
+    await expect(row(page.locator("body"), "setup-health-log")).toContainText(words);
   });
 });
