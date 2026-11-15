@@ -704,7 +704,6 @@ async def test_accept_edit_dismiss(client):
     assert r.json()["open"] == 0
 
 
-
 async def test_published_estimate_is_the_open_drafts_accepted_dates(client):
     """Review (join d91b93b): until its draft publishes, a viewer's undated item reads the dates
     the working draft holds for it: an edit's typed dates, not Oracle's; once the draft is

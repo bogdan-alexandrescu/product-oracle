@@ -793,7 +793,6 @@ async def test_date_suggestion_survives_publishing_an_added_item(client):
         assert sug is not None and sug.status == "open" and sug.basis == "Two sprints"
 
 
-
 async def test_picked_quarter_survives_publishing_a_quarter_add(client):
     """Review (QA Nov 14 follow-ups): a quarter add approved before its dates are accepted keeps
     its quarter on the published copy, so its estimate stays in that quarter, not Later's."""
