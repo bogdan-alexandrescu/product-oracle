@@ -31,27 +31,19 @@ export function errorMessage(e: unknown): string {
   return "Cannot reach the API.";
 }
 
-/**
- * Redirects to the login page when a call fails with 401. simple-call-budget: the same function
- * while the URL changes (it reads the path when called), so a page still drawn as the person
- * moves away never reads its queries again (Home's waiting list on moving to the Inbox).
- */
+/** Redirects to the login page when a call fails with 401. */
 export function useAuthRedirect() {
   const router = useRouter();
   const pathname = usePathname();
-  const path = useRef(pathname);
-  useEffect(() => {
-    path.current = pathname;
-  }, [pathname]);
   return useCallback(
     (e: unknown) => {
       if (e instanceof ApiError && e.status === 401) {
-        router.replace(`/login?next=${encodeURIComponent(path.current)}`);
+        router.replace(`/login?next=${encodeURIComponent(pathname)}`);
         return true;
       }
       return false;
     },
-    [router],
+    [router, pathname],
   );
 }
 
