@@ -143,26 +143,34 @@ for (const [phone, dark] of [
       // no_claim: the sheet's own edits (meeting-agenda-edit.spec.ts)
       await startReview(page);
       await expect(page.getByTestId("agenda-strip")).toContainText("Item 1 of");
+      // The strip names the item taken next; Setup checklist has no code, so its flag shows
+      // beside the name (simple-home-qa-nov14 #1), never in it.
+      const strip = page.getByTestId("agenda-next");
+      const takenNext = async () => {
+        await expect(strip.locator("button[data-feature]")).toHaveText("Setup checklist");
+        await expect(strip).toContainText(/^Next:/);
+        await expect(strip.getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
+      };
 
       const next = await understood(chat(page), "next: Setup checklist", "Take Setup checklist next");
       await preview(next, "Setup checklist is taken next");
       await apply(next);
-      await expect(page.getByTestId("agenda-next")).toHaveText("Next: Setup checklist");
+      await takenNext();
 
       const skip = await understood(chat(page), "skip Team invite nudges", "Skip Team invite nudges");
       await preview(skip, "Team invite nudges is skipped");
       await apply(skip);
       expect(await skippedInSheet(page)).toEqual(["Team invite nudges"]);
-      await expect(page.getByTestId("agenda-next")).toHaveText("Next: Setup checklist");
+      await takenNext();
 
       const skipNext = await understood(chat(page), "skip Setup checklist", "Skip Setup checklist");
       await apply(skipNext);
-      await expect(page.getByTestId("agenda-next")).not.toHaveText("Next: Setup checklist");
+      await expect(strip).not.toContainText("Setup checklist");
       expect((await skippedInSheet(page)).sort()).toEqual(["Setup checklist", "Team invite nudges"]);
 
       await tap(skipNext.getByRole("button", { name: "Undo" }));
       await expect(skipNext.getByTestId("chat-card-outcome")).toContainText("Undone");
-      await expect(page.getByTestId("agenda-next")).toHaveText("Next: Setup checklist");
+      await takenNext();
       expect(await skippedInSheet(page)).toEqual(["Team invite nudges"]);
     });
 
