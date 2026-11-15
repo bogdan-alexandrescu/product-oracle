@@ -535,11 +535,18 @@ async def load(
     # of all its open slices, the dates Accept applies).
     suggestions: dict[uuid.UUID, RoadmapDateSuggestion] = {}
     spans: dict[uuid.UUID, tuple[date, date]] = {}
+    # join (roadmap-dates): an accepted suggestion is no longer offered, but until its draft
+    # publishes the dates, the published undated item keeps it as its estimate.
+    decided: dict[uuid.UUID, tuple[date, date]] = {}
     for s in await db.scalars(
         select(RoadmapDateSuggestion)
-        .where(RoadmapDateSuggestion.status == "open")
+        .where(RoadmapDateSuggestion.status.in_(("open", "accepted", "edited")))
         .order_by(RoadmapDateSuggestion.start_date)
     ):
+        if s.status != "open":
+            a, b = decided.get(s.item_id, (s.start_date, s.end_date))
+            decided[s.item_id] = (min(a, s.start_date), max(b, s.end_date))
+            continue
         first = suggestions.setdefault(s.item_id, s)
         if s.slice_code is not None and first.slice_code is not None:
             a, b = spans.get(s.item_id, (s.start_date, s.end_date))
@@ -580,8 +587,10 @@ async def load(
         # roadmap-dates: an undated item's estimate is its open suggestion's span (the span
         # of its slices'), else its picked quarter, else Later's window.
         sug = suggestions.get(row.id)
-        suggested = spans.get(row.id) or (
-            (sug.start_date, sug.end_date) if sug is not None else None
+        suggested = (
+            spans.get(row.id)
+            or ((sug.start_date, sug.end_date) if sug is not None else None)
+            or decided.get(row.id)
         )
         resolved, horizon = dates.resolve_by_dates(
             cands, windows, effort.get(row.id), suggested, row.picked_quarter
