@@ -98,8 +98,8 @@ const G2 = "Grow paid conversion";
 
 const FEATURES: FeatureSeed[] = [
   {
-    key: "F-1",
-    title: "Saved addresses at checkout",
+    key: "F-01",
+    title: "Setup checklist",
     status: "confirmed",
     goals: [{ goal: "g.activation", title: G1, weight: 3, contribution: 2 }],
     attrs: { effort: 2, reach: 4000, impact: 2, business_value: 8, time_criticality: 5, risk_reduction: 3, job_size: 3, moscow: "must" },
@@ -117,17 +117,17 @@ const FEATURES: FeatureSeed[] = [
     depends_on: [],
   },
   {
-    key: "F-2",
-    title: "Shipping cost shown in the cart",
+    key: "F-02",
+    title: "Sample data import",
     status: "confirmed",
     goals: [{ goal: "g.activation", title: G1, weight: 3, contribution: 3 }],
     attrs: { effort: 1, reach: 6000, impact: 1, business_value: 5, time_criticality: 8, risk_reduction: 2, job_size: 2, moscow: "should" },
     evidence: [{ id: "ev-3", confidence: 0.9, ref: "https://example.com/research/survey-q3", title: "Survey Q3", source_kind: "notion", date: "2026-09-15" }],
-    depends_on: ["F-5"],
+    depends_on: ["F-07"],
   },
   {
-    key: "F-3",
-    title: "Shared projects",
+    key: "F-05",
+    title: "Team invites",
     status: "proposed",
     goals: [{ goal: "g.paid-conversion", title: G2, weight: null, contribution: null }],
     attrs: { effort: 4, reach: 1500, impact: 3, business_value: 9, time_criticality: 3, risk_reduction: 5, job_size: 8, moscow: "could" },
@@ -135,8 +135,8 @@ const FEATURES: FeatureSeed[] = [
     depends_on: [],
   },
   {
-    key: "F-4",
-    title: "Usage alerts",
+    key: "F-08",
+    title: "Usage dashboard",
     status: "proposed",
     goals: [{ goal: "g.paid-conversion", title: G2, weight: 2, contribution: 1 }],
     attrs: { effort: 1, impact: 1, confidence: "low", business_value: 3, time_criticality: 2, risk_reduction: 1, job_size: 1, moscow: "should" },
@@ -144,8 +144,8 @@ const FEATURES: FeatureSeed[] = [
     depends_on: [],
   },
   {
-    key: "F-5",
-    title: "Address lookup service",
+    key: "F-07",
+    title: "Bulk import",
     status: "confirmed",
     goals: [{ goal: "g.activation", title: G1, weight: 3, contribution: 1 }],
     attrs: { effort: 3, reach: 6000, impact: 0.5, business_value: 3, time_criticality: 3, risk_reduction: 3, job_size: 5, moscow: "could" },
@@ -153,8 +153,8 @@ const FEATURES: FeatureSeed[] = [
     depends_on: [],
   },
   {
-    key: "F-6",
-    title: "Dark mode",
+    key: "F-06",
+    title: "Setup error report",
     status: "proposed",
     goals: [],
     attrs: { effort: 1, reach: 2000, impact: 0.5, confidence: 0.6, business_value: 2, time_criticality: 1, risk_reduction: 1, job_size: 1, moscow: "could" },
@@ -162,22 +162,22 @@ const FEATURES: FeatureSeed[] = [
     depends_on: [],
   },
   {
-    key: "F-7",
-    title: "Bulk export",
+    key: "F-12",
+    title: "Referral link",
     status: "proposed",
     goals: [{ goal: "g.paid-conversion", title: G2, weight: 2, contribution: 2 }],
     attrs: { effort: 2, reach: 800, impact: 2, confidence: 0.5, business_value: 4, time_criticality: 2, risk_reduction: 2, job_size: 3, moscow: "should" },
     evidence: [],
-    depends_on: ["F-8"],
+    depends_on: ["F-13"],
   },
   {
-    key: "F-8",
-    title: "Scheduled exports",
+    key: "F-13",
+    title: "Public signup",
     status: "proposed",
     goals: [{ goal: "g.paid-conversion", title: G2, weight: 2, contribution: 1 }],
     attrs: { effort: 3, reach: 500, impact: 1, confidence: 0.5, business_value: 3, time_criticality: 1, risk_reduction: 1, job_size: 3, moscow: "could" },
     evidence: [],
-    depends_on: ["F-7"],
+    depends_on: ["F-12"],
   },
 ];
 
@@ -192,12 +192,12 @@ const longGoal = (key: string, title: string, goals: GoalLink[], depends_on: str
   attrs: { effort, reach: 1200, impact: 2, confidence, business_value: 5, time_criticality: 3, risk_reduction: 2, job_size: effort, moscow: "should" },
 });
 const LONG_GOAL_FEATURES: FeatureSeed[] = [
-  longGoal("F-9", "Guided first project with sample tasks", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 3 }, { goal: "g.activation", title: G1, weight: 3, contribution: 2 }], ["F-1", "F-3", "F-5", "F-10", "F-11", "F-12"], 2, 0.8),
-  longGoal("F-10", "Invite teammates from the project page", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 2 }], ["F-3"], 1, 0.7),
-  longGoal("F-11", "Team plan renewal reminders", [{ goal: "g.long-churn", title: PG2, weight: 2, contribution: 3 }, { goal: "g.paid-conversion", title: G2, weight: 2, contribution: 1 }], ["F-4", "F-7", "F-8"], 2, 0.6),
-  longGoal("F-12", "Keyboard and screen reader support at checkout", [{ goal: "g.long-accessible", title: PG3, weight: 2, contribution: 3 }, { goal: "g.activation", title: G1, weight: 3, contribution: 1 }], ["F-1", "F-2", "F-5"], 3, 0.7),
-  longGoal("F-13", "Usage report for workspace owners", [{ goal: "g.long-churn", title: PG2, weight: 2, contribution: 2 }], ["F-4", "F-7", "F-8", "F-11"], 2, 0.5),
-  longGoal("F-14", "Project templates for agencies", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 1 }, { goal: "g.long-churn", title: PG2, weight: 2, contribution: 1 }], ["F-3", "F-9", "F-10"], 3, 0.6),
+  longGoal("F-21", "Guided first project with sample tasks", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 3 }, { goal: "g.activation", title: G1, weight: 3, contribution: 2 }], ["F-01", "F-05", "F-07", "F-22", "F-23", "F-24"], 2, 0.8),
+  longGoal("F-22", "Invite teammates from the project page", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 2 }], ["F-05"], 1, 0.7),
+  longGoal("F-23", "Team plan renewal reminders", [{ goal: "g.long-churn", title: PG2, weight: 2, contribution: 3 }, { goal: "g.paid-conversion", title: G2, weight: 2, contribution: 1 }], ["F-08", "F-12", "F-13"], 2, 0.6),
+  longGoal("F-24", "Keyboard and screen reader support at checkout", [{ goal: "g.long-accessible", title: PG3, weight: 2, contribution: 3 }, { goal: "g.activation", title: G1, weight: 3, contribution: 1 }], ["F-01", "F-02", "F-07"], 3, 0.7),
+  longGoal("F-25", "Usage report for workspace owners", [{ goal: "g.long-churn", title: PG2, weight: 2, contribution: 2 }], ["F-08", "F-12", "F-13", "F-23"], 2, 0.5),
+  longGoal("F-26", "Project templates for agencies", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 1 }, { goal: "g.long-churn", title: PG2, weight: 2, contribution: 1 }], ["F-05", "F-21", "F-22"], 3, 0.6),
 ];
 // B-19: the "large" company ranks many features (invented, on the seeded goals).
 const LARGE_AREAS = ["Billing", "Search", "Reports", "Sharing", "Mobile", "Alerts", "Imports", "Exports"];
@@ -506,7 +506,7 @@ export const LEGACY_OVERRIDE_SCENARIO = "priority-legacy-override";
 function legacyOverride(): OverrideRow {
   return {
     id: "00000000-0000-4000-8000-00000000f001",
-    feature: { id: entityId("F-1"), key: "F-1", title: "Saved addresses at checkout" },
+    feature: { id: entityId("F-01"), key: "F-01", title: "Setup checklist" },
     kind: "move",
     above: { id: entityId("F-99"), key: "F-99", title: "Shipping carrier picker" },
     position: null,
@@ -1580,9 +1580,9 @@ export function previewHtml(t: Tokens, css: string, kind: Kind): string {
           ["Sources and data points", "Checkout funnel report, September. Customer interview notes, week 7."],
         ]
       : [
-          ["Now", "Shipping cost in the cart (G1) · Saved addresses (G1)"],
-          ["Next", "Shared projects (G2) · Usage alerts (G2)"],
-          ["Later", "Scheduled exports (G2)"],
+          ["Now", "Sample data import (G1) · Setup checklist (G1)"],
+          ["Next", "Team invites (G2) · Usage dashboard (G2)"],
+          ["Later", "Public signup (G2)"],
           ["Sources and data points", "Ground Truth snapshot of 1 October."],
         ];
   const body = sections
@@ -2101,9 +2101,9 @@ function goalTitles(db: Db, r: Schemas["PriorityRanking"], scenario?: string | n
 
 /** priorities-words: features whose names carry long single words (./baseline.ts LONG_WORDS_SCENARIO). */
 const LONG_WORDS: Record<string, string> = {
-  "F-3": "Shared projects for Conversion",
-  "F-5": "Address lookup (instrumentation)",
-  "F-8": "Internationalization of exports",
+  "F-05": "Team invites for Conversion",
+  "F-07": "Bulk import (instrumentation)",
+  "F-13": "Internationalization of exports",
 };
 
 /**

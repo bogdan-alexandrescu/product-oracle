@@ -163,7 +163,7 @@ test.describe("desktop", () => {
   test("qa4-docs-54: a problem too short asks for a bit more, not for a problem", async ({ page }) => {
     await setUp(page);
     await page.goto("/documents/new?kind=prd");
-    await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses at checkout");
+    await page.getByRole("textbox", { name: "Title" }).fill("Setup checklist");
     const problem = page.getByRole("textbox", { name: "What problem does it solve?" });
     await problem.fill("short");
     await page.getByRole("button", { name: "Continue" }).first().click();

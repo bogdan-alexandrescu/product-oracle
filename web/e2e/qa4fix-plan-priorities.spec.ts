@@ -4,9 +4,9 @@ import { login } from "./helpers";
 
 /*
  * QA findings on /priorities, round qa4, driven through the UI on the mock layer as a person
- * would. Oracle's goal-weighted order: #1 Address lookup service (F-5, ranked higher because
- * Shipping cost shown in the cart, F-2, depends on it), #2 F-2, #3 Saved addresses at
- * checkout (F-1), #4 Bulk export (F-7), #5 Scheduled exports (F-8) ... #8 Dark mode (F-6).
+ * would. Oracle's goal-weighted order: #1 Bulk import (F-07, ranked higher because
+ * Sample data import, F-02, depends on it), #2 F-02, #3 Saved addresses at
+ * checkout (F-01), #4 Referral link (F-12), #5 Public signup (F-13) ... #8 Setup error report (F-06).
  */
 
 const APPROVER = "approver@example.com";
@@ -45,7 +45,7 @@ test.describe("desktop", () => {
     page,
   }) => {
     await open(page);
-    await moveUp(page, "F-1");
+    await moveUp(page, "F-01");
     await expect(
       page.getByRole("columnheader", { name: "Oracle #" }),
     ).toBeVisible();
@@ -79,11 +79,11 @@ test.describe("desktop", () => {
     page,
   }) => {
     await open(page);
-    const row = rowOf(page, "F-5");
+    const row = rowOf(page, "F-07");
     const sheet = page.getByRole("dialog");
     // docs/ground-truth.md: a feature reads its code with its name.
     const menu = page.getByRole("menu", {
-      name: "Change F-5 Address lookup service",
+      name: "Change F-07 Bulk import",
     });
     await expect(async () => {
       if (!(await sheet.isVisible())) {
@@ -103,17 +103,17 @@ test.describe("desktop", () => {
     }).toPass({ timeout: 30_000 });
     await sheet
       .getByRole("list", { name: "Features" })
-      .getByRole("button", { name: /Saved addresses at checkout/ })
+      .getByRole("button", { name: /Setup checklist/ })
       .click();
     await expect(sheet.getByTestId("move-target")).toHaveText(
-      "Move above F-1 Saved addresses at checkout",
+      "Move above F-01 Setup checklist",
     );
     await sheet
       .getByLabel("Why?")
       .fill("The address work should wait for checkout");
     await sheet.getByRole("button", { name: "Save", exact: true }).click();
     await expect(sheet).toContainText(
-      "This move leaves Address lookup service where it is: Shipping cost shown in the cart depends on it",
+      "This move leaves Bulk import where it is: Sample data import depends on it",
     );
     await sheet.getByRole("button", { name: "Cancel" }).click();
     await expect(sheet).toBeHidden();
@@ -129,7 +129,7 @@ test.describe("desktop", () => {
     page,
   }) => {
     await open(page);
-    await expect(rowOf(page, "F-5")).toHaveAttribute("aria-selected", "true");
+    await expect(rowOf(page, "F-07")).toHaveAttribute("aria-selected", "true");
     const chips = page
       .getByTestId("priority-table")
       .getByTestId("rank-reason")
@@ -155,10 +155,10 @@ test.describe("desktop", () => {
       panel.getByTestId("snapshot-list").getByRole("listitem"),
     ).toHaveCount(1);
     await expect(panel.getByTestId("snapshot-list")).toContainText(
-      "Top: Address lookup service",
+      "Top: Bulk import",
     );
     await expect(panel.getByRole("status")).not.toContainText(
-      "Address lookup service",
+      "Bulk import",
     );
   });
 
@@ -166,19 +166,19 @@ test.describe("desktop", () => {
     page,
   }) => {
     await open(page);
-    await moveUp(page, "F-1");
+    await moveUp(page, "F-01");
     const log = page.getByTestId("change-log");
     await expect(log.getByRole("listitem")).toHaveCount(1);
     await expect(log).toContainText("Priya Raman");
     await expect(log).not.toContainText(APPROVER);
     await expect(log.getByTitle(APPROVER)).toHaveText("Priya Raman");
 
-    await rowOf(page, "F-1").getByTestId("feature-name").click();
+    await rowOf(page, "F-01").getByTestId("feature-name").click();
     const change = page.getByTestId("your-change");
     await expect(change).toContainText("Priya Raman");
     await expect(change).not.toContainText(APPROVER);
     await expect(change.getByTitle(APPROVER)).toHaveText("Priya Raman");
-    await expect(rowOf(page, "F-1").getByTestId("override-chip")).toHaveText(
+    await expect(rowOf(page, "F-01").getByTestId("override-chip")).toHaveText(
       "Moved by Priya Raman",
     );
   });

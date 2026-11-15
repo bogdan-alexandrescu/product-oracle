@@ -38,7 +38,7 @@ for (const [name, viewport] of [
     await login(page);
     await page.getByRole("link", { name: "New PRD" }).filter({ visible: true }).first().click();
     await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeAttached();
-    await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses at checkout");
+    await page.getByRole("textbox", { name: "Title" }).fill("Setup checklist");
     await page
       .getByRole("textbox", { name: "What problem does it solve?" })
       .fill("Returning buyers retype their address at every checkout.");
@@ -49,7 +49,7 @@ for (const [name, viewport] of [
     const empty = page.getByTestId("prds-empty-ideas");
     await expect(empty).toContainText("No PRDs yet. 1 brief waits in Ideas.");
     await empty.getByRole("button", { name: "Open Ideas" }).click();
-    await expect(page.getByTestId("idea-row").filter({ hasText: "Saved addresses at checkout" })).toBeVisible();
+    await expect(page.getByTestId("idea-row").filter({ hasText: "Setup checklist" })).toBeVisible();
   });
 }
 

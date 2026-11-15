@@ -116,7 +116,7 @@ test("intake: Start drafting says it waits for the estimate", async ({ page }) =
   await login(page, "approver@example.com");
   await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
   await page.getByRole("link", { name: "New PRD" }).click();
-  await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses at checkout");
+  await page.getByRole("textbox", { name: "Title" }).fill("Setup checklist");
   await page
     .getByRole("textbox", { name: "What problem does it solve?" })
     .fill("Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.");

@@ -113,7 +113,7 @@ async function missingFields(page: Page) {
   await expect(title).toBeFocused();
   await expect(page).toHaveURL(/\/documents\/new\?kind=prd$/);
 
-  await title.fill("Saved addresses at checkout");
+  await title.fill("Setup checklist");
   await problem.fill("Too short");
   await go.click();
   // qa4-docs-54: a problem too short asks for a bit more, not for a problem.

@@ -54,35 +54,35 @@ test("review and approve the run's order", async ({ page }) => {
   // The PRD's 6 new features are ranked among the Ground Truth's (RP1, build-runplan.spec.ts).
   await expect(rows).toHaveCount(11);
   expect(await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("priority-row-", "")))).toEqual([
-    "F-5",
-    "F-4",
-    "F-2",
+    "F-07",
+    "F-08",
+    "F-02",
     "N-1",
     "N-2",
     "N-3",
-    "F-1",
+    "F-01",
     "N-4",
     "N-5",
-    "F-7",
+    "F-12",
     "N-6",
   ]);
-  const moved = page.getByTestId("priority-row-F-4");
+  const moved = page.getByTestId("priority-row-F-08");
   await expect(moved.getByTestId("live-rank")).toHaveText("5");
   await expect(moved.getByTestId("delta")).toHaveText("↑3");
-  await expect(page.getByTestId("priority-row-F-2").getByTestId("delta")).toHaveText("↓1");
-  await expect(page.getByTestId("priority-row-F-5").getByTestId("delta")).toHaveText("=");
+  await expect(page.getByTestId("priority-row-F-02").getByTestId("delta")).toHaveText("↓1");
+  await expect(page.getByTestId("priority-row-F-07").getByTestId("delta")).toHaveText("=");
   // The differs_from_live row: an amber chip with its message.
   const chip = moved.getByTestId("problem-differs_from_live");
   await expect(chip).toBeVisible();
   await expect(chip).toHaveAttribute("data-kind", "warn");
-  await expect(chip).toHaveAttribute("title", "F-4 is ranked 2 here and 5 in the live ranking");
+  await expect(chip).toHaveAttribute("title", "F-08 is ranked 2 here and 5 in the live ranking");
 
   // Why rank 2: the run's explanation above Oracle's live formula.
-  await moved.getByRole("button", { name: /Usage alerts/ }).click();
+  await moved.getByRole("button", { name: /Usage dashboard/ }).click();
   const why = page.getByTestId("run-explanation");
   await expect(why).toContainText("Why rank 2");
   await expect(why).toContainText("Alerts keep teams active; ranked early on purpose");
-  await expect(page.getByTestId("explanation-F-4").getByRole("list", { name: "Steps" })).toBeVisible();
+  await expect(page.getByTestId("explanation-F-08").getByRole("list", { name: "Steps" })).toBeVisible();
 
   // Approve order: saved for the PRD, and the run moves on.
   await band.getByRole("button", { name: "Approve order" }).click();
@@ -102,9 +102,9 @@ test("a blocking problem disables Approve order; Request changes sends it back",
   const approve = band.getByRole("button", { name: "Approve order" });
   await expect(approve).toBeDisabled();
   await expect(band.getByTestId("cannot-approve")).toContainText("1 blocking problem");
-  const chip = page.getByTestId("priority-row-F-2").getByTestId("problem-before_prerequisite");
+  const chip = page.getByTestId("priority-row-F-02").getByTestId("problem-before_prerequisite");
   await expect(chip).toHaveAttribute("data-kind", "crit");
-  await expect(chip).toHaveAttribute("title", "F-2 Shipping cost shown in the cart is ranked 1, above F-5 Address lookup service (rank 2), which it depends on");
+  await expect(chip).toHaveAttribute("title", "F-02 Sample data import is ranked 1, above F-07 Bulk import (rank 2), which it depends on");
 
   const requestChanges = band.getByRole("button", { name: "Request changes" });
   await expect(requestChanges).toBeDisabled();
@@ -141,7 +141,7 @@ test("at 390 px Live # and Δ show in the row card, no sideways scroll", async (
   await seeded(page);
   await page.goto(`/runs/${PRIORITY_RUN}`);
   await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
-  const row = page.getByTestId("priority-row-F-4");
+  const row = page.getByTestId("priority-row-F-08");
   await expect(row.getByTestId("live-rank")).toBeVisible();
   await expect(row.getByTestId("live-rank")).toHaveText("5");
   await expect(row.getByTestId("delta")).toBeVisible();

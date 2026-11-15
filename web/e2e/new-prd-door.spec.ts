@@ -67,7 +67,7 @@ const estimate = (page: Page) => sheet(page).getByTestId("draft-estimate");
 test("brief to draft: goals, out of scope and a template, then Draft with Oracle starts the run", async ({ page }) => {
   await login(page, "approver@example.com");
   await openDoor(page);
-  await writeBrief(page, "Saved addresses at checkout");
+  await writeBrief(page, "Setup checklist");
 
   const goals = page.getByRole("group", { name: "Which goals does it serve?" });
   await expect(goals.getByRole("checkbox")).toHaveCount(2);
@@ -83,7 +83,7 @@ test("brief to draft: goals, out of scope and a template, then Draft with Oracle
   await expect(page.getByTestId("recommended-template")).toHaveText("One-pager");
 
   await continueToIntake(page);
-  await expect(page.getByRole("heading", { level: 1, name: "Saved addresses at checkout" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Setup checklist" })).toBeVisible();
   // The brief named its goal and its out-of-scope line: Oracle does not ask those again.
   await expect(page.getByTestId("intake-thread")).toBeVisible();
   await expect(page.getByTestId("intake-thread")).not.toContainText("Which confirmed company goal does this serve");

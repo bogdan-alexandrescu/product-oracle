@@ -1543,28 +1543,37 @@ function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: numbe
         const inRoom = b.w - (gantt ? 10 : 12);
         const next = dated.find((o) => o.start_date! > x.start_date!);
         const outRoom = Math.min(next ? sc.x(next.start_date!) : sc.width, sc.width) - (b.x + b.w) - 8;
+        // train BW: the first slice, short with its next close, may read before its bar instead.
+        const first = !dated.some((o) => o.start_date! < x.start_date!);
+        const beforeRoom = first ? b.x - 8 : 0;
         // qa4-simple-roadmap-25: the Gantt never cuts a slice's name mid-word when a whole one
         // fits: its name in the bar, else beside it (up to the next slice), else its part alone
-        // ("Part 1 of 2": the row already names the feature) in or beside the bar; only then cut.
+        // ("Part 1 of 2": the row already names the feature) in or beside the bar, else (the
+        // first slice) before it; only then cut.
         const part = gantt ? x.name.match(/,\s*(part \d+ of \d+)$/i)?.[1] : undefined;
         const short = part ? part[0].toUpperCase() + part.slice(1) : "";
         const fits = (w: string, room: number, weight: number) => !!w && textWidth(w, size, weight) <= room;
-        const whole: [string, boolean] | null = !gantt || !name
+        const whole: [string, "in" | "after" | "before"] | null = !gantt || !name
           ? null
           : fits(name, inRoom, 650)
-            ? [name, false]
+            ? [name, "in"]
             : fits(name, outRoom, 400)
-              ? [name, true]
+              ? [name, "after"]
               : fits(short, inRoom, 650)
-                ? [short, false]
+                ? [short, "in"]
                 : fits(short, outRoom, 400)
-                  ? [short, true]
-                  : null;
-        const inner = whole ? (whole[1] ? "" : whole[0]) : name ? ellipsize(name, inRoom, size, 650) : "";
-        const besideWords = whole ? (whole[1] ? whole[0] : "") : gantt && name && inner.length < 4 ? ellipsize(name, outRoom, size, 400) : "";
+                  ? [short, "after"]
+                  : fits(name, beforeRoom, 400)
+                    ? [name, "before"]
+                    : fits(short, beforeRoom, 400)
+                      ? [short, "before"]
+                      : null;
+        const before = whole?.[1] === "before";
+        const inner = whole ? (whole[1] === "in" ? whole[0] : "") : name ? ellipsize(name, inRoom, size, 650) : "";
+        const besideWords = whole ? (whole[1] === "after" ? whole[0] : "") : gantt && name && inner.length < 4 ? ellipsize(name, outRoom, size, 400) : "";
         const beside = besideWords.length >= 4;
-        const inside = !beside && inner.length >= 4;
-        const words = beside ? besideWords : inner;
+        const inside = !beside && !before && inner.length >= 4;
+        const words = before ? whole![0] : beside ? besideWords : inner;
         return (
           <g
             key={x.code}
@@ -1590,15 +1599,16 @@ function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: numbe
               strokeWidth={gantt && open ? 2.5 : 1}
               strokeDasharray={pm ? "3 2" : undefined}
             />
-            {(inside || beside) && (
+            {(inside || beside || before) && (
               <text
                 data-testid="slice-label"
-                data-beside={beside ? "true" : undefined}
-                x={beside ? b.x + b.w + 5 : b.x + (gantt ? 5 : 6)}
+                data-beside={beside ? "true" : before ? "before" : undefined}
+                x={beside ? b.x + b.w + 5 : before ? b.x - 5 : b.x + (gantt ? 5 : 6)}
+                textAnchor={before ? "end" : undefined}
                 y={y + h / 2 + 4}
                 fontSize={size}
-                fontWeight={beside ? 400 : 650}
-                fill={beside ? "var(--text2)" : pm ? "var(--accent-ink)" : gantt ? "var(--on-accent)" : msInk(x.milestone)}
+                fontWeight={beside || before ? 400 : 650}
+                fill={beside || before ? "var(--text2)" : pm ? "var(--accent-ink)" : gantt ? "var(--on-accent)" : msInk(x.milestone)}
                 pointerEvents="none"
               >
                 {words}

@@ -4,9 +4,9 @@ import { login } from "./helpers";
 
 /*
  * QA findings on /priorities, round 2, driven through the UI on the mock layer as a person would.
- * Oracle's goal-weighted order: #1 Address lookup service (F-5), #2 Shipping cost shown in the
- * cart (F-2), #3 Saved addresses at checkout (F-1), #4 Bulk export (F-7), #5 Scheduled exports
- * (F-8), #6 Usage alerts (F-4), #7 Shared projects (F-3), #8 Dark mode (F-6).
+ * Oracle's goal-weighted order: #1 Bulk import (F-07), #2 Shipping cost shown in the
+ * cart (F-02), #3 Setup checklist (F-01), #4 Referral link (F-12), #5 Public signup
+ * (F-13), #6 Usage dashboard (F-08), #7 Team invites (F-05), #8 Setup error report (F-06).
  */
 
 const APPROVER = "approver@example.com";
@@ -36,7 +36,7 @@ test.describe("desktop", () => {
   test("qa-plan-5: every feature name reads in full beside the docked inspector", async ({ page }) => {
     await open(page);
     await expect(page.getByTestId("priority-inspector")).toBeVisible();
-    for (const key of ["F-5", "F-2", "F-1", "F-8"]) {
+    for (const key of ["F-07", "F-02", "F-01", "F-13"]) {
       const name = rowOf(page, key).locator("td button[aria-controls]");
       await expect(name).toBeVisible();
       const m = await name.evaluate((e) => ({
@@ -48,21 +48,21 @@ test.describe("desktop", () => {
       expect(m.ellipsis, `${key}: the name ends in …`).toBe(false);
     }
     // The Feature column has room for a word of the names (wider than the Flags column's leftovers).
-    const cell = rowOf(page, "F-5").locator("td").filter({ has: page.locator("button[aria-controls]") });
+    const cell = rowOf(page, "F-07").locator("td").filter({ has: page.locator("button[aria-controls]") });
     expect((await cell.boundingBox())!.width).toBeGreaterThan(130);
   });
 
   test("qa-plan-6: ▼ on #7 never opens a pin; it says why it cannot move below the last row", async ({ page }) => {
     await open(page);
-    const down = rowOf(page, "F-3").getByRole("button", { name: "Move down", exact: true });
+    const down = rowOf(page, "F-05").getByRole("button", { name: "Move down", exact: true });
     await expect(down).toBeVisible();
     await expect(down).toBeDisabled();
-    await expect(down).toHaveAttribute("title", /Dark mode is last/);
+    await expect(down).toHaveAttribute("title", /Setup error report is last/);
     // #6 ▼ is the usual Move dialog: below the next row.
-    await press(page, "F-4", "Move down");
+    await press(page, "F-08", "Move down");
     const dialog = page.getByRole("dialog");
     // docs/ground-truth.md: a feature reads its code with its name.
-    await expect(dialog).toContainText("Move below F-3 Shared projects");
+    await expect(dialog).toContainText("Move below F-05 Team invites");
     await expect(dialog.getByLabel("Rank")).toHaveCount(0);
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();
@@ -70,16 +70,16 @@ test.describe("desktop", () => {
 
   test("qa-plan-15: ▼ on #1 says Move below the next feature", async ({ page }) => {
     await open(page);
-    await press(page, "F-5", "Move down");
+    await press(page, "F-07", "Move down");
     const dialog = page.getByRole("dialog");
     // docs/ground-truth.md: a feature reads its code with its name.
-    await expect(dialog.getByTestId("move-target")).toHaveText("Move below F-2 Shipping cost shown in the cart");
-    await expect(dialog).not.toContainText("Move above F-1 Saved addresses at checkout");
+    await expect(dialog.getByTestId("move-target")).toHaveText("Move below F-02 Sample data import");
+    await expect(dialog).not.toContainText("Move above F-01 Setup checklist");
   });
 
   test("qa-plan-16: the evidence picker says how many may be picked; each item's score is a percent", async ({ page }) => {
     await open(page);
-    await press(page, "F-1", "Move up");
+    await press(page, "F-01", "Move up");
     const picker = page.getByRole("dialog").getByRole("group", { name: "Cite evidence (optional)" });
     await expect(picker.getByTestId("cited-count")).toHaveText("Pick up to 5");
     await expect(picker).not.toContainText("0 of 5");
@@ -93,12 +93,12 @@ test.describe("desktop", () => {
     // docs/ground-truth.md: every feature shows its code with its name, never one without the other.
     await open(page);
     const banner = page.getByTestId("cycles-banner");
-    await expect(banner).toContainText("F-7 Bulk export → F-8 Scheduled exports");
-    await rowOf(page, "F-5").getByRole("button", { name: "F-5 Address lookup service", exact: true }).click();
+    await expect(banner).toContainText("F-12 Referral link → F-13 Public signup");
+    await rowOf(page, "F-07").getByRole("button", { name: "F-07 Bulk import", exact: true }).click();
     const inspector = page.getByTestId("priority-inspector");
-    await expect(page.getByTestId("explanation-F-5")).toBeVisible();
+    await expect(page.getByTestId("explanation-F-07")).toBeVisible();
     const movedFor = inspector.locator("li", { hasText: "Moved for" });
-    await expect(movedFor).toContainText("F-2 Shipping cost shown in the cart");
+    await expect(movedFor).toContainText("F-02 Sample data import");
   });
 
   test("qa-plan-18: every score has one precision per method, right-aligned", async ({ page }) => {
@@ -116,13 +116,13 @@ test.describe("desktop", () => {
       expect(Math.max(...rights) - Math.min(...rights), `${method}: scores share a right edge`).toBeLessThanOrEqual(1);
     }
     await methods.getByRole("radio", { name: "Goal-weighted" }).click();
-    await expect(rowOf(page, "F-2").getByTestId("score")).toHaveText("8.10");
+    await expect(rowOf(page, "F-02").getByTestId("score")).toHaveText("8.10");
   });
 
   test("qa-plan-19: ▲ ▼ ⋯ show on every row without pointing at it", async ({ page }) => {
     await open(page);
     await page.mouse.move(0, 0);
-    for (const key of ["F-2", "F-4", "F-6"]) {
+    for (const key of ["F-02", "F-08", "F-06"]) {
       const row = rowOf(page, key);
       await row.evaluate((e) => e.scrollIntoView({ block: "center" }));
       await page.mouse.move(0, 0);

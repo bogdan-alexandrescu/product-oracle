@@ -123,7 +123,7 @@ for (const [name, viewport] of VIEWPORTS) {
     test(`23: the side panel names the template the new PRD chose (${name})`, async ({ page }) => {
       await login(page);
       await page.goto("/documents/new?kind=prd");
-      await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses at checkout");
+      await page.getByRole("textbox", { name: "Title" }).fill("Setup checklist");
       await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Returning buyers retype their address at every checkout.");
       const onePager = page.getByTestId("template-option-one-pager");
       await onePager.click();

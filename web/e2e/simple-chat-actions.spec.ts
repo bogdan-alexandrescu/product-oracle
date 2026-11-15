@@ -137,39 +137,40 @@ for (const [phone, dark] of [
       await expect(page.getByLabel("Open questions")).toHaveValue(/Who writes the tour script\?/);
     });
 
-    // Setup checklist has no code, so it carries the "Not in the Ground Truth" flag (simple-home 93f3aec92).
-    const expectNextSetupChecklist = async (page: Page) => {
-      const next = page.getByTestId("agenda-next");
-      await expect(next).toContainText("Next: Setup checklist");
-      await expect(next.getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
-    };
-
     test(`"next:" and "skip" change the agenda strip; Undo restores it (${where})`, async ({ page }) => {
       // protects: "next: Setup checklist" restates as "Take Setup checklist next" (Preview: "Setup checklist is taken next") and Apply shows "Next: Setup checklist" on the meeting screen; "skip Team invite nudges" ("Skip Team invite nudges", Preview "… is skipped") marks it skipped in the Agenda sheet; skipping the next item moves Next on; Undo puts the agenda back as it was
       // fails_when: the strip does not follow Apply or Undo, or a card has no Preview description
       // no_claim: the sheet's own edits (meeting-agenda-edit.spec.ts)
       await startReview(page);
       await expect(page.getByTestId("agenda-strip")).toContainText("Item 1 of");
+      // The strip names the item taken next; Setup checklist has no code, so its flag shows
+      // beside the name (simple-home-qa-nov14 #1), never in it.
+      const strip = page.getByTestId("agenda-next");
+      const takenNext = async () => {
+        await expect(strip.locator("button[data-feature]")).toHaveText("Setup checklist");
+        await expect(strip).toContainText(/^Next:/);
+        await expect(strip.getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
+      };
 
       const next = await understood(chat(page), "next: Setup checklist", "Take Setup checklist next");
       await preview(next, "Setup checklist is taken next");
       await apply(next);
-      await expectNextSetupChecklist(page);
+      await takenNext();
 
       const skip = await understood(chat(page), "skip Team invite nudges", "Skip Team invite nudges");
       await preview(skip, "Team invite nudges is skipped");
       await apply(skip);
       expect(await skippedInSheet(page)).toEqual(["Team invite nudges"]);
-      await expectNextSetupChecklist(page);
+      await takenNext();
 
       const skipNext = await understood(chat(page), "skip Setup checklist", "Skip Setup checklist");
       await apply(skipNext);
-      await expect(page.getByTestId("agenda-next")).not.toContainText("Next: Setup checklist");
+      await expect(strip).not.toContainText("Setup checklist");
       expect((await skippedInSheet(page)).sort()).toEqual(["Setup checklist", "Team invite nudges"]);
 
       await tap(skipNext.getByRole("button", { name: "Undo" }));
       await expect(skipNext.getByTestId("chat-card-outcome")).toContainText("Undone");
-      await expectNextSetupChecklist(page);
+      await takenNext();
       expect(await skippedInSheet(page)).toEqual(["Team invite nudges"]);
     });
 

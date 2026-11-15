@@ -13,8 +13,8 @@ import { login } from "./helpers";
 test("an evidence card links only an http(s) source; an upload's file name is no link", async ({ page }) => {
   await login(page);
   await page.goto("/priorities");
-  await page.getByTestId("priority-row-F-1").getByRole("button", { name: /Saved addresses at checkout/ }).click();
-  const ex = page.getByTestId("explanation-F-1");
+  await page.getByTestId("priority-row-F-01").getByRole("button", { name: /Setup checklist/ }).click();
+  const ex = page.getByTestId("explanation-F-01");
   const card = page.getByTestId("code-card");
 
   const upload = ex.getByTestId("evidence-chip").filter({ hasText: "Interview 11" });

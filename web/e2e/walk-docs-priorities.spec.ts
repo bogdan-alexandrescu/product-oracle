@@ -103,12 +103,12 @@ test("5 Depends on names a dependency the PRD left out, with no extra note (RP1 
   await seeded(page);
   await runOrder(page);
   const deps = page.getByTestId("row-deps");
-  await expect(deps.filter({ hasText: "Address lookup service" })).toHaveCount(1);
+  await expect(deps.filter({ hasText: "Bulk import" })).toHaveCount(1);
   // docs/ground-truth.md: a feature shows its code with its name, never the code alone.
-  await expect(deps.filter({ hasText: "F-8 Scheduled exports" })).toHaveCount(1);
+  await expect(deps.filter({ hasText: "F-13 Public signup" })).toHaveCount(1);
   await expect(page.locator("main")).not.toContainText("Outside this PRD's scope");
   // The cycle banner names it too.
-  await expect(page.getByTestId("cycles-banner")).toContainText("F-7 Bulk export → F-8 Scheduled exports");
+  await expect(page.getByTestId("cycles-banner")).toContainText("F-12 Referral link → F-13 Public signup");
 });
 
 test("6 at 390 px every table row of the run's order fits the phone", async ({ page }) => {

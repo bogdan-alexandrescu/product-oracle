@@ -14,30 +14,30 @@ const scenario = (page: Page, key: string) => page.addInitScript(([k, v]) => loc
 async function priorities(page: Page) {
   await login(page);
   await page.goto("/priorities");
-  await expect(page.getByTestId("priority-row-F-1")).toBeVisible();
+  await expect(page.getByTestId("priority-row-F-01")).toBeVisible();
 }
 
 test("detailed-b 1: Priorities names each feature by its code and name", async ({ page }) => {
   await priorities(page);
   // The row, its Depends on and the cycle banner.
-  await expect(page.getByTestId("priority-row-F-5").getByTestId("feature-name")).toHaveText("F-5 Address lookup service");
-  await expect(page.getByTestId("cycles-banner")).toContainText("F-7 Bulk export → F-8 Scheduled exports");
-  const deps = page.getByTestId("priority-row-F-2").getByTestId("row-deps");
-  await expect(deps).toContainText("F-5 Address lookup service");
+  await expect(page.getByTestId("priority-row-F-07").getByTestId("feature-name")).toHaveText("F-07 Bulk import");
+  await expect(page.getByTestId("cycles-banner")).toContainText("F-12 Referral link → F-13 Public signup");
+  const deps = page.getByTestId("priority-row-F-02").getByTestId("row-deps");
+  await expect(deps).toContainText("F-07 Bulk import");
   // The inspector's head and its Moved for chip.
-  await page.getByTestId("priority-row-F-5").getByTestId("feature-name").click();
-  await expect(page.getByTestId("priority-inspector").getByRole("heading").first()).toContainText("F-5 Address lookup service");
-  await expect(page.getByTestId("explanation-F-5").locator("li", { hasText: "Moved for" })).toContainText("F-2 Shipping cost shown in the cart");
+  await page.getByTestId("priority-row-F-07").getByTestId("feature-name").click();
+  await expect(page.getByTestId("priority-inspector").getByRole("heading").first()).toContainText("F-07 Bulk import");
+  await expect(page.getByTestId("explanation-F-07").locator("li", { hasText: "Moved for" })).toContainText("F-02 Sample data import");
   // The Move dialog's title and target.
-  await page.getByTestId("priority-row-F-2").getByRole("button", { name: "Move up" }).click();
+  await page.getByTestId("priority-row-F-02").getByRole("button", { name: "Move up" }).click();
   const sheet = page.getByTestId("override-sheet");
-  await expect(sheet).toContainText("Move F-2 Shipping cost shown in the cart");
-  await expect(sheet.getByTestId("move-target")).toHaveText("Move above F-5 Address lookup service");
+  await expect(sheet).toContainText("Move F-02 Sample data import");
+  await expect(sheet.getByTestId("move-target")).toHaveText("Move above F-07 Bulk import");
 });
 
 test("detailed-b 4: a row's More actions is the app's icon, never a ⋯ character", async ({ page }) => {
   await priorities(page);
-  const more = page.getByTestId("priority-row-F-1").getByRole("button", { name: "More actions" });
+  const more = page.getByTestId("priority-row-F-01").getByRole("button", { name: "More actions" });
   await expect(more.locator("svg")).toHaveCount(1);
   await expect(more).not.toContainText("⋯");
   await more.click();
@@ -52,11 +52,11 @@ test("detailed-b 6: each header count shows the rows it counts", async ({ page }
   await header.getByRole("button", { name: "1 no goal" }).click();
   await expect(header.getByRole("button", { name: "1 no goal" })).toHaveAttribute("aria-pressed", "true");
   await expect(rows).toHaveCount(1);
-  await expect(page.getByTestId("priority-row-F-6")).toBeVisible();
+  await expect(page.getByTestId("priority-row-F-06")).toBeVisible();
   await header.getByRole("button", { name: "2 in a cycle" }).click();
   await expect(rows).toHaveCount(2);
-  await expect(page.getByTestId("priority-row-F-7")).toBeVisible();
-  await expect(page.getByTestId("priority-row-F-8")).toBeVisible();
+  await expect(page.getByTestId("priority-row-F-12")).toBeVisible();
+  await expect(page.getByTestId("priority-row-F-13")).toBeVisible();
   // The whole count brings every row back.
   await header.getByRole("button", { name: /ranked$/ }).click();
   await expect(rows).toHaveCount(all);
@@ -67,12 +67,12 @@ test("detailed-b 2: a run's order problem names each feature by its code and nam
   await login(page, "approver@example.com");
   await page.goto(`/runs/${PRIORITY_BLOCKED_RUN}`);
   const reason = page.getByTestId("gate-reason").filter({ visible: true }).first();
-  await expect(reason).toContainText("F-2 Shipping cost shown in the cart");
-  await expect(reason).toContainText("is ranked 1, above F-5 Address lookup service (rank 2), which it depends on");
+  await expect(reason).toContainText("F-02 Sample data import");
+  await expect(reason).toContainText("is ranked 1, above F-07 Bulk import (rank 2), which it depends on");
   await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
-  await expect(page.getByTestId("priority-row-F-2").getByTestId("problem-before_prerequisite")).toHaveAttribute(
+  await expect(page.getByTestId("priority-row-F-02").getByTestId("problem-before_prerequisite")).toHaveAttribute(
     "title",
-    "F-2 Shipping cost shown in the cart is ranked 1, above F-5 Address lookup service (rank 2), which it depends on",
+    "F-02 Sample data import is ranked 1, above F-07 Bulk import (rank 2), which it depends on",
   );
 });
 

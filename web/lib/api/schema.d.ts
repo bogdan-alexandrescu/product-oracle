@@ -33694,6 +33694,8 @@ export interface components {
             roadmap_version_id?: string | null;
             /** Roadmap Item Key */
             roadmap_item_key?: string | null;
+            /** Roadmap Item Code */
+            roadmap_item_code?: string | null;
             /** Experiment Id */
             experiment_id?: string | null;
             prediction: components["schemas"]["Prediction"];
@@ -34193,6 +34195,8 @@ export interface components {
             key: string;
             /** Title */
             title: string;
+            /** Code */
+            code?: string | null;
             /** Outcome */
             outcome?: string | null;
             /**
@@ -44473,6 +44477,8 @@ export interface components {
              * @default false
              */
             estimate_pending: boolean;
+            /** Picked Quarter */
+            picked_quarter?: string | null;
             /** Date Basis */
             date_basis?: string | null;
             suggestion?: components["schemas"]["DateSuggestionOut"] | null;

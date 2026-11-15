@@ -327,6 +327,48 @@ async def test_added_item_is_in_the_draft_only(client):
         )
 
 
+async def test_quarter_add_is_estimated_in_its_quarter(client):
+    """roadmap-dates (QA Nov 14): Quick Add to a picked quarter keeps the quarter on the item:
+    the undated draft is estimated inside it and sits in its column (Next here, not Later),
+    then Oracle's suggestion is its estimate, and the daily suggestion stays in the quarter."""
+    from oracle.simple import suggestions
+
+    w = await World().build()
+    c = (await w.add(client, "owner", "Saved search filters", kind="quarter", value="2027-Q1"))[
+        "change"
+    ]
+    iid = c["target"]["item_id"]
+    item = (await w.items(client))[iid]
+    assert item["picked_quarter"] == "2027-01-01"
+    assert item["horizon"] == "next" and item["estimated"]
+    assert (item["start"]["date"], item["end"]["date"]) == ("2027-01-01", "2027-03-31")
+
+    async def ask(kind, payload):
+        return {"outcome": "Find saved searches fast.", "feature_key": None, "depends_on": [],
+                "start_date": "2027-01-11", "end_date": "2027-02-19", "basis": "x"}  # fmt: skip
+
+    async with tenant_session(w.ctx.tenant_id) as s:
+        job = await s.scalar(select(LlmJob).where(LlmJob.kind == "item_draft"))
+        await additions.run_item_draft(s, job, ask)
+        await s.commit()
+    item = (await w.items(client))[iid]
+    assert (item["suggestion"]["start_date"], item["suggestion"]["end_date"]) == (
+        "2027-01-11", "2027-02-19")  # fmt: skip
+    # The row's estimate is the panel's suggestion, on every format.
+    assert (item["start"]["date"], item["end"]["date"]) == ("2027-01-11", "2027-02-19")
+    assert item["estimated"] and item["horizon"] == "next"
+    async with tenant_session(w.ctx.tenant_id) as s:
+        await suggestions.regenerate(s)
+        await s.commit()
+    item = (await w.items(client))[iid]
+    s0, s1 = item["suggestion"]["start_date"], item["suggestion"]["end_date"]
+    assert "2027-01-01" <= s0 <= s1 <= "2027-03-31", (s0, s1)
+    assert (item["start"]["date"], item["end"]["date"]) == (s0, s1) and item["horizon"] == "next"
+    # A column add keeps no quarter: an undated draft is Later's estimate.
+    c2 = (await w.add(client, "owner", "Bulk alert export", kind="horizon", value="next"))["change"]
+    assert (await w.items(client))[c2["target"]["item_id"]]["picked_quarter"] is None
+
+
 async def test_drafting_job_fills_the_draft(client):
     w = await World().build()
     c = (await w.add(client, "owner", "Import from files", kind="quarter", value="2026-Q4"))[
@@ -749,6 +791,37 @@ async def test_date_suggestion_survives_publishing_an_added_item(client):
             select(RoadmapDateSuggestion).where(RoadmapDateSuggestion.item_id == copy.id)
         )
         assert sug is not None and sug.status == "open" and sug.basis == "Two sprints"
+
+
+async def test_picked_quarter_survives_publishing_a_quarter_add(client):
+    """Review (QA Nov 14 follow-ups): a quarter add approved before its dates are accepted keeps
+    its quarter on the published copy, so its estimate stays in that quarter, not Later's."""
+    w = await World().build()
+    c = (await w.add(client, "owner", "Saved search filters", kind="quarter", value="2027-Q1"))[
+        "change"
+    ]
+    iid = c["target"]["item_id"]
+    ds = (await client.get("/v1/simple/drafts", headers=w.as_("decider"))).json()
+    d = next(x for x in ds if x["document"]["id"] == w.roadmap_id)
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/submit", headers=w.as_("decider"))
+    assert r.status_code == 200, r.text
+    for who in ("decider", "approver"):
+        r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=w.as_(who))
+        assert r.status_code == 200, r.text
+    assert r.json()["status"] == "approved", r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert await s.get(RoadmapItem, uuid.UUID(iid)) is None
+        copy = await s.scalar(
+            select(RoadmapItem).where(
+                RoadmapItem.title == "Saved search filters",
+                RoadmapItem.roadmap_version_id.is_not(None),
+            )
+        )
+        assert copy.picked_quarter == date(2027, 1, 1)
+    item = (await w.items(client))[str(copy.id)]
+    assert item["picked_quarter"] == "2027-01-01"
+    assert (item["start"]["date"], item["end"]["date"]) == ("2027-01-01", "2027-03-31")
+    assert item["estimated"] and item["horizon"] == "next"
 
 
 GOALS = "/v1/simple/goals"

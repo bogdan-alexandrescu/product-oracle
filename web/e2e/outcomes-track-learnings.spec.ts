@@ -39,7 +39,7 @@ test("an approver tracks an outcome for a roadmap item", async ({ page }) => {
   await openOutcomes(page);
   await page.getByRole("button", { name: "Track outcome" }).click();
   const form = page.getByTestId("track-outcome-form");
-  await form.getByLabel("Item").selectOption({ label: "Threshold alerts on spend" });
+  await form.getByLabel("Item").selectOption({ label: "Threshold alerts on spend · Not in the Ground Truth" });
   await expect(form.getByLabel("Goal")).toHaveValue(/.+/);
   await expect(form.getByLabel("Goal").locator("option:checked")).toHaveText("Raise activation");
   await form.getByLabel("Expected effect").fill("+5 weekly active teams");

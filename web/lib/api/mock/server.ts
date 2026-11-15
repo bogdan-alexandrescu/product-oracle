@@ -13,6 +13,7 @@ import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
 
 import { MOCK_SCENARIO_KEY, mockUuid, newCompany, seeded, stableUuid } from "./ids";
+import { prdCode } from "./item-code";
 import { acceptNewFeatures, addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
@@ -8046,6 +8047,17 @@ async function route(db: Db, req: Request): Promise<Response> {
   // PRD quality and readiness, outcomes and learnings (./quality.ts) check roles themselves.
   const v2db = ensureV2(db);
   const qualityDb = ensureQuality(db);
+  // outcomes-code (codes.code_of): a published plan item's feature code, else its PRD section's; the plan's ids (routePlan).
+  const planItemCode = (id: string): string | null => {
+    const stored = [
+      { slug: ALERTS_ROADMAP_SLUG, number: 1, items: seededPlanItems(ALERTS_ROADMAP_SLUG, 1, db.roadmap?.section_code) ?? [] },
+      ...Object.entries(db.plan_edits?.versions ?? {}).flatMap(([slug, by]) => Object.entries(by).map(([n, items]) => ({ slug, number: Number(n), items }))),
+    ];
+    const hit = stored.flatMap((v) => v.items.map((i) => ({ i, id: seeded(`plan:${v.slug}:${v.number}:${i.key}`, mockUuid) }))).find((x) => x.id === id)?.i;
+    if (!hit) return null;
+    const byFeature = hit.feature_id ? featureCodes(db.baseline.entities.filter((e) => e.type === "feature"), db.roadmap?.section_code, db.plan_edits, db) : {};
+    return (hit.feature_id ? byFeature[hit.feature_id] : null) || prdCode(hit.section) || null;
+  };
   const qualityCtx: QualityContext = {
     db: qualityDb,
     v2: v2db,
@@ -8063,6 +8075,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       const goal = db.baseline.entities.find((e) => e.id === id && e.type === "goal");
       return goal ? (goal.attrs ?? {}) : null;
     },
+    itemCode: planItemCode,
     // outcomes-edit (quality.outcomes.trash_outcome): the row waits in a Trash entry.
     trash: (row, reason) => {
       const at = now();
@@ -8861,7 +8874,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const drift = (key: string, origin: "approved" | "draft") => planDrift(db.strategy, me.role, key, origin);
   // walkc-roadmap-tasks: an item's decisions as Simple's item sheet reads them (the same keys).
   const decidedOf = (key: string) => [...(db.simple_roadmap?.decided_in?.[stableUuid(`simple-item/${key}`)] ?? [])];
-  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits, drift, decided: decidedOf }, db.roadmap, req, p, q);
+  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits, drift, decided: decidedOf, code: planItemCode }, db.roadmap, req, p, q);
   if (planRes) return planRes;
   if (p[1] === "tracks" && p[3] === "roadmap-run" && m === "POST") {
     if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });

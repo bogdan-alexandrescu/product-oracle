@@ -589,8 +589,13 @@ async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all"
     from oracle.simple.service import decided_of_rows
 
     decided = await decided_of_rows(db, [r for _, r in item_rows])
+    from oracle.roadmap import codes
+
+    # outcomes-code: each item's code, as Outcomes and the roadmap name it.
+    by_feature = await codes.feature_codes(db) if any(r.feature_id for _, r in item_rows) else {}
     for item, row in item_rows:
         item.decisions = decided.get(row.id, [])
+        item.code = codes.code_of(row, by_feature)
 
     # The PRDs in play (F1 §4).
     run_of_prd: dict[uuid.UUID, Run] = {}

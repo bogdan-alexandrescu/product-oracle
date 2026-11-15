@@ -64,11 +64,12 @@ VIEWS = {
     "decisions-prd": (DECISIONS, "owner", {"prd": "product-3-prd"}),
 }
 # Each view's body on the seed as 3eea4a0 answered it (the company's id masked).
+# roadmap-dates: picked_quarter, and undated items estimated by their suggestions.
 DIGESTS = {
-    "roadmap": "2bdb31518feb21d575a13c1b1dbccae21ed5dffa38e6a7b26cefcb81fc9fa352",
-    "roadmap-viewer": "9c2f1c3d20f5cc7f43d0f90c50b7a1759dbed7b17a0e4c58801b800fd06a1bb7",
-    "priorities": "47fab36d7325276b7c141d70d1d510c6026116c977f2a48b743b78d314b49b37",
-    "priorities-viewer": "a43376612642b3c90e23fce7011806c453febdf9341a8ec7994ac6f6e8b89517",
+    "roadmap": "1ceabb64e589e635de15170f73563131b8d112d9309e5068b67fb8cada0929e0",
+    "roadmap-viewer": "9e567f590ceceba40e4ba886f64160d4ed3d8010fbce4e2a021c720c86891837",
+    "priorities": "1471b1dcc8f5186e1e1227e91a2bde13d28d48b9ba8971869df141851d6c5277",
+    "priorities-viewer": "6f5a79e3aef918833c7e6fda07988bbed353c7e59ee907b3d793b6a3c5550001",
     "decisions": "e5265b88addf7bd45293bc4041094ac5e6d46a38a00b94bbd175f6a22e6ec400",
     "decisions-viewer": "990a9f77ce6c52e514901685e5baee279b0d9a6cd8706ef47a556be42a29b12a",
     "decisions-goal": "cd08b498db9fec8500fb80a6be5209a18d37c790126f4d659a5fd7f5d5c61ca3",

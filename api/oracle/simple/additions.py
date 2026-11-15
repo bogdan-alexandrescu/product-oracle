@@ -493,6 +493,10 @@ async def _place(
         start_date=date.fromisoformat(c.after["start_date"]) if c.after.get("start_date") else None,
         end_date=date.fromisoformat(c.after["end_date"]) if c.after.get("end_date") else None,
         date_source="typed" if c.after.get("start_date") else None,
+        # roadmap-dates: the quarter it was added to, its estimate until Oracle suggests.
+        picked_quarter=date.fromisoformat(c.after["quarter"]["start"])
+        if c.after.get("quarter")
+        else None,
         milestone=c.after.get("milestone"),
     )
     db.add(row)
