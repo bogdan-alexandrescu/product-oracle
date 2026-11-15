@@ -6,7 +6,7 @@ import { login } from "./helpers";
  * Fix-plan review minors on /baseline, through the UI on the mock layer (see
  * qa-plan-baseline.spec.ts for the pattern this borrows).
  *
- * #2 "conflict-3way" scenario (lib/api/mock/baseline.ts addThreeWayConflict): Dark mode's
+ * #2 "conflict-3way" scenario (lib/api/mock/baseline.ts addThreeWayConflict): Setup error report's
  * delivery status has three claims tied on confidence. The winner (code) and the true
  * runner-up (tracker) share the precedence tiebreak the rule names; a third claim (chat)
  * has higher raw confidence than the runner-up but a weaker source. protects=the "outranks"
@@ -23,7 +23,7 @@ async function openConflicts(page: Page) {
 
 test("conflicts: with 3 claims the 'outranks' sentence names the actual runner-up", async ({ page }) => {
   await openConflicts(page);
-  const card = page.getByTestId("conflict").filter({ hasText: "Dark mode" });
+  const card = page.getByTestId("conflict").filter({ hasText: "Setup error report" });
   await expect(card).toBeVisible();
   const claims = card.getByTestId("claim");
   await expect(claims).toHaveCount(3);

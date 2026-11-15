@@ -4217,9 +4217,9 @@ const LOCAL_BRIEFS: Brief[] = [
 
 /** The "eng-check" scenario's briefs, on the baseline's own features (their efforts M, S, L). */
 const SEEDED_BRIEFS: Brief[] = [
-  { key: "f.guided-setup", title: "Guided setup", approach: "Reuse the onboarding checklist and add the test-order step.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Does the payment sandbox take test orders without a live account?", blocking: true }, { id: "q2", question: "Show the checklist on phones too?", blocking: false }] },
-  { key: "f.sample-data", title: "Sample data", approach: "A fixed catalogue copied into the new store on first sign-in.", size: "s", depends_on: [], questions: [] },
-  { key: "f.saved-carts", title: "Saved carts", approach: "Keep the cart server-side and sync it on sign-in.", size: "l", depends_on: ["f.guided-setup"], questions: [] },
+  { key: "f.guided-setup", title: "Setup checklist", approach: "Reuse the onboarding checklist and add the test-order step.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Does the payment sandbox take test orders without a live account?", blocking: true }, { id: "q2", question: "Show the checklist on phones too?", blocking: false }] },
+  { key: "f.sample-data", title: "Sample data import", approach: "A fixed catalogue copied into the new store on first sign-in.", size: "s", depends_on: [], questions: [] },
+  { key: "f.saved-carts", title: "Referral link", approach: "Keep the cart server-side and sync it on sign-in.", size: "l", depends_on: ["f.guided-setup"], questions: [] },
 ];
 
 /** What a brief file says of the code maps: the ids each feature cites (with where: touches[i].ref or reuse) and the repositories it names. */

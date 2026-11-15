@@ -78,14 +78,14 @@ test("qa-plan-59: a recorded change leads back to its version, with PRDs highlig
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
 });
 
-test("qa-plan-59/61: a Ground Truth item's what-if reads 'Impact: Guided setup' and leads back to Ground Truth", async ({ page }) => {
+test("qa-plan-59/61: a Ground Truth item's what-if reads 'Impact: Setup checklist' and leads back to Ground Truth", async ({ page }) => {
   await scenario(page, "impact");
   await login(page);
   await page.goto("/ground-truth");
-  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
-  await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
+  await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
+  await page.getByRole("dialog", { name: "Setup checklist" }).getByRole("link", { name: "What if it changed?" }).click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Impact: Guided setup");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Impact: Setup checklist");
   const nav = page.getByRole("navigation", { name: "Oracle" });
   await expect(nav.getByTestId("nav-baseline")).toHaveAttribute("aria-current", "page");
   await page.getByTestId("impact-back").click();

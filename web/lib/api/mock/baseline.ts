@@ -315,12 +315,14 @@ export function seedBaseline(uuid: () => string): BaselineState {
     },
     confidence: 0.66,
   });
-  entity("goal", "g.early-churn", "Cut early churn", {
+  const churn = entity("goal", "g.early-churn", "Cut early churn", {
     body: "Fewer accounts leave in their first three months.",
     attrs: { weight: 0.2, metric: "Accounts lost in the first 90 days", target_text: "below 8%" },
     status: "proposed",
     confidence: 0.45,
   });
+  // The goals keep the order their earlier names gave them (lib/goal-order.ts breaks a tie by title): churn, paid, activation.
+  [churn, paid].forEach((g, i) => (g.created_at = g.updated_at = `2026-10-12T08:5${8 + i}:00Z`));
   const scenario = typeof localStorage !== "undefined" ? localStorage.getItem(MOCK_SCENARIO_KEY) : null;
   if (scenario === OKR_IMPORT_SCENARIO || scenario === GOAL_ATTRS_SCENARIO) {
     const shapes =
@@ -388,29 +390,29 @@ export function seedBaseline(uuid: () => string): BaselineState {
   const console_ = entity("product", "p.admin-console", "Admin console", { body: "Settings, members and billing." });
 
   // Features.
-  const guided = entity("feature", "F-82", "Guided setup", {
+  const guided = entity("feature", "F-01", "Setup checklist", {
     body: "A short checklist that walks a new account through its first product, payment method and test order.",
     attrs: { status: "in_progress", effort: "M" },
     confidence: 0.71,
     locked: true,
   });
-  const sample = entity("feature", "F-83", "Sample data", {
+  const sample = entity("feature", "F-02", "Sample data import", {
     body: "Prefill a new store with example products so the first preview is not empty.",
     attrs: { status: "planned", effort: "S" },
     confidence: 0.71,
   });
-  const carts = entity("feature", "F-84", "Saved carts", {
-    body: "Shoppers can keep a cart and come back to it on another device.",
+  const carts = entity("feature", "F-12", "Referral link", {
+    body: "A team shares a link that brings another team to sign up.",
     attrs: { status: "planned", effort: "L", milestone: "Beta" },
     confidence: 0.3,
   });
-  const invites = entity("feature", "F-85", "Team invites", {
+  const invites = entity("feature", "F-05", "Team invites", {
     body: "Invite teammates during setup.",
     attrs: { status: "shipped", effort: "S" },
     confidence: 0.68,
   });
-  const dark = entity("feature", "F-81", "Dark mode", {
-    body: "A dark theme for the admin console.",
+  const dark = entity("feature", "F-06", "Setup error report", {
+    body: "A report in the admin console of what failed during setup.",
     attrs: { status: "idea", effort: "M" },
     confidence: 0.52,
   });
@@ -477,7 +479,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
   cite(carts, "slack", { source: 0.3, freshness: 0.2, mentions: 0.3, goal_impact: 0.4 }, {
     url: "https://example.slack.com/archives/C0SALES/p1750000000",
     ref: "#sales thread",
-    excerpt: "One prospect asked whether carts can be saved across devices.",
+    excerpt: "One prospect asked for a link to bring a partner team in.",
     retrieved_at: "2026-08-02T15:00:00Z",
     itemTitle: "#sales thread",
     item: { id: seededItemId(PRODUCT_CHAT_ID, "m1"), source_id: PRODUCT_CHAT_ID },
@@ -485,7 +487,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
   cite(carts, "upload", { source: 0.4, freshness: 0.25, mentions: 0.2, goal_impact: 0.3 }, {
     url: "https://files.example.com/wishlist-2026.pdf",
     ref: "Feature wishlist (upload)",
-    excerpt: "Saved carts: requested twice.",
+    excerpt: "Referral link: requested twice.",
     retrieved_at: "2026-07-20T10:00:00Z",
     itemTitle: "Feature wishlist",
   });
@@ -499,7 +501,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
   cite(dark, "slack", { source: 0.5, freshness: 0.6, mentions: 0.6, goal_impact: 0.3 }, {
     url: "https://example.slack.com/archives/C0DESIGN/p1760500000",
     ref: "#design thread",
-    excerpt: "A few admins asked for a dark theme for late shifts.",
+    excerpt: "A few admins asked to see why setup failed.",
     retrieved_at: "2026-10-09T19:10:00Z",
     itemTitle: "#design thread",
     item: { id: seededItemId(PRODUCT_CHAT_ID, "m2"), source_id: PRODUCT_CHAT_ID },
@@ -1950,8 +1952,8 @@ export function addNoisyProposals(s: BaselineState, uuid: () => string) {
 
 /**
  * The "proposal-duplicates" scenario: the Baseline to PRD run's writer and critic propose the
- * same changes twice (Dark mode's delivery status both ways, Saved addresses under two
- * titles, the Saved carts → Team invites link that already exists), and four proposals on
+ * same changes twice (Setup error report's delivery status both ways, Saved addresses under two
+ * titles, the Referral link → Team invites link that already exists), and four proposals on
  * Activation that one accept settles.
  */
 export function addDuplicateProposals(s: BaselineState, uuid: () => string) {
@@ -1973,11 +1975,11 @@ export function addDuplicateProposals(s: BaselineState, uuid: () => string) {
     markDuplicate(s, p);
   };
   const update = (fields: Attrs, reason: string, role?: string) => ({ op: "update", kind: "entity", fields, reason, ...(role ? { role } : {}) });
-  push(by("F-81"), update({ attrs: { status: "proposed" } }, "Not committed to yet.", "critic"), "2026-10-16T08:40:00Z");
+  push(by("F-06"), update({ attrs: { status: "proposed" } }, "Not committed to yet.", "critic"), "2026-10-16T08:40:00Z");
   const feature = (key: string, title: string, role: string) => ({ op: "create", kind: "entity", fields: { type: "feature", key, title }, reason: "Asked for in the planning call.", role });
   push(null, feature("f.saved-addresses", "Saved addresses", "writer"), "2026-10-16T08:41:00Z");
   push(null, feature("f.saved-address", "Add saved address", "critic"), "2026-10-16T08:42:00Z");
-  const link = { src_id: by("F-84").id, dst_id: by("F-85").id, type: "depends_on" };
+  const link = { src_id: by("F-12").id, dst_id: by("F-05").id, type: "depends_on" };
   push(null, { op: "create", kind: "edge", fields: link, reason: "Shared carts need invites.", role: "writer" }, "2026-10-16T08:43:00Z");
   push(null, { op: "create", kind: "edge", fields: link, reason: "Invites come first.", role: "critic" }, "2026-10-16T08:44:00Z");
   const goal = by("g.activation");
@@ -1988,7 +1990,7 @@ export function addDuplicateProposals(s: BaselineState, uuid: () => string) {
   push(null, { ...feature("f.search", "Search", "writer"), reason: "A search box." }, "2026-10-16T08:49:00Z");
   push(null, { ...feature("f.search-v2", "Search v2", "critic"), reason: "A second search with filters." }, "2026-10-16T08:50:00Z");
   // Team invites' milestone, set by a proposal accepted days ago, that an older one would undo.
-  const invites = by("F-85");
+  const invites = by("F-05");
   const was = invites.attrs?.milestone ?? null;
   invites.attrs = { ...invites.attrs, milestone: "M3" };
   push(invites, update({ attrs: { milestone: "M1" } }, "Invites in M1."), "2026-10-16T08:51:00Z", false);
@@ -2001,11 +2003,11 @@ export function addDuplicateProposals(s: BaselineState, uuid: () => string) {
 }
 
 /**
- * The "proposal-overlap" scenario (#268): two run proposals on Saved carts that both set its
+ * The "proposal-overlap" scenario (#268): two run proposals on Referral link that both set its
  * milestone, written before either was accepted.
  */
 export function addOverlappingProposals(s: BaselineState, uuid: () => string) {
-  const carts = s.entities.find((e) => e.key === "F-84")!;
+  const carts = s.entities.find((e) => e.key === "F-12")!;
   const propose = (fields: Attrs, reason: string, created_at: string) =>
     s.proposals.push({
       id: uuid(),
@@ -2029,7 +2031,7 @@ export function addOverlappingProposals(s: BaselineState, uuid: () => string) {
  * overlap warning must name the field fully ("delivery status"), not bare "status".
  */
 export function addStatusOverlapProposals(s: BaselineState, uuid: () => string) {
-  const invites = s.entities.find((e) => e.key === "F-85")!;
+  const invites = s.entities.find((e) => e.key === "F-05")!;
   const propose = (fields: Attrs, reason: string, created_at: string) =>
     s.proposals.push({
       id: uuid(),
@@ -2048,7 +2050,7 @@ export function addStatusOverlapProposals(s: BaselineState, uuid: () => string) 
 }
 
 /**
- * The "conflict-3way" scenario (review minor, #2): Dark mode's delivery status has three
+ * The "conflict-3way" scenario (review minor, #2): Setup error report's delivery status has three
  * competing claims, all within the tie margin of each other. The winner (code) and the
  * true runner-up (tracker) share the same precedence tiebreak the rule names; a third
  * claim (chat) has higher raw confidence than the runner-up but a weaker source, so
@@ -2056,7 +2058,7 @@ export function addStatusOverlapProposals(s: BaselineState, uuid: () => string) 
  * ranked second would point at the wrong claim.
  */
 export function addThreeWayConflict(s: BaselineState, uuid: () => string) {
-  const dark = s.entities.find((e) => e.key === "F-81")!;
+  const dark = s.entities.find((e) => e.key === "F-06")!;
   s.conflicts.push({
     id: uuid(),
     entity_id: dark.id,

@@ -57,10 +57,10 @@ test("the run page lists the answered questions under the Engineering review sto
   await expect(answers).toHaveCount(2);
   const when = String.raw`[A-Z][a-z]{2} \d{1,2}(, \d{4})?, \d{1,2}:\d{2} [AP]M`;
   await expect(answers.nth(0)).toHaveText(
-    new RegExp(String.raw`^Guided setup: Does the payment sandbox take test orders without a live account\? → Yes, the sandbox takes test orders\. · Theo Brandt · ${when}`),
+    new RegExp(String.raw`^Setup checklist: Does the payment sandbox take test orders without a live account\? → Yes, the sandbox takes test orders\. · Theo Brandt · ${when}`),
   );
   await expect(answers.nth(1)).toHaveText(
-    new RegExp(String.raw`^Guided setup: Show the checklist on phones too\? → Phones come in the second release\. · Theo Brandt · ${when}`),
+    new RegExp(String.raw`^Setup checklist: Show the checklist on phones too\? → Phones come in the second release\. · Theo Brandt · ${when}`),
   );
   // The feature by its name: never its key.
   await expect(section).not.toContainText("f.guided-setup");
@@ -116,6 +116,6 @@ test("an answer recorded by its question's id shows the feature's question", asy
   const answers = eng.getByRole("list", { name: "Answered at Engineering review" }).getByTestId("run-decision-answer");
   await expect(answers).toHaveCount(1);
   await expect(answers.nth(0)).toHaveText(
-    /^Guided setup: Does the payment sandbox take test orders without a live account\? → Yes, the sandbox takes test orders\. · Theo Brandt · Oct 17/,
+    /^Setup checklist: Does the payment sandbox take test orders without a live account\? → Yes, the sandbox takes test orders\. · Theo Brandt · Oct 17/,
   );
 });

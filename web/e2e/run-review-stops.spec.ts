@@ -113,9 +113,9 @@ test("the staged chips name each change by its feature, with a count only past t
     .getByRole("button", { name: "XL" })
     .click();
   await expect(bar.getByTestId("staged-chip")).toHaveText([
-    "Guided setup: Feasible",
-    "Guided setup: Blocking question answered",
-    "Guided setup: Size XL",
+    "Setup checklist: Feasible",
+    "Setup checklist: Blocking question answered",
+    "Setup checklist: Size XL",
   ]);
   await expect(bar.getByTestId("staged-more")).toHaveCount(0);
   await expect(bar).not.toContainText("changes staged");
@@ -125,7 +125,7 @@ test("the staged chips name each change by its feature, with a count only past t
   await expect(bar.getByTestId("staged-more")).toHaveText("1 more change");
   await expect(bar.getByTestId("staged-more")).toHaveAttribute(
     "title",
-    "Saved carts: Feasible",
+    "Referral link: Feasible",
   );
 });
 

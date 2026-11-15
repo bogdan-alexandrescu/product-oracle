@@ -132,10 +132,10 @@ test.describe("desktop", () => {
     await tile.getByRole("button", { name: "About Features traced" }).click();
     await expect(
       page.getByRole("tooltip").filter({ visible: true }),
-    ).toContainText("Not traced: Dark mode");
+    ).toContainText("Not traced: Setup error report");
     await expect(
       ledger(page)
-        .getByTestId("feature-F-81")
+        .getByTestId("feature-F-06")
         .getByText("Serves no goal"),
     ).toBeVisible();
   });
@@ -194,11 +194,11 @@ test.describe("desktop", () => {
     await login(page);
     await page.goto("/ground-truth");
     await page
-      .getByTestId("feature-F-82")
-      .getByRole("button", { name: "Guided setup" })
+      .getByTestId("feature-F-01")
+      .getByRole("button", { name: "Setup checklist" })
       .click();
     await page
-      .getByRole("dialog", { name: "Guided setup" })
+      .getByRole("dialog", { name: "Setup checklist" })
       .getByRole("link", { name: "What if it changed?" })
       .click();
     await expect(page).toHaveURL(/\/impact\/entities\//);
@@ -227,7 +227,7 @@ test.describe("phone", () => {
     const usage = ledger(page).getByTestId("feature-f.usage-export");
     await expect(usage.getByText("Proposed", { exact: true })).toBeVisible();
 
-    const guided = ledger(page).getByTestId("feature-F-82");
+    const guided = ledger(page).getByTestId("feature-F-01");
     const pill = guided
       .locator("td")
       .filter({ has: page.getByTestId("code-chip") })

@@ -15,8 +15,8 @@ async function openItem(page: Page, key: string, title: string, email?: string) 
 test("Ground Truth: link a feature to a goal, change its contribution, unlock it and remove it; the matrix follows", async ({
   page,
 }) => {
-  const d = await openItem(page, "F-81", "Dark mode");
-  const row = page.getByTestId("feature-F-81");
+  const d = await openItem(page, "F-06", "Setup error report");
+  const row = page.getByTestId("feature-F-06");
   await expect(row.getByTestId("flag")).toHaveText(["Serves no goal"]);
 
   await d.getByRole("button", { name: "Link to goal" }).click();
@@ -51,8 +51,8 @@ test("Ground Truth: link a feature to a goal, change its contribution, unlock it
 });
 
 test("Ground Truth: add depends-on, blocks and part-of links, and confirm a proposed link", async ({ page }) => {
-  const d = await openItem(page, "F-84", "Saved carts");
-  // An agent proposed that Saved carts depends on Team invites.
+  const d = await openItem(page, "F-12", "Referral link");
+  // An agent proposed that Referral link depends on Team invites.
   const deps = d.getByRole("list", { name: "Depends on" });
   await expect(deps).toContainText("Team invites");
   await expect(deps).toContainText("Proposed");
@@ -61,8 +61,8 @@ test("Ground Truth: add depends-on, blocks and part-of links, and confirm a prop
   await expect(deps).not.toContainText("Proposed");
 
   for (const [relation, entry, list] of [
-    ["Depends on", "Sample data", "Depends on"],
-    ["Blocks", "Dark mode", "Blocks"],
+    ["Depends on", "Sample data import", "Depends on"],
+    ["Blocks", "Setup error report", "Blocks"],
     ["Part of", "Admin console", "Part of"],
   ] as const) {
     await d.getByRole("button", { name: "Add dependency" }).click();
@@ -77,13 +77,13 @@ test("Ground Truth: add depends-on, blocks and part-of links, and confirm a prop
   await d.getByRole("button", { name: "Add dependency" }).click();
   const again = d.getByRole("form", { name: "Add dependency" });
   await again.getByLabel("Relation").selectOption({ label: "Blocks" });
-  await again.getByLabel("Entry").selectOption({ label: "Dark mode" });
+  await again.getByLabel("Entry").selectOption({ label: "Setup error report" });
   await again.getByRole("button", { name: "Add", exact: true }).click();
   await expect(d.getByText("This link already exists")).toBeVisible();
 });
 
 test("Ground Truth: cite a source item as evidence, then remove evidence with a reason", async ({ page }) => {
-  const d = await openItem(page, "F-81", "Dark mode");
+  const d = await openItem(page, "F-06", "Setup error report");
   const evidence = d.getByRole("list", { name: "Evidence" });
   await expect(evidence.getByTestId("evidence-row")).toHaveCount(1);
   await d.getByRole("button", { name: "Cite a source item" }).click();
@@ -110,7 +110,7 @@ test("Ground Truth: cite a source item as evidence, then remove evidence with a 
 });
 
 test("Ground Truth: a viewer sees no link or evidence controls, and a View only label", async ({ page }) => {
-  const d = await openItem(page, "F-82", "Guided setup", "viewer@example.com");
+  const d = await openItem(page, "F-01", "Setup checklist", "viewer@example.com");
   await expect(d.getByText("View only", { exact: true })).toBeVisible();
   for (const name of ["Link to goal", "Add dependency", "Cite a source item"]) {
     await expect(d.getByRole("button", { name })).toHaveCount(0);
@@ -121,7 +121,7 @@ test("Ground Truth: a viewer sees no link or evidence controls, and a View only 
 });
 
 test("Ground Truth: a commenter sees no link or cite controls, but can still add an evidence link", async ({ page }) => {
-  const d = await openItem(page, "F-82", "Guided setup", "commenter@example.com");
+  const d = await openItem(page, "F-01", "Setup checklist", "commenter@example.com");
   for (const name of ["Link to goal", "Add dependency", "Cite a source item"]) {
     await expect(d.getByRole("button", { name })).toHaveCount(0);
   }
@@ -131,7 +131,7 @@ test("Ground Truth: a commenter sees no link or cite controls, but can still add
 
 test("Ground Truth: on a phone the Link to goal form fits", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const d = await openItem(page, "F-81", "Dark mode");
+  const d = await openItem(page, "F-06", "Setup error report");
   await d.getByRole("button", { name: "Link to goal" }).click();
   const form = d.getByRole("form", { name: "Link to goal" });
   await form.getByLabel("Goal").selectOption({ label: "Growth" });

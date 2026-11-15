@@ -5168,7 +5168,7 @@ function seedDiscussionChangeKindsScenario(db: Db): DiscussionsDb {
   return seedDiscussionChangeKinds(
     { members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now },
     { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind, name: (key) => itemName(db, key, run.id) },
-    { moved: feature("F-84"), above: feature("F-82") },
+    { moved: feature("F-12"), above: feature("F-01") },
   );
 }
 
@@ -6857,9 +6857,9 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
 
 /** #346: the change-set mock's view of the db; a proposal imports the next version, copied from its base. */
 function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsContext {
-  const guided = db.roadmap?.two_roadmaps && db.baseline.entities.find((e) => e.type === "feature" && (e.key === "F-82" || e.key === "f.guided-setup"));
+  const guided = db.roadmap?.two_roadmaps && db.baseline.entities.find((e) => e.type === "feature" && (e.key === "F-01" || e.key === "f.guided-setup"));
   // The scenario's Guided setup has no code of its own (still its slug), so it takes its oldest published section's.
-  if (guided && guided.key === "F-82") guided.key = "f.guided-setup";
+  if (guided && guided.key === "F-01") guided.key = "f.guided-setup";
   // Seeded lazily, on the first change-set request: a page opened before Edit plan shows usage-alerts-roadmap v1 not yet approved.
   if (guided) seedTwoRoadmaps(db, (db.plan_edits ??= emptyPlanEdits()), guided.id);
   let codes: Record<string, string> | undefined;
@@ -6983,7 +6983,7 @@ function goalLinks(db: Db): V2Db["section_links"] {
   };
   link("checkout-redesign", "goal-trace", "g.activation");
   link("checkout-redesign", "goal-trace", "g.paid-conversion");
-  link("team-workspaces", "scope", "F-85");
+  link("team-workspaces", "scope", "F-05");
   return out;
 }
 
@@ -7023,7 +7023,7 @@ function evidenceLinks(db: Db): V2Db["section_links"] {
   link(v2, "problem", "mentions", { source_item_id: "6f1e2d3c-4b5a-4968-8778-a1b2c3d4e5f6" }, { precision: "paragraph" });
   link(v2, "goal-trace", "claims", { evidence_id: evidence("#sales thread") }, { precision: "claim", claim: "Week-1 activation rises once the cost shows early." });
   link(v2, "goal-trace", "implements", { entity_id: entity("f.usage-export") }, { stale: true, at: "2026-10-16T15:00:00Z" });
-  link(v2, "scope", "tests", { entity_id: entity("F-82") }, { precision: "paragraph", module_key: "acceptance-criteria" });
+  link(v2, "scope", "tests", { entity_id: entity("F-01") }, { precision: "paragraph", module_key: "acceptance-criteria" });
   link(v2, "risks", "evidences", { evidence_id: evidence("Onboarding review (meeting)") }, { stale: true });
   link(approved, "behaviour", "evidences", { evidence_id: evidence("Sample store spec") });
   return out;
@@ -7107,7 +7107,7 @@ function ensureV2(db: Db): V2Db {
         seedImpact(v2, {
           versionId: version.id,
           roadmapVersionId: db.versions.find((v) => v.document_id === roadmap?.id)?.id ?? null,
-          entity: db.baseline.entities.find((e) => e.key === "F-82") ?? db.baseline.entities.find((e) => e.type !== "goal") ?? null,
+          entity: db.baseline.entities.find((e) => e.key === "F-01") ?? db.baseline.entities.find((e) => e.type !== "goal") ?? null,
           userId: db.user_id,
           uuid,
         }, scenario === "impact-large");

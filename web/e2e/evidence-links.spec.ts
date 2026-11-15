@@ -8,8 +8,8 @@ async function openDrawer(page: Page, email: string) {
   await login(page, email);
   await page.goto("/ground-truth");
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
-  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
-  const d = page.getByRole("dialog", { name: "Guided setup" });
+  await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
+  const d = page.getByRole("dialog", { name: "Setup checklist" });
   await expect(d.getByTestId("evidence-chip")).toHaveCount(3);
   return d;
 }

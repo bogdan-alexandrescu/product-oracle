@@ -96,7 +96,7 @@ test("an Ask Oracle answer about the Ground Truth, and a decision on its review,
   await login(page);
   // A decision on the review, and whatever it says back (a notice or a toast).
   await page.goto("/ground-truth?run=7a11c0de-0000-4000-8000-0000000000b2");
-  const row = page.getByTestId("from-run-row").filter({ hasText: "Guided setup" });
+  const row = page.getByTestId("from-run-row").filter({ hasText: "Setup checklist" });
   await row.getByRole("button", { name: "Accept" }).click();
   await expect(row).toContainText("Accepted");
   expect(await page.locator("body").innerText()).not.toMatch(OLD_NAME);

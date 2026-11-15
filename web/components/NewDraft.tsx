@@ -976,7 +976,7 @@ export function NewDraft({ kind }: { kind: Kind }) {
                 className={INPUT}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder={kind === "prd" ? "Saved addresses at checkout" : "Product roadmap, next two quarters"}
+                placeholder={kind === "prd" ? "Setup checklist" : "Product roadmap, next two quarters"}
                 aria-invalid={titleError ? true : undefined}
                 required
               />
@@ -1383,7 +1383,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
                 value={title}
                 maxLength={200}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Saved addresses at checkout"
+                placeholder="Setup checklist"
                 aria-invalid={titleError ? true : undefined}
                 aria-describedby={titleError ? `${id}-title-error` : undefined}
                 required

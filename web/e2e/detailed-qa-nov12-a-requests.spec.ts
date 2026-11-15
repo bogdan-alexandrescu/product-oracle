@@ -5,11 +5,11 @@ import { login } from "./helpers";
 /*
  * Detailed visual QA, Nov 12, 2026 (pass A), finding 5: the request panel names a feature by its
  * code and name wherever it shows one (the Feature choices, the Feature row and Oracle's
- * suggestion), so two features are told apart. The mock's Ground Truth keys Guided setup F-82;
+ * suggestion), so two features are told apart. The mock's Ground Truth keys Setup checklist F-01;
  * the seeded requests link it and Oracle suggests it. Driven through the UI on the mock API; invented data only.
  */
 
-const CODED = "F-82 Guided setup";
+const CODED = "F-01 Setup checklist";
 const CODE_FIRST = /^[A-Z]{1,3}-\d+[a-j]? \S/;
 
 const inspector = (page: Page) =>
@@ -43,7 +43,7 @@ test("#5: the Feature choices read each feature's code before its name", async (
   await openRequest(page, "Keep the delivery address between orders");
   const select = inspector(page).getByRole("combobox", { name: "Feature", exact: true });
   const options = select.locator("option");
-  await expect(options.filter({ hasText: "Guided setup" })).toHaveText(
+  await expect(options.filter({ hasText: "Setup checklist" })).toHaveText(
     CODED,
   );
   // The linked feature is the one picked, by code and name.
@@ -60,7 +60,7 @@ test("#5: the Feature choices read each feature's code before its name", async (
     .locator("select")
     .filter({ has: page.locator("option", { hasText: "Pick the feature" }) });
   await expect(
-    basis.locator("option").filter({ hasText: "Guided setup" }),
+    basis.locator("option").filter({ hasText: "Setup checklist" }),
   ).toHaveText(CODED);
   const coded = (await basis.locator("option").allTextContents()).filter((t) =>
     CODE_FIRST.test(t.trim()),

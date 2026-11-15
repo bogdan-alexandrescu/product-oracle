@@ -127,8 +127,8 @@ test("lead decides: Approve waits for every verdict and the blocking answer, the
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByTestId("segment-priority").getByTestId("segment-state")).toHaveText("Running");
   await page.goto("/ground-truth");
-  await page.getByTestId("feature-F-84").getByRole("button", { name: "Saved carts" }).click();
-  await expect(page.getByRole("dialog", { name: "Saved carts" }).locator('[data-attr="effort"]')).toHaveText("XL");
+  await page.getByTestId("feature-F-12").getByRole("button", { name: "Referral link" }).click();
+  await expect(page.getByRole("dialog", { name: "Referral link" }).locator('[data-attr="effort"]')).toHaveText("XL");
 });
 
 test("started from the UI: a run from the sheet waits at its Engineering check and is approved there", async ({ page }) => {
@@ -206,7 +206,7 @@ test("inspector per feature: a note typed for one feature never saves against an
   await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible with changes", exact: true }).click();
   await inspector(page).getByRole("textbox", { name: "What changes" }).fill("Ship a smaller catalogue first");
   await row(page, "f.saved-carts").getByRole("button").first().click();
-  await expect(inspector(page)).toHaveAccessibleName("Brief: Saved carts");
+  await expect(inspector(page)).toHaveAccessibleName("Brief: Referral link");
   await expect(inspector(page).getByRole("textbox", { name: "What changes" })).toHaveCount(0);
   await expect(inspector(page).getByRole("button", { name: "Save verdict" })).toHaveCount(0);
   await expect(row(page, "f.saved-carts").getByTestId("brief-verdict")).toHaveText("Not decided");

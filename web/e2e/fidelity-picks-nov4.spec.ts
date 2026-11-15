@@ -81,7 +81,7 @@ test.describe("EC1 b and EC2 b: the Engineering check", () => {
 
     // The ability stays: it starts a note to the architect with the feature named.
     await ask.click();
-    await expect(bar(page).getByRole("textbox", { name: "Note to the architect" })).toHaveValue(/^Guided setup: /);
+    await expect(bar(page).getByRole("textbox", { name: "Note to the architect" })).toHaveValue(/^Setup checklist: /);
   });
 
   test("a feature with no questions keeps Ask the architect on the 'None for this feature.' line", async ({ page }) => {

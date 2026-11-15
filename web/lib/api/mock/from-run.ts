@@ -172,13 +172,13 @@ export function baselineReviewOf(s: BaselineState, runId: string, actions: Schem
 /**
  * The "baseline-review" scenarios' baseline (B2 3.6): the Oct 20 Build the baseline run
  * created two proposed goals (one measurable, one without target and owner), a feature at
- * confidence 0.32 serving no goal, a duplicate of Saved carts (with evidence and a link to a
- * confirmed goal, so it needs nothing), and proposed a change to the locked Guided setup.
+ * confidence 0.32 serving no goal, a duplicate of Referral link (with evidence and a link to a
+ * confirmed goal, so it needs nothing), and proposed a change to the locked Setup checklist.
  */
 export function seedFromRun(s: BaselineState, runId: string, uuid: () => string, ownerId: string) {
   const at = "2026-10-20T16:30:00Z";
   const goal = s.entities.find((e) => e.type === "goal" && e.status === "confirmed")!;
-  const guided = s.entities.find((e) => e.key === "F-82")!;
+  const guided = s.entities.find((e) => e.key === "F-01")!;
   const cited = s.evidence.find((x) => x.entity_id)!;
   const entity = (type: EntityRow["type"], key: string, title: string, attrs: Record<string, unknown>, extra: Partial<EntityRow> = {}): EntityRow => {
     const row: EntityRow = {
@@ -196,9 +196,9 @@ export function seedFromRun(s: BaselineState, runId: string, uuid: () => string,
   const repeat = entity("goal", "g.repeat-buyers", "Bring buyers back", { metric: "buyers with a second order", horizon: "long" });
   cite(repeat, "Repeat buyers spend twice as much over a year.");
   entity("feature", "f.gift-notes", "Gift notes", {}, { confidence: 0.32 });
-  const twin = entity("feature", "f.carts-for-later", "Carts for later", { status: "idea" });
-  cite(twin, "Buyers ask to keep a cart for later.");
-  cite(twin, "Two support tickets a week ask for a saved cart.");
+  const twin = entity("feature", "f.share-links", "Share links for teams", { status: "idea" });
+  cite(twin, "Teams ask for a link to bring a partner team in.");
+  cite(twin, "Two support tickets a week ask for a referral link.");
   s.edges.push({
     id: uuid(), src_id: twin.id, dst_id: goal.id, type: "supports", attrs: { contribution: 2 }, status: "proposed", origin: "agent",
     locked: false, locked_by: null, locked_at: null, confidence: null, run_id: runId, created_at: at, updated_at: at,

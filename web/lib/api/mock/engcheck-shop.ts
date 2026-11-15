@@ -11,7 +11,7 @@ const lines = (...xs: string[]) => xs.join("\n");
 export const SHOP_BRIEFS: Brief[] = [
   {
     key: "f.guided-setup",
-    title: "Guided setup",
+    title: "Setup checklist",
     size: "m",
     depends_on: [],
     approach: lines(
@@ -33,7 +33,7 @@ export const SHOP_BRIEFS: Brief[] = [
   },
   {
     key: "f.sample-data",
-    title: "Sample data",
+    title: "Sample data import",
     size: "s",
     depends_on: [],
     approach: lines(
@@ -50,7 +50,7 @@ export const SHOP_BRIEFS: Brief[] = [
   },
   {
     key: "f.saved-carts",
-    title: "Saved carts",
+    title: "Referral link",
     size: "l",
     depends_on: ["f.guided-setup"],
     approach: lines(

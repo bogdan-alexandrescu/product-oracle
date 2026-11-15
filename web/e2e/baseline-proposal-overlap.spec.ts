@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
 
-// #268: the "proposal-overlap" scenario adds two run proposals on Saved carts that both set
+// #268: the "proposal-overlap" scenario adds two run proposals on Referral link that both set
 // its milestone (lib/api/mock/baseline.ts addOverlappingProposals).
 const FIRST = "Slice a ships in M2.";
 const SECOND = "Moved below the line after sizing.";
@@ -37,8 +37,8 @@ async function acceptFirstThenOpenWarning(page: Page) {
 
 async function savedCarts(page: Page) {
   await page.getByRole("tab", { name: /Graph/ }).click();
-  await page.getByTestId("feature-F-84").getByRole("button", { name: "Saved carts" }).click();
-  return page.getByRole("dialog", { name: "Saved carts" });
+  await page.getByTestId("feature-F-12").getByRole("button", { name: "Referral link" }).click();
+  return page.getByRole("dialog", { name: "Referral link" });
 }
 
 /**

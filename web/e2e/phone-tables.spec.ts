@@ -116,17 +116,17 @@ test("phone run detail: the status chips sit under the phone header, clear of th
 test("phone Ground Truth: the feature × goal ledger is a list of whole feature names with their goal tags", async ({ page }) => {
   await login(page);
   await page.goto("/ground-truth");
-  const feature = page.getByTestId("feature-F-82");
+  const feature = page.getByTestId("feature-F-01");
   await expect(feature).toBeVisible();
-  await expect(feature.getByRole("button", { name: "Guided setup" })).toBeVisible();
+  await expect(feature.getByRole("button", { name: "Setup checklist" })).toBeVisible();
   // Its two goal links by goal name, with their strength.
   await expect(feature.getByText("Activation", { exact: true })).toBeVisible();
   await expect(feature.getByText("Growth", { exact: true })).toBeVisible();
   await expect(feature.getByRole("img", { name: /^Contribution \d of 3/ })).toHaveCount(2);
   // A flagged feature shows its flag as on desktop, not an unexplained dot.
-  await expect(page.getByTestId("feature-F-81").getByText("Serves no goal")).toBeVisible();
-  await expect(page.getByTestId("feature-F-84").getByText("Low confidence")).toBeVisible();
-  // Every ledger row (keys are codes now, F-81..F-85, not f.*): at least one, so it never passes on none.
+  await expect(page.getByTestId("feature-F-06").getByText("Serves no goal")).toBeVisible();
+  await expect(page.getByTestId("feature-F-12").getByText("Low confidence")).toBeVisible();
+  // Every ledger row (keys are codes now, F-06..F-05, not f.*): at least one, so it never passes on none.
   const rows = await page.locator('tr[data-testid^="feature-"]').all();
   expect(rows.length).toBeGreaterThan(0);
   for (const row of rows) {

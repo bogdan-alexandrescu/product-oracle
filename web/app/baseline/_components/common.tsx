@@ -255,7 +255,7 @@ export function titleOf(graph: GraphOut | undefined, id: string | null | undefin
   return graph?.entities.find((e) => e.id === id)?.title ?? "Unknown item";
 }
 
-/** An item's title, a feature's with its Ground Truth code before it ("F-84 Saved carts"). */
+/** An item's title, a feature's with its Ground Truth code before it ("F-12 Referral link"). */
 export function codedTitleOf(graph: GraphOut | undefined, id: string | null | undefined): string {
   const e = id ? graph?.entities.find((x) => x.id === id) : undefined;
   return e?.type === "feature" ? namedText(named(e.title, e.key)) : titleOf(graph, id);

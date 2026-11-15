@@ -110,8 +110,8 @@ test.describe("desktop", () => {
     await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "impact"] as const);
     await login(page);
     await page.goto("/ground-truth");
-    await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
-    await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
+    await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
+    await page.getByRole("dialog", { name: "Setup checklist" }).getByRole("link", { name: "What if it changed?" }).click();
     await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
     const back = page.getByTestId("impact-back").filter({ visible: true });
     await expect(back).toHaveText("‹ Ground Truth");

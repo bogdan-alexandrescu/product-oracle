@@ -8,7 +8,7 @@ import { login, signOut } from "./helpers";
  * H1 follow-ups (#193): pickers for the evidence, linked Ground Truth items and subjects of a
  * decision when proposing or editing it, and the outcome status in the inspector's
  * Expected. The mock seeds D-5 "Ship usage caps before anomaly detection", proposed by the
- * commenter for the approver, and the Ground Truth's "Guided setup" feature with its evidence.
+ * commenter for the approver, and the Ground Truth's "Setup checklist" feature with its evidence.
  * Each test states its card: protects / fails_when / no_claim.
  */
 
@@ -40,15 +40,15 @@ test("a proposal names the Ground Truth items, evidence and document it is about
   const dialog = page.getByRole("dialog", { name: "Propose decision" });
   await dialog.getByLabel("Decision", { exact: true }).fill("Point new accounts to payment setup first");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Checklist first");
-  await dialog.getByLabel("Option 2", { exact: true }).fill("Sample data first");
+  await dialog.getByLabel("Option 2", { exact: true }).fill("Sample data import first");
   await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Priya Raman · ${APPROVER}` });
 
   const evidence = dialog.getByRole("group", { name: "Evidence" });
   await expect(evidence).toContainText("Link a Ground Truth item to pick from its evidence");
   const linked = dialog.getByRole("group", { name: "Linked items" });
   await linked.getByLabel("Find an item to link").fill("guided");
-  await linked.getByRole("button", { name: /^Guided setup · Feature/ }).click();
-  await expect(linked.getByRole("button", { name: "Remove Guided setup" })).toBeVisible();
+  await linked.getByRole("button", { name: /^Setup checklist · Feature/ }).click();
+  await expect(linked.getByRole("button", { name: "Remove Setup checklist" })).toBeVisible();
   await linked.getByLabel("Find an item to link").fill("churn");
   await linked.getByRole("button", { name: /^Cut early churn · Goal/ }).click();
   await evidence.getByRole("checkbox", { name: new RegExp(STALL) }).check();
@@ -69,7 +69,7 @@ test("a proposal names the Ground Truth items, evidence and document it is about
     const ins = inspector(page);
     await expect(ins).toContainText("Point new accounts to payment setup first");
     const restsOn = ins.getByTestId("decision-rests-on");
-    await expect(restsOn.getByRole("link", { name: "Guided setup" })).toHaveAttribute("href", /\/ground-truth\?entity=/);
+    await expect(restsOn.getByRole("link", { name: "Setup checklist" })).toHaveAttribute("href", /\/ground-truth\?entity=/);
     await expect(restsOn).not.toContainText("Cut early churn");
     await expect(restsOn.getByTestId("decision-evidence")).toHaveCount(1);
     await expect(restsOn.getByTestId("decision-evidence")).toContainText(STALL);
@@ -87,29 +87,29 @@ test("editing a proposal changes its linked items, evidence and subjects", async
   const form = inspector(page).getByRole("form", { name: "Edit decision" });
   const linked = form.getByRole("group", { name: "Linked items" });
   await linked.getByLabel("Find an item to link").fill("guided");
-  await linked.getByRole("button", { name: /^Guided setup · Feature/ }).click();
+  await linked.getByRole("button", { name: /^Setup checklist · Feature/ }).click();
   await form.getByRole("group", { name: "Evidence" }).getByRole("checkbox", { name: new RegExp(STALL) }).check();
   const about = form.getByRole("group", { name: "About" });
   await about.getByLabel("Kind", { exact: true }).selectOption({ label: "Ground Truth item" });
-  await about.getByLabel("Item", { exact: true }).selectOption({ label: "Guided setup" });
+  await about.getByLabel("Item", { exact: true }).selectOption({ label: "Setup checklist" });
   await about.getByRole("button", { name: "Add", exact: true }).click();
   await form.getByRole("button", { name: "Save changes" }).click();
   await expect(form).toHaveCount(0);
   await expect(inspector(page).getByTestId("decision-evidence")).toContainText(STALL);
-  await expect(inspector(page).getByRole("link", { name: "Ground Truth item Guided setup" })).toBeVisible();
+  await expect(inspector(page).getByRole("link", { name: "Ground Truth item Setup checklist" })).toBeVisible();
 
   // Edit again: the form holds what was saved; unticking and removing clears them.
   await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
   const again = inspector(page).getByRole("form", { name: "Edit decision" });
-  await expect(again.getByRole("group", { name: "Linked items" }).getByRole("button", { name: "Remove Guided setup" })).toBeVisible();
+  await expect(again.getByRole("group", { name: "Linked items" }).getByRole("button", { name: "Remove Setup checklist" })).toBeVisible();
   await again.getByRole("group", { name: "Evidence" }).getByRole("checkbox", { name: new RegExp(STALL) }).uncheck();
-  await again.getByRole("group", { name: "About" }).getByRole("button", { name: "Remove Ground Truth item Guided setup" }).click();
+  await again.getByRole("group", { name: "About" }).getByRole("button", { name: "Remove Ground Truth item Setup checklist" }).click();
   await again.getByRole("button", { name: "Save changes" }).click();
   await expect(again).toHaveCount(0);
   await page.reload();
-  await expect(inspector(page).getByRole("link", { name: "Guided setup" })).toBeVisible();
+  await expect(inspector(page).getByRole("link", { name: "Setup checklist" })).toBeVisible();
   await expect(inspector(page).getByTestId("decision-evidence")).toHaveCount(0);
-  await expect(inspector(page).getByRole("link", { name: "Ground Truth item Guided setup" })).toHaveCount(0);
+  await expect(inspector(page).getByRole("link", { name: "Ground Truth item Setup checklist" })).toHaveCount(0);
 });
 
 test("a decision with a prediction shows its outcome's status under Expected and opens it in Outcomes", async ({ page }) => {
@@ -171,15 +171,15 @@ test("a title-only edit saves after evidence the decision rests on is removed fr
   await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
   const form = inspector(page).getByRole("form", { name: "Edit decision" });
   await form.getByRole("group", { name: "Linked items" }).getByLabel("Find an item to link").fill("guided");
-  await form.getByRole("group", { name: "Linked items" }).getByRole("button", { name: /^Guided setup · Feature/ }).click();
+  await form.getByRole("group", { name: "Linked items" }).getByRole("button", { name: /^Setup checklist · Feature/ }).click();
   await form.getByRole("group", { name: "Evidence" }).getByRole("checkbox", { name: new RegExp(STALL) }).check();
   await form.getByRole("button", { name: "Save changes" }).click();
   await expect(form).toHaveCount(0);
   await expect(inspector(page).getByTestId("decision-evidence")).toContainText(STALL);
 
   await page.goto("/ground-truth");
-  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
-  const drawer = page.getByRole("dialog", { name: "Guided setup" });
+  await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
+  const drawer = page.getByRole("dialog", { name: "Setup checklist" });
   await drawer.getByRole("list", { name: "Evidence" }).getByRole("button", { name: "Remove example-org/storefront#128" }).click();
   const ask = drawer.getByRole("form", { name: "Remove evidence" });
   await ask.getByLabel("Reason").fill("Cited on the wrong feature.");

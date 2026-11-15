@@ -40,7 +40,7 @@ for (const [size, viewport] of [
     test(`${size}: Proposals: a source's own requirement number reads with where it comes from`, async ({ page }) => {
       await openBaseline(page);
       await page.getByRole("tab", { name: /Proposals/ }).click();
-      const darkMode = page.getByTestId("proposal").filter({ hasText: "Dark mode" });
+      const darkMode = page.getByTestId("proposal").filter({ hasText: "Setup error report" });
       await expect(darkMode).toContainText("Mentioned as next up in the planning call, under FR-06 (from Saved carts PRD).");
       // Never the run's flow name, nor "its source" naming nothing.
       await expect(darkMode).not.toContainText("the sources of");

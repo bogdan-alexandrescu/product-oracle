@@ -29,3 +29,29 @@ test("detailed priorities: every feature is Simple's, by Simple's code and name"
   }
   await expect(page.getByText("Saved addresses at checkout")).toHaveCount(0);
 });
+
+/**
+ * detailed-story: Detailed's Ground Truth tells the same story, its features by Simple's codes and names and its goals
+ * by Simple's plan goals (Activation, Growth); none of the older story's names is left. Invented data.
+ */
+const GROUND_TRUTH_FEATURES: [string, string][] = [
+  ["F-01", "Setup checklist"],
+  ["F-02", "Sample data import"],
+  ["F-05", "Team invites"],
+  ["F-06", "Setup error report"],
+  ["F-12", "Referral link"],
+];
+
+test("detailed ground truth: every coded feature is Simple's and the goals are Simple's plan goals", async ({ page }) => {
+  await login(page);
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
+  for (const [code, name] of GROUND_TRUTH_FEATURES) {
+    await expect(page.getByTestId(`feature-${code}`).getByRole("button", { name })).toBeVisible();
+  }
+  await expect(page.getByTestId("goal-g.activation")).toContainText("Activation");
+  await expect(page.getByTestId("goal-g.paid-conversion")).toContainText("Growth");
+  for (const old of ["Raise activation", "Grow paid conversion", "Guided setup", "Saved carts", "Dark mode"]) {
+    await expect(page.getByText(old)).toHaveCount(0);
+  }
+});

@@ -28,7 +28,7 @@ for (const [where, size] of [["desktop", null], ["phone", PHONE]] as const) {
      * fails_when: the critic's proposal has its own card, the card offers Accept instead of the
      * choice, or the other value is still asked for after the pick.
      */
-    test("two values for Dark mode's status are one choice", async ({ page }) => {
+    test("two values for Setup error report's status are one choice", async ({ page }) => {
       await openProposals(page);
       await expect(card(page, "Not committed to yet.")).toHaveCount(0);
       const dark = card(page, "Mentioned as next up in the planning call");

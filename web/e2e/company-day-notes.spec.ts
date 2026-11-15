@@ -38,7 +38,7 @@ test("proposals: the run that made them is named with the Company day", async ({
   const label = "Ground Truth to PRD · Oct 15";
   await expect(page.getByLabel("From").locator("option")).toContainText([label]);
   const rows = page.getByTestId("proposal");
-  const link = rows.filter({ hasText: "Guided setup" }).getByRole("link", { name: `From run · ${label}` });
+  const link = rows.filter({ hasText: "Setup checklist" }).getByRole("link", { name: `From run · ${label}` });
   await expect(link).toHaveAttribute("href", `/runs/${AGENT_RUN}`);
   await expect(page.getByText("Ground Truth to PRD · Oct 16")).toHaveCount(0);
 });

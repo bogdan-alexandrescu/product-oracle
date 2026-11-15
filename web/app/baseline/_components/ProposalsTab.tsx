@@ -371,7 +371,7 @@ function Sentence({ p, graph, onOpen }: { p: ProposalOut; graph: GraphOut | unde
   const op = (p.payload as Payload).op;
   const title = p.entity_id && op !== "create" ? titleOf(graph, p.entity_id) : null;
   const at = title ? p.summary.indexOf(title) : -1;
-  // A feature's button reads its Ground Truth code too (F-81 Dark mode), unless the sentence already names it.
+  // A feature's button reads its Ground Truth code too (F-06 Setup error report), unless the sentence already names it.
   const coded = title ? codedTitleOf(graph, p.entity_id) : null;
   const code = title && coded?.endsWith(` ${title}`) ? coded.slice(0, -title.length) : "";
   const named = code && !p.summary.slice(0, at).endsWith(code) ? coded : title;

@@ -32,17 +32,17 @@ test("impact: the lineage names a Ground Truth item's kind, not its raw key", as
   // A version's preview reaches only that document's sections (as the API's): a Ground Truth
   // item is an upstream on its own what-if, opened from its drawer as a person would.
   await page.goto("/ground-truth");
-  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
-  await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
+  await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
+  await page.getByRole("dialog", { name: "Setup checklist" }).getByRole("link", { name: "What if it changed?" }).click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
   const graph = page.getByRole("region", { name: "Lineage" });
-  const upstream = graph.getByTestId("lineage-upstream").filter({ hasText: "Guided setup" });
+  const upstream = graph.getByTestId("lineage-upstream").filter({ hasText: "Setup checklist" });
   await expect(upstream).toBeVisible();
   // The sub-line names the kind in words ("Feature", locked), never "f.guided-setup".
   await expect(upstream.getByTestId("lineage-upstream-sub")).toHaveText("Feature · locked");
   await expect(upstream).not.toContainText("f.guided-setup");
   // The link to the what-if names the item too.
-  await expect(upstream.getByRole("link", { name: "What if Guided setup changed?" })).toBeVisible();
+  await expect(upstream.getByRole("link", { name: "What if Setup checklist changed?" })).toBeVisible();
   await expect(upstream.getByRole("link", { name: /f\.guided-setup/ })).toHaveCount(0);
 });
 
