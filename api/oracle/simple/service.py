@@ -535,22 +535,19 @@ async def load(
     # of all its open slices, the dates Accept applies).
     suggestions: dict[uuid.UUID, RoadmapDateSuggestion] = {}
     spans: dict[uuid.UUID, tuple[date, date]] = {}
-    # join (roadmap-dates): an accepted suggestion is no longer offered, but until its draft
-    # publishes the dates, the published undated item keeps it as its estimate.
-    decided: dict[uuid.UUID, tuple[date, date]] = {}
     for s in await db.scalars(
         select(RoadmapDateSuggestion)
-        .where(RoadmapDateSuggestion.status.in_(("open", "accepted", "edited")))
+        .where(RoadmapDateSuggestion.status == "open")
         .order_by(RoadmapDateSuggestion.start_date)
     ):
-        if s.status != "open":
-            a, b = decided.get(s.item_id, (s.start_date, s.end_date))
-            decided[s.item_id] = (min(a, s.start_date), max(b, s.end_date))
-            continue
         first = suggestions.setdefault(s.item_id, s)
         if s.slice_code is not None and first.slice_code is not None:
             a, b = spans.get(s.item_id, (s.start_date, s.end_date))
             spans[s.item_id] = (min(a, s.start_date), max(b, s.end_date))
+    # join (roadmap-dates): an accepted suggestion is no longer offered, but until its draft
+    # publishes the dates, the published undated item keeps the dates an open draft holds for
+    # it (an edit's typed ones; the latest accept), never a discarded draft's.
+    decided = await _accepted_in_open_drafts(db, {r.id for r in rows})
     # roadmap-speed: the roadmaps' policies as drafts.who reads them (once per read); the
     # counts read the policies alone.
     deciders = (
@@ -1008,6 +1005,39 @@ async def _blockers(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, co
             expected=expected,
             open=spec.get("status", "open") in OPEN_BLOCKER and e.status != "rejected",
         )
+    return out
+
+
+async def _accepted_in_open_drafts(
+    db: AsyncSession, item_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, tuple[date, date]]:
+    """join (roadmap-dates): the dates each item's latest accept (or edit) of Oracle's
+    suggestion wrote into a working or submitted draft, by item id."""
+    from oracle.simple.models import SimpleChange, SimpleDraft
+
+    if not item_ids:
+        return {}
+    undone = select(SimpleChange.undoes_id).where(SimpleChange.undoes_id.is_not(None))
+    out: dict[uuid.UUID, tuple[date, date]] = {}
+    for c in await db.scalars(
+        select(SimpleChange)
+        .where(
+            SimpleChange.op == "accept_date_suggestion",
+            SimpleChange.status.in_(("applied", "accepted")),
+            SimpleChange.target["item_id"].astext.in_([str(i) for i in item_ids]),
+            SimpleChange.id.not_in(undone),
+            select(SimpleDraft.id)
+            .where(
+                SimpleDraft.id == any_(SimpleChange.draft_ids),
+                SimpleDraft.status.in_(("working", "submitted")),
+            )
+            .exists(),
+        )
+        .order_by(SimpleChange.seq)
+    ):
+        a, b = c.after.get("start_date"), c.after.get("end_date")
+        if a and b:
+            out[uuid.UUID(c.target["item_id"])] = (date.fromisoformat(a), date.fromisoformat(b))
     return out
 
 
