@@ -181,8 +181,8 @@ for (const [name, viewport] of VIEWPORTS) {
       await page.goto("/inbox");
       await expect(page.getByTestId("inbox-needs")).toBeVisible();
       const rows = page.locator("[role=tabpanel]").getByTestId("inbox-questions").locator("[data-row]").filter({ visible: true });
-      await expect(rows.filter({ hasText: "Checkout redesign" }).first()).toBeVisible();
-      await expect(rows.filter({ hasText: /PRD (drafted|in review|approved) · Checkout redesign/ }).first()).toBeVisible();
+      await expect(rows.filter({ hasText: "Self-serve checkout" }).first()).toBeVisible();
+      await expect(rows.filter({ hasText: /PRD (drafted|in review|approved) · Self-serve checkout/ }).first()).toBeVisible();
       await expect(rows.filter({ hasText: `Before drafting · ${BEFORE_DRAFTING.title}` })).toHaveCount(0);
     });
   });

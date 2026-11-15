@@ -59,7 +59,7 @@ test("qa-work-16: an items check with no problems says No problems, capitalised"
 test("qa-work-18, 19: a finished run names its import by the document's title, its file as a raw file", async ({ page }) => {
   await openRun(page, "checkout-redesign");
   const segment = page.getByTestId("segment-timeline").locator("li").filter({ hasText: "Imported as" }).first();
-  await expect(segment.getByRole("link", { name: "Checkout redesign PRD v2" })).toBeVisible();
+  await expect(segment.getByRole("link", { name: "Self-serve checkout PRD v2" })).toBeVisible();
   await expect(segment).not.toContainText("checkout-redesign v2");
   const files = segment.getByRole("group", { name: "Raw file" });
   await expect(files.getByTestId("artifacts-raw-label")).toHaveText("Raw file:");
@@ -70,8 +70,8 @@ test("qa-work-18, 19: a finished run names its import by the document's title, i
 test("qa-work-20: the run's document reads For <document> on a document that exists and one the run writes", async ({ page }) => {
   await openRun(page, "team-workspaces");
   const doc = header(page).getByTestId("run-document");
-  await expect(doc).toHaveText("Team workspaces PRD");
-  await expect(doc.locator("xpath=..")).toHaveText(/^For\s*Team workspaces PRD$/);
+  await expect(doc).toHaveText("Team invites PRD");
+  await expect(doc.locator("xpath=..")).toHaveText(/^For\s*Team invites PRD$/);
   await page.goto("/runs");
   await page.locator('[data-testid="run-row"][data-document="usage-alerts-v2"]').getByRole("link").first().click();
   const written = header(page).getByTestId("run-document");

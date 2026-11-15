@@ -66,7 +66,7 @@ async function linkFirstPrd(page: Page, title: string): Promise<string> {
   await openRequests(page);
   await pickRequest(page, title);
   const select = inspector(page).getByLabel("Linked PRD");
-  await select.selectOption({ label: "Checkout redesign PRD" });
+  await select.selectOption({ label: "Self-serve checkout PRD" });
   const prd = (await select.locator("option:checked").innerText()).trim();
   await inspector(page).getByRole("button", { name: "Save links" }).click();
   await expect(inspector(page).getByRole("link", { name: prd })).toBeVisible();

@@ -14,7 +14,7 @@ import { login } from "./helpers";
  *   is open, and names what is missing; fails_when=it does; no_claim=the draft gate's rule.
  */
 
-const TITLE = "Saved addresses for repeat buyers";
+const TITLE = "Bulk import for repeat buyers";
 const badge = (page: Page) => page.getByTestId("nav-inbox-badge").filter({ visible: true });
 
 async function newBrief(page: Page) {
@@ -24,7 +24,7 @@ async function newBrief(page: Page) {
   await page.getByRole("textbox", { name: "Title" }).fill(TITLE);
   await page
     .getByRole("textbox", { name: "What problem does it solve?" })
-    .fill("Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.");
+    .fill("Returning buyers retype their address at every checkout. Bulk import would make repeat checkout faster.");
   await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 }

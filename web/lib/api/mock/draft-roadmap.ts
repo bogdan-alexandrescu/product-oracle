@@ -127,7 +127,7 @@ function checkOf(items: Item[], problems: DraftRoadmapCheck["problems"] = []): D
 }
 
 const CART: ItemSeed = { key: "cart-review", title: "Cart review shows the full price", outcome: "Buyers see the whole price before they start checkout", horizon: "now", section: "s-5-1", rank: 1, confidence: "high", milestone: { name: "Beta" }, feature: { key: "F-41", title: "Cart review shows the full price" } };
-const GUEST: ItemSeed = { key: "guest-checkout", title: "Guest checkout", outcome: "First-time buyers check out without an account", horizon: "next", section: "scope", rank: 3, confidence: "medium" };
+const GUEST: ItemSeed = { key: "guest-checkout", title: "Public signup", outcome: "First-time buyers check out without an account", horizon: "next", section: "scope", rank: 3, confidence: "medium" };
 
 /** checkout-redesign v1: four items, no problems. */
 function seedV1(): ItemSeed[] {
@@ -139,7 +139,7 @@ function seedV1(): ItemSeed[] {
   ];
 }
 
-/** checkout-redesign v2: guest checkout moved to Now, the shipping date removed, saved addresses new, wallet pay gone. */
+/** checkout-redesign v2: public signup moved to Now, the shipping date removed, imported rows new, wallet pay gone. */
 function seedV2(): ItemSeed[] {
   return [
     CART,
@@ -147,8 +147,8 @@ function seedV2(): ItemSeed[] {
     { key: "shipping-step", title: "Shipping step on one screen", outcome: "Buyers choose a shipping option without leaving the step", horizon: "now", section: "s-5-2", rank: 3, confidence: "medium", milestone: { name: "Beta" } },
     {
       key: "saved-addresses",
-      title: "Saved addresses",
-      outcome: "Returning buyers pick a saved address instead of typing it",
+      title: "Bulk import",
+      outcome: "Returning buyers pick a imported row instead of typing it",
       horizon: "next",
       section: "s-5-3",
       rank: 4,

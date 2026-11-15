@@ -10,13 +10,13 @@ import type { Report } from "./_lib";
 
 /*
  * Human names for what an impact report points at by reference (qa-plan-10): a document by
- * its title ("Checkout redesign PRD"), a section by its heading ("Success metrics"), never a
+ * its title ("Self-serve checkout PRD"), a section by its heading ("Success metrics"), never a
  * slug, "slug@2#metrics" or a section key. The report carries slugs, version numbers and
  * section keys; the documents and versions it names give their titles and headings.
  */
 
 export type Names = {
-  /** "Checkout redesign PRD"; the slug in words until the document has loaded. */
+  /** "Self-serve checkout PRD"; the slug in words until the document has loaded. */
   doc: (slug: string) => string;
   /** "Success metrics": a section's heading without its number; the key in words until known. */
   section: (key: string, slug?: string | null, n?: number | null) => string;
@@ -133,7 +133,7 @@ export const useNamesOf = () => useContext(NamesContext);
 
 /**
  * qa-plan-12: where a recorded change's page was opened from (its "?from="), as its back link:
- * a PRD version's Impact ("Impact of Checkout redesign PRD v2"). Anything else (or a path that
+ * a PRD version's Impact ("Impact of Self-serve checkout PRD v2"). Anything else (or a path that
  * is not this site's) is ignored, and the page leads back to what the change is about.
  */
 export function parseFrom(from: string | null | undefined, names: Names): { href: string; label: string } | null {
@@ -160,13 +160,13 @@ const CAUSE: Record<string, string> = {
 const causeWords = (cause: string) => CAUSE[cause] ?? cause.replace(/^(?:section|document|version|entity)_/, "").replaceAll("_", " ");
 
 export type SubjectWords = {
-  /** "Checkout redesign PRD v2 › Success metrics section edited". */
+  /** "Self-serve checkout PRD v2 › Success metrics section edited". */
   title: string;
   /** The title without the version it names ("Success metrics section edited"), for a page whose back link names it. */
   short: string;
-  /** The version the title starts with ("Checkout redesign PRD v2"), when it names one. */
+  /** The version the title starts with ("Self-serve checkout PRD v2"), when it names one. */
   where: string | null;
-  /** Where the report's subject lives, for the back link: "Checkout redesign PRD v2" at its version page. */
+  /** Where the report's subject lives, for the back link: "Self-serve checkout PRD v2" at its version page. */
   back: { href: string; label: string } | null;
   /** The document and version the subject names, where it names one: the lineage shows that version. */
   version: { slug: string; n: number } | null;
@@ -195,7 +195,7 @@ export function subjectWords(report: Report, names: Names): SubjectWords {
   const kindKey = ref ? /^([a-z_]+):(.+)$/.exec(ref) : null;
   const kind = kindKey?.[1] ?? c?.subject_kind ?? report.subject.kind;
   const titled = report.subject.title;
-  // A recorded change on a baseline item: its kind and title, quoted ("Requirement “Guest checkout
+  // A recorded change on a baseline item: its kind and title, quoted ("Requirement “Public signup
   // keeps the cart” deleted"), so the verb never reads as part of the title.
   const named =
     titled && c && kindKey

@@ -6,7 +6,7 @@ import { login } from "./helpers";
 /*
  * QA plan findings on the Impact explorer (qa-plan-10, 58, 59, 60, 61), on the mock API.
  * The "impact" scenario gives checkout-redesign's v1 downstream outputs; a recorded change
- * edited the Success metrics section in v2, and the Saved addresses tech brief was built on it.
+ * edited the Success metrics section in v2, and the Bulk import tech brief was built on it.
  */
 
 const scenario = (page: Page, name: string) =>
@@ -20,16 +20,16 @@ async function openVersionImpact(page: Page) {
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
 }
 
-/** The recorded change behind the Saved addresses tech brief, opened from its inspector. */
+/** The recorded change behind the Bulk import tech brief, opened from its inspector. */
 async function openRecordedChange(page: Page) {
   await openVersionImpact(page);
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
-  await page.getByRole("grid", { name: "Affected outputs" }).getByText("Saved addresses tech brief").click();
-  await page.getByRole("complementary", { name: /Saved addresses tech brief/ }).getByRole("link", { name: "Recorded change" }).click();
+  await page.getByRole("grid", { name: "Affected outputs" }).getByText("Bulk import tech brief").click();
+  await page.getByRole("complementary", { name: /Bulk import tech brief/ }).getByRole("link", { name: "Recorded change" }).click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
 }
 
-const SUBJECT = "Checkout redesign PRD v2 › Success metrics section edited";
+const SUBJECT = "Self-serve checkout PRD v2 › Success metrics section edited";
 
 test("qa-plan-10/61: a recorded change is named in words, in the heading and the lineage, with no internal refs", async ({ page }) => {
   await scenario(page, "impact");
@@ -46,10 +46,10 @@ test("qa-plan-10/61: a recorded change is named in words, in the heading and the
 
   // The table's inspector: the reason in words, and no code-font chips.
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
-  await page.getByRole("grid", { name: "Affected outputs" }).getByText("Saved addresses tech brief").click();
-  const inspector = page.getByRole("complementary", { name: /Saved addresses tech brief/ });
-  await expect(inspector.getByText("The “Success metrics” section changed in Checkout redesign PRD")).toBeVisible();
-  await expect(inspector.getByTestId("dependency")).toContainText("Checkout redesign PRD v1 · Success metrics");
+  await page.getByRole("grid", { name: "Affected outputs" }).getByText("Bulk import tech brief").click();
+  const inspector = page.getByRole("complementary", { name: /Bulk import tech brief/ });
+  await expect(inspector.getByText("The “Success metrics” section changed in Self-serve checkout PRD")).toBeVisible();
+  await expect(inspector.getByTestId("dependency")).toContainText("Self-serve checkout PRD v1 · Success metrics");
   await expect(inspector.locator("code")).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Regeneration plan" }).locator("code")).toHaveCount(0);
 });
@@ -59,9 +59,9 @@ test("qa-plan-58: the section a change reached names the same version as the cha
   await openRecordedChange(page);
   const graph = page.getByRole("region", { name: "Lineage" });
   const sub = graph.getByTestId("lineage-upstream").filter({ hasText: "Success metrics" }).getByTestId("lineage-upstream-sub");
-  await expect(sub).toHaveText("Section of Checkout redesign PRD v2");
+  await expect(sub).toHaveText("Section of Self-serve checkout PRD v2");
   // The version the outputs were built on is said on hover, not as a second, clashing version.
-  await expect(sub).toHaveAttribute("title", "Section of Checkout redesign PRD v2. Outputs were built on v1.");
+  await expect(sub).toHaveAttribute("title", "Section of Self-serve checkout PRD v2. Outputs were built on v1.");
 });
 
 test("qa-plan-59: a recorded change leads back to its version, with PRDs highlighted", async ({ page }) => {
@@ -72,7 +72,7 @@ test("qa-plan-59: a recorded change leads back to its version, with PRDs highlig
   // The what-if page it was opened from may still be mounted, hidden; the shown header is the change's.
   const back = page.getByTestId("impact-back").filter({ visible: true });
   // qa-plan-12: opened from v2's Impact, it leads back there.
-  await expect(back).toHaveText("‹ Impact of Checkout redesign PRD v2");
+  await expect(back).toHaveText("‹ Impact of Self-serve checkout PRD v2");
   await expect(back).toBeVisible();
   await back.click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);

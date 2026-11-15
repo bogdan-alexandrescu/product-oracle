@@ -2,8 +2,8 @@ import { expect, test, type Page } from "./test";
 
 import { login, openSection, section } from "./helpers";
 
-// QA pass 4, docs lane: the version page /documents/<doc>/v/<n> (Checkout redesign v2 with a
-// held rewrite, Team workspaces v2 with a changed approved section, Saved carts v2 with a
+// QA pass 4, docs lane: the version page /documents/<doc>/v/<n> (Self-serve checkout v2 with a
+// held rewrite, Team invites v2 with a changed approved section, Referral link v2 with a
 // brief), driven as a person on the mock.
 
 const CHECKOUT = "/documents/checkout-redesign/v/2";

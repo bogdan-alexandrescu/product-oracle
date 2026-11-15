@@ -80,9 +80,9 @@ test.describe("desktop", () => {
   // qa-docs-34: the table and the panel write dates one way, in the Company time zone.
   test("qa-docs-34: the panel's Created and Updated read as the table's dates", async ({ page }) => {
     await openList(page);
-    const r = row(page, "Saved carts PRD");
+    const r = row(page, "Referral link PRD");
     await r.locator("td").last().click({ position: { x: 4, y: 4 } });
-    await expect(inspector(page)).toContainText("Saved carts PRD");
+    await expect(inspector(page)).toContainText("Referral link PRD");
     const tableDate = (await r.locator("td").nth(4).innerText()).trim();
     const day = /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/;
     expect(tableDate).toMatch(day);
@@ -132,7 +132,7 @@ test.describe("desktop", () => {
     await page.goto("/documents/saved-carts/publish");
     const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
     await expect(crumb.getByRole("link", { name: "PRDs" })).toBeVisible();
-    await expect(crumb.getByRole("link", { name: "Saved carts PRD" })).toHaveAttribute("href", "/documents/saved-carts");
+    await expect(crumb.getByRole("link", { name: "Referral link PRD" })).toHaveAttribute("href", "/documents/saved-carts");
     await expect(crumb).toContainText(/Draft|In review|Approved/);
   });
 });

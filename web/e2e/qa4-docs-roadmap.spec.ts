@@ -2,8 +2,8 @@ import { expect, test, type Locator, type Page } from "./test";
 
 import { login } from "./helpers";
 
-// QA pass 4, docs lane: the Roadmap tab of a PRD version (Checkout redesign PRD v2, seeded in
-// lib/api/mock/draft-roadmap.ts: 4 items, 3 Now and 1 Next; Saved addresses carries a GA date
+// QA pass 4, docs lane: the Roadmap tab of a PRD version (Self-serve checkout PRD v2, seeded in
+// lib/api/mock/draft-roadmap.ts: 4 items, 3 Now and 1 Next; Bulk import carries a GA date
 // with no confirmed schedule; v1's One-tap wallet pay was dropped), driven as a person.
 
 const VERSION = "/documents/checkout-redesign/v/2";
@@ -56,7 +56,7 @@ test.describe("desktop", () => {
     await openRoadmap(page);
     const notice = visible(page, "draft-roadmap-problem");
     await expect(notice).toHaveCount(1);
-    await expect(notice).toHaveText("Date unverified · Saved addresses: the Dec 15, 2026 date has no confirmed schedule behind it yet");
+    await expect(notice).toHaveText("Date unverified · Bulk import: the Dec 15, 2026 date has no confirmed schedule behind it yet");
     await expect(notice).not.toContainText("saved-addresses");
     await expect(notice).not.toContainText("2026-12-15");
   });

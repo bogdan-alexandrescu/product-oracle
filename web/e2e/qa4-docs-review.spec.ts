@@ -3,8 +3,8 @@ import { expect, test, type Page } from "./test";
 import { login, openTab, showAll } from "./helpers";
 
 // QA pass 4, docs lane: the review panel on a PRD version page (suggestions, feedback, sources)
-// and the Build draft action, driven as a person. Team workspaces v2 has Oracle's suggestions
-// (one a duplicate, one pushed back) and a paused agents' run; Checkout redesign v2 has
+// and the Build draft action, driven as a person. Team invites v2 has Oracle's suggestions
+// (one a duplicate, one pushed back) and a paused agents' run; Self-serve checkout v2 has
 // scored sources and comments by the owner.
 
 const WORKSPACES = "/documents/team-workspaces/v/2";

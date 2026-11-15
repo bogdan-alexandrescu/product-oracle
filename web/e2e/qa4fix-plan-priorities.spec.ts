@@ -5,7 +5,7 @@ import { login } from "./helpers";
 /*
  * QA findings on /priorities, round qa4, driven through the UI on the mock layer as a person
  * would. Oracle's goal-weighted order: #1 Bulk import (F-07, ranked higher because
- * Sample data import, F-02, depends on it), #2 F-02, #3 Saved addresses at
+ * Sample data import, F-02, depends on it), #2 F-02, #3 Bulk import at
  * checkout (F-01), #4 Referral link (F-12), #5 Public signup (F-13) ... #8 Setup error report (F-06).
  */
 

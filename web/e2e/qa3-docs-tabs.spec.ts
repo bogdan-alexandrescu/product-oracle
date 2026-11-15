@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 /*
  * QA pass 3, docs lane: a PRD version's tabs (Evidence, Impact, Roadmap), Present mode and the
- * text diff of Saved carts v1 -> v2, driven as a person would on the mock.
+ * text diff of Referral link v1 -> v2, driven as a person would on the mock.
  */
 
 const DOC = "/documents/saved-carts";

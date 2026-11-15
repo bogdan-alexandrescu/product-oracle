@@ -181,7 +181,7 @@ test("reports on a version: write, read both tabs, export", async ({ page }) => 
 
   await reports.getByRole("tab", { name: "What changed since v1" }).click();
   const changes = reports.getByRole("region", { name: "What changed" });
-  await expect(changes).toContainText("5.3 Saved addresses");
+  await expect(changes).toContainText("5.3 Bulk import");
   await expect(reports.getByTestId("new-sources")).toContainText("Q3 support ticket export");
 
   const download = page.waitForEvent("download");

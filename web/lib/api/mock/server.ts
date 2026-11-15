@@ -618,7 +618,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * approver, holding the draft (walk 2 problem 19);
  * "draft-gate" as the default company where Oracle reads a critical blocker in every new
  * brief, so drafting waits until it is answered or an owner accepts its risk (C5);
- * "late-answers" as "before-drafting" with that brief drafting into Checkout redesign: an answer
+ * "late-answers" as "before-drafting" with that brief drafting into Self-serve checkout: an answer
  * given now becomes a feedback item on the PRD (C5 late answers); its success-metric gap is a
  * finding shared in full;
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
@@ -1304,7 +1304,7 @@ function seedSimpleHomeOnePrdScenario(): Db {
  * CLD's production walk (#723, 2026-10-27), the "simple-walk" scenario: "simple-home-one-prd"
  * whose Guided setup items carry milestone texts with their notes appended, as real roadmaps
  * do ("M1 · Measure it, make it safe (the usage report needs the export); ..."), its one-pager's slice
- * alike with a long problem line, and Checkout redesign started from an empty skeleton (the
+ * alike with a long problem line, and Self-serve checkout started from an empty skeleton (the
  * template's guidance only). Invented data.
  */
 function seedSimpleWalkScenario(): Db {
@@ -1907,7 +1907,7 @@ function seedReportDraftItemScenario(): Db {
 
 /**
  * plan-open-from-simple "plan-same-key" (./roadmap.ts): the default company plus the Checkout
- * redesign roadmap, built from Checkout redesign (v1 approved, draft 2 from PRD v2), on Simple
+ * redesign roadmap, built from Self-serve checkout (v1 approved, draft 2 from PRD v2), on Simple
  * with Free shipping threshold alert, whose key Usage alerts' roadmap holds for another item.
  * Usage alerts' roadmap v1 is approved, so its item stays on the Plan with Approved only while
  * the Checkout one, only in draft 2, does not.
@@ -1919,7 +1919,7 @@ function seedPlanSameKeyScenario(): Db {
   alerts.status = "approved";
   const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
   const at = "2026-10-20T09:00:00Z";
-  const roadmap: DocumentRow = { id: uuid(), slug: "checkout-redesign-roadmap", title: "Checkout redesign roadmap", status: "in_review", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at };
+  const roadmap: DocumentRow = { id: uuid(), slug: "checkout-redesign-roadmap", title: "Self-serve checkout roadmap", status: "in_review", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at };
   db.documents.push(roadmap);
   for (const n of [1, 2] as const) {
     const pv = db.versions.find((v) => v.document_id === prd.id && v.number === n)!;
@@ -1929,7 +1929,7 @@ function seedPlanSameKeyScenario(): Db {
     db.versions.push(v);
   }
   const rm = seedSimpleRoadmap();
-  (rm.extra_roadmaps ??= {})[roadmap.slug] = { title: roadmap.title, prd: "Checkout redesign", track: "checkout", track_title: "Checkout redesign track" };
+  (rm.extra_roadmaps ??= {})[roadmap.slug] = { title: roadmap.title, prd: "Self-serve checkout", track: "checkout", track_title: "Self-serve checkout track" };
   rm.items.push({ key: SAME_KEY_ITEM.key, title: SAME_KEY_ITEM.title, horizon: "now", roadmap: roadmap.slug, track: "checkout", confidence: "medium", start: 10, end: 40, source: "typed" });
   rm.ids[SAME_KEY_ITEM.key] = stableUuid(`simple-item/${SAME_KEY_ITEM.key}`);
   db.simple_roadmap = rm;
@@ -2359,7 +2359,7 @@ function seedSuggestions(): Db {
       updated_at: created_at,
     });
   });
-  // D14: a question Oracle answered and a remark with nothing to change, on Team workspaces,
+  // D14: a question Oracle answered and a remark with nothing to change, on Team invites,
   // so the Inbox has a row of every kind to act on (Send answer, Close).
   const w2 = findVersion(db, findDocument(db, "team-workspaces")!, 2)!;
   const replies: [string, Schemas["TextQuoteSelector"], "answer" | "none", string | null, string][] = [
@@ -2764,14 +2764,14 @@ function scopeToBaseline(db: Db, scope: StoredScope, by: string) {
 
 /**
  * C8 "priority-order" scenario: two runs waiting at the priority stop (./runs.ts
- * seedPriorityRuns), one for the Saved addresses PRD, and a run order saved for the
- * Checkout redesign PRD.
+ * seedPriorityRuns), one for the Bulk import PRD, and a run order saved for the
+ * Self-serve checkout PRD.
  */
 function seedPriorityOrder(): Db {
   const db = seed();
   const at = "2026-10-18T09:00:00Z";
   db.documents.push({
-    id: uuid(), slug: "saved-addresses", title: "Saved addresses PRD", status: "draft", kind: "prd",
+    id: uuid(), slug: "saved-addresses", title: "Bulk import PRD", status: "draft", kind: "prd",
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
   seeded("priority-order", () => seedPriorityRuns(db.runs!, runsContext(db)));
@@ -2792,12 +2792,12 @@ function seedPriorityOrderGoalReview(): Db {
 }
 
 /**
- * build-runplan RP2 "meeting-draft-dates" scenario: the Simple home's data, the Saved carts PRD a
+ * build-runplan RP2 "meeting-draft-dates" scenario: the Simple home's data, the Referral link PRD a
  * draft whose run dated six items on its draft roadmap (./meeting-draft.ts).
  */
 function seedMeetingDraftDatesScenario(): Db {
   const db = seedSimpleHomeScenario();
-  // The fixtures' Saved carts PRD, named as the review shows it.
+  // The fixtures' Referral link PRD, named as the review shows it.
   const doc = db.documents.find((d) => d.slug === SAVED_CARTS.slug)!;
   doc.title = SAVED_CARTS.title;
   if (db.simple_roadmap) seedMeetingDraftDates(db.simple_roadmap, doc.id, docVersions(db, doc).at(-1)?.number ?? 1);
@@ -2806,7 +2806,7 @@ function seedMeetingDraftDatesScenario(): Db {
 
 /**
  * RP2 'Draft layer on roadmap' "roadmap-draft-layer" scenario: the meeting-draft-dates data, with
- * Team workspaces in draft too, Online deposits' draft (its PRD replaced) and Clinic outreach's
+ * Team invites in draft too, Online deposits' draft (its PRD replaced) and Clinic outreach's
  * (its run cancelled), which the layer leaves out (./meeting-draft.ts).
  */
 export const DRAFT_LAYER_SCENARIO = "roadmap-draft-layer";
@@ -3069,7 +3069,7 @@ function seed(): Db {
   const ver = (slug: string, n: number) => findVersion(db, docs.get(slug)!, n)!;
   const at = (iso: string) => ({ created_at: iso });
 
-  // Checkout redesign: v1 was reviewed, v2 answered that feedback.
+  // Self-serve checkout: v1 was reviewed, v2 answered that feedback.
   const c1 = ver("checkout-redesign", 1);
   addComment(db, c1, {
     section_key: "problem",
@@ -3118,14 +3118,14 @@ function seed(): Db {
     section_key: "s-5-3",
     anchor: {
       exact: "Choosing a card fills the form",
-      prefix: "eir saved addresses as cards on the shipping step. ",
+      prefix: "eir imported rows as cards on the shipping step. ",
       suffix: " and recalculates the shipping options in place.",
     },
     body: "Should the most recently used address be selected by default?",
   }, at("2026-10-17T09:40:00Z"));
   docs.get("checkout-redesign")!.status = "in_review";
 
-  // Team workspaces: an approved section changed in v2.
+  // Team invites: an approved section changed in v2.
   const w1 = ver("team-workspaces", 1);
   addReview(db, w1, "roles", { verdict: "approved", note: null }, at("2026-10-12T16:00:00Z"));
   addReview(db, w1, "scope", { verdict: "approved", note: null }, at("2026-10-12T16:02:00Z"));
@@ -4957,14 +4957,14 @@ function load(): Db {
   // #711 "long-title": the saved-carts PRD under a title as long as real PRD titles are.
   if (scenario === "long-title") {
     const carts = db.documents.find((d) => d.slug === "saved-carts");
-    if (carts) carts.title = "Saved carts for returning buyers PRD";
+    if (carts) carts.title = "Referral link for returning buyers PRD";
   }
   // PR 1300 review: saved-carts v2's Problem is one paragraph longer than a slide (E-9).
   if (scenario === "long-paragraph") {
     const carts = db.documents.find((d) => d.slug === "saved-carts");
     const problem = carts && docVersions(db, carts).find((v) => v.number === 2)?.sections.find((s) => s.section_key === "problem");
     if (problem) {
-      problem.body_md = Array.from({ length: 30 }, (_, i) => `Sentence ${i + 1} says the saved cart for returning buyers keeps its items for thirty days.`).join(" ");
+      problem.body_md = Array.from({ length: 30 }, (_, i) => `Sentence ${i + 1} says the referral link for returning buyers keeps its items for thirty days.`).join(" ");
       problem.body_text = problem.body_md;
     }
   }
@@ -5038,7 +5038,7 @@ function load(): Db {
     addGoalCodes(db.baseline);
     addCodedPrd(db);
     // An Inbox row quoting Oracle's text with a known code (G-B) and an unknown one (G-Z).
-    db.autonomy.actions.push(seedOracleDid(db.user_id, uuid(), "Moved 'Saved addresses' up 2 within G-B, ahead of G-Z"));
+    db.autonomy.actions.push(seedOracleDid(db.user_id, uuid(), "Moved 'Bulk import' up 2 within G-B, ahead of G-Z"));
   }
   if (scenario === "proposal-overlap") addOverlappingProposals(db.baseline, uuid);
   if (scenario === "proposal-duplicates") addDuplicateProposals(db.baseline, uuid);
@@ -6988,7 +6988,7 @@ function goalLinks(db: Db): V2Db["section_links"] {
 }
 
 /**
- * v2 screen 3 "evidence" scenario: Checkout redesign PRD v2's sections linked to baseline
+ * v2 screen 3 "evidence" scenario: Self-serve checkout PRD v2's sections linked to baseline
  * evidence (one from a removed source, one behind a claim), a restricted source item, a
  * feature and a stale link to a proposed one; and one link on the approved Usage alerts v1.
  */

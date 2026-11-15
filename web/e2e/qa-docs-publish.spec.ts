@@ -3,7 +3,7 @@ import { expect, test, type Page } from "./test";
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
-// QA pass 1, docs lane: the Publish page. Saved carts v2 (a PRD: no section reviewed, one
+// QA pass 1, docs lane: the Publish page. Referral link v2 (a PRD: no section reviewed, one
 // critical advisory check, two hard checks N/A) and the Usage alerts roadmap v1 (its date
 // Dec 15, 2026 lost its schedule basis, so its approve is refused).
 

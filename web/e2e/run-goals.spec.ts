@@ -13,12 +13,12 @@ import { login } from "./helpers";
  * prompts the run's agents get (test_runs_target_goals.py).
  */
 
-const PROBLEM = "Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.";
+const PROBLEM = "Returning buyers retype their address at every checkout. Bulk import would make repeat checkout faster.";
 
 test("goals in Draft with Oracle: the brief's goals are picked, and a change sticks to the draft run", async ({ page }) => {
   await login(page, "approver@example.com");
   await page.goto("/documents/new?kind=prd");
-  await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses for teams");
+  await page.getByRole("textbox", { name: "Title" }).fill("Bulk import for teams");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
   await page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox", { name: /Activation/ }).check();
   await page.getByRole("button", { name: "Continue" }).first().click();

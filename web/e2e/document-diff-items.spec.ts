@@ -6,8 +6,8 @@ import { login } from "./helpers";
 // E3 on the PRD text diff page: under "Changes from v1 to v2", the roadmap items of the two
 // versions compared item by item, as a roadmap version's Items tab compares them.
 //
-// The default mock seeds checkout-redesign v1 and v2 draft items (Guest checkout moved to
-// Now, the Shipping step's date removed, Saved addresses new, One-tap wallet pay dropped,
+// The default mock seeds checkout-redesign v1 and v2 draft items (Public signup moved to
+// Now, the Shipping step's date removed, Bulk import new, One-tap wallet pay dropped,
 // Cart review unchanged). The "roadmap-diff" scenario: usage-alerts-roadmap v2 adds Spend
 // limits, moves Behaviour to Next and drops Usage exports. saved-carts has no draft items.
 
@@ -25,9 +25,9 @@ test("the PRD diff page shows what changed in the roadmap items", async ({ page 
   await expect(panel).toContainText("Roadmap items");
   await expect(visible(page, "diff-items-summary")).toHaveText("Since draft v1: 1 new · 1 dropped · 1 moved · 1 changed");
   await expect(visible(page, "diff-item")).toHaveCount(4);
-  await expect(item(page, "Guest checkout").getByTestId("item-change")).toHaveText("Next → Now");
+  await expect(item(page, "Public signup").getByTestId("item-change")).toHaveText("Next → Now");
   await expect(item(page, "Shipping step").getByTestId("item-change")).toHaveText("Date removed");
-  await expect(item(page, "Saved addresses").getByTestId("item-change")).toHaveText("New");
+  await expect(item(page, "Bulk import").getByTestId("item-change")).toHaveText("New");
   const dropped = item(page, "One-tap wallet pay");
   await expect(dropped).toHaveAttribute("data-change", "dropped");
   await expect(dropped.locator("s")).toHaveText("One-tap wallet pay");
@@ -46,7 +46,7 @@ test("the PRD diff page shows what changed in the roadmap items", async ({ page 
 test("an item on the diff page lists what changed", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/diff?from=1&to=2");
-  await expect(item(page, "Guest checkout")).toContainText("Horizon: Next → Now");
+  await expect(item(page, "Public signup")).toContainText("Horizon: Next → Now");
   await expect(item(page, "Shipping step")).toContainText("Date: Nov 30, 2026 → none");
 });
 

@@ -96,7 +96,7 @@ test("a row's actions sit on one line, each the same height", async ({ page }) =
 test("runs are named in words: no short id, slug, section key or code font", async ({ page }) => {
   await openInbox(page);
   const needs = page.getByTestId("inbox-needs");
-  await expect(overrun(page)).toContainText("Team workspaces");
+  await expect(overrun(page)).toContainText("Team invites");
   await expect(page.getByTestId("inbox-approvals")).toContainText("Usage alerts v2");
   await expect(needs).not.toContainText("usage-alerts-v2");
   await expect(needs).not.toContainText("team-workspaces");

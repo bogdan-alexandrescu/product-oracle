@@ -237,10 +237,10 @@ test("the feature set's gate rows name each requirement, goal and feature, never
     .getByTestId("approve-gate");
   await expect(gate.getByTestId("gate-reason")).toHaveCount(4);
   await expect(gate).toContainText(
-    'Requirement "The buyer picks one of up to five saved addresses" of Saved addresses is neither a Ground Truth requirement nor one this run proposed',
+    'Requirement "The buyer picks one of up to five imported rows" of Bulk import is neither a Ground Truth requirement nor one this run proposed',
   );
   await expect(gate).toContainText(
-    "Saved addresses: goal Retention rate is not a confirmed goal",
+    "Bulk import: goal Retention rate is not a confirmed goal",
   );
   await expect(gate).toContainText(
     "Address labels needs Café pickup, which is not in the feature set or the Ground Truth",

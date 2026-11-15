@@ -191,7 +191,7 @@ export function evidenceName(ev: { title?: string | null; ref?: string | null; s
   return "Evidence";
 }
 
-/** The PRD a snapshot is for, by its title ("Saved addresses PRD"), else its slug in words. */
+/** The PRD a snapshot is for, by its title ("Bulk import PRD"), else its slug in words. */
 export function prdName(doc: { title?: string | null; slug: string }): string {
   const title = doc.title?.trim();
   if (title) return docLabel({ title, kind: "prd" });

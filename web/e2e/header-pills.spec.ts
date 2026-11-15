@@ -77,7 +77,7 @@ async function pillMetrics(page: Page, testId: string, text: RegExp) {
 }
 
 /** An invented PRD title as long as real ones are (the "long-title" scenario's). */
-const LONG_TITLE = "Saved carts for returning buyers PRD";
+const LONG_TITLE = "Referral link for returning buyers PRD";
 
 for (const size of SIZES) {
   for (const open of [true, false]) {

@@ -24,7 +24,7 @@ async function open(page: Page, url: string, size: { width: number; height: numb
   await page.goto(url);
 }
 
-/** Saved carts in Full: its brief, then the full version. */
+/** Referral link in Full: its brief, then the full version. */
 async function fullCarts(page: Page) {
   await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
   await expect(section(page, "sources-list")).toBeVisible();

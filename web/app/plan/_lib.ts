@@ -141,7 +141,7 @@ export function nextSentence(n: PlanItem["next"], me: string | null | undefined)
   return `${cap(who)} ${many ? v[0] : v[1]}`;
 }
 
-/** "Usage alerts PRD v1" or "Checkout redesign PRD draft 2". */
+/** "Usage alerts PRD v1" or "Self-serve checkout PRD draft 2". */
 export function prdLabel(i: PlanItem): string {
   if (!i.prd) return "—";
   const v = i.prd.version == null ? "" : i.prd.approved ? ` v${i.prd.version}` : ` draft ${i.prd.version}`;

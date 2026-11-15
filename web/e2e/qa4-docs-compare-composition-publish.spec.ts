@@ -91,7 +91,7 @@ test.describe("desktop", () => {
     const dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
     const outline = dialog.getByTestId("outline-full");
     await expect(outline.locator("li > span.font-medium").first()).toHaveText("Introduction");
-    await expect(outline).not.toContainText("Checkout redesign PRD");
+    await expect(outline).not.toContainText("Self-serve checkout PRD");
   });
 
   test("qa4-docs-50: module numbers run in reading order and no Selection column repeats the group", async ({ page }) => {

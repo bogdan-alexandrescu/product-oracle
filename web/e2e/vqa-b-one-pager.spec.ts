@@ -6,7 +6,7 @@ import { expect, test, type Page } from "./test";
  * Visual QA, batch B, on Simple's one-pagers (the mock's invented PRDs), driven through the UI
  * as an owner on a desktop.
  *
- * B-13: protects = each PRD's one-pager reads its own PRD: Saved carts PRD and Checkout
+ * B-13: protects = each PRD's one-pager reads its own PRD: Referral link PRD and Checkout
  * redesign PRD each show their own problem, never the same words; fails_when = the mock serves
  * every PRD the seeded page's invented body ("New workspace admins stall ...") under its title.
  *
@@ -35,12 +35,12 @@ test.describe("desktop", () => {
 
   test("B-13: two PRDs' one-pagers each show their own problem", async ({ page }) => {
     await login(page);
-    await openFromList(page, "Saved carts PRD");
+    await openFromList(page, "Referral link PRD");
     await expect(problem(page)).toContainText("Shoppers build a cart on their phone");
     await expect(problem(page)).not.toContainText(SEEDED_PROBLEM);
     const carts = (await problem(page).textContent())!.trim();
 
-    await openFromList(page, "Checkout redesign PRD");
+    await openFromList(page, "Self-serve checkout PRD");
     await expect(problem(page)).toContainText("Buyers leave checkout when the total changes late in the flow");
     await expect(problem(page)).not.toContainText(SEEDED_PROBLEM);
     expect((await problem(page).textContent())!.trim()).not.toBe(carts);
@@ -48,12 +48,12 @@ test.describe("desktop", () => {
     await expect(page.getByRole("region", { name: "Risks and open decisions" })).toContainText("Pickup availability differs by region");
   });
 
-  test("B-13: Saved carts' bets name the goal in words and are no template line", async ({ page }) => {
+  test("B-13: Referral link' bets name the goal in words and are no template line", async ({ page }) => {
     // protects = a bet reads its goal by name ("Cart on every device: Retention") and every bet
     // is the PRD's own; fails_when = the fixture's table shows "G2" or its Feature detail is
     // the template's "One section per feature, in priority order."
     await login(page);
-    await openFromList(page, "Saved carts PRD");
+    await openFromList(page, "Referral link PRD");
     const bets = page.getByRole("region", { name: "What we will build" });
     await expect(bets).toContainText("Cart on every device: Retention");
     await expect(bets).toContainText("Keep a signed-in shopper's cart on our servers");

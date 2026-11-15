@@ -58,9 +58,9 @@ test("a proposal names the Ground Truth items, evidence and document it is about
 
   const about = dialog.getByRole("group", { name: "About" });
   await about.getByLabel("Kind", { exact: true }).selectOption({ label: "Document" });
-  await about.getByLabel("Item", { exact: true }).selectOption({ label: "Checkout redesign PRD" });
+  await about.getByLabel("Item", { exact: true }).selectOption({ label: "Self-serve checkout PRD" });
   await about.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(about.getByRole("button", { name: "Remove Checkout redesign PRD" })).toBeVisible();
+  await expect(about.getByRole("button", { name: "Remove Self-serve checkout PRD" })).toBeVisible();
   await dialog.getByRole("button", { name: "Propose" }).click();
   await expect(dialog).toHaveCount(0);
 
@@ -73,7 +73,7 @@ test("a proposal names the Ground Truth items, evidence and document it is about
     await expect(restsOn).not.toContainText("Cut early churn");
     await expect(restsOn.getByTestId("decision-evidence")).toHaveCount(1);
     await expect(restsOn.getByTestId("decision-evidence")).toContainText(STALL);
-    await expect(ins.getByRole("link", { name: "Checkout redesign PRD", exact: true })).toHaveAttribute("href", "/documents/checkout-redesign");
+    await expect(ins.getByRole("link", { name: "Self-serve checkout PRD", exact: true })).toHaveAttribute("href", "/documents/checkout-redesign");
   }
 });
 

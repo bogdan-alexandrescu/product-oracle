@@ -22,7 +22,7 @@ async function openWhatIf(page: Page, key: string, title: string) {
   await expect(page).toHaveURL(/\/impact\/entities\/[^/?]+$/);
 }
 
-/** PRDs > Checkout redesign > v2 > Impact. */
+/** PRDs > Self-serve checkout > v2 > Impact. */
 async function openVersionImpact(page: Page) {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
@@ -86,7 +86,7 @@ test.describe("desktop", () => {
     await scenario(page, "impact");
     await openR90Change(page);
     const back = page.getByTestId("impact-back").filter({ visible: true });
-    await expect(back).toHaveText("‹ Impact of Checkout redesign PRD v2");
+    await expect(back).toHaveText("‹ Impact of Self-serve checkout PRD v2");
     const nav = page.getByRole("navigation", { name: "Oracle" });
     await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
     await expect(nav.getByTestId("nav-baseline")).not.toHaveAttribute("aria-current", "page");
@@ -182,7 +182,7 @@ test.describe("phone", () => {
     await page.getByRole("dialog").getByRole("link", { name: "Recorded change" }).first().click();
     await expect(page).toHaveURL(/\/impact\/changes\//);
     const h1 = page.getByRole("heading", { level: 1 });
-    await expect(h1).toHaveText("Impact: Requirement “Guest checkout keeps the cart” deleted");
+    await expect(h1).toHaveText("Impact: Requirement “Public signup keeps the cart” deleted");
     await expect(h1).toBeVisible();
     // Wrapped, not cut: the whole heading fits the screen's width.
     const fits = await h1.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= window.innerWidth);

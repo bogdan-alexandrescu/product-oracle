@@ -5,7 +5,7 @@ import { login } from "./helpers";
 // QA pass 3, docs lane: a roadmap document's header and Share sheet, and its Public version
 // page (/documents/<doc>/public). The "sharing" scenario seeds a published roadmap (Platform
 // roadmap, autumn v1); Usage alerts roadmap v1 is not published (a date lost its schedule
-// basis), and Saved carts PRD is a PRD.
+// basis), and Referral link PRD is a PRD.
 
 const PUBLISHED = "/documents/example-labs-roadmap";
 const UNPUBLISHED = "/documents/usage-alerts-roadmap";
@@ -136,7 +136,7 @@ test.describe("desktop", () => {
     // Nothing on a PRD's page links to a public version.
     await page.goto("/documents/saved-carts");
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "Saved carts PRD",
+      "Referral link PRD",
     );
     await expect(page.getByRole("link", { name: "Check public text" })).toHaveCount(
       0,
@@ -146,7 +146,7 @@ test.describe("desktop", () => {
     await page.goto("/documents/saved-carts/public");
     const note = page.getByTestId("public-check-not-roadmap");
     await expect(note).toContainText("Only a roadmap has a public version");
-    await expect(note).toContainText("Saved carts PRD is a PRD");
+    await expect(note).toContainText("Referral link PRD is a PRD");
     await expect(page.getByText("Public texts are for roadmaps only")).toHaveCount(
       0,
     );

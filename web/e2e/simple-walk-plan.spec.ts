@@ -135,7 +135,7 @@ for (const phone of [false, true]) {
         test(`a skeleton PRD's one-pager shows no template guidance, as ${role} (${where})`, async ({ page }) => {
           await setUp(page, scheme, EMAILS[role]);
           await page.goto("/simple/one-pagers/checkout-redesign");
-          await expect(page.getByRole("heading", { level: 1, name: "Checkout redesign PRD" })).toBeVisible();
+          await expect(page.getByRole("heading", { level: 1, name: "Self-serve checkout PRD" })).toBeVisible();
           const article = page.locator("article");
           await expect(page.getByTestId("one-pager-empty-block")).toHaveCount(5);
           await expect(page.getByTestId("one-pager-empty-block").first()).toHaveText("Not written yet");

@@ -83,12 +83,12 @@ for (const [where, size] of [["desktop", DESKTOP], ["phone", PHONE]] as const) {
     await scenario(page, "discussions");
     await login(page, APPROVER);
     await page.goto("/simple/inbox");
-    const row = page.locator("tr[data-row], li[data-row], [data-row]").filter({ hasText: "Order: put Guest checkout first? · 1 change proposed" }).filter({ visible: true }).first();
+    const row = page.locator("tr[data-row], li[data-row], [data-row]").filter({ hasText: "Order: put Public signup first? · 1 change proposed" }).filter({ visible: true }).first();
     await row.getByRole("link", { name: "Review changes" }).click();
     await expect(page).toHaveURL(/\/simple\/priorities\?discussion=[^&]+&changes=1/);
     const card = page.getByTestId("linked-discussion-sheet").getByTestId("changes-card");
     await expect(card).toBeVisible();
-    await expect(card.getByRole("list", { name: "Open changes" }).getByTestId("change-row")).toContainText("Move Guest checkout above Saved carts");
+    await expect(card.getByRole("list", { name: "Open changes" }).getByTestId("change-row")).toContainText("Move Public signup above Referral link");
   });
 }
 

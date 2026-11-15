@@ -10,9 +10,9 @@ import { login, signOut } from "./helpers";
  */
 
 const PHONE = { width: 390, height: 844 };
-const PRD = "Checkout redesign PRD";
+const PRD = "Self-serve checkout PRD";
 
-/** Deletes Checkout redesign PRD from PRDs; returns how the dialog named its first run. */
+/** Deletes Self-serve checkout PRD from PRDs; returns how the dialog named its first run. */
 async function deletePrd(page: Page): Promise<string> {
   await page.goto("/documents");
   const row = page.getByTestId("document-row").filter({ hasText: PRD });
@@ -189,7 +189,7 @@ for (const phone of [false, true]) {
 
 test("F-68: Empty Trash names up to three entries, then counts them", async ({ page }) => {
   await login(page);
-  const names = [PRD, "Visit reminders", "Saved carts PRD"];
+  const names = [PRD, "Visit reminders", "Referral link PRD"];
   for (const title of names) await deleteDoc(page, title);
   await page.goto("/settings/trash");
   await expect(page.getByTestId("trash-entry")).toHaveCount(3);

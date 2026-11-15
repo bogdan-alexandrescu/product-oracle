@@ -5,7 +5,7 @@ import { login } from "./helpers";
 
 /*
  * QA pass 4 on the Feature set review page, /runs/<id>/review/<checkpoint> (qa4-work-39, 41, 43,
- * 44, 45, 46), driven through the UI on the mock's "scope-review" scenario: the Saved addresses
+ * 44, 45, 46), driven through the UI on the mock's "scope-review" scenario: the Bulk import
  * PRD at its feature set, where Bulk edit depends on a left-out feature, Address labels serves
  * no goal and Pick address in one step has a low confidence (the three rows under Needs you).
  */
@@ -21,7 +21,7 @@ async function seeded(page: Page, email: string) {
   await login(page, email);
 }
 
-/** Runs › Saved addresses PRD › Review feature set, as a person goes there. */
+/** Runs › Bulk import PRD › Review feature set, as a person goes there. */
 async function openReview(page: Page) {
   await page.goto("/runs");
   await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').filter({ visible: true }).getByRole("link").first().click();

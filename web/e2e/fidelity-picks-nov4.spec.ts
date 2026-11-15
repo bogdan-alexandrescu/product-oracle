@@ -180,7 +180,7 @@ test.describe("RP1 a: the run's priority order", () => {
     await expect(page.getByTestId("priority-row-F-01").getByTestId("problem-differs_from_live")).toHaveCount(0);
     const band = page.getByTestId("snapshot-band");
     await band.getByRole("button", { name: "Approve order" }).click();
-    await expect(band).toContainText("Saved for Saved addresses");
+    await expect(band).toContainText("Saved for Bulk import");
 
     await page.goto("/priorities");
     await expect(page.locator("main").getByText("Address book per account").first()).toBeVisible();

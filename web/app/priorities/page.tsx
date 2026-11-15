@@ -898,7 +898,7 @@ function NewFeaturesNote({ c }: { c: CompareOut }) {
       </Notice>
     );
   if (c.snapshot.status !== "proposed") return null;
-  // As the frame words it: "the 6 features Saved addresses adds", the PRD named without its kind.
+  // As the frame words it: "the 6 features Bulk import adds", the PRD named without its kind.
   const prd = c.snapshot.document ? prdName(c.snapshot.document).replace(/ PRD$/, "") : "this PRD";
   const approvable = blockingOf(c).length === 0;
   return (

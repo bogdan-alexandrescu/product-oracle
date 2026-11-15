@@ -90,7 +90,7 @@ test.describe("desktop", () => {
   test("qa-work-25: one Open per run: the selected-run panel has none", async ({ page }) => {
     await openRuns(page);
     await run(page, "team-workspaces").getByTestId("run-status").click();
-    await expect(inspector(page)).toContainText("Team workspaces");
+    await expect(inspector(page)).toContainText("Team invites");
     await expect(inspector(page).getByRole("link", { name: "Open" })).toHaveCount(0);
     await expect(run(page, "team-workspaces").getByRole("button", { name: "Open" })).toHaveCount(1);
   });

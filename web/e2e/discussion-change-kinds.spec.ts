@@ -24,7 +24,7 @@ const APPROVER = "approver@example.com";
 const MOVE = "Move Referral link above Setup checklist: Gut feeling";
 const ASK = "Ask Priya Raman: How long should a referral link last?";
 const APPLY_WHY_NOT = "Approvers apply this change.";
-const DECISION = "Ship saved carts before guided setup?";
+const DECISION = "Ship F-12 Referral link before F-01 Setup checklist?";
 
 const withScenario = (page: Page) => page.addInitScript((key) => localStorage.setItem(key, "discussion-change-kinds"), MOCK_SCENARIO_KEY);
 const thread = (page: Page) => page.getByTestId("discussion-thread").filter({ visible: true });
@@ -56,7 +56,7 @@ test("an approver applies Oracle's priority move after its pushback", async ({ p
   await expect(card(page).getByTestId("changes-header")).toHaveText("From this discussion · 3 changes");
   const anyway = row.getByRole("button", { name: "Apply anyway" });
   await expect(anyway).toBeDisabled();
-  await row.getByRole("textbox", { name: "Why apply it anyway?" }).fill("Three enterprise deals this month wait on saved carts.");
+  await row.getByRole("textbox", { name: "Why apply it anyway?" }).fill("Three enterprise deals this month wait on referral links.");
   await anyway.click();
   await expect(card(page).getByTestId("changes-header")).toHaveText("From this discussion · 2 changes");
   await expect(handled(page).locator("summary")).toHaveText("1 handled");
@@ -170,9 +170,9 @@ test("an approver writes scope changes and Stage needs a feature set holding the
   form = await propose(page, "Add, change or cut a requirement");
   await form.getByRole("button", { name: "Add", exact: true }).click();
   await form.getByRole("combobox", { name: "Feature it belongs to" }).selectOption({ label: "Referral link" });
-  await form.getByRole("textbox", { name: "Requirement text" }).fill("A saved cart lasts thirty days");
+  await form.getByRole("textbox", { name: "Requirement text" }).fill("A referral link lasts thirty days");
   await form.getByRole("button", { name: "Propose" }).click();
-  const add = change(page, "A saved cart lasts thirty days");
+  const add = change(page, "A referral link lasts thirty days");
   await add.getByRole("button", { name: "Stage", exact: true }).click();
   await expect(add).toContainText("No feature set waiting for approval has this feature");
   await expect(stagingBar(page)).toContainText("Nothing staged");

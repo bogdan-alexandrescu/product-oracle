@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
 
-// Visual QA pass E: Present mode of Saved carts v2. Dates in the brief's text read month
+// Visual QA pass E: Present mode of Referral link v2. Dates in the brief's text read month
 // first (E-11), a goal in the items table carries its name (E-12), and a version with no
 // brief says so by the PRD's title (E-15).
 
@@ -66,7 +66,7 @@ test("E-15: a version without a brief names the PRD by its title", async ({
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2/present");
   await expect(page.getByTestId("present-mode")).toContainText(
-    "Version 2 of Checkout redesign PRD has no brief to present: open the full PRD instead.",
+    "Version 2 of Self-serve checkout PRD has no brief to present: open the full PRD instead.",
   );
   await expect(page.getByTestId("present-mode")).not.toContainText(
     "checkout-redesign",

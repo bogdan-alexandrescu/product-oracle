@@ -623,7 +623,7 @@ export function storeModelReview(
 }
 
 /**
- * The "quality" scenarios (invented): Team workspaces v2 with a stored rules snapshot, a model
+ * The "quality" scenarios (invented): Team invites v2 with a stored rules snapshot, a model
  * review of 7 of the 10 criteria and two people's ratings, and one check that could not run.
  * "quality-job-failed" adds a later model job that failed (pool paused); "quality-job-running"
  * one still running; "quality-off" turns the quality review off for the PRD and stores nothing.

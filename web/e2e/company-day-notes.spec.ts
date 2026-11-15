@@ -43,7 +43,7 @@ test("proposals: the run that made them is named with the Company day", async ({
   await expect(page.getByText("Ground Truth to PRD · Oct 16")).toHaveCount(0);
 });
 
-const PROBLEM = "Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.";
+const PROBLEM = "Returning buyers retype their address at every checkout. Bulk import would make repeat checkout faster.";
 
 /** The mock's last Ground Truth review, 16:40 UTC nine days ago, is the next day in Auckland (UTC+13). */
 function aucklandApprovalDay(): string {
@@ -65,7 +65,7 @@ test("reuse: the Ground Truth's approval day is the Company day in the sheet and
 
   await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
   await page.getByRole("link", { name: "New PRD" }).click();
-  await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses for late shoppers");
+  await page.getByRole("textbox", { name: "Title" }).fill("Bulk import for late shoppers");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
   await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);

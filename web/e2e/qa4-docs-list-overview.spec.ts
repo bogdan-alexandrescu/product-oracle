@@ -37,8 +37,8 @@ async function rowAction(page: Page, title: string, item: "Regenerate…" | "Del
 
 async function openRegenerate(page: Page) {
   await openList(page);
-  await rowAction(page, "Saved carts PRD", "Regenerate…");
-  const dialog = page.getByRole("dialog", { name: "Regenerate Saved carts PRD" });
+  await rowAction(page, "Referral link PRD", "Regenerate…");
+  const dialog = page.getByRole("dialog", { name: "Regenerate Referral link PRD" });
   await expect(dialog).toBeVisible();
   return dialog;
 }
@@ -95,7 +95,7 @@ test.describe("desktop", () => {
     const dialog = await openRegenerate(page);
     await dialog.getByRole("button", { name: "Estimate" }).click();
     const inputs = dialog.getByTestId("regenerate-inputs");
-    await expect(inputs).toHaveText("Saved carts PRD, latest version (v2)");
+    await expect(inputs).toHaveText("Referral link PRD, latest version (v2)");
     await expect(inputs).not.toContainText("saved-carts");
     const price = dialog.getByTestId("regenerate-estimate");
     await expect(price).toHaveText("$18.00");
@@ -121,18 +121,18 @@ test.describe("desktop", () => {
     await regenerate.getByRole("button", { name: "Cancel" }).click();
     await expect(regenerate).toHaveCount(0);
 
-    await rowAction(page, "Saved carts PRD", "Delete…");
-    const remove = page.getByRole("dialog", { name: "Delete Saved carts PRD" });
+    await rowAction(page, "Referral link PRD", "Delete…");
+    const remove = page.getByRole("dialog", { name: "Delete Referral link PRD" });
     await expect(remove.getByRole("button", { name: "Back" })).toHaveCount(0);
     await remove.getByRole("button", { name: "Cancel" }).click();
     await expect(remove).toHaveCount(0);
-    await expect(row(page, "Saved carts PRD")).toBeVisible();
+    await expect(row(page, "Referral link PRD")).toBeVisible();
   });
 
   test("qa4-docs-26: the Delete dialog names each run by its day and what it wrote", async ({ page }) => {
     await openList(page);
-    await rowAction(page, "Checkout redesign PRD", "Delete…");
-    const dialog = page.getByRole("dialog", { name: "Delete Checkout redesign PRD" });
+    await rowAction(page, "Self-serve checkout PRD", "Delete…");
+    const dialog = page.getByRole("dialog", { name: "Delete Self-serve checkout PRD" });
     const goes = dialog.getByTestId("delete-dependents");
     await expect(goes).toBeVisible();
     const runs = goes.getByTestId("delete-run");

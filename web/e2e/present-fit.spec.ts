@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from "./test";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
-// Visual QA pass E, review round 2 (PR 1300): in Present mode of Saved carts v2 a date never
+// Visual QA pass E, review round 2 (PR 1300): in Present mode of Referral link v2 a date never
 // wraps between its parts ("Nov 15," on one line and "2026." on the next), at 1440 and at
 // 390; at 390 the items table keeps its last column on the slide; a section that is one
 // paragraph longer than a slide goes on continuation slides, every sentence once, none

@@ -8,7 +8,7 @@ import { login } from "./helpers";
  * feature set sit in a "Questions from the agents" block at the top of the stop's review page,
  * above the feature table. Open ones as cards with their options as buttons and the agent's
  * pick marked; then an Answered row with who and when. Driven through the UI on the mock's
- * "scope-review" scenario (the Saved addresses PRD, invented people) and its hard case,
+ * "scope-review" scenario (the Bulk import PRD, invented people) and its hard case,
  * "scope-review-questions" (eleven questions).
  */
 
@@ -23,7 +23,7 @@ async function seeded(page: Page, email: string, scenario = "scope-review") {
   await login(page, email);
 }
 
-/** Runs › Saved addresses PRD › Review feature set, as a person goes there. */
+/** Runs › Bulk import PRD › Review feature set, as a person goes there. */
 async function openReview(page: Page) {
   await page.goto("/runs");
   await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').filter({ visible: true }).getByRole("link").first().click();
@@ -51,7 +51,7 @@ for (const [device, viewport] of [
       await expect(block(page).getByText("each answer goes to Priority order with the decision")).toBeVisible();
       const send = card(page, SEND);
       await expect(send).toHaveAttribute("data-state", "unanswered");
-      await expect(send.getByText("Architect asks · About Saved addresses")).toBeVisible();
+      await expect(send.getByText("Architect asks · About Bulk import")).toBeVisible();
       await expect(send.getByRole("radio", { name: /Reuse the order service path/ }).getByText("Agent's pick")).toBeVisible();
       await expect(send.getByRole("radio", { name: /Build a new send path/ }).getByText("Agent's pick")).toHaveCount(0);
       await expect(send.getByText("Not answered by the time you decide: Priority order goes with the agent's pick.")).toBeVisible();

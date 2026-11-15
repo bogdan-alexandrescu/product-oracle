@@ -5,7 +5,7 @@ import { login } from "./helpers";
 
 /*
  * The Inbox's Review changes lands on the changes it counts, on every subject's page, on the
- * mock layer ("discussions" scenario). The approver has three rows: the open Saved carts
+ * mock layer ("discussions" scenario). The approver has three rows: the open Referral link
  * discussion on a PRD's section (2 changes), their open goals interview on "Weekly checkout
  * time" (Oracle's 2 versions proposed; its page is the Ground Truth), and a discussion on the
  * priority order they are not in (the commenter's suggested move; its page is Priorities).
@@ -18,9 +18,9 @@ import { login } from "./helpers";
  */
 
 const APPROVER = "approver@example.com";
-const TITLE = "Saved carts: keep carts for guests?";
+const TITLE = "F-12 Referral link: keep links for guests?";
 const GOAL = "Make “Weekly checkout time” measurable";
-const ORDER = "Order: put Guest checkout first?";
+const ORDER = "Order: put Public signup first?";
 
 const rowsOf = (page: Page) => page.getByTestId("inbox-tab-new").getByTestId("inbox-discussions").locator("tr[data-row]");
 const review = (page: Page) => page.getByTestId("inbox-tab-new").getByRole("link", { name: "Review changes" });
@@ -55,7 +55,7 @@ test("Review changes on the priorities opens their thread on Priorities, on the 
   await expect(card).toBeInViewport();
   const open = card.getByRole("list", { name: "Open changes" }).getByTestId("change-row");
   await expect(open).toHaveCount(1);
-  await expect(open).toContainText("Move Guest checkout above Saved carts");
+  await expect(open).toContainText("Move Public signup above Referral link");
 });
 
 test("Review changes on a goal opens its thread on the Ground Truth, on Oracle's versions", async ({ page }) => {
@@ -81,7 +81,7 @@ test("with no change open, the row offers no Review changes", async ({ page }) =
     await expect(open).toHaveCount(n);
   }
 
-  // Back in the Inbox: the other two rows still offer Review changes, Saved carts' none.
+  // Back in the Inbox: the other two rows still offer Review changes, Referral link' none.
   await page.goto("/inbox");
   const offered = page.getByRole("link", { name: "Review changes" }).filter({ visible: true });
   await expect(offered).toHaveCount(2);

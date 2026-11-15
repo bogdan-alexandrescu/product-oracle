@@ -1952,7 +1952,7 @@ export function addNoisyProposals(s: BaselineState, uuid: () => string) {
 
 /**
  * The "proposal-duplicates" scenario: the Baseline to PRD run's writer and critic propose the
- * same changes twice (Setup error report's delivery status both ways, Saved addresses under two
+ * same changes twice (Setup error report's delivery status both ways, Bulk import under two
  * titles, the Referral link → Team invites link that already exists), and four proposals on
  * Activation that one accept settles.
  */
@@ -1977,8 +1977,8 @@ export function addDuplicateProposals(s: BaselineState, uuid: () => string) {
   const update = (fields: Attrs, reason: string, role?: string) => ({ op: "update", kind: "entity", fields, reason, ...(role ? { role } : {}) });
   push(by("F-06"), update({ attrs: { status: "proposed" } }, "Not committed to yet.", "critic"), "2026-10-16T08:40:00Z");
   const feature = (key: string, title: string, role: string) => ({ op: "create", kind: "entity", fields: { type: "feature", key, title }, reason: "Asked for in the planning call.", role });
-  push(null, feature("f.saved-addresses", "Saved addresses", "writer"), "2026-10-16T08:41:00Z");
-  push(null, feature("f.saved-address", "Add saved address", "critic"), "2026-10-16T08:42:00Z");
+  push(null, feature("f.saved-addresses", "Bulk import", "writer"), "2026-10-16T08:41:00Z");
+  push(null, feature("f.saved-address", "Add imported row", "critic"), "2026-10-16T08:42:00Z");
   const link = { src_id: by("F-12").id, dst_id: by("F-05").id, type: "depends_on" };
   push(null, { op: "create", kind: "edge", fields: link, reason: "Shared carts need invites.", role: "writer" }, "2026-10-16T08:43:00Z");
   push(null, { op: "create", kind: "edge", fields: link, reason: "Invites come first.", role: "critic" }, "2026-10-16T08:44:00Z");

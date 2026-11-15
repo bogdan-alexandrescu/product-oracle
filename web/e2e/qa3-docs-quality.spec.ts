@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
 
-// QA pass 3, docs lane: the Quality screen of Saved carts v2 (no saved check, no model review
+// QA pass 3, docs lane: the Quality screen of Referral link v2 (no saved check, no model review
 // and no ratings in the mock until a test makes them through the screen), and its Publish page.
 
 const URL = "/documents/saved-carts/v/2/quality";

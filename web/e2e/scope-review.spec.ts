@@ -9,7 +9,7 @@ import { login, signOut } from "./helpers";
  * driven through the UI over the mock API ("scope-review" scenario, web/lib/api/mock/runs.ts
  * seedScopeReviewRuns): saved-addresses (attempt 1: Bulk edit depends on the left-out Address
  * book export, Address labels serves no goal, Pick address in one step has a low confidence,
- * and a commenter suggested leaving Edit a saved address out), saved-addresses-next (attempt
+ * and a commenter suggested leaving Edit a imported row out), saved-addresses-next (attempt
  * 2) and address-book (approved in the console while Bulk edit's dependency blocks).
  */
 
@@ -42,7 +42,7 @@ const bar = (page: Page) => page.getByTestId("decision-bar");
 test("a blocking dependency disables Approve until Include <dependency> fixes it", async ({ page }) => {
   await seeded(page);
   await openReview(page, "saved-addresses");
-  await expect(page.getByTestId("scope-for")).toHaveText("For Saved addresses PRD · attempt 1");
+  await expect(page.getByTestId("scope-for")).toHaveText("For Bulk import PRD · attempt 1");
   await expect(page.getByRole("button", { name: /^Needs you/ })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("scope-row")).toHaveCount(3);
   const approve = bar(page).getByRole("button", { name: /^Approve/ });
@@ -113,19 +113,19 @@ test("add a requirement, approve with edits, and the Ground Truth lists it under
   // The blocking dependency first, so Approve is open.
   await row(page, "Bulk edit").getByRole("button", { name: "Include dependency" }).click();
   await page.getByRole("button", { name: /^All/ }).click();
-  await row(page, "Saved addresses").getByTestId("feature-title").click();
+  await row(page, "Bulk import").getByTestId("feature-title").click();
   const inspector = page.getByTestId("scope-inspector");
-  await expect(inspector).toContainText("Saved addresses");
+  await expect(inspector).toContainText("Bulk import");
   await inspector.getByRole("button", { name: "Add requirement" }).click();
-  const text = "The buyer sees which saved address was used last";
+  const text = "The buyer sees which imported row was used last";
   await inspector.getByRole("textbox", { name: "Requirement", exact: true }).fill(text);
   await inspector.getByRole("textbox", { name: /Acceptance criteria/ }).fill("The last used address is marked");
   await inspector.getByRole("button", { name: "Add", exact: true }).click();
-  const added = row(page, "Saved addresses").locator('[data-added="true"]');
+  const added = row(page, "Bulk import").locator('[data-added="true"]');
   await expect(added).toHaveCount(1);
   await expect(added).toContainText(text);
   await expect(added.getByTestId("yours")).toHaveText("Yours");
-  await expect(bar(page).getByTestId("staged-chip").filter({ hasText: "+ Requirement on Saved addresses" })).toBeVisible();
+  await expect(bar(page).getByTestId("staged-chip").filter({ hasText: "+ Requirement on Bulk import" })).toBeVisible();
 
   await bar(page).getByRole("button", { name: "Approve with 2 edits" }).click();
   // Rows still under Needs you: Approve says so first.
@@ -181,13 +181,13 @@ test("a commenter suggests leave out; the approver accepts it", async ({ page })
 test("the Changed filter on attempt 2 lists only rows that differ from attempt 1", async ({ page }) => {
   await seeded(page);
   await openReview(page, "saved-addresses-next");
-  await expect(page.getByTestId("scope-for")).toHaveText("For Saved addresses next PRD · attempt 2");
+  await expect(page.getByTestId("scope-for")).toHaveText("For Bulk import next PRD · attempt 2");
   await page.getByRole("button", { name: /^Changed/ }).click();
   const rows = page.getByTestId("scope-row");
   await expect(rows).toHaveCount(3);
   await expect(row(page, "Delivery notes").getByTestId("changed-chip")).toHaveText("New in attempt 2");
   await expect(row(page, "Bulk edit").getByTestId("changed-chip")).toHaveText("Was left out");
-  await expect(row(page, "Saved addresses").getByTestId("changed-chip")).toHaveText("Requirements changed");
+  await expect(row(page, "Bulk import").getByTestId("changed-chip")).toHaveText("Requirements changed");
   await expect(row(page, "Address labels")).toHaveCount(0);
   await expect(row(page, "Address lookup")).toHaveCount(0);
 });

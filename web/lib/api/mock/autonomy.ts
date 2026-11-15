@@ -760,7 +760,7 @@ export function inboxActions(db: AutonomyDb, me: string): Schemas["InboxOracleAc
 }
 
 /** The "oracle-did" scenario: Oracle moved a priority within its goal and told the owner. */
-export function seedOracleDid(ownerId: string, id: string, summary = "Moved 'Saved addresses' up 2 within Activation"): OracleActionRow {
+export function seedOracleDid(ownerId: string, id: string, summary = "Moved 'Bulk import' up 2 within Activation"): OracleActionRow {
   return {
     id,
     responsibility: "priorities",

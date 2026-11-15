@@ -66,6 +66,6 @@ test("the discussion's subject names the item by its title", async ({ page }) =>
   await withScenario(page);
   await login(page, APPROVER);
   await openDiscussion(page);
-  await expect(thread(page)).toContainText(/· Guest checkout/);
+  await expect(thread(page)).toContainText(/· Public signup/);
   await expect(thread(page)).not.toContainText("guest-checkout");
 });

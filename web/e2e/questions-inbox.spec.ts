@@ -64,7 +64,7 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
   await expect(row).toContainText("Oracle asks");
   await expect(row).toContainText("Before drafting · Clinic waitlist");
   await expect(questionRow(page, TIERS)).toContainText("Priya Raman asks");
-  await expect(questionRow(page, TIERS)).toContainText("Checkout redesign PRD · Success metrics");
+  await expect(questionRow(page, TIERS)).toContainText("Self-serve checkout PRD · Success metrics");
   // The pending access request (A5, #203 part 3) counts too.
   await expect(badge(page)).toHaveText("13");
 
@@ -138,7 +138,7 @@ test("the other paths: I don't know, Defer and Ask someone leave Open; the deleg
 });
 
 test("ask a teammate on a section: Waiting on them, then their answer on the Feedback tab", async ({ page }) => {
-  const question = "Do pilots keep their saved addresses after the trial?";
+  const question = "Do pilots keep their imported rows after the trial?";
   const reply = "Yes, for 90 days after the trial ends.";
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");

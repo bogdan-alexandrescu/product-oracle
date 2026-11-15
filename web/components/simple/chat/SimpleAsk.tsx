@@ -71,7 +71,7 @@ function aboutWords(name: string): string {
 }
 
 /**
- * qa-simple-home-22: a one-pager's chat is about its document ("Ask about Checkout redesign"):
+ * qa-simple-home-22: a one-pager's chat is about its document ("Ask about Self-serve checkout"):
  * the shown page's heading names it (the page says no subject of its own). Null elsewhere.
  */
 function useShownHeading(on: boolean): string | null {

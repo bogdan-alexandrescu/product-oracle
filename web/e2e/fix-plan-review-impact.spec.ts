@@ -68,7 +68,7 @@ test("impact: a recorded change on a deleted Ground Truth item highlights Ground
   // A change on a deleted Ground Truth item (a requirement) belongs with Ground Truth, never PRDs,
   // when it is opened on its own (qa-plan-12: opened from a PRD's Impact, it stays with PRDs).
   const nav = await openRecordedChange(page, "Acceptance tests", true);
-  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Requirement “Guest checkout keeps the cart” deleted");
+  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Requirement “Public signup keeps the cart” deleted");
   await expect(nav.getByTestId("nav-baseline")).toHaveAttribute("aria-current", "page");
   await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
   // Back twice (the change opened on its own, then from the table) is the PRD's Impact again.
@@ -88,8 +88,8 @@ test("impact: a recorded change on a source's permission leaves the rail quiet",
 
 test("impact: a recorded change on a PRD section highlights PRDs in the rail", async ({ page }) => {
   // A change on a PRD section still belongs with PRDs, as before.
-  const nav = await openRecordedChange(page, "Saved addresses tech brief", false);
-  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Checkout redesign PRD v2");
+  const nav = await openRecordedChange(page, "Bulk import tech brief", false);
+  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Self-serve checkout PRD v2");
   await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
 });
 

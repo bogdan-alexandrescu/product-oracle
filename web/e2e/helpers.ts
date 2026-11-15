@@ -320,7 +320,7 @@ export async function seedSentBack(page: Page): Promise<string> {
       }));
       Object.assign(run, { status: "running", waiting_on: null });
       db.runs.runs.push(run);
-      db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Guest checkout PRD\n---\n\n# Guest checkout PRD {#title}\n";
+      db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Public signup PRD\n---\n\n# Public signup PRD {#title}\n";
       return id;
       });
     },

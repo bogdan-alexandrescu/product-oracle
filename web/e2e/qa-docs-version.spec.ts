@@ -4,7 +4,7 @@ import { MOCK_DENY_KEY } from "../lib/api/mock/server";
 import { login, openTab } from "./helpers";
 import { contrast } from "./contrast-helpers";
 
-// QA pass 1, docs lane: the version page /documents/<doc>/v/<n> (Saved carts v2, a PRD with a
+// QA pass 1, docs lane: the version page /documents/<doc>/v/<n> (Referral link v2, a PRD with a
 // brief; the early shipping cost technical brief, v1 earlier and v2 latest), driven as a person.
 
 const CARTS = "/documents/saved-carts/v/2";
@@ -95,7 +95,7 @@ test.describe("desktop", () => {
     // PT1 a: the outline rail is gone on a PRD; its contents rail names rows the same way.
     const first = page.getByTestId("prd-contents").locator("a[data-outline-key]").first();
     await expect(first).toContainText("Introduction");
-    await expect(first).not.toContainText("Saved carts PRD");
+    await expect(first).not.toContainText("Referral link PRD");
   });
 
   test("qa-docs-49: the contents filter narrows and clears; feedback filters wait for feedback", async ({ page }) => {
@@ -110,7 +110,7 @@ test.describe("desktop", () => {
     await find.fill("");
     await expect(nav.locator("a[data-outline-key]").first()).toBeVisible();
 
-    // Saved carts has no feedback yet: its panel shows no filter chips, only the empty state.
+    // Referral link has no feedback yet: its panel shows no filter chips, only the empty state.
     await expect(panel(page).getByTestId("feedback-state")).toHaveCount(0);
 
     // A version with no feedback at all shows no filters.

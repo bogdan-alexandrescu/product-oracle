@@ -67,7 +67,7 @@ async function seedFinishedWithoutDocument(page: Page, otherImported = false): P
         can_decide: false,
       }));
       db.runs.runs.push(run);
-      db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Guest checkout PRD\n---\n\n# Guest checkout PRD {#title}\n";
+      db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Public signup PRD\n---\n\n# Public signup PRD {#title}\n";
       localStorage.setItem(key, JSON.stringify(db));
       return id;
     },

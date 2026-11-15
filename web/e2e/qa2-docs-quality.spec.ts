@@ -190,11 +190,11 @@ test.describe("phone", () => {
   // qa-docs-10; no colour changes, so light only. vqa B-14 replaced its wrapping labels: a
   // label keeps to one line, and one cut short holds its whole words (the count too) in an (i)
   // that opens on a tap as well as on hover. C-13: only a PRD with roadmap items has a Timeline
-  // strip (Saved carts has none in this mock: "No roadmap items yet"), so this opens Guided
+  // strip (Referral link has none in this mock: "No roadmap items yet"), so this opens Guided
   // setup's one-pager at its address (the default list does not carry it).
   test("qa-docs-10: the one-pager's Timeline labels keep to one line and never lose their item count", async ({ page }) => {
     await login(page);
-    // C-13 (PR 1307): Saved carts reads its own sections and has no roadmap items of its own, so
+    // C-13 (PR 1307): Referral link reads its own sections and has no roadmap items of its own, so
     // no Timeline; Guided setup's one-pager is the one whose strip has milestones.
     await page.goto("/simple/one-pagers/guided-setup");
     await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();

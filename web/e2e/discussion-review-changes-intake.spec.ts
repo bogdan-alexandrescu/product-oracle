@@ -6,7 +6,7 @@ import { login } from "./helpers";
 /*
  * The Inbox's Review changes on an intake's discussion opens the intake's own page (Before
  * drafting), on the mock layer ("discussion-intake" scenario): the approver's open discussion
- * on the "Saved addresses" intake, where Oracle proposes one way to measure its goal.
+ * on the "Bulk import" intake, where Oracle proposes one way to measure its goal.
  *
  * Card: protects=Review changes on an intake's (or its gap's) discussion lands on the intake's
  * page with the thread open on its changes card and the counted change in it;
@@ -15,7 +15,7 @@ import { login } from "./helpers";
  */
 
 const APPROVER = "approver@example.com";
-const TITLE = "Saved addresses: how do we measure it?";
+const TITLE = "F-07 Bulk import: how do we measure it?";
 
 const rowsOf = (page: Page) => page.getByTestId("inbox-tab-new").getByTestId("inbox-discussions").locator("tr[data-row]");
 const cardOf = (page: Page) => page.getByTestId("discussion-thread").filter({ visible: true }).getByTestId("changes-card");
@@ -29,7 +29,7 @@ test("Review changes on an intake's discussion opens its thread on the intake's 
   await row.getByRole("link", { name: "Review changes" }).click();
 
   await expect(page).toHaveURL(/\/intakes\/[^/?]+\?discussion=[^&]+&changes=1/);
-  await expect(page.getByRole("heading", { name: "Saved addresses", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Bulk import", level: 1 })).toBeVisible();
   await expect(page.getByText("Tech brief not found")).toHaveCount(0);
   const card = cardOf(page);
   await expect(card).toBeInViewport();

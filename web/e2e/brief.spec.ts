@@ -192,7 +192,7 @@ test("present: one brief section per slide, keyboard and click navigation, Expan
   const counter = page.getByTestId("slide-counter");
   // Title slide, one slide per brief section, then Sources and data points.
   await expect(counter).toHaveText("1 / 10");
-  await expect(present.getByRole("region", { name: "Slide 1 of 10: Saved carts PRD" })).toBeVisible();
+  await expect(present.getByRole("region", { name: "Slide 1 of 10: Referral link PRD" })).toBeVisible();
   // The document's theme, as its slide variant.
   expect(
     await present.locator(".current-slide").evaluate((el) => !!el.shadowRoot?.querySelector(".deck.theme-clean-document")),
@@ -270,7 +270,7 @@ test("present: viewers present too; a version without a brief has nothing to pre
 
   await page.goto("/documents/checkout-redesign/v/2/present");
   await expect(page.getByTestId("present-mode")).toContainText(
-    "Version 2 of Checkout redesign PRD has no brief to present: open the full PRD instead.",
+    "Version 2 of Self-serve checkout PRD has no brief to present: open the full PRD instead.",
   );
 });
 

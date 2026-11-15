@@ -180,7 +180,7 @@ export function seedV2(documentId: string, versionId: string | null, userId: str
     intakes: [
       {
         id: I.intake,
-        title: "Saved addresses",
+        title: "Bulk import",
         brief: "Returning buyers retype their address at every checkout. Make repeat checkout faster.",
         author_id: userId,
         source_snapshot_ids: [],
@@ -190,7 +190,7 @@ export function seedV2(documentId: string, versionId: string | null, userId: str
           problem: { statement: "Repeat buyers retype addresses", knowledge_state: "hypothesis" },
           outcomes: [],
           goal_ids: [],
-          scope: ["Saved addresses at checkout"],
+          scope: ["Bulk import from a spreadsheet"],
           non_goals: [],
           dependencies: [],
           blockers: [],
@@ -279,10 +279,10 @@ export function seedV2(documentId: string, versionId: string | null, userId: str
       { id: I.finding, report_id: I.report, criterion: "success_metrics", status: "warning", hard: false, rationale: "The metric has no baseline value yet", evidence_ids: [], owner_id: userId, section_keys: ["metrics"], module_key: null, created_at: AT },
     ],
     artifact_requests: [
-      { id: I.request, kind: "tech_brief", title: "Saved addresses tech brief", source_document_id: documentId, source_version_id: versionId, requirement_ids: [I.requirement], section_keys: ["metrics"], params: {}, status: "succeeded", run_id: null, requested_by: userId, lock_version: 1, created_at: AT, updated_at: AT },
+      { id: I.request, kind: "tech_brief", title: "Bulk import tech brief", source_document_id: documentId, source_version_id: versionId, requirement_ids: [I.requirement], section_keys: ["metrics"], params: {}, status: "succeeded", run_id: null, requested_by: userId, lock_version: 1, created_at: AT, updated_at: AT },
     ],
     artifact_versions: [
-      { id: I.artifactVersion, request_id: I.request, number: 1, status: "in_review", freshness: "potentially_stale", source_version_id: versionId, composition_revision: 1, content_hash: null, summary: "Tech brief for saved addresses", provenance: {}, created_by: null, approved_by: null, approved_at: null, created_at: AT },
+      { id: I.artifactVersion, request_id: I.request, number: 1, status: "in_review", freshness: "potentially_stale", source_version_id: versionId, composition_revision: 1, content_hash: null, summary: "Tech brief for imported rows", provenance: {}, created_by: null, approved_by: null, approved_at: null, created_at: AT },
     ],
     artifact_outputs: [
       { id: I.output, version_id: I.artifactVersion, name: "tech-brief.md", media_type: "text/markdown", size_bytes: 128, sha256: "0".repeat(64), meta: {}, created_at: AT },

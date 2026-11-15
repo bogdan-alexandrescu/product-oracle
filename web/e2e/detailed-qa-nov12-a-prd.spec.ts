@@ -4,8 +4,8 @@ import { login } from "./helpers";
 
 /*
  * Detailed visual QA, Nov 12, 2026 (pass A), findings 6 and 17, on a PRD version's Roadmap tab
- * (Checkout redesign PRD v2, seeded in lib/api/mock/draft-roadmap.ts: Cart review is the
- * Ground Truth feature F-41; Guest checkout, Shipping step and Saved addresses name no feature;
+ * (Self-serve checkout PRD v2, seeded in lib/api/mock/draft-roadmap.ts: Cart review is the
+ * Ground Truth feature F-41; Public signup, Shipping step and Bulk import name no feature;
  * v1's One-tap wallet pay was dropped). Driven through the UI on the mock API; invented data only.
  */
 
@@ -53,7 +53,7 @@ test("#6: each roadmap item shows its feature code before its name, and one with
       "Not in the Ground Truth",
     );
   }
-  // Saved addresses keeps its check problem beside the flag.
+  // Bulk import keeps its check problem beside the flag.
   await expect(
     row(page, "saved-addresses").getByTestId("draft-roadmap-chips"),
   ).toHaveText("Date unverified");

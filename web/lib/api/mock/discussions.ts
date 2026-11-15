@@ -628,7 +628,7 @@ export function seedDiscussions(ctx: Omit<DiscussionsContext, "me" | "db">, docu
 }
 
 /**
- * G6, the "discussions" scenario only: the commenter's open discussion on the Saved carts PRD.
+ * G6, the "discussions" scenario only: the commenter's open discussion on the Referral link PRD.
  * Its first message mentions the viewer (who is invited), the approver replies, then the
  * commenter mentions the approver (already in it); Oracle proposed one change and the
  * commenter suggested another, so 2 wait on the approver.
@@ -649,7 +649,7 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     subject_url: url,
     document_id: documentId,
     run_id: null,
-    title: "Saved carts: keep carts for guests?",
+    title: "F-12 Referral link: keep links for guests?",
     visibility: "open",
     author_only: false,
     status: "open",
@@ -670,9 +670,9 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
   ] as const)
     db.participants.push({ discussion_id: id, user_id, added_via, left_at: null, last_read_at: null, created_at: at(0) });
   const lines: [string, string, string[]][] = [
-    [commenter, "Lena, guests lose their cart today. Should we keep it?", [viewer]],
+    [commenter, "Lena, guests lose their link today. Should we keep it?", [viewer]],
     [approver, "Only with a clear expiry.", []],
-    [commenter, "Priya, can guests keep a cart for 30 days?", [approver]],
+    [commenter, "Priya, can guests keep a link for 30 days?", [approver]],
   ];
   const ids = lines.map(([author, body, mentions], i) => {
     const mid = ctx.uuid();
@@ -710,8 +710,8 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     {
       ...change,
       id: ctx.uuid(),
-      label: "Scope: keep a guest's cart for 30 days",
-      payload: { section_key: "scope", instruction: "Keep a guest's cart for 30 days." },
+      label: "Scope: keep a guest's link for 30 days",
+      payload: { section_key: "scope", instruction: "Keep a guest's link for 30 days." },
       proposed_by_kind: "oracle",
       suggested_by: null,
       status: "proposed",
@@ -719,8 +719,8 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     {
       ...change,
       id: ctx.uuid(),
-      label: "Scope: show the expiry on the cart",
-      payload: { section_key: "scope", instruction: "Show the expiry on the cart." },
+      label: "Scope: show the expiry on the link",
+      payload: { section_key: "scope", instruction: "Show the expiry on the link." },
       proposed_by_kind: "oracle",
       suggested_by: commenter,
       status: "suggested",
@@ -737,10 +737,10 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     subject_kind: "entity",
     subject: { entity_id: goal, interview: true },
     subject_key: `entity:${goal}`,
-    subject_label: "Weekly saved carts",
+    subject_label: "Weekly referral links",
     subject_url: "/ground-truth",
     document_id: null,
-    title: "Make “Weekly saved carts” measurable",
+    title: "Make “Weekly referral links” measurable",
     status: "closed",
     started_by: approver,
     last_message_at: late,
@@ -759,9 +759,9 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
       id: ctx.uuid(),
       discussion_id: interview,
       kind: "goal_measure",
-      label: `Make Weekly saved carts measurable: version ${n}`,
-      target: { entity_id: goal, title: "Weekly saved carts" },
-      payload: { entity_id: goal, metric: "Weekly saved carts", target: 500 * n },
+      label: `Make Weekly referral links measurable: version ${n}`,
+      target: { entity_id: goal, title: "Weekly referral links" },
+      payload: { entity_id: goal, metric: "Weekly referral links", target: 500 * n },
       proposed_by_kind: "oracle",
       suggested_by: null,
       status,
@@ -806,7 +806,7 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     subject_key: "priorities",
     subject_label: "Priority order",
     subject_url: "/priorities",
-    title: "Order: put Guest checkout first?",
+    title: "Order: put Public signup first?",
     started_by: commenter,
   });
   db.participants.push({ discussion_id: order, user_id: commenter, added_via: "started", left_at: null, last_read_at: null, created_at: late });
@@ -815,7 +815,7 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     id: ctx.uuid(),
     discussion_id: order,
     kind: "priority_move",
-    label: "Move Guest checkout above Saved carts",
+    label: "Move Public signup above Referral link",
     target: {},
     payload: { feature_id: ctx.uuid(), above_feature_id: ctx.uuid(), reason: "Guests leave at sign-up." },
     proposed_by_kind: "person",
@@ -844,7 +844,7 @@ export function seedIntakeDiscussion(ctx: Omit<DiscussionsContext, "me" | "db">,
     subject_url: `/intakes/${intake.id}`,
     document_id: null,
     run_id: null,
-    title: "Saved addresses: how do we measure it?",
+    title: "F-07 Bulk import: how do we measure it?",
     visibility: "open",
     author_only: false,
     status: "open",
@@ -990,7 +990,7 @@ export function seedDiscussionReplies(ctx: Omit<DiscussionsContext, "me" | "db">
     ...base,
     ...open,
     id: ctx.uuid(),
-    title: "Saved addresses: what the intake found",
+    title: "F-07 Bulk import: what the intake found",
     last_message_at: null,
     private_findings: { author: commenter, count: 2, intake_id: ctx.uuid() },
   };
@@ -1977,7 +1977,7 @@ export function seedRunDiscussions(
     updated_at: at,
   });
   const open = row(RUN_DISCUSSION_OPEN, "bulk-address-edit", "Bulk edit: keep it without the export?", "open");
-  const hidden = row(RUN_DISCUSSION_PRIVATE, "saved-addresses", "Saved addresses: who pays for storage?", "private");
+  const hidden = row(RUN_DISCUSSION_PRIVATE, "saved-addresses", "Bulk import: who pays for storage?", "private");
   db.discussions.push(open, hidden);
   db.participants.push(
     { discussion_id: open.id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at },
@@ -2026,7 +2026,7 @@ export function seedDiscussionRecord(ctx: Omit<DiscussionsContext, "me" | "db">,
     subject_url: `/documents/${prd.slug}/v/${version}/items`,
     document_id: prd.id,
     run_id: null,
-    title: "Guest checkout: what date can we hold?",
+    title: "Public signup: what date can we hold?",
     visibility: "open",
     author_only: false,
     status: "open",

@@ -7,7 +7,7 @@ import { login } from "./helpers";
  * F7 Link tracker issues, driven through the Plan's UI on the mock layer (NEXT_PUBLIC_API_MOCKS=1).
  *
  * The synced GitHub issues are mock rows (lib/api/mock/roadmap.ts, SYNCED_ISSUES): acme/app#412
- * "Saved cards checkout" (open, milestone Beta due 2026-11-30) and acme/app#418, already linked to
+ * "Annual billing" (open, milestone Beta due 2026-11-30) and acme/app#418, already linked to
  * "Spend forecast for the month". GitHub is never called. The API's rules (state mapping, scoping,
  * refresh on sync) are proven by api/tests/test_tracker_links.py; these tests prove what a person
  * sees and does. Each test gets a fresh browser context, hence a freshly seeded mock.
@@ -52,7 +52,7 @@ test("Link issue on an untracked Now item links #412 and the cell reads its date
   await expect(dialog(page).getByRole("heading")).toHaveText("Link a GitHub issue to Usage dashboard");
   await dialog(page).getByRole("searchbox", { name: "Search your GitHub issues" }).fill("#412");
   await expect(results(page)).toHaveCount(1);
-  await expect(results(page)).toHaveText("acme/app#412 · Saved cards checkout · Open · milestone Beta (Nov 30)");
+  await expect(results(page)).toHaveText("acme/app#412 · Annual billing · Open · milestone Beta (Nov 30)");
   await expect(dialog(page).getByTestId("link-issue-sharing")).toHaveText(
     "Everyone who can see the Plan will see this issue's number, title, state and link.",
   );

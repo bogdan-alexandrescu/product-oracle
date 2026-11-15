@@ -106,7 +106,7 @@ const CHECKOUT_V1: SectionSeed[] = [
   {
     key: "title",
     level: 1,
-    heading: "Checkout redesign PRD",
+    heading: "Self-serve checkout PRD",
     body: "This document proposes a redesign of the web checkout so that first-time buyers can finish an order without surprises. It is written for the product, design and storefront engineering teams.",
   },
   {
@@ -125,7 +125,7 @@ const CHECKOUT_V1: SectionSeed[] = [
     key: "users",
     level: 2,
     heading: "3. Users and jobs",
-    body: "- **First-time buyer:** wants to know the full price before committing any personal details.\n- **Returning buyer:** wants to reuse a saved address and pay in as few steps as possible.\n- **Support agent:** wants fewer tickets about unexpected shipping charges.",
+    body: "- **First-time buyer:** wants to know the full price before committing any personal details.\n- **Returning buyer:** wants to reuse a imported row and pay in as few steps as possible.\n- **Support agent:** wants fewer tickets about unexpected shipping charges.",
   },
   {
     key: "scope",
@@ -161,7 +161,7 @@ const CHECKOUT_V1: SectionSeed[] = [
     key: "risks",
     level: 2,
     heading: "7. Risks and open questions",
-    body: "- Showing an estimate too early may anchor buyers on a price that later changes.\n- Pickup availability differs by region; we need a fallback when no pickup point is nearby.\n- Open question: do we keep the guest checkout path unchanged during the experiment?",
+    body: "- Showing an estimate too early may anchor buyers on a price that later changes.\n- Pickup availability differs by region; we need a fallback when no pickup point is nearby.\n- Open question: do we keep the public signup path unchanged during the experiment?",
   },
   {
     key: "rollout",
@@ -190,8 +190,8 @@ const CHECKOUT_V2: SectionSeed[] = (() => {
   const added: SectionSeed = {
     key: "s-5-3",
     level: 3,
-    heading: "5.3 Saved addresses",
-    body: "Returning buyers see their saved addresses as cards on the shipping step. Choosing a card fills the form and recalculates the shipping options in place.",
+    heading: "5.3 Bulk import",
+    body: "Returning buyers see their imported rows as cards on the shipping step. Choosing a card fills the form and recalculates the shipping options in place.",
   };
   const at = s.findIndex((x) => x.key === "s-5-2") + 1;
   s.splice(at, 0, added);
@@ -245,8 +245,8 @@ const WORKSPACES_V1: SectionSeed[] = [
   {
     key: "title",
     level: 1,
-    heading: "Team workspaces PRD",
-    body: "Team workspaces let several people work on the same projects with shared settings and billing.",
+    heading: "Team invites PRD",
+    body: "Team invites let several people work on the same projects with shared settings and billing.",
   },
   {
     key: "problem",
@@ -377,7 +377,7 @@ export const CARTS_BRIEF = [
 ];
 
 const CARTS_V1: SectionSeed[] = [
-  { key: "title", level: 1, heading: "Saved carts PRD", body: "Returning shoppers keep their cart across devices." },
+  { key: "title", level: 1, heading: "Referral link PRD", body: "Returning shoppers keep their cart across devices." },
   {
     key: "summary",
     level: 2,
@@ -409,7 +409,7 @@ const CARTS_V1: SectionSeed[] = [
     key: "brief-roadmap",
     level: 2,
     heading: "Roadmap",
-    body: "- [Beta](#milestone-beta): signed-in shoppers never lose a cart.\n- [General release](#milestone-ga): more saved carts turn into orders.",
+    body: "- [Beta](#milestone-beta): signed-in shoppers never lose a cart.\n- [General release](#milestone-ga): more referral links turn into orders.",
   },
   { key: "non-goals", level: 2, heading: "Non-goals", body: "- Carts for guests without an account.\n- Sharing a cart with someone else." },
   {
@@ -547,7 +547,7 @@ const SPEC_ORACLE_CITATIONS: CitationSeed[] = [
     id: "prd-checkout",
     source: "upload",
     ref: "/documents/checkout-redesign/v/1",
-    title: "Checkout redesign PRD, version 1",
+    title: "Self-serve checkout PRD, version 1",
     excerpt: "Show the shipping cost on the cart, before the address step.",
     retrieved_at: "2026-10-17T09:00:00Z",
   },
@@ -568,14 +568,14 @@ const SPEC_TITLE = (kind: string): SectionSeed => ({
   key: "spec",
   level: 1,
   heading: `Early shipping cost: ${kind}`,
-  body: `${kind[0].toUpperCase()}${kind.slice(1)} for Early shipping cost, from the approved PRD Checkout redesign PRD (version 1) [c:prd-checkout]. Product requirements come from that PRD; the engineering approach is proposed until an engineering approver approves this version.`,
+  body: `${kind[0].toUpperCase()}${kind.slice(1)} for Early shipping cost, from the approved PRD Self-serve checkout PRD (version 1) [c:prd-checkout]. Product requirements come from that PRD; the engineering approach is proposed until an engineering approver approves this version.`,
 });
 const SPEC_SUMMARY: SectionSeed = { key: "summary", level: 2, heading: "Summary", body: "Shoppers see the shipping cost on the cart page, before the address step." };
 const SPEC_REQUIREMENTS: SectionSeed = {
   key: "requirements",
   level: 2,
   heading: "Product requirements",
-  body: `${REQUIREMENTS_NOTE}\n\nFrom PRD [Checkout redesign PRD](/documents/checkout-redesign/v/1), version 1.\n\n- **req-shipping-cost: Show shipping cost on the cart** (requirement id \`5b0c…\`)\n  PRD section: [5.2 Shipping options](/documents/checkout-redesign/v/1#s-5-2)`,
+  body: `${REQUIREMENTS_NOTE}\n\nFrom PRD [Self-serve checkout PRD](/documents/checkout-redesign/v/1), version 1.\n\n- **req-shipping-cost: Show shipping cost on the cart** (requirement id \`5b0c…\`)\n  PRD section: [5.2 Shipping options](/documents/checkout-redesign/v/1#s-5-2)`,
 };
 const SPEC_ROLLOUT: SectionSeed = {
   key: "rollout-notes",
@@ -690,7 +690,7 @@ const OUTREACH_V5 = revise(OUTREACH_V4, {
 export const DOCUMENTS: DocumentSeed[] = [
   {
     slug: "checkout-redesign",
-    title: "Checkout redesign PRD",
+    title: "Self-serve checkout PRD",
     template: "oracle-default",
     template_version: "1",
     versions: [
@@ -713,7 +713,7 @@ export const DOCUMENTS: DocumentSeed[] = [
   },
   {
     slug: "team-workspaces",
-    title: "Team workspaces PRD",
+    title: "Team invites PRD",
     template: "oracle-default",
     template_version: "1",
     versions: [
@@ -723,7 +723,7 @@ export const DOCUMENTS: DocumentSeed[] = [
   },
   {
     slug: "saved-carts",
-    title: "Saved carts PRD",
+    title: "Referral link PRD",
     template: "oracle-default",
     template_version: "2",
     theme: "clean-document",

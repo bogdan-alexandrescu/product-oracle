@@ -10,7 +10,7 @@ import { expect, test, type Page } from "./test";
  * Show drafts, which brings the row and selects it; fails_when = the other roadmap's row with the
  * key is opened in its place, or no line shows; no_claim = the rows' own content (plan.spec.ts).
  * Invented data: the mock's "plan-same-key" scenario, Free shipping threshold alert only in the
- * Checkout redesign roadmap's draft, and Threshold alerts on spend approved in Usage alerts'.
+ * Self-serve checkout roadmap's draft, and Threshold alerts on spend approved in Usage alerts'.
  */
 
 const ITEM = "Free shipping threshold alert";
@@ -24,7 +24,7 @@ async function setup(page: Page, scope: "Approved + drafts" | "Approved only") {
   await bar.getByRole("button", { name: scope }).click();
   await expect(bar.getByRole("button", { name: scope })).toHaveAttribute("aria-pressed", "true");
   // Simple's card link (its &roadmap= is the Simple lane's part): the Plan opened by it, with the
-  // card's own PRD id (the mock's item.prd for the Checkout redesign roadmap).
+  // card's own PRD id (the mock's item.prd for the Self-serve checkout roadmap).
   await page.goto(`/plan?item=threshold-alerts&prd=${stableUuid("simple-prd/checkout-redesign-roadmap")}&roadmap=checkout-redesign-roadmap`);
 }
 

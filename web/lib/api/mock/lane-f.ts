@@ -1622,7 +1622,7 @@ export function slidePreviewHtml(t: Tokens, slideCss: string | null | undefined,
   const vars = Object.entries(c)
     .map(([k, v]) => `--color-${k}: ${v};`)
     .join(" ");
-  const title = kind === "prd" ? "Saved carts PRD" : "Product roadmap";
+  const title = kind === "prd" ? "Referral link PRD" : "Product roadmap";
   const brief =
     kind === "prd"
       ? [
@@ -1631,7 +1631,7 @@ export function slidePreviewHtml(t: Tokens, slideCss: string | null | undefined,
           ["Requirements", "R1 Carts persist for 30 days. R2 Prices refresh on return."],
         ]
       : [
-          ["Now", "Saved carts · Faster checkout"],
+          ["Now", "Referral link · Faster checkout"],
           ["Next", "Bulk ordering"],
           ["Later", "Marketplace"],
         ];

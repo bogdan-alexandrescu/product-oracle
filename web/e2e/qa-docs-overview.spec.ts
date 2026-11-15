@@ -118,7 +118,7 @@ test.describe("desktop", () => {
       .locator("li[data-section-key] span.font-semibold")
       .allInnerTexts();
     expect(headings.length).toBeGreaterThan(0);
-    expect(headings).not.toContain("Saved carts PRD");
+    expect(headings).not.toContain("Referral link PRD");
     expect(headings).toContain("Sources and data points");
     expect(headings).not.toContain("Sources");
     await fold.getByRole("button", { name: "Hide" }).click();

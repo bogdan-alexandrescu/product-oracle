@@ -19,7 +19,7 @@ test("qa-docs-1: a viewer's mouse click opens the account menu with Sign out, an
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page, "viewer@example.com");
   await page.goto("/documents");
-  await page.getByRole("link", { name: "Saved carts PRD" }).filter({ visible: true }).first().click();
+  await page.getByRole("link", { name: "Referral link PRD" }).filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/documents\/saved-carts$/);
 
   const avatar = page.getByTestId("user-menu");

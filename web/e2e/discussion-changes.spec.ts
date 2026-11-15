@@ -16,7 +16,7 @@ import { login, openSection, openTab, sectionAction, signOut } from "./helpers";
  */
 
 const DOC = "/documents/checkout-redesign/v/2";
-const SUBJECT = "Checkout redesign PRD · 2. Problem";
+const SUBJECT = "Self-serve checkout PRD · 2. Problem";
 const COMMENTER = "commenter@example.com";
 const APPROVER = "approver@example.com";
 const VIEWER = "viewer@example.com";

@@ -117,7 +117,7 @@ export function TaskForm({
         <span className="min-w-0 text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal: {goal}</span>
       </div>
       <Field label="Name" error={!done ? "Name the task." : undefined}>
-        <input autoFocus value={f.name} onChange={set("name")} placeholder="For example: Saved carts" className={done ? INPUT : BAD} />
+        <input autoFocus value={f.name} onChange={set("name")} placeholder="For example: Referral link" className={done ? INPUT : BAD} />
       </Field>
       <Field label="Outcome: what changes for people">
         <textarea rows={2} value={f.outcome} onChange={set("outcome")} placeholder="For example: shoppers pick up where they left off" className={`${INPUT} h-auto py-1.5`} />

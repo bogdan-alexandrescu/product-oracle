@@ -65,7 +65,7 @@ test("spec: a source an edit added is listed under Added sources, apart from Ora
   await page.getByRole("tab", { name: /^Sources/ }).filter({ visible: true }).click();
   const oracle = page.getByTestId("sources-list").filter({ visible: true });
   await expect(oracle.getByRole("listitem")).toHaveCount(1);
-  await expect(oracle).toContainText("Checkout redesign PRD, version 1");
+  await expect(oracle).toContainText("Self-serve checkout PRD, version 1");
   await expect(oracle).not.toContainText("Carrier quote latency");
   const added = page.getByTestId("added-sources").filter({ visible: true });
   await expect(added.getByText("Added sources")).toBeVisible();

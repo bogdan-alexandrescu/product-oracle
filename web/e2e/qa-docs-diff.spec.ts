@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from "./test";
 import { login } from "./helpers";
 import { readableWords, wordDiff } from "../lib/diff";
 
-// QA pass 1, docs lane: the text diff of Saved carts v1 → v2 (its Problem section was rewritten;
+// QA pass 1, docs lane: the text diff of Referral link v1 → v2 (its Problem section was rewritten;
 // v2 has no roadmap items yet), opened at its address.
 
 async function openDiff(page: Page) {

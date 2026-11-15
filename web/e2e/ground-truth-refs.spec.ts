@@ -18,7 +18,7 @@ const SHOWN = "Ground Truth decision D-12";
 const OLD_NAME = /\bbaseline\b(?! value)/i;
 
 /**
- * Version 2 of Checkout redesign cites a Ground Truth decision, with no title, in Problem. The
+ * Version 2 of Self-serve checkout cites a Ground Truth decision, with no title, in Problem. The
  * edit is made as the next page loads, before its scripts run: made on Home, a request Home
  * still had under way could save its own copy of the mock over it.
  */

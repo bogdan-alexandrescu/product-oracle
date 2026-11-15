@@ -3,7 +3,7 @@ import { expect, test, type Page } from "./test";
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
-// QA pass 4, docs lane: the Publish page. Checkout redesign PRD v2 (default scenario) is held
+// QA pass 4, docs lane: the Publish page. Self-serve checkout PRD v2 (default scenario) is held
 // by one critical blocker; Usage alerts roadmap v1 is held by a date whose schedule basis was
 // withdrawn, and is published in the "approved-plan" scenario. Invented data only.
 

@@ -45,14 +45,14 @@ for (const [where, size] of [["desktop", null], ["phone", PHONE]] as const) {
     /**
      * protects: a feature added twice under near-identical titles is one card naming the other
      * role and its title; accepting it closes the other as already done.
-     * fails_when: "Add saved address" has its own card, the role or its title is not named, or
+     * fails_when: "Add imported row" has its own card, the role or its title is not named, or
      * it is left open.
      */
     test("a feature proposed twice is one card, also proposed by the critic", async ({ page }) => {
       await openProposals(page);
       const added = card(page, "Asked for in the planning call.");
       await expect(added).toHaveCount(1);
-      await expect(added.getByTestId("also-proposed")).toHaveText("Also proposed by Critic as “Add saved address”");
+      await expect(added.getByTestId("also-proposed")).toHaveText("Also proposed by Critic as “Add imported row”");
       await added.getByRole("button", { name: "Accept", exact: true }).click();
       await expect(page.getByRole("status")).toContainText("1 other proposal was already done and is closed.");
       await expect(card(page, "Asked for in the planning call.")).toHaveCount(0);

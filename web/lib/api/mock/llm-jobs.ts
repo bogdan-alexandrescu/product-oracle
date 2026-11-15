@@ -415,7 +415,7 @@ export const SPENT = "No Claude account can take this call: every Claude account
 
 // ------------------------------------------------------------------ seed
 
-/** Team workspaces v2: three comments, one review job that ran, one reporting job that could not. */
+/** Team invites v2: three comments, one review job that ran, one reporting job that could not. */
 export function seedLlm(ctx: Omit<LlmContext, "db"> & { db?: LlmDb }): LlmDb {
   const db: LlmDb = { jobs: [], suggestions: [], disabled: {} };
   const c = { ...ctx, db };
@@ -508,7 +508,7 @@ export function seedLlm(ctx: Omit<LlmContext, "db"> & { db?: LlmDb }): LlmDb {
   return db;
 }
 
-/** #556 item 2: Saved carts v2's reports failed on Oct 18 with a refusal stored before #403's wording. */
+/** #556 item 2: Referral link v2's reports failed on Oct 18 with a refusal stored before #403's wording. */
 function seedStoredRefusal(c: LlmContext) {
   const doc = c.documents.find((d) => d.slug === "saved-carts");
   const v = doc && versionsOf(c, doc).find((x) => x.number === 2);

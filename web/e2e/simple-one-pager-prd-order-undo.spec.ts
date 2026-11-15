@@ -15,7 +15,7 @@ import { expect, test, type Page } from "./test";
  */
 
 const USAGE = "Usage alerts PRD";
-const CHECKOUT = "Checkout redesign PRD";
+const CHECKOUT = "Self-serve checkout PRD";
 
 async function onePagers(page: Page): Promise<string[]> {
   await expect(page.getByTestId("one-pager-row").first()).toBeVisible();

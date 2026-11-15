@@ -12,8 +12,8 @@ import { login } from "./helpers";
  * (api/oracle/plan, its rules proven by api/tests/test_plan.py): a tracked PRD (Usage alerts,
  * whose roadmap v1 is in review by default; in the "roadmap-diff" scenario v1 is approved and
  * its draft 2 changes, moves and drops items), a PRD waiting at the feature set checkpoint
- * (Saved carts), one at the engineering check with a lead named (Clinic outreach) and a
- * never-approved PRD with no roadmap (Checkout redesign). No test here proves the API's rules;
+ * (Referral link), one at the engineering check with a lead named (Clinic outreach) and a
+ * never-approved PRD with no roadmap (Self-serve checkout). No test here proves the API's rules;
  * each proves what a person sees and does on the screen.
  */
 
@@ -80,12 +80,12 @@ test("the goals band shows the same goal tags and distances to go as Home", asyn
 test("PRD cards: stage lines say who the run waits for", async ({ page }) => {
   await openPlan(page);
   await expect(page.getByTestId("plan-prd-card").first()).toContainText("Usage alerts PRD");
-  await expect(card(page, "Saved carts PRD").getByTestId("plan-prd-stage")).toHaveText("Feature set · waiting for you");
-  await expect(card(page, "Saved carts PRD").getByTestId("plan-prd-figure")).toHaveText("9 features");
+  await expect(card(page, "Referral link PRD").getByTestId("plan-prd-stage")).toHaveText("Feature set · waiting for you");
+  await expect(card(page, "Referral link PRD").getByTestId("plan-prd-figure")).toHaveText("9 features");
   await expect(card(page, "Usage alerts PRD").getByTestId("plan-prd-stage")).toHaveText("Approved v1");
   await expect(card(page, "Usage alerts PRD").getByTestId("plan-prd-figure")).toHaveText("At risk");
-  // qa4-plan-4: Checkout redesign has no roadmap document, so no roadmap draft either.
-  await expect(card(page, "Checkout redesign PRD").getByTestId("plan-prd-stage")).toHaveText("Draft 2 in review");
+  // qa4-plan-4: Self-serve checkout has no roadmap document, so no roadmap draft either.
+  await expect(card(page, "Self-serve checkout PRD").getByTestId("plan-prd-stage")).toHaveText("Draft 2 in review");
   await expect(card(page, "Usage alerts PRD").getByRole("link", { name: "Usage alerts PRD" })).toHaveAttribute("href", "/documents/usage-alerts");
   await expect(card(page, "Usage alerts PRD").getByRole("img", { name: /^Journey 9 of 9/ })).toBeVisible();
   // Seven PRDs in play: five cards, then "+2 more" to the PRDs list.
@@ -97,8 +97,8 @@ test("PRD cards: stage lines say who the run waits for", async ({ page }) => {
 test("PRD cards: a viewer sees the feature set wait for an approver", async ({ page }) => {
   await asRole(page, "viewer");
   await openPlan(page);
-  await expect(card(page, "Saved carts PRD").getByTestId("plan-prd-stage")).toHaveText("Feature set · waiting for approver");
-  await expect(page.getByTestId("plan-prd-card").first()).not.toContainText("Saved carts PRD");
+  await expect(card(page, "Referral link PRD").getByTestId("plan-prd-stage")).toHaveText("Feature set · waiting for approver");
+  await expect(page.getByTestId("plan-prd-card").first()).not.toContainText("Referral link PRD");
 });
 
 // protects = 16c, the engineering check's line names the engineering lead to an approver

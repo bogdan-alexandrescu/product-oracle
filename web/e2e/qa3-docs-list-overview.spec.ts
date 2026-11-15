@@ -80,7 +80,7 @@ test.describe("desktop", () => {
     const crumb = page.getByRole("navigation", { name: "Breadcrumb" }).filter({ visible: true }).first();
     await expect(crumb.getByRole("link", { name: "PRDs" })).toBeVisible();
     await expect(crumb).not.toContainText("Draft");
-    await expect(crumb).not.toContainText("Saved carts PRD");
+    await expect(crumb).not.toContainText("Referral link PRD");
     const statuses = page.locator("[data-status]").filter({ visible: true });
     await expect(statuses).toHaveCount(1);
     await expect(page.locator("[data-page-header]").locator("[data-status]")).toHaveText("Draft");
@@ -131,8 +131,8 @@ test.describe("desktop", () => {
   test("qa-docs-27: the ⋯ menu repeats no Open latest and leaves the version card's heading clear", async ({ page }) => {
     await openDoc(page, "saved-carts");
     await expect(page.getByRole("link", { name: "Open latest (v2)" })).toBeVisible();
-    await page.getByRole("button", { name: "Actions for Saved carts PRD" }).click();
-    const menu = page.getByRole("menu", { name: "Actions for Saved carts PRD" });
+    await page.getByRole("button", { name: "Actions for Referral link PRD" }).click();
+    const menu = page.getByRole("menu", { name: "Actions for Referral link PRD" });
     await expect(menu).toBeVisible();
     await expect(menu.getByRole("menuitem", { name: /^Open/ })).toHaveCount(0);
     await expect(menu.getByRole("menuitem")).toHaveText(["Regenerate…", "Delete…"]);
@@ -170,7 +170,7 @@ test.describe("desktop", () => {
 
   test("qa-docs-32: the list opens a PRD one way; Read latest says what it opens; the menu has no Open", async ({ page }) => {
     await openList(page);
-    await pick(page, "Saved carts PRD");
+    await pick(page, "Referral link PRD");
     const inspector = listInspector(page);
     await expect(inspector.getByRole("link", { name: /^Open/ })).toHaveCount(1);
     await expect(inspector.getByRole("link", { name: "Open", exact: true })).toHaveAttribute("href", "/documents/saved-carts");

@@ -49,7 +49,7 @@ test("runs are named by document and flow, with no slug or short id", async ({ p
   await openRuns(page);
   const table = page.getByTestId("runs-table");
   await expect(run(page, "team-onboarding").getByRole("link").first()).toHaveText("Team onboarding PRD");
-  await expect(run(page, "team-workspaces").getByRole("link").first()).toHaveText("Team workspaces PRD");
+  await expect(run(page, "team-workspaces").getByRole("link").first()).toHaveText("Team invites PRD");
   await expect(table).not.toContainText("team-onboarding");
   await expect(table).not.toContainText("usage-alerts-v2");
   await expect(table.getByRole("columnheader", { name: "Run" })).toHaveCount(0);
@@ -57,7 +57,7 @@ test("runs are named by document and flow, with no slug or short id", async ({ p
   const inspector = page.getByRole("complementary", { name: "Run" }).filter({ visible: true });
   await expect(inspector).toContainText("Selected run");
   await expect(inspector).not.toContainText(/Run [0-9a-f]{4}\b/);
-  await expect(inspector.getByRole("heading", { name: "Team workspaces PRD" })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: "Team invites PRD" })).toBeVisible();
 });
 
 test.describe("on a phone", () => {

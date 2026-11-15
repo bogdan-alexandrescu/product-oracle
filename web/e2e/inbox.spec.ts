@@ -18,7 +18,7 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
   const feedback = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback");
   // Feedback is one row per item, with its document and what to do.
   const comment = feedback.locator("tr[data-row]").filter({ hasText: "Should the most recently used address be selected by default?" });
-  await expect(comment).toContainText("Checkout redesign PRD");
+  await expect(comment).toContainText("Self-serve checkout PRD");
   await expect(comment.getByRole("button", { name: "Decline", exact: true })).toBeVisible();
   await expect(comment.getByRole("link", { name: /^Open Should the most recently used address/ })).toBeVisible();
 

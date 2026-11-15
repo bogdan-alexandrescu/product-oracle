@@ -64,7 +64,7 @@ export function seedImpact(v2: V2Db, ctx: ImpactSeedContext, large: boolean): vo
   };
 
   const deleted: DeletedEntity = {
-    id: ctx.uuid(), type: "requirement", key: "R-90", title: "Guest checkout keeps the cart", status: "confirmed",
+    id: ctx.uuid(), type: "requirement", key: "R-90", title: "Public signup keeps the cart", status: "confirmed",
     locked: false, confidence: 0.82, deleted_at: "2026-10-21T09:00:00Z",
   };
   v2.deleted_entities = [deleted];

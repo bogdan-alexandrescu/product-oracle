@@ -4,7 +4,7 @@ import { MOCK_FAIL_KEY, MOCK_ROLE_KEY, MOCK_SCENARIO_KEY, MOCK_SLOW_KEY } from "
 import { login } from "./helpers";
 
 // v2 screen 5, Quality evaluation (picks.md 5: A's criteria table + inspector, C's "hide
-// until you pick" in the rating form, B's report list as History). Team workspaces v2 in
+// until you pick" in the rating form, B's report list as History). Team invites v2 in
 // the mock; the "quality" scenario adds a stored rules snapshot, a model review (7 of 10
 // criteria) and two people's ratings, all invented. MOCK_ROLE_KEY changes the signed-in
 // member's role, not who they are: their own reports read "Avery Stone".

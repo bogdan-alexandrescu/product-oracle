@@ -26,8 +26,8 @@ test("login page skips the form when already signed in (e.g. by IAP)", async ({ 
 
 test("open a version: sections in order with citation chips", async ({ page }) => {
   await login(page);
-  // The home list also links "Open PRD in review · Checkout redesign PRD" (its brief, walk-brief).
-  await page.getByRole("link", { name: "Checkout redesign PRD", exact: true }).click();
+  // The home list also links "Open PRD in review · Self-serve checkout PRD" (its brief, walk-brief).
+  await page.getByRole("link", { name: "Self-serve checkout PRD", exact: true }).click();
   await page.getByRole("link", { name: "Version 2" }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2$/);
 
@@ -43,7 +43,7 @@ test("open a version: sections in order with citation chips", async ({ page }) =
     "5 Proposed flow",
     "5.1 Cart review",
     "5.2 Shipping step",
-    "5.3 Saved addresses",
+    "5.3 Bulk import",
     "6 Risks and open questions",
     "7 Success metrics",
   ]);
@@ -58,7 +58,7 @@ test("open a version: sections in order with citation chips", async ({ page }) =
     "Proposed flow",
     "Cart review",
     "Shipping step",
-    "Saved addresses",
+    "Bulk import",
     "Risks and open questions",
     "Success metrics",
   ]);
@@ -202,7 +202,7 @@ test("open the diff: section badges and word-level changes", async ({ page }) =>
     "goal-trace": "1. Goal trace",
     problem: "2. Problem",
     "s-5-2": "5.2 Shipping step",
-    "s-5-3": "5.3 Saved addresses",
+    "s-5-3": "5.3 Bulk import",
     risks: "6. Risks and open questions",
     metrics: "7. Success metrics",
     rollout: "8. Rollout",

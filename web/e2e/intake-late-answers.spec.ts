@@ -8,7 +8,7 @@ import { feedbackState, login, openSection, openTab, sectionAction, showAll } fr
 /*
  * C5 late answers: an answer given after drafting started becomes a feedback item on the
  * draft, linked back to its question, so the next draft takes it. The "late-answers" mock
- * scenario is "before-drafting" with its brief drafting into the Checkout redesign PRD: the
+ * scenario is "before-drafting" with its brief drafting into the Self-serve checkout PRD: the
  * answers given by then are the draft run's; admin@example.com still has two questions.
  *
  * Test card: protects=a late answer reaches the PRD's feedback and leads back to its

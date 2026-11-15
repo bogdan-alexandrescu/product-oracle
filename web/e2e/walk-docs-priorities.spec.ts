@@ -84,7 +84,7 @@ test("3 a snapshot's Top names its features, also those the order on screen lack
   const list = page.getByTestId("snapshot-list");
   await expect(list.getByRole("listitem")).toHaveCount(2);
   await expect(list).toContainText("Top: ");
-  // The Checkout redesign order's fifth feature was dropped since: by its name, not "F-41".
+  // The Self-serve checkout order's fifth feature was dropped since: by its name, not "F-41".
   await expect(list).toContainText("Gift wrap at checkout");
   await expect(list).not.toContainText(/\bF-\d+\b/);
 });

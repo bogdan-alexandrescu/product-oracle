@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
 
-// QA pass 1, docs lane: Present mode of Saved carts v2 (a draft), opened from the version.
+// QA pass 1, docs lane: Present mode of Referral link v2 (a draft), opened from the version.
 
 async function openPresent(page: Page) {
   await login(page);
@@ -28,7 +28,7 @@ test.describe("desktop", () => {
     expect(text).not.toMatch(/· draft|imported /);
     // Not again in the control bar.
     await expect(page.getByRole("navigation", { name: "Presentation" })).not.toContainText("Imported");
-    await expect(page.getByRole("navigation", { name: "Presentation" })).not.toContainText("Saved carts PRD");
+    await expect(page.getByRole("navigation", { name: "Presentation" })).not.toContainText("Referral link PRD");
   });
 
   test("qa-docs-59: no account button sits over the slide controls", async ({ page }) => {

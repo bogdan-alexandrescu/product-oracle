@@ -60,7 +60,7 @@ test("the Inbox shows a draft Oracle sent back as Revising, not a decision, and 
   await expect(page.getByText("11 waiting").filter({ visible: true })).toBeVisible();
   await expect(page.getByTestId("nav-inbox-badge")).toHaveText("11");
   await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New11");
-  await expect(page.getByTestId("inbox-checkpoints")).not.toContainText("Guest checkout");
+  await expect(page.getByTestId("inbox-checkpoints")).not.toContainText("Public signup");
   await expect(page.getByTestId("inbox-revising")).toHaveCount(0);
 
   // Under Open, shown and not counted, as the run page shows it.
@@ -71,7 +71,7 @@ test("the Inbox shows a draft Oracle sent back as Revising, not a decision, and 
   const item = revising.getByTestId("inbox-revising-state");
   await expect(item).toHaveText(REVISING);
   await expect(item).toHaveAttribute("title", SUMMARY);
-  await expect(revising).toContainText("Guest checkout");
+  await expect(revising).toContainText("Public signup");
   await expect(revising.getByRole("button")).toHaveCount(0);
   await revising.getByRole("link", { name: "Open", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${ID}$`));

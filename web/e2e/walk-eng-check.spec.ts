@@ -236,8 +236,8 @@ test("plain requirement: a requirement reads without the agents' stage and quest
   await page.getByRole("button", { name: /^All/ }).click();
   await scopeRow(page, "address-edit").getByTestId("feature-title").click();
   const req = page.getByTestId("inspector-requirements").filter({ visible: true }).getByTestId("requirement-address-edit-inline");
-  await expect(req).toContainText("A saved address is edited in place at checkout");
+  await expect(req).toContainText("A imported row is edited in place at checkout");
   await expect(req).not.toContainText(/stage 3|Q8|awaiting the founder/);
   // Only the pointers go: "stage 2 of rollout" is the requirement's own words.
-  await expect(req).toContainText("A saved address is edited in place at checkout and ships in stage 2 of rollout");
+  await expect(req).toContainText("A imported row is edited in place at checkout and ships in stage 2 of rollout");
 });

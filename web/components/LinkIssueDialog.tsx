@@ -21,7 +21,7 @@ function linkedName(l: Linked, items: PlanItem[]): { item: string; prd: string }
   return { item: i?.title ?? l.item_title ?? l.item_key, prd: i?.prd?.title ?? l.prd ?? "another PRD" };
 }
 
-/** "acme/app#412 · Saved cards checkout · Open · milestone Beta (Nov 30)" */
+/** "acme/app#412 · Annual billing · Open · milestone Beta (Nov 30)" */
 function issueLine(i: TrackerIssue): string {
   const ms = i.milestone ? `milestone ${i.milestone.title}${i.milestone.due ? ` (${formatDay(i.milestone.due)})` : ""}` : "";
   return [i.external_ref, i.title, STATE[i.state] ?? i.raw_status ?? i.state, ms].filter(Boolean).join(" · ");

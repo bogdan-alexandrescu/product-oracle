@@ -5,8 +5,8 @@ import { login } from "./helpers";
 
 /*
  * Inbox "Discussion · N changes proposed" rows lead to the changes they count, each with its
- * action, on the mock layer ("discussions" scenario). Besides the open Saved carts discussion
- * (2 changes waiting on the approver), the approver's goals interview on "Weekly saved carts"
+ * action, on the mock layer ("discussions" scenario). Besides the open Referral link discussion
+ * (2 changes waiting on the approver), the approver's goals interview on "Weekly referral links"
  * was closed once their pick made the goal measurable, leaving Oracle's other 3 versions
  * proposed: a closed discussion's card offers no action, so it must make no row. The open
  * goals interview's and the priorities' changes make the other two changes rows.
@@ -18,8 +18,8 @@ import { login } from "./helpers";
  */
 
 const APPROVER = "approver@example.com";
-const OPEN_TITLE = "Saved carts: keep carts for guests?";
-const CLOSED_TITLE = "Make “Weekly saved carts” measurable";
+const OPEN_TITLE = "F-12 Referral link: keep links for guests?";
+const CLOSED_TITLE = "Make “Weekly referral links” measurable";
 
 const rowsOf = (page: Page) => page.getByTestId("inbox-tab-new").getByTestId("inbox-discussions").locator("tr[data-row]");
 

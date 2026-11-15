@@ -5,7 +5,7 @@ import { login } from "./helpers";
 
 /*
  * G6 Discussion rows in the Inbox through the UI, on the mock layer ("discussions" scenario):
- * besides G1's private discussion, the commenter's open discussion on the Saved carts PRD
+ * besides G1's private discussion, the commenter's open discussion on the Referral link PRD
  * mentions the viewer (an invitation) and, later, the approver (already in it), and has 2
  * changes waiting: Oracle's proposal and the commenter's suggestion.
  *
@@ -14,7 +14,7 @@ import { login } from "./helpers";
  * In the default scenario the badge is still 10: e2e/inbox-one.spec.ts pins it.
  */
 
-const TITLE = "Saved carts: keep carts for guests?";
+const TITLE = "F-12 Referral link: keep links for guests?";
 const VIEWER = "viewer@example.com";
 const APPROVER = "approver@example.com";
 
@@ -79,7 +79,7 @@ test("an approver reviews the changes proposed in a discussion", async ({ page }
 test("a mention shows its excerpt in quotes", async ({ page }) => {
   await inboxAs(page, APPROVER);
   const row = group(page, "new").locator("tr[data-row]").filter({ hasText: "Mentioned you" });
-  await expect(row).toContainText("“Priya, can guests keep a cart for 30 days?”");
+  await expect(row).toContainText("“Priya, can guests keep a link for 30 days?”");
   await expect(row).toContainText(TITLE);
   await expect(row.getByRole("link", { name: "Open" })).toBeVisible();
 });
@@ -89,7 +89,7 @@ test("a mention shows its excerpt in quotes", async ({ page }) => {
 // surface and not another; no_claim=the visual order of groups.
 test("the badge equals New + Open with discussion rows present", async ({ page }) => {
   await inboxAs(page, APPROVER);
-  // Saved carts' mention and changes, the goals interview's and the priorities' changes.
+  // Referral link' mention and changes, the goals interview's and the priorities' changes.
   await expect(group(page, "new").locator("tr[data-row]")).toHaveCount(4);
   // hotfix 3: the rows show at once, the counts only once every read they add up has arrived;
   // read the tabs once the New tab shows its count, not before (a tab without one reads 0).

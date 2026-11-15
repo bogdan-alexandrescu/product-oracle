@@ -202,10 +202,10 @@ test("Before drafting's Goals draws each goal with its chip, never a place code"
   await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/documents$/);
   await page.getByRole("link", { name: "New PRD" }).click();
-  await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses for repeat buyers");
+  await page.getByRole("textbox", { name: "Title" }).fill("Bulk import for repeat buyers");
   await page
     .getByRole("textbox", { name: "What problem does it solve?" })
-    .fill("Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.");
+    .fill("Returning buyers retype their address at every checkout. Bulk import would make repeat checkout faster.");
   const door = page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox");
   // The goals load after the form draws (Loading meanwhile): all() lists only what is drawn (#520).
   await expect(door.first()).toBeVisible();

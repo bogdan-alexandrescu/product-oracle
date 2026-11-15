@@ -3,7 +3,7 @@ import { expect, test, type Page } from "./test";
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
-// QA pass 1, docs lane: the Quality screen of Saved carts v2 (no saved check, no model review
+// QA pass 1, docs lane: the Quality screen of Referral link v2 (no saved check, no model review
 // and no ratings in the mock until a test makes them through the screen).
 
 type Role = "viewer" | "commenter" | "approver" | "owner";

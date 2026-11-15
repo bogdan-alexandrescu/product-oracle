@@ -36,7 +36,7 @@ import { login, signOut } from "./helpers";
  *   sideways or the recommendation sits beside the form; no_claim=other phone layouts.
  */
 
-const PROBLEM = "Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.";
+const PROBLEM = "Returning buyers retype their address at every checkout. Bulk import would make repeat checkout faster.";
 
 function answer(page: Page, question: string, option: string) {
   return page.getByRole("group", { name: question }).getByText(option, { exact: true }).click();
@@ -146,7 +146,7 @@ test("Ground Truth choice: reuse is preselected; Rebuild costs the Ground Truth 
 test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet takes up the same draft run", async ({ page }) => {
   await login(page, "approver@example.com");
   await openDoor(page);
-  await writeBrief(page, "Saved addresses for guests");
+  await writeBrief(page, "Bulk import for guests");
   const id = await continueToIntake(page);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   await sheet(page).getByRole("button", { name: "Estimate" }).click();
@@ -158,13 +158,13 @@ test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet 
 
   // Nothing started: after a reload the brief is still open, editable and in PRDs › Ideas.
   await page.reload();
-  await expect(page.getByRole("heading", { level: 1, name: "Saved addresses for guests" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Bulk import for guests" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Draft with Oracle" })).toBeEnabled();
   await expect(page.getByRole("button", { name: /^Actions for / })).toBeVisible();
   await page.goto("/documents");
   await page.getByRole("button", { name: /^Ideas\s*\d+$/ }).click();
-  const row = page.getByTestId("idea-row").filter({ hasText: "Saved addresses for guests" });
-  await row.getByRole("link", { name: "Saved addresses for guests" }).click();
+  const row = page.getByTestId("idea-row").filter({ hasText: "Bulk import for guests" });
+  await row.getByRole("link", { name: "Bulk import for guests" }).click();
   await expect(page).toHaveURL(new RegExp(`/intakes/${id}$`));
 
   // Reopening takes up the draft run: its choices and its estimate, not a fresh sheet.
@@ -178,7 +178,7 @@ test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet 
 
   // Started: the brief is drafting, so Draft with Oracle is gone.
   await page.goto(`/intakes/${id}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Saved addresses for guests" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Bulk import for guests" })).toBeVisible();
   await expect(page.getByTestId("intake-status-link")).toBeVisible();
   await expect(page.getByRole("button", { name: "Draft with Oracle" })).toHaveCount(0);
 });

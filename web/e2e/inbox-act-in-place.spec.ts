@@ -9,7 +9,7 @@ import { feedbackState, login, openSection, openTab } from "./helpers";
  * The "suggestions" mock (inbox-feedback.spec.ts's seed) has every kind: Clinic outreach's
  * open metric request and the Fleet next version change requests (section text), Team
  * workspaces' custom roles (Oracle pushed back), its demand duplicate, a question Oracle
- * answered and a remark with nothing to change, and Checkout redesign's comment (none).
+ * answered and a remark with nothing to change, and Self-serve checkout's comment (none).
  */
 
 async function suggestions(page: Page) {

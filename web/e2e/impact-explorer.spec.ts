@@ -28,7 +28,7 @@ test("impact: an owner sees the lineage, picks an output and settles it, then pr
   await expect(page.getByText("Preview: v2 marks nothing stale.")).toBeVisible();
 
   const graph = page.getByRole("region", { name: "Lineage" });
-  await expect(graph.getByTestId("lineage-subject")).toContainText("Checkout redesign PRD v2");
+  await expect(graph.getByTestId("lineage-subject")).toContainText("Self-serve checkout PRD v2");
   await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Scope" })).toBeVisible();
   await expect(graph.getByTestId("lineage-output")).toHaveCount(7);
 
@@ -98,21 +98,21 @@ test("impact: the table view lists outputs by category with the inspector's depe
   await inspector.getByRole("link", { name: "Recorded change" }).first().click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
   const graph = page.getByRole("region", { name: "Lineage" });
-  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Deleted" })).toContainText("Guest checkout keeps the cart");
+  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Deleted" })).toContainText("Public signup keeps the cart");
   await page.getByRole("button", { name: "Table" }).click();
   await page.getByRole("grid", { name: "Affected outputs" }).getByText("Acceptance tests").first().click();
   const tests = page.getByRole("complementary", { name: /Acceptance tests/ });
-  await expect(tests.getByTestId("dependency").filter({ hasText: "Guest checkout keeps the cart" })).toContainText("Deleted");
-  await expect(tests.getByText("Guest checkout keeps the cart was deleted")).toBeVisible();
+  await expect(tests.getByTestId("dependency").filter({ hasText: "Public signup keeps the cart" })).toContainText("Deleted");
+  await expect(tests.getByText("Public signup keeps the cart was deleted")).toBeVisible();
   await page.goBack();
   await page.getByRole("button", { name: "Table" }).click();
 
   // A dependency's recorded change opens that change's impact.
-  await page.getByRole("grid", { name: "Affected outputs" }).getByText("Saved addresses tech brief").click();
-  await page.getByRole("complementary", { name: /Saved addresses tech brief/ }).getByRole("link", { name: "Recorded change" }).click();
+  await page.getByRole("grid", { name: "Affected outputs" }).getByText("Bulk import tech brief").click();
+  await page.getByRole("complementary", { name: /Bulk import tech brief/ }).getByRole("link", { name: "Recorded change" }).click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
   await expect(page.getByText("Recorded: this change marked these outputs Potentially stale.").filter({ visible: true })).toBeVisible();
-  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Checkout redesign PRD v2 › Success metrics section edited");
+  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Self-serve checkout PRD v2 › Success metrics section edited");
 });
 
 test("impact: a what-if from a Ground Truth item's drawer", async ({ page }) => {
