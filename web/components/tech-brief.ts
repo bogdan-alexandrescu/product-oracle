@@ -25,7 +25,7 @@ export type PrdWords = { slug: string | null; title: string | null; heading: (ke
 
 /**
  * A staleness reason in words ("section s-5-2 changed in checkout-redesign" reads
- * 'Section "5.2 Shipping step" changed in Self-serve checkout PRD'): section headings and the
+ * 'Section "5.2 Shipping step" changed in Annual billing PRD'): section headings and the
  * PRD's title, never keys or slugs (qa-docs-18).
  */
 export function reasonText(reason: string, w: PrdWords): string {

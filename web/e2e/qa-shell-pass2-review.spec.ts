@@ -35,9 +35,9 @@ for (const [name, size] of [
     await page.setViewportSize(size);
     await login(page);
     // qa-company-32: on a phone the PRD panel opens on a tap of its In flight row.
-    if (name === "phone") await page.getByTestId("home-in-flight-table").getByTestId("flight-row").filter({ hasText: "Self-serve checkout" }).first().click();
+    if (name === "phone") await page.getByTestId("home-in-flight-table").getByTestId("flight-row").filter({ hasText: "Annual billing" }).first().click();
     const inspector = page.getByTestId("home-inspector");
-    await expect(inspector.getByRole("heading", { name: "Self-serve checkout PRD" })).toBeVisible();
+    await expect(inspector.getByRole("heading", { name: "Annual billing PRD" })).toBeVisible();
     const label = inspector.getByTestId("stat-sections").locator("dt");
     // qa-company-26 names it "Approved" (the stat's room cut "Sections approved").
     await expect(label).toHaveText("Approved");

@@ -1942,7 +1942,7 @@ export const RUN_DISCUSSION_PRIVATE = "d15c0000-0000-4000-8000-0000000000a2";
 /**
  * The "run-discussions" scenario (G5): on the feature-set run's checkpoint, an open discussion
  * the approver started on bulk-address-edit, and a private one the approver started with the
- * owner on saved-addresses (the commenter is not in it), one message each.
+ * owner on bulk-import (the commenter is not in it), one message each.
  */
 export function seedRunDiscussions(
   ctx: Omit<DiscussionsContext, "me" | "db">,
@@ -1977,7 +1977,7 @@ export function seedRunDiscussions(
     updated_at: at,
   });
   const open = row(RUN_DISCUSSION_OPEN, "bulk-address-edit", "Bulk edit: keep it without the export?", "open");
-  const hidden = row(RUN_DISCUSSION_PRIVATE, "saved-addresses", "Bulk import: who pays for storage?", "private");
+  const hidden = row(RUN_DISCUSSION_PRIVATE, "bulk-import", "Bulk import: who pays for storage?", "private");
   db.discussions.push(open, hidden);
   db.participants.push(
     { discussion_id: open.id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at },

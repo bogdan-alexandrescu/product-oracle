@@ -93,7 +93,7 @@ test("coverage: Used in leads to the Ground Truth item and to the document versi
   await expect(page.getByRole("dialog", { name: "Dark mode" })).toBeVisible();
 
   await page.goBack();
-  await used.getByRole("link", { name: /Self-serve checkout PRD/ }).click();
+  await used.getByRole("link", { name: /Annual billing PRD/ }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2$/);
 });
 

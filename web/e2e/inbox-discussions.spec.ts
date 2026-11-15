@@ -89,7 +89,7 @@ test("a mention shows its excerpt in quotes", async ({ page }) => {
 // surface and not another; no_claim=the visual order of groups.
 test("the badge equals New + Open with discussion rows present", async ({ page }) => {
   await inboxAs(page, APPROVER);
-  // Referral link' mention and changes, the goals interview's and the priorities' changes.
+  // Referral link's mention and changes, the goals interview's and the priorities' changes.
   await expect(group(page, "new").locator("tr[data-row]")).toHaveCount(4);
   // hotfix 3: the rows show at once, the counts only once every read they add up has arrived;
   // read the tabs once the New tab shows its count, not before (a tab without one reads 0).

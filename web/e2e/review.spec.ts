@@ -26,8 +26,8 @@ test("login page skips the form when already signed in (e.g. by IAP)", async ({ 
 
 test("open a version: sections in order with citation chips", async ({ page }) => {
   await login(page);
-  // The home list also links "Open PRD in review · Self-serve checkout PRD" (its brief, walk-brief).
-  await page.getByRole("link", { name: "Self-serve checkout PRD", exact: true }).click();
+  // The home list also links "Open PRD in review · Annual billing PRD" (its brief, walk-brief).
+  await page.getByRole("link", { name: "Annual billing PRD", exact: true }).click();
   await page.getByRole("link", { name: "Version 2" }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2$/);
 

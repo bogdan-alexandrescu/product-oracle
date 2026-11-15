@@ -28,13 +28,13 @@ test("qa-docs-35: the design page names sections, documents and requirements in 
   await open(page, FLOW);
   const main = page.locator("main");
   const stale = page.getByTestId("stale-notice").filter({ visible: true });
-  await expect(stale).toContainText('Section "5.2 Shipping step" changed in Self-serve checkout PRD');
+  await expect(stale).toContainText('Section "5.2 Shipping step" changed in Annual billing PRD');
 
   const panel = inspector(page);
   await expect(panel.getByTestId("annotation").first()).toContainText("5.2 Shipping step");
   await expect(panel.getByTestId("annotation").first()).toContainText("Show shipping cost on the cart");
   await expect(panel.getByTestId("version-meta")).toContainText("From PRD");
-  await expect(panel.getByTestId("version-meta")).toContainText("Self-serve checkout PRD v1");
+  await expect(panel.getByTestId("version-meta")).toContainText("Annual billing PRD v1");
   await expect(panel.getByTestId("version-meta")).toContainText("Oracle · See how it was made");
 
   // No ids, keys, slugs, hashes or media types on screen.

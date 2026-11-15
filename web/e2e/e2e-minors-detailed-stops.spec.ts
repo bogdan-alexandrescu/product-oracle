@@ -237,7 +237,7 @@ for (const [name, viewport] of [
       await page.goto(`/runs/${ENG_DATES_RUN}`);
       await page.getByTestId("review-screen-line").filter({ visible: true }).getByRole("link", { name: "Review" }).click();
       await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+$/);
-      await page.locator('[data-testid="date-row"][data-item="saved-addresses"]').getByRole("button", { name: "Change", exact: true }).click();
+      await page.locator('[data-testid="date-row"][data-item="bulk-import"]').getByRole("button", { name: "Change", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "Change the date: Bulk import" });
       await expect(dialog).toBeVisible();
       const b = await box(dialog);

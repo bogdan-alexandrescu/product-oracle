@@ -42,7 +42,7 @@ test("inbox: one feedback row per item, saying what waits and linking to its sec
   await expect(action).toHaveAttribute("href", DEEP_LINK);
 
   // A comment without a suggestion: Decline, and Open to its section.
-  const checkout = page.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Self-serve checkout PRD" });
+  const checkout = page.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Annual billing PRD" });
   await expect(checkout).toContainText("most recently used address");
   await expect(checkout.getByRole("button", { name: "Decline", exact: true })).toBeVisible();
   await expect(checkout.getByRole("link", { name: /^Open Should the most recently used address/ })).toHaveAttribute(

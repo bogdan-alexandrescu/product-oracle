@@ -100,7 +100,7 @@ for (const phone of [false, true]) {
       const blocks = runs.getByTestId("decisions-run");
       await expect(blocks).toHaveCount(4);
       await expect(blocks.getByRole("heading", { level: 3 })).toHaveText([
-        "Self-serve checkout plan · Self-serve checkout PRD · 4 decisions",
+        "Annual billing plan · Annual billing PRD · 4 decisions",
         "Team invites plan · Team invites PRD · 3 decisions",
         "Usage alerts plan · Usage alerts PRD · 5 decisions",
         "Referral link plan · Referral link PRD · 5 decisions",

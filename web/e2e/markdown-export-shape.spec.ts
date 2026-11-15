@@ -37,6 +37,6 @@ test("markdown export: no banner line, days month first, citations as footnotes"
 
   // The first citation is footnote 1, in the text and defined at the end; no raw marker is left.
   expect(md).toContain("(version 1)[^1].");
-  expect(md).toMatch(/\n\[\^1\]: Self-serve checkout PRD, version 1 \(upload: \/documents\/checkout-redesign\/v\/1\)\n?$/m);
+  expect(md).toMatch(/\n\[\^1\]: Annual billing PRD, version 1 \(upload: \/documents\/checkout-redesign\/v\/1\)\n?$/m);
   expect(md).not.toMatch(/\[c:/);
 });

@@ -12,7 +12,7 @@ const BRIEF = "/documents/checkout-redesign-early-shipping-cost-spec/v/1";
 
 const inspector = (page: Page) => page.getByRole("complementary", { name: "Design review" }).filter({ visible: true });
 
-/** Self-serve checkout PRD → its tech brief → the design "Early shipping cost: user flows". */
+/** Annual billing PRD → its tech brief → the design "Early shipping cost: user flows". */
 async function openFlow(page: Page) {
   await page.goto(BRIEF);
   await page.getByTestId("spec-design").filter({ visible: true }).getByRole("link", { name: /Early shipping cost: user flows/ }).click();

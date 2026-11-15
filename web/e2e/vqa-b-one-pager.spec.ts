@@ -40,7 +40,7 @@ test.describe("desktop", () => {
     await expect(problem(page)).not.toContainText(SEEDED_PROBLEM);
     const carts = (await problem(page).textContent())!.trim();
 
-    await openFromList(page, "Self-serve checkout PRD");
+    await openFromList(page, "Annual billing PRD");
     await expect(problem(page)).toContainText("Buyers leave checkout when the total changes late in the flow");
     await expect(problem(page)).not.toContainText(SEEDED_PROBLEM);
     expect((await problem(page).textContent())!.trim()).not.toBe(carts);
@@ -48,7 +48,7 @@ test.describe("desktop", () => {
     await expect(page.getByRole("region", { name: "Risks and open decisions" })).toContainText("Pickup availability differs by region");
   });
 
-  test("B-13: Referral link' bets name the goal in words and are no template line", async ({ page }) => {
+  test("B-13: Referral link's bets name the goal in words and are no template line", async ({ page }) => {
     // protects = a bet reads its goal by name ("Cart on every device: Retention") and every bet
     // is the PRD's own; fails_when = the fixture's table shows "G2" or its Feature detail is
     // the template's "One section per feature, in priority order."

@@ -37,7 +37,7 @@ for (const size of ["desktop", "phone"] as const) {
 }
 
 test("the feature drawer's Depends on and Blocked by name each feature with its code", async ({ page }) => {
-  // protects=Referral link' drawer reads F-05 Team invites and F-01 Setup checklist; fails_when=the names show
+  // protects=Referral link's drawer reads F-05 Team invites and F-01 Setup checklist; fails_when=the names show
   // without codes; no_claim=the links' edits (baseline-links).
   await login(page);
   await page.goto("/ground-truth");

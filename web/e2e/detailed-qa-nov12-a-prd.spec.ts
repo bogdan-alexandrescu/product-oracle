@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 /*
  * Detailed visual QA, Nov 12, 2026 (pass A), findings 6 and 17, on a PRD version's Roadmap tab
- * (Self-serve checkout PRD v2, seeded in lib/api/mock/draft-roadmap.ts: Cart review is the
+ * (Annual billing PRD v2, seeded in lib/api/mock/draft-roadmap.ts: Cart review is the
  * Ground Truth feature F-41; Public signup, Shipping step and Bulk import name no feature;
  * v1's One-tap wallet pay was dropped). Driven through the UI on the mock API; invented data only.
  */
@@ -48,14 +48,14 @@ test("#6: each roadmap item shows its feature code before its name, and one with
   const cart = row(page, "cart-review");
   await expect(cart).toContainText("F-41 Cart review shows the full price");
   await expect(cart.getByTestId("not-in-ground-truth")).toHaveCount(0);
-  for (const key of ["guest-checkout", "shipping-step", "saved-addresses"]) {
+  for (const key of ["guest-checkout", "shipping-step", "bulk-import"]) {
     await expect(row(page, key).getByTestId("not-in-ground-truth")).toHaveText(
       "Not in the Ground Truth",
     );
   }
   // Bulk import keeps its check problem beside the flag.
   await expect(
-    row(page, "saved-addresses").getByTestId("draft-roadmap-chips"),
+    row(page, "bulk-import").getByTestId("draft-roadmap-chips"),
   ).toHaveText("Date unverified");
 
   // The item's panel names it the same way.

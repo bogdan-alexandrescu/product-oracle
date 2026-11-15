@@ -33,7 +33,7 @@ async function discussProblem(page: Page, opts: { private?: { email: string; nam
   const s = await openSection(page, "problem");
   await sectionAction(s, "2. Problem", "Start a discussion");
   const form = page.getByTestId("start-discussion").filter({ visible: true });
-  await expect(form.getByRole("textbox", { name: "Title" })).toHaveValue("Self-serve checkout PRD · 2. Problem");
+  await expect(form.getByRole("textbox", { name: "Title" })).toHaveValue("Annual billing PRD · 2. Problem");
   if (opts.private) {
     await form.getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
     await expect(form).toContainText("Only the people you pick can read it. Everyone else sees that a private discussion exists.");
@@ -94,7 +94,7 @@ test("discuss a section: the mention shows as a chip, the Discussion chip counts
   await thread(page).getByRole("button", { name: "All feedback" }).click();
   await expect(discussionChip(page)).toHaveText(/^Discussion\s*1$/);
   await expect(rows(page)).toHaveCount(1);
-  await expect(rows(page)).toContainText("Self-serve checkout PRD · 2. Problem");
+  await expect(rows(page)).toContainText("Annual billing PRD · 2. Problem");
   await expect(openFeedback).toHaveText(before!);
 });
 
@@ -108,7 +108,7 @@ test("a viewer opening the discussion reads it and has no composer", async ({ pa
 
   await login(page, VIEWER);
   await page.goto(DOC);
-  await openDiscussion(page, "Self-serve checkout PRD · 2. Problem");
+  await openDiscussion(page, "Annual billing PRD · 2. Problem");
   await expect(thread(page).getByTestId("discussion-message").first()).toContainText("Is the drop-off at shipping or at payment?");
   // #370: a control a role can never use is hidden, with no role note: no composer, no note.
   await expect(thread(page)).not.toContainText("Viewers can read but not write here.");

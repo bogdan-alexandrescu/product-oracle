@@ -25,7 +25,7 @@ import { expect, test, type Page } from "./test";
 const USAGE = "Usage alerts PRD";
 /** The one-roadmap scenario's area PRD, whose items sit on the company's Product roadmap. */
 const SAFETY = AREA_PRDS[0][1];
-const CHECKOUT = "Self-serve checkout PRD";
+const CHECKOUT = "Annual billing PRD";
 
 const LOOKS = [
   { name: "desktop light", viewport: { width: 1440, height: 900 }, theme: "light" },

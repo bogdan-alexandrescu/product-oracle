@@ -172,7 +172,7 @@ test("Questions asked of me: rail badge, Home and the Inbox count the same", asy
   const row = questions.locator("tr[data-row]").filter({ hasText: "Which metric" });
   await expect(row).toContainText("Which metric shows repeat checkout got faster?");
   await expect(row).toContainText("Oracle asks");
-  await expect(row.getByRole("link", { name: "Open PRD in review · Self-serve checkout PRD" })).toHaveAttribute("href", /^\/intakes\/[0-9a-f-]+$/);
+  await expect(row.getByRole("link", { name: "Open PRD in review · Annual billing PRD" })).toHaveAttribute("href", /^\/intakes\/[0-9a-f-]+$/);
   // A first visit: all eleven under New, the questions with them.
   await expect(page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^New/ })).toHaveText("New11");
   await expect(page.getByTestId("inbox-tab-new").getByTestId("inbox-questions")).toBeVisible();
@@ -287,7 +287,7 @@ test("Questions asked of me: a failing call shows the block's error, never an em
 test("Home: Enter on an In flight row selects it; the inspector's Open opens it", async ({ page }) => {
   await openHome(page);
   const flights = page.getByTestId("home-in-flight-table").getByTestId("flight-row");
-  await flights.filter({ hasText: "Self-serve checkout PRD" }).click();
+  await flights.filter({ hasText: "Annual billing PRD" }).click();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/home$/);
@@ -296,7 +296,7 @@ test("Home: Enter on an In flight row selects it; the inspector's Open opens it"
   const name = (await selected.locator("td").first().textContent())!;
   await expect(page.getByTestId("home-inspector")).toContainText(name.replace(/v\d+$/, "").trim().slice(0, 12));
   // The inspector shows the selected PRD's goals (loaded for that row only).
-  await flights.filter({ hasText: "Self-serve checkout PRD" }).click();
+  await flights.filter({ hasText: "Annual billing PRD" }).click();
   await expect(page.getByTestId("home-inspector").getByTestId("row-goals")).toHaveText("GrowthActivation");
 });
 

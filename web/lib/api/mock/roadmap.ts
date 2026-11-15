@@ -62,7 +62,7 @@ export interface RoadmapDb {
   alerts?: StoredAlert[];
   /** The freshness of a Plan item the roadmap version has no row for (the alerts scenarios' stale item), by key. */
   freshness?: Record<string, Item["freshness"]>;
-  /** plan-open-from-simple "plan-same-key": the Self-serve checkout roadmap draft holds a key Usage alerts' roadmap holds too. */
+  /** plan-open-from-simple "plan-same-key": the Annual billing roadmap draft holds a key Usage alerts' roadmap holds too. */
   same_key?: boolean;
   /**
    * "plan-section-code", "plan-section-linked" and "plan-section-feature": the approved plan has an item from the PRD's section f-31
@@ -174,7 +174,7 @@ export const PLAN_TWO_ROADMAPS_SCENARIO = "plan-two-roadmaps";
 export const REPORT_OFF_TRACK_SCENARIO = "report-off-track";
 /** qa5-plan-at-risk review: "alignment-report" with no First release track milestone; the Plan's Now items name it. */
 export const REPORT_ITEM_MILESTONE_SCENARIO = "report-item-milestone";
-/** tracks-goal: GET /v1/tracks with the Plan's track holding a second PRD (Self-serve checkout) and a third track with none. */
+/** tracks-goal: GET /v1/tracks with the Plan's track holding a second PRD (Annual billing) and a third track with none. */
 export const TRACK_PRDS_SCENARIO = "track-prds";
 
 const now = () => new Date().toISOString();
@@ -380,7 +380,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
     if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
     if (alertsScenario)
       seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO, scenario === TRACK_ALERTS_HISTORY_SCENARIO, staleScenario, scenario === TRACK_ALERTS_STALE_REMOVED_SCENARIO);
-    // "launches": a second track, Self-serve checkout PRD, with no roadmap yet (New launch's Track picker).
+    // "launches": a second track, Annual billing PRD, with no roadmap yet (New launch's Track picker).
     // fix4: the alignment report scenarios have it too, so a report's second track is one the mock keeps.
     const secondTrack = scenario === "launches" || scenario === "alignment-report" || scenario === "report-prd-moved" || scenario === "report-draft-item" || scenario === REPORT_OFF_TRACK_SCENARIO || scenario === REPORT_ITEM_MILESTONE_SCENARIO;
     const checkout = secondTrack ? ctx.documents.find((d) => d.slug === "checkout-redesign") : undefined;
@@ -1768,15 +1768,15 @@ const ALERTS_DRAFT: Record<string, { horizon?: Horizon; change: Schemas["ItemCha
   "spend-forecast": { horizon: "now", change: { kind: "moved", from_horizon: "next", to_horizon: "now", fields: ["horizon"], notes: [] } },
   "team-budgets": { change: { kind: "dropped", draft_version: 2, fields: [], notes: [] } },
 };
-/** checkout-redesign-roadmap draft 2, from Self-serve checkout PRD v2 (never approved): every item new. */
+/** checkout-redesign-roadmap draft 2, from Annual billing PRD v2 (never approved): every item new. */
 const CHECKOUT_DRAFT: PlanSeedItem[] = [
   { key: "one-page-checkout", title: "Self-serve checkout", horizon: "now", goals: ["g.paid-conversion"], section: "problem" },
-  { key: "saved-addresses", title: "Bulk import of people", horizon: "next", goals: ["g.paid-conversion"], section: "s-5-3" },
+  { key: "bulk-import", title: "Bulk import of people", horizon: "next", goals: ["g.paid-conversion"], section: "s-5-3" },
   { key: "shipping-choices", title: "Three clear shipping choices", horizon: "later", section: "s-5-2" },
 ];
 
 /**
- * plan-open-from-simple "plan-same-key": the default company plus the Self-serve checkout roadmap
+ * plan-open-from-simple "plan-same-key": the default company plus the Annual billing roadmap
  * (server.ts), whose draft 2 also holds threshold-alerts, a key Usage alerts' roadmap holds for
  * another item (keys are unique only per roadmap version). Simple shows the Checkout one.
  */
@@ -1788,7 +1788,7 @@ const checkoutDraft = (db: RoadmapDb): PlanSeedItem[] => (db.same_key ? [...CHEC
  * The Plan's mock (api/oracle/plan): a tracked PRD (Usage alerts, with a roadmap draft 2 that
  * moves, changes and drops items), a PRD waiting at the feature set checkpoint (Referral link),
  * a PRD at the engineering check with a lead named (Clinic outreach), and a never-approved PRD
- * with a roadmap draft (Self-serve checkout); the other PRDs by their versions. Simplified on
+ * with a roadmap draft (Annual billing); the other PRDs by their versions. Simplified on
  * purpose: the rows are seeded with the state, engineering and next decision the API's rules
  * give them, not computed from the other mocks.
  */
@@ -1997,7 +1997,7 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
     // only lists none of them, as the Documents tab, Launches and Edit plan say.
     for (const s of ALERTS_APPROVED) items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: 1 }, "draft", { kind: "new", fields: [], notes: [] }));
   }
-  // qa4-plan-4: the Self-serve checkout PRD has no roadmap document, so (as the API lists only
+  // qa4-plan-4: the Annual billing PRD has no roadmap document, so (as the API lists only
   // roadmap documents' versions) it has no roadmap rows and its card names no roadmap draft.
   if (checkout && scope === "all" && roadmapDoc(CHECKOUT_ROADMAP_SLUG)) {
     for (const s of checkoutDraft(db)) items.push(row(s, checkout, 2, { slug: CHECKOUT_ROADMAP_SLUG, version: 2 }, "draft", { kind: "new", fields: [], notes: [] }));
@@ -2073,7 +2073,7 @@ type SyncedIssue = { id: string; repo: string; number: number; title: string; ra
 
 /** The signed-in person's synced GitHub issues (mock rows: GitHub is never called). */
 const SYNCED_ISSUES: SyncedIssue[] = [
-  { id: stableUuid("tracker-issue/acme/app#412"), repo: "acme/app", number: 412, title: "Annual billing", raw: "open",
+  { id: stableUuid("tracker-issue/acme/app#412"), repo: "acme/app", number: 412, title: "Plan limits", raw: "open",
     milestone: { title: "Beta", due: "2026-11-30" }, updated_at: "2026-10-20T15:00:00Z" },
   { id: stableUuid("tracker-issue/acme/app#418"), repo: "acme/app", number: 418, title: "Monthly spend forecast", raw: "open",
     milestone: { title: "Beta", due: "2026-11-30" }, updated_at: "2026-10-19T11:00:00Z" },

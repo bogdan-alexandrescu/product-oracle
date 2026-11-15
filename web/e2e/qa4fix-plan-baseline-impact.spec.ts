@@ -31,7 +31,7 @@ const scenario = (page: Page, name: string) =>
     [MOCK_SCENARIO_KEY, name],
   );
 
-/** PRDs > Self-serve checkout > v2 > Impact. */
+/** PRDs > Annual billing > v2 > Impact. */
 async function openVersionImpact(page: Page, signIn = true) {
   if (signIn) await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
@@ -161,15 +161,15 @@ test.describe("desktop", () => {
   });
 
   // protects=qa4-plan-45: a recorded change's back link sits above the title, and the title does
-  // not repeat the version the link names; fails_when="‹ Impact of Self-serve checkout PRD v2" on
-  // the row of "Impact: Self-serve checkout PRD v2 › Success metrics section edited"; no_claim=phones.
+  // not repeat the version the link names; fails_when="‹ Impact of Annual billing PRD v2" on
+  // the row of "Impact: Annual billing PRD v2 › Success metrics section edited"; no_claim=phones.
   test("qa4-plan-45: the change's back link is above a title that does not repeat it", async ({
     page,
   }) => {
     await scenario(page, "impact");
     await openRecordedChange(page, "Bulk import tech brief");
     const back = page.getByTestId("impact-back").filter({ visible: true });
-    await expect(back).toContainText("Self-serve checkout PRD v2");
+    await expect(back).toContainText("Annual billing PRD v2");
     const h1 = page.getByRole("heading", { level: 1 });
     await expect(h1).toHaveText("Impact: Success metrics section edited");
     const b = (await back.boundingBox())!;
@@ -181,7 +181,7 @@ test.describe("desktop", () => {
         .getByRole("region", { name: "Lineage" })
         .getByTestId("lineage-subject"),
     ).toContainText(
-      "Self-serve checkout PRD v2 › Success metrics section edited",
+      "Annual billing PRD v2 › Success metrics section edited",
     );
   });
 

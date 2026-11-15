@@ -78,7 +78,7 @@ export type Upstream = {
   typeLabel: string | null;
 };
 
-/** "Self-serve checkout PRD v1": a dependency's document version in words. */
+/** "Annual billing PRD v1": a dependency's document version in words. */
 function whereOf(u: Dependency["upstream"], names?: Names): string {
   if (!u.document_slug) return "";
   const doc = names ? names.doc(u.document_slug) : u.document_slug;
@@ -114,7 +114,7 @@ export function upstreamOf(d: Dependency, names?: Names): Upstream {
   };
 }
 
-/** "Self-serve checkout PRD v1 · Scope": a dependency's upstream in one line. */
+/** "Annual billing PRD v1 · Scope": a dependency's upstream in one line. */
 export function upstreamLine(d: Dependency, names?: Names): string {
   const u = d.upstream;
   // qa-plan-10: the item by its title and kind ("Guided setup · Feature"), never its baseline key.

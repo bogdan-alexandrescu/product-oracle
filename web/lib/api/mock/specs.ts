@@ -157,7 +157,7 @@ const note = (target: string): Schemas["AnnotationOut"] => ({
   id: "cost-early", target, note: "The quote shows before the address step.", section_key: "s-5-2", requirement_ids: [I.requirement], reviews: [],
 });
 const guestNote: Schemas["AnnotationOut"] = {
-  id: "guest-path", target: "cart", note: "Guests skip the saved-address branch.", section_key: null, requirement_ids: [], reviews: [],
+  id: "guest-path", target: "cart", note: "Guests skip the bulk-imports branch.", section_key: null, requirement_ids: [], reviews: [],
 };
 
 function design(kind: "user_flow" | "wireframe", versionId = kind === "user_flow" ? I.flowVersion : I.wireVersion, number = 1): Design {

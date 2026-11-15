@@ -45,7 +45,7 @@ test("an approver opens the flow from the tech brief: sandboxed canvas, Approve 
   const panel = inspector(page);
   // qa4-docs-share-42: the status pills show once, in the page header; the panel names the staleness on its own line.
   await expect(panel).toContainText("May be stale");
-  await expect(page.getByTestId("stale-notice").filter({ visible: true })).toContainText('Section "5.2 Shipping step" changed in Self-serve checkout PRD');
+  await expect(page.getByTestId("stale-notice").filter({ visible: true })).toContainText('Section "5.2 Shipping step" changed in Annual billing PRD');
   await expect(panel.getByRole("button", { name: "Approve" })).toBeDisabled();
   await expect(page.getByTestId("stale-notice").filter({ visible: true }).getByRole("link", { name: "Open the tech brief" })).toHaveAttribute("href", BRIEF);
 

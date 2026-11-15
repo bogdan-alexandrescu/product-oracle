@@ -106,7 +106,7 @@ const CHECKOUT_V1: SectionSeed[] = [
   {
     key: "title",
     level: 1,
-    heading: "Self-serve checkout PRD",
+    heading: "Annual billing PRD",
     body: "This document proposes a redesign of the web checkout so that first-time buyers can finish an order without surprises. It is written for the product, design and storefront engineering teams.",
   },
   {
@@ -125,7 +125,7 @@ const CHECKOUT_V1: SectionSeed[] = [
     key: "users",
     level: 2,
     heading: "3. Users and jobs",
-    body: "- **First-time buyer:** wants to know the full price before committing any personal details.\n- **Returning buyer:** wants to reuse a imported row and pay in as few steps as possible.\n- **Support agent:** wants fewer tickets about unexpected shipping charges.",
+    body: "- **First-time buyer:** wants to know the full price before committing any personal details.\n- **Returning buyer:** wants to reuse an imported row and pay in as few steps as possible.\n- **Support agent:** wants fewer tickets about unexpected shipping charges.",
   },
   {
     key: "scope",
@@ -547,7 +547,7 @@ const SPEC_ORACLE_CITATIONS: CitationSeed[] = [
     id: "prd-checkout",
     source: "upload",
     ref: "/documents/checkout-redesign/v/1",
-    title: "Self-serve checkout PRD, version 1",
+    title: "Annual billing PRD, version 1",
     excerpt: "Show the shipping cost on the cart, before the address step.",
     retrieved_at: "2026-10-17T09:00:00Z",
   },
@@ -568,14 +568,14 @@ const SPEC_TITLE = (kind: string): SectionSeed => ({
   key: "spec",
   level: 1,
   heading: `Early shipping cost: ${kind}`,
-  body: `${kind[0].toUpperCase()}${kind.slice(1)} for Early shipping cost, from the approved PRD Self-serve checkout PRD (version 1) [c:prd-checkout]. Product requirements come from that PRD; the engineering approach is proposed until an engineering approver approves this version.`,
+  body: `${kind[0].toUpperCase()}${kind.slice(1)} for Early shipping cost, from the approved PRD Annual billing PRD (version 1) [c:prd-checkout]. Product requirements come from that PRD; the engineering approach is proposed until an engineering approver approves this version.`,
 });
 const SPEC_SUMMARY: SectionSeed = { key: "summary", level: 2, heading: "Summary", body: "Shoppers see the shipping cost on the cart page, before the address step." };
 const SPEC_REQUIREMENTS: SectionSeed = {
   key: "requirements",
   level: 2,
   heading: "Product requirements",
-  body: `${REQUIREMENTS_NOTE}\n\nFrom PRD [Self-serve checkout PRD](/documents/checkout-redesign/v/1), version 1.\n\n- **req-shipping-cost: Show shipping cost on the cart** (requirement id \`5b0c…\`)\n  PRD section: [5.2 Shipping options](/documents/checkout-redesign/v/1#s-5-2)`,
+  body: `${REQUIREMENTS_NOTE}\n\nFrom PRD [Annual billing PRD](/documents/checkout-redesign/v/1), version 1.\n\n- **req-shipping-cost: Show shipping cost on the cart** (requirement id \`5b0c…\`)\n  PRD section: [5.2 Shipping options](/documents/checkout-redesign/v/1#s-5-2)`,
 };
 const SPEC_ROLLOUT: SectionSeed = {
   key: "rollout-notes",
@@ -690,7 +690,7 @@ const OUTREACH_V5 = revise(OUTREACH_V4, {
 export const DOCUMENTS: DocumentSeed[] = [
   {
     slug: "checkout-redesign",
-    title: "Self-serve checkout PRD",
+    title: "Annual billing PRD",
     template: "oracle-default",
     template_version: "1",
     versions: [

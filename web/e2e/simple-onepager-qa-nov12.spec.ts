@@ -18,7 +18,7 @@ import { expect, test, type Page } from "./test";
  * fails_when = the header says "No dates yet".
  * OP10: protects = a "What we will build" line naming no feature code is flagged "Not in the
  * Ground Truth", a coded one is not; fails_when = an uncoded feature shows with no flag.
- * OP11: protects = Referral link' "Stale prices" risk shows once in "Risks and open decisions";
+ * OP11: protects = Referral link's "Stale prices" risk shows once in "Risks and open decisions";
  * fails_when = the top risk and its risk line both show.
  */
 
@@ -112,7 +112,7 @@ test.describe("desktop", () => {
     await expect(bets.getByTestId("not-in-gt")).toHaveCount(0);
   });
 
-  test("OP11: Referral link' stale prices risk shows once", async ({ page }) => {
+  test("OP11: Referral link's stale prices risk shows once", async ({ page }) => {
     await login(page);
     await openFromList(page, "Referral link PRD");
     const risks = page.getByRole("region", { name: "Risks and open decisions" });

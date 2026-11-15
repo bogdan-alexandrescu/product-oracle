@@ -13,7 +13,7 @@ import { login } from "./helpers";
  * whose roadmap v1 is in review by default; in the "roadmap-diff" scenario v1 is approved and
  * its draft 2 changes, moves and drops items), a PRD waiting at the feature set checkpoint
  * (Referral link), one at the engineering check with a lead named (Clinic outreach) and a
- * never-approved PRD with no roadmap (Self-serve checkout). No test here proves the API's rules;
+ * never-approved PRD with no roadmap (Annual billing). No test here proves the API's rules;
  * each proves what a person sees and does on the screen.
  */
 
@@ -84,8 +84,8 @@ test("PRD cards: stage lines say who the run waits for", async ({ page }) => {
   await expect(card(page, "Referral link PRD").getByTestId("plan-prd-figure")).toHaveText("9 features");
   await expect(card(page, "Usage alerts PRD").getByTestId("plan-prd-stage")).toHaveText("Approved v1");
   await expect(card(page, "Usage alerts PRD").getByTestId("plan-prd-figure")).toHaveText("At risk");
-  // qa4-plan-4: Self-serve checkout has no roadmap document, so no roadmap draft either.
-  await expect(card(page, "Self-serve checkout PRD").getByTestId("plan-prd-stage")).toHaveText("Draft 2 in review");
+  // qa4-plan-4: Annual billing has no roadmap document, so no roadmap draft either.
+  await expect(card(page, "Annual billing PRD").getByTestId("plan-prd-stage")).toHaveText("Draft 2 in review");
   await expect(card(page, "Usage alerts PRD").getByRole("link", { name: "Usage alerts PRD" })).toHaveAttribute("href", "/documents/usage-alerts");
   await expect(card(page, "Usage alerts PRD").getByRole("img", { name: /^Journey 9 of 9/ })).toBeVisible();
   // Seven PRDs in play: five cards, then "+2 more" to the PRDs list.

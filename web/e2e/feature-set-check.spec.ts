@@ -39,7 +39,7 @@ async function seeded(page: Page) {
 test("the feature-set line shows the check, and a blocking problem disables Approve while Request changes works", async ({ page }) => {
   await seeded(page);
   await page.getByTestId("nav-runs").click();
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
 
   const segment = page.getByTestId("segment-feature_set");
@@ -57,7 +57,7 @@ test("the feature-set line shows the check, and a blocking problem disables Appr
   const flags = check.getByTestId("feature-set-flags").getByRole("listitem");
   await expect(flags).toHaveCount(2);
   await expect(flags.filter({ hasText: "bulk-address-edit" })).toContainText("serves no goal, low confidence");
-  await expect(flags.filter({ hasText: "saved-addresses" })).toContainText("new feature");
+  await expect(flags.filter({ hasText: "bulk-import" })).toContainText("new feature");
 
   // The checkpoint: Approve and continue is disabled with the approve gate's reason.
   const cp = page.getByTestId("checkpoint-feature_set");
@@ -77,7 +77,7 @@ test("the feature-set line shows the check, and a blocking problem disables Appr
 test("the feature set's blocking problem is waived under the decision, and Approve and continue is enabled", async ({ page }) => {
   await seeded(page);
   await page.getByTestId("nav-runs").click();
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").click();
   const cp = page.getByTestId("checkpoint-feature_set");
   const approve = cp.getByRole("button", { name: "Approve and continue" });
   await expect(approve).toBeDisabled();

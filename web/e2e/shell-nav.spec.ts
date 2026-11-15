@@ -45,8 +45,8 @@ test("the browser tab names the page: signed out, Home, a document", async ({ pa
   await login(page);
   await expect(page).toHaveTitle("Home · Product Oracle");
   await page.goto(DOC);
-  await expect(page.getByRole("heading", { level: 1, name: /Self-serve checkout PRD/ })).toBeVisible();
-  await expect(page).toHaveTitle("Self-serve checkout PRD · Product Oracle");
+  await expect(page.getByRole("heading", { level: 1, name: /Annual billing PRD/ })).toBeVisible();
+  await expect(page).toHaveTitle("Annual billing PRD · Product Oracle");
   // A section's tab is named for itself and its section in the tab (qa-shell-3), for its
   // section on the phone header.
   await page.goto("/plan/dates");
@@ -203,7 +203,7 @@ test.describe("phone", () => {
       await expect(title, path).toHaveText(name);
     }
     await page.goto(DOC);
-    await expect(title).toContainText("Self-serve checkout PRD");
+    await expect(title).toContainText("Annual billing PRD");
   });
 
   test("More: a backdrop, Escape, a tap outside and a swipe down close it; focus goes in and back; no account controls", async ({ page }) => {

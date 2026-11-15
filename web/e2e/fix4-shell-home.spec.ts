@@ -23,11 +23,11 @@ for (const [name, viewport] of [
 
     test("qa-shell-22: the selected PRD names its open feedback and its sections not reviewed apart", async ({ page }) => {
       await login(page);
-      const checkout = page.getByTestId("home-in-flight-table").getByTestId("flight-row").filter({ hasText: "Self-serve checkout PRD" });
+      const checkout = page.getByTestId("home-in-flight-table").getByTestId("flight-row").filter({ hasText: "Annual billing PRD" });
       // A phone shows the inspector after a tap (qa-company-32).
       if (name === "phone") await checkout.click();
       const inspector = page.getByTestId("home-inspector");
-      await expect(inspector.getByRole("heading", { name: "Self-serve checkout PRD" })).toBeVisible();
+      await expect(inspector.getByRole("heading", { name: "Annual billing PRD" })).toBeVisible();
       await expect(inspector.getByTestId("stat-open").locator("dt")).toHaveText("Your open feedback");
       const legend = inspector.getByTestId("inspector-sections");
       await expect(legend).toContainText("Not reviewed");

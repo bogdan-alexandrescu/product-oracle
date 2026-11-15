@@ -47,7 +47,7 @@ for (const [name, size] of [
     await openDates(page);
     await expect(page.getByTestId("dates-prd")).toHaveText(/^The Now items of Usage alerts PRD v\d+$/);
     await expect(dateRow(page, "shipping-step").getByTestId("date-proposed")).toHaveText("Nov 30 · Estimate: shipping step");
-    await expect(dateRow(page, "saved-addresses").getByTestId("date-proposed")).toHaveText("Dec 11 · Capacity plan: Q4 checkout");
+    await expect(dateRow(page, "bulk-import").getByTestId("date-proposed")).toHaveText("Dec 11 · Capacity plan: Q4 checkout");
     await expect(dateRow(page, "shipping-step")).toContainText("PRD section: Shipping");
     await expect(dateRow(page, "price-early")).toContainText("PRD section: Pricing");
     const table = page.getByRole("region", { name: "Now items" });
@@ -108,7 +108,7 @@ test("dates: Ask the architect in the panel is a button like the others", async 
   // protects=qa4-work-55 on the Engineering dates; fails_when=Ask the architect is a ghost (grey text) button.
   await page.setViewportSize(DESKTOP);
   await openDates(page);
-  await dateRow(page, "saved-addresses").getByRole("button").first().click();
+  await dateRow(page, "bulk-import").getByRole("button").first().click();
   const panel = page.getByTestId("dates-inspector");
   await expect(panel).toContainText("Dec 11 · Capacity plan: Q4 checkout");
   await expect(panel.getByRole("button", { name: "Ask the architect" })).toHaveAttribute("data-variant", "secondary");

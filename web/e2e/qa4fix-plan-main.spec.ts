@@ -178,15 +178,15 @@ test.describe("desktop: one approval state", () => {
 
   test("qa4-plan-4: a PRD with no roadmap document shows no roadmap draft on the Plan", async ({ page }) => {
     await openPlan(page);
-    const card = page.getByTestId("plan-prd-card").filter({ hasText: "Self-serve checkout PRD" });
+    const card = page.getByTestId("plan-prd-card").filter({ hasText: "Annual billing PRD" });
     await expect(card.getByTestId("plan-prd-stage")).toHaveText("Draft 2 in review");
     await expect(card).not.toContainText("roadmap draft");
     await expect(row(page, "Self-serve checkout")).toHaveCount(0);
     await page.getByRole("group", { name: "Group by" }).getByRole("button", { name: "PRD" }).click();
     await expect(page.getByTestId("plan-group").filter({ visible: true })).toHaveText(["Usage alerts PRD · 7"]);
-    // Documents lists no Self-serve checkout roadmap either.
+    // Documents lists no Annual billing roadmap either.
     await page.getByTestId("plan-tabs").filter({ visible: true }).getByRole("link", { name: "Roadmap documents" }).click();
-    await expect(page.getByTestId("roadmap-row").filter({ hasText: "Self-serve checkout" })).toHaveCount(0);
+    await expect(page.getByTestId("roadmap-row").filter({ hasText: "Annual billing" })).toHaveCount(0);
   });
 
   test("qa4-plan-22: approved version 1 and draft 2 are named one way on the table, Edit plan and History", async ({ page }) => {

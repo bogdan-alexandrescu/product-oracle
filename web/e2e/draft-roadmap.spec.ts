@@ -61,7 +61,7 @@ test("a PRD version has Document and Roadmap 4 tabs; Roadmap shows 3 Now, 1 Next
   await expect(groups.nth(2)).toHaveAttribute("data-horizon", "later");
   await expect(pane.locator('[data-testid="roadmap-group"][data-horizon="now"]')).toHaveCount(1);
 
-  const saved = row(page, "saved-addresses");
+  const saved = row(page, "bulk-import");
   await expect(saved).toContainText("Bulk import");
   await expect(saved.getByTestId("draft-roadmap-chips")).toHaveText("Date unverified");
   // The other rows carry no problem chip.
@@ -147,7 +147,7 @@ test("Derive and the owner switch by role; unticking the switch persists across 
 test("Open PRD section goes to the Document tab with the item's section open", async ({ page }) => {
   await login(page);
   await page.goto(`${PRD}/v/2/roadmap`);
-  await row(page, "saved-addresses").getByRole("link", { name: "Open PRD section" }).click();
+  await row(page, "bulk-import").getByRole("link", { name: "Open PRD section" }).click();
   await expect(page).toHaveURL(new RegExp(`${PRD}/v/2#s-5-3$`));
   await expect(visible(page, "version-tab-document")).toHaveAttribute("aria-current", "page");
   await expect(section(page, "s-5-3")).toBeVisible();
@@ -170,7 +170,7 @@ test.describe("phone", () => {
       const b = (await visible(page, t).boundingBox())!;
       expect(b.x + b.width).toBeLessThanOrEqual(390);
     }
-    const saved = row(page, "saved-addresses");
+    const saved = row(page, "bulk-import");
     await expect(saved).toBeVisible();
     // Stacked: the row is one card no wider than the screen.
     const r = (await saved.boundingBox())!;

@@ -66,7 +66,7 @@ test("E-15: a version without a brief names the PRD by its title", async ({
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2/present");
   await expect(page.getByTestId("present-mode")).toContainText(
-    "Version 2 of Self-serve checkout PRD has no brief to present: open the full PRD instead.",
+    "Version 2 of Annual billing PRD has no brief to present: open the full PRD instead.",
   );
   await expect(page.getByTestId("present-mode")).not.toContainText(
     "checkout-redesign",

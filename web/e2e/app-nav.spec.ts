@@ -68,7 +68,7 @@ test("app shell: each destination routes to its page", async ({ page }) => {
   }
 
   // A document page keeps PRDs highlighted.
-  await page.getByRole("link", { name: "Self-serve checkout PRD" }).click();
+  await page.getByRole("link", { name: "Annual billing PRD" }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign/);
   await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
 });
@@ -229,7 +229,7 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
   // so the bar names where it is instead of cutting the title a second time (qa-docs-78).
   await page.goto("/documents/checkout-redesign/v/2");
   // The page's own H1 (its sections draw an H1 of their own once they load).
-  await expect(page.getByRole("heading", { level: 1, name: /Self-serve checkout PRD/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Annual billing PRD/ })).toBeVisible();
   await expect(title).toHaveText("PRDs");
 
   const user = bar.getByTestId("phone-user-menu");

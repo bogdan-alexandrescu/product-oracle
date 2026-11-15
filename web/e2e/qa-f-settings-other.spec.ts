@@ -10,9 +10,9 @@ import { login, signOut } from "./helpers";
  */
 
 const PHONE = { width: 390, height: 844 };
-const PRD = "Self-serve checkout PRD";
+const PRD = "Annual billing PRD";
 
-/** Deletes Self-serve checkout PRD from PRDs; returns how the dialog named its first run. */
+/** Deletes Annual billing PRD from PRDs; returns how the dialog named its first run. */
 async function deletePrd(page: Page): Promise<string> {
   await page.goto("/documents");
   const row = page.getByTestId("document-row").filter({ hasText: PRD });

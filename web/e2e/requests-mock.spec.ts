@@ -18,7 +18,7 @@ const GOALS = [
   { id: "e1000000-0000-4000-8000-000000000002", key: "g.retention", title: "Keep teams", status: "confirmed" },
   { id: "e1000000-0000-4000-8000-000000000003", key: "g.idea", title: "An idea", status: "proposed" },
 ];
-const FEATURES = [{ id: "f1000000-0000-4000-8000-000000000001", key: "f.saved-addresses", title: "Bulk import" }];
+const FEATURES = [{ id: "f1000000-0000-4000-8000-000000000001", key: "f.bulk-import", title: "Bulk import" }];
 
 type Role = RequestsContext["role"];
 

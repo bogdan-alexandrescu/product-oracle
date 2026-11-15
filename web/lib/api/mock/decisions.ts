@@ -187,13 +187,13 @@ export function seedDecisions(ctx: DecisionsContext): DecisionsDb {
   };
   const longAgo = (days: number) => `${day(-days)}T09:00:00Z`;
   add({
-    title: "Publish Self-serve checkout PRD v2",
+    title: "Publish Annual billing PRD v2",
     origin: "version_approval",
     approver_id: owner,
     status: "decided",
     options: [option("publish", "Publish"), option("keep_in_review", "Keep in review")],
     chosen_option: "publish",
-    rationale: "Approved version 2 of Self-serve checkout PRD",
+    rationale: "Approved version 2 of Annual billing PRD",
     context: "Readiness at approval: 9 passed, 1 warned",
     expected_outcome: "See the document's success metrics",
     decided_by: owner,

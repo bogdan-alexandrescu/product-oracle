@@ -131,8 +131,8 @@ test.describe("desktop", () => {
 
   test("qa4-docs-26: the Delete dialog names each run by its day and what it wrote", async ({ page }) => {
     await openList(page);
-    await rowAction(page, "Self-serve checkout PRD", "Delete…");
-    const dialog = page.getByRole("dialog", { name: "Delete Self-serve checkout PRD" });
+    await rowAction(page, "Annual billing PRD", "Delete…");
+    const dialog = page.getByRole("dialog", { name: "Delete Annual billing PRD" });
     const goes = dialog.getByTestId("delete-dependents");
     await expect(goes).toBeVisible();
     const runs = goes.getByTestId("delete-run");

@@ -599,7 +599,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * v2, a draft with a new "3. Spend limits" section whose ready draft items move Behaviour from
  * Now to Next, keep Success metrics and add Spend limits (Now) (E3b);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
- * problem (C6, saved-addresses);
+ * problem (C6, bulk-import);
  * "feature-set-two" as "feature-set" with a second blocking problem of the same code on the same
  * feature (each waived on its own, with its own reason);
  * "feature-set-names" as "feature-set" with problems naming a requirement, a goal and a feature whose
@@ -618,7 +618,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * approver, holding the draft (walk 2 problem 19);
  * "draft-gate" as the default company where Oracle reads a critical blocker in every new
  * brief, so drafting waits until it is answered or an owner accepts its risk (C5);
- * "late-answers" as "before-drafting" with that brief drafting into Self-serve checkout: an answer
+ * "late-answers" as "before-drafting" with that brief drafting into Annual billing: an answer
  * given now becomes a feedback item on the PRD (C5 late answers); its success-metric gap is a
  * finding shared in full;
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
@@ -1304,7 +1304,7 @@ function seedSimpleHomeOnePrdScenario(): Db {
  * CLD's production walk (#723, 2026-10-27), the "simple-walk" scenario: "simple-home-one-prd"
  * whose Guided setup items carry milestone texts with their notes appended, as real roadmaps
  * do ("M1 · Measure it, make it safe (the usage report needs the export); ..."), its one-pager's slice
- * alike with a long problem line, and Self-serve checkout started from an empty skeleton (the
+ * alike with a long problem line, and Annual billing started from an empty skeleton (the
  * template's guidance only). Invented data.
  */
 function seedSimpleWalkScenario(): Db {
@@ -1907,7 +1907,7 @@ function seedReportDraftItemScenario(): Db {
 
 /**
  * plan-open-from-simple "plan-same-key" (./roadmap.ts): the default company plus the Checkout
- * redesign roadmap, built from Self-serve checkout (v1 approved, draft 2 from PRD v2), on Simple
+ * redesign roadmap, built from Annual billing (v1 approved, draft 2 from PRD v2), on Simple
  * with Free shipping threshold alert, whose key Usage alerts' roadmap holds for another item.
  * Usage alerts' roadmap v1 is approved, so its item stays on the Plan with Approved only while
  * the Checkout one, only in draft 2, does not.
@@ -1919,7 +1919,7 @@ function seedPlanSameKeyScenario(): Db {
   alerts.status = "approved";
   const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
   const at = "2026-10-20T09:00:00Z";
-  const roadmap: DocumentRow = { id: uuid(), slug: "checkout-redesign-roadmap", title: "Self-serve checkout roadmap", status: "in_review", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at };
+  const roadmap: DocumentRow = { id: uuid(), slug: "checkout-redesign-roadmap", title: "Annual billing roadmap", status: "in_review", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at };
   db.documents.push(roadmap);
   for (const n of [1, 2] as const) {
     const pv = db.versions.find((v) => v.document_id === prd.id && v.number === n)!;
@@ -1929,7 +1929,7 @@ function seedPlanSameKeyScenario(): Db {
     db.versions.push(v);
   }
   const rm = seedSimpleRoadmap();
-  (rm.extra_roadmaps ??= {})[roadmap.slug] = { title: roadmap.title, prd: "Self-serve checkout", track: "checkout", track_title: "Self-serve checkout track" };
+  (rm.extra_roadmaps ??= {})[roadmap.slug] = { title: roadmap.title, prd: "Annual billing", track: "checkout", track_title: "Annual billing track" };
   rm.items.push({ key: SAME_KEY_ITEM.key, title: SAME_KEY_ITEM.title, horizon: "now", roadmap: roadmap.slug, track: "checkout", confidence: "medium", start: 10, end: 40, source: "typed" });
   rm.ids[SAME_KEY_ITEM.key] = stableUuid(`simple-item/${SAME_KEY_ITEM.key}`);
   db.simple_roadmap = rm;
@@ -2765,13 +2765,13 @@ function scopeToBaseline(db: Db, scope: StoredScope, by: string) {
 /**
  * C8 "priority-order" scenario: two runs waiting at the priority stop (./runs.ts
  * seedPriorityRuns), one for the Bulk import PRD, and a run order saved for the
- * Self-serve checkout PRD.
+ * Annual billing PRD.
  */
 function seedPriorityOrder(): Db {
   const db = seed();
   const at = "2026-10-18T09:00:00Z";
   db.documents.push({
-    id: uuid(), slug: "saved-addresses", title: "Bulk import PRD", status: "draft", kind: "prd",
+    id: uuid(), slug: "bulk-import", title: "Bulk import PRD", status: "draft", kind: "prd",
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
   seeded("priority-order", () => seedPriorityRuns(db.runs!, runsContext(db)));
@@ -3069,7 +3069,7 @@ function seed(): Db {
   const ver = (slug: string, n: number) => findVersion(db, docs.get(slug)!, n)!;
   const at = (iso: string) => ({ created_at: iso });
 
-  // Self-serve checkout: v1 was reviewed, v2 answered that feedback.
+  // Annual billing: v1 was reviewed, v2 answered that feedback.
   const c1 = ver("checkout-redesign", 1);
   addComment(db, c1, {
     section_key: "problem",
@@ -6988,7 +6988,7 @@ function goalLinks(db: Db): V2Db["section_links"] {
 }
 
 /**
- * v2 screen 3 "evidence" scenario: Self-serve checkout PRD v2's sections linked to baseline
+ * v2 screen 3 "evidence" scenario: Annual billing PRD v2's sections linked to baseline
  * evidence (one from a removed source, one behind a claim), a restricted source item, a
  * feature and a stale link to a proposed one; and one link on the approved Usage alerts v1.
  */

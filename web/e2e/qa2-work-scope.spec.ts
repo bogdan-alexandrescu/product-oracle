@@ -25,7 +25,7 @@ async function seeded(page: Page, scenario: "feature-set" | "scope-review", emai
 /** Runs › Bulk import PRD › Review feature set, as a person goes there. */
 async function openReview(page: Page) {
   await page.goto("/runs");
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').filter({ visible: true }).getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').filter({ visible: true }).getByRole("link").first().click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+/);
@@ -91,7 +91,7 @@ test.describe("desktop", () => {
     await row(page, "Bulk import").getByTestId("feature-title").click();
     await expect(inspector(page)).toContainText("A goal not in the Ground Truth");
     const text = await page.locator("main").innerText();
-    for (const key of ["repeat-checkout", "fewer-failed-deliveries", "shared-address-book-export", "bulk-address-edit", "saved-addresses"]) expect(text).not.toContain(key);
+    for (const key of ["repeat-checkout", "fewer-failed-deliveries", "shared-address-book-export", "bulk-address-edit", "bulk-import"]) expect(text).not.toContain(key);
   });
 
   test("rirs-3: an inspector requirement shows its text in full, the buttons below it", async ({ page }) => {

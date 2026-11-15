@@ -24,7 +24,7 @@ import { login, openSeeded, seedConsoleHeld, seedRun } from "./helpers";
  *   no_claim=why the review could not be read.
  * - gate-names: protects=the feature set's gate rows name a requirement, a goal and a feature
  *   whose key holds a non-ASCII letter by name, as the API does (api/tests/test_checkpoint_gate_refs.py);
- *   fails_when=a row shows "retention-rate", "saved-addresses-pick" or "café-pickup";
+ *   fails_when=a row shows "retention-rate", "bulk-import-pick" or "café-pickup";
  *   no_claim=the API's own check.
  */
 
@@ -229,7 +229,7 @@ test("the feature set's gate rows name each requirement, goal and feature, never
   await login(page);
   await page.getByTestId("nav-runs").click();
   await page
-    .locator('[data-testid="run-row"][data-document="saved-addresses"]')
+    .locator('[data-testid="run-row"][data-document="bulk-import"]')
     .getByRole("link")
     .click();
   const gate = page
@@ -245,7 +245,7 @@ test("the feature set's gate rows name each requirement, goal and feature, never
   await expect(gate).toContainText(
     "Address labels needs Café pickup, which is not in the feature set or the Ground Truth",
   );
-  for (const key of ["saved-addresses-pick", "retention-rate", "café-pickup"]) {
+  for (const key of ["bulk-import-pick", "retention-rate", "café-pickup"]) {
     await expect(gate).not.toContainText(key);
   }
 });

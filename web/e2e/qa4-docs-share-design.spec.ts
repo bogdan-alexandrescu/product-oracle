@@ -80,10 +80,10 @@ test.describe("desktop", () => {
     await openDesign(page, FLOW, "approver@example.com");
     const meta = inspector(page).getByTestId("version-meta");
     const depends = meta.locator("div").filter({ has: page.getByText("Depends on", { exact: true }) }).last();
-    await expect(depends).toContainText("Self-serve checkout PRD");
+    await expect(depends).toContainText("Annual billing PRD");
     await expect(depends).not.toContainText("changed");
     const stale = meta.locator("div").filter({ has: page.getByText("May be stale", { exact: true }) }).last();
-    await expect(stale).toContainText('Section "5.2 Shipping step" changed in Self-serve checkout PRD');
+    await expect(stale).toContainText('Section "5.2 Shipping step" changed in Annual billing PRD');
   });
 
   test("qa4-docs-share-44: the PRD overview calls a technical brief by that name", async ({ page }) => {

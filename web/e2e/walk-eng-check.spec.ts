@@ -160,7 +160,7 @@ test("note focus: focusing Note to the agents keeps the list where it was and th
   await withScenario(page, "scope-review");
   await login(page, "approver@example.com");
   await page.getByTestId("nav-runs").click();
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").first().click();
   await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page.getByTestId("scope-row").first()).toBeVisible();
   await page.getByRole("button", { name: /^All/ }).click();
@@ -194,7 +194,7 @@ async function openFeatureSet(page: Page) {
   await withScenario(page, "scope-review");
   await login(page, "approver@example.com");
   await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").first().click();
   await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page.getByTestId("scope-row").first()).toBeVisible();
 }
@@ -209,14 +209,14 @@ test("left out: a feature the set leaves out shows the goal it serves and Left o
   await expect(out.getByTestId("row-requirements")).toHaveText("Left out");
   await expect(scopeRow(page, "address-sharing").getByTestId("goal-chip")).toHaveText("Growth");
   // A goal's name is never cut: the chip is as wide as its text.
-  const chip = scopeRow(page, "saved-addresses").getByTestId("goal-chip").first();
+  const chip = scopeRow(page, "bulk-import").getByTestId("goal-chip").first();
   expect(await chip.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
 });
 
 test("evidence by name: the feature panel names each source, never a bare id", async ({ page }) => {
   await openFeatureSet(page);
   await page.getByRole("button", { name: /^All/ }).click();
-  await scopeRow(page, "saved-addresses").getByTestId("feature-title").click();
+  await scopeRow(page, "bulk-import").getByTestId("feature-title").click();
   const evidence = page.getByTestId("inspector-evidence").filter({ visible: true });
   await expect(evidence.getByRole("listitem")).toHaveText(["Checkout interviews, September", "Support tickets: retyped addresses"]);
   await expect(evidence).not.toContainText("58a87cc0");
@@ -236,8 +236,8 @@ test("plain requirement: a requirement reads without the agents' stage and quest
   await page.getByRole("button", { name: /^All/ }).click();
   await scopeRow(page, "address-edit").getByTestId("feature-title").click();
   const req = page.getByTestId("inspector-requirements").filter({ visible: true }).getByTestId("requirement-address-edit-inline");
-  await expect(req).toContainText("A imported row is edited in place at checkout");
+  await expect(req).toContainText("An imported row is edited in place at checkout");
   await expect(req).not.toContainText(/stage 3|Q8|awaiting the founder/);
   // Only the pointers go: "stage 2 of rollout" is the requirement's own words.
-  await expect(req).toContainText("A imported row is edited in place at checkout and ships in stage 2 of rollout");
+  await expect(req).toContainText("An imported row is edited in place at checkout and ships in stage 2 of rollout");
 });

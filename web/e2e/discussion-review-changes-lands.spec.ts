@@ -81,7 +81,7 @@ test("with no change open, the row offers no Review changes", async ({ page }) =
     await expect(open).toHaveCount(n);
   }
 
-  // Back in the Inbox: the other two rows still offer Review changes, Referral link' none.
+  // Back in the Inbox: the other two rows still offer Review changes, Referral link's none.
   await page.goto("/inbox");
   const offered = page.getByRole("link", { name: "Review changes" }).filter({ visible: true });
   await expect(offered).toHaveCount(2);

@@ -71,8 +71,8 @@ for (const [name, viewport] of VIEWPORTS) {
       await openTechBrief(page, "Keep form state on back navigation");
 
       // 18: the PRD is at v2 now; the link opens it and says the brief was written for v1.
-      const back = page.locator("[data-page-header]").getByRole("link", { name: /Self-serve checkout PRD/ });
-      await expect(back).toContainText("Self-serve checkout PRD v2 · written for v1");
+      const back = page.locator("[data-page-header]").getByRole("link", { name: /Annual billing PRD/ });
+      await expect(back).toContainText("Annual billing PRD v2 · written for v1");
       await expect(back).toHaveAttribute("href", "/documents/checkout-redesign");
 
       // 19: the approach's steps are a list of three, not " - " inside one paragraph.

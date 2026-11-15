@@ -22,7 +22,7 @@ async function openRun(page: Page) {
   await page.addInitScript((key) => localStorage.setItem(key, "feature-set"), MOCK_SCENARIO_KEY);
   await login(page);
   await page.getByTestId("nav-runs").click();
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").click();
   await expect(page).toHaveURL(new RegExp(`/runs/${RUN}$`));
 }
 

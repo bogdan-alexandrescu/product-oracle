@@ -77,7 +77,7 @@ test("a card answered at the feature set shows under that stop with the feature'
   await withScenario(page, "scope-review");
   await login(page, "approver@example.com");
   await page.getByTestId("nav-runs").click();
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").first().click();
   await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+/);
   const card = page.getByRole("region", { name: "Questions from the agents" }).getByTestId("agent-question").filter({ hasText: "Who edits addresses in bulk" });

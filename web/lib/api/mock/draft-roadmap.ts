@@ -146,9 +146,9 @@ function seedV2(): ItemSeed[] {
     { ...GUEST, horizon: "now", rank: 2 },
     { key: "shipping-step", title: "Shipping step on one screen", outcome: "Buyers choose a shipping option without leaving the step", horizon: "now", section: "s-5-2", rank: 3, confidence: "medium", milestone: { name: "Beta" } },
     {
-      key: "saved-addresses",
+      key: "bulk-import",
       title: "Bulk import",
-      outcome: "Returning buyers pick a imported row instead of typing it",
+      outcome: "Returning buyers pick an imported row instead of typing it",
       horizon: "next",
       section: "s-5-3",
       rank: 4,
@@ -161,7 +161,7 @@ function seedV2(): ItemSeed[] {
 
 const V2_PROBLEMS: DraftRoadmapCheck["problems"] = [
   // As the API's view words it (draft_items.readable_check): no item key, the date month first.
-  { code: "unverified_date", item: "saved-addresses", message: "the Dec 15, 2026 date has no confirmed schedule behind it yet" },
+  { code: "unverified_date", item: "bulk-import", message: "the Dec 15, 2026 date has no confirmed schedule behind it yet" },
 ];
 
 /** The seeded rows: checkout-redesign v1 and v2, ready. */

@@ -109,7 +109,7 @@ test("qa-docs-36: the tech brief names modules and the PRD in words; the rail ma
   expect(await page.getByTestId("brief-code-map").locator(".font-mono").count()).toBe(0);
 
   // The back link names the PRD by its title.
-  const back = page.locator("[data-page-header]").getByRole("link", { name: "Self-serve checkout PRD v2" });
+  const back = page.locator("[data-page-header]").getByRole("link", { name: "Annual billing PRD v2" });
   await expect(back).toHaveAttribute("href", "/documents/checkout-redesign");
 
   // An unanswered question says so in plain words (qa4-docs-53).

@@ -8,7 +8,7 @@ import { login } from "./helpers";
  * v2 screen 3: the Evidence inspector for a PRD version (picks.md 3: C's coverage matrix as
  * the main view, A's section table + inspector as the second view). Driven through the UI
  * on the mock as each role would. The "evidence" scenario adds section links to
- * Self-serve checkout PRD v2 (evidence, a restricted source item, a stale and a claim link)
+ * Annual billing PRD v2 (evidence, a restricted source item, a stale and a claim link)
  * and one to the approved Usage alerts PRD v1.
  */
 
@@ -196,7 +196,7 @@ test("evidence: ?section= naming no section says so and shows all sections again
 test("evidence: a version that does not exist offers the latest", async ({ page }) => {
   await open(page);
   await page.goto(`${DOC}/v/7/evidence`);
-  await expect(page.getByText("Version 7 of Self-serve checkout PRD was not found.")).toBeVisible();
+  await expect(page.getByText("Version 7 of Annual billing PRD was not found.")).toBeVisible();
   await page.getByRole("link", { name: "Go to the latest version (v2)" }).click();
   await expect(page).toHaveURL(/\/v\/2\/evidence$/);
   await expect(page.getByTestId("evidence-matrix")).toBeVisible();

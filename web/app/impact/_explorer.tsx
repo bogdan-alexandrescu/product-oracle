@@ -160,7 +160,7 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
     </>
   );
   // qa-plan-61: one sentence, "Impact: Guided setup", not the title and a suffix run together.
-  // qa4-plan-45: a back link that names the version ("‹ Impact of Self-serve checkout PRD v2")
+  // qa4-plan-45: a back link that names the version ("‹ Impact of Annual billing PRD v2")
   // leaves it out of the title: "Impact: Success metrics section edited".
   const named = !!subject?.where && !!backTo?.label.endsWith(subject.where);
   const title = subject ? `Impact: ${named ? subject.short : subject.title}` : "Impact";
@@ -544,7 +544,7 @@ const BAR: Record<Output["freshness"], string> = {
   under_review: "bg-na",
 };
 
-/** The subject in words (qa-plan-10): "Self-serve checkout PRD v2 › Success metrics section edited". */
+/** The subject in words (qa-plan-10): "Annual billing PRD v2 › Success metrics section edited". */
 function subjectSub(report: Report): string | null {
   const c = report.change;
   return c ? `Recorded ${formatDate(c.created_at)}` : report.preview ? "Preview" : null;
@@ -557,7 +557,7 @@ function subjectHeight(report: Report, subject: SubjectWords): number {
 }
 
 /**
- * The subject in words (qa-plan-10): "Self-serve checkout PRD v2 › Success metrics section edited".
+ * The subject in words (qa-plan-10): "Annual billing PRD v2 › Success metrics section edited".
  * qa-plan-11: it grows to fit its title and date (centred on the subject's row), never clipping a
  * word or running the title into the date.
  */

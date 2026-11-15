@@ -1334,7 +1334,7 @@ export function seedBeforeDrafting(db: V2Db, authorId: string, approverId: strin
       id: uuid(), intake_id: intake.id, gap_id: gap("customer_user").id, question_id: customer.id,
       answer_id: db.answers.find((a) => a.question_id === customer.id)?.id ?? null, kind: "prd_patch",
       title: `Add to the PRD: ${LABEL.customer_user}`,
-      detail: { document: "saved-addresses", base_version: 2, section_key: "context.users", text: `${customer.prompt} Returning buyers on the web shop, signed in.` },
+      detail: { document: "bulk-import", base_version: 2, section_key: "context.users", text: `${customer.prompt} Returning buyers on the web shop, signed in.` },
       status: "proposed", result: {}, created_by: approverId, decided_by: null, decided_at: null, decision_note: null,
       created_at: "2026-10-20T11:00:00Z", updated_at: "2026-10-20T11:00:00Z",
     },

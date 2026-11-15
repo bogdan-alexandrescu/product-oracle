@@ -22,7 +22,7 @@ async function openWhatIf(page: Page, key: string, title: string) {
   await expect(page).toHaveURL(/\/impact\/entities\/[^/?]+$/);
 }
 
-/** PRDs > Self-serve checkout > v2 > Impact. */
+/** PRDs > Annual billing > v2 > Impact. */
 async function openVersionImpact(page: Page) {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
@@ -86,7 +86,7 @@ test.describe("desktop", () => {
     await scenario(page, "impact");
     await openR90Change(page);
     const back = page.getByTestId("impact-back").filter({ visible: true });
-    await expect(back).toHaveText("‹ Impact of Self-serve checkout PRD v2");
+    await expect(back).toHaveText("‹ Impact of Annual billing PRD v2");
     const nav = page.getByRole("navigation", { name: "Oracle" });
     await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
     await expect(nav.getByTestId("nav-baseline")).not.toHaveAttribute("aria-current", "page");

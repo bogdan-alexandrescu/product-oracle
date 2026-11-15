@@ -174,7 +174,7 @@ test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet 
   await sheet(page).getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
-  await expect(page.locator('[data-testid="run-row"][data-document="saved-addresses-for-guests"]')).toHaveCount(1);
+  await expect(page.locator('[data-testid="run-row"][data-document="bulk-import-for-guests"]')).toHaveCount(1);
 
   // Started: the brief is drafting, so Draft with Oracle is gone.
   await page.goto(`/intakes/${id}`);

@@ -22,7 +22,7 @@ function base(other: Person): StoredAgentQuestion[] {
     {
       id: "q1",
       role: "architect",
-      feature: "saved-addresses",
+      feature: "bulk-import",
       question: "Does a way to send an address to the courier exist already, or do we build it?",
       why: "The design needs a send path to the courier. I found a half-built one in the order service but no tests and no caller.",
       options: [
@@ -74,7 +74,7 @@ function more(other: Person): StoredAgentQuestion[] {
     ["analyst", "address-edit", "When an address is edited, do orders already placed keep the old one?", "keep", "Placed orders keep the old address", "update", "Placed orders follow the edit"],
     ["architect", null, "Store delivery notes with the address or with each order?", "address", "With the address", "order", "With each order"],
     ["analyst", null, "Is the deadline the holiday sale on Dec 11, or is a January date acceptable?", "dec", "Dec 11, cut what does not fit", "jan", "January, keep the whole set"],
-    ["architect", "saved-addresses", "How many addresses may one account keep?", "ten", "Up to 10", "any", "No limit"],
+    ["architect", "bulk-import", "How many addresses may one account keep?", "ten", "Up to 10", "any", "No limit"],
     ["analyst", "bulk-edit", "Import from a spreadsheet file, or paste rows into a box?", "file", "A spreadsheet file", "paste", "Paste rows"],
   ];
   return rows.map(([role, feature, question, a, al, b, bl], i) => ({

@@ -5,7 +5,7 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
- * QA pass 4, docs lane: the Evidence, Impact and Quality tabs of Self-serve checkout PRD v2,
+ * QA pass 4, docs lane: the Evidence, Impact and Quality tabs of Annual billing PRD v2,
  * driven as a person would on the mock (invented data).
  */
 
@@ -72,7 +72,7 @@ test.describe("desktop", () => {
     await page.getByRole("group", { name: "Evidence view" }).getByRole("button", { name: "Sections" }).click();
     const table = page.getByRole("grid", { name: "Sections" });
     await expect(table.getByRole("row", { name: /Introduction/ })).toBeVisible();
-    await expect(table.getByRole("row", { name: /Self-serve checkout PRD/ })).toHaveCount(0);
+    await expect(table.getByRole("row", { name: /Annual billing PRD/ })).toHaveCount(0);
   });
 
   test("qa4-docs-56: the column cut at the matrix's right edge fades out into the panel", async ({ page }) => {
@@ -113,7 +113,7 @@ test.describe("desktop", () => {
     const sub = node.getByTestId("lineage-upstream-sub");
     await expect(sub).toHaveText("Section changed in v2");
     await expect(sub).toHaveAttribute("title", "Section changed in v2. Outputs were built on v1.");
-    await expect(graph).not.toContainText("Section of Self-serve checkout PRD v1");
+    await expect(graph).not.toContainText("Section of Annual billing PRD v1");
   });
 
   test("qa4-docs-15: after Ask Oracle to review, the banner says Oracle is on it", async ({ page }) => {
@@ -145,7 +145,7 @@ test.describe("desktop", () => {
     const form = inspector(page).getByTestId("rating-form");
     const picker = form.getByLabel("Add a section");
     await expect(picker.locator("option", { hasText: "Introduction" })).toHaveCount(1);
-    await expect(picker.locator("option", { hasText: "Self-serve checkout PRD" })).toHaveCount(0);
+    await expect(picker.locator("option", { hasText: "Annual billing PRD" })).toHaveCount(0);
     await form.getByRole("button", { name: "Warning" }).click();
     await form.getByLabel("Reason").fill("Only one approach is written down.");
     await picker.selectOption({ label: "Introduction" });

@@ -248,7 +248,7 @@ test("a /simple link opens in Simple for an owner whose saved mode is Detailed",
   await page.goto("/simple/one-pagers");
   await expectSimple(page, "/simple/one-pagers");
   await expect(page.getByRole("heading", { level: 1, name: "One-pagers" })).toBeVisible();
-  await page.getByRole("link", { name: "Self-serve checkout PRD" }).click();
+  await page.getByRole("link", { name: "Annual billing PRD" }).click();
   await expectSimple(page, "/simple/one-pagers/checkout-redesign");
   // S5's one-pager is the page the list opens.
   await expect(page.getByTestId("one-pager")).toBeVisible();

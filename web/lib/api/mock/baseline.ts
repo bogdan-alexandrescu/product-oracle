@@ -89,7 +89,7 @@ export type CitedItem = {
 /** The accepted intake constraint the seed keeps as a suggested blocker (B4). */
 export const SUGGESTED_BLOCKER = {
   id: "a4000000-0000-4000-8000-000000000010",
-  key: "saved-addresses-third-party-policy-4f2a1c",
+  key: "bulk-import-third-party-policy-4f2a1c",
   title: "The carrier's terms forbid keeping a buyer's address for more than 30 days",
 } as const;
 
@@ -1977,8 +1977,8 @@ export function addDuplicateProposals(s: BaselineState, uuid: () => string) {
   const update = (fields: Attrs, reason: string, role?: string) => ({ op: "update", kind: "entity", fields, reason, ...(role ? { role } : {}) });
   push(by("F-06"), update({ attrs: { status: "proposed" } }, "Not committed to yet.", "critic"), "2026-10-16T08:40:00Z");
   const feature = (key: string, title: string, role: string) => ({ op: "create", kind: "entity", fields: { type: "feature", key, title }, reason: "Asked for in the planning call.", role });
-  push(null, feature("f.saved-addresses", "Bulk import", "writer"), "2026-10-16T08:41:00Z");
-  push(null, feature("f.saved-address", "Add imported row", "critic"), "2026-10-16T08:42:00Z");
+  push(null, feature("f.bulk-import", "Bulk import", "writer"), "2026-10-16T08:41:00Z");
+  push(null, feature("f.bulk-imports", "Add bulk imports", "critic"), "2026-10-16T08:42:00Z");
   const link = { src_id: by("F-12").id, dst_id: by("F-05").id, type: "depends_on" };
   push(null, { op: "create", kind: "edge", fields: link, reason: "Shared carts need invites.", role: "writer" }, "2026-10-16T08:43:00Z");
   push(null, { op: "create", kind: "edge", fields: link, reason: "Invites come first.", role: "critic" }, "2026-10-16T08:44:00Z");

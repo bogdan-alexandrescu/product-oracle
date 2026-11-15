@@ -64,7 +64,7 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
   await expect(row).toContainText("Oracle asks");
   await expect(row).toContainText("Before drafting · Clinic waitlist");
   await expect(questionRow(page, TIERS)).toContainText("Priya Raman asks");
-  await expect(questionRow(page, TIERS)).toContainText("Self-serve checkout PRD · Success metrics");
+  await expect(questionRow(page, TIERS)).toContainText("Annual billing PRD · Success metrics");
   // The pending access request (A5, #203 part 3) counts too.
   await expect(badge(page)).toHaveText("13");
 

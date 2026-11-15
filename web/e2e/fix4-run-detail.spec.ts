@@ -59,7 +59,7 @@ test("qa-work-16: an items check with no problems says No problems, capitalised"
 test("qa-work-18, 19: a finished run names its import by the document's title, its file as a raw file", async ({ page }) => {
   await openRun(page, "checkout-redesign");
   const segment = page.getByTestId("segment-timeline").locator("li").filter({ hasText: "Imported as" }).first();
-  await expect(segment.getByRole("link", { name: "Self-serve checkout PRD v2" })).toBeVisible();
+  await expect(segment.getByRole("link", { name: "Annual billing PRD v2" })).toBeVisible();
   await expect(segment).not.toContainText("checkout-redesign v2");
   const files = segment.getByRole("group", { name: "Raw file" });
   await expect(files.getByTestId("artifacts-raw-label")).toHaveText("Raw file:");

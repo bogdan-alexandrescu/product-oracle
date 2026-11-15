@@ -98,9 +98,9 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(panel).toHaveAttribute("aria-label", "Price-drop note on referral links");
         await expect(panel.getByText("Draft", { exact: true })).toBeVisible();
         await expect(panel).toContainText("Jan 11 – Feb 12 · Priya Natarajan");
-        // Where the dates come from, behind its (i); a PRD name ending in s reads "Referral link' run".
+        // Where the dates come from, behind its (i); the PRD's name reads "Referral link's run".
         await expect(panel.getByRole("button", { name: "About these dates" })).toHaveAccessibleDescription(
-          "Dates from Referral link' run (engineering dates). Not approved: it joins the roadmap when the PRD is approved.",
+          "Dates from Referral link's run (engineering dates). Not approved: it joins the roadmap when the PRD is approved.",
         );
         // The panel starts under the toolbar: its right end (Needs a decision) stays in sight.
         const actions = (await page.getByTestId("roadmap-actions").boundingBox())!;

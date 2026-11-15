@@ -97,7 +97,7 @@ for (const size of SIZES) {
       await page.addInitScript((key) => localStorage.setItem(key, "scope-review"), MOCK_SCENARIO_KEY);
       await login(page, "approver@example.com");
       await page.goto("/runs");
-      await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
+      await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").first().click();
       await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
       await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+/);
       const row = page.getByTestId("scope-row").filter({ has: page.getByTestId("feature-title").filter({ hasText: "Bulk edit" }) });

@@ -86,13 +86,13 @@ for (const view of VIEWS) {
         await expect(form).toContainText("Goal: Growth");
         const save = form.getByRole("button", { name: "Save", exact: true });
         await expect(save).toBeDisabled();
-        await form.getByLabel("Name").fill("Referral link");
+        await form.getByLabel("Name").fill("Partner page");
         await form.getByLabel("Outcome: what changes for people").fill("Shoppers pick up where they left off");
         await form.getByLabel("Milestone").selectOption({ index: 1 });
         await expect(save).toBeEnabled();
         await save.click();
-        await expect(note(page)).toContainText("Added Referral link to Growth.");
-        const made = growth.getByTestId("plan-feature").filter({ hasText: "Referral link" });
+        await expect(note(page)).toContainText("Added Partner page to Growth.");
+        const made = growth.getByTestId("plan-feature").filter({ hasText: "Partner page" });
         await expect(made).toBeVisible();
         await expect(made).toContainText("Draft");
         await expect(add.getByRole("button", { name: "+ Add a feature" })).toBeVisible();
@@ -215,15 +215,15 @@ for (const view of VIEWS) {
         const growth = bucket(page, view, "Growth");
         const add = growth.getByTestId("add-task");
         await add.getByRole("button", { name: "+ Add a feature" }).click();
-        await add.getByTestId("task-form").getByLabel("Name").fill("Referral link");
+        await add.getByTestId("task-form").getByLabel("Name").fill("Partner page");
         await add.getByTestId("task-form").getByRole("button", { name: "Save", exact: true }).click();
-        await expect(note(page)).toContainText("Added Referral link to Growth.");
-        const made = (goal: string) => bucket(page, view, goal).getByTestId("plan-feature").filter({ hasText: "Referral link" });
+        await expect(note(page)).toContainText("Added Partner page to Growth.");
+        const made = (goal: string) => bucket(page, view, goal).getByTestId("plan-feature").filter({ hasText: "Partner page" });
         await expect(made("Growth")).toContainText("Draft");
         // No code people know yet: no chip, never the item's raw key.
         await expect(made("Growth").getByTestId("prio-code")).toHaveCount(0);
         const grip = made("Growth").getByTestId("feature-grip");
-        await expect(grip).toHaveAccessibleName("Move Referral link to another goal");
+        await expect(grip).toHaveAccessibleName("Move Partner page to another goal");
         if (size.name === "desktop") {
           await grip.scrollIntoViewIfNeeded();
           const from = (await grip.boundingBox())!;
@@ -234,7 +234,7 @@ for (const view of VIEWS) {
           await expect(bucket(page, view, "Revenue")).toHaveAttribute("data-drop", "");
           // The floating preview: its name and Draft, never the raw key as a chip nor "PM-owned".
           const ghost = page.getByTestId("drag-ghost");
-          await expect(ghost).toContainText("Referral link");
+          await expect(ghost).toContainText("Partner page");
           await expect(ghost).toContainText("Draft");
           await expect(ghost.getByTestId("prio-code")).toHaveCount(0);
           await expect(ghost).not.toContainText("saved-carts");
@@ -248,7 +248,7 @@ for (const view of VIEWS) {
           await page.keyboard.press("Enter");
         }
         const there = size.name === "desktop" ? "Revenue" : "Reliability";
-        await expect(note(page)).toContainText(`Moved Referral link to ${there}.`);
+        await expect(note(page)).toContainText(`Moved Partner page to ${there}.`);
         await expect(made(there)).toContainText("Draft");
         await expect(made("Growth")).toHaveCount(0);
         await note(page).getByRole("button", { name: "Undo" }).click();

@@ -120,9 +120,9 @@ test("the Snapshots panel lists saved snapshots only, each run order with its PR
   await seeded(page);
   await page.goto("/priorities");
   const list = page.getByTestId("snapshot-list");
-  // Seeded: one saved run order (Self-serve checkout) and two proposed ones, never listed.
+  // Seeded: one saved run order (Annual billing) and two proposed ones, never listed.
   await expect(list.getByRole("listitem")).toHaveCount(1);
-  await expect(list).toContainText("Self-serve checkout PRD · approved order");
+  await expect(list).toContainText("Annual billing PRD · approved order");
 
   // Approving a proposed order lists it, with its PRD.
   await page.goto(`/runs/${PRIORITY_RUN}`);

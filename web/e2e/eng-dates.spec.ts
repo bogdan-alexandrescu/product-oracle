@@ -62,7 +62,7 @@ test("inbox and accept: the lead's row counts the Now items and dates to decide,
 test("change: the dialog opens pre-filled from the proposal and saves another basis", async ({ page }) => {
   // protects=Change pre-fills kind, reference and date from the proposal and saves a changed basis; fails_when=the fields are empty, a missing reference saves, or the row does not read "Changed" with the new date; no_claim=the API's 422 wording.
   await openDatesAsLead(page);
-  await row(page, "saved-addresses").getByRole("button", { name: "Change", exact: true }).click();
+  await row(page, "bulk-import").getByRole("button", { name: "Change", exact: true }).click();
   const dialog = page.getByTestId("date-change");
   await expect(page.getByRole("dialog", { name: "Change the date: Bulk import" })).toBeVisible();
   await expect(dialog.getByRole("combobox", { name: "Kind" })).toHaveValue("capacity");
@@ -75,8 +75,8 @@ test("change: the dialog opens pre-filled from the proposal and saves another ba
   await dialog.getByRole("textbox", { name: "Date", exact: true }).fill("2026-12-18");
   await dialog.getByRole("button", { name: "Save date" }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(row(page, "saved-addresses").getByTestId("date-decision")).toHaveText("Changed");
-  await expect(row(page, "saved-addresses").getByTestId("date-proposed")).toContainText("Now Dec 18 · Estimate: ENG-412");
+  await expect(row(page, "bulk-import").getByTestId("date-decision")).toHaveText("Changed");
+  await expect(row(page, "bulk-import").getByTestId("date-proposed")).toContainText("Now Dec 18 · Estimate: ENG-412");
 });
 
 test("no date: a reason is required before it saves", async ({ page }) => {
@@ -102,7 +102,7 @@ test("approve: Approve waits for every dated Now row, then the run succeeds", as
   await noDate(page, "price-early", "Waits on the pricing service rewrite");
   await expect(bar(page).getByTestId("dates-tally")).toHaveText("2 of 3 decided · 1 to decide");
   await expect(approve).toBeDisabled();
-  await accept(page, "saved-addresses");
+  await accept(page, "bulk-import");
   await expect(bar(page).getByTestId("dates-tally")).toHaveText("3 of 3 decided");
   await expect(approve).toBeEnabled();
   await approve.click();
@@ -116,7 +116,7 @@ test("approve with a No date: the Decisions page counts the proposed date taken 
   await openDatesAsLead(page);
   await accept(page, "shipping-step");
   await noDate(page, "price-early", "Waits on the pricing service rewrite");
-  await accept(page, "saved-addresses");
+  await accept(page, "bulk-import");
   await bar(page).getByRole("button", { name: "Approve" }).click();
   await expect(page.getByTestId("run-status").filter({ visible: true })).toHaveText("Succeeded");
   await page.goto("/simple/decisions");

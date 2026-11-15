@@ -28,7 +28,7 @@ test("impact: an owner sees the lineage, picks an output and settles it, then pr
   await expect(page.getByText("Preview: v2 marks nothing stale.")).toBeVisible();
 
   const graph = page.getByRole("region", { name: "Lineage" });
-  await expect(graph.getByTestId("lineage-subject")).toContainText("Self-serve checkout PRD v2");
+  await expect(graph.getByTestId("lineage-subject")).toContainText("Annual billing PRD v2");
   await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Scope" })).toBeVisible();
   await expect(graph.getByTestId("lineage-output")).toHaveCount(7);
 
@@ -112,7 +112,7 @@ test("impact: the table view lists outputs by category with the inspector's depe
   await page.getByRole("complementary", { name: /Bulk import tech brief/ }).getByRole("link", { name: "Recorded change" }).click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
   await expect(page.getByText("Recorded: this change marked these outputs Potentially stale.").filter({ visible: true })).toBeVisible();
-  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Self-serve checkout PRD v2 › Success metrics section edited");
+  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Annual billing PRD v2 › Success metrics section edited");
 });
 
 test("impact: a what-if from a Ground Truth item's drawer", async ({ page }) => {

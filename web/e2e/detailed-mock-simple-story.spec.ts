@@ -28,7 +28,7 @@ test("detailed priorities: every feature is Simple's, by Simple's code and name"
   for (const [code, name] of SIMPLE_FEATURES) {
     await expect(page.getByTestId(`priority-row-${code}`).getByTestId("feature-name")).toContainText(name);
   }
-  await expect(page.getByText("Bulk import from a spreadsheet")).toHaveCount(0);
+  await expect(page.getByText("Saved addresses at checkout")).toHaveCount(0);
 });
 
 /**
@@ -52,7 +52,7 @@ test("detailed ground truth: every coded feature is Simple's and the goals are S
   }
   await expect(page.getByTestId("goal-g.activation")).toContainText("Activation");
   await expect(page.getByTestId("goal-g.paid-conversion")).toContainText("Growth");
-  for (const old of ["Raise activation", "Grow paid conversion", "Guided setup", "Referral link", "Dark mode"]) {
+  for (const old of ["Raise activation", "Grow paid conversion", "Guided setup", "Saved carts", "Dark mode"]) {
     await expect(page.getByText(old)).toHaveCount(0);
   }
 });
@@ -61,12 +61,12 @@ test("detailed ground truth: every coded feature is Simple's and the goals are S
  * detailed-story (review): Detailed's PRDs, discussions and Oracle's actions tell Simple's story too: the PRDs are
  * named for Simple's features and no older story name is left on the PRD list or the Inbox. Invented data.
  */
-const OLD_NAMES = ["Self-serve checkout", "Team invites", "Referral link", "Bulk import", "Public signup", "Self-serve checkout"];
+const OLD_NAMES = ["Checkout redesign", "Team workspaces", "Saved carts", "Saved addresses", "Guest checkout", "One-page checkout"];
 
 test("detailed PRDs: the PRD list names Simple's features, none of the older story's", async ({ page }) => {
   await login(page);
   await page.goto("/documents");
-  for (const prd of ["Self-serve checkout PRD", "Team invites PRD", "Referral link PRD"]) {
+  for (const prd of ["Annual billing PRD", "Team invites PRD", "Referral link PRD"]) {
     await expect(page.getByRole("link", { name: prd }).first()).toBeVisible();
   }
   for (const old of OLD_NAMES) await expect(page.getByText(old)).toHaveCount(0);

@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 /*
  * QA pass 3, docs lane (fix4-docs-share): the tech brief page and a spec's design page
- * /specs/<id>/design/<versionId>, on the mock API's seeded spec: Self-serve checkout PRD →
+ * /specs/<id>/design/<versionId>, on the mock API's seeded spec: Annual billing PRD →
  * "Early shipping cost: technical brief" (v1 potentially stale, v2 the latest) → its user flow
  * and wireframes. Driven through the UI as a person would.
  */
@@ -34,7 +34,7 @@ test.describe("desktop", () => {
     await login(page, "approver@example.com");
     await page.goto(BRIEF_V1);
     const reasons = visible(page, "spec-staleness").getByTestId("spec-staleness-reasons");
-    await expect(reasons).toHaveText('Section "5.2 Shipping step" changed in Self-serve checkout PRD');
+    await expect(reasons).toHaveText('Section "5.2 Shipping step" changed in Annual billing PRD');
     await expect(visible(page, "spec-staleness")).not.toContainText("s-5-2");
     await expect(visible(page, "spec-staleness")).not.toContainText("checkout-redesign");
   });

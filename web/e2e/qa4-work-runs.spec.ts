@@ -50,7 +50,7 @@ test.describe("desktop", () => {
   });
 
   test("qa4-work-29: a decision reads as a sentence in the panel's normal size", async ({ page }) => {
-    await openRun(page, "Self-serve checkout");
+    await openRun(page, "Annual billing");
     const decision = inspector(page).getByTestId("run-decisions").getByTestId("run-decision");
     await expect(decision).toHaveText("PRD review was skipped: it was turned off when the run started.");
     await expect(decision).toHaveCSS("font-size", "14px");

@@ -196,7 +196,7 @@ test.describe("desktop", () => {
   });
 
   test("a bet's first flow is titled after its line, as Version 1 (qa4-simple-prd-22)", async ({ page }) => {
-    // A bet drawn on Guided setup first: its flow is that PRD's own, never Referral link'.
+    // A bet drawn on Guided setup first: its flow is that PRD's own, never Referral link's.
     await login(page);
     await page.goto("/simple/one-pagers/guided-setup");
     const first = page.locator("li", { hasText: "Invite suggestions from the admin" }).first();
@@ -206,7 +206,7 @@ test.describe("desktop", () => {
     await page.goto("/simple/one-pagers");
     await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Referral link PRD", exact: true }).click();
     await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
-    // vqa B-13: Referral link' one-pager has its own lines; its first flow is its own Version 1.
+    // vqa B-13: Referral link's one-pager has its own lines; its first flow is its own Version 1.
     const line = page.locator("li", { hasText: "Beta: Save cart" }).first();
     await line.getByRole("button", { name: "Draw the flow" }).click();
     await page.getByRole("button", { name: /^Flow for “Beta: Save cart/ }).click();
