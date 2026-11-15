@@ -5,6 +5,7 @@ import { Suspense, useState, useSyncExternalStore } from "react";
 
 import { DeleteMenu } from "@/components/ArtifactMenu";
 import { Button, Chip, type ChipKind, type Column, confirmInPage, DataTable, type FilterChip, FilterChips, InfoTip, Inspector, InspectorRow, InspectorSection, Notice, Page, PageHeader, PageSkeleton, Panel, Sheet, Split } from "@/components/ds";
+import { Named, NotInGt } from "@/components/simple/FeatureName";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CATEGORY_LABEL } from "@/app/intakes/[id]/_lib";
@@ -78,6 +79,34 @@ function stateOf(o: Outcome): State {
     return o.proposed_assessment ? "due" : "measuring";
   return o.status;
 }
+
+/** outcomes-code: a roadmap item's outcome as every page names its feature: its Ground Truth code, then its title
+ * ("F-21 Saved payment methods"), a title that leads with the code read once (codes.shown); null for an outcome of no
+ * roadmap item, which names no feature. */
+function itemNamed(o: Outcome): { code: string | null; title: string } | null {
+  if (!o.roadmap_item_id && !o.roadmap_item_key) return null;
+  const m = /^([A-Z][A-Z0-9]*-\d+[a-z]?)\s+(\S.*)$/.exec(o.title);
+  const code = o.roadmap_item_code ?? null;
+  return m && (!code || code === m[1]) ? { code: m[1], title: m[2] } : { code, title: o.title };
+}
+
+/** The outcome's name: its item's code and title, flagged when it has no code (FeatureName's Named and NotInGt). */
+function OutcomeName({ o }: { o: Outcome }) {
+  const item = itemNamed(o);
+  if (!item) return <>{o.title}</>;
+  return (
+    <>
+      <Named item={item} />
+      <NotInGt item={item} />
+    </>
+  );
+}
+
+/** "F-21 Saved payment methods": the outcome's name as words, for a label. */
+const outcomeWords = (o: Outcome) => {
+  const item = itemNamed(o);
+  return item?.code ? `${item.code} ${item.title}` : o.title;
+};
 
 /** The API's word for a goal with no metric (quality.capture.UNSET): it has none to show behind an (i). */
 const UNSET = "Not set yet";
@@ -253,7 +282,11 @@ function Outcomes() {
       header: "Item",
       phone: "title",
       wrap: true,
-      cell: (o) => <span className="font-semibold">{o.title}</span>,
+      cell: (o) => (
+        <span className="font-semibold">
+          <OutcomeName o={o} />
+        </span>
+      ),
     },
     {
       key: "goal",
@@ -447,7 +480,7 @@ function Outcomes() {
         {phone && active && (
           <Sheet
             open={sheet}
-            title={active.title}
+            title={outcomeWords(active)}
             onClose={() => setSheet(false)}
             testId="outcome-sheet"
           >
@@ -783,8 +816,8 @@ function OutcomeInspector({
   return (
     <Inspector
       eyebrow="Outcome"
-      title={o.title}
-      label={`Outcome ${o.title}`}
+      title={<OutcomeName o={o} />}
+      label={`Outcome ${outcomeWords(o)}`}
       testId="outcome-inspector"
       // Beside the table it stays in view: taller than the window, it scrolls on its own.
       className="xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto"

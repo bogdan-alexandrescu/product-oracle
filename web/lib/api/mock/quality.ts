@@ -40,6 +40,8 @@ export interface QualityContext {
   trash?: (row: Outcome, reason: string | null) => Schemas["TrashEntryOut"];
   /** A goal's attrs (metric, unit), or null when the entity is not a goal (quality.outcomes._entity). */
   goalAttrs?: (id: string) => Record<string, unknown> | null;
+  /** outcomes-code: an approved plan item's Ground Truth code by its id (oracle.roadmap.codes.code_of), or null. */
+  itemCode?: (roadmapItemId: string) => string | null;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -159,7 +161,7 @@ function outcomeRow(over: Partial<Outcome> & Pick<Outcome, "title" | "goal_id" |
   const at = new Date(Date.now() - 60 * DAY).toISOString();
   return {
     id: crypto.randomUUID(), outcome_entity_id: null, document_id: null, prd_version_id: null, roadmap_version_id: null,
-    roadmap_item_key: null, experiment_id: null, module_keys: [], gap_categories: [], observed: null, assessments: [],
+    roadmap_item_key: null, roadmap_item_code: null, experiment_id: null, module_keys: [], gap_categories: [], observed: null, assessments: [],
     owner_id: owner, created_by: owner, assessed_at: null, lock_version: 1, created_at: at, updated_at: at,
     roadmap_item_id: null, track_id: null, needs_prediction: false, confidence_at_prediction: 0.5, shipped_at: null,
     ship_signal: null, assess_due_on: null, proposed_assessment: null, decision_id: null,
@@ -202,14 +204,14 @@ export function seedOutcomes(owner: string, goalId: string, roadmapVersionId: st
   const shipped = new Date(now - 45 * DAY).toISOString();
   const rows: Outcome[] = [
     outcomeRow({
-      title: "Saved payment methods", goal_id: goalId, status: "tracking", prediction: typed, roadmap_item_key: "saved-payment",
+      title: "Saved payment methods", goal_id: goalId, status: "tracking", prediction: typed, roadmap_item_key: "saved-payment", roadmap_item_code: "F-21",
       gap_categories: ["success_metric"], module_keys: ["M-12"],
       roadmap_version_id: roadmapVersionId, confidence_at_prediction: 0.8, shipped_at: shipped, assess_due_on: isoDay(now - 2 * DAY),
       ship_signal: { kind: "tracker", refs: ["github:example-org/storefront#402", "github:example-org/storefront#403", "github:example-org/storefront#404"], at: shipped, note: null },
       proposed_assessment: { verdict: "partially_held", actual_value: 41, measured_at: isoDay(now - 3 * DAY), observed: "41%", source: "goal_history", note: null },
     }, owner),
     outcomeRow({
-      title: "Guided setup checklist", goal_id: goalId, status: "predicted", needs_prediction: true, roadmap_item_key: "setup-checklist",
+      title: "Guided setup checklist", goal_id: goalId, status: "predicted", needs_prediction: true, roadmap_item_key: "setup-checklist", roadmap_item_code: "F-22",
       roadmap_version_id: roadmapVersionId,
       prediction: { metric: "Accounts that finish setup within 7 days", baseline: "38%", predicted: "Not set yet", threshold: null, by: isoDay(now + 70 * DAY), unit: "%", direction: "increase", baseline_value: 38 },
     }, owner),
@@ -797,6 +799,8 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
         document_id: null, prd_version_id: data.prd_version_id ?? null, roadmap_version_id: data.roadmap_version_id ?? null,
         roadmap_item_key: data.roadmap_item_key ?? null, experiment_id: data.experiment_id ?? null,
         roadmap_item_id: data.roadmap_item_id ?? null,
+        // outcomes-code (quality.outcomes.outs): the roadmap item's Ground Truth code, else none.
+        roadmap_item_code: data.roadmap_item_id ? (ctx.itemCode?.(data.roadmap_item_id) ?? null) : null,
         prediction: { baseline: null, threshold: null, by: null, ...data.prediction },
         module_keys: data.module_keys ?? [], gap_categories: data.gap_categories ?? [], status: "tracking", observed: null,
         needs_prediction: data.prediction.predicted_value == null && !!data.roadmap_item_id,
