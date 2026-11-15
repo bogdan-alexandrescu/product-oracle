@@ -9,12 +9,12 @@ import { login } from "./helpers";
 
 /*
  * QA pass 4 on the brief page, /intakes/<id> (qa-work-2, 3, 28, 29, 30, 31; qa-onboarding-22,
- * 23), driven through the UI on the mock: the default scenario's "Saved addresses" brief (a
+ * 23), driven through the UI on the mock: the default scenario's "Bulk import" brief (a
  * critical question answered "I don't know"), and a new company's first brief ("empty").
  */
 
 const PHONE = { width: 390, height: 844 };
-const SAVED = "Saved addresses";
+const SAVED = "Bulk import";
 const UNSURE = "Which metric shows repeat checkout got faster?";
 
 async function openSaved(page: Page) {

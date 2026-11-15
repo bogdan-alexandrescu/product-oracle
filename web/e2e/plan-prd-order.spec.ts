@@ -29,7 +29,7 @@ test("Plan's PRD cards follow a move on One-pagers and keep their marks", async 
   const shown = await Promise.all(slugs.map((slug) => page.locator(`[data-testid="plan-prd-card"][data-slug="${slug}"]`).innerText()));
   const named = shown.map((text) => order.find((t) => text.startsWith(t)) ?? text);
   expect(named).toEqual(order.filter((t) => named.includes(t)));
-  // The marks stay: Saved carts still waits for you, Usage alerts is still at risk.
-  await expect(card.filter({ hasText: "Saved carts PRD" })).toContainText("waiting for you");
+  // The marks stay: Referral link still waits for you, Usage alerts is still at risk.
+  await expect(card.filter({ hasText: "Referral link PRD" })).toContainText("waiting for you");
   await expect(card.filter({ hasText: "Usage alerts PRD" })).toContainText("At risk");
 });

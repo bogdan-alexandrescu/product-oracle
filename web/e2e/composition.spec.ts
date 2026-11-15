@@ -6,14 +6,14 @@ import { login, signOut } from "./helpers";
  * v2 screen 1 (picks.md 1): the Composition inspector of a PRD. A's module table and 380 px
  * inspector, B's draft diff and Brief/Full outline inside the Confirm step, C's policy board as
  * the Company policy tab (owners edit; everyone else reads it). Confirming sends the base
- * revision and a required reason (never last-write-wins). The mock seeds checkout-redesign with
- * a confirmed rev 1 (pack ai-agent.platform) and leaves team-workspaces without a composition.
+ * revision and a required reason (never last-write-wins). The mock seeds annual-billing with
+ * a confirmed rev 1 (pack ai-agent.platform) and leaves team-invites without a composition.
  */
 
 const EMAILS = { owner: "admin@example.com", approver: "approver@example.com", commenter: "commenter@example.com", viewer: "viewer@example.com" };
 type Who = keyof typeof EMAILS;
 
-async function openComposition(page: Page, who: Who, slug = "checkout-redesign") {
+async function openComposition(page: Page, who: Who, slug = "annual-billing") {
   await login(page, EMAILS[who]);
   await page.goto(`/documents/${slug}`);
   await page.getByRole("link", { name: "Composition" }).first().click();
@@ -93,7 +93,7 @@ test("a stale base revision is refused with the API's message and a Reload", asy
   await inspector(page).getByRole("button", { name: "Add to draft" }).click();
   // Another approver confirms in another tab meanwhile.
   const other = await page.context().newPage();
-  await other.goto("/documents/checkout-redesign/composition");
+  await other.goto("/documents/annual-billing/composition");
   await other.getByTestId("composition-modules").locator('[data-module="platform.tenant-isolation"]').click();
   await other.getByTestId("module-inspector").getByRole("button", { name: "Add to draft" }).click();
   await other.getByRole("button", { name: "Use these modules" }).first().click();
@@ -190,7 +190,7 @@ for (const who of ["viewer", "commenter"] as const) {
 test("a legacy PRD shows Oracle's recommendation and an approver confirms rev 1", async ({ page }) => {
   // protects=a PRD without a composition reads as legacy with the recommendation, and the first
   // confirm is based on no revision; fails_when=a legacy PRD shows an empty table.
-  await openComposition(page, "approver", "team-workspaces");
+  await openComposition(page, "approver", "team-invites");
   await expect(page.getByTestId("legacy-notice")).toContainText("This PRD has no composition yet. Oracle recommends");
   await expect(row(page, "decision.executive")).toBeVisible();
   await page.getByRole("button", { name: "Use these modules" }).click();
@@ -210,8 +210,8 @@ test("the filter can match nothing, and Show all brings the modules back", async
 
 test("a failed load shows the error and Retry reads it again", async ({ page }) => {
   await login(page, EMAILS.viewer);
-  await page.evaluate(() => localStorage.setItem("po-mock-fail-once", "GET /v1/documents/checkout-redesign/composition"));
-  await page.goto("/documents/checkout-redesign/composition");
+  await page.evaluate(() => localStorage.setItem("po-mock-fail-once", "GET /v1/documents/annual-billing/composition"));
+  await page.goto("/documents/annual-billing/composition");
   await expect(page.getByRole("alert").filter({ hasText: "Mock failure" })).toBeVisible();
   await page.getByRole("button", { name: "Retry" }).click();
   await expect(row(page, "decision.executive")).toBeVisible();

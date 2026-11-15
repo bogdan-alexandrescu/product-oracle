@@ -64,7 +64,7 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
   await expect(row).toContainText("Oracle asks");
   await expect(row).toContainText("Before drafting · Clinic waitlist");
   await expect(questionRow(page, TIERS)).toContainText("Priya Raman asks");
-  await expect(questionRow(page, TIERS)).toContainText("Checkout redesign PRD · Success metrics");
+  await expect(questionRow(page, TIERS)).toContainText("Annual billing PRD · Success metrics");
   // The pending access request (A5, #203 part 3) counts too.
   await expect(badge(page)).toHaveText("13");
 
@@ -138,10 +138,10 @@ test("the other paths: I don't know, Defer and Ask someone leave Open; the deleg
 });
 
 test("ask a teammate on a section: Waiting on them, then their answer on the Feedback tab", async ({ page }) => {
-  const question = "Do pilots keep their saved addresses after the trial?";
+  const question = "Do pilots keep their imported rows after the trial?";
   const reply = "Yes, for 90 days after the trial ends.";
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const s = await openSection(page, "metrics");
   await s.getByRole("button", { name: "Actions for 7. Success metrics" }).click();
   await page.getByRole("menuitem", { name: /Ask a teammate/ }).click();
@@ -169,7 +169,7 @@ test("ask a teammate on a section: Waiting on them, then their answer on the Fee
 
   await signOut(page);
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openSection(page, "metrics");
   await openTab(page, "Feedback");
   const answered = page.getByTestId("section-questions").filter({ visible: true }).getByTestId("section-question").filter({ hasText: question });
@@ -250,7 +250,7 @@ test("many people: a teammate past the picker's first 20 is named on the Feedbac
   const question = "Which carriers ship to the islands?";
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "many-people"));
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const s = await openSection(page, "metrics");
   await s.getByRole("button", { name: "Actions for 7. Success metrics" }).click();
   await page.getByRole("menuitem", { name: /Ask a teammate/ }).click();

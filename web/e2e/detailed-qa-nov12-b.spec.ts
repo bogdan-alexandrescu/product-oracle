@@ -93,7 +93,7 @@ test("detailed-b 5: the runs list's count shows only the runs that need a decisi
 test("detailed-b 20: a run paused over budget says it once to whoever may resume it", async ({ page }) => {
   await login(page);
   await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "Team workspaces" }).getByRole("link").first().click();
+  await page.getByTestId("run-row").filter({ hasText: "Team invites" }).getByRole("link").first().click();
   await expect(page.getByRole("button", { name: "Resume" }).first()).toBeVisible();
   await expect(page.getByTestId("run-overrun-held")).toHaveCount(0);
 });

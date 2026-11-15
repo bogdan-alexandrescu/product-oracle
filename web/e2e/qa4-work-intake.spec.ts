@@ -6,12 +6,12 @@ import { login } from "./helpers";
 
 /*
  * QA pass 4 on the brief page, /intakes/<id> (qa4-work-1, 3, 4, 6, 8, 9, 10, 12), driven
- * through the UI on the mock: the default scenario's "Saved addresses" brief, whose critical
+ * through the UI on the mock: the default scenario's "Bulk import" brief, whose critical
  * question was answered "I don't know", opened from the Inbox as a person would.
  */
 
 const PHONE = { width: 390, height: 844 };
-const SAVED = "Saved addresses";
+const SAVED = "Bulk import";
 const UNSURE = "Which metric shows repeat checkout got faster?";
 
 /** Signs in with Oracle's follow-ups off (the answer goes straight in). */
@@ -26,7 +26,7 @@ async function openFromInbox(page: Page) {
   await expect(page.getByTestId("inbox-needs")).toBeVisible();
   const row = page.locator("[role=tabpanel]").getByTestId("inbox-questions").locator("tr[data-row]").filter({ hasText: UNSURE });
   await expect(row).toContainText("Oracle asks");
-  await row.getByRole("link", { name: "Open PRD in review · Checkout redesign PRD" }).click();
+  await row.getByRole("link", { name: "Open PRD in review · Annual billing PRD" }).click();
   await expect(page).toHaveURL(new RegExp(`/intakes/${V2_IDS.intake}$`));
   await expect(page.getByRole("heading", { level: 1, name: SAVED })).toBeAttached();
   await expect(page.getByTestId("intake-thread")).toBeVisible();

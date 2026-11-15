@@ -228,7 +228,7 @@ export type DocumentSection = { document_id: string; key: string; heading: strin
 /** G2: the gateway's message when no Claude account can take a call (approvers and owners). */
 export const NO_ACCOUNT_MESSAGE =
   "No Claude account: an owner adds one on Settings > Claude accounts (or sets a fallback setup-token or API key there)";
-/** The mock's canned reply, citing the seed's "Raise activation" goal. */
+/** The mock's canned reply, citing the seed's "Activation" goal. */
 export const CANNED_REPLY = ["Yes, if caps ", "read the plan thresholds only ", "[c:1]. Detection can follow ", "once activation holds; ", "the goal does not depend on it."];
 
 const withoutView = (subject: Record<string, unknown>) => Object.fromEntries(Object.entries(subject).filter(([k]) => k !== "view"));
@@ -265,7 +265,7 @@ export const RESEARCH_START_FAILED = "Oracle couldn't start this research.";
 /** The "research-unsafe-link" scenario: the web page the research cites has an address that is not http(s) (#606 re-review). */
 export const RESEARCH_UNSAFE_LINK_SCENARIO = "research-unsafe-link";
 export const RESEARCH_UNSAFE_LINK = "javascript:alert(document.domain)";
-const CANNED_CITATIONS = [{ n: 1, kind: "entity", ref: "g.activation", title: "Goal: Raise activation", url: "/ground-truth", confidence: 0.82, low_confidence: false }];
+const CANNED_CITATIONS = [{ n: 1, kind: "entity", ref: "g.activation", title: "Goal: Activation", url: "/ground-truth", confidence: 0.82, low_confidence: false }];
 /** The web page the mock's research read (read:web): a `web` citation linking to it. */
 const RESEARCH_CITATIONS: Record<string, unknown>[] = [
   ...CANNED_CITATIONS,
@@ -628,7 +628,7 @@ export function seedDiscussions(ctx: Omit<DiscussionsContext, "me" | "db">, docu
 }
 
 /**
- * G6, the "discussions" scenario only: the commenter's open discussion on the Saved carts PRD.
+ * G6, the "discussions" scenario only: the commenter's open discussion on the Referral link PRD.
  * Its first message mentions the viewer (who is invited), the approver replies, then the
  * commenter mentions the approver (already in it); Oracle proposed one change and the
  * commenter suggested another, so 2 wait on the approver.
@@ -649,7 +649,7 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     subject_url: url,
     document_id: documentId,
     run_id: null,
-    title: "Saved carts: keep carts for guests?",
+    title: "F-12 Referral link: keep links for guests?",
     visibility: "open",
     author_only: false,
     status: "open",
@@ -670,9 +670,9 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
   ] as const)
     db.participants.push({ discussion_id: id, user_id, added_via, left_at: null, last_read_at: null, created_at: at(0) });
   const lines: [string, string, string[]][] = [
-    [commenter, "Lena, guests lose their cart today. Should we keep it?", [viewer]],
+    [commenter, "Lena, guests lose their link today. Should we keep it?", [viewer]],
     [approver, "Only with a clear expiry.", []],
-    [commenter, "Priya, can guests keep a cart for 30 days?", [approver]],
+    [commenter, "Priya, can guests keep a link for 30 days?", [approver]],
   ];
   const ids = lines.map(([author, body, mentions], i) => {
     const mid = ctx.uuid();
@@ -710,8 +710,8 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     {
       ...change,
       id: ctx.uuid(),
-      label: "Scope: keep a guest's cart for 30 days",
-      payload: { section_key: "scope", instruction: "Keep a guest's cart for 30 days." },
+      label: "Scope: keep a guest's link for 30 days",
+      payload: { section_key: "scope", instruction: "Keep a guest's link for 30 days." },
       proposed_by_kind: "oracle",
       suggested_by: null,
       status: "proposed",
@@ -719,8 +719,8 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     {
       ...change,
       id: ctx.uuid(),
-      label: "Scope: show the expiry on the cart",
-      payload: { section_key: "scope", instruction: "Show the expiry on the cart." },
+      label: "Scope: show the expiry on the link",
+      payload: { section_key: "scope", instruction: "Show the expiry on the link." },
       proposed_by_kind: "oracle",
       suggested_by: commenter,
       status: "suggested",
@@ -737,10 +737,10 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     subject_kind: "entity",
     subject: { entity_id: goal, interview: true },
     subject_key: `entity:${goal}`,
-    subject_label: "Weekly saved carts",
+    subject_label: "Weekly referral links",
     subject_url: "/ground-truth",
     document_id: null,
-    title: "Make “Weekly saved carts” measurable",
+    title: "Make “Weekly referral links” measurable",
     status: "closed",
     started_by: approver,
     last_message_at: late,
@@ -759,9 +759,9 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
       id: ctx.uuid(),
       discussion_id: interview,
       kind: "goal_measure",
-      label: `Make Weekly saved carts measurable: version ${n}`,
-      target: { entity_id: goal, title: "Weekly saved carts" },
-      payload: { entity_id: goal, metric: "Weekly saved carts", target: 500 * n },
+      label: `Make Weekly referral links measurable: version ${n}`,
+      target: { entity_id: goal, title: "Weekly referral links" },
+      payload: { entity_id: goal, metric: "Weekly referral links", target: 500 * n },
       proposed_by_kind: "oracle",
       suggested_by: null,
       status,
@@ -806,7 +806,7 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     subject_key: "priorities",
     subject_label: "Priority order",
     subject_url: "/priorities",
-    title: "Order: put Guest checkout first?",
+    title: "Order: put Public signup first?",
     started_by: commenter,
   });
   db.participants.push({ discussion_id: order, user_id: commenter, added_via: "started", left_at: null, last_read_at: null, created_at: late });
@@ -815,7 +815,7 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
     id: ctx.uuid(),
     discussion_id: order,
     kind: "priority_move",
-    label: "Move Guest checkout above Saved carts",
+    label: "Move Public signup above Referral link",
     target: {},
     payload: { feature_id: ctx.uuid(), above_feature_id: ctx.uuid(), reason: "Guests leave at sign-up." },
     proposed_by_kind: "person",
@@ -844,7 +844,7 @@ export function seedIntakeDiscussion(ctx: Omit<DiscussionsContext, "me" | "db">,
     subject_url: `/intakes/${intake.id}`,
     document_id: null,
     run_id: null,
-    title: "Saved addresses: how do we measure it?",
+    title: "F-07 Bulk import: how do we measure it?",
     visibility: "open",
     author_only: false,
     status: "open",
@@ -990,7 +990,7 @@ export function seedDiscussionReplies(ctx: Omit<DiscussionsContext, "me" | "db">
     ...base,
     ...open,
     id: ctx.uuid(),
-    title: "Saved addresses: what the intake found",
+    title: "F-07 Bulk import: what the intake found",
     last_message_at: null,
     private_findings: { author: commenter, count: 2, intake_id: ctx.uuid() },
   };
@@ -1942,7 +1942,7 @@ export const RUN_DISCUSSION_PRIVATE = "d15c0000-0000-4000-8000-0000000000a2";
 /**
  * The "run-discussions" scenario (G5): on the feature-set run's checkpoint, an open discussion
  * the approver started on bulk-address-edit, and a private one the approver started with the
- * owner on saved-addresses (the commenter is not in it), one message each.
+ * owner on bulk-import (the commenter is not in it), one message each.
  */
 export function seedRunDiscussions(
   ctx: Omit<DiscussionsContext, "me" | "db">,
@@ -1977,7 +1977,7 @@ export function seedRunDiscussions(
     updated_at: at,
   });
   const open = row(RUN_DISCUSSION_OPEN, "bulk-address-edit", "Bulk edit: keep it without the export?", "open");
-  const hidden = row(RUN_DISCUSSION_PRIVATE, "saved-addresses", "Saved addresses: who pays for storage?", "private");
+  const hidden = row(RUN_DISCUSSION_PRIVATE, "bulk-import", "Bulk import: who pays for storage?", "private");
   db.discussions.push(open, hidden);
   db.participants.push(
     { discussion_id: open.id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at },
@@ -2009,14 +2009,14 @@ export const DISCUSSION_RECORD = "d15c0000-0000-4000-8000-0000000000b1";
 
 /**
  * The "discussion-record" scenario (G3 Record with F3 Date bases): the approver's open
- * discussion on the PRD's guest-checkout item, Oracle's reply, and the basis_record change it
+ * discussion on the PRD's public-signup item, Oracle's reply, and the basis_record change it
  * proposed (a team estimate that supports 2026-12-15).
  */
 export function seedDiscussionRecord(ctx: Omit<DiscussionsContext, "me" | "db">, prd: { id: string; title: string; slug: string; name?: (key: string) => string }, version: number): DiscussionsDb {
   const db = emptyDiscussions();
   const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
   const at = "2026-10-22T10:00:00Z";
-  const item = "guest-checkout";
+  const item = "public-signup";
   db.discussions.push({
     id: DISCUSSION_RECORD,
     subject_kind: "roadmap_item",
@@ -2026,7 +2026,7 @@ export function seedDiscussionRecord(ctx: Omit<DiscussionsContext, "me" | "db">,
     subject_url: `/documents/${prd.slug}/v/${version}/items`,
     document_id: prd.id,
     run_id: null,
-    title: "Guest checkout: what date can we hold?",
+    title: "Public signup: what date can we hold?",
     visibility: "open",
     author_only: false,
     status: "open",
@@ -2057,15 +2057,15 @@ export function seedDiscussionRecord(ctx: Omit<DiscussionsContext, "me" | "db">,
   return db;
 }
 
-/** G3 "discussion-change-kinds": the open discussion on the feature-set stop's saved-carts item. */
+/** G3 "discussion-change-kinds": the open discussion on the feature-set stop's referral-link item. */
 export const DISCUSSION_CHANGE_KINDS = "d15c0000-0000-4000-8000-0000000000c1";
 
 /**
  * The "discussion-change-kinds" scenario (G3's ask_person, priority_move and decision): on the
- * feature-set run's waiting checkpoint, the approver's open discussion on saved-carts, Oracle's
- * reply, and the 3 changes it proposed: move Saved carts above Guided setup on a thin reason
- * ("Gut feeling", which Apply pushes back on), ask the approver how long a cart lasts, and a
- * decision on keeping carts for guests.
+ * feature-set run's waiting checkpoint, the approver's open discussion on referral-link, Oracle's
+ * reply, and the 3 changes it proposed: move Referral link above Setup checklist on a thin reason
+ * ("Gut feeling", which Apply pushes back on), ask the approver how long a link lasts, and a
+ * decision on links for guests.
  */
 export function seedDiscussionChangeKinds(
   ctx: Omit<DiscussionsContext, "me" | "db">,
@@ -2075,7 +2075,7 @@ export function seedDiscussionChangeKinds(
   const db = emptyDiscussions();
   const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
   const at = "2026-10-22T11:00:00Z";
-  const item = "saved-carts";
+  const item = "referral-link";
   const id = DISCUSSION_CHANGE_KINDS;
   db.discussions.push({
     id,
@@ -2086,7 +2086,7 @@ export function seedDiscussionChangeKinds(
     subject_url: `/runs/${run.id}`,
     document_id: null,
     run_id: run.id,
-    title: "Saved carts: ahead of guided setup?",
+    title: "Referral link: ahead of the setup checklist?",
     visibility: "open",
     author_only: false,
     status: "open",
@@ -2105,13 +2105,13 @@ export function seedDiscussionChangeKinds(
   const reply = ctx.uuid();
   const msg = { discussion_id: id, mentions: [], created_at: at, edited_at: null, deleted_at: null };
   db.messages.push(
-    { ...msg, id: asked, author_kind: "person", author_id: approver, body: "@Oracle should saved carts go before guided setup?", mentions_oracle: true, reply_to: null },
+    { ...msg, id: asked, author_kind: "person", author_id: approver, body: "@Oracle should the referral link go before the setup checklist?", mentions_oracle: true, reply_to: null },
     {
       ...msg,
       id: reply,
       author_kind: "oracle",
       author_id: null,
-      body: "Moving saved carts up is possible; ask who owns cart expiry, and decide whether guests keep carts.",
+      body: "Moving the referral link up is possible; ask who owns link expiry, and decide whether guests get a link.",
       mentions_oracle: false,
       reply_to: asked,
       status: "complete",
@@ -2137,13 +2137,13 @@ export function seedDiscussionChangeKinds(
     created_at: at,
   });
   db.changes!.push(
-    row("priority_move", { feature_id: features.moved.id, above_feature_id: features.above.id, reason: "Gut feeling" }, "The approver asked whether saved carts should go first."),
-    row("ask_person", { asked_to: approver, prompt: "How long should a saved cart last?", category: "general" }, "Nobody has said how long a cart is kept."),
+    row("priority_move", { feature_id: features.moved.id, above_feature_id: features.above.id, reason: "Gut feeling" }, "The approver asked whether the referral link should go first."),
+    row("ask_person", { asked_to: approver, prompt: "How long should a referral link last?", category: "general" }, "Nobody has said how long a link is kept."),
     row(
       "decision",
       {
-        title: "Keep saved carts for guests?",
-        question: "Do guests keep a cart without an account?",
+        title: "Referral links for guests?",
+        question: "Do guests get a link without an account?",
         options: [
           { key: "o1", label: "Keep for 30 days" },
           { key: "o2", label: "Members only" },
@@ -2151,7 +2151,7 @@ export function seedDiscussionChangeKinds(
         approver_id: approver,
         reversibility: "reversible",
       },
-      "Guest carts change what saved carts costs to build.",
+      "Guest links change what the referral link costs to build.",
     ),
   );
   return db;

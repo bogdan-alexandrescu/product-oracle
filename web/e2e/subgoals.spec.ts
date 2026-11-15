@@ -90,8 +90,8 @@ test("add a subgoal, set its target, link a feature, see the parent roll up, pic
   await expect(row).toBeVisible();
 
   // Link a feature to the subgoal.
-  await page.getByRole("button", { name: "Guided setup" }).first().click();
-  const f = drawer(page, "Guided setup");
+  await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
+  const f = drawer(page, "Setup checklist");
   await f.getByRole("button", { name: "Link to goal" }).click();
   const link = f.getByRole("form", { name: "Link to goal" });
   await link.getByLabel("Goal").selectOption({ label: SUB });
@@ -131,9 +131,9 @@ test("move, promote and archive a subgoal; viewers see no tree controls", async 
   const row = await churnWithSubgoal(page);
   await row.getByRole("button", { name: SUB, exact: true }).click();
   const d = drawer(page, SUB);
-  await d.getByLabel("Parent goal").selectOption({ label: "Raise activation" });
+  await d.getByLabel("Parent goal").selectOption({ label: "Activation" });
   await d.getByRole("button", { name: "Move" }).click();
-  const underActivation = page.getByTestId("goal-g.activation").getByRole("button", { name: "Hide subgoals of Raise activation" });
+  const underActivation = page.getByTestId("goal-g.activation").getByRole("button", { name: "Hide subgoals of Activation" });
   await expect(underActivation).toBeVisible();
   await expect(row.getByTestId("code-tag")).toHaveCount(0);
   await expect(page.getByTestId("goal-g.early-churn").locator('[data-attr="progress"]')).toHaveText("–");

@@ -24,19 +24,19 @@ async function openFromList(page: Page, title: string) {
   await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
 }
 
-test("Team workspaces PRD's one-pager shows its own Problem and scope, not Guided setup's", async ({ page }) => {
-  await openFromList(page, "Team workspaces PRD");
-  await expect(page.getByRole("heading", { level: 1, name: "Team workspaces PRD" })).toBeVisible();
+test("Team invites PRD's one-pager shows its own Problem and scope, not Guided setup's", async ({ page }) => {
+  await openFromList(page, "Team invites PRD");
+  await expect(page.getByRole("heading", { level: 1, name: "Team invites PRD" })).toBeVisible();
 
   const problem = page.getByRole("region", { name: "Problem and who has it" });
   await expect(problem).toContainText("People share work by exporting files and sending them around");
   await expect(problem).not.toContainText(GUIDED_SETUP_PROBLEM);
 
   const bets = page.getByRole("region", { name: "What we will build" });
-  await expect(bets).toContainText("Create a workspace and invite members");
+  await expect(bets).toContainText("Invite teammates by email");
   await expect(bets).not.toContainText("A setup checklist that shows the next step");
 
-  // C-13: no roadmap item of this mock names Team workspaces, so its span is its own: none.
+  // C-13: no roadmap item of this mock names Team invites, so its span is its own: none.
   await expect(page.getByText("No roadmap items yet")).toBeVisible();
 });
 

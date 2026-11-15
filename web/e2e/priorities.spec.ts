@@ -50,7 +50,7 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   const ex = page.getByTestId("explanation-F-01");
-  await expect(ex.getByRole("list", { name: "Steps" })).toContainText("Goal value = 3×2 (Raise activation) = 6");
+  await expect(ex.getByRole("list", { name: "Steps" })).toContainText("Goal value = 3×2 (Activation) = 6");
   await expect(ex.getByRole("list", { name: "Steps" })).toContainText("Score = 6 × 75% ÷ 2 = 2.25");
   await expect(ex).toContainText("from evidence");
   await expect(ex).toContainText("Interview 07");

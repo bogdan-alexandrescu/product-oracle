@@ -10,7 +10,7 @@ import { login } from "./helpers";
  */
 
 async function openBrief(page: Page, title: string) {
-  await page.goto("/documents/checkout-redesign");
+  await page.goto("/documents/annual-billing");
   const panel = page.getByTestId("tech-briefs");
   await expect(panel).toBeVisible();
   await panel.getByRole("link", { name: title }).click();
@@ -89,7 +89,7 @@ test("the PRD's Tech briefs panel shows a load error instead of hiding", async (
   // briefs (the panel disappears).
   await page.addInitScript(() => localStorage.setItem("po-mock-fail", "/v1/tech-briefs"));
   await login(page);
-  await page.goto("/documents/checkout-redesign");
+  await page.goto("/documents/annual-billing");
   const panel = page.getByTestId("tech-briefs");
   await expect(panel).toBeVisible();
   await expect(panel.getByRole("alert")).toContainText("Mock failure");

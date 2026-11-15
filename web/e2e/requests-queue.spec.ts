@@ -50,7 +50,7 @@ test("Queue: filters by state, goal and theme, searches, and shows a filed reque
   await expect(page.getByTestId("request-row")).toHaveCount(2);
   await filter(page, "State").selectOption("");
   await filter(page, "Theme").selectOption("");
-  await filter(page, "Goal").selectOption({ label: "Raise activation" });
+  await filter(page, "Goal").selectOption({ label: "Activation" });
   await expect(row(page, "Weekly summary email")).toBeVisible();
   await expect(row(page, "Invite a whole team at once")).toHaveCount(0);
   await filter(page, "Goal").selectOption("");
@@ -97,12 +97,12 @@ test("Inspector: link goals, theme, feature and PRD, then qualify with a reason"
   await openRequests(page);
   await pick(page, "Dark mode");
   const panel = inspector(page);
-  await panel.getByRole("checkbox", { name: "Raise activation" }).check();
+  await panel.getByRole("checkbox", { name: "Activation" }).check();
   await panel.getByRole("combobox", { name: "Theme", exact: true }).selectOption({ label: "Reporting" });
-  await panel.getByLabel("Feature").selectOption({ label: "F-81 Dark mode" });
+  await panel.getByLabel("Feature").selectOption({ label: "F-06 Setup error report" });
   await panel.getByLabel("PRD").selectOption({ index: 1 });
   await panel.getByRole("button", { name: "Save links" }).click();
-  await expect(row(page, "Dark mode").getByTestId("goal-chip")).toHaveText(["Raise activation"]);
+  await expect(row(page, "Dark mode").getByTestId("goal-chip")).toHaveText(["Activation"]);
   await expect(row(page, "Dark mode")).toContainText("Reporting");
 
   await panel.getByRole("button", { name: "Qualify", exact: true }).click();

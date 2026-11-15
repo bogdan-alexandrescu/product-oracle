@@ -1,6 +1,6 @@
 /**
  * The "impact" and "impact-large" scenarios (v2 screen 2, the Impact explorer): outputs
- * built on checkout-redesign v1, in every category and freshness, a roadmap version among
+ * built on annual-billing v1, in every category and freshness, a roadmap version among
  * them, one resting on a baseline item that was since deleted. "impact-large" adds enough
  * outputs to group the lineage by category, and a walk cut off at its limit. Invented
  * data only; the trace mock (./trace.ts) turns these rows into ImpactReports.
@@ -12,7 +12,7 @@ type Dep = Schemas["ArtifactDependencyOut"];
 const AT = "2026-10-20T10:00:00Z";
 
 export interface ImpactSeedContext {
-  /** checkout-redesign v1: what the outputs were built from. */
+  /** annual-billing v1: what the outputs were built from. */
   versionId: string;
   /** usage-alerts-roadmap v1, whose plan row is a roadmap run. */
   roadmapVersionId: string | null;
@@ -64,7 +64,7 @@ export function seedImpact(v2: V2Db, ctx: ImpactSeedContext, large: boolean): vo
   };
 
   const deleted: DeletedEntity = {
-    id: ctx.uuid(), type: "requirement", key: "R-90", title: "Guest checkout keeps the cart", status: "confirmed",
+    id: ctx.uuid(), type: "requirement", key: "R-90", title: "Signup keeps the yearly price", status: "confirmed",
     locked: false, confidence: 0.82, deleted_at: "2026-10-21T09:00:00Z",
   };
   v2.deleted_entities = [deleted];
@@ -75,7 +75,7 @@ export function seedImpact(v2: V2Db, ctx: ImpactSeedContext, large: boolean): vo
     id: revoked, subject_kind: "source_permission", subject_id: ctx.uuid(), subject_ref: "source:interviews", document_id: null,
     cause: "source_permission", actor: `user:${ctx.userId}`, data: {}, handled_by: ["trace.mark_stale"], created_at: AT,
   } as Schemas["ChangeEventOut"]);
-  output("tech_brief", "Early shipping cost brief", "approved", "potentially_stale", [
+  output("tech_brief", "Early yearly price brief", "approved", "potentially_stale", [
     { upstream_section_key: "problem" },
     { upstream_section_key: "users", caused_by_change_id: revoked },
   ]);
@@ -83,7 +83,7 @@ export function seedImpact(v2: V2Db, ctx: ImpactSeedContext, large: boolean): vo
     { upstream_section_key: "scope" },
     ...(ctx.entity ? [{ upstream_version_id: null, upstream_entity_id: ctx.entity.id }] : []),
   ]);
-  output("wireframe", "Cart wireframes", "draft", "under_review", [{ upstream_section_key: "scope" }]);
+  output("wireframe", "Plan page wireframes", "draft", "under_review", [{ upstream_section_key: "scope" }]);
   // Recorded: deleting R-90 marked the tests built on it, and on the risks section that linked it.
   const change = ctx.uuid();
   v2.change_events.push({

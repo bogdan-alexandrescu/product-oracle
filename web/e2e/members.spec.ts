@@ -94,7 +94,7 @@ test("members: non-owners see the read-only list", async ({ page }) => {
 
 test("roles: a viewer reads and exports but has no comment, verdict or approve controls", async ({ page }) => {
   await login(page, "viewer@example.com");
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
   await openSection(page, "problem");
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
@@ -117,7 +117,7 @@ test("roles: a viewer reads and exports but has no comment, verdict or approve c
 
 test("roles: a commenter comments and resolves their own thread, not others'", async ({ page }) => {
   await login(page, "commenter@example.com");
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await expect(page.getByTestId("view-only")).toHaveCount(0);
   await openSection(page, "problem");
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
@@ -149,7 +149,7 @@ test("roles: a commenter comments and resolves their own thread, not others'", a
 
 test("roles: an approver sets verdicts and publishes a ready PRD, but cannot manage members", async ({ page }) => {
   await login(page, "approver@example.com");
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openSection(page, "problem");
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toBeVisible();
   await expect(page.getByTestId("role-note")).toHaveCount(0);
@@ -157,9 +157,9 @@ test("roles: an approver sets verdicts and publishes a ready PRD, but cannot man
   await expect(
     page.locator('[data-testid="feedback-item"][data-kind="comment"]').filter({ visible: true }).first().getByRole("button", { name: "Resolve" }),
   ).toBeVisible();
-  // checkout-redesign carries a critical blocker: Publish opens the screen, which refuses.
+  // annual-billing carries a critical blocker: Publish opens the screen, which refuses.
   await page.getByTestId("doc-header").getByRole("link", { name: "Publish", exact: true }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/publish$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/publish$/);
   await expect(page.getByTestId("publish-button")).toBeDisabled();
   await expect(page.getByTestId("block-row").first()).toBeVisible();
   // A ready PRD publishes.
@@ -177,7 +177,7 @@ test("roles: a role change shows up on the reviewer's next page load", async ({ 
   await signOut(page);
 
   await login(page, "viewer@example.com");
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openSection(page, "problem");
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toBeVisible();
 });

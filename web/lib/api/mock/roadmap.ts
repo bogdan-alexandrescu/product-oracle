@@ -62,7 +62,7 @@ export interface RoadmapDb {
   alerts?: StoredAlert[];
   /** The freshness of a Plan item the roadmap version has no row for (the alerts scenarios' stale item), by key. */
   freshness?: Record<string, Item["freshness"]>;
-  /** plan-open-from-simple "plan-same-key": the Checkout redesign roadmap draft holds a key Usage alerts' roadmap holds too. */
+  /** plan-open-from-simple "plan-same-key": the Annual billing roadmap draft holds a key Usage alerts' roadmap holds too. */
   same_key?: boolean;
   /**
    * "plan-section-code", "plan-section-linked" and "plan-section-feature": the approved plan has an item from the PRD's section f-31
@@ -174,7 +174,7 @@ export const PLAN_TWO_ROADMAPS_SCENARIO = "plan-two-roadmaps";
 export const REPORT_OFF_TRACK_SCENARIO = "report-off-track";
 /** qa5-plan-at-risk review: "alignment-report" with no First release track milestone; the Plan's Now items name it. */
 export const REPORT_ITEM_MILESTONE_SCENARIO = "report-item-milestone";
-/** tracks-goal: GET /v1/tracks with the Plan's track holding a second PRD (Checkout redesign) and a third track with none. */
+/** tracks-goal: GET /v1/tracks with the Plan's track holding a second PRD (Annual billing) and a third track with none. */
 export const TRACK_PRDS_SCENARIO = "track-prds";
 
 const now = () => new Date().toISOString();
@@ -380,10 +380,10 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
     if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
     if (alertsScenario)
       seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO, scenario === TRACK_ALERTS_HISTORY_SCENARIO, staleScenario, scenario === TRACK_ALERTS_STALE_REMOVED_SCENARIO);
-    // "launches": a second track, Checkout redesign PRD, with no roadmap yet (New launch's Track picker).
+    // "launches": a second track, Annual billing PRD, with no roadmap yet (New launch's Track picker).
     // fix4: the alignment report scenarios have it too, so a report's second track is one the mock keeps.
     const secondTrack = scenario === "launches" || scenario === "alignment-report" || scenario === "report-prd-moved" || scenario === "report-draft-item" || scenario === REPORT_OFF_TRACK_SCENARIO || scenario === REPORT_ITEM_MILESTONE_SCENARIO;
-    const checkout = secondTrack ? ctx.documents.find((d) => d.slug === "checkout-redesign") : undefined;
+    const checkout = secondTrack ? ctx.documents.find((d) => d.slug === "annual-billing") : undefined;
     if (checkout) {
       const started = latest(ctx, checkout.id)?.number ?? 1;
       db.tracks.push({
@@ -396,7 +396,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
     // redesign too) and one with none, so "prd" (its first, or none) and "prds" (all of them)
     // both show on the route.
     if (scenario === TRACK_PRDS_SCENARIO) {
-      const second = ctx.documents.find((d) => d.slug === "checkout-redesign");
+      const second = ctx.documents.find((d) => d.slug === "annual-billing");
       if (second) track.extra_prd_ids = [second.id];
       db.tracks.push({
         id: mockUuid(), prd_id: null, roadmap_id: null, title: "Spend policy", status: "active",
@@ -1473,7 +1473,7 @@ const entityRef = (type: "feature" | "requirement", [key, title]: [string, strin
 });
 
 export const ALERTS_ROADMAP_SLUG = "usage-alerts-roadmap";
-const CHECKOUT_ROADMAP_SLUG = "checkout-redesign-roadmap";
+const CHECKOUT_ROADMAP_SLUG = "annual-billing-roadmap";
 const NEXT_LABEL: Record<NonNullable<Schemas["PlanNext"]["action"]>, string> = {
   review_prd: "PRD review",
   verify_date: "Verify date",
@@ -1768,15 +1768,15 @@ const ALERTS_DRAFT: Record<string, { horizon?: Horizon; change: Schemas["ItemCha
   "spend-forecast": { horizon: "now", change: { kind: "moved", from_horizon: "next", to_horizon: "now", fields: ["horizon"], notes: [] } },
   "team-budgets": { change: { kind: "dropped", draft_version: 2, fields: [], notes: [] } },
 };
-/** checkout-redesign-roadmap draft 2, from Checkout redesign PRD v2 (never approved): every item new. */
+/** annual-billing-roadmap draft 2, from Annual billing PRD v2 (never approved): every item new. */
 const CHECKOUT_DRAFT: PlanSeedItem[] = [
-  { key: "one-page-checkout", title: "One-page checkout", horizon: "now", goals: ["g.paid-conversion"], section: "problem" },
-  { key: "saved-addresses", title: "Saved addresses as cards", horizon: "next", goals: ["g.paid-conversion"], section: "s-5-3" },
+  { key: "one-page-checkout", title: "Self-serve checkout", horizon: "now", goals: ["g.paid-conversion"], section: "problem" },
+  { key: "bulk-import", title: "Bulk import of people", horizon: "next", goals: ["g.paid-conversion"], section: "s-5-3" },
   { key: "shipping-choices", title: "Three clear shipping choices", horizon: "later", section: "s-5-2" },
 ];
 
 /**
- * plan-open-from-simple "plan-same-key": the default company plus the Checkout redesign roadmap
+ * plan-open-from-simple "plan-same-key": the default company plus the Annual billing roadmap
  * (server.ts), whose draft 2 also holds threshold-alerts, a key Usage alerts' roadmap holds for
  * another item (keys are unique only per roadmap version). Simple shows the Checkout one.
  */
@@ -1786,9 +1786,9 @@ const checkoutDraft = (db: RoadmapDb): PlanSeedItem[] => (db.same_key ? [...CHEC
 
 /**
  * The Plan's mock (api/oracle/plan): a tracked PRD (Usage alerts, with a roadmap draft 2 that
- * moves, changes and drops items), a PRD waiting at the feature set checkpoint (Saved carts),
+ * moves, changes and drops items), a PRD waiting at the feature set checkpoint (Referral link),
  * a PRD at the engineering check with a lead named (Clinic outreach), and a never-approved PRD
- * with a roadmap draft (Checkout redesign); the other PRDs by their versions. Simplified on
+ * with a roadmap draft (Annual billing); the other PRDs by their versions. Simplified on
  * purpose: the rows are seeded with the state, engineering and next decision the API's rules
  * give them, not computed from the other mocks.
  */
@@ -1916,7 +1916,7 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
   const doc = (slug: string) => ctx.documents.find((d) => d.slug === slug);
   const goalIds = (keys: string[] = []) => keys.map((k) => ctx.goals.find((g) => g.key === k)?.id).filter((id): id is string => !!id);
   const alerts = doc("usage-alerts");
-  const checkout = doc("checkout-redesign");
+  const checkout = doc("annual-billing");
   const track = alerts ? db.tracks.find((t) => t.prd_id === alerts.id) : undefined;
 
   const row = (
@@ -1997,7 +1997,7 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
     // only lists none of them, as the Documents tab, Launches and Edit plan say.
     for (const s of ALERTS_APPROVED) items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: 1 }, "draft", { kind: "new", fields: [], notes: [] }));
   }
-  // qa4-plan-4: the Checkout redesign PRD has no roadmap document, so (as the API lists only
+  // qa4-plan-4: the Annual billing PRD has no roadmap document, so (as the API lists only
   // roadmap documents' versions) it has no roadmap rows and its card names no roadmap draft.
   if (checkout && scope === "all" && roadmapDoc(CHECKOUT_ROADMAP_SLUG)) {
     for (const s of checkoutDraft(db)) items.push(row(s, checkout, 2, { slug: CHECKOUT_ROADMAP_SLUG, version: 2 }, "draft", { kind: "new", fields: [], notes: [] }));
@@ -2019,10 +2019,10 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
     if (d.slug === "usage-alerts" && track) {
       card = { ...base, stage: "approved", stage_label: `Approved v${approved}`, journey_step: 9, figure: HEALTH_WORD[health!] ?? null,
         track: { id: track.id, status: track.status, health: health!, owner_id: track.owner_id } };
-    } else if (d.slug === "saved-carts") {
+    } else if (d.slug === "referral-link") {
       const mine = may("approver");
       card = { ...base, stage: "waiting", stage_label: `Feature set · waiting for ${mine ? "you" : "approver"}`, journey_step: 7, figure: "9 features",
-        waiting_for_viewer: mine, run: { id: seeded("plan:run:saved-carts", mockUuid), status: "awaiting_checkpoint", checkpoint: "feature_set", checkpoint_role: "approver", segment: null } };
+        waiting_for_viewer: mine, run: { id: seeded("plan:run:referral-link", mockUuid), status: "awaiting_checkpoint", checkpoint: "feature_set", checkpoint_role: "approver", segment: null } };
     } else if (d.slug === "clinic-outreach") {
       // A lead is named (A3): the engineering check waits for them, whoever looks. The run
       // imported the PRD's draft on Oct 20, which updated the document.
@@ -2034,10 +2034,10 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
       card = { ...base, stage: "idea", stage_label: "Brief", journey_step: 1 };
     } else {
       const review = d.status === "in_review";
-      const draft = d.slug === "checkout-redesign" && roadmapDoc(CHECKOUT_ROADMAP_SLUG) ? " · roadmap draft 2" : "";
+      const draft = d.slug === "annual-billing" && roadmapDoc(CHECKOUT_ROADMAP_SLUG) ? " · roadmap draft 2" : "";
       const label = approved != null ? `Approved v${approved} · draft ${latest}` : `Draft ${latest}`;
       card = { ...base, stage: review ? "in_review" : "draft", stage_label: review ? `${label} in review${draft}` : label, journey_step: 8 };
-      if (d.slug === "checkout-redesign" && scope === "all" && draft) card.figure = `${checkoutDraft(db).length} items`;
+      if (d.slug === "annual-billing" && scope === "all" && draft) card.figure = `${checkoutDraft(db).length} items`;
     }
     prds.push(card);
   }
@@ -2073,7 +2073,7 @@ type SyncedIssue = { id: string; repo: string; number: number; title: string; ra
 
 /** The signed-in person's synced GitHub issues (mock rows: GitHub is never called). */
 const SYNCED_ISSUES: SyncedIssue[] = [
-  { id: stableUuid("tracker-issue/acme/app#412"), repo: "acme/app", number: 412, title: "Saved cards checkout", raw: "open",
+  { id: stableUuid("tracker-issue/acme/app#412"), repo: "acme/app", number: 412, title: "Plan limits", raw: "open",
     milestone: { title: "Beta", due: "2026-11-30" }, updated_at: "2026-10-20T15:00:00Z" },
   { id: stableUuid("tracker-issue/acme/app#418"), repo: "acme/app", number: 418, title: "Monthly spend forecast", raw: "open",
     milestone: { title: "Beta", due: "2026-11-30" }, updated_at: "2026-10-19T11:00:00Z" },
@@ -2096,7 +2096,7 @@ function issueState(raw: string): TrackerRecord["state"] {
 /** The plan item a PRD's key names (the mock's Plan rows), with its title. */
 function planItem(prdSlug: string, key: string): PlanSeedItem | undefined {
   if (prdSlug === "usage-alerts") return ALERTS_APPROVED.find((i) => i.key === key);
-  if (prdSlug === "checkout-redesign") return CHECKOUT_DRAFT.find((i) => i.key === key);
+  if (prdSlug === "annual-billing") return CHECKOUT_DRAFT.find((i) => i.key === key);
   return undefined;
 }
 

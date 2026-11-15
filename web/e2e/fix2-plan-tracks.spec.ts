@@ -53,7 +53,7 @@ for (const phone of [false, true]) {
     // line, or At risk is bare red text.
     test(`card subtitles share one style and risk is a badge (${where})`, async ({ page }) => {
       await openPlan(page);
-      const waiting = card(page, "Saved carts PRD").getByTestId("plan-prd-stage");
+      const waiting = card(page, "Referral link PRD").getByTestId("plan-prd-stage");
       await expect(waiting).toHaveText("Feature set · waiting for you");
       const approved = card(page, "Usage alerts PRD").getByTestId("plan-prd-stage");
       const style = (el: Element) => {

@@ -9,7 +9,7 @@ import { login } from "./helpers";
  * due date, and feedback campaigns asked for and closed, all from the document page.
  */
 
-const DOC = "/documents/checkout-redesign";
+const DOC = "/documents/annual-billing";
 
 async function asRole(page: Page, role: "approver" | "commenter" | "viewer") {
   await page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, role] as const);

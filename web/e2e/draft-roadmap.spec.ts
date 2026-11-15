@@ -3,11 +3,11 @@ import { expect, test, type Page } from "./test";
 import { login, section, signOut } from "./helpers";
 
 // E1 Roadmap per PRD draft: every PRD version has Document and Roadmap tabs; Roadmap shows
-// the items-only roadmap Oracle derived from that draft. The mock seeds checkout-redesign
-// v1 (4 items, no problems) and v2 (4 items: 3 Now, 1 Next; Saved addresses carries an
+// the items-only roadmap Oracle derived from that draft. The mock seeds annual-billing
+// v1 (4 items, no problems) and v2 (4 items: 3 Now, 1 Next; Bulk import carries an
 // unverified date) in lib/api/mock/draft-roadmap.ts.
 
-const PRD = "/documents/checkout-redesign";
+const PRD = "/documents/annual-billing";
 
 // Next keeps recently visited routes mounted (hidden): only the visible page's elements.
 const visible = (page: Page, testId: string) => page.getByTestId(testId).filter({ visible: true });
@@ -61,8 +61,8 @@ test("a PRD version has Document and Roadmap 4 tabs; Roadmap shows 3 Now, 1 Next
   await expect(groups.nth(2)).toHaveAttribute("data-horizon", "later");
   await expect(pane.locator('[data-testid="roadmap-group"][data-horizon="now"]')).toHaveCount(1);
 
-  const saved = row(page, "saved-addresses");
-  await expect(saved).toContainText("Saved addresses");
+  const saved = row(page, "bulk-import");
+  await expect(saved).toContainText("Bulk import");
   await expect(saved.getByTestId("draft-roadmap-chips")).toHaveText("Date unverified");
   // The other rows carry no problem chip.
   await expect(pane.getByTestId("draft-roadmap-chips")).toHaveCount(1);
@@ -74,7 +74,7 @@ test("a PRD version has Document and Roadmap 4 tabs; Roadmap shows 3 Now, 1 Next
   await expect(notice).toContainText("Date unverified");
   await notice.getByTestId("draft-roadmap-problem-link").click();
   await expect(saved).toHaveAttribute("aria-selected", "true");
-  await expect(visible(page, "roadmap-item-inspector")).toContainText("Saved addresses");
+  await expect(visible(page, "roadmap-item-inspector")).toContainText("Bulk import");
 });
 
 // Card derive-and-poll: protects = an approver's Derive again queues the version, keeps the
@@ -147,11 +147,11 @@ test("Derive and the owner switch by role; unticking the switch persists across 
 test("Open PRD section goes to the Document tab with the item's section open", async ({ page }) => {
   await login(page);
   await page.goto(`${PRD}/v/2/roadmap`);
-  await row(page, "saved-addresses").getByRole("link", { name: "Open PRD section" }).click();
+  await row(page, "bulk-import").getByRole("link", { name: "Open PRD section" }).click();
   await expect(page).toHaveURL(new RegExp(`${PRD}/v/2#s-5-3$`));
   await expect(visible(page, "version-tab-document")).toHaveAttribute("aria-current", "page");
   await expect(section(page, "s-5-3")).toBeVisible();
-  await expect(section(page, "s-5-3")).toContainText("5.3 Saved addresses");
+  await expect(section(page, "s-5-3")).toContainText("5.3 Seat count");
 });
 
 // Card draft-phone: protects = at 390 px the tab bar fits, rows stack, a tap opens the
@@ -170,7 +170,7 @@ test.describe("phone", () => {
       const b = (await visible(page, t).boundingBox())!;
       expect(b.x + b.width).toBeLessThanOrEqual(390);
     }
-    const saved = row(page, "saved-addresses");
+    const saved = row(page, "bulk-import");
     await expect(saved).toBeVisible();
     // Stacked: the row is one card no wider than the screen.
     const r = (await saved.boundingBox())!;
@@ -181,7 +181,7 @@ test.describe("phone", () => {
     await saved.click();
     const sheet = visible(page, "sheet-item");
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByTestId("roadmap-item-inspector")).toContainText("Saved addresses");
+    await expect(sheet.getByTestId("roadmap-item-inspector")).toContainText("Bulk import");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 });

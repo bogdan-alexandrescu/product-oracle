@@ -88,7 +88,7 @@ test("edit form: a target without a unit shows the problem under Value and does 
 // no_claim: mock members; disabled-member refusal is proven in pytest.
 test("owner picker: pick a member, save, and the table shows their name", async ({ page }) => {
   await openBaseline(page);
-  const form = await editGoal(page, "g.paid-conversion", "Grow paid conversion");
+  const form = await editGoal(page, "g.paid-conversion", "Growth");
   await form.getByLabel("Owner", { exact: true }).fill("comm");
   const options = form.getByRole("listbox", { name: "Members" }).getByRole("option");
   await expect(options).toHaveText([/Theo Brandt/]);
@@ -107,7 +107,7 @@ test("owner picker: pick a member, save, and the table shows their name", async 
 // no_claim: does not send an invite.
 test("owner picker: an owner is sent to the invite form; an approver gets the link too (A5)", async ({ page }) => {
   await openBaseline(page);
-  let form = await editGoal(page, "g.paid-conversion", "Grow paid conversion");
+  let form = await editGoal(page, "g.paid-conversion", "Growth");
   await form.getByLabel("Owner", { exact: true }).fill("nobody");
   await expect(form.getByRole("listbox", { name: "Members" }).getByRole("option")).toHaveCount(0);
   const invite = form.getByRole("link", { name: "Invite them first" });
@@ -120,7 +120,7 @@ test("owner picker: an owner is sent to the invite form; an approver gets the li
 
   await signOut(page);
   await openBaseline(page, "approver@example.com");
-  form = await editGoal(page, "g.paid-conversion", "Grow paid conversion");
+  form = await editGoal(page, "g.paid-conversion", "Growth");
   await form.getByLabel("Owner", { exact: true }).fill("nobody");
   // A5 "Who invites": an approver invites viewers and commenters too, so they get the link.
   await expect(form.getByTestId("owner-invite")).toHaveText("Not a member yet? Invite them first");
@@ -152,8 +152,8 @@ test("measurements: Home shows 7 pts to go; Record value 40 today moves the char
   await expect(page.getByTestId("home-goal-G1").getByTestId("goal-to-go")).toHaveText("No current value yet");
 
   await page.goto("/ground-truth");
-  await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
-  const d = drawer(page, "Raise activation");
+  await page.getByTestId("goal-g.activation").getByRole("button", { name: "Activation" }).click();
+  const d = drawer(page, "Activation");
   const section = d.getByTestId("goal-measurements");
   await expect(section.getByTestId("measurement-row")).toHaveCount(7);
   await expect(section.getByTestId("measurement-row").first()).toContainText("38% · Oct 1");
@@ -175,7 +175,7 @@ test("measurements: Home shows 7 pts to go; Record value 40 today moves the char
 
   // Deleting it, with the in-page confirmation, rolls back to 38%.
   await page.goto("/ground-truth");
-  await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
+  await page.getByTestId("goal-g.activation").getByRole("button", { name: "Activation" }).click();
   const row = d.getByTestId("goal-measurements").getByTestId("measurement-row").first();
   await row.getByRole("button", { name: /^Delete/ }).click();
   await row.getByRole("button", { name: "Delete value" }).click();
@@ -212,7 +212,7 @@ test("the goal edit form fits at 390 px without horizontal scroll", async ({ pag
   await page.setViewportSize({ width: 390, height: 844 });
   await openBaseline(page);
   await page.getByTestId("goal-g.activation").click();
-  const d = drawer(page, "Raise activation");
+  const d = drawer(page, "Activation");
   await d.getByRole("button", { name: "Edit" }).click();
   const form = d.getByRole("form", { name: "Edit" });
   await expect(form.getByLabel("Comparison")).toBeVisible();

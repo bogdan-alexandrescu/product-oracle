@@ -40,7 +40,7 @@ export interface EngineeringContext {
   slowRead?: boolean;
 }
 
-const PRD = "checkout-redesign";
+const PRD = "annual-billing";
 const LEAD = stableUuid("member/approver@example.com");
 const RUN = stableUuid("tech-briefs/run");
 

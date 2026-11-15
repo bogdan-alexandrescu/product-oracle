@@ -93,7 +93,7 @@ test("branding: an owner uploads a logo and sets an accent, and the HTML export 
   await expect(page.getByTestId("branding-panel").getByLabel("Show 'Made with Product Oracle' on shared pages")).not.toBeChecked();
   await expect(page.getByTestId("brand-preview-light").locator("img")).toHaveAttribute("src", /^data:image\/png;base64,/);
 
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export HTML" }).click();

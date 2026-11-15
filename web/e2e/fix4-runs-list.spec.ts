@@ -59,7 +59,7 @@ test.describe("desktop", () => {
     const approval = run(page, "usage-alerts-v2");
     await expect(approval.getByTestId("run-waits-on")).toHaveText(/^Owner approves \$[\d,]+\.\d{2}$/);
     await expect(approval.getByRole("button")).toHaveCount(0);
-    await expect(run(page, "team-workspaces").getByTestId("run-waits-on")).toHaveText("Owner resumes");
+    await expect(run(page, "team-invites").getByTestId("run-waits-on")).toHaveText("Owner resumes");
     await approval.getByTestId("run-status").click();
     await expect(inspector(page)).toContainText("Usage alerts v2");
     await expect(inspector(page)).toContainText("Approves the cost");
@@ -77,7 +77,7 @@ test.describe("desktop", () => {
       rights.push(box.x + box.width);
     }
     for (const r of rights) expect(Math.abs(r - rights[0]!)).toBeLessThanOrEqual(1);
-    const paused = run(page, "team-workspaces");
+    const paused = run(page, "team-invites");
     const [status, cost] = [paused.getByTestId("run-status").locator(".."), paused.locator('[data-cost="prominent"]')];
     await expect(cost).toHaveText("$14.20 of $9.00 estimated");
     const [sb, cb] = [(await status.boundingBox())!, (await cost.boundingBox())!];
@@ -89,10 +89,10 @@ test.describe("desktop", () => {
 
   test("qa-work-25: one Open per run: the selected-run panel has none", async ({ page }) => {
     await openRuns(page);
-    await run(page, "team-workspaces").getByTestId("run-status").click();
-    await expect(inspector(page)).toContainText("Team workspaces");
+    await run(page, "team-invites").getByTestId("run-status").click();
+    await expect(inspector(page)).toContainText("Team invites");
     await expect(inspector(page).getByRole("link", { name: "Open" })).toHaveCount(0);
-    await expect(run(page, "team-workspaces").getByRole("button", { name: "Open" })).toHaveCount(1);
+    await expect(run(page, "team-invites").getByRole("button", { name: "Open" })).toHaveCount(1);
   });
 
   test("qa-work-26: an Updated column with friendly dates, not ISO", async ({ page }) => {
@@ -166,7 +166,7 @@ test.describe("on a phone", () => {
   test("qa-work-25: a row tap opens the run; no selected-run panel below the list", async ({ page }) => {
     await openRuns(page);
     await expect(inspector(page)).toHaveCount(0);
-    await run(page, "checkout-redesign").locator('td[data-phone="meta"]').first().click();
+    await run(page, "annual-billing").locator('td[data-phone="meta"]').first().click();
     await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   });
 

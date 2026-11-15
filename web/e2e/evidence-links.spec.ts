@@ -8,8 +8,8 @@ async function openDrawer(page: Page, email: string) {
   await login(page, email);
   await page.goto("/ground-truth");
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
-  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
-  const d = page.getByRole("dialog", { name: "Guided setup" });
+  await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
+  const d = page.getByRole("dialog", { name: "Setup checklist" });
   await expect(d.getByTestId("evidence-chip")).toHaveCount(3);
   return d;
 }
@@ -80,7 +80,7 @@ test("evidence links: a viewer gets no Add evidence link control", async ({ page
   await expect(d.getByRole("button", { name: /^Refresh/ })).toHaveCount(0);
 
   await page.keyboard.press("Escape");
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openSection(page, "goal-trace");
   await expect(page.getByRole("button", { name: /Actions for/ }).filter({ visible: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Add evidence link/ }).filter({ visible: true })).toHaveCount(0);
@@ -88,14 +88,14 @@ test("evidence links: a viewer gets no Add evidence link control", async ({ page
 
 test("evidence links: a commenter cites a Google Doc from a document section", async ({ page }) => {
   await login(page, "commenter@example.com");
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const goalTrace = await openSection(page, "goal-trace");
   // The section's ⋯ menu holds Add evidence link (and Refine section, for approvers).
   await sectionAction(goalTrace, "1. Goal trace", "Add evidence link to 1. Goal trace");
 
   const form = goalTrace.getByRole("form", { name: "Add evidence link" });
   const target = form.getByLabel("Ground Truth item it supports");
-  await target.selectOption({ label: "goal: Raise activation" });
+  await target.selectOption({ label: "goal: Activation" });
   await form.getByLabel("Public link").fill("https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012/edit?usp=sharing");
   await form.getByRole("button", { name: "Preview" }).click();
   await expect(form.getByTestId("link-preview-title")).toHaveText("Pricing page refresh");
@@ -105,7 +105,7 @@ test("evidence links: a commenter cites a Google Doc from a document section", a
 
   // The Ground Truth item now carries it, for everyone.
   await page.goto("/ground-truth");
-  await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
-  const d = page.getByRole("dialog", { name: "Raise activation" });
+  await page.getByTestId("goal-g.activation").getByRole("button", { name: "Activation" }).click();
+  const d = page.getByRole("dialog", { name: "Activation" });
   await expect(d.getByTestId("evidence-row").filter({ hasText: "Pricing page refresh" })).toHaveCount(1);
 });

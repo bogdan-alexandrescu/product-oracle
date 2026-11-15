@@ -10,7 +10,7 @@ import { login, openSection, outlineRow } from "./helpers";
  */
 
 const DB_KEY = "po-mock-db-v2";
-const DOC = "/documents/checkout-redesign/v/1";
+const DOC = "/documents/annual-billing/v/1";
 
 test("contents: a lapsed approval's dot reads Approval lapsed, never Approved, as the section view does", async ({ page }) => {
   await login(page);
@@ -20,7 +20,7 @@ test("contents: a lapsed approval's dot reads Approval lapsed, never Approved, a
     const raw = localStorage.getItem(key);
     if (!raw) return;
     const db = JSON.parse(raw);
-    const version = db.versions.find((v: { slug?: string; number: number; document_id: string }) => v.number === 1 && db.documents.find((d: { id: string; slug: string }) => d.id === v.document_id)?.slug === "checkout-redesign");
+    const version = db.versions.find((v: { slug?: string; number: number; document_id: string }) => v.number === 1 && db.documents.find((d: { id: string; slug: string }) => d.id === v.document_id)?.slug === "annual-billing");
     const review = db.reviews.find((r: { version_id: string; section_key: string }) => r.version_id === version.id && r.section_key === "goal-trace");
     review.lapsed_at = "2026-10-19T09:00:00Z";
     review.lapse_reason = "former.pm@example.com was removed";

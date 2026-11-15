@@ -5,7 +5,7 @@ import { login } from "./helpers";
 /*
  * QA pass 4 on the Inbox (qa4-work-32, 35, 38), driven through the UI on the mock: the default
  * scenario, and the "suggestions" one (inbox-act-in-place.spec.ts's seed) where Oracle pushed
- * back on Team workspaces' custom roles.
+ * back on Team invites' custom roles.
  */
 
 const ROLES = "Add custom roles to the first release";

@@ -8,15 +8,15 @@ import { login, openSection, openTab, sectionAction, signOut } from "./helpers";
  * that people suggest, edit, stage or dismiss in the card under the thread. On a section the
  * mock's canned reply proposes 2 section edits (the API offers a section only section_edit and
  * answer: "Edit problem: …" and "Edit solution: …"); the change
- * routes follow the API's rules for the four mock roles. checkout-redesign v2 has no
+ * routes follow the API's rules for the four mock roles. annual-billing v2 has no
  * discussions, so every test starts its own on its Problem, as a person would.
  *
  * Each test's card: protects=<the observable>; fails_when=<the wrong result>; no_claim=<what
  * green does not prove>. The API's rules are covered by api/tests/test_discussion_changes*.py.
  */
 
-const DOC = "/documents/checkout-redesign/v/2";
-const SUBJECT = "Checkout redesign PRD · 2. Problem";
+const DOC = "/documents/annual-billing/v/2";
+const SUBJECT = "Annual billing PRD · 2. Problem";
 const COMMENTER = "commenter@example.com";
 const APPROVER = "approver@example.com";
 const VIEWER = "viewer@example.com";

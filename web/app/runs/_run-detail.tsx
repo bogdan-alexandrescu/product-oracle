@@ -1566,7 +1566,7 @@ function DraftImportLine({
   newRun,
 }: {
   imp: NonNullable<SegmentOut["draft_import"]>;
-  /** The document's name in words ("Checkout redesign PRD"). */
+  /** The document's name in words ("Annual billing PRD"). */
   docName: string;
   /** A finished run imported a version already: why this draft stays refused (owner, 2026-10-25). */
   retryRefused?: string | null;

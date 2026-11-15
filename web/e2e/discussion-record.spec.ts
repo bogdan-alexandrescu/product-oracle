@@ -6,7 +6,7 @@ import { login } from "./helpers";
 
 /*
  * G3 Record (basis_record) through the UI, on the mock layer ("discussion-record" scenario):
- * in the open discussion on checkout-redesign v2's guest-checkout item, Oracle proposed
+ * in the open discussion on annual-billing v2's public-signup item, Oracle proposed
  * recording a date basis. The discussion's link (as the Inbox gives it) opens its thread in
  * the PRD's Feedback tab. Record follows F3 Date bases' rights (leads.date_rights): with no
  * engineering lead named an approver records it verified; a commenter who is not the lead
@@ -16,7 +16,7 @@ import { login } from "./helpers";
  * green does not prove>. The API's rules are covered by api/tests/test_discussion_changes.py.
  */
 
-const DOC = "/documents/checkout-redesign/v/2";
+const DOC = "/documents/annual-billing/v/2";
 const COMMENTER = "commenter@example.com";
 const APPROVER = "approver@example.com";
 const RECORD = "Add a date source: Team estimate supports 2026-12-15";
@@ -60,12 +60,12 @@ test("a commenter without date rights cannot record and sees why", async ({ page
 });
 
 // protects=the thread's subject names the PRD's item by its title, as the API's Labels._roadmap_item reads
-// the version's RoadmapItem; fails_when=the subject reads the raw item key ("· guest-checkout");
+// the version's RoadmapItem; fails_when=the subject reads the raw item key ("· public-signup");
 // no_claim=the API's naming (pytest).
 test("the discussion's subject names the item by its title", async ({ page }) => {
   await withScenario(page);
   await login(page, APPROVER);
   await openDiscussion(page);
-  await expect(thread(page)).toContainText(/· Guest checkout/);
-  await expect(thread(page)).not.toContainText("guest-checkout");
+  await expect(thread(page)).toContainText(/· Public signup/);
+  await expect(thread(page)).not.toContainText("public-signup");
 });

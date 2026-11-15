@@ -73,7 +73,7 @@ test("two problems of one code on one feature carry two refs", async ({ page }) 
   await page.addInitScript((key) => localStorage.setItem(key, "feature-set-two"), MOCK_SCENARIO_KEY);
   await login(page);
   await page.getByTestId("nav-runs").click();
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").click();
   const rows = page.getByTestId("checkpoint-feature_set").getByTestId("approve-gate").getByTestId("gate-reason");
   await expect(rows).toHaveCount(2);
   const refs = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-ref") ?? ""));

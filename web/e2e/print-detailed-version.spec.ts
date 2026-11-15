@@ -13,7 +13,7 @@ import { expect, test } from "./test";
 
 const PAGES = [
   { name: "roadmap", url: "/documents/usage-alerts-roadmap/v/1" },
-  { name: "PRD", url: "/documents/saved-carts/v/2" },
+  { name: "PRD", url: "/documents/referral-link/v/2" },
 ];
 
 const CHROME = ["app-nav", "version-tabs", "hop-dock", "version-toolbar", "outline-rail", "section-switcher", "review-panel-column"];

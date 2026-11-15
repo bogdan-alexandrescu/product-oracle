@@ -3,12 +3,12 @@ import { expect, test, type Locator, type Page } from "./test";
 import { login } from "./helpers";
 import { readableWords, wordDiff } from "../lib/diff";
 
-// QA pass 1, docs lane: the text diff of Saved carts v1 → v2 (its Problem section was rewritten;
+// QA pass 1, docs lane: the text diff of Referral link v1 → v2 (its Problem section was rewritten;
 // v2 has no roadmap items yet), opened at its address.
 
 async function openDiff(page: Page) {
   await login(page);
-  await page.goto("/documents/saved-carts/diff?from=1&to=2");
+  await page.goto("/documents/referral-link/diff?from=1&to=2");
   await expect(page.getByRole("heading", { name: "Changes from v1 to v2" })).toBeVisible();
 }
 
@@ -42,10 +42,10 @@ for (const [name, viewport] of [
     test("qa-docs-11: a rewritten sentence reads as one removed phrase, then one added phrase", async ({ page }) => {
       await openDiff(page);
       const words = problem(page).getByTestId("word-diff");
-      await expect(words.locator("del")).toHaveText(["Most start over; many give up."]);
-      await expect(words.locator("ins")).toHaveText(["More than half start over."]);
+      await expect(words.locator("del")).toHaveText(["Most never find signup; many give up."]);
+      await expect(words.locator("ins")).toHaveText(["More than half never find signup."]);
       expect(await interleaved(words)).toEqual([]);
-      await expect(words).toContainText("Shoppers build a cart on their phone, then lose it when they move to a laptop.");
+      await expect(words).toContainText("Admins tell other teams about us, then send them to the home page.");
     });
 
     test("qa-docs-28: no status code, no Open items before there are items, no section anchors", async ({ page }) => {
@@ -59,7 +59,7 @@ for (const [name, viewport] of [
       await expect(section).not.toContainText("#problem");
       await expect(page.getByTestId("diff-section").filter({ hasText: "#" })).toHaveCount(0);
       await section.getByRole("link", { name: "View Problem in v2" }).click();
-      await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2/);
+      await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2/);
     });
   });
 }
@@ -90,8 +90,8 @@ test.describe("review: readable word diff", () => {
   });
 
   test("a rewritten sentence still reads as one removed phrase, then one added phrase", () => {
-    const ops = read("Most start over; many give up.", "More than half start over.");
-    expect(ops.filter((w) => w.op === "delete").map((w) => w.text.trim())).toEqual(["Most start over; many give up."]);
-    expect(ops.filter((w) => w.op === "insert").map((w) => w.text.trim())).toEqual(["More than half start over."]);
+    const ops = read("Most never find signup; many give up.", "More than half never find signup.");
+    expect(ops.filter((w) => w.op === "delete").map((w) => w.text.trim())).toEqual(["Most never find signup; many give up."]);
+    expect(ops.filter((w) => w.op === "insert").map((w) => w.text.trim())).toEqual(["More than half never find signup."]);
   });
 });

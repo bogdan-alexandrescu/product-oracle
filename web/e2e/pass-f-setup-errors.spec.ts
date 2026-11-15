@@ -103,7 +103,7 @@ for (const width of [1440, 390]) {
       test("F-39: a paused run's notice is one short line, and a commenter is not told to cancel", async ({ page }) => {
         await login(page, "commenter@example.com");
         await page.goto("/runs");
-        await page.locator('[data-testid="run-row"][data-document="team-workspaces"]').getByRole("link").first().click();
+        await page.locator('[data-testid="run-row"][data-document="team-invites"]').getByRole("link").first().click();
         await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
         await expect(page.getByTestId("run-overrun-held")).toHaveText("Paused: over budget. An owner can resume it.");
       });
@@ -225,7 +225,7 @@ test.describe("F-35: Oracle's work names a section by its name", () => {
     test(`a section rewrite reads "3. Users and jobs", never its key (${width} px)`, async ({ page }) => {
       await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
       await login(page, "approver@example.com");
-      await page.goto("/documents/checkout-redesign/v/2");
+      await page.goto("/documents/annual-billing/v/2");
       const users = await openSection(page, "users");
       await sectionAction(users, "3. Users and jobs", /^Ask Oracle to rewrite/);
       const refine = users.getByTestId("refine-panel");

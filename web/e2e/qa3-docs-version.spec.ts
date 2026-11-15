@@ -3,13 +3,13 @@ import { expect, test, type Locator, type Page } from "./test";
 import { MOCK_DENY_KEY, MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login, openSection, openTab, outlineRow } from "./helpers";
 
-// QA pass 3, docs lane: the version page /documents/<doc>/v/<n> (Saved carts v2, a PRD with a
+// QA pass 3, docs lane: the version page /documents/<doc>/v/<n> (Referral link v2, a PRD with a
 // brief; Clinic outreach v5, a PRD without one; the early shipping cost technical brief) and a
 // PRD's Review settings, driven as a person.
 
-const CARTS = "/documents/saved-carts/v/2";
+const CARTS = "/documents/referral-link/v/2";
 const OUTREACH = "/documents/clinic-outreach/v/5";
-const TECH_BRIEF = "/documents/checkout-redesign-early-shipping-cost-spec/v/2";
+const TECH_BRIEF = "/documents/annual-billing-early-yearly-price-spec/v/2";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
@@ -65,7 +65,7 @@ test.describe("desktop", () => {
     await expect(card).toContainText("Proposed text for 2. Metrics");
     await expect(card).not.toContainText("#metrics");
 
-    // Saved carts has no feedback: one whole-draft comment is listed with no filter rows.
+    // Referral link has no feedback: one whole-draft comment is listed with no filter rows.
     await page.goto(CARTS);
     await expect(page.getByTestId("document-sections")).toBeVisible();
     // Whole-draft feedback goes through the header's Discuss (fix3-discuss, on main since train AC).
@@ -167,7 +167,7 @@ test.describe("desktop", () => {
 
   for (const scheme of ["light", "dark"] as const) {
     for (const [what, url] of [
-      ["saved carts", CARTS],
+      ["referral links", CARTS],
       ["a technical brief", TECH_BRIEF],
     ] as const) {
       test(`qa-docs-77: a viewer sees one status line and who reviews, on ${what} (${scheme})`, async ({ page }) => {
@@ -192,7 +192,7 @@ test.describe("desktop", () => {
 
   test("qa-docs-28: Review settings opens as a side panel on a wide screen, with no drag handle", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/checkout-redesign");
+    await page.goto("/documents/annual-billing");
     await page.getByRole("button", { name: "Review settings" }).click();
     const dialog = page.getByRole("dialog", { name: "Review settings" });
     await expect(dialog).toBeVisible();
@@ -211,7 +211,7 @@ test.describe("phone", () => {
 
   test("qa-docs-28: on a phone Review settings stays the bottom sheet", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/checkout-redesign");
+    await page.goto("/documents/annual-billing");
     await page.getByRole("button", { name: "Review settings" }).click();
     const dialog = page.getByRole("dialog", { name: "Review settings" });
     await expect(dialog).toBeVisible();

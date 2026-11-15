@@ -68,7 +68,7 @@ test("Approve on a spec version that may be stale says what to do, in the app's 
   // shows a route, a method or an id, or the stale version is approved; no_claim=when a
   // spec is stale (api/tests/test_specs.py).
   await login(page);
-  await page.goto("/documents/checkout-redesign-early-shipping-cost-spec/v/1");
+  await page.goto("/documents/annual-billing-early-yearly-price-spec/v/1");
   await page.getByRole("button", { name: "Approve version" }).click();
   await page.getByRole("group", { name: "Confirm approval" }).getByRole("button", { name: "Confirm" }).click();
   const refusal = page.getByRole("group", { name: "Confirm approval" }).getByRole("alert");

@@ -15,35 +15,35 @@ async function openItem(page: Page, key: string, title: string, email?: string) 
 test("Ground Truth: link a feature to a goal, change its contribution, unlock it and remove it; the matrix follows", async ({
   page,
 }) => {
-  const d = await openItem(page, "F-81", "Dark mode");
-  const row = page.getByTestId("feature-F-81");
+  const d = await openItem(page, "F-06", "Setup error report");
+  const row = page.getByTestId("feature-F-06");
   await expect(row.getByTestId("flag")).toHaveText(["Serves no goal"]);
 
   await d.getByRole("button", { name: "Link to goal" }).click();
   const form = d.getByRole("form", { name: "Link to goal" });
-  await form.getByLabel("Goal").selectOption({ label: "Raise activation" });
+  await form.getByLabel("Goal").selectOption({ label: "Activation" });
   await form.getByLabel("Contribution").selectOption("2");
   await form.getByRole("button", { name: "Link" }).click();
-  await expect(d.getByRole("status")).toContainText("Linked to “Raise activation”");
-  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Raise activation");
+  await expect(d.getByRole("status")).toContainText("Linked to “Activation”");
+  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Activation");
   // The feature × goal matrix shows the new link, and the flag goes.
   await expect(row.getByRole("img", { name: "Contribution 2 of 3" })).toBeVisible();
   await expect(row.getByTestId("flag")).toHaveCount(0);
 
-  await d.getByLabel("Contribution to Raise activation").selectOption("3");
+  await d.getByLabel("Contribution to Activation").selectOption("3");
   await expect(d.getByRole("status")).toContainText("Contribution set to 3");
   await expect(row.getByRole("img", { name: "Contribution 3 of 3" })).toBeVisible();
 
   // A person's link is locked against agents; Unlock frees it.
-  await d.getByRole("button", { name: "Unlock link to Raise activation" }).click();
+  await d.getByRole("button", { name: "Unlock link to Activation" }).click();
   await expect(d.getByRole("status")).toContainText("Unlocked");
-  await expect(d.getByRole("button", { name: "Unlock link to Raise activation" })).toHaveCount(0);
+  await expect(d.getByRole("button", { name: "Unlock link to Activation" })).toHaveCount(0);
 
-  await d.getByRole("button", { name: "Remove link to Raise activation" }).click();
+  await d.getByRole("button", { name: "Remove link to Activation" }).click();
   const ask = d.getByRole("form", { name: "Remove link" });
   await ask.getByRole("button", { name: "Back" }).click();
-  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Raise activation");
-  await d.getByRole("button", { name: "Remove link to Raise activation" }).click();
+  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Activation");
+  await d.getByRole("button", { name: "Remove link to Activation" }).click();
   await d.getByRole("form", { name: "Remove link" }).getByRole("button", { name: "Remove" }).click();
   await expect(d.getByRole("status")).toContainText("Removed the link");
   await expect(d.getByRole("list", { name: "Supports" })).toHaveCount(0);
@@ -51,8 +51,8 @@ test("Ground Truth: link a feature to a goal, change its contribution, unlock it
 });
 
 test("Ground Truth: add depends-on, blocks and part-of links, and confirm a proposed link", async ({ page }) => {
-  const d = await openItem(page, "F-84", "Saved carts");
-  // An agent proposed that Saved carts depends on Team invites.
+  const d = await openItem(page, "F-12", "Referral link");
+  // An agent proposed that Referral link depends on Team invites.
   const deps = d.getByRole("list", { name: "Depends on" });
   await expect(deps).toContainText("Team invites");
   await expect(deps).toContainText("Proposed");
@@ -61,8 +61,8 @@ test("Ground Truth: add depends-on, blocks and part-of links, and confirm a prop
   await expect(deps).not.toContainText("Proposed");
 
   for (const [relation, entry, list] of [
-    ["Depends on", "Sample data", "Depends on"],
-    ["Blocks", "Dark mode", "Blocks"],
+    ["Depends on", "Sample data import", "Depends on"],
+    ["Blocks", "Setup error report", "Blocks"],
     ["Part of", "Admin console", "Part of"],
   ] as const) {
     await d.getByRole("button", { name: "Add dependency" }).click();
@@ -77,13 +77,13 @@ test("Ground Truth: add depends-on, blocks and part-of links, and confirm a prop
   await d.getByRole("button", { name: "Add dependency" }).click();
   const again = d.getByRole("form", { name: "Add dependency" });
   await again.getByLabel("Relation").selectOption({ label: "Blocks" });
-  await again.getByLabel("Entry").selectOption({ label: "Dark mode" });
+  await again.getByLabel("Entry").selectOption({ label: "Setup error report" });
   await again.getByRole("button", { name: "Add", exact: true }).click();
   await expect(d.getByText("This link already exists")).toBeVisible();
 });
 
 test("Ground Truth: cite a source item as evidence, then remove evidence with a reason", async ({ page }) => {
-  const d = await openItem(page, "F-81", "Dark mode");
+  const d = await openItem(page, "F-06", "Setup error report");
   const evidence = d.getByRole("list", { name: "Evidence" });
   await expect(evidence.getByTestId("evidence-row")).toHaveCount(1);
   await d.getByRole("button", { name: "Cite a source item" }).click();
@@ -110,7 +110,7 @@ test("Ground Truth: cite a source item as evidence, then remove evidence with a 
 });
 
 test("Ground Truth: a viewer sees no link or evidence controls, and a View only label", async ({ page }) => {
-  const d = await openItem(page, "F-82", "Guided setup", "viewer@example.com");
+  const d = await openItem(page, "F-01", "Setup checklist", "viewer@example.com");
   await expect(d.getByText("View only", { exact: true })).toBeVisible();
   for (const name of ["Link to goal", "Add dependency", "Cite a source item"]) {
     await expect(d.getByRole("button", { name })).toHaveCount(0);
@@ -121,7 +121,7 @@ test("Ground Truth: a viewer sees no link or evidence controls, and a View only 
 });
 
 test("Ground Truth: a commenter sees no link or cite controls, but can still add an evidence link", async ({ page }) => {
-  const d = await openItem(page, "F-82", "Guided setup", "commenter@example.com");
+  const d = await openItem(page, "F-01", "Setup checklist", "commenter@example.com");
   for (const name of ["Link to goal", "Add dependency", "Cite a source item"]) {
     await expect(d.getByRole("button", { name })).toHaveCount(0);
   }
@@ -131,12 +131,12 @@ test("Ground Truth: a commenter sees no link or cite controls, but can still add
 
 test("Ground Truth: on a phone the Link to goal form fits", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const d = await openItem(page, "F-81", "Dark mode");
+  const d = await openItem(page, "F-06", "Setup error report");
   await d.getByRole("button", { name: "Link to goal" }).click();
   const form = d.getByRole("form", { name: "Link to goal" });
-  await form.getByLabel("Goal").selectOption({ label: "Grow paid conversion" });
+  await form.getByLabel("Goal").selectOption({ label: "Growth" });
   const width = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(width).toBeLessThanOrEqual(390);
   await form.getByRole("button", { name: "Link" }).click();
-  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Grow paid conversion");
+  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Growth");
 });

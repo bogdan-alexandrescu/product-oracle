@@ -3,14 +3,14 @@ import { expect, test } from "./test";
 import { login, openTab } from "./helpers";
 
 /**
- * #556 item 2: Saved carts v2's reports failed on Oct 18 with a refusal stored before #403's
+ * #556 item 2: Referral link v2's reports failed on Oct 18 with a refusal stored before #403's
  * wording (the earliest reset as raw UTC). It reads the way #403 writes one now: the time in
  * the Company time zone in words, its sentences apart, and when it failed, so it does not
  * read as if every account is spent now; writing again stays offered (qa-docs-13: as the alert's Try again).
  */
 test("a stored Claude-pool refusal on a PRD's Reports row reads like the time it happened", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   await openTab(page, "History");
   const reports = page.getByTestId("history-reports").filter({ visible: true }).getByTestId("reports-panel");
 

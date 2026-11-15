@@ -8,14 +8,14 @@ import { login } from "./helpers";
  * and a brief before drafting (/intakes/<id>), driven through the UI as a person would.
  */
 
-const BRIEF = "/documents/checkout-redesign-early-shipping-cost-spec/v/1";
+const BRIEF = "/documents/annual-billing-early-yearly-price-spec/v/1";
 
 const inspector = (page: Page) => page.getByRole("complementary", { name: "Design review" }).filter({ visible: true });
 
-/** Checkout redesign PRD → its tech brief → the design "Early shipping cost: user flows". */
+/** Annual billing PRD → its tech brief → the design "Early yearly price: user flows". */
 async function openFlow(page: Page) {
   await page.goto(BRIEF);
-  await page.getByTestId("spec-design").filter({ visible: true }).getByRole("link", { name: /Early shipping cost: user flows/ }).click();
+  await page.getByTestId("spec-design").filter({ visible: true }).getByRole("link", { name: /Early yearly price: user flows/ }).click();
   await expect(page).toHaveURL(/\/specs\/[^/]+\/design\/[^/]+$/);
 }
 

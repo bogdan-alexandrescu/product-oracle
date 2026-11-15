@@ -40,7 +40,7 @@ test("the run page lists the answered questions under the Engineering review sto
   await inboxRow.getByRole("link", { name: "Review" }).click();
   await expect(page.getByTestId("brief-row")).toHaveCount(3);
 
-  for (const key of ["f.guided-setup", "f.sample-data", "f.saved-carts"]) await verdict(page, key, "Feasible");
+  for (const key of ["f.guided-setup", "f.sample-data", "f.referral-link"]) await verdict(page, key, "Feasible");
   await row(page, "f.guided-setup").getByRole("button").first().click();
   await answer(page, /^Answer: Does the payment sandbox/, "Yes, the sandbox takes test orders.");
   await answer(page, /^Answer: Show the checklist on phones/, "Phones come in the second release.");
@@ -57,10 +57,10 @@ test("the run page lists the answered questions under the Engineering review sto
   await expect(answers).toHaveCount(2);
   const when = String.raw`[A-Z][a-z]{2} \d{1,2}(, \d{4})?, \d{1,2}:\d{2} [AP]M`;
   await expect(answers.nth(0)).toHaveText(
-    new RegExp(String.raw`^Guided setup: Does the payment sandbox take test orders without a live account\? → Yes, the sandbox takes test orders\. · Theo Brandt · ${when}`),
+    new RegExp(String.raw`^Setup checklist: Does the payment sandbox take test orders without a live account\? → Yes, the sandbox takes test orders\. · Theo Brandt · ${when}`),
   );
   await expect(answers.nth(1)).toHaveText(
-    new RegExp(String.raw`^Guided setup: Show the checklist on phones too\? → Phones come in the second release\. · Theo Brandt · ${when}`),
+    new RegExp(String.raw`^Setup checklist: Show the checklist on phones too\? → Phones come in the second release\. · Theo Brandt · ${when}`),
   );
   // The feature by its name: never its key.
   await expect(section).not.toContainText("f.guided-setup");
@@ -77,7 +77,7 @@ test("a card answered at the feature set shows under that stop with the feature'
   await withScenario(page, "scope-review");
   await login(page, "approver@example.com");
   await page.getByTestId("nav-runs").click();
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").first().click();
   await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+/);
   const card = page.getByRole("region", { name: "Questions from the agents" }).getByTestId("agent-question").filter({ hasText: "Who edits addresses in bulk" });
@@ -116,6 +116,6 @@ test("an answer recorded by its question's id shows the feature's question", asy
   const answers = eng.getByRole("list", { name: "Answered at Engineering review" }).getByTestId("run-decision-answer");
   await expect(answers).toHaveCount(1);
   await expect(answers.nth(0)).toHaveText(
-    /^Guided setup: Does the payment sandbox take test orders without a live account\? → Yes, the sandbox takes test orders\. · Theo Brandt · Oct 17/,
+    /^Setup checklist: Does the payment sandbox take test orders without a live account\? → Yes, the sandbox takes test orders\. · Theo Brandt · Oct 17/,
   );
 });

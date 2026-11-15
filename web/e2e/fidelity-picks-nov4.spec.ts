@@ -81,7 +81,7 @@ test.describe("EC1 b and EC2 b: the Engineering check", () => {
 
     // The ability stays: it starts a note to the architect with the feature named.
     await ask.click();
-    await expect(bar(page).getByRole("textbox", { name: "Note to the architect" })).toHaveValue(/^Guided setup: /);
+    await expect(bar(page).getByRole("textbox", { name: "Note to the architect" })).toHaveValue(/^Setup checklist: /);
   });
 
   test("a feature with no questions keeps Ask the architect on the 'None for this feature.' line", async ({ page }) => {
@@ -180,7 +180,7 @@ test.describe("RP1 a: the run's priority order", () => {
     await expect(page.getByTestId("priority-row-F-01").getByTestId("problem-differs_from_live")).toHaveCount(0);
     const band = page.getByTestId("snapshot-band");
     await band.getByRole("button", { name: "Approve order" }).click();
-    await expect(band).toContainText("Saved for Saved addresses");
+    await expect(band).toContainText("Saved for Bulk import");
 
     await page.goto("/priorities");
     await expect(page.locator("main").getByText("Address book per account").first()).toBeVisible();
@@ -199,7 +199,7 @@ test.describe("RP1 a: the run's priority order", () => {
     await delivery.getByRole("button", { name: /Default delivery address$/ }).first().click();
     const supports = page.getByRole("list", { name: "Supports" });
     await expect(supports.getByRole("listitem")).toHaveCount(1);
-    await expect(supports.getByRole("listitem")).toContainText("Raise activation");
+    await expect(supports.getByRole("listitem")).toContainText("Activation");
     await expect(supports.getByRole("listitem")).toContainText("Proposed");
     const needs = page.getByRole("list", { name: "Depends on" });
     await expect(needs.getByRole("listitem")).toHaveCount(1);
@@ -214,9 +214,9 @@ test.describe("RP1 a: the run's priority order", () => {
     await shared.getByRole("button", { name: /Shared team addresses$/ }).first().click();
     const link = page.getByRole("list", { name: "Supports" }).getByRole("listitem");
     await expect(link).toHaveCount(1);
-    await expect(link).toContainText("Grow paid conversion");
+    await expect(link).toContainText("Growth");
     await expect(link).toContainText("Contribution assumed");
-    await link.getByLabel("Contribution to Grow paid conversion").selectOption("2");
+    await link.getByLabel("Contribution to Growth").selectOption("2");
     await expect(link).not.toContainText("Contribution assumed");
   });
 

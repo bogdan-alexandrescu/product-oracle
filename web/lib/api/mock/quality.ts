@@ -71,7 +71,7 @@ type Rule = [Status, string, string[], string[]?];
 /** The fixed synthetic evaluation every version shows in mock mode (but the ones below). */
 const RULES: Record<string, Rule> = {
   problem_clarity: ["pass", "The problem names its users and its pain is backed by 2 pieces of evidence.", ["problem"]],
-  goal_alignment: ["pass", "Every linked feature (1) serves a confirmed goal: Raise activation (g.activation).", ["goal-trace"]],
+  goal_alignment: ["pass", "Every linked feature (1) serves a confirmed goal: Activation (g.activation).", ["goal-trace"]],
   evidence_provenance: ["warning", "1 piece of evidence is stale.", []],
   alternatives_tradeoffs: ["warning", "No alternatives considered: no section and no blocker with two options.", []],
   blocker_feasibility: ["pass", "No blocker is recorded; the risks section states the constraints.", ["risks"]],
@@ -192,7 +192,7 @@ export function addDecisionOutcome(
 /**
  * The "outcomes" scenario (synthetic): Saved payment methods is due for its check (38% → 42%,
  * now 41%), Guided setup checklist needs a prediction, Order status emails is measuring, and
- * six earlier predictions on Raise activation were assessed (3 held, 3 not; expected 4.2).
+ * six earlier predictions on Activation were assessed (3 held, 3 not; expected 4.2).
  */
 export function seedOutcomes(owner: string, goalId: string, roadmapVersionId: string | null): Outcome[] {
   const now = Date.now();
@@ -623,7 +623,7 @@ export function storeModelReview(
 }
 
 /**
- * The "quality" scenarios (invented): Team workspaces v2 with a stored rules snapshot, a model
+ * The "quality" scenarios (invented): Team invites v2 with a stored rules snapshot, a model
  * review of 7 of the 10 criteria and two people's ratings, and one check that could not run.
  * "quality-job-failed" adds a later model job that failed (pool paused); "quality-job-running"
  * one still running; "quality-off" turns the quality review off for the PRD and stores nothing.
@@ -657,7 +657,7 @@ export function seedQualityScenario(
       })),
     );
   };
-  s.quality.check_errors = { "team-workspaces": { downstream_consistency: "artifact dependency lookup timed out" } };
+  s.quality.check_errors = { "team-invites": { downstream_consistency: "artifact dependency lookup timed out" } };
   report("rules", s.owner, "2026-10-20T09:41:00Z",
     CRITERIA.map((c) => [c.key, RULES[c.key][0], RULES[c.key][1], RULES[c.key][2]]),
     { blocked: false, blocking: [], errors: ["downstream_consistency"] });
@@ -679,7 +679,7 @@ export function seedQualityScenario(
   };
   job.output = storeModelReview(s.v2, job, s.versionId, [
     { criterion: "problem_clarity", status: "pass", rationale: "The problem names the teams who share work and the calls that asked for it.", section_keys: ["problem"] },
-    { criterion: "goal_alignment", status: "pass", rationale: "Shared editing maps to the activation goal.", section_keys: [] },
+    { criterion: "goal_alignment", status: "pass", rationale: "Team invites map to the growth goal.", section_keys: [] },
     { criterion: "evidence_provenance", status: "warning", rationale: "One cited figure is older than the last release.", section_keys: [] },
     { criterion: "blocker_feasibility", status: "warning", rationale: "The permissions migration has no stated fallback.", section_keys: [] },
     { criterion: "scope_testability", status: "critical", rationale: "Acceptance criteria describe intent (\"feels easy\") rather than tests; non-goals are missing.", section_keys: ["solution"] },

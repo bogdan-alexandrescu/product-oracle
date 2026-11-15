@@ -29,7 +29,7 @@ async function seedFinishedWithoutDocument(page: Page, otherImported = false): P
       const run = {
         ...JSON.parse(JSON.stringify(base)),
         id,
-        document_slug: "guest-checkout",
+        document_slug: "public-signup",
         document_id: null,
         status: "succeeded",
         waiting_on: null,
@@ -49,7 +49,7 @@ async function seedFinishedWithoutDocument(page: Page, otherImported = false): P
       const refused = { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems: [], summary, source: null, prd_links: null };
       Object.assign(segments[3], { artifacts: ["prd.md"], draft_import: refused });
       if (otherImported) {
-        const imported = { document_id: crypto.randomUUID(), slug: "guest-checkout", kind: "prd", version: 1, created: true, warnings: [], error: null, problems: [], summary: null, source: null, prd_links: null };
+        const imported = { document_id: crypto.randomUUID(), slug: "public-signup", kind: "prd", version: 1, created: true, warnings: [], error: null, problems: [], summary: null, source: null, prd_links: null };
         Object.assign(segments[2], { draft_import: imported });
       }
       run.checkpoints = segments.map((s) => ({
@@ -67,7 +67,7 @@ async function seedFinishedWithoutDocument(page: Page, otherImported = false): P
         can_decide: false,
       }));
       db.runs.runs.push(run);
-      db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Guest checkout PRD\n---\n\n# Guest checkout PRD {#title}\n";
+      db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Public signup PRD\n---\n\n# Public signup PRD {#title}\n";
       localStorage.setItem(key, JSON.stringify(db));
       return id;
     },
@@ -76,7 +76,7 @@ async function seedFinishedWithoutDocument(page: Page, otherImported = false): P
 }
 
 /**
- * The "no-document" scenario (#583 review): guest-checkout's run finished with no document
+ * The "no-document" scenario (#583 review): public-signup's run finished with no document
  * just now, old-checkout's on Oct 1, before the No document row shipped. The clock is set
  * past that day, as the API's NO_DOCUMENT_SINCE.
  */
@@ -107,12 +107,12 @@ test("a run that finished with no document: an Inbox row says why and what to do
   const row = page.getByTestId("inbox-no-document");
   // The run from before the row shipped gets none.
   await expect(row).toHaveCount(1);
-  await expect(row).toContainText("guest-checkout finished without a document: Oracle refused its draft");
+  await expect(row).toContainText("public-signup finished without a document: Oracle refused its draft");
   await expect(row).toContainText("Retry import");
 
   // The runs list: Succeeded, with no Draft rejected chip.
   await page.getByTestId("nav-runs").click();
-  const listed = page.locator('[data-testid="run-row"][data-document="guest-checkout"]');
+  const listed = page.locator('[data-testid="run-row"][data-document="public-signup"]');
   await expect(listed).toContainText("Succeeded");
   await expect(listed.getByTestId("run-draft-rejected")).toHaveCount(0);
 
@@ -125,9 +125,9 @@ test("a run that finished with no document: an Inbox row says why and what to do
   await expect(page).toHaveURL(new RegExp(`/runs/${NO_DOCUMENT_RUN}$`));
   const prd = page.getByTestId("segment-prd_draft").filter({ visible: true });
   await prd.getByRole("button", { name: "Retry import" }).click();
-  await expect(prd).toContainText(/Imported as (?!guest-checkout).+ v\d/);
+  await expect(prd).toContainText(/Imported as (?!public-signup).+ v\d/);
   await noRowInTheInbox(page);
-  await page.goto("/documents/guest-checkout");
+  await page.goto("/documents/public-signup");
   const again = page.getByTestId("version-inspector").getByTestId("version-imported-again");
   await expect(again).toHaveText(/^imported again by .+ on [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M \S+$/);
 });
@@ -148,7 +148,7 @@ test("the No document row clears itself once a later run imports the document", 
   await expect(page).toHaveURL(new RegExp(`/runs/${NO_DOCUMENT_RUN}$`));
   await page.getByTestId("segment-prd_draft").filter({ visible: true }).getByRole("button", { name: "Start a new run" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByLabel("PRD document")).toHaveValue("guest-checkout");
+  await expect(dialog.getByLabel("PRD document")).toHaveValue("public-signup");
   // Only the PRD review stops: the other stops are switched off.
   const stops = dialog.getByRole("checkbox", { name: /^Stop for / });
   await expect(stops.first()).toBeVisible();
@@ -170,13 +170,13 @@ test("the No document row clears itself once a later run imports the document", 
     await expect(review).toHaveCount(1, { timeout: 1_000 });
   }).toPass({ timeout: 15_000 });
   await review.getByRole("link", { name: "Open review" }).click();
-  await expect(page).toHaveURL(/\/documents\/guest-checkout\/v\/1\?run_review=/);
+  await expect(page).toHaveURL(/\/documents\/public-signup\/v\/1\?run_review=/);
   const bar = page.getByTestId("run-review-bar").filter({ visible: true });
   await bar.getByRole("button", { name: "Approve draft" }).click();
   await bar.getByRole("group", { name: "Confirm Approve draft" }).getByRole("button", { name: "Approve draft" }).click();
   await expect(bar).toContainText("Approved");
   await page.goto(runUrl);
-  await expect(page.getByTestId("segment-prd_draft")).toContainText(/Imported as (?!guest-checkout).+ v1/);
+  await expect(page.getByTestId("segment-prd_draft")).toContainText(/Imported as (?!public-signup).+ v1/);
 
   // The finished run's row is gone, with nobody dismissing it.
   await noRowInTheInbox(page);
@@ -188,11 +188,11 @@ test("once another segment imported a version, the refused one says why in plain
   await page.goto(`/runs/${ID}`);
   const prd = page.getByTestId("segment-prd_draft");
   await expect(prd.getByRole("button", { name: "Retry import" })).toHaveCount(0);
-  await expect(prd.getByTestId("draft-retry-refused")).toContainText("already imported guest-checkout v1");
+  await expect(prd.getByTestId("draft-retry-refused")).toContainText("already imported public-signup v1");
   await prd.getByRole("button", { name: "Start a new run" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("PRD document")).toHaveValue("guest-checkout");
+  await expect(dialog.getByLabel("PRD document")).toHaveValue("public-signup");
   // Not a run that needs a person: no Inbox row.
   await page.goto("/inbox");
   await expect(page.getByTestId("inbox-no-document")).toHaveCount(0);

@@ -21,7 +21,7 @@ import { login } from "./helpers";
  *   the page scrolls sideways.
  */
 
-const ITEMS = ["Save a cart for later", "Carts kept across devices", "Price-drop note on saved carts", "Shared carts for teams", "Saved-cart reminder emails", "Turn a cart into a quote"];
+const ITEMS = ["Save a cart for later", "Carts kept across devices", "Price-drop note on referral links", "Shared carts for teams", "Saved-cart reminder emails", "Turn a cart into a quote"];
 
 async function openRoadmapStep(page: Page) {
   await page.addInitScript((key) => localStorage.setItem(key, "meeting-draft-dates"), MOCK_SCENARIO_KEY);
@@ -30,13 +30,13 @@ async function openRoadmapStep(page: Page) {
   await expect(page.getByRole("region", { name: "Upcoming" })).toBeVisible();
   await page.getByRole("button", { name: "Start review" }).first().click();
   const sheet = page.getByRole("dialog", { name: "Start a review" });
-  await sheet.getByLabel("PRD").selectOption({ label: "Saved carts" });
+  await sheet.getByLabel("PRD").selectOption({ label: "Referral link" });
   await sheet.getByRole("checkbox", { name: "Priya Raman" }).check();
   await sheet.getByRole("button", { name: "Start", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review: Saved carts" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review: Referral link" })).toBeVisible();
   await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();
   const slice = page.getByRole("region", { name: "Roadmap slice" });
-  await expect(slice.getByRole("heading", { name: "Saved carts on the roadmap" })).toBeVisible();
+  await expect(slice.getByRole("heading", { name: "Referral link on the roadmap" })).toBeVisible();
   return slice;
 }
 
@@ -86,7 +86,7 @@ test.describe("desktop", () => {
     await expect(slice.getByRole("img", { name: "Roadmap items" })).toBeVisible();
     await expect(slice.locator("[data-bar]")).toHaveCount(6);
     await expect(slice).not.toContainText("Draft from the run");
-    await expect(page.getByText("Saved carts dates approved: 6 items on the roadmap").first()).toBeVisible();
+    await expect(page.getByText("Referral link dates approved: 6 items on the roadmap").first()).toBeVisible();
 
     // After a reload the Roadmap step still says the dates were approved here, solid.
     await page.reload();
@@ -96,18 +96,18 @@ test.describe("desktop", () => {
     await expect(slice).not.toContainText("Draft from the run");
 
     // The items are on the Simple roadmap now.
-    await page.goto("/simple/roadmap?prd=saved-carts");
+    await page.goto("/simple/roadmap?prd=referral-link");
     // vqa-simple-runs: the Timeline's bars move by drag and arrow keys since train AH (the owner's answer), and say so in their name.
     await expect(page.getByRole("button", { name: /^Turn a cart into a quote, May 3 – Jun 25, 2027\. Arrows move it/ })).toBeVisible();
 
     // runplan-r2: the decision is in Company > Decisions and its PRD link opens the PRD.
     await page.goto("/company/decisions?state=all");
-    await page.getByTestId("decision-row").filter({ hasText: "Saved carts dates approved: 6 items on the roadmap" }).click();
+    await page.getByTestId("decision-row").filter({ hasText: "Referral link dates approved: 6 items on the roadmap" }).click();
     const inspector = page.getByTestId("decision-inspector").filter({ visible: true });
-    await expect(inspector).toContainText("Saved carts dates approved: 6 items on the roadmap");
-    await inspector.getByRole("link", { name: "Saved carts PRD" }).click();
-    await expect(page).toHaveURL(/\/documents\/saved-carts$/);
-    await expect(page.getByRole("heading", { name: "Saved carts", level: 1 })).toBeVisible();
+    await expect(inspector).toContainText("Referral link dates approved: 6 items on the roadmap");
+    await inspector.getByRole("link", { name: "Referral link PRD" }).click();
+    await expect(page).toHaveURL(/\/documents\/referral-link$/);
+    await expect(page.getByRole("heading", { name: "Referral link", level: 1 })).toBeVisible();
     await expect(page.getByText("Not found")).toHaveCount(0);
   });
 

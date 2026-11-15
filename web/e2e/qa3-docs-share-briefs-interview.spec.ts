@@ -22,7 +22,7 @@ const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
 async function openTechBrief(page: Page, title: string) {
-  await page.goto("/documents/checkout-redesign");
+  await page.goto("/documents/annual-billing");
   await page.getByTestId("tech-briefs").getByRole("link", { name: title }).click();
   await expect(page).toHaveURL(/\/briefs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText(title);

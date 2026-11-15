@@ -52,7 +52,7 @@ test.describe("desktop", () => {
       /^v\d+, the latest$/,
     );
     // A PRD with nothing approved says so, not 'No' or a dash.
-    await pick(page, "Saved carts PRD");
+    await pick(page, "Referral link PRD");
     await expect(inspector(page).getByTestId("inspector-approved")).toHaveText(
       "Not approved",
     );
@@ -63,10 +63,10 @@ test.describe("desktop", () => {
   }) => {
     await open(page);
     const table = page.getByTestId("documents-table");
-    await expect(row(page, "Saved carts PRD")).toContainText("Goal-traced PRD");
+    await expect(row(page, "Referral link PRD")).toContainText("Goal-traced PRD");
     await expect(table).not.toContainText("oracle-default");
     await expect(table.locator(".font-mono")).toHaveCount(0);
-    await row(page, "Saved carts PRD").click();
+    await row(page, "Referral link PRD").click();
     await expect(inspector(page).getByTestId("inspector-template")).toHaveText(
       "Goal-traced PRD",
     );
@@ -169,17 +169,17 @@ test.describe("desktop", () => {
     page,
   }) => {
     await open(page);
-    await row(page, "Saved carts PRD")
-      .getByRole("button", { name: "Actions for Saved carts PRD" })
+    await row(page, "Referral link PRD")
+      .getByRole("button", { name: "Actions for Referral link PRD" })
       .click();
     const menu = page.getByRole("menu", {
-      name: "Actions for Saved carts PRD",
+      name: "Actions for Referral link PRD",
     });
     await expect(menu.getByRole("menuitem", { name: "Edit" })).toHaveCount(0);
     await expect(menu.getByRole("menuitem", { name: /^Open/ })).toHaveCount(0);
     await page.keyboard.press("Escape");
-    await row(page, "Saved carts PRD").getByRole("link", { name: "v2", exact: true }).click();
-    await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2$/);
+    await row(page, "Referral link PRD").getByRole("link", { name: "v2", exact: true }).click();
+    await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2$/);
   });
 
   test("qa-docs-43: the delete dialog names the draft run in words, not its flow", async ({
@@ -256,10 +256,10 @@ test.describe("phone", () => {
     await open(page);
     await expect(inspector(page)).toHaveCount(0);
     // The status cell, not the title link: a tap anywhere on the row opens it.
-    await row(page, "Saved carts PRD").locator("td").nth(1).click();
-    await expect(page).toHaveURL(/\/documents\/saved-carts$/);
+    await row(page, "Referral link PRD").locator("td").nth(1).click();
+    await expect(page).toHaveURL(/\/documents\/referral-link$/);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Saved carts PRD" }),
+      page.getByRole("heading", { level: 1, name: "Referral link PRD" }),
     ).toBeVisible();
   });
 

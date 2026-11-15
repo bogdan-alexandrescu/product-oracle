@@ -52,9 +52,9 @@ for (const [label, size] of [
 
       const replaces = s.getByRole("group", { name: /Replaces/ });
       const pick = replaces.getByLabel("Approved PRD it replaces");
-      // Approved PRDs only: Usage alerts is approved, Checkout redesign is not.
+      // Approved PRDs only: Usage alerts is approved, Annual billing is not.
       await expect(pick.locator("option", { hasText: OLD })).toHaveCount(1);
-      await expect(pick.locator("option", { hasText: "Checkout redesign PRD" })).toHaveCount(0);
+      await expect(pick.locator("option", { hasText: "Annual billing PRD" })).toHaveCount(0);
       await expect(replaces.getByTestId("np-carried")).toHaveCount(0);
       await pick.selectOption({ label: OLD });
 

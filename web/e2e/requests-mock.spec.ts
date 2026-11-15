@@ -14,11 +14,11 @@ import { login } from "./helpers";
 const ADMIN_ID = "b1000000-0000-4000-8000-000000000001";
 const OTHER_ID = "b1000000-0000-4000-8000-000000000002";
 const GOALS = [
-  { id: "e1000000-0000-4000-8000-000000000001", key: "g.activation", title: "Raise activation", status: "confirmed" },
+  { id: "e1000000-0000-4000-8000-000000000001", key: "g.activation", title: "Activation", status: "confirmed" },
   { id: "e1000000-0000-4000-8000-000000000002", key: "g.retention", title: "Keep teams", status: "confirmed" },
   { id: "e1000000-0000-4000-8000-000000000003", key: "g.idea", title: "An idea", status: "proposed" },
 ];
-const FEATURES = [{ id: "f1000000-0000-4000-8000-000000000001", key: "f.saved-addresses", title: "Saved addresses" }];
+const FEATURES = [{ id: "f1000000-0000-4000-8000-000000000001", key: "f.bulk-import", title: "Bulk import" }];
 
 type Role = RequestsContext["role"];
 

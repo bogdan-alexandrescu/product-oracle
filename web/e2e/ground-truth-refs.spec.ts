@@ -12,13 +12,13 @@ import { login, openSection, openTab } from "./helpers";
  * Truth's review says back say no "baseline" either. Mock API; made-up data.
  */
 
-const DOC = "/documents/checkout-redesign/v/2";
+const DOC = "/documents/annual-billing/v/2";
 const SHOWN = "Ground Truth decision D-12";
 /** "baseline" naming the graph; a goal measure's starting value would read "Baseline value". */
 const OLD_NAME = /\bbaseline\b(?! value)/i;
 
 /**
- * Version 2 of Checkout redesign cites a Ground Truth decision, with no title, in Problem. The
+ * Version 2 of Annual billing cites a Ground Truth decision, with no title, in Problem. The
  * edit is made as the next page loads, before its scripts run: made on Home, a request Home
  * still had under way could save its own copy of the mock over it.
  */
@@ -29,7 +29,7 @@ async function citeDecision(page: Page) {
     sessionStorage.setItem("cited-o-d12", "1");
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
-    const doc = db.documents.find((d: { slug: string }) => d.slug === "checkout-redesign");
+    const doc = db.documents.find((d: { slug: string }) => d.slug === "annual-billing");
     const v = db.versions.find((x: { document_id: string; number: number }) => x.document_id === doc.id && x.number === 2);
     v.citations.push({
       id: crypto.randomUUID(),
@@ -96,7 +96,7 @@ test("an Ask Oracle answer about the Ground Truth, and a decision on its review,
   await login(page);
   // A decision on the review, and whatever it says back (a notice or a toast).
   await page.goto("/ground-truth?run=7a11c0de-0000-4000-8000-0000000000b2");
-  const row = page.getByTestId("from-run-row").filter({ hasText: "Guided setup" });
+  const row = page.getByTestId("from-run-row").filter({ hasText: "Setup checklist" });
   await row.getByRole("button", { name: "Accept" }).click();
   await expect(row).toContainText("Accepted");
   expect(await page.locator("body").innerText()).not.toMatch(OLD_NAME);

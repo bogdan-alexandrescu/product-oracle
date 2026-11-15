@@ -95,7 +95,7 @@ test("in flight: the PRD's step and its sections approved are labelled apart", a
   await openHome(page);
   const table = page.getByTestId("home-in-flight-table");
   await expect(table.getByRole("columnheader", { name: "Progress" })).toBeAttached();
-  const checkout = flight(page, "checkout-redesign", "prd");
+  const checkout = flight(page, "annual-billing", "prd");
   await expect(checkout).toHaveAttribute("aria-selected", "true");
   await expect(checkout.getByTestId("row-journey")).toContainText("Step 8 of 9");
   const inspector = page.getByTestId("home-inspector");
@@ -115,7 +115,7 @@ test("in flight: the selected PRD's blockers are named", async ({ page }) => {
 // qa-company-43, qa-shell-32: a paused run does not read as finished; runs are named, not slugged.
 test("in flight: a run paused over budget says Paused; runs are named by title, no slug or short id", async ({ page }) => {
   await openHome(page);
-  const paused = flight(page, "team-workspaces");
+  const paused = flight(page, "team-invites");
   await expect(paused).toContainText("Paused: over budget");
   await expect(paused.getByTestId("row-paused")).toHaveText(/^Paused/);
   await expect(paused.getByRole("meter")).toHaveCount(0);
@@ -156,8 +156,8 @@ test.describe("on a phone", () => {
     await expect(page.getByTestId("home-goal-G3").getByTestId("goal-confidence")).toBeVisible();
     await expect(page.getByTestId("home-goal-G1").getByTestId("goal-confidence")).toHaveCount(0);
     await expect(page.getByTestId("home-goal-G3").getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
-    await expect(flight(page, "team-workspaces").getByTestId("row-paused")).toBeVisible();
-    await expect(flight(page, "checkout-redesign", "prd").getByTestId("row-journey")).toContainText("Step 8 of 9");
+    await expect(flight(page, "team-invites").getByTestId("row-paused")).toBeVisible();
+    await expect(flight(page, "annual-billing", "prd").getByTestId("row-journey")).toContainText("Step 8 of 9");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 });

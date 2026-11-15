@@ -134,7 +134,7 @@ export function Who({ by, who }: { by: string; who: WhoOf }) {
 }
 
 /**
- * Words for a change: "Moved above Saved addresses" / "Pinned at #1". The feature it moved
+ * Words for a change: "Moved above Bulk import" / "Pinned at #1". The feature it moved
  * above by its name: the API's own title for it (the object form's `title`) over a lookup by key, which only works while the key is still in the
  * ranking shown; either way, never the bare key.
  */

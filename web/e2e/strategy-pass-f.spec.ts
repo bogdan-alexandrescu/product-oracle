@@ -91,8 +91,8 @@ test("pass F: the strategy card's counts open the stack line, and a goalless foc
   await team.getByRole("button", { name: "1 item" }).click();
   await expect(root.getByTestId("stack-inspector")).toContainText("Team plans");
   const self = card.getByTestId("focus-row").filter({ hasText: "Self-serve onboarding" });
-  await self.getByRole("button", { name: /Grow paid conversion/ }).click();
-  await expect(root.getByTestId("stack-inspector").getByRole("heading").first()).toContainText("Grow paid conversion");
+  await self.getByRole("button", { name: /Growth/ }).click();
+  await expect(root.getByTestId("stack-inspector").getByRole("heading").first()).toContainText("Growth");
   await expect(team.getByRole("link", { name: "Add a goal" })).toBeVisible();
   // The count leads to the two items it counts, each opened on the Plan.
   const stop = card.getByTestId("stop-row");

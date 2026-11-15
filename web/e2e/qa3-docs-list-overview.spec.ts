@@ -65,7 +65,7 @@ test.describe("desktop", () => {
 
   test("qa-docs-23: who imported a version is a person or an integration, never a credential's name", async ({ page }) => {
     await setUp(page);
-    for (const doc of ["saved-carts", "checkout-redesign"]) {
+    for (const doc of ["referral-link", "annual-billing"]) {
       await page.goto(`/documents/${doc}`);
       await expect(page.getByTestId("versions-table")).toBeVisible();
       const by = versionInspector(page).getByTestId("version-importer");
@@ -76,11 +76,11 @@ test.describe("desktop", () => {
   });
 
   test("qa-docs-24: the overview says the PRD's status once, beside its title", async ({ page }) => {
-    await openDoc(page, "saved-carts");
+    await openDoc(page, "referral-link");
     const crumb = page.getByRole("navigation", { name: "Breadcrumb" }).filter({ visible: true }).first();
     await expect(crumb.getByRole("link", { name: "PRDs" })).toBeVisible();
     await expect(crumb).not.toContainText("Draft");
-    await expect(crumb).not.toContainText("Saved carts PRD");
+    await expect(crumb).not.toContainText("Referral link PRD");
     const statuses = page.locator("[data-status]").filter({ visible: true });
     await expect(statuses).toHaveCount(1);
     await expect(page.locator("[data-page-header]").locator("[data-status]")).toHaveText("Draft");
@@ -88,7 +88,7 @@ test.describe("desktop", () => {
 
   for (const theme of ["light", "dark"] as const) {
     test(`qa-docs-25 (${theme}): Diff from v1 is drawn in the link colour`, async ({ page }) => {
-      await openDoc(page, "saved-carts", { theme });
+      await openDoc(page, "referral-link", { theme });
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       const link = page.getByTestId("versions-table").getByRole("link", { name: "Diff from v1" });
       await expect(link).toBeVisible();
@@ -108,7 +108,7 @@ test.describe("desktop", () => {
   }
 
   test("qa-docs-26: the open Ask for feedback form hides its opener; Send says why it waits", async ({ page }) => {
-    await openDoc(page, "checkout-redesign");
+    await openDoc(page, "annual-billing");
     const panel = page.getByTestId("campaigns");
     await panel.getByRole("button", { name: "Ask for feedback" }).click();
     await expect(panel.getByRole("button", { name: "Ask for feedback" })).toHaveCount(0);
@@ -129,10 +129,10 @@ test.describe("desktop", () => {
   });
 
   test("qa-docs-27: the ⋯ menu repeats no Open latest and leaves the version card's heading clear", async ({ page }) => {
-    await openDoc(page, "saved-carts");
+    await openDoc(page, "referral-link");
     await expect(page.getByRole("link", { name: "Open latest (v2)" })).toBeVisible();
-    await page.getByRole("button", { name: "Actions for Saved carts PRD" }).click();
-    const menu = page.getByRole("menu", { name: "Actions for Saved carts PRD" });
+    await page.getByRole("button", { name: "Actions for Referral link PRD" }).click();
+    const menu = page.getByRole("menu", { name: "Actions for Referral link PRD" });
     await expect(menu).toBeVisible();
     await expect(menu.getByRole("menuitem", { name: /^Open/ })).toHaveCount(0);
     await expect(menu.getByRole("menuitem")).toHaveText(["Regenerate…", "Delete…"]);
@@ -143,20 +143,20 @@ test.describe("desktop", () => {
   });
 
   test("qa-docs-29: the technical brief is listed under Tech briefs, and the counts add up", async ({ page }) => {
-    await openDoc(page, "checkout-redesign");
+    await openDoc(page, "annual-billing");
     const briefs = page.getByTestId("tech-briefs");
     const specs = page.getByTestId("engineering-specs");
-    await expect(briefs).toContainText("Early shipping cost: technical brief");
-    await expect(specs).not.toContainText("Early shipping cost: technical brief");
+    await expect(briefs).toContainText("Early yearly price: technical brief");
+    await expect(specs).not.toContainText("Early yearly price: technical brief");
     // qa4-docs-8: only the full engineering spec is under Engineering specs.
     await expect(specs.getByTestId("engineering-spec")).toHaveCount(1);
-    await expect(specs.getByTestId("engineering-spec")).toContainText("Early shipping cost: engineering spec");
+    await expect(specs.getByTestId("engineering-spec")).toContainText("Early yearly price: engineering spec");
     // The two feature briefs and the requested technical brief, all in one card.
     await expect(briefs.getByRole("listitem")).toHaveCount(3);
   });
 
   test("qa-docs-30: a feedback campaign is ended with End campaign, not a bare Close", async ({ page }) => {
-    await openDoc(page, "checkout-redesign");
+    await openDoc(page, "annual-billing");
     const campaign = page.getByTestId("campaigns").getByRole("listitem").filter({ hasText: "Company-wide feedback" });
     await expect(campaign.getByRole("button", { name: /^Close/ })).toHaveCount(0);
     const end = campaign.getByRole("button", { name: "End campaign Company-wide feedback" });
@@ -170,11 +170,11 @@ test.describe("desktop", () => {
 
   test("qa-docs-32: the list opens a PRD one way; Read latest says what it opens; the menu has no Open", async ({ page }) => {
     await openList(page);
-    await pick(page, "Saved carts PRD");
+    await pick(page, "Referral link PRD");
     const inspector = listInspector(page);
     await expect(inspector.getByRole("link", { name: /^Open/ })).toHaveCount(1);
-    await expect(inspector.getByRole("link", { name: "Open", exact: true })).toHaveAttribute("href", "/documents/saved-carts");
-    await expect(inspector.getByRole("link", { name: "Read latest (v2)" })).toHaveAttribute("href", "/documents/saved-carts/v/2");
+    await expect(inspector.getByRole("link", { name: "Open", exact: true })).toHaveAttribute("href", "/documents/referral-link");
+    await expect(inspector.getByRole("link", { name: "Read latest (v2)" })).toHaveAttribute("href", "/documents/referral-link/v/2");
     await expect(inspector.getByRole("link", { name: /^Read v\d+$/ })).toHaveCount(0);
     await row(page, "Usage alerts PRD").getByRole("button", { name: "Actions for Usage alerts PRD" }).click();
     const menu = page.getByRole("menu", { name: "Actions for Usage alerts PRD" });
@@ -197,7 +197,7 @@ test.describe("phone", () => {
   test.use({ viewport: PHONE });
 
   test("qa-docs-24 (phone): the crumb leads back with no second status", async ({ page }) => {
-    await openDoc(page, "saved-carts");
+    await openDoc(page, "referral-link");
     const crumb = page.getByRole("navigation", { name: "Breadcrumb" }).filter({ visible: true }).first();
     await expect(crumb).not.toContainText("Draft");
     await expect(page.locator("[data-status]").filter({ visible: true })).toHaveCount(1);
@@ -233,7 +233,7 @@ test.describe("phone", () => {
   });
 
   test("qa-docs-8: at the end of the overview the Feedback campaigns card sits above the tab bar", async ({ page }) => {
-    await openDoc(page, "checkout-redesign");
+    await openDoc(page, "annual-billing");
     await expect(page.getByTestId("campaigns")).toContainText("Company-wide feedback");
     await scrollToEnd(page);
     await aboveTabBar(page, page.getByTestId("campaigns"));

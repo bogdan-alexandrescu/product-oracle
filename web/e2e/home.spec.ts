@@ -15,7 +15,7 @@ test("Home: goals show current over target, distance to go, confidence and trend
   await expect(goals.getByTestId("goals-proposed")).toHaveText("Cut early churn proposed");
 
   const activation = page.getByTestId("home-goal-G3");
-  await expect(activation).toContainText("Raise activation");
+  await expect(activation).toContainText("Activation");
   await expect(activation.getByTestId("goal-figure")).toHaveText("38%/ 45%");
   // I3: distance to go in the goal's own unit, never a percentage of target.
   await expect(activation.getByTestId("goal-to-go")).toHaveText("7 pts to go");
@@ -73,17 +73,17 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
   await openHome(page);
   const flights = page.getByTestId("home-in-flight-table").getByTestId("flight-row");
   await expect(flights).toHaveCount(6);
-  const checkout = flights.filter({ hasText: "Checkout redesign PRD" });
+  const checkout = flights.filter({ hasText: "Annual billing PRD" });
   await expect(checkout).toHaveAttribute("aria-selected", "true");
   await expect(checkout.getByTestId("row-journey").getByRole("img")).toHaveAttribute("aria-label", "Journey 8 of 9: Review");
 
   const inspector = page.getByTestId("home-inspector");
   // Goal tags load for the selected row only, in the inspector (no trace call per row).
-  await expect(inspector.getByTestId("row-goals")).toHaveText("Grow paid conversionRaise activation");
+  await expect(inspector.getByTestId("row-goals")).toHaveText("GrowthActivation");
   await expect(inspector).toContainText("PRD · selected");
-  await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: "Annual billing PRD" })).toBeVisible();
   await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");
-  await expect(inspector.getByRole("link", { name: "Open", exact: true })).toHaveAttribute("href", "/documents/checkout-redesign");
+  await expect(inspector.getByRole("link", { name: "Open", exact: true })).toHaveAttribute("href", "/documents/annual-billing");
 
   // A run: its segments and what comes next. Named by its document's own title and its flow (#979).
   const onboarding = flights.filter({ hasText: "Team onboarding · Ground Truth to PRD" });

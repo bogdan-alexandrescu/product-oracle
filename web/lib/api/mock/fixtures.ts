@@ -55,8 +55,8 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
     id: "c1",
     source: "slack",
     ref: "https://example.slack.com/archives/C0PRODUCT/p1700000000",
-    title: "#product thread on checkout drop-off",
-    excerpt: "Most users who abandon do it at the shipping step, usually right after the cost appears.",
+    title: "#product thread on yearly plans",
+    excerpt: "Most teams who ask for a discount ask for a yearly price, usually right after their first invoice.",
     retrieved_at: "2026-10-16T13:10:00Z",
     confidence: 0.82,
   },
@@ -65,7 +65,7 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
     source: "fireflies",
     ref: "https://app.example-notes.com/view/customer-interview-07",
     title: "Customer interview 07 (transcript)",
-    excerpt: "I didn't know what shipping would cost until the last screen, so I went back to compare.",
+    excerpt: "I didn't know we could pay for the year until the last screen, so I went back to compare.",
     retrieved_at: "2026-10-15T09:42:00Z",
     confidence: 0.35,
     confidence_note: "one interview, not corroborated",
@@ -75,8 +75,8 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
     id: "c3",
     source: "notion",
     ref: "https://www.notion.so/example/Q4-goals-0000000000",
-    title: "Q4 goals: activation and retention",
-    excerpt: "G1: raise first-order completion from 61% to 70% by the end of Q4.",
+    title: "Q4 goals: activation and growth",
+    excerpt: "G2: raise paid conversion from 61% to 70% by the end of Q4.",
     retrieved_at: "2026-10-14T16:05:00Z",
     // No score: the note shows instead. Its angle brackets are text, never markup.
     confidence: null,
@@ -85,9 +85,9 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
   {
     id: "c4",
     source: "github",
-    ref: "https://github.com/example-org/storefront/issues/412",
-    title: "Address form loses state on back navigation",
-    excerpt: "Navigating back from payment clears every field in the address form.",
+    ref: "https://github.com/example-org/billing/issues/412",
+    title: "Card form loses state on back navigation",
+    excerpt: "Navigating back from payment clears every field in the card form.",
     retrieved_at: "2026-10-16T11:30:00Z",
     item: "7d0c6f3e-2b4a-4e8f-9c1d-3a5b7e9f1c2d",
     confidence: 0.75,
@@ -97,7 +97,7 @@ const CHECKOUT_CITATIONS: CitationSeed[] = [
     source: "gdocs",
     ref: "https://docs.google.com/document/d/example-funnel-export",
     title: "Funnel export, September",
-    excerpt: "Cart → shipping 82%, shipping → payment 64%, payment → confirmation 91%.",
+    excerpt: "Plan page → billing 82%, billing → payment 64%, payment → confirmation 91%.",
     retrieved_at: "2026-10-16T12:00:00Z",
   },
 ];
@@ -106,62 +106,62 @@ const CHECKOUT_V1: SectionSeed[] = [
   {
     key: "title",
     level: 1,
-    heading: "Checkout redesign PRD",
-    body: "This document proposes a redesign of the web checkout so that first-time buyers can finish an order without surprises. It is written for the product, design and storefront engineering teams.",
+    heading: "Annual billing PRD",
+    body: "This document proposes annual billing so that a team can pay for a whole year at once, without surprises. It is written for the product, design and billing engineering teams.",
   },
   {
     key: "goal-trace",
     level: 2,
     heading: "1. Goal trace",
-    body: "Serves **Raise activation**: raise first-order completion from 61% to 70% by the end of Q4 [c:c3]. Every change below is expected to move completion between the cart and the confirmation page.",
+    body: "Serves **Growth**: raise paid conversion from 61% to 70% by the end of Q4 [c:c3]. Every change below is expected to move conversion between the plan page and the confirmation page.",
   },
   {
     key: "problem",
     level: 2,
     heading: "2. Problem",
-    body: "Buyers leave checkout when the total changes late in the flow. Most abandonment happens at the shipping step, right after shipping cost appears [c:c1]. Interviewed buyers describe going back to compare totals and then not returning [c:c2].\n\nThe address form also loses its state on back navigation, which turns a quick comparison into retyping the whole address [c:c4].",
+    body: "Admins leave the plan page when the yearly price shows up late in the flow. Most drop-off happens at the billing step, right after the monthly total appears [c:c1]. Interviewed admins describe going back to compare prices and then not returning [c:c2].\n\nThe card form also loses its state on back navigation, which turns a quick comparison into retyping the whole card [c:c4].",
   },
   {
     key: "users",
     level: 2,
     heading: "3. Users and jobs",
-    body: "- **First-time buyer:** wants to know the full price before committing any personal details.\n- **Returning buyer:** wants to reuse a saved address and pay in as few steps as possible.\n- **Support agent:** wants fewer tickets about unexpected shipping charges.",
+    body: "- **New admin:** wants to know the yearly price before entering any card details.\n- **Paying admin:** wants to move a monthly plan to yearly in as few steps as possible.\n- **Support agent:** wants fewer tickets about yearly discounts.",
   },
   {
     key: "scope",
     level: 2,
     heading: "4. Scope",
-    body: "In scope: the cart summary, the shipping step and the order review page on web.\n\nOut of scope: payment providers, the mobile apps and promotional codes. These are tracked separately.",
+    body: "In scope: the plan page, the billing step and the order review page on web.\n\nOut of scope: payment providers, the mobile apps and discount codes. These are tracked separately.",
   },
   {
     key: "s-5",
     level: 2,
     heading: "5. Proposed flow",
-    body: "The flow keeps three steps but moves every cost the buyer will pay to the first screen.",
+    body: "The flow keeps three steps but moves the yearly price the team will pay to the first screen.",
   },
   {
     key: "s-5-1",
     level: 3,
-    heading: "5.1 Cart review",
-    body: "Show an estimated total, including shipping for the buyer's region, directly in the cart. The estimate uses the cheapest available option and is labelled as an estimate until an address is entered.",
+    heading: "5.1 Plan review",
+    body: "Show the monthly and the yearly price side by side, with the saving, directly on the plan page. The yearly price uses the team's seats and is labelled as an estimate until seats are confirmed.",
   },
   {
     key: "s-5-2",
     level: 3,
-    heading: "5.2 Shipping step",
-    body: "Replace the free-text shipping options with three clear choices: standard, express and pickup. Each option shows its price and delivery window before it is selected.\n\nThe address form keeps its values when the buyer navigates back and forth [c:c4].",
+    heading: "5.2 Billing step",
+    body: "Replace the free-text billing options with three clear choices: monthly, yearly and yearly by invoice. Each option shows its price and renewal date before it is selected.\n\nThe card form keeps its values when the admin navigates back and forth [c:c4].",
   },
   {
     key: "metrics",
     level: 2,
     heading: "6. Success metrics",
-    body: "| Metric | Baseline | Target |\n| --- | --- | --- |\n| First-order completion | 61% | 70% |\n| Shipping → payment conversion | 64% | 75% |\n\nMeasured weekly on web traffic, comparing the new flow against the current one with a 50/50 split.",
+    body: "| Metric | Baseline | Target |\n| --- | --- | --- |\n| Paid conversion | 61% | 70% |\n| Billing → payment conversion | 64% | 75% |\n\nMeasured weekly on web traffic, comparing the new flow against the current one with a 50/50 split.",
   },
   {
     key: "risks",
     level: 2,
     heading: "7. Risks and open questions",
-    body: "- Showing an estimate too early may anchor buyers on a price that later changes.\n- Pickup availability differs by region; we need a fallback when no pickup point is nearby.\n- Open question: do we keep the guest checkout path unchanged during the experiment?",
+    body: "- Showing a saving too early may anchor admins on a price that later changes.\n- Invoice billing differs by region; we need a fallback where no invoice option is offered.\n- Open question: do we keep the public signup path unchanged during the experiment?",
   },
   {
     key: "rollout",
@@ -178,20 +178,20 @@ function revise(base: SectionSeed[], edits: Record<string, Partial<SectionSeed>>
 const CHECKOUT_V2: SectionSeed[] = (() => {
   const s = revise(CHECKOUT_V1, {
     problem: {
-      body: "Buyers leave checkout when the total changes late in the flow. In September only 64% of buyers who reached the shipping step continued to payment [c:c5], and most abandonment happens right after shipping cost appears [c:c1]. Interviewed buyers describe going back to compare totals and then not returning [c:c2].\n\nThe address form also loses its state on back navigation, which turns a quick comparison into retyping the whole address [c:c4].",
+      body: "Admins leave the plan page when the yearly price shows up late in the flow. In September only 64% of admins who reached the billing step continued to payment [c:c5], and most drop-off happens right after the monthly total appears [c:c1]. Interviewed admins describe going back to compare prices and then not returning [c:c2].\n\nThe card form also loses its state on back navigation, which turns a quick comparison into retyping the whole card [c:c4].",
     },
     "s-5-2": {
-      body: "Replace the free-text shipping options with three clear choices: standard, express and pickup. Each option shows its price and delivery window before it is selected, and the cheapest option is preselected.\n\nThe address form keeps its values when the buyer navigates back and forth [c:c4]. Today 36% of buyers drop between shipping and payment [c:c5]; this step is where we expect most of the gain.",
+      body: "Replace the free-text billing options with three clear choices: monthly, yearly and yearly by invoice. Each option shows its price and renewal date before it is selected, and the yearly option is preselected.\n\nThe card form keeps its values when the admin navigates back and forth [c:c4]. Today 36% of admins drop between billing and payment [c:c5]; this step is where we expect most of the gain.",
     },
     metrics: {
-      body: "| Metric | Baseline | Target |\n| --- | --- | --- |\n| First-order completion | 61% | 70% |\n| Shipping → payment conversion | 64% | 75% |\n| Refund rate (guardrail) | 2.1% | ≤ 2.1% |\n\nMeasured weekly on web traffic, comparing the new flow against the current one with a 50/50 split. The experiment stops early if the refund-rate guardrail is breached for two consecutive weeks.",
+      body: "| Metric | Baseline | Target |\n| --- | --- | --- |\n| Paid conversion | 61% | 70% |\n| Billing → payment conversion | 64% | 75% |\n| Refund rate (guardrail) | 2.1% | ≤ 2.1% |\n\nMeasured weekly on web traffic, comparing the new flow against the current one with a 50/50 split. The experiment stops early if the refund-rate guardrail is breached for two consecutive weeks.",
     },
   }).filter((x) => x.key !== "rollout");
   const added: SectionSeed = {
     key: "s-5-3",
     level: 3,
-    heading: "5.3 Saved addresses",
-    body: "Returning buyers see their saved addresses as cards on the shipping step. Choosing a card fills the form and recalculates the shipping options in place.",
+    heading: "5.3 Seat count",
+    body: "Paying admins see their current seats as cards on the billing step. Choosing a card fills the form and recalculates the yearly price in place.",
   };
   const at = s.findIndex((x) => x.key === "s-5-2") + 1;
   s.splice(at, 0, added);
@@ -226,8 +226,8 @@ const WORKSPACES_CITATIONS: CitationSeed[] = [
   {
     id: "w2",
     source: "upload",
-    ref: "https://files.example.com/research/workspace-survey.pdf",
-    title: "Workspace survey results (n=214)",
+    ref: "https://files.example.com/research/team-survey.pdf",
+    title: "Team survey results (n=214)",
     excerpt: "58% of respondents share work by sending exported files to colleagues.",
     retrieved_at: "2026-10-11T15:20:00Z",
   },
@@ -245,14 +245,14 @@ const WORKSPACES_V1: SectionSeed[] = [
   {
     key: "title",
     level: 1,
-    heading: "Team workspaces PRD",
-    body: "Team workspaces let several people work on the same projects with shared settings and billing.",
+    heading: "Team invites PRD",
+    body: "Team invites let an admin bring teammates in from setup, so several people work on the same projects.",
   },
   {
     key: "problem",
     level: 2,
     heading: "1. Problem",
-    body: "People share work by exporting files and sending them around [c:w2]. Requests for shared editing come up in most sales conversations with teams [c:w1].",
+    body: "People share work by exporting files and sending them around [c:w2]. Requests to invite teammates come up in most sales conversations with teams [c:w1].",
   },
   {
     key: "roles",
@@ -264,13 +264,13 @@ const WORKSPACES_V1: SectionSeed[] = [
     key: "scope",
     level: 2,
     heading: "3. Scope",
-    body: "- Create a workspace and invite members by email.\n- Move existing projects into a workspace.\n- One invoice per workspace.",
+    body: "- Invite teammates by email from setup.\n- Resend or cancel an invite that is still open.\n- One click for a teammate to join.",
   },
 ];
 
 const WORKSPACES_V2 = revise(WORKSPACES_V1, {
   scope: {
-    body: "- Create a workspace and invite members by email or link.\n- Move existing projects into a workspace.\n- One invoice per workspace, with seats billed monthly.",
+    body: "- Invite teammates by email or link from setup.\n- Resend or cancel an invite that is still open.\n- One click for a teammate to join, as an editor.",
   },
 });
 
@@ -350,17 +350,17 @@ const CARTS_CITATIONS: CitationSeed[] = [
   {
     id: "c1",
     source: "web",
-    ref: "https://example.com/research/cart-abandonment-survey",
-    title: "Cart abandonment survey",
-    excerpt: "Shoppers who switch devices restart their cart more often than not.",
+    ref: "https://example.com/research/referral-survey",
+    title: "Referral survey",
+    excerpt: "Admins who liked setup told another team about it more often than not.",
     retrieved_at: "2026-10-15T10:00:00Z",
   },
   {
     id: "c2",
     source: "gdocs",
-    ref: "https://docs.google.com/document/d/example-repeat-orders",
-    title: "Repeat orders, Q3 review",
-    excerpt: "Repeat orders within 30 days: 18% of first-time buyers.",
+    ref: "https://docs.google.com/document/d/example-new-teams",
+    title: "New teams, Q3 review",
+    excerpt: "New teams from a colleague within 30 days: 18% of new admins.",
     retrieved_at: "2026-10-15T10:05:00Z",
   },
 ];
@@ -377,21 +377,21 @@ export const CARTS_BRIEF = [
 ];
 
 const CARTS_V1: SectionSeed[] = [
-  { key: "title", level: 1, heading: "Saved carts PRD", body: "Returning shoppers keep their cart across devices." },
+  { key: "title", level: 1, heading: "Referral link PRD", body: "Each admin gets a link that brings new teams in." },
   {
     key: "summary",
     level: 2,
     heading: "Summary",
     body:
-      "We will let signed-in shoppers save a cart and pick it up on any device. It serves the retention goal. We ask you to approve the beta scope.\n\n" +
-      "```notes\nOpen with how many carts are lost when a session ends.\n```",
+      "We will give every admin a link that brings a new team straight to signup. It serves the growth goal. We ask you to approve the beta scope.\n\n" +
+      "```notes\nOpen with how many new teams come from a colleague today.\n```",
   },
-  { key: "goal-trace", level: 2, heading: "Goal trace", body: "- **G2 (retention)**: more repeat orders within 30 days." },
+  { key: "goal-trace", level: 2, heading: "Goal trace", body: "- **G2 (growth)**: more new teams each week from referrals." },
   {
     key: "problem",
     level: 2,
     heading: "Problem",
-    body: "Shoppers build a cart on their phone, then lose it when they move to a laptop. Most start over; many give up.",
+    body: "Admins tell other teams about us, then send them to the home page. Most never find signup; many give up.",
   },
   {
     key: "brief-items",
@@ -400,66 +400,66 @@ const CARTS_V1: SectionSeed[] = [
     body: [
       "| Milestone | Feature | Goal | Outcome |",
       "|---|---|---|---|",
-      "| [Beta](#milestone-beta) | [Save cart](#feature-save-cart) | Retention | A cart survives the session |",
-      "|  | [Cart on every device](#feature-sync) | Retention | The same cart on phone and laptop |",
-      "| [General release](#milestone-ga) | [Reminder email](#feature-reminder) | Retention | Shoppers come back to finish |",
+      "| [Beta](#milestone-beta) | [Copy link](#feature-copy-link) | Growth | A link any admin can share |",
+      "|  | [Link in settings](#feature-settings) | Growth | The same link in setup and settings |",
+      "| [General release](#milestone-ga) | [Joined email](#feature-joined) | Growth | Admins hear a team joined |",
     ].join("\n"),
   },
   {
     key: "brief-roadmap",
     level: 2,
     heading: "Roadmap",
-    body: "- [Beta](#milestone-beta): signed-in shoppers never lose a cart.\n- [General release](#milestone-ga): more saved carts turn into orders.",
+    body: "- [Beta](#milestone-beta): every admin has a link to share.\n- [General release](#milestone-ga): more referral links turn into new teams.",
   },
-  { key: "non-goals", level: 2, heading: "Non-goals", body: "- Carts for guests without an account.\n- Sharing a cart with someone else." },
+  { key: "non-goals", level: 2, heading: "Non-goals", body: "- Links for guests without an account.\n- Paying admins for each new team." },
   {
     key: "top-risks",
     level: 2,
     heading: "Top risks",
-    body: "- Old carts show stale prices: re-price when a cart opens. See [Risks](#risks).\n- Too many emails: one reminder per cart, never more.",
+    body: "- Old links point at a closed plan: check the plan when a link opens. See [Risks](#risks).\n- Too many emails: one email per new team, never more.",
   },
   {
     key: "decisions",
     level: 2,
     heading: "Decisions needed",
-    body: "- Approve the beta scope: owner the founder, needed by 2026-11-01.\n- Pick the reminder delay (24 or 72 hours): owner the growth lead, needed by 2026-11-15.",
+    body: "- Approve the beta scope: owner the founder, needed by 2026-11-01.\n- Pick how long a link lasts (30 or 90 days): owner the growth lead, needed by 2026-11-15.",
   },
   { key: "full", level: 1, heading: "Full version", body: "" },
-  { key: "feature-detail", level: 2, heading: "Feature detail", body: "Keep a signed-in shopper's cart on our servers, so it follows them to any device." },
+  { key: "feature-detail", level: 2, heading: "Feature detail", body: "Keep each admin's link on our servers, so it works from any device and any page." },
   {
-    key: "feature-save-cart",
+    key: "feature-copy-link",
     level: 3,
-    heading: "Save cart",
-    body: "**Story:** as a signed-in shopper, I want my cart kept when I leave, so I can finish later.\n\n**Acceptance:** given a cart with items, when the session ends, then the cart is there at the next sign-in.",
+    heading: "Copy link",
+    body: "**Story:** as an admin, I want a link I can copy, so I can bring another team in.\n\n**Acceptance:** given an admin in setup, when they open it, then their link is there with a Copy button.",
   },
   {
-    key: "feature-sync",
+    key: "feature-settings",
     level: 3,
-    heading: "Cart on every device",
-    body: "**Story:** as a shopper on two devices, I want one cart, so I never rebuild it.\n\n**Acceptance:** an item added on the phone appears on the laptop within five seconds.",
+    heading: "Link in settings",
+    body: "**Story:** as an admin past setup, I want my link in settings, so I never lose it.\n\n**Acceptance:** the link in settings is the one in setup, and it opens signup.",
   },
   {
-    key: "feature-reminder",
+    key: "feature-joined",
     level: 3,
-    heading: "Reminder email",
-    body: "**Story:** as a shopper who left a cart, I want one reminder, so I remember to finish.\n\n**Acceptance:** one email per cart, sent after the chosen delay, with a one-click opt-out.",
+    heading: "Joined email",
+    body: "**Story:** as an admin who shared a link, I want one email when a team joins, so I know it worked.\n\n**Acceptance:** one email per new team, sent within the hour, with a one-click opt-out.",
   },
   { key: "milestones", level: 2, heading: "Milestones", body: "Dates come from the tracker estimates." },
   {
     key: "milestone-beta",
     level: 3,
     heading: "Beta",
-    body: "Scope: save cart and cart on every device, for signed-in shoppers. Exit: two weeks without a lost cart.",
+    body: "Scope: copy link and link in settings, for every admin. Exit: two weeks without a broken link.",
   },
-  { key: "milestone-ga", level: 3, heading: "General release", body: "Scope: the reminder email. Exit: opt-outs below 2%." },
+  { key: "milestone-ga", level: 3, heading: "General release", body: "Scope: the joined email. Exit: opt-outs below 2%." },
   {
     key: "risks",
     level: 2,
     heading: "Risks and open questions",
-    body: "- Stale prices: likely, medium impact; re-price when the cart opens.\n- Too many emails: possible, high impact; one reminder per cart.",
+    body: "- Closed plans: likely, medium impact; check the plan when a link opens.\n- Too many emails: possible, high impact; one email per new team.",
   },
   { key: "sources", level: 2, heading: "Sources and data points", body: "" },
-  { key: "sources-list", level: 3, heading: "Sources", body: "- Cart abandonment survey [c:c1]\n- Repeat orders, Q3 review [c:c2]" },
+  { key: "sources-list", level: 3, heading: "Sources", body: "- Referral survey [c:c1]\n- New teams, Q3 review [c:c2]" },
 ];
 
 const HORIZONS = [
@@ -531,11 +531,11 @@ const ALERTS_ROADMAP = roadmapFromPrd({ slug: "usage-alerts", title: "Usage aler
 
 const CARTS_V2: SectionSeed[] = CARTS_V1.map((s) =>
   s.key === "problem"
-    ? { ...s, body: "Shoppers build a cart on their phone, then lose it when they move to a laptop. More than half start over." }
+    ? { ...s, body: "Admins tell other teams about us, then send them to the home page. More than half never find signup." }
     : s,
 );
 
-// E1: the technical brief Oracle wrote from checkout-redesign v1 (version 1), then an edit
+// E1: the technical brief Oracle wrote from annual-billing v1 (version 1), then an edit
 // (version 2) added "Rollout notes" (not in the spec template) and "Proposed architecture"
 // (a template section a technical brief does not have): both read "Proposed · added in an
 // edit", and so does the source the edit cited.
@@ -546,9 +546,9 @@ const SPEC_ORACLE_CITATIONS: CitationSeed[] = [
   {
     id: "prd-checkout",
     source: "upload",
-    ref: "/documents/checkout-redesign/v/1",
-    title: "Checkout redesign PRD, version 1",
-    excerpt: "Show the shipping cost on the cart, before the address step.",
+    ref: "/documents/annual-billing/v/1",
+    title: "Annual billing PRD, version 1",
+    excerpt: "Show the yearly price up front, before the billing step.",
     retrieved_at: "2026-10-17T09:00:00Z",
   },
 ];
@@ -556,9 +556,9 @@ const SPEC_ADDED_CITATIONS: CitationSeed[] = [
   {
     id: "quote-latency",
     source: "web",
-    ref: "https://example.com/carrier-quote-latency",
-    title: "Carrier quote latency, p95",
-    excerpt: "Carrier rate lookups answer in 300 ms at p95.",
+    ref: "https://example.com/tax-quote-latency",
+    title: "Tax quote latency, p95",
+    excerpt: "Tax rate lookups answer in 300 ms at p95.",
     retrieved_at: "2026-10-19T15:00:00Z",
     added: true,
     state_label: ADDED_IN_AN_EDIT,
@@ -567,49 +567,49 @@ const SPEC_ADDED_CITATIONS: CitationSeed[] = [
 const SPEC_TITLE = (kind: string): SectionSeed => ({
   key: "spec",
   level: 1,
-  heading: `Early shipping cost: ${kind}`,
-  body: `${kind[0].toUpperCase()}${kind.slice(1)} for Early shipping cost, from the approved PRD Checkout redesign PRD (version 1) [c:prd-checkout]. Product requirements come from that PRD; the engineering approach is proposed until an engineering approver approves this version.`,
+  heading: `Early yearly price: ${kind}`,
+  body: `${kind[0].toUpperCase()}${kind.slice(1)} for Early yearly price, from the approved PRD Annual billing PRD (version 1) [c:prd-checkout]. Product requirements come from that PRD; the engineering approach is proposed until an engineering approver approves this version.`,
 });
-const SPEC_SUMMARY: SectionSeed = { key: "summary", level: 2, heading: "Summary", body: "Shoppers see the shipping cost on the cart page, before the address step." };
+const SPEC_SUMMARY: SectionSeed = { key: "summary", level: 2, heading: "Summary", body: "Admins see the yearly price on the plan page, before the billing step." };
 const SPEC_REQUIREMENTS: SectionSeed = {
   key: "requirements",
   level: 2,
   heading: "Product requirements",
-  body: `${REQUIREMENTS_NOTE}\n\nFrom PRD [Checkout redesign PRD](/documents/checkout-redesign/v/1), version 1.\n\n- **req-shipping-cost: Show shipping cost on the cart** (requirement id \`5b0c…\`)\n  PRD section: [5.2 Shipping options](/documents/checkout-redesign/v/1#s-5-2)`,
+  body: `${REQUIREMENTS_NOTE}\n\nFrom PRD [Annual billing PRD](/documents/annual-billing/v/1), version 1.\n\n- **req-yearly-price: Show the yearly price up front** (requirement id \`5b0c…\`)\n  PRD section: [5.2 Billing step](/documents/annual-billing/v/1#s-5-2)`,
 };
 const SPEC_ROLLOUT: SectionSeed = {
   key: "rollout-notes",
   level: 2,
   heading: "Rollout notes",
-  body: "Ten percent of carts first, then everyone after a week without a rise in quote errors.\n\n![chart](https://example.com/chart.png)\n\n![stored](/uploads/rollout.png)\n\n![evil](/\\evil.com/p.png) ![other](/v1/me) ![up](/uploads/../v1/me) after the images.",
+  body: "Ten percent of plan pages first, then everyone after a week without a rise in price errors.\n\n![chart](https://example.com/chart.png)\n\n![stored](/uploads/rollout.png)\n\n![evil](/\\evil.com/p.png) ![other](/v1/me) ![up](/uploads/../v1/me) after the images.",
 };
 const SPEC_ARCHITECTURE: SectionSeed = {
   key: "architecture",
   level: 2,
   heading: "Proposed architecture",
-  body: "The cart calls a new quote service; the service asks the carrier and caches the answer per postcode [c:quote-latency].",
+  body: "The plan page calls a new price service; the service asks the tax provider and caches the answer per region [c:quote-latency].",
 };
 const SPEC_APPROACH: SectionSeed = {
   key: "approach",
   level: 2,
   heading: "Proposed engineering approach",
-  body: "_Proposed engineering approach, based on assumptions: no code capability map was available, so it is not checked against the code (see Assumptions)._\n\nA shipping quote service called from the cart, cached per postcode for ten minutes.",
+  body: "_Proposed engineering approach, based on assumptions: no code capability map was available, so it is not checked against the code (see Assumptions)._\n\nA yearly price service called from the plan page, cached per region for ten minutes.",
 };
-const SPEC_OPEN: SectionSeed = { key: "open-decisions", level: 2, heading: "Open engineering decisions", body: "Which carrier rates to cache, and for how long." };
+const SPEC_OPEN: SectionSeed = { key: "open-decisions", level: 2, heading: "Open engineering decisions", body: "Which tax rates to cache, and for how long." };
 const SPEC_FULL: SectionSeed = { key: "full", level: 1, heading: "Full version", body: "" };
 /** Oracle's acceptance criteria: the half from the PRD (decided), then the proposed half. */
 const SPEC_ACCEPTANCE: SectionSeed = {
   key: "acceptance-criteria",
   level: 2,
   heading: "Acceptance criteria",
-  body: "In the Ground Truth (decided with the PRD):\n\n- req-shipping-cost: A shopper sees the shipping cost on the cart page.\n\nProposed by this spec (not product requirements until the PRD adopts them):\n\n- The quote refreshes when the cart changes.",
+  body: "In the Ground Truth (decided with the PRD):\n\n- req-yearly-price: An admin sees the yearly price on the plan page.\n\nProposed by this spec (not product requirements until the PRD adopts them):\n\n- The price refreshes when the seat count changes.",
 };
-const SPEC_ASSUMPTIONS: SectionSeed = { key: "assumptions", level: 2, heading: "Assumptions", body: "The cart service can call an internal endpoint." };
+const SPEC_ASSUMPTIONS: SectionSeed = { key: "assumptions", level: 2, heading: "Assumptions", body: "The billing service can call an internal endpoint." };
 const SPEC_SOURCES: SectionSeed = {
   key: "sources",
   level: 2,
   heading: "Sources and data points",
-  body: "- Product requirements: PRD checkout-redesign version 1, approved 2026-10-17.\n- Code capability map: not available; the approach rests on the assumptions listed above.",
+  body: "- Product requirements: PRD annual-billing version 1, approved 2026-10-17.\n- Code capability map: not available; the approach rests on the assumptions listed above.",
 };
 const SPEC_V1: SectionSeed[] = [
   SPEC_TITLE("technical brief"), SPEC_SUMMARY, SPEC_REQUIREMENTS, SPEC_APPROACH, SPEC_OPEN,
@@ -625,11 +625,11 @@ const FULL_SPEC_V1: SectionSeed[] = [
   SPEC_TITLE("engineering spec"), SPEC_SUMMARY, SPEC_REQUIREMENTS, SPEC_APPROACH, SPEC_OPEN,
   SPEC_FULL,
   SPEC_ACCEPTANCE,
-  { key: "user-flows", level: 2, heading: "User flows", body: "1. The shopper opens the cart.\n2. The cart asks for a quote and shows it under the subtotal." },
+  { key: "user-flows", level: 2, heading: "User flows", body: "1. The admin opens the plan page.\n2. The page asks for a price and shows it under the monthly one." },
   SPEC_ARCHITECTURE,
-  { key: "apis-data", level: 2, heading: "APIs and data models", body: "`GET /quotes?postcode=…` returns the cheapest rate and its carrier." },
-  { key: "failure-modes", level: 2, heading: "Failure modes", body: "When the carrier does not answer, the cart shows the flat rate." },
-  { key: "launch-checklist", level: 2, heading: "Launch checklist", body: "- Quote errors under 0.5 percent for a week.\n- Support briefed on the new cart line." },
+  { key: "apis-data", level: 2, heading: "APIs and data models", body: "`GET /prices?region=…` returns the yearly price and its saving." },
+  { key: "failure-modes", level: 2, heading: "Failure modes", body: "When the tax provider does not answer, the page shows the price before tax." },
+  { key: "launch-checklist", level: 2, heading: "Launch checklist", body: "- Price errors under 0.5 percent for a week.\n- Support briefed on the new plan page line." },
   SPEC_ASSUMPTIONS,
   SPEC_SOURCES,
 ];
@@ -689,8 +689,8 @@ const OUTREACH_V5 = revise(OUTREACH_V4, {
 
 export const DOCUMENTS: DocumentSeed[] = [
   {
-    slug: "checkout-redesign",
-    title: "Checkout redesign PRD",
+    slug: "annual-billing",
+    title: "Annual billing PRD",
     template: "oracle-default",
     template_version: "1",
     versions: [
@@ -712,8 +712,8 @@ export const DOCUMENTS: DocumentSeed[] = [
     ],
   },
   {
-    slug: "team-workspaces",
-    title: "Team workspaces PRD",
+    slug: "team-invites",
+    title: "Team invites PRD",
     template: "oracle-default",
     template_version: "1",
     versions: [
@@ -722,8 +722,8 @@ export const DOCUMENTS: DocumentSeed[] = [
     ],
   },
   {
-    slug: "saved-carts",
-    title: "Saved carts PRD",
+    slug: "referral-link",
+    title: "Referral link PRD",
     template: "oracle-default",
     template_version: "2",
     theme: "clean-document",
@@ -790,8 +790,8 @@ export const DOCUMENTS: DocumentSeed[] = [
   },
   // E1: a technical brief; version 2 is an edit that added sections and a source.
   {
-    slug: "checkout-redesign-early-shipping-cost-spec",
-    title: "Early shipping cost: technical brief",
+    slug: "annual-billing-early-yearly-price-spec",
+    title: "Early yearly price: technical brief",
     kind: "spec",
     depth: "brief",
     versions: [
@@ -801,7 +801,7 @@ export const DOCUMENTS: DocumentSeed[] = [
         sections: SPEC_V1,
         citations: SPEC_ORACLE_CITATIONS,
         brief: ["summary", "requirements", "approach", "open-decisions"],
-        source: { slug: "checkout-redesign", version: 1 },
+        source: { slug: "annual-billing", version: 1 },
       },
       {
         number: 2,
@@ -809,14 +809,14 @@ export const DOCUMENTS: DocumentSeed[] = [
         sections: SPEC_V2,
         citations: [...SPEC_ORACLE_CITATIONS, ...SPEC_ADDED_CITATIONS],
         brief: SPEC_BRIEF_KEYS,
-        source: { slug: "checkout-redesign", version: 1 },
+        source: { slug: "annual-billing", version: 1 },
       },
     ],
   },
   // E1: a full engineering spec with a section and a source added in an edit.
   {
-    slug: "checkout-redesign-early-shipping-cost-engineering-spec",
-    title: "Early shipping cost: engineering spec",
+    slug: "annual-billing-early-yearly-price-engineering-spec",
+    title: "Early yearly price: engineering spec",
     kind: "spec",
     depth: "full",
     versions: [
@@ -826,7 +826,7 @@ export const DOCUMENTS: DocumentSeed[] = [
         sections: FULL_SPEC_V1,
         citations: [...SPEC_ORACLE_CITATIONS, ...SPEC_ADDED_CITATIONS],
         brief: ["summary", "requirements", "approach", "open-decisions"],
-        source: { slug: "checkout-redesign", version: 1 },
+        source: { slug: "annual-billing", version: 1 },
       },
     ],
   },

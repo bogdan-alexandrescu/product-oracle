@@ -294,7 +294,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   ].join("");
   const fileProblems = (scope.check.problems ?? []).filter((p) => FILE_PROBLEMS.includes(p.code));
   const selectedFeature = scope.features.find((f) => f.key === selected) ?? scope.features.find((f) => f.needs_you) ?? scope.features[0] ?? null;
-  // rirs-2/24: the PRD by its name ("Saved addresses PRD"), never its slug.
+  // rirs-2/24: the PRD by its name ("Bulk import PRD"), never its slug.
   const prdTitle = runDocName(run) ?? "this PRD";
   // rirs-13: only an approver is asked; the others see what needs a decision.
   const needsWord = mode === "approver" ? "Needs you" : "Needs a decision";

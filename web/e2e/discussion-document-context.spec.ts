@@ -5,7 +5,7 @@ import { login, openSection, sectionAction } from "./helpers";
 
 /*
  * #406 through the UI, on the mock layer ("discussion-replies" scenario): in a discussion on
- * checkout-redesign v2's Problem, the commenter asks about a fact stated only in another
+ * annual-billing v2's Problem, the commenter asks about a fact stated only in another
  * section (Success metrics: when the experiment stops early). The mock reads the version's
  * text as the API does (the section first, then the rest) and streams an answer quoting it,
  * its citation marker split across two pieces.
@@ -16,7 +16,7 @@ import { login, openSection, sectionAction } from "./helpers";
  * api/tests/test_discussion_document_context.py).
  */
 
-const DOC = "/documents/checkout-redesign/v/2";
+const DOC = "/documents/annual-billing/v/2";
 const COMMENTER = "commenter@example.com";
 const QUESTION = "When does the experiment stop early?";
 

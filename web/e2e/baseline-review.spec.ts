@@ -9,7 +9,7 @@ import { login } from "./helpers";
  * waits until every goal is decided (confirmed, rejected or left proposed with a reason).
  * Driven through the UI over the mock API ("baseline-review" scenario: a Build the Ground Truth
  * run of Oct 20 that created two goals, a feature with low confidence serving no goal, a
- * duplicate of Saved carts, and proposed a change to the locked Guided setup). Made-up data.
+ * duplicate of Referral link, and proposed a change to the locked Setup checklist). Made-up data.
  */
 
 const RUN = "7a11c0de-0000-4000-8000-0000000000b2";
@@ -61,10 +61,10 @@ test("the Inbox's Review opens the run's rows, and Approve the Ground Truth wait
   await expect(row(page, "Bring buyers back").getByTestId("reason-chip")).toHaveText(["Not decided", "Not measurable"]);
   await expect(row(page, "Bring buyers back").getByTestId("reason-chip").nth(1)).toHaveAttribute("title", "Missing: target, owner");
   await expect(row(page, "Gift notes").getByTestId("reason-chip")).toHaveText(["Low confidence 32", "No evidence", "Serves no goal"]);
-  await expect(row(page, "Guided setup").getByTestId("reason-chip")).toHaveText(["Changes a locked item"]);
+  await expect(row(page, "Setup checklist").getByTestId("reason-chip")).toHaveText(["Changes a locked item"]);
   await page.getByRole("button", { name: /All from this run/ }).click();
   await expect(page.getByTestId("from-run-row")).toHaveCount(5);
-  await expect(row(page, "Carts for later").getByTestId("reason-chip")).toHaveCount(0);
+  await expect(row(page, "Share links for teams").getByTestId("reason-chip")).toHaveCount(0);
   await page.getByRole("button", { name: /Needs you/ }).click();
 
   const approve = bar(page).getByRole("button", { name: "Approve the Ground Truth" });
@@ -98,7 +98,7 @@ test("Merge into… on the duplicate removes its row and the target shows the mo
   await page.goto(`/ground-truth?run=${RUN}`);
   const evidence = async () => {
     await page.getByRole("tab", { name: "Graph" }).click();
-    await page.getByTestId("feature-F-84").click();
+    await page.getByTestId("feature-F-12").click();
     const stat = page.getByTestId("entity-drawer").getByText("Evidence", { exact: true }).locator("xpath=ancestor::div[1]");
     await expect(stat).toContainText(/\d/);
     const n = Number((await stat.innerText()).match(/\d+/)![0]);
@@ -108,13 +108,13 @@ test("Merge into… on the duplicate removes its row and the target shows the mo
   };
   const before = await evidence();
   await page.getByRole("button", { name: /All from this run/ }).click();
-  const twin = row(page, "Carts for later");
-  await twin.getByRole("button", { name: "More actions for Carts for later" }).click();
+  const twin = row(page, "Share links for teams");
+  await twin.getByRole("button", { name: "More actions for Share links for teams" }).click();
   await twin.getByRole("button", { name: "Merge into…" }).click();
-  await twin.getByLabel("Merge into").selectOption({ label: "Saved carts" });
+  await twin.getByLabel("Merge into").selectOption({ label: "Referral link" });
   await twin.getByRole("button", { name: "Merge", exact: true }).click();
-  await expect(page.getByText("Merged “Carts for later” into “Saved carts”.")).toBeVisible();
-  await expect(row(page, "Carts for later")).toHaveCount(0);
+  await expect(page.getByText("Merged “Share links for teams” into “Referral link”.")).toBeVisible();
+  await expect(row(page, "Share links for teams")).toHaveCount(0);
   await expect(page.getByTestId("from-run-row")).toHaveCount(4);
   expect(await evidence()).toBe(before + 2);
 });
@@ -124,10 +124,10 @@ test("Merge into… on the duplicate removes its row and the target shows the mo
 test("Accept on the proposal row applies it and the row shows ✓ Accepted", async ({ page }) => {
   await seeded(page);
   await page.goto(`/ground-truth?run=${RUN}`);
-  await row(page, "Guided setup").getByRole("button", { name: "Accept" }).click();
+  await row(page, "Setup checklist").getByRole("button", { name: "Accept" }).click();
   await page.getByRole("button", { name: /All from this run/ }).click();
-  await expect(row(page, "Guided setup").getByTestId("row-result")).toContainText("Accepted");
-  await expect(row(page, "Guided setup").getByRole("button", { name: "Accept" })).toHaveCount(0);
+  await expect(row(page, "Setup checklist").getByTestId("row-result")).toContainText("Accepted");
+  await expect(row(page, "Setup checklist").getByRole("button", { name: "Accept" })).toHaveCount(0);
 });
 
 // Card send-back: protects = staged look agains go back as one structured note the run page
@@ -255,7 +255,7 @@ test("at 390 px rows are cards and the bottom bar shows the tally and Approve", 
 test("a run with no items says it has none, not that all of them are handled", async ({ page }) => {
   await page.clock.setSystemTime(new Date("2026-10-27T12:00:00Z"));
   await seeded(page, "no-document");
-  // guest-checkout's Ground Truth to PRD run (the "no-document" scenario) created no Ground Truth items.
+  // public-signup's Ground Truth to PRD run (the "no-document" scenario) created no Ground Truth items.
   await page.goto("/ground-truth?run=7a11c0de-0000-4000-8000-0000000000e1");
   const band = page.getByTestId("from-run-band");
   await expect(band).toContainText("From run · Ground Truth to PRD");

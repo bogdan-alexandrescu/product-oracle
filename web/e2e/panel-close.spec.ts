@@ -195,8 +195,8 @@ test.describe("desktop", () => {
     await page.goto("/ground-truth");
     const goal = page.getByTestId("goal-g.activation");
     await expect(goal).toBeVisible();
-    await goal.getByRole("button", { name: "Raise activation", exact: true }).click();
-    const drawer = page.getByRole("dialog", { name: "Raise activation" });
+    await goal.getByRole("button", { name: "Activation", exact: true }).click();
+    const drawer = page.getByRole("dialog", { name: "Activation" });
     await expect(drawer).toBeVisible();
     await expect(drawer.getByRole("button", { name: /close/i })).toHaveCount(1);
     await drawer.getByRole("button", { name: "Close the details" }).click();

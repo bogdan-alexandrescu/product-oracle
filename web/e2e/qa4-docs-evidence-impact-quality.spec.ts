@@ -5,11 +5,11 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
- * QA pass 4, docs lane: the Evidence, Impact and Quality tabs of Checkout redesign PRD v2,
+ * QA pass 4, docs lane: the Evidence, Impact and Quality tabs of Annual billing PRD v2,
  * driven as a person would on the mock (invented data).
  */
 
-const DOC = "/documents/checkout-redesign";
+const DOC = "/documents/annual-billing";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
@@ -17,14 +17,14 @@ async function openEvidence(page: Page) {
   await login(page);
   await page.goto(`${DOC}/v/2`);
   await page.getByTestId("version-tab-evidence").filter({ visible: true }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/evidence/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/evidence/);
 }
 
 async function openImpact(page: Page) {
   await login(page);
   await page.goto(`${DOC}/v/2`);
   await page.getByRole("link", { name: "Impact", exact: true }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
 }
 
 const row = (page: Page, key: string) => page.locator(`[data-testid="criterion-row"][data-key="${key}"]`);
@@ -72,7 +72,7 @@ test.describe("desktop", () => {
     await page.getByRole("group", { name: "Evidence view" }).getByRole("button", { name: "Sections" }).click();
     const table = page.getByRole("grid", { name: "Sections" });
     await expect(table.getByRole("row", { name: /Introduction/ })).toBeVisible();
-    await expect(table.getByRole("row", { name: /Checkout redesign PRD/ })).toHaveCount(0);
+    await expect(table.getByRole("row", { name: /Annual billing PRD/ })).toHaveCount(0);
   });
 
   test("qa4-docs-56: the column cut at the matrix's right edge fades out into the panel", async ({ page }) => {
@@ -113,7 +113,7 @@ test.describe("desktop", () => {
     const sub = node.getByTestId("lineage-upstream-sub");
     await expect(sub).toHaveText("Section changed in v2");
     await expect(sub).toHaveAttribute("title", "Section changed in v2. Outputs were built on v1.");
-    await expect(graph).not.toContainText("Section of Checkout redesign PRD v1");
+    await expect(graph).not.toContainText("Section of Annual billing PRD v1");
   });
 
   test("qa4-docs-15: after Ask Oracle to review, the banner says Oracle is on it", async ({ page }) => {
@@ -132,7 +132,7 @@ test.describe("desktop", () => {
   test("qa4-docs-15: a review already running says when it started", async ({ page }) => {
     await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "quality-job-running"] as const);
     await login(page);
-    await page.goto("/documents/team-workspaces/v/2/quality");
+    await page.goto("/documents/team-invites/v/2/quality");
     await expect(page.getByTestId("job-active")).toContainText(/^Oracle is reviewing v2, started (?:[A-Z][a-z]{2} \d{1,2}, )?\d{1,2}:\d{2} [AP]M/);
     await expect(page.getByTestId("job-active")).not.toContainText(/\d{4}-\d{2}-\d{2}/);
   });
@@ -145,7 +145,7 @@ test.describe("desktop", () => {
     const form = inspector(page).getByTestId("rating-form");
     const picker = form.getByLabel("Add a section");
     await expect(picker.locator("option", { hasText: "Introduction" })).toHaveCount(1);
-    await expect(picker.locator("option", { hasText: "Checkout redesign PRD" })).toHaveCount(0);
+    await expect(picker.locator("option", { hasText: "Annual billing PRD" })).toHaveCount(0);
     await form.getByRole("button", { name: "Warning" }).click();
     await form.getByLabel("Reason").fill("Only one approach is written down.");
     await picker.selectOption({ label: "Introduction" });

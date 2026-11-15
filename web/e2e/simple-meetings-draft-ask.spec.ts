@@ -22,10 +22,10 @@ test.describe("RP2 c: the meeting's draft step", () => {
     await page.goto("/simple/meetings");
     await page.getByRole("button", { name: "Start review" }).first().click();
     const sheet = page.getByRole("dialog", { name: "Start a review" });
-    await sheet.getByLabel("PRD").selectOption({ label: "Saved carts" });
+    await sheet.getByLabel("PRD").selectOption({ label: "Referral link" });
     await sheet.getByRole("checkbox", { name: "Priya Raman" }).check();
     await sheet.getByRole("button", { name: "Start", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Review: Saved carts" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Review: Referral link" })).toBeVisible();
     await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();
     return page.getByRole("region", { name: "Roadmap slice" });
   }

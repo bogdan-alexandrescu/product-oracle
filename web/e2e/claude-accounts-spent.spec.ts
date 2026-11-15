@@ -124,7 +124,7 @@ test("with an account that takes calls there is no notice, and a spent one besid
 test("the discussion refusal gives the clearing time in words", async ({ page }) => {
   await withSpentPool(page);
   await login(page, OWNER);
-  await page.goto("/documents/team-workspaces/v/2");
+  await page.goto("/documents/team-invites/v/2");
   await openTab(page, "Feedback");
   const panel = page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true });
   await panel.getByTestId("feedback-discussions").click();

@@ -3,12 +3,12 @@ import { expect, test, type Page } from "./test";
 import { login, openTab, showAll } from "./helpers";
 
 // QA pass 4, docs lane: the review panel on a PRD version page (suggestions, feedback, sources)
-// and the Build draft action, driven as a person. Team workspaces v2 has Oracle's suggestions
-// (one a duplicate, one pushed back) and a paused agents' run; Checkout redesign v2 has
+// and the Build draft action, driven as a person. Team invites v2 has Oracle's suggestions
+// (one a duplicate, one pushed back) and a paused agents' run; Annual billing v2 has
 // scored sources and comments by the owner.
 
-const WORKSPACES = "/documents/team-workspaces/v/2";
-const CHECKOUT = "/documents/checkout-redesign/v/2";
+const WORKSPACES = "/documents/team-invites/v/2";
+const CHECKOUT = "/documents/annual-billing/v/2";
 const DESKTOP = { width: 1440, height: 900 };
 
 const feedbackItem = (page: Page, text: string) => page.getByTestId("feedback-item").filter({ visible: true, hasText: text });
@@ -86,7 +86,7 @@ test.describe("desktop", () => {
     await page.goto(CHECKOUT);
     await openTab(page, "Sources");
     const list = page.getByTestId("sources-list").filter({ visible: true });
-    await expect(list.getByRole("listitem").filter({ hasText: "#product thread on checkout drop-off" }).getByTestId("source-label")).toHaveText(
+    await expect(list.getByRole("listitem").filter({ hasText: "#product thread on yearly plans" }).getByTestId("source-label")).toHaveText(
       "Slack · High confidence",
     );
     await expect(list).not.toContainText("0.82");
@@ -96,7 +96,7 @@ test.describe("desktop", () => {
 
   test("qa4-docs-39: someone else's feedback shows its author's name beside the avatar", async ({ page }) => {
     await openFeedback(page, CHECKOUT, "commenter@example.com");
-    const item = feedbackItem(page, "most recently used address");
+    const item = feedbackItem(page, "current seat count");
     await expect(item.getByTestId("feedback-author")).toHaveText("Avery Stone");
     await expect(item.getByRole("img", { name: "Avery Stone" })).toHaveText("AS");
   });

@@ -53,8 +53,8 @@ test("#2: the Pick a goal notice names F-02 Audit log", async ({ page }) => {
   await open(page);
   await openKind(page, "no_goal");
   await row(page, "Audit log").getByRole("button", { name: /Pick a goal/ }).click();
-  await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Raise activation" }).click();
-  await expect(page.getByTestId("gt-notice")).toContainText("“F-02 Audit log” now serves “Raise activation”.");
+  await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Activation" }).click();
+  await expect(page.getByTestId("gt-notice")).toContainText("“F-02 Audit log” now serves “Activation”.");
 });
 
 test("#10: the Not linked row shows Weekly digest once, as F-14 Weekly digest", async ({ page }) => {
@@ -70,9 +70,9 @@ test("#10: the Not linked row shows Weekly digest once, as F-14 Weekly digest", 
 
 test("#11: the feature panel's lock line wraps instead of cutting its date", async ({ page }) => {
   await open(page);
-  const feature = page.locator('[data-testid^="feature-"]').filter({ hasText: "Guided setup" });
-  await feature.getByRole("button", { name: /Guided setup/ }).first().click();
-  const lock = page.getByRole("dialog", { name: /Guided setup/ }).getByTestId("lock-note");
+  const feature = page.locator('[data-testid^="feature-"]').filter({ hasText: "Setup checklist" });
+  await feature.getByRole("button", { name: /Setup checklist/ }).first().click();
+  const lock = page.getByRole("dialog", { name: /Setup checklist/ }).getByTestId("lock-note");
   await expect(lock).toContainText("Oct 15");
   await expect(lock).not.toHaveClass(/\btruncate\b/);
   const fits = await lock.evaluate((el) => el.scrollWidth <= el.clientWidth);

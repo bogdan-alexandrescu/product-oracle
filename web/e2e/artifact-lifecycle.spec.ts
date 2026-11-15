@@ -24,7 +24,7 @@ async function withFamily(page: Page) {
 
 const PRD = "Usage alerts PRD";
 const ROADMAP = "Usage alerts roadmap";
-const BRIEF = "Early shipping cost: technical brief";
+const BRIEF = "Early yearly price: technical brief";
 
 const prdRow = (page: Page, title: string) => page.getByTestId("document-row").filter({ hasText: title });
 
@@ -62,7 +62,7 @@ async function expectFamilyGone(page: Page) {
   await expect(page.getByTestId("roadmaps-table")).toBeVisible();
   await expect(page.getByTestId("roadmap-row").filter({ hasText: ROADMAP })).toHaveCount(0);
   await expect(page.getByTestId("approved-prd").filter({ hasText: PRD })).toHaveCount(0);
-  await page.goto("/documents/checkout-redesign-early-shipping-cost-spec");
+  await page.goto("/documents/annual-billing-early-yearly-price-spec");
   // The page's own not-found words (the phone header holds a hidden copy, qa-shell-8).
   await expect(page.getByText(/not found/i).filter({ visible: true }).first()).toBeVisible();
 }
@@ -72,7 +72,7 @@ async function expectFamilyBack(page: Page) {
   await expect(prdRow(page, PRD)).toBeVisible();
   await page.goto("/plan/documents");
   await expect(page.getByTestId("roadmap-row").filter({ hasText: ROADMAP })).toBeVisible();
-  await page.goto("/documents/checkout-redesign-early-shipping-cost-spec");
+  await page.goto("/documents/annual-billing-early-yearly-price-spec");
   await expect(page.getByRole("heading", { level: 1, name: BRIEF })).toBeVisible();
 }
 

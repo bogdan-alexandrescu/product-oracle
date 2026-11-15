@@ -8,8 +8,8 @@ import { DRAFT_LAYER_SCENARIO, MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/a
  * hatched on the card's own months; Show drafts hides them all and is remembered; the PRD filter
  * lists each as "<PRD> (draft)"; a draft item opens the feature panel with its Draft line, and
  * Leave out takes it off the run's draft; approving the PRD puts its items on the roadmap.
- * Against the mock (web/lib/api/mock/meeting-draft.ts draftPrdsOut), invented data: Saved carts and
- * Team workspaces in draft, Online deposits (its PRD replaced) and Clinic outreach (its run
+ * Against the mock (web/lib/api/mock/meeting-draft.ts draftPrdsOut), invented data: Referral link and
+ * Team invites in draft, Online deposits (its PRD replaced) and Clinic outreach (its run
  * cancelled) left out.
  *
  * Test cards (protects / fails_when / no_claim):
@@ -27,7 +27,7 @@ import { DRAFT_LAYER_SCENARIO, MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/a
  *   chart, a row is missing, or the page scrolls sideways.
  */
 
-const CARTS = ["Save a cart for later", "Carts kept across devices", "Price-drop note on saved carts", "Shared carts for teams", "Saved-cart reminder emails", "Turn a cart into a quote"];
+const CARTS = ["Save a cart for later", "Carts kept across devices", "Price-drop note on referral links", "Shared carts for teams", "Saved-cart reminder emails", "Turn a cart into a quote"];
 
 const shot = (page: Page, name: string) => page.screenshot({ path: test.info().outputPath(`${name}.png`) });
 
@@ -50,8 +50,8 @@ for (const scheme of ["light", "dark"] as const) {
 
       test("the layer shows each draft PRD; the switch, the filter and the panel work on it", async ({ page }) => {
         const layer = await openRoadmap(page);
-        await expect(layer.getByRole("heading", { name: "Saved carts · draft" })).toBeVisible();
-        await expect(layer.getByRole("heading", { name: "Team workspaces · draft" })).toBeVisible();
+        await expect(layer.getByRole("heading", { name: "Referral link · draft" })).toBeVisible();
+        await expect(layer.getByRole("heading", { name: "Team invites · draft" })).toBeVisible();
         await expect(layer).not.toContainText("Deposit at booking");
         await expect(layer).not.toContainText("Outreach letters");
         await expect(layer.getByText("Not approved yet").first()).toBeVisible();
@@ -63,8 +63,8 @@ for (const scheme of ["light", "dark"] as const) {
         await shot(page, `rp2-a-rest-${width}-${scheme}`);
 
         // Each card folds away on its own.
-        await layer.getByRole("button", { name: "Team workspaces · draft" }).click();
-        await expect(layer.getByRole("button", { name: "Team workspaces · draft" })).toHaveAttribute("aria-expanded", "false");
+        await layer.getByRole("button", { name: "Team invites · draft" }).click();
+        await expect(layer.getByRole("button", { name: "Team invites · draft" })).toHaveAttribute("aria-expanded", "false");
         await expect(bar(page, "Invite a whole team")).toHaveCount(0);
         await expect(bar(page, "Save a cart for later")).toBeVisible();
 
@@ -79,28 +79,28 @@ for (const scheme of ["light", "dark"] as const) {
 
         // The PRD filter lists the draft PRD; picked, only its draft shows and the chart has nothing of it.
         const prd = page.getByRole("combobox", { name: "PRD" });
-        await expect(prd.locator("option", { hasText: "Saved carts (draft)" })).toHaveCount(1);
+        await expect(prd.locator("option", { hasText: "Referral link (draft)" })).toHaveCount(1);
         await expect(prd.locator("option", { hasText: "Online deposits" })).toHaveCount(0);
-        await prd.selectOption({ label: "Saved carts (draft)" });
+        await prd.selectOption({ label: "Referral link (draft)" });
         // The why sits behind its (i) (the prose guard): a short line stays in sight.
-        await expect(layer.getByRole("status")).toHaveText("Showing Saved carts only");
-        await expect(layer.getByRole("button", { name: "About Saved carts draft" })).toHaveAccessibleDescription(
+        await expect(layer.getByRole("status")).toHaveText("Showing Referral link only");
+        await expect(layer.getByRole("button", { name: "About Referral link draft" })).toHaveAccessibleDescription(
           "Its 6 items are a draft, hatched until the PRD is approved. Nothing of it is on the approved roadmap yet.",
         );
-        await expect(layer.getByRole("heading", { name: "Team workspaces · draft" })).toHaveCount(0);
+        await expect(layer.getByRole("heading", { name: "Team invites · draft" })).toHaveCount(0);
         await expect(page.getByText("Nothing matches these filters")).toBeVisible();
         await shot(page, `rp2-a-done-${width}-${scheme}`);
         await prd.selectOption({ label: "All" });
 
         // A draft item opens the feature panel with its Draft line.
-        await bar(page, "Price-drop note on saved carts").click();
+        await bar(page, "Price-drop note on referral links").click();
         const panel = page.getByTestId("item-panel");
-        await expect(panel).toHaveAttribute("aria-label", "Price-drop note on saved carts");
+        await expect(panel).toHaveAttribute("aria-label", "Price-drop note on referral links");
         await expect(panel.getByText("Draft", { exact: true })).toBeVisible();
         await expect(panel).toContainText("Jan 11 – Feb 12 · Priya Natarajan");
-        // Where the dates come from, behind its (i); a PRD name ending in s reads "Saved carts' run".
+        // Where the dates come from, behind its (i); the PRD's name reads "Referral link's run".
         await expect(panel.getByRole("button", { name: "About these dates" })).toHaveAccessibleDescription(
-          "Dates from Saved carts' run (engineering dates). Not approved: it joins the roadmap when the PRD is approved.",
+          "Dates from Referral link's run (engineering dates). Not approved: it joins the roadmap when the PRD is approved.",
         );
         // The panel starts under the toolbar: its right end (Needs a decision) stays in sight.
         const actions = (await page.getByTestId("roadmap-actions").boundingBox())!;
@@ -111,7 +111,7 @@ for (const scheme of ["light", "dark"] as const) {
         await panel.getByRole("button", { name: "Leave out" }).click();
         await page.getByRole("alertdialog").getByRole("button", { name: "Leave out", exact: true }).click();
         await expect(page.getByTestId("item-panel")).toHaveCount(0);
-        await expect(bar(page, "Price-drop note on saved carts")).toHaveCount(0);
+        await expect(bar(page, "Price-drop note on referral links")).toHaveCount(0);
         await expect(bar(page, "Shared carts for teams")).toBeVisible();
       });
     });
@@ -123,24 +123,24 @@ test.describe("approval", () => {
 
   test("approving the PRD takes its card off the layer and its items onto the roadmap", async ({ page }) => {
     const layer = await openRoadmap(page);
-    await expect(layer.getByRole("heading", { name: "Saved carts · draft" })).toBeVisible();
+    await expect(layer.getByRole("heading", { name: "Referral link · draft" })).toBeVisible();
     // Left out on the layer: approval does not put it on the roadmap.
     await bar(page, "Turn a cart into a quote").click();
     await page.getByTestId("item-panel").getByRole("button", { name: "Leave out" }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Leave out", exact: true }).click();
     await expect(bar(page, "Turn a cart into a quote")).toHaveCount(0);
-    await page.goto("/documents/saved-carts/publish");
+    await page.goto("/documents/referral-link/publish");
     const publish = page.getByTestId("publish-button");
     await expect(publish).toBeEnabled();
     await publish.click();
     await page.getByRole("dialog", { name: /^Publish v\d+\?$/ }).getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByTestId("published-chip")).toBeVisible();
     await page.goto("/simple/roadmap");
-    await expect(layer.getByRole("heading", { name: "Team workspaces · draft" })).toBeVisible();
-    await expect(layer.getByRole("heading", { name: "Saved carts · draft" })).toHaveCount(0);
+    await expect(layer.getByRole("heading", { name: "Team invites · draft" })).toBeVisible();
+    await expect(layer.getByRole("heading", { name: "Referral link · draft" })).toHaveCount(0);
     const prd = page.getByRole("combobox", { name: "PRD" });
-    await expect(prd.locator("option", { hasText: "Saved carts (draft)" })).toHaveCount(0);
-    await prd.selectOption({ label: "Saved carts" });
+    await expect(prd.locator("option", { hasText: "Referral link (draft)" })).toHaveCount(0);
+    await prd.selectOption({ label: "Referral link" });
     await expect(page.getByRole("button", { name: /^Save a cart for later, / }).first()).toBeVisible();
     await expect(page.getByText("Turn a cart into a quote")).toHaveCount(0);
   });
@@ -152,8 +152,8 @@ for (const role of ["commenter", "viewer"] as const) {
 
     test(`a ${role} reads the draft panel without Change dates or Leave out`, async ({ page }) => {
       const layer = await openRoadmap(page, role);
-      await expect(layer.getByRole("heading", { name: "Saved carts · draft" })).toBeVisible();
-      await bar(page, "Price-drop note on saved carts").click();
+      await expect(layer.getByRole("heading", { name: "Referral link · draft" })).toBeVisible();
+      await bar(page, "Price-drop note on referral links").click();
       const panel = page.getByTestId("item-panel");
       await expect(panel).toContainText("Jan 11 – Feb 12 · Priya Natarajan");
       await expect(panel.getByText("Draft", { exact: true })).toBeVisible();
@@ -176,7 +176,7 @@ for (const scheme of ["light", "dark"] as const) {
       const wide = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(wide).toBeLessThanOrEqual(0);
       await shot(page, `rp2-a-rest-390-${scheme}`);
-      await bar(page, "Price-drop note on saved carts").click();
+      await bar(page, "Price-drop note on referral links").click();
       await expect(page.getByTestId("item-panel")).toContainText("Jan 11 – Feb 12 · Priya Natarajan");
     });
   });

@@ -33,7 +33,7 @@ const GOAL = "Which confirmed company goal";
 const LONG = "Repeat checkout time is 95 seconds today and we want 45 seconds by March next year.";
 
 async function openTechBrief(page: Page, title: string) {
-  await page.goto("/documents/checkout-redesign");
+  await page.goto("/documents/annual-billing");
   await page.getByTestId("tech-briefs").getByRole("link", { name: title }).click();
   await expect(page).toHaveURL(/\/briefs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText(title);
@@ -71,9 +71,9 @@ for (const [name, viewport] of VIEWPORTS) {
       await openTechBrief(page, "Keep form state on back navigation");
 
       // 18: the PRD is at v2 now; the link opens it and says the brief was written for v1.
-      const back = page.locator("[data-page-header]").getByRole("link", { name: /Checkout redesign PRD/ });
-      await expect(back).toContainText("Checkout redesign PRD v2 · written for v1");
-      await expect(back).toHaveAttribute("href", "/documents/checkout-redesign");
+      const back = page.locator("[data-page-header]").getByRole("link", { name: /Annual billing PRD/ });
+      await expect(back).toContainText("Annual billing PRD v2 · written for v1");
+      await expect(back).toHaveAttribute("href", "/documents/annual-billing");
 
       // 19: the approach's steps are a list of three, not " - " inside one paragraph.
       const approach = page.getByTestId("brief-approach");

@@ -11,7 +11,7 @@ async function openFeature(page: Page, key: string, title: string) {
 }
 
 test("Ground Truth: editing a feature's milestone saves only it, and shows in its history", async ({ page, context }) => {
-  const d = await openFeature(page, "F-84", "Saved carts");
+  const d = await openFeature(page, "F-12", "Referral link");
   await expect(d.locator('[data-attr="milestone"]')).toHaveText("Beta");
 
   await d.getByRole("button", { name: "Edit" }).click();
@@ -26,8 +26,8 @@ test("Ground Truth: editing a feature's milestone saves only it, and shows in it
   // Meanwhile the same person changes the effort in a second tab.
   const other = await context.newPage();
   await other.goto("/ground-truth");
-  await other.getByTestId("feature-F-84").getByRole("button", { name: "Saved carts" }).click();
-  const od = other.getByRole("dialog", { name: "Saved carts" });
+  await other.getByTestId("feature-F-12").getByRole("button", { name: "Referral link" }).click();
+  const od = other.getByRole("dialog", { name: "Referral link" });
   await od.getByRole("button", { name: "Edit" }).click();
   await od.getByRole("form", { name: "Edit" }).getByLabel("Effort").fill("XL");
   await od.getByRole("form", { name: "Edit" }).getByRole("button", { name: "Save" }).click();
@@ -47,7 +47,7 @@ test("Ground Truth: editing a feature's milestone saves only it, and shows in it
 });
 
 test("Ground Truth: the edit form adds a known attribute the entry lacks", async ({ page }) => {
-  const d = await openFeature(page, "F-83", "Sample data");
+  const d = await openFeature(page, "F-02", "Sample data import");
   await expect(d.locator('[data-attr="size"]')).toHaveCount(0);
 
   await d.getByRole("button", { name: "Edit" }).click();

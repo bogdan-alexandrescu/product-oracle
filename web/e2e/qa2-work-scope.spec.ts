@@ -6,7 +6,7 @@ import { login } from "./helpers";
 /*
  * QA pass on the Feature set review page, /runs/<id>/review/<checkpoint> (rirs-1, 2, 3, 4, 5,
  * 11, 12, 13, 14, 24, 25, 41), driven through the UI on the mock: the "feature-set" scenario
- * (Saved addresses PRD, its left-out rows titled only by their keys) and the "scope-review"
+ * (Bulk import PRD, its left-out rows titled only by their keys) and the "scope-review"
  * scenario (an approver, a commenter and a viewer on the same stop).
  */
 
@@ -22,10 +22,10 @@ async function seeded(page: Page, scenario: "feature-set" | "scope-review", emai
   await login(page, email);
 }
 
-/** Runs › Saved addresses PRD › Review feature set, as a person goes there. */
+/** Runs › Bulk import PRD › Review feature set, as a person goes there. */
 async function openReview(page: Page) {
   await page.goto("/runs");
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').filter({ visible: true }).getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').filter({ visible: true }).getByRole("link").first().click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+/);
@@ -84,14 +84,14 @@ test.describe("desktop", () => {
   test("rirs-2: goals, the PRD and the left-out feature read as names, never as keys", async ({ page }) => {
     await seeded(page, "feature-set");
     await openReview(page);
-    await expect(page.getByTestId("scope-for")).toHaveText("For Saved addresses PRD · attempt 1");
+    await expect(page.getByTestId("scope-for")).toHaveText("For Bulk import PRD · attempt 1");
     await page.getByRole("button", { name: /^All/ }).click();
     await row(page, "Bulk address edit").getByTestId("feature-title").click();
     await expect(inspector(page).getByTestId("reason-depends_on_excluded")).toContainText("Bulk address edit depends on Shared address book export, which is left out");
-    await row(page, "Saved addresses").getByTestId("feature-title").click();
+    await row(page, "Bulk import").getByTestId("feature-title").click();
     await expect(inspector(page)).toContainText("A goal not in the Ground Truth");
     const text = await page.locator("main").innerText();
-    for (const key of ["repeat-checkout", "fewer-failed-deliveries", "shared-address-book-export", "bulk-address-edit", "saved-addresses"]) expect(text).not.toContain(key);
+    for (const key of ["repeat-checkout", "fewer-failed-deliveries", "shared-address-book-export", "bulk-address-edit", "bulk-import"]) expect(text).not.toContain(key);
   });
 
   test("rirs-3: an inspector requirement shows its text in full, the buttons below it", async ({ page }) => {
@@ -198,7 +198,7 @@ test.describe("phone", () => {
   test("rirs-24: the run's full name shows on the page, wrapped", async ({ page }) => {
     await seeded(page, "feature-set");
     await openReview(page);
-    const name = page.getByRole("link", { name: "Saved addresses · Ground Truth to PRD", exact: true });
+    const name = page.getByRole("link", { name: "Bulk import · Ground Truth to PRD", exact: true });
     await expect(name).toHaveAttribute("data-testid", "review-back");
     await expect(name).toBeVisible();
     expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);

@@ -185,10 +185,10 @@ test("qa-shell-15: Simple's rail names the product as Detailed and the browser t
 
 test("qa-shell-4, 5: the switch maps an old one-pager link and the Roadmap's own tabs", async ({ page }) => {
   await login(page);
-  await page.goto("/simple/prds/checkout-redesign");
+  await page.goto("/simple/prds/annual-billing");
   await expect(page.getByTestId("one-pager-meta")).toBeVisible();
   await page.getByRole("radiogroup", { name: "Mode" }).filter({ visible: true }).getByRole("radio", { name: "Detailed" }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing$/);
 
   for (const tab of ["/roadmap/changelog", "/roadmap/launches"]) {
     await page.goto(tab);

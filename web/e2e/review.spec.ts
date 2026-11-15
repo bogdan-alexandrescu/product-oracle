@@ -20,16 +20,16 @@ test("login: rejects a wrong password, then signs in", async ({ page }) => {
 
 test("login page skips the form when already signed in (e.g. by IAP)", async ({ page }) => {
   await login(page);
-  await page.goto("/login?next=/documents/checkout-redesign");
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign$/);
+  await page.goto("/login?next=/documents/annual-billing");
+  await expect(page).toHaveURL(/\/documents\/annual-billing$/);
 });
 
 test("open a version: sections in order with citation chips", async ({ page }) => {
   await login(page);
-  // The home list also links "Open PRD in review · Checkout redesign PRD" (its brief, walk-brief).
-  await page.getByRole("link", { name: "Checkout redesign PRD", exact: true }).click();
+  // The home list also links "Open PRD in review · Annual billing PRD" (its brief, walk-brief).
+  await page.getByRole("link", { name: "Annual billing PRD", exact: true }).click();
   await page.getByRole("link", { name: "Version 2" }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2$/);
 
   // A PRD reads as one document: every section shows at once, numbered from its heading level.
   // The opening section, titled with the document's own title, reads as the Introduction (qa-docs-50).
@@ -41,9 +41,9 @@ test("open a version: sections in order with citation chips", async ({ page }) =
     "3 Users and jobs",
     "4 Scope",
     "5 Proposed flow",
-    "5.1 Cart review",
-    "5.2 Shipping step",
-    "5.3 Saved addresses",
+    "5.1 Plan review",
+    "5.2 Billing step",
+    "5.3 Seat count",
     "6 Risks and open questions",
     "7 Success metrics",
   ]);
@@ -56,9 +56,9 @@ test("open a version: sections in order with citation chips", async ({ page }) =
     "Users and jobs",
     "Scope",
     "Proposed flow",
-    "Cart review",
-    "Shipping step",
-    "Saved addresses",
+    "Plan review",
+    "Billing step",
+    "Seat count",
     "Risks and open questions",
     "Success metrics",
   ]);
@@ -68,14 +68,14 @@ test("open a version: sections in order with citation chips", async ({ page }) =
   await expect(chip).toHaveText(/Slack/);
   await chip.hover();
   const card = page.getByRole("tooltip");
-  await expect(card).toContainText("#product thread on checkout drop-off");
-  await expect(card).toContainText("Most users who abandon do it at the shipping step");
+  await expect(card).toContainText("#product thread on yearly plans");
+  await expect(card).toContainText("Most teams who ask for a discount ask for a yearly price");
   await expect(card.getByRole("link", { name: /Open source/ })).toHaveAttribute("href", /example\.slack\.com/);
 });
 
 test("add an anchored comment that survives reload", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const scope = await openSection(page, "scope");
 
   // Select again until the Comment button shows: under load the view can still be wiring its
@@ -109,11 +109,11 @@ test("add an anchored comment that survives reload", async ({ page }) => {
 
 test("a citation of Oracle's Ground Truth reads 'Oracle Ground Truth', its ref as text, not a link", async ({ page }) => {
   await login(page);
-  // Version 2 of checkout-redesign cites a Ground Truth goal in its Problem section.
+  // Version 2 of annual-billing cites a Ground Truth goal in its Problem section.
   await page.evaluate(() => {
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
-    const doc = db.documents.find((d: { slug: string }) => d.slug === "checkout-redesign");
+    const doc = db.documents.find((d: { slug: string }) => d.slug === "annual-billing");
     const v = db.versions.find((x: { document_id: string; number: number }) => x.document_id === doc.id && x.number === 2);
     v.citations.push({
       id: crypto.randomUUID(),
@@ -129,7 +129,7 @@ test("a citation of Oracle's Ground Truth reads 'Oracle Ground Truth', its ref a
     problem.citation_keys.push("o-g1");
     localStorage.setItem(key, JSON.stringify(db));
   });
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
 
   const chip = (await openSection(page, "problem")).getByTestId("cite-o-g1");
   await expect(chip).toHaveText(/Oracle Ground Truth/);
@@ -147,7 +147,7 @@ test("a citation of Oracle's Ground Truth reads 'Oracle Ground Truth', its ref a
 
 test("set a section verdict; approval shows the section as locked", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const users = await openSection(page, "users");
   const bar = users.getByTestId("review-bar");
   await expect(bar.getByTestId("verdict-state")).toHaveText("Not reviewed");
@@ -174,7 +174,7 @@ test("set a section verdict; approval shows the section as locked", async ({ pag
 
 test("switch versions with the version switcher", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openSection(page, "s-5-3");
 
   await page.getByRole("group", { name: "Version" }).getByRole("link", { name: "v1", exact: true }).click();
@@ -192,7 +192,7 @@ test("switch versions with the version switcher", async ({ page }) => {
 
 test("open the diff: section badges and word-level changes", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await page.getByRole("link", { name: "Compare with v1" }).click();
   await expect(page).toHaveURL(/\/diff\?from=1&to=2$/);
   await expect(page.getByRole("heading", { name: "Changes from v1 to v2" })).toBeVisible();
@@ -201,8 +201,8 @@ test("open the diff: section badges and word-level changes", async ({ page }) =>
   const HEADINGS: Record<string, string> = {
     "goal-trace": "1. Goal trace",
     problem: "2. Problem",
-    "s-5-2": "5.2 Shipping step",
-    "s-5-3": "5.3 Saved addresses",
+    "s-5-2": "5.2 Billing step",
+    "s-5-3": "5.3 Seat count",
     risks: "6. Risks and open questions",
     metrics: "7. Success metrics",
     rollout: "8. Rollout",
@@ -215,7 +215,7 @@ test("open the diff: section badges and word-level changes", async ({ page }) =>
   await expect(byKey("risks").getByText("Moved")).toBeVisible();
 
   const words = byKey("s-5-2").getByTestId("word-diff");
-  await expect(words.locator("ins").first()).toContainText("and the cheapest option is preselected");
+  await expect(words.locator("ins").first()).toContainText("and the yearly option is preselected");
   await expect(byKey("metrics").locator("ins").first()).toContainText("Refund rate");
   // A markdown table is drawn as a table, as in the version view, not as pipe text.
   const table = byKey("metrics").getByTestId("diff-table");
@@ -231,23 +231,23 @@ test("open the diff: section badges and word-level changes", async ({ page }) =>
 
 test("publish a version and export it", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/team-workspaces/v/2");
+  await page.goto("/documents/team-invites/v/2");
   await expect(page.getByRole("status").filter({ hasText: "scope" })).toBeVisible();
 
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   await page.getByRole("button", { name: "Export PDF" }).click();
-  expect((await download).suggestedFilename()).toBe("team-workspaces-v2.pdf");
+  expect((await download).suggestedFilename()).toBe("team-invites-v2.pdf");
 
-  // A PRD is published from the Publish screen (T2 publish gate); team-workspaces is ready.
+  // A PRD is published from the Publish screen (T2 publish gate); team-invites is ready.
   await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
   await page.getByTestId("doc-header").getByRole("link", { name: "Publish", exact: true }).click();
-  await expect(page).toHaveURL(/\/documents\/team-workspaces\/publish$/);
+  await expect(page).toHaveURL(/\/documents\/team-invites\/publish$/);
   await page.getByTestId("publish-button").click();
   await page.getByRole("dialog", { name: "Publish v2?" }).getByRole("button", { name: "Publish", exact: true }).click();
   await expect(page.getByTestId("published-chip")).toHaveText("Published v2");
 
-  await page.goto("/documents/team-workspaces/v/2");
+  await page.goto("/documents/team-invites/v/2");
   await expect(page.getByText(/✓ Approved/)).toBeVisible();
   await expect(page.getByTestId("doc-status")).toHaveText("Approved");
   await expect(page.getByText(/review is closed/)).toBeVisible();

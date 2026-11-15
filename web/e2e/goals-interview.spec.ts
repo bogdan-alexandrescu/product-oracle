@@ -6,7 +6,7 @@ import { login } from "./helpers";
  * B6 Goals interview (#149) through the UI, on the mock layer: a person starts a discussion on
  * a vague goal, Oracle (scripted in the mock) restates it, names what is missing and offers two
  * measurable versions for "Cut early churn"; a version is proposed, accepted, and the goal
- * becomes measurable. The seed has 2 vague goals of 3: "Grow paid conversion" (no owner) and
+ * becomes measurable. The seed has 2 vague goals of 3: "Growth" (no owner) and
  * "Cut early churn" (target, horizon and owner still missing).
  *
  * Each test's card: protects=<the observable>; fails_when=<the wrong result>; no_claim=<what
@@ -210,7 +210,7 @@ test("Interview vague goals (2) steps Goal 1 of 2 · Next, creating each discuss
   await expect(stepper.getByTestId("stepper-position")).toHaveText("Goal 1 of 2");
   await expect(stepper.getByRole("button", { name: "Next" })).toBeVisible();
   await expect(stepper.getByRole("button", { name: "Skip" })).toBeVisible();
-  await expect(thread(page).getByRole("heading", { name: "Who should own “Grow paid conversion”?" })).toBeVisible();
+  await expect(thread(page).getByRole("heading", { name: "Who should own “Growth”?" })).toBeVisible();
   await expect(chips(page)).toHaveText(["Owner"]);
   expect(await interviews(page)).toBe(1);
 

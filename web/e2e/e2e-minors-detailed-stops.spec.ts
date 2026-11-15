@@ -237,8 +237,8 @@ for (const [name, viewport] of [
       await page.goto(`/runs/${ENG_DATES_RUN}`);
       await page.getByTestId("review-screen-line").filter({ visible: true }).getByRole("link", { name: "Review" }).click();
       await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+$/);
-      await page.locator('[data-testid="date-row"][data-item="saved-addresses"]').getByRole("button", { name: "Change", exact: true }).click();
-      const dialog = page.getByRole("dialog", { name: "Change the date: Saved addresses" });
+      await page.locator('[data-testid="date-row"][data-item="bulk-import"]').getByRole("button", { name: "Change", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Change the date: Bulk import" });
       await expect(dialog).toBeVisible();
       const b = await box(dialog);
       if (viewport === DESKTOP) {
@@ -269,7 +269,7 @@ for (const [name, viewport] of [
 
     test("review bar: one Approve per bar, and the saved date never sits under the buttons", async ({ page }) => {
       await login(page);
-      await page.goto("/documents/saved-carts/v/2");
+      await page.goto("/documents/referral-link/v/2");
       await expect(page.getByTestId("document-sections")).toBeVisible();
       const summary = await openSection(page, "summary");
       const reviewBar = summary.getByTestId("review-bar");

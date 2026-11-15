@@ -124,23 +124,23 @@ for (const [name, viewport] of [["desktop", { width: 1440, height: 900 }], ["pho
   });
 }
 
-/** simple-plan: Usage alerts and Guided setup marked replaced by Team workspaces PRD, in Detailed. */
+/** simple-plan: Usage alerts and Guided setup marked replaced by Team invites PRD, in Detailed. */
 async function replaceInDetailed(page: Page) {
   for (const [slug, title] of [["usage-alerts", "Usage alerts"], ["guided-setup", "Guided setup"]]) {
     await page.goto(`/documents/${slug}`);
     await expect(page.getByRole("heading", { level: 1 }).filter({ visible: true })).toContainText(title);
     await page.getByRole("button", { name: "Replaced by" }).click();
     const dialog = page.getByTestId("replaced-by-dialog");
-    await dialog.getByLabel("Team workspaces PRD").check();
+    await dialog.getByLabel("Team invites PRD").check();
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByTestId("replaced-by").filter({ visible: true })).toContainText("Replaced by Team workspaces PRD");
+    await expect(page.getByTestId("replaced-by").filter({ visible: true })).toContainText("Replaced by Team invites PRD");
   }
 }
 
 /**
  * Re-review round 3 (the mock's "simple-plan" invented data): once Usage alerts and Guided setup are
- * marked replaced by Team workspaces, their history stays on Decisions. The Meetings page's
+ * marked replaced by Team invites, their history stays on Decisions. The Meetings page's
  * "Its decisions" link of the past "Review: Usage alerts" opens that meeting with its decision,
  * and Guided setup's decided question stays outside meetings; only the PRD filter leaves them
  * out. protects = a replaced PRD's past meetings, their decisions and its decided questions on
@@ -250,7 +250,7 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await page.goto("/simple/decisions");
   await expect(page.getByRole("region", { name: "Outside meetings" })).toContainText("Q1 Data retention period");
   const filter = page.getByRole("combobox", { name: "PRD", exact: true });
-  await expect(filter.locator("option", { hasText: "Team workspaces" })).toHaveCount(1);
+  await expect(filter.locator("option", { hasText: "Team invites" })).toHaveCount(1);
   const filters = await optionTexts(filter);
   expect(filters.filter((t) => /Usage alerts|Guided setup/.test(t))).toEqual([]);
 });

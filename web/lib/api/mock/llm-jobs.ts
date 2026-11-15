@@ -314,7 +314,7 @@ function runReports(ctx: LlmContext, doc: Doc, v: Version, since: number | null)
         : "This is the first version.",
       sections: changed,
       new_sources: since
-        ? [{ title: "Q3 support ticket export", kind: "upload", about: "Shipping step", url: null, added_at: v.created_at }]
+        ? [{ title: "Q3 support ticket export", kind: "upload", about: "Billing step", url: null, added_at: v.created_at }]
         : [],
     },
   };
@@ -415,11 +415,11 @@ export const SPENT = "No Claude account can take this call: every Claude account
 
 // ------------------------------------------------------------------ seed
 
-/** Team workspaces v2: three comments, one review job that ran, one reporting job that could not. */
+/** Team invites v2: three comments, one review job that ran, one reporting job that could not. */
 export function seedLlm(ctx: Omit<LlmContext, "db"> & { db?: LlmDb }): LlmDb {
   const db: LlmDb = { jobs: [], suggestions: [], disabled: {} };
   const c = { ...ctx, db };
-  const doc = ctx.documents.find((d) => d.slug === "team-workspaces");
+  const doc = ctx.documents.find((d) => d.slug === "team-invites");
   const v = doc && versionsOf(c, doc).at(-1);
   if (!doc || !v) return db;
   const items = ctx.feedback.filter((f) => f.document_id === doc.id && f.raised_on_version === v.number);
@@ -442,7 +442,7 @@ export function seedLlm(ctx: Omit<LlmContext, "db"> & { db?: LlmDb }): LlmDb {
         group_key: "demand figure",
         kind: "section_text",
         section_key: "problem",
-        text: `${problem.body_md.replace(/[ \t]*\[c:[^\]]*\]/g, "")} Seven in ten sales calls with teams this quarter asked for shared editing.`,
+        text: `${problem.body_md.replace(/[ \t]*\[c:[^\]]*\]/g, "")} Seven in ten sales calls with teams this quarter asked to invite teammates.`,
         rationale: "Two reviewers ask for the size of the demand; the headline number goes in the body and its source in Sources and data points.",
         created_at: "2026-10-13T11:05:40Z",
       }),
@@ -508,9 +508,9 @@ export function seedLlm(ctx: Omit<LlmContext, "db"> & { db?: LlmDb }): LlmDb {
   return db;
 }
 
-/** #556 item 2: Saved carts v2's reports failed on Oct 18 with a refusal stored before #403's wording. */
+/** #556 item 2: Referral link v2's reports failed on Oct 18 with a refusal stored before #403's wording. */
 function seedStoredRefusal(c: LlmContext) {
-  const doc = c.documents.find((d) => d.slug === "saved-carts");
+  const doc = c.documents.find((d) => d.slug === "referral-link");
   const v = doc && versionsOf(c, doc).find((x) => x.number === 2);
   if (!doc || !v) return;
   c.db.jobs.push(

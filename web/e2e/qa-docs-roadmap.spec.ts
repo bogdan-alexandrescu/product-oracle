@@ -96,7 +96,7 @@ test.describe("desktop", () => {
     page,
   }) => {
     await login(page);
-    await page.goto("/documents/checkout-redesign/v/2/roadmap");
+    await page.goto("/documents/annual-billing/v/2/roadmap");
     const status = visible(page, "draft-roadmap-status");
     await expect(status).toHaveAttribute("data-status", "ready");
     await expect(

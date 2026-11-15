@@ -4,13 +4,13 @@ import { MOCK_FAIL_KEY, MOCK_ROLE_KEY, MOCK_SCENARIO_KEY, MOCK_SLOW_KEY } from "
 import { login } from "./helpers";
 
 // v2 screen 5, Quality evaluation (picks.md 5: A's criteria table + inspector, C's "hide
-// until you pick" in the rating form, B's report list as History). Team workspaces v2 in
+// until you pick" in the rating form, B's report list as History). Team invites v2 in
 // the mock; the "quality" scenario adds a stored rules snapshot, a model review (7 of 10
 // criteria) and two people's ratings, all invented. MOCK_ROLE_KEY changes the signed-in
 // member's role, not who they are: their own reports read "Avery Stone".
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
-const URL = "/documents/team-workspaces/v/2/quality";
+const URL = "/documents/team-invites/v/2/quality";
 
 async function open(page: Page, { role = "owner", scenario }: { role?: Role; scenario?: string } = {}) {
   await page.addInitScript(
@@ -280,7 +280,7 @@ test("blocked: a critical hard check blocks the version", async ({ page }) => {
 });
 
 test("error: the dashboard cannot be read, then Retry", async ({ page }) => {
-  await page.addInitScript(([k]) => localStorage.setItem(k, "/v1/documents/team-workspaces/versions/2/readiness"), [MOCK_FAIL_KEY] as const);
+  await page.addInitScript(([k]) => localStorage.setItem(k, "/v1/documents/team-invites/versions/2/readiness"), [MOCK_FAIL_KEY] as const);
   await login(page);
   await page.goto(URL);
   await expect(page.getByTestId("quality-error")).toContainText("Mock failure");
@@ -290,7 +290,7 @@ test("error: the dashboard cannot be read, then Retry", async ({ page }) => {
 });
 
 test("loading: the criteria table draws placeholder rows first", async ({ page }) => {
-  await page.addInitScript(([k]) => localStorage.setItem(k, "/v1/documents/team-workspaces/versions/2/readiness"), [MOCK_SLOW_KEY] as const);
+  await page.addInitScript(([k]) => localStorage.setItem(k, "/v1/documents/team-invites/versions/2/readiness"), [MOCK_SLOW_KEY] as const);
   await login(page);
   await page.goto(URL);
   await expect(page.getByRole("grid", { name: "Criteria" })).toHaveAttribute("aria-busy", "true");
@@ -301,17 +301,17 @@ test("reached from the version page and from Publish", async ({ page }) => {
   // qa-docs-64: a commenter's toolbar is the owner's: Quality, and no extra "Check readiness".
   await page.addInitScript(([k]) => localStorage.setItem(k, "commenter"), [MOCK_ROLE_KEY] as const);
   await login(page);
-  await page.goto("/documents/team-workspaces/v/2");
+  await page.goto("/documents/team-invites/v/2");
   const quality = page.getByRole("link", { name: "Quality" });
   await expect(quality).toBeVisible();
   await expect(page.getByRole("link", { name: "Check readiness" })).toHaveCount(0);
   await quality.click();
-  await expect(page).toHaveURL(/\/documents\/team-workspaces\/v\/2\/quality$/);
+  await expect(page).toHaveURL(/\/documents\/team-invites\/v\/2\/quality$/);
   await expect(page.getByTestId("criterion-row")).toHaveCount(13);
 
-  await page.goto("/documents/team-workspaces/publish");
+  await page.goto("/documents/team-invites/publish");
   await page.getByRole("link", { name: "Open quality" }).click();
-  await expect(page).toHaveURL(/\/documents\/team-workspaces\/v\/2\/quality$/);
+  await expect(page).toHaveURL(/\/documents\/team-invites\/v\/2\/quality$/);
 });
 
 test.describe("phone", () => {

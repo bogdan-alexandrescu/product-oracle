@@ -80,8 +80,8 @@ test.describe("distance to go, met and direction", () => {
   // [title, target, current, history, the text Home shows under the goal]
   const cases: [string, string, string | null, Point[] | undefined, string][] = [
     // Home's seeded goals keep their figures.
-    ["Raise activation", "45%", "38%", undefined, "7 pts to go"],
-    ["Grow paid conversion", "12%", "9.4%", undefined, "2.6 pts to go"],
+    ["Activation", "45%", "38%", undefined, "7 pts to go"],
+    ["Growth", "12%", "9.4%", undefined, "2.6 pts to go"],
     ["Cut early churn", "below 8%", "11%", undefined, "3 pts to go"],
     // A bare target already passed is met, never "to go".
     ["Clinics", "400 clinics", "450", undefined, "Target met"],

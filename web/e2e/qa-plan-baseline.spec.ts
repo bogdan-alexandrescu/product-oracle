@@ -56,13 +56,13 @@ test("goals table: names and chips are whole, the actions column is narrow", asy
 // drops Weight and Horizon; fails_when=the Goal column is squeezed away; no_claim=other tables.
 test("goals table: an open drawer drops Weight and Horizon, not the goal's name", async ({ page }) => {
   await openBaseline(page);
-  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
-  await expect(page.getByRole("dialog", { name: "Guided setup" })).toBeVisible();
+  await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
+  await expect(page.getByRole("dialog", { name: "Setup checklist" })).toBeVisible();
   const table = goalsTable(page);
   await expect(table.getByRole("columnheader", { name: "Goal", exact: true })).toBeVisible();
   await expect(table.getByRole("columnheader", { name: "Weight" })).toBeHidden();
   await expect(table.getByRole("columnheader", { name: "Horizon" })).toBeHidden();
-  const name = table.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation", exact: true });
+  const name = table.getByTestId("goal-g.activation").getByRole("button", { name: "Activation", exact: true });
   await expect(name).toBeVisible();
   expect((await name.boundingBox())!.width).toBeGreaterThan(100);
   expect(await clippedTexts(table.getByTestId("goal-g.activation").locator("td").first())).toEqual([]);
@@ -121,7 +121,7 @@ test("feature × goal: a legend, Confidence and Delivery headers; goals' Review 
   await expect(ledger.getByRole("columnheader", { name: "Delivery" })).toBeVisible();
   await expect(ledger.getByRole("columnheader", { name: "Confidence" })).toBeVisible();
   await expect(ledger.getByRole("columnheader", { name: "Conf." })).toHaveCount(0);
-  await expect(page.getByTestId("feature-F-82").getByRole("img", { name: "Confidence 71%" })).toBeVisible();
+  await expect(page.getByTestId("feature-F-01").getByRole("img", { name: "Confidence 71%" })).toBeVisible();
   await expect(goalsTable(page).getByRole("columnheader", { name: "Review", exact: true })).toBeVisible();
   await expect(goalsTable(page).getByRole("columnheader", { name: "State", exact: true })).toHaveCount(0);
 
@@ -136,8 +136,8 @@ test("feature × goal: a legend, Confidence and Delivery headers; goals' Review 
 test("proposals: Details read 'Change: Delivery status → Planned'", async ({ page }) => {
   await openBaseline(page);
   await page.getByRole("tab", { name: /Proposals/ }).click();
-  const dark = page.getByTestId("proposal").filter({ hasText: "Dark mode" });
-  await expect(dark.getByTestId("proposal-summary")).toHaveText("Set F-81 Dark mode’s delivery status to Planned (was Idea)");
+  const dark = page.getByTestId("proposal").filter({ hasText: "Setup error report" });
+  await expect(dark.getByTestId("proposal-summary")).toHaveText("Set F-06 Setup error report’s delivery status to Planned (was Idea)");
   await dark.getByText("Details", { exact: true }).click();
   await expect(dark.getByTestId("proposal-op")).toHaveText("Change:");
   await expect(dark.getByLabel("Proposed fields")).toHaveText("delivery status → Planned");
@@ -151,7 +151,7 @@ test("proposals: Details read 'Change: Delivery status → Planned'", async ({ p
 test("conflicts: values in words, percentages, and why the leading claim leads", async ({ page }) => {
   await openBaseline(page);
   await page.getByRole("tab", { name: /Conflicts/ }).click();
-  const open = page.getByTestId("conflict").filter({ hasText: "Saved carts" });
+  const open = page.getByTestId("conflict").filter({ hasText: "Referral link" });
   await expect(open.getByTestId("conflict-field")).toHaveText("Delivery status");
   const claims = open.getByTestId("claim");
   await expect(claims.nth(0)).toContainText("In progress");
@@ -173,8 +173,8 @@ test("conflicts: values in words, percentages, and why the leading claim leads",
 // whole; fails_when="status"/"effort" raw, or "Confide…"; no_claim=other kinds' attributes.
 test("entity drawer: attribute labels in words, Confidence label whole", async ({ page }) => {
   await openBaseline(page);
-  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
-  const d = page.getByRole("dialog", { name: "Guided setup" });
+  await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
+  const d = page.getByRole("dialog", { name: "Setup checklist" });
   const labels = d.getByLabel("Attributes").locator("dt");
   await expect(labels).toContainText(["Status", "Effort"]);
   const stat = d.locator("dl").first().locator("dt").filter({ hasText: "Confidence" });
@@ -189,7 +189,7 @@ test("interview: owner-only gap asks who owns it; the stepper has no separators"
   await openBaseline(page);
   await page.getByRole("button", { name: "Ask Oracle to sharpen 2 goals" }).click();
   const discuss = page.getByTestId("goal-discuss");
-  await expect(discuss.getByRole("heading", { name: "Who should own “Grow paid conversion”?" })).toBeVisible();
+  await expect(discuss.getByRole("heading", { name: "Who should own “Growth”?" })).toBeVisible();
   const stepper = discuss.getByTestId("interview-stepper");
   await expect(stepper.getByTestId("stepper-position")).toHaveText("Goal 1 of 2");
   expect(await stepper.innerText()).not.toContain("·");
@@ -221,7 +221,7 @@ test("phone: tabs all show; features keep delivery and confidence", async ({ pag
   await expect(page.getByRole("button", { name: /^Scroll/ })).toHaveCount(0);
   await expect(page.getByTestId("confirmed-chip")).toBeHidden();
 
-  const guided = page.getByTestId("feature-F-82");
+  const guided = page.getByTestId("feature-F-01");
   await expect(guided.getByTestId("phone-feature-delivery")).toBeVisible();
   await expect(guided.getByTestId("phone-feature-delivery")).toHaveText("In progress");
   await expect(guided.getByTestId("phone-feature-confidence")).toBeVisible();

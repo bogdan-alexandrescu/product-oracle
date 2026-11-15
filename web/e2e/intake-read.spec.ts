@@ -71,7 +71,7 @@ test("switch: an owner turns Oracle's read off on Settings › Company; it shows
 
   // The owner's brief: the read is off for the company, so nothing offers one.
   await page.goto(`/intakes/${V2_IDS.intake}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Saved addresses" })).toBeAttached();
+  await expect(page.getByRole("heading", { level: 1, name: "Bulk import" })).toBeAttached();
   await expect(readLine(page)).toContainText("Oracle's read is off for this company.");
   await expect(page.getByRole("button", { name: "Analyse with Oracle" })).toHaveCount(0);
 

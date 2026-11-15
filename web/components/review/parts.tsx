@@ -280,7 +280,7 @@ export function Menu({
 
 /**
  * qa-work-17: a review's way back, in the run page's style ("← Runs" there): an arrow and the
- * run's name ("← Saved addresses PRD · Baseline to PRD"), back to the run.
+ * run's name ("← Bulk import PRD · Baseline to PRD"), back to the run.
  */
 export function RunBackLink({ run }: { run: Parameters<typeof runLabel>[0] & { id: string } }) {
   return (

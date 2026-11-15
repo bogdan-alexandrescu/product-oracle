@@ -6,9 +6,9 @@ import { login } from "./helpers";
 // PR 1300 review round 3, owner decision (Nov 5): code stays out of decks. In Present mode a
 // code block is one line on its slide, "Code: 40 lines, in the full PRD", a link to that
 // place in the full PRD; it is never cut into continuation slides, and no slide is blank
-// (the mock's "long-code" scenario: saved-carts v2's Problem holds a 40-line code block).
+// (the mock's "long-code" scenario: referral-link v2's Problem holds a 40-line code block).
 
-const SLIDE = "/documents/saved-carts/v/2/present";
+const SLIDE = "/documents/referral-link/v/2/present";
 const current = (page: Page) => page.getByTestId("audience-view").locator(".current-slide");
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -41,9 +41,9 @@ test("a code block is one line linking to the full PRD, never blank slides", asy
   await expect(slide.locator(".slide-body")).toContainText("Steps to try:");
   const link = slide.getByRole("link", { name: "Code: 40 lines, in the full PRD" });
   await expect(link).toHaveCount(1);
-  await expect(link).toHaveAttribute("href", /\/documents\/saved-carts\/v\/2#s-problem$/);
+  await expect(link).toHaveAttribute("href", /\/documents\/referral-link\/v\/2#s-problem$/);
   await link.click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2#s-problem$/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2#s-problem$/);
   await expect(page.locator("#s-problem")).toBeVisible();
 });
 
@@ -78,7 +78,7 @@ test("every kind of code block is one line, an empty one none", async ({ page })
     "Code: 1 line, in the full PRD",
   ]);
   for (const link of await links.all()) {
-    await expect(link).toHaveAttribute("href", /^https?:\/\/[^/]+\/documents\/saved-carts\/v\/2#s-problem$/);
+    await expect(link).toHaveAttribute("href", /^https?:\/\/[^/]+\/documents\/referral-link\/v\/2#s-problem$/);
   }
   for (const code of ["step 7 of the rollout", "run the check", "make carts", "ship the carts", "```", "Code: 0"]) {
     await expect(body).not.toContainText(code);

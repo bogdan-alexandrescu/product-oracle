@@ -19,8 +19,8 @@ test("qa-docs-1: a viewer's mouse click opens the account menu with Sign out, an
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page, "viewer@example.com");
   await page.goto("/documents");
-  await page.getByRole("link", { name: "Saved carts PRD" }).filter({ visible: true }).first().click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts$/);
+  await page.getByRole("link", { name: "Referral link PRD" }).filter({ visible: true }).first().click();
+  await expect(page).toHaveURL(/\/documents\/referral-link$/);
 
   const avatar = page.getByTestId("user-menu");
   await clickCentre(page, avatar);
@@ -36,12 +36,12 @@ test("qa-docs-1: a viewer's mouse click opens the account menu with Sign out, an
 
 const COMMENTER_PAGES = [
   "/documents",
-  "/documents/saved-carts",
-  "/documents/saved-carts/v/2",
-  "/documents/saved-carts/v/2/evidence",
-  "/documents/saved-carts/v/2/quality",
-  "/documents/saved-carts/v/2/roadmap",
-  "/documents/saved-carts/composition",
+  "/documents/referral-link",
+  "/documents/referral-link/v/2",
+  "/documents/referral-link/v/2/evidence",
+  "/documents/referral-link/v/2/quality",
+  "/documents/referral-link/v/2/roadmap",
+  "/documents/referral-link/composition",
 ];
 
 test("qa-docs-22: a commenter reads one role badge, in the same words, on every Documents page", async ({ page }) => {
@@ -78,7 +78,7 @@ test("qa-docs-22: an owner reads no role badge on Documents pages", async ({ pag
 test("qa-docs-31: on a phone the overview's Edit, scrolled into view, sits clear of the tab bar's More", async ({ page }) => {
   await page.setViewportSize(PHONE);
   await login(page);
-  await page.goto("/documents/checkout-redesign");
+  await page.goto("/documents/annual-billing");
   const edit = page.getByRole("button", { name: /^Edit owner and reviewers/ }).filter({ visible: true }).first();
   await edit.scrollIntoViewIfNeeded();
   const [e, bar] = await Promise.all([edit.boundingBox(), page.getByTestId("tab-bar").boundingBox()]);

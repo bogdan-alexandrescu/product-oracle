@@ -18,7 +18,7 @@ async function asRole(page: Page, role: Role) {
 
 async function openQuality(page: Page, role: Role = "owner") {
   await asRole(page, role);
-  await page.goto("/documents/saved-carts/v/2/quality");
+  await page.goto("/documents/referral-link/v/2/quality");
   await expect(page.getByTestId("criterion-row")).toHaveCount(13);
 }
 
@@ -37,9 +37,9 @@ test.describe("desktop", () => {
   // qa-docs-7
   test("qa-docs-7: coverage column heads carry no repeated 'unsupported'; the note is plain and short", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/saved-carts/v/2");
+    await page.goto("/documents/referral-link/v/2");
     await page.getByTestId("version-tab-evidence").filter({ visible: true }).click();
-    await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\/evidence/);
+    await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/evidence/);
     const matrix = page.getByTestId("evidence-matrix");
     await expect(matrix).toBeVisible();
 
@@ -102,7 +102,7 @@ test.describe("desktop", () => {
     const quality = await naCount(page.getByTestId("criteria-tally"));
     expect(quality).toBeGreaterThan(0);
 
-    await page.goto("/documents/saved-carts/publish");
+    await page.goto("/documents/referral-link/publish");
     await expect(page.getByTestId("publish-readiness")).toBeVisible();
     const hard = await naCount(page.getByRole("region", { name: "Hard checks" }).locator("div").first());
     const advisory = await naCount(page.getByRole("region", { name: "Advisory" }).locator("div").first());
@@ -113,7 +113,7 @@ test.describe("desktop", () => {
   // qa-docs-30
   test("qa-docs-30: the composition page speaks plainly and its main button says what it does", async ({ page }) => {
     await login(page, "approver@example.com");
-    await page.goto("/documents/team-workspaces/composition");
+    await page.goto("/documents/team-invites/composition");
     await expect(page.getByRole("heading", { level: 1, name: "Composition" })).toBeVisible();
     const modules = page.getByTestId("composition-modules");
     await expect(modules).toBeVisible();
@@ -133,9 +133,9 @@ test.describe("desktop", () => {
   // qa-docs-24
   test("qa-docs-24: Present mode has a heading per slide and key hints that say what they do", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/saved-carts/v/2");
+    await page.goto("/documents/referral-link/v/2");
     await page.getByRole("link", { name: "Present" }).filter({ visible: true }).first().click();
-    await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\/present$/);
+    await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/present$/);
     const present = page.getByTestId("present-mode");
     await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
     // Level-one headings shown on the page, the slides' shadow roots included (Next keeps visited pages, hidden).
@@ -178,7 +178,7 @@ test.describe("phone", () => {
   // qa-docs-30
   test("qa-docs-30: the composition button reads 'Use these modules' in full on a phone", async ({ page }) => {
     await login(page, "approver@example.com");
-    await page.goto("/documents/team-workspaces/composition");
+    await page.goto("/documents/team-invites/composition");
     await expect(page.getByTestId("composition-modules")).toBeVisible();
     const action = page.getByRole("button", { name: "Use these modules" });
     await expect(action).toHaveText("Use these modules");
@@ -190,11 +190,11 @@ test.describe("phone", () => {
   // qa-docs-10; no colour changes, so light only. vqa B-14 replaced its wrapping labels: a
   // label keeps to one line, and one cut short holds its whole words (the count too) in an (i)
   // that opens on a tap as well as on hover. C-13: only a PRD with roadmap items has a Timeline
-  // strip (Saved carts has none in this mock: "No roadmap items yet"), so this opens Guided
+  // strip (Referral link has none in this mock: "No roadmap items yet"), so this opens Guided
   // setup's one-pager at its address (the default list does not carry it).
   test("qa-docs-10: the one-pager's Timeline labels keep to one line and never lose their item count", async ({ page }) => {
     await login(page);
-    // C-13 (PR 1307): Saved carts reads its own sections and has no roadmap items of its own, so
+    // C-13 (PR 1307): Referral link reads its own sections and has no roadmap items of its own, so
     // no Timeline; Guided setup's one-pager is the one whose strip has milestones.
     await page.goto("/simple/one-pagers/guided-setup");
     await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();

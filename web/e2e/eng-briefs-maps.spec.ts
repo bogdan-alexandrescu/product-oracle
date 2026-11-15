@@ -42,7 +42,7 @@ async function checkScreen(page: Page) {
   await expect(problems.getByText("The briefs could not be read: send them back to the architect.")).toBeVisible();
   await expect(problems.getByRole("listitem")).toHaveText([
     "'model:catalogue' is not in the code map this run used: cited by f.sample-data (reuse)",
-    "'module:storefront' is not in the code map this run used: cited by f.guided-setup (touches[1].ref), f.sample-data (touches[0].ref), f.saved-carts (reuse)",
+    "'module:storefront' is not in the code map this run used: cited by f.guided-setup (touches[1].ref), f.sample-data (touches[0].ref), f.referral-link (reuse)",
   ]);
   await expect(page.getByTestId("briefs-unnamed")).toHaveCount(0);
   const unmapped = page.getByTestId("briefs-unmapped");

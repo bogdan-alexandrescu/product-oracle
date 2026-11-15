@@ -117,7 +117,7 @@ export function TaskForm({
         <span className="min-w-0 text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal: {goal}</span>
       </div>
       <Field label="Name" error={!done ? "Name the task." : undefined}>
-        <input autoFocus value={f.name} onChange={set("name")} placeholder="For example: Saved carts" className={done ? INPUT : BAD} />
+        <input autoFocus value={f.name} onChange={set("name")} placeholder="For example: Referral link" className={done ? INPUT : BAD} />
       </Field>
       <Field label="Outcome: what changes for people">
         <textarea rows={2} value={f.outcome} onChange={set("outcome")} placeholder="For example: shoppers pick up where they left off" className={`${INPUT} h-auto py-1.5`} />
@@ -306,7 +306,7 @@ export function dependentsOf(rows: Row[], code: string): string[] {
   return rows.filter((r) => r.depends_on.some((d) => d.toLowerCase() === code.toLowerCase())).map((r) => r.title);
 }
 
-/** A code people know ("F-27"), not an item's raw key ("saved-carts"): a draft shows no chip until it has one. */
+/** A code people know ("F-27"), not an item's raw key ("referral-link"): a draft shows no chip until it has one. */
 export const knownCode = (code: string) => /^[a-z]+\d*-\d+[a-z]?$/i.test(code);
 
 /** A task's row where the plan does not place it (an added draft; every task with no dated plan), as FeatureRows draws a feature's. */

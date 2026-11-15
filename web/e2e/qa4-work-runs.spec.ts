@@ -23,7 +23,7 @@ test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test("qa4-work-25: the over-budget banner says what Resume allows in the shown numbers, in short sentences", async ({ page }) => {
-    await openRun(page, "Team workspaces");
+    await openRun(page, "Team invites");
     // detailed-b 20: who may resume reads it from the pill and Resume; no line says it again.
     await expect(page.getByTestId("run-overrun-held")).toHaveCount(0);
     // F-39: what Resume allows sits behind the Overrun (i).
@@ -50,7 +50,7 @@ test.describe("desktop", () => {
   });
 
   test("qa4-work-29: a decision reads as a sentence in the panel's normal size", async ({ page }) => {
-    await openRun(page, "Checkout redesign");
+    await openRun(page, "Annual billing");
     const decision = inspector(page).getByTestId("run-decisions").getByTestId("run-decision");
     await expect(decision).toHaveText("PRD review was skipped: it was turned off when the run started.");
     await expect(decision).toHaveCSS("font-size", "14px");

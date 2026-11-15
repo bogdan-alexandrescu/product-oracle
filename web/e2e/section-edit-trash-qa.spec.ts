@@ -21,7 +21,7 @@ const SIZES = [
   { width: 390, height: 844 },
 ];
 const THEMES = ["light", "dark"] as const;
-const CARTS = "/documents/saved-carts/v/2";
+const CARTS = "/documents/referral-link/v/2";
 
 async function tap(l: Locator) {
   await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -52,8 +52,8 @@ for (const theme of THEMES)
       await login(page);
       await page.goto(CARTS);
       await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
-      const reminder = section(page, "feature-reminder");
-      await tap(reminder.getByRole("button", { name: "Actions for Reminder email" }));
+      const reminder = section(page, "feature-joined");
+      await tap(reminder.getByRole("button", { name: "Actions for Joined email" }));
       await page.getByRole("menuitem", { name: "Edit the text yourself" }).click();
       const editor = reminder.getByTestId("section-editor");
       await expect(editor).toBeVisible();

@@ -33,7 +33,7 @@ for (const size of SIZES) {
     test("reused Ground Truth: the reused segment counts as done, and the run's title is the PRD's own", async ({ page }) => {
       await login(page);
       await page.goto("/documents/new");
-      await page.getByRole("textbox", { name: "Title" }).fill("Example test · Saved carts");
+      await page.getByRole("textbox", { name: "Title" }).fill("Example test · Referral link");
       await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
       await page.getByRole("button", { name: "Continue" }).first().click();
       await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
@@ -46,10 +46,10 @@ for (const size of SIZES) {
 
       await expect(page.getByTestId("segment-baseline").getByTestId("segment-state")).toHaveText(/^Reused/);
       await expect(page.getByTestId("segments-done")).toHaveText(/^1 of \d+ done$/);
-      await expect(page.getByTestId("run-name").filter({ visible: true }).first()).toHaveText("Example test · Saved carts · Ground Truth to PRD");
-      await expect(page.getByTestId("run-document")).toContainText("Example test · Saved carts");
-      // Never the slug in words ("Example test saved carts").
-      await expect(page.getByTestId("run-document")).not.toContainText(/Example test saved carts/i);
+      await expect(page.getByTestId("run-name").filter({ visible: true }).first()).toHaveText("Example test · Referral link · Ground Truth to PRD");
+      await expect(page.getByTestId("run-document")).toContainText("Example test · Referral link");
+      // Never the slug in words ("Example test referral links").
+      await expect(page.getByTestId("run-document")).not.toContainText(/Example test referral links/i);
     });
 
     test("decisions: the list names who decided, and a send-back says what it sent", async ({ page }) => {
@@ -97,7 +97,7 @@ for (const size of SIZES) {
       await page.addInitScript((key) => localStorage.setItem(key, "scope-review"), MOCK_SCENARIO_KEY);
       await login(page, "approver@example.com");
       await page.goto("/runs");
-      await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
+      await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").first().click();
       await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
       await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+/);
       const row = page.getByTestId("scope-row").filter({ has: page.getByTestId("feature-title").filter({ hasText: "Bulk edit" }) });

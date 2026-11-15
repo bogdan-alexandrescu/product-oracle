@@ -47,7 +47,7 @@ for (const [name, size] of [
     await openDates(page);
     await expect(page.getByTestId("dates-prd")).toHaveText(/^The Now items of Usage alerts PRD v\d+$/);
     await expect(dateRow(page, "shipping-step").getByTestId("date-proposed")).toHaveText("Nov 30 · Estimate: shipping step");
-    await expect(dateRow(page, "saved-addresses").getByTestId("date-proposed")).toHaveText("Dec 11 · Capacity plan: Q4 checkout");
+    await expect(dateRow(page, "bulk-import").getByTestId("date-proposed")).toHaveText("Dec 11 · Capacity plan: Q4 checkout");
     await expect(dateRow(page, "shipping-step")).toContainText("PRD section: Shipping");
     await expect(dateRow(page, "price-early")).toContainText("PRD section: Pricing");
     const table = page.getByRole("region", { name: "Now items" });
@@ -108,7 +108,7 @@ test("dates: Ask the architect in the panel is a button like the others", async 
   // protects=qa4-work-55 on the Engineering dates; fails_when=Ask the architect is a ghost (grey text) button.
   await page.setViewportSize(DESKTOP);
   await openDates(page);
-  await dateRow(page, "saved-addresses").getByRole("button").first().click();
+  await dateRow(page, "bulk-import").getByRole("button").first().click();
   const panel = page.getByTestId("dates-inspector");
   await expect(panel).toContainText("Dec 11 · Capacity plan: Q4 checkout");
   await expect(panel.getByRole("button", { name: "Ask the architect" })).toHaveAttribute("data-variant", "secondary");
@@ -123,10 +123,10 @@ for (const [name, size] of [
     await page.setViewportSize(size);
     await openCheck(page);
     // EC1 b (owner, Nov 1): the list shows the name; the key shows only in small type by the title in the pane.
-    await expect(briefRow(page, "f.guided-setup").getByRole("button").first()).toContainText("Guided setup");
-    await expect(briefRow(page, "f.sample-data").getByRole("button").first()).toContainText("Sample data");
+    await expect(briefRow(page, "f.guided-setup").getByRole("button").first()).toContainText("Setup checklist");
+    await expect(briefRow(page, "f.sample-data").getByRole("button").first()).toContainText("Sample data import");
     const table = page.getByRole("region", { name: "Features" });
-    for (const key of ["f.guided-setup", "f.sample-data", "f.saved-carts"]) await expect(table).not.toContainText(key);
+    for (const key of ["f.guided-setup", "f.sample-data", "f.referral-link"]) await expect(table).not.toContainText(key);
   });
 }
 
@@ -138,12 +138,12 @@ test("check: no code map reads in plain words, the panel names what a feature de
   // EC1 b (owner, Nov 1): said once, in the pane, not on every row of the list.
   await expect(briefRow(page, "f.guided-setup")).not.toContainText(guess);
   await expect(page.getByRole("region", { name: "Features" })).not.toContainText("No code map");
-  await briefRow(page, "f.saved-carts").getByRole("button").first().click();
+  await briefRow(page, "f.referral-link").getByRole("button").first().click();
   const panel = page.getByTestId("brief-inspector");
-  await expect(panel).toHaveAccessibleName("Brief: Saved carts");
+  await expect(panel).toHaveAccessibleName("Brief: Referral link");
   await expect(panel).toContainText(guess);
   await expect(panel).not.toContainText("No code map");
-  await expect(panel).toContainText("Depends on Guided setup");
+  await expect(panel).toContainText("Depends on Setup checklist");
   await expect(panel).not.toContainText("f.guided-setup");
   // EC1 b (owner, Nov 4): a quiet accent link after "None for this feature.", not grey text and not a button below.
   await expect(panel.getByRole("button", { name: "Ask the architect" })).toHaveClass(/text-accent/);

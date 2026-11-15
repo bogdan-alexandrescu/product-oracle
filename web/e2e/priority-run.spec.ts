@@ -40,7 +40,7 @@ test("review and approve the run's order", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/priorities\?snapshot=/);
   const band = page.getByTestId("snapshot-band");
-  await expect(band).toContainText("Proposed by Ground Truth to PRD · Saved addresses PRD · waiting for you");
+  await expect(band).toContainText("Proposed by Ground Truth to PRD · Bulk import PRD · waiting for you");
   // The method switch is locked to the snapshot's method.
   const methods = page.getByRole("radiogroup", { name: "Ranking method" });
   await expect(methods.getByRole("radio", { name: "Goal-weighted" })).toHaveAttribute("aria-checked", "true");
@@ -86,7 +86,7 @@ test("review and approve the run's order", async ({ page }) => {
 
   // Approve order: saved for the PRD, and the run moves on.
   await band.getByRole("button", { name: "Approve order" }).click();
-  await expect(band).toContainText("Saved for Saved addresses");
+  await expect(band).toContainText("Saved for Bulk import");
   await expect(band.getByRole("button", { name: "Approve order" })).toHaveCount(0);
   await page.goto(`/runs/${PRIORITY_RUN}`);
   await expect(page.getByTestId("run-status").filter({ visible: true })).toHaveText("Running");
@@ -120,17 +120,17 @@ test("the Snapshots panel lists saved snapshots only, each run order with its PR
   await seeded(page);
   await page.goto("/priorities");
   const list = page.getByTestId("snapshot-list");
-  // Seeded: one saved run order (Checkout redesign) and two proposed ones, never listed.
+  // Seeded: one saved run order (Annual billing) and two proposed ones, never listed.
   await expect(list.getByRole("listitem")).toHaveCount(1);
-  await expect(list).toContainText("Checkout redesign PRD · approved order");
+  await expect(list).toContainText("Annual billing PRD · approved order");
 
   // Approving a proposed order lists it, with its PRD.
   await page.goto(`/runs/${PRIORITY_RUN}`);
   await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
   await page.getByTestId("snapshot-band").getByRole("button", { name: "Approve order" }).click();
-  await expect(page.getByTestId("snapshot-band")).toContainText("Saved for Saved addresses");
+  await expect(page.getByTestId("snapshot-band")).toContainText("Saved for Bulk import");
   await expect(list.getByRole("listitem")).toHaveCount(2);
-  await expect(list).toContainText("Saved addresses PRD · approved order");
+  await expect(list).toContainText("Bulk import PRD · approved order");
   await page.goto("/priorities");
   await expect(page.getByTestId("snapshot-band")).toHaveCount(0);
   await expect(page.getByTestId("snapshot-list").getByRole("listitem")).toHaveCount(2);

@@ -94,7 +94,7 @@ for (const [where, use] of [
     ] as const) {
       test(`as the ${who}, a key two roadmaps hold opens the one in the card's roadmap`, async ({ page }) => {
         await inScenario(page, "plan-same-key");
-        await openDetailed(page, "threshold-alerts", "checkout-redesign-roadmap", "checkout-redesign-roadmap", email);
+        await openDetailed(page, "threshold-alerts", "annual-billing-roadmap", "annual-billing-roadmap", email);
         // Both roadmaps' rows are on the Plan; the Checkout one is picked, not Usage alerts' first row.
         await expect(page.locator('[data-testid="plan-row"][data-item="threshold-alerts"]').filter({ visible: true })).toHaveCount(2);
         const picked = page.locator('[data-testid="plan-row"][aria-selected="true"]').filter({ visible: true });

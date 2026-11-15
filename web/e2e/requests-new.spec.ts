@@ -42,7 +42,7 @@ test("New request: file one with a goal; it shows as New with its goal chip, sel
   await dialog.getByRole("button", { name: "File request" }).click();
   await expect(dialog.getByText("Say what it is and why")).toBeVisible();
   await dialog.getByLabel("What it is and why").fill(WHY);
-  await dialog.getByRole("checkbox", { name: "Raise activation" }).check();
+  await dialog.getByRole("checkbox", { name: "Activation" }).check();
   await dialog.getByRole("button", { name: "File request" }).click();
 
   await expect(dialog).toBeHidden();
@@ -50,11 +50,11 @@ test("New request: file one with a goal; it shows as New with its goal chip, sel
   await expect(filed).toHaveAttribute("aria-current", "true");
   await expect(filed).toContainText("New");
   await expect(filed).toContainText("In app");
-  await expect(filed.getByTestId("goal-chip")).toHaveText(["Raise activation"]);
+  await expect(filed.getByTestId("goal-chip")).toHaveText(["Activation"]);
 
   await page.reload();
   await expect(row(page, TITLE)).toContainText("New");
-  await expect(row(page, TITLE).getByTestId("goal-chip")).toHaveText(["Raise activation"]);
+  await expect(row(page, TITLE).getByTestId("goal-chip")).toHaveText(["Activation"]);
 });
 
 test("New request: a viewer is not shown it (#370)", async ({ page }) => {

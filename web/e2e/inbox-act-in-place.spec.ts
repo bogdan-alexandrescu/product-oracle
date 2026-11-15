@@ -9,7 +9,7 @@ import { feedbackState, login, openSection, openTab } from "./helpers";
  * The "suggestions" mock (inbox-feedback.spec.ts's seed) has every kind: Clinic outreach's
  * open metric request and the Fleet next version change requests (section text), Team
  * workspaces' custom roles (Oracle pushed back), its demand duplicate, a question Oracle
- * answered and a remark with nothing to change, and Checkout redesign's comment (none).
+ * answered and a remark with nothing to change, and Annual billing's comment (none).
  */
 
 async function suggestions(page: Page) {
@@ -30,9 +30,9 @@ const notice = (page: Page) => page.getByTestId("inbox-acted");
 const METRIC = "Add a metric that shows the outbound check works";
 const ROLES = "Add custom roles to the first release";
 const QUANTIFY = "Can we quantify the demand from the sales calls?";
-const QUESTION = "Who can see a workspace's billing page?";
+const QUESTION = "Can an invited teammate join as a viewer instead?";
 const REMARK = "The scope reads well as it is.";
-const ADDRESS = "Should the most recently used address be selected by default?";
+const ADDRESS = "Should the current seat count be selected by default?";
 const DEPOT = "Depot handover needs a count check";
 const FAILED = "Limit how many times a customer can move a failed delivery.";
 
@@ -171,13 +171,13 @@ for (const [width, height] of [
 
     // The answer is a reply on the comment's thread in the document.
     await row(page, QUESTION, "done").getByRole("link", { name: /^Open/ }).click();
-    await expect(page).toHaveURL(/\/documents\/team-workspaces\/v\/2/);
+    await expect(page).toHaveURL(/\/documents\/team-invites\/v\/2/);
     // On a phone the review panel is a sheet behind its Review button.
     if (page.viewportSize()!.width <= 600) await page.getByRole("button", { name: /^Review ·/ }).filter({ visible: true }).click();
     await openTab(page, "Feedback");
     await feedbackState(page, "Done");
     const answered = page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: QUESTION });
-    await expect(answered.getByTestId("comment")).toContainText("Workspace owners and billing admins see it; members do not.");
+    await expect(answered.getByTestId("comment")).toContainText("Yes: the admin picks the role on the invite; editor is the default.");
   });
 
   test("a row without a suggestion offers Stage for agents (first), Decline and Open; Decline declines the item", async ({ page }) => {

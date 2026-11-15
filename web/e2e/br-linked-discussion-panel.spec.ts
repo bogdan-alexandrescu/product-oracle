@@ -12,7 +12,7 @@ import { login } from "./helpers";
  */
 
 const APPROVER = "approver@example.com";
-const ORDER = "Order: put Guest checkout first?";
+const ORDER = "Order: put Public signup first?";
 // The run the "feature-set" scenario seeds (web/lib/api/mock/runs.ts FEATURE_SET_RUN).
 const RUN = "7a11c0de-0000-4000-8000-0000000000f5";
 
@@ -32,7 +32,7 @@ test.describe("desktop", () => {
     await expect(page.getByRole("heading", { name: "Priorities", level: 1 })).toBeVisible();
     const card = panel(page).getByTestId("discussion-thread").getByTestId("changes-card");
     await expect(card).toBeInViewport();
-    await expect(card.getByRole("list", { name: "Open changes" }).getByTestId("change-row")).toContainText("Move Guest checkout above Saved carts");
+    await expect(card.getByRole("list", { name: "Open changes" }).getByTestId("change-row")).toContainText("Move Public signup above Referral link");
     await expect(sheet(page)).toHaveCount(0);
     // The panel sits at the right, no wider than the panel's 400 px.
     const box = (await panel(page).boundingBox())!;

@@ -24,7 +24,7 @@ import { disconnectAll, login, openSection, sectionAction } from "./helpers";
  * reply run's argv (API tests).
  */
 
-const DOC = "/documents/checkout-redesign/v/2";
+const DOC = "/documents/annual-billing/v/2";
 const LABEL = "Fireflies Archive";
 const MEETING_ID = "FF-2041";
 const MEETING_TITLE = "Pricing review with the design team";

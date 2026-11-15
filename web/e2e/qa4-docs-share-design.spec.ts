@@ -5,7 +5,7 @@ import { login } from "./helpers";
 /*
  * QA pass 4, design group: a spec's design page /specs/<id>/design/<versionId>, the PRD
  * overview's tech briefs and a tech brief page, on the mock API's seeded spec (Checkout
- * redesign PRD -> "Early shipping cost: technical brief" -> its user flow and wireframes).
+ * redesign PRD -> "Early yearly price: technical brief" -> its user flow and wireframes).
  * Driven through the UI as a person would.
  */
 
@@ -31,7 +31,7 @@ test.describe("desktop", () => {
     await openDesign(page, WIRE);
     await page.getByRole("button", { name: "Side by side" }).click();
     const note = visible(page, "sanitised");
-    await expect(note).toContainText("A part that isn't allowed was removed from Cart 2 for safety.");
+    await expect(note).toContainText("A part that isn't allowed was removed from Plan page 2 for safety.");
     await expect(note).not.toContainText("<");
     await expect(note).not.toContainText("Sanitised");
     await expect(note).not.toContainText("Oracle removed");
@@ -41,8 +41,8 @@ test.describe("desktop", () => {
     await openDesign(page, WIRE);
     await page.getByRole("button", { name: "Side by side" }).click();
     const notes = inspector(page).getByTestId("annotations");
-    await expect(notes.getByLabel("Comment on annotation 1 of Cart 1")).toBeVisible();
-    await expect(notes.getByLabel("Comment on annotation 1 of Cart 2")).toBeVisible();
+    await expect(notes.getByLabel("Comment on annotation 1 of Plan page 1")).toBeVisible();
+    await expect(notes.getByLabel("Comment on annotation 1 of Plan page 2")).toBeVisible();
     const file = visible(page, "file-details").first();
     await file.getByText("Details").click();
     await expect(file).toContainText("Web page (HTML)");
@@ -80,24 +80,24 @@ test.describe("desktop", () => {
     await openDesign(page, FLOW, "approver@example.com");
     const meta = inspector(page).getByTestId("version-meta");
     const depends = meta.locator("div").filter({ has: page.getByText("Depends on", { exact: true }) }).last();
-    await expect(depends).toContainText("Checkout redesign PRD");
+    await expect(depends).toContainText("Annual billing PRD");
     await expect(depends).not.toContainText("changed");
     const stale = meta.locator("div").filter({ has: page.getByText("May be stale", { exact: true }) }).last();
-    await expect(stale).toContainText('Section "5.2 Shipping step" changed in Checkout redesign PRD');
+    await expect(stale).toContainText('Section "5.2 Billing step" changed in Annual billing PRD');
   });
 
   test("qa4-docs-share-44: the PRD overview calls a technical brief by that name", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/checkout-redesign");
+    await page.goto("/documents/annual-billing");
     const row = page.getByTestId("tech-briefs").getByTestId("engineering-spec").first();
-    await expect(row).toContainText("Early shipping cost: technical brief");
+    await expect(row).toContainText("Early yearly price: technical brief");
     await expect(row).toContainText("Open technical brief");
     await expect(row).not.toContainText("Open spec");
   });
 
   test("qa4-docs-share-46: What it touches reads as words, not kind and change values", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/checkout-redesign");
+    await page.goto("/documents/annual-billing");
     await page.getByTestId("tech-briefs").getByRole("link", { name: "Show the full price early" }).click();
     await expect(page).toHaveURL(/\/briefs\/[0-9a-f-]+$/);
     const touches = page.getByRole("table", { name: "What it touches" });
@@ -119,7 +119,7 @@ test.describe("phone", () => {
     const open = page.getByRole("button", { name: "Open the review" });
     await expect(open).toHaveAttribute("data-variant", "secondary");
     await open.click();
-    const sheet = page.getByRole("dialog", { name: /Review · Early shipping cost: user flows/ });
+    const sheet = page.getByRole("dialog", { name: /Review · Early yearly price: user flows/ });
     await expect(sheet).toContainText("You can read this review.");
     await expect(sheet).not.toContainText("viewing as");
     await expect(sheet).not.toContainText("viewer");

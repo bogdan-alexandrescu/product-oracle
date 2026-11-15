@@ -2,13 +2,13 @@ import { expect, test, type Page } from "./test";
 
 import { login, openSection, section } from "./helpers";
 
-// QA pass 4, docs lane: the version page /documents/<doc>/v/<n> (Checkout redesign v2 with a
-// held rewrite, Team workspaces v2 with a changed approved section, Saved carts v2 with a
+// QA pass 4, docs lane: the version page /documents/<doc>/v/<n> (Annual billing v2 with a
+// held rewrite, Team invites v2 with a changed approved section, Referral link v2 with a
 // brief), driven as a person on the mock.
 
-const CHECKOUT = "/documents/checkout-redesign/v/2";
-const WORKSPACES = "/documents/team-workspaces/v/2";
-const CARTS = "/documents/saved-carts/v/2";
+const CHECKOUT = "/documents/annual-billing/v/2";
+const WORKSPACES = "/documents/team-invites/v/2";
+const CARTS = "/documents/referral-link/v/2";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
@@ -125,7 +125,7 @@ test.describe("desktop", () => {
   test("qa4-docs-58: the brief Summary names the goal in words, with no goal code", async ({ page }) => {
     await openVersion(page, CARTS);
     const summary = section(page, "summary").first();
-    await expect(summary).toContainText("It serves the retention goal.");
+    await expect(summary).toContainText("It serves the growth goal.");
     await expect(summary).not.toContainText("G2");
   });
 });

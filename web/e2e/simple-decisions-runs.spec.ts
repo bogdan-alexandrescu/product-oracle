@@ -84,7 +84,7 @@ for (const phone of [false, true]) {
       await expect(changed.locator("b")).toHaveText("Dates: approved with one date changed");
       await expect(changed).toContainText("Weekly alert digest moved from Nov 20 to Dec 4. · Avery Stone (owner) · Tue Oct 27");
       // A Dates stop whose dates were taken as proposed reads as before.
-      const carts = runs.getByTestId("decisions-run").filter({ hasText: "Saved carts plan" });
+      const carts = runs.getByTestId("decisions-run").filter({ hasText: "Referral link plan" });
       await expect(carts.getByTestId("run-stop-row").filter({ hasText: "Dates:" }).locator("b")).toHaveText("Dates: approved");
       // Only the dates stop counts date edits.
       await expect(runs.getByText(/date changed|dates changed/)).toHaveCount(1);
@@ -100,10 +100,10 @@ for (const phone of [false, true]) {
       const blocks = runs.getByTestId("decisions-run");
       await expect(blocks).toHaveCount(4);
       await expect(blocks.getByRole("heading", { level: 3 })).toHaveText([
-        "Checkout redesign plan · Checkout redesign PRD · 4 decisions",
-        "Team workspaces plan · Team workspaces PRD · 3 decisions",
+        "Annual billing plan · Annual billing PRD · 4 decisions",
+        "Team invites plan · Team invites PRD · 3 decisions",
         "Usage alerts plan · Usage alerts PRD · 5 decisions",
-        "Saved carts plan · Saved carts PRD · 5 decisions",
+        "Referral link plan · Referral link PRD · 5 decisions",
       ]);
       await expect(runs.getByTestId("run-stop-row")).toHaveCount(17);
       // The meetings above keep their place.

@@ -43,7 +43,7 @@ test("qa-plan-4: Plan's goal cards and the Ground Truth's Goals table show the s
   const plan = page.getByTestId("plan-goals");
   const g1 = plan.getByTestId("home-goal-G3");
   const g2 = plan.getByTestId("home-goal-G2");
-  await expect(g1).toContainText("Raise activation");
+  await expect(g1).toContainText("Activation");
   // No evidence yet on either goal: no score on Plan either.
   await expect(g1.getByTestId("goal-confidence")).toHaveText("No confidence yet: add evidence");
   await expect(g1.getByRole("img", { name: /Confidence 78/ })).toHaveCount(0);
@@ -56,8 +56,8 @@ test("qa-plan-4: Plan's goal cards and the Ground Truth's Goals table show the s
     await expect(row.getByRole("img", { name: "Not scored: no evidence yet" })).toBeVisible();
     await expect(row.getByRole("img", { name: /^Confidence/ })).toHaveCount(0);
   }
-  await table.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation", exact: true }).click();
-  const drawer = page.getByRole("dialog", { name: "Raise activation" });
+  await table.getByTestId("goal-g.activation").getByRole("button", { name: "Activation", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Activation" });
   await expect(drawer.getByRole("img", { name: "Not scored: no evidence yet" })).toBeVisible();
 });
 
@@ -65,8 +65,8 @@ test("qa-plan-4: Plan's goal cards and the Ground Truth's Goals table show the s
 // name whole; its flags wrap under it; fails_when=the name ends in "Usa…"; no_claim=phones.
 test("qa-plan-7: an open drawer leaves the feature names whole in Feature × goal", async ({ page }) => {
   await openBaseline(page);
-  await page.getByTestId("feature-F-82").getByRole("button", { name: "Guided setup" }).click();
-  await expect(page.getByRole("dialog", { name: "Guided setup" })).toBeVisible();
+  await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
+  await expect(page.getByRole("dialog", { name: "Setup checklist" })).toBeVisible();
   const usage = ledger(page).getByTestId("feature-f.usage-export");
   const name = usage.getByRole("button", { name: "Usage export", exact: true });
   await expect(name).toBeVisible();
@@ -139,7 +139,7 @@ test("qa-plan-38: the targets row is labelled on the left; goal names wrap", asy
   });
   const delivery = await box(t.getByRole("columnheader", { name: "Delivery" }));
   expect(textX).toBeLessThan(delivery.x);
-  const paid = t.getByRole("columnheader").getByRole("button", { name: "Grow paid conversion", exact: true });
+  const paid = t.getByRole("columnheader").getByRole("button", { name: "Growth", exact: true });
   await expect(paid).toBeVisible();
   expect(await clipped(paid)).toBe(false);
 });

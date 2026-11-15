@@ -16,8 +16,8 @@
  * in the Ground Truth by code and not flagged unlinked, though it is flagged if that feature runs
  * today; no_code and no_goal read every confirmed feature (the base mock's have a code and a goal
  * here), a goal served by a confirmed link to a confirmed goal. Every other scenario reads the
- * same check over its own state: the base mock's features have their codes (F-81 to F-85) and
- * Dark mode serves no goal, so the default company has one no_goal flag. The
+ * same check over its own state: the base mock's features have their codes (F-01 to F-12) and
+ * Setup error report serves no goal, so the default company has one no_goal flag. The
  * "ground-truth-confirm" scenario adds Usage sync (a run's proposal with its Code F-16 and
  * its proposed goal link, on the roadmap item Usage sync) and Alert rules (confirmed before codes
  * kept their own: keyed F-30, its Code F-17), flagged code_differs. Invented data only.

@@ -1223,13 +1223,13 @@ const LOCAL_FEATURE_SET: FeatureSetSpec = {
       requirements: [{ key: "price-early-total", text: "The cart shows the total with delivery before checkout", acceptance: ["Delivery cost is included"] }],
     },
     {
-      key: "guest-checkout",
-      title: "Guest checkout",
+      key: "public-signup",
+      title: "Public signup",
       summary: "First-time buyers pay without an account",
       goals: [{ key: "g.activation", contribution: 3 }],
       depends_on: ["price-early"],
       confidence: 0.7,
-      requirements: [{ key: "guest-checkout-email", text: "A guest gives an email address only", acceptance: ["No password is asked for"] }],
+      requirements: [{ key: "public-signup-email", text: "A guest gives an email address only", acceptance: ["No password is asked for"] }],
     },
     {
       key: "order-tracking",
@@ -1388,7 +1388,7 @@ const LOCAL_ORDER: OrderSpec = {
   method: "goal_weighted",
   order: [
     { key: "price-early", score: 4.8, explanation: "G1 weight 3 x contribution 2 x confidence 0.8 / effort 1" },
-    { key: "guest-checkout", score: 6.3, explanation: "Needs price-early first; G1 weight 3 x contribution 3 x 0.7 / 1" },
+    { key: "public-signup", score: 6.3, explanation: "Needs price-early first; G1 weight 3 x contribution 3 x 0.7 / 1" },
     { key: "order-tracking", score: 1.8, explanation: "G1 weight 3 x contribution 1 x 0.6 / 1" },
   ],
 };
@@ -2908,7 +2908,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
   big.status = "awaiting_approval";
 
   // Spent past 1.5x its estimate.
-  const over = make("feedback_loop", "team-workspaces", {}, "2026-10-16T17:00:00Z");
+  const over = make("feedback_loop", "team-invites", {}, "2026-10-16T17:00:00Z");
   from(over.created_at);
   launch(full, over);
   over.overrun_ceiling_usd = 13.5;
@@ -2918,13 +2918,13 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
   over.status = "paused_overrun";
 
   // A finished feedback loop.
-  const done = make("feedback_loop", "checkout-redesign", { checkpoints: { prd_review: false } }, "2026-10-16T09:00:00Z");
+  const done = make("feedback_loop", "annual-billing", { checkpoints: { prd_review: false } }, "2026-10-16T09:00:00Z");
   done.segments[0].attempts.push({ attempt: 1, workflow_id: "mock-wf-done", submitted_at: "2026-10-16T09:00:00Z", cost_usd: 8.1, note: null, state: "succeeded" });
   Object.assign(done.segments[0], {
     status: "succeeded",
     cost_usd: 8.1,
     artifacts: ["prd.md"],
-    draft_import: { document_id: done.document_id, slug: "checkout-redesign", version: 2, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null },
+    draft_import: { document_id: done.document_id, slug: "annual-billing", version: 2, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null },
   });
   db.artifacts[`${done.id}|1|prd.md`] = fileContent("prd.md", "next_draft", 1);
   done.checkpoints.push({
@@ -2936,7 +2936,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
 
   // A finished Baseline to PRD run whose agents proposed baseline changes (./baseline.ts).
   const off = { baseline_confirm: false, feature_set: false, priority_order: false, prd_review: false };
-  const proposer = make("baseline_to_prd", "saved-carts", { checkpoints: off }, "2026-10-16T08:00:00Z");
+  const proposer = make("baseline_to_prd", "referral-link", { checkpoints: off }, "2026-10-16T08:00:00Z");
   proposer.id = AGENT_RUN;
   from(proposer.created_at);
   for (const seg of proposer.segments) {
@@ -2951,11 +2951,11 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
 }
 
 /**
- * #561 review, the "stored-refusals" scenario: a feedback loop on checkout-redesign that failed
+ * #561 review, the "stored-refusals" scenario: a feedback loop on annual-billing that failed
  * on Oct 18, its segment and the run on a refusal stored before #403's wording.
  */
 export function seedStoredRefusalRun(db: RunsDb, ctx: Omit<RunsContext, "db">, error: string): RunOut {
-  const run = seedRun(ctx, db, "feedback_loop", "checkout-redesign", { checkpoints: { prd_review: false } }, "2026-10-18T23:00:00Z");
+  const run = seedRun(ctx, db, "feedback_loop", "annual-billing", { checkpoints: { prd_review: false } }, "2026-10-18T23:00:00Z");
   const at = "2026-10-18T23:12:00Z";
   run.segments[0].attempts.push({ attempt: 1, workflow_id: null, submitted_at: "2026-10-18T23:00:00Z", cost_usd: 0, note: null, state: "failed" });
   Object.assign(run.segments[0], { status: "failed", started_at: "2026-10-18T23:00:00Z", finished_at: at, error });
@@ -2969,11 +2969,11 @@ export const KEY_RENEWED_NOTE =
   "Key renewed at Oct 21, 2026, 3:10 AM PDT: the step started after its key expired while it waited in SwarmCloud's queue";
 
 /**
- * The "key-renewed" scenario: a SwarmCloud feedback loop on checkout-redesign whose first step waited in
+ * The "key-renewed" scenario: a SwarmCloud feedback loop on annual-billing whose first step waited in
  * SwarmCloud's queue past its key, was parked, and went on once Oracle renewed the key.
  */
 export function seedKeyRenewedRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
-  const run = seedRun(ctx, db, "feedback_loop", "checkout-redesign", { checkpoints: { prd_review: false } }, "2026-10-20T03:00:00Z");
+  const run = seedRun(ctx, db, "feedback_loop", "annual-billing", { checkpoints: { prd_review: false } }, "2026-10-20T03:00:00Z");
   run.segments[0].attempts.push({ attempt: 1, workflow_id: "mock-wf-key-renewed", submitted_at: "2026-10-20T03:00:00Z", cost_usd: 0, note: null, state: "running" });
   Object.assign(run.segments[0], { status: "running", started_at: "2026-10-20T03:00:00Z" });
   Object.assign(run, { status: "running", started_at: "2026-10-20T03:00:00Z", runtime: "swarmcloud", notes: [KEY_RENEWED_NOTE] });
@@ -2984,20 +2984,20 @@ export function seedKeyRenewedRun(db: RunsDb, ctx: Omit<RunsContext, "db">): Run
 /** The run the "feature-set" scenario seeds (C6). */
 export const FEATURE_SET_RUN = "7a11c0de-0000-4000-8000-0000000000f5";
 
-/** Saved addresses at checkout: 6 features, 14 requirements, 2 left out; bulk edit depends on one left out. */
+/** Bulk import from a spreadsheet: 6 features, 14 requirements, 2 left out; bulk edit depends on one left out. */
 const SAVED_ADDRESSES: FeatureSetSpec = {
   features: [
     {
-      key: "saved-addresses",
-      title: "Saved addresses",
-      summary: "Returning buyers pick a saved address at checkout",
+      key: "bulk-import",
+      title: "Bulk import",
+      summary: "Returning buyers pick an imported row at checkout",
       goals: [{ key: "repeat-checkout", contribution: 3 }],
       depends_on: ["address-lookup"],
       confidence: 0.8,
       requirements: [
-        { key: "saved-addresses-pick", text: "The buyer picks one of up to five saved addresses", acceptance: ["Five addresses at most", "The last used one is preselected"] },
-        { key: "saved-addresses-save", text: "A new address can be saved while paying", acceptance: ["Saving is opt-in"] },
-        { key: "saved-addresses-remove", text: "The buyer removes a saved address from their account", acceptance: ["Removed addresses are gone at the next checkout"] },
+        { key: "bulk-import-pick", text: "The buyer picks one of up to five imported rows", acceptance: ["Five addresses at most", "The last used one is preselected"] },
+        { key: "bulk-import-save", text: "A new address can be saved while paying", acceptance: ["Saving is opt-in"] },
+        { key: "bulk-import-remove", text: "The buyer removes an imported row from their account", acceptance: ["Removed addresses are gone at the next checkout"] },
       ],
     },
     {
@@ -3018,7 +3018,7 @@ const SAVED_ADDRESSES: FeatureSetSpec = {
       title: "One-step address at checkout",
       summary: "Address and delivery choice on one screen",
       goals: [{ key: "repeat-checkout", contribution: 2 }],
-      depends_on: ["saved-addresses"],
+      depends_on: ["bulk-import"],
       confidence: 0.6,
       requirements: [
         { key: "checkout-address-one-screen", text: "Address and delivery option are chosen on one screen", acceptance: ["No extra page load"] },
@@ -3027,22 +3027,22 @@ const SAVED_ADDRESSES: FeatureSetSpec = {
     },
     {
       key: "address-edit",
-      title: "Edit a saved address",
-      summary: "Buyers correct a saved address without retyping it",
+      title: "Edit an imported row",
+      summary: "Buyers correct an imported row without retyping it",
       goals: [{ key: "fewer-failed-deliveries", contribution: 2 }],
-      depends_on: ["saved-addresses"],
+      depends_on: ["bulk-import"],
       confidence: 0.7,
       requirements: [
-        { key: "address-edit-inline", text: "A saved address is edited in place at checkout", acceptance: ["Changes apply to this order"] },
+        { key: "address-edit-inline", text: "An imported row is edited in place at checkout", acceptance: ["Changes apply to this order"] },
         { key: "address-edit-history", text: "Orders already placed keep the address they were sent to", acceptance: ["Past orders do not change"] },
       ],
     },
     {
       key: "bulk-address-edit",
       title: "Bulk address edit",
-      summary: "Business buyers update many saved addresses at once",
+      summary: "Business buyers update many imported rows at once",
       goals: [],
-      depends_on: ["saved-addresses", "shared-address-book-export"],
+      depends_on: ["bulk-import", "shared-address-book-export"],
       confidence: 0.3,
       requirements: [
         { key: "bulk-address-edit-import", text: "A buyer uploads a file of address changes", acceptance: ["Up to 200 rows"] },
@@ -3052,12 +3052,12 @@ const SAVED_ADDRESSES: FeatureSetSpec = {
     {
       key: "address-labels",
       title: "Address labels",
-      summary: "Buyers name saved addresses (Home, Work)",
+      summary: "Buyers name imported rows (Home, Work)",
       goals: [{ key: "repeat-checkout", contribution: 1 }],
-      depends_on: ["saved-addresses"],
+      depends_on: ["bulk-import"],
       confidence: 0.65,
       requirements: [
-        { key: "address-labels-name", text: "A saved address takes a short label", acceptance: ["Labels are 20 characters at most"] },
+        { key: "address-labels-name", text: "An imported row takes a short label", acceptance: ["Labels are 20 characters at most"] },
         { key: "address-labels-show", text: "Labels show first in the address picker", acceptance: ["Unlabelled addresses show the street"] },
       ],
     },
@@ -3068,23 +3068,23 @@ const SAVED_ADDRESSES: FeatureSetSpec = {
   ],
 };
 
-const SAVED_ADDRESSES_DESIGN = `# Saved addresses: design
+const SAVED_ADDRESSES_DESIGN = `# Bulk import: design
 
-Returning buyers pick a saved address at checkout instead of typing it again.
+Returning buyers pick an imported row at checkout instead of typing it again.
 
 ## Dependencies
 
-- Saved addresses read the postcode lookup for new entries.
-- The one-step address screen, editing and labels build on saved addresses.
+- Bulk import read the postcode lookup for new entries.
+- The one-step address screen, editing and labels build on imported rows.
 - Bulk address edit reads the shared address book export, which this set leaves out.
 
 ## Open questions
 
-- How many saved addresses a buyer keeps (five proposed).
+- How many imported rows a buyer keeps (five proposed).
 `;
 
 /**
- * The "feature-set" scenario (C6): a Baseline to PRD run for a new PRD (saved-addresses)
+ * The "feature-set" scenario (C6): a Baseline to PRD run for a new PRD (bulk-import)
  * waiting at its feature set, whose check found one blocking problem (bulk-address-edit
  * depends on a feature left out) and two flags, so Approve is refused until it is sent back.
  */
@@ -3093,7 +3093,7 @@ export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">, twoO
   // Its own runs list, so the ticks below move this run only.
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}) };
   const full = { ...ctx, db: own, now };
-  const r = seedRun(ctx, own, "baseline_to_prd", "saved-addresses", {}, "2026-10-17T09:00:00Z");
+  const r = seedRun(ctx, own, "baseline_to_prd", "bulk-import", {}, "2026-10-17T09:00:00Z");
   r.id = FEATURE_SET_RUN;
   from(r.created_at);
   launch(full, r);
@@ -3131,18 +3131,18 @@ export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">, twoO
             {
               code: "unknown_requirement",
               blocking: true,
-              feature: "saved-addresses",
-              requirement: "saved-addresses-pick",
-              message: "requirement saved-addresses-pick of saved-addresses is neither a Ground Truth requirement nor one this run proposed",
+              feature: "bulk-import",
+              requirement: "bulk-import-pick",
+              message: "requirement bulk-import-pick of bulk-import is neither a Ground Truth requirement nor one this run proposed",
             },
-            { code: "unknown_goal", blocking: true, feature: "saved-addresses", requirement: null, message: "saved-addresses: goal retention-rate is not a confirmed goal" },
+            { code: "unknown_goal", blocking: true, feature: "bulk-import", requirement: null, message: "bulk-import: goal retention-rate is not a confirmed goal" },
             { code: "unknown_dependency", blocking: true, feature: "address-labels", requirement: null, message: "address-labels needs café-pickup, which is not in the feature set or the Ground Truth" },
           ]
         : []),
     ],
-    { "bulk-address-edit": ["serves_no_goal", "low_confidence"], "saved-addresses": ["new_feature"] },
+    { "bulk-address-edit": ["serves_no_goal", "low_confidence"], "bulk-import": ["new_feature"] },
     named
-      ? { requirement_names: { "saved-addresses-pick": "The buyer picks one of up to five saved addresses" }, goal_names: { "retention-rate": "Retention rate" } }
+      ? { requirement_names: { "bulk-import-pick": "The buyer picks one of up to five imported rows" }, goal_names: { "retention-rate": "Retention rate" } }
       : undefined,
   );
   if (named) check.titles["café-pickup"] = "Café pickup";
@@ -3241,7 +3241,7 @@ export function seedEngCheckUnmappedRun(db: RunsDb, ctx: Omit<RunsContext, "db">
     cites: {
       "f.guided-setup": [["module:onboarding", "touches[0].ref"], ["module:storefront", "touches[1].ref"]],
       "f.sample-data": [["module:storefront", "touches[0].ref"], ["model:catalogue", "reuse"]],
-      "f.saved-carts": [["module:storefront", "reuse"]],
+      "f.referral-link": [["module:storefront", "reuse"]],
     },
     repos: ["https://github.com/example/shop-app.git"],
     unmapped: named ? ["example/shop-web"] : [],
@@ -3353,7 +3353,7 @@ export const OLD_NO_DOCUMENT_RUN = "7a11c0de-0000-4000-8000-0000000000e2";
 
 /**
  * The "no-document" scenario (#583 review): two Baseline to PRD runs approved past a refused PRD
- * draft, so they finished with no document: guest-checkout's just now, and old-checkout's on
+ * draft, so they finished with no document: public-signup's just now, and old-checkout's on
  * Oct 1, before the No document row shipped (NO_DOCUMENT_SINCE), which gets no Inbox row.
  */
 export function seedNoDocumentRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
@@ -3381,7 +3381,7 @@ export function seedNoDocumentRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
     refresh(r);
   };
   make(OLD_NO_DOCUMENT_RUN, "old-checkout", "2026-10-01T09:00:00Z");
-  make(NO_DOCUMENT_RUN, "guest-checkout", new Date().toISOString());
+  make(NO_DOCUMENT_RUN, "public-signup", new Date().toISOString());
 }
 
 /** B2: the run's Confirm the baseline stop as GET /v1/baseline/from-run reads it, or null. */
@@ -3428,14 +3428,14 @@ export const PRIORITY_DUPLICATE_RUN = "7a11c0de-0000-4000-8000-0000000000cc";
 export const PRIORITY_STALE_GOAL_RUN = "7a11c0de-0000-4000-8000-0000000000cd";
 
 /**
- * Saved addresses: one feature ranked well above the live ranking (differs_from_live,
+ * Bulk import: one feature ranked well above the live ranking (differs_from_live,
  * advisory), and the 6 features the PRD adds (new, not in the baseline yet) scored on the
  * same formula and ranked among the rest (RP1, invented).
  */
 const SAVED_ADDRESSES_ORDER: OrderSpec = {
   method: "goal_weighted",
   order: [
-    { key: "F-07", score: 1.8, explanation: "Saved addresses read the lookup first; G1 weight 3 x contribution 1 x 0.6 / 3" },
+    { key: "F-07", score: 1.8, explanation: "Bulk import read the lookup first; G1 weight 3 x contribution 1 x 0.6 / 3" },
     { key: "F-08", score: 0.6, explanation: "Alerts keep teams active; ranked early on purpose: G2 weight 2 x contribution 1 x 0.3 / 1" },
     { key: "F-02", score: 8.1, explanation: "Needs F-07 first; G1 weight 3 x contribution 3 x 0.9 / 1" },
     { key: "N-1", title: "Address book per account", goal: "g.activation", weight: 3, contribution: 2, confidence: 0.7, effort: 1, score: 4.2, explanation: "New in this PRD. Every other address feature needs the book first." },
@@ -3540,20 +3540,20 @@ function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, do
 
 /**
  * The "priority-order" scenario (C8): two Baseline to PRD runs waiting at the priority stop,
- * one whose order has an advisory differs_from_live row (Saved addresses PRD) and one with a
+ * one whose order has an advisory differs_from_live row (Bulk import PRD) and one with a
  * blocking before_prerequisite (Usage alerts), and a run order saved earlier for the
- * Checkout redesign PRD.
+ * Annual billing PRD.
  */
 export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
-  seedAtPriority(db, ctx, PRIORITY_RUN, "saved-addresses", "2026-10-18T09:00:00Z", SAVED_ADDRESSES_ORDER);
+  seedAtPriority(db, ctx, PRIORITY_RUN, "bulk-import", "2026-10-18T09:00:00Z", SAVED_ADDRESSES_ORDER);
   // Its PRD is not imported yet (no document has the slug): the order names it by the brief's title.
   seedAtPriority(db, ctx, PRIORITY_BLOCKED_RUN, "usage-alerts-pilot", "2026-10-18T10:00:00Z", USAGE_ALERTS_ORDER, "Example Co · Usage alerts");
   seedAtPriority(db, ctx, PRIORITY_NO_GOAL_RUN, "gift-notes", "2026-10-18T08:00:00Z", GIFT_NOTES_ORDER, "Gift notes");
   seedAtPriority(db, ctx, PRIORITY_ROWLESS_RUN, "gift-receipts", "2026-10-18T07:00:00Z", GIFT_RECEIPTS_ORDER, "Gift receipts", GIFT_RECEIPTS_SCOPE);
   seedAtPriority(db, ctx, PRIORITY_DUPLICATE_RUN, "gift-cards", "2026-10-18T06:00:00Z", GIFT_CARDS_ORDER, "Gift cards");
   seedAtPriority(db, ctx, PRIORITY_STALE_GOAL_RUN, "gift-boxes", "2026-10-18T05:00:00Z", GIFT_BOXES_ORDER, "Gift boxes");
-  const checkout = ctx.documents.find((d) => d.slug === "checkout-redesign");
-  const earlier = db.runs.find((r) => r.document_slug === "checkout-redesign") ?? db.runs[0];
+  const checkout = ctx.documents.find((d) => d.slug === "annual-billing");
+  const earlier = db.runs.find((r) => r.document_slug === "annual-billing") ?? db.runs[0];
   const spec: OrderSpec = { method: "goal_weighted", order: ranking("goal_weighted").features.slice(0, 4).map((f) => ({ key: f.key, score: f.score ?? 0, explanation: "As the live ranking" })) };
   const check = checkOrder(spec, null, goalSet(ctx), ctx.goalTitle);
   const snap = proposeOrder({ ...ctx, db }, earlier, 0, 1, spec, check);
@@ -4211,15 +4211,15 @@ const VERDICT_WORDS: Record<string, string> = { feasible: "Feasible", feasible_w
 /** The local runtime's briefs: one per feature of its feature set (LOCAL_FEATURE_SET). */
 const LOCAL_BRIEFS: Brief[] = [
   { key: "price-early", title: "Show the price early", approach: "Compute the total on the cart page from the existing pricing call.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Can the pricing call answer within 200 ms?", blocking: true }] },
-  { key: "guest-checkout", title: "Guest checkout", approach: "A guest session that carries the cart to payment.", size: "l", depends_on: ["price-early"], questions: [] },
-  { key: "saved-cards", title: "Saved cards", approach: "Store the payment provider's card token on the account.", size: "s", depends_on: [], questions: [] },
+  { key: "public-signup", title: "Public signup", approach: "A guest session that carries the cart to payment.", size: "l", depends_on: ["price-early"], questions: [] },
+  { key: "saved-cards", title: "Plan limits", approach: "Store the payment provider's card token on the account.", size: "s", depends_on: [], questions: [] },
 ];
 
 /** The "eng-check" scenario's briefs, on the baseline's own features (their efforts M, S, L). */
 const SEEDED_BRIEFS: Brief[] = [
-  { key: "f.guided-setup", title: "Guided setup", approach: "Reuse the onboarding checklist and add the test-order step.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Does the payment sandbox take test orders without a live account?", blocking: true }, { id: "q2", question: "Show the checklist on phones too?", blocking: false }] },
-  { key: "f.sample-data", title: "Sample data", approach: "A fixed catalogue copied into the new store on first sign-in.", size: "s", depends_on: [], questions: [] },
-  { key: "f.saved-carts", title: "Saved carts", approach: "Keep the cart server-side and sync it on sign-in.", size: "l", depends_on: ["f.guided-setup"], questions: [] },
+  { key: "f.guided-setup", title: "Setup checklist", approach: "Reuse the onboarding checklist and add the test-order step.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Does the payment sandbox take test orders without a live account?", blocking: true }, { id: "q2", question: "Show the checklist on phones too?", blocking: false }] },
+  { key: "f.sample-data", title: "Sample data import", approach: "A fixed catalogue copied into the new store on first sign-in.", size: "s", depends_on: [], questions: [] },
+  { key: "f.referral-link", title: "Referral link", approach: "A referral link per owner, kept on the server and shown in setup.", size: "l", depends_on: ["f.guided-setup"], questions: [] },
 ];
 
 /** What a brief file says of the code maps: the ids each feature cites (with where: touches[i].ref or reuse) and the repositories it names. */
@@ -4464,9 +4464,9 @@ const BASIS_KINDS = ["estimate", "capacity", "commitment"];
 const LOCAL_DATES: DatesSpec = {
   items: [
     { key: "price-early", title: "Show the price early", section: "features", size: "m", proposed: { kind: "estimate", reference: "est-price-early", supports_date: "2026-11-27" }, confidence: "medium", assumptions: ["The pricing call answers within 200 ms"], no_date_reason: null },
-    { key: "guest-checkout", title: "Guest checkout", section: "features", size: "l", proposed: null, confidence: null, assumptions: [], no_date_reason: "Sized once the price step ships" },
+    { key: "public-signup", title: "Public signup", section: "features", size: "l", proposed: null, confidence: null, assumptions: [], no_date_reason: "Sized once the price step ships" },
   ],
-  others: [{ key: "saved-cards", title: "Saved cards", horizon: "next" }],
+  others: [{ key: "saved-cards", title: "Plan limits", horizon: "next" }],
 };
 
 /** The "eng-dates" scenario's dates: four Now items (three dated), two Next, one Later. */
@@ -4474,12 +4474,12 @@ const SEEDED_DATES: DatesSpec = {
   items: [
     { key: "shipping-step", title: "Shipping step", section: "shipping", size: "m", proposed: { kind: "estimate", reference: "est-shipping-step", supports_date: "2026-11-30" }, confidence: "medium", assumptions: ["The carrier rates API stays as it is"], no_date_reason: null },
     { key: "price-early", title: "Show the price early", section: "pricing", size: "s", proposed: { kind: "estimate", reference: "est-price-early", supports_date: "2026-11-20" }, confidence: "high", assumptions: [], no_date_reason: null },
-    { key: "saved-addresses", title: "Saved addresses", section: "addresses", size: "l", proposed: { kind: "capacity", reference: "cap-q4-checkout", supports_date: "2026-12-11" }, confidence: "low", assumptions: ["Two engineers from Nov 16", "No change to the address lookup"], no_date_reason: null },
+    { key: "bulk-import", title: "Bulk import", section: "addresses", size: "l", proposed: { kind: "capacity", reference: "cap-q4-checkout", supports_date: "2026-12-11" }, confidence: "low", assumptions: ["Two engineers from Nov 16", "No change to the address lookup"], no_date_reason: null },
     { key: "cart-review", title: "Cart review step", section: null, size: "m", proposed: null, confidence: null, assumptions: [], no_date_reason: "Waits on the provider's sandbox" },
   ],
   others: [
-    { key: "guest-checkout", title: "Guest checkout", horizon: "next" },
-    { key: "saved-cards", title: "Saved cards", horizon: "next" },
+    { key: "public-signup", title: "Public signup", horizon: "next" },
+    { key: "saved-cards", title: "Plan limits", horizon: "next" },
     { key: "gift-wrap", title: "Gift wrap", horizon: "later" },
   ],
 };
@@ -5273,16 +5273,16 @@ export const SCOPE_CONSOLE_RUN = "7a11c0de-0000-4000-8000-0000000000f8";
 type SpecFeature = FeatureSetSpec["features"][number];
 const req = (key: string, text: string, acceptance: string[]) => ({ key, text, acceptance });
 const SAVED: SpecFeature = {
-  key: "saved-addresses",
-  title: "Saved addresses",
-  summary: "Returning buyers pick a saved address at checkout",
+  key: "bulk-import",
+  title: "Bulk import",
+  summary: "Returning buyers pick an imported row at checkout",
   goals: [{ key: "g.paid-conversion", contribution: 3 }],
   depends_on: ["address-lookup"],
   confidence: 0.8,
   requirements: [
-    req("saved-addresses-pick", "The buyer picks one of up to five saved addresses", ["Five addresses at most", "The last used one is preselected"]),
-    req("saved-addresses-save", "A new address can be saved while paying", ["Saving is opt-in"]),
-    req("saved-addresses-remove", "The buyer removes a saved address from their account", ["Removed addresses are gone at the next checkout"]),
+    req("bulk-import-pick", "The buyer picks one of up to five imported rows", ["Five addresses at most", "The last used one is preselected"]),
+    req("bulk-import-save", "A new address can be saved while paying", ["Saving is opt-in"]),
+    req("bulk-import-remove", "The buyer removes an imported row from their account", ["Removed addresses are gone at the next checkout"]),
   ],
 };
 const LOOKUP: SpecFeature = {
@@ -5300,9 +5300,9 @@ const LOOKUP: SpecFeature = {
 const BULK: SpecFeature = {
   key: "bulk-edit",
   title: "Bulk edit",
-  summary: "Business buyers update many saved addresses at once",
+  summary: "Business buyers update many imported rows at once",
   goals: [{ key: "g.paid-conversion", contribution: 1 }],
-  depends_on: ["saved-addresses", "address-book-export"],
+  depends_on: ["bulk-import", "address-book-export"],
   confidence: 0.7,
   requirements: [
     req("bulk-edit-import", "A buyer uploads a file of address changes", ["Up to 200 rows"]),
@@ -5312,12 +5312,12 @@ const BULK: SpecFeature = {
 const LABELS: SpecFeature = {
   key: "address-labels",
   title: "Address labels",
-  summary: "Buyers name saved addresses (Home, Work)",
+  summary: "Buyers name imported rows (Home, Work)",
   goals: [],
-  depends_on: ["saved-addresses"],
+  depends_on: ["bulk-import"],
   confidence: 0.65,
   requirements: [
-    req("address-labels-name", "A saved address takes a short label", ["Labels are 20 characters at most"]),
+    req("address-labels-name", "An imported row takes a short label", ["Labels are 20 characters at most"]),
     req("address-labels-show", "Labels show first in the address picker", ["Unlabelled addresses show the street"]),
   ],
 };
@@ -5326,7 +5326,7 @@ const PICK: SpecFeature = {
   title: "Pick address in one step",
   summary: "Address and delivery choice on one screen",
   goals: [{ key: "g.activation", contribution: 2 }],
-  depends_on: ["saved-addresses"],
+  depends_on: ["bulk-import"],
   confidence: 0.35,
   requirements: [
     req("pick-address-one-screen", "Address and delivery option are chosen on one screen", ["No extra page load"]),
@@ -5335,27 +5335,27 @@ const PICK: SpecFeature = {
 };
 const EDIT: SpecFeature = {
   key: "address-edit",
-  title: "Edit a saved address",
-  summary: "Buyers correct a saved address without retyping it",
+  title: "Edit an imported row",
+  summary: "Buyers correct an imported row without retyping it",
   goals: [{ key: "g.early-churn", contribution: 1 }],
-  depends_on: ["saved-addresses"],
+  depends_on: ["bulk-import"],
   confidence: 0.7,
-  requirements: [req("address-edit-inline", "A saved address is edited in place at checkout and ships in stage 2 of rollout (proposed in stage 3, awaiting the founder, stage 3 Q8.)", ["Changes apply to this order"])],
+  requirements: [req("address-edit-inline", "An imported row is edited in place at checkout and ships in stage 2 of rollout (proposed in stage 3, awaiting the founder, stage 3 Q8.)", ["Changes apply to this order"])],
 };
 const NOTES: SpecFeature = {
   key: "delivery-notes",
   title: "Delivery notes",
-  summary: "Buyers leave a note for the courier on a saved address",
+  summary: "Buyers leave a note for the courier on an imported row",
   goals: [{ key: "g.early-churn", contribution: 1 }],
-  depends_on: ["saved-addresses"],
+  depends_on: ["bulk-import"],
   confidence: 0.7,
-  requirements: [req("delivery-notes-text", "A saved address keeps a note for the courier", ["Notes are 140 characters at most"])],
+  requirements: [req("delivery-notes-text", "An imported row keeps a note for the courier", ["Notes are 140 characters at most"])],
 };
 /** The goals the baseline links the rows left out to (walk-eng-check 5). */
 const SCOPE_BASELINE_GOALS: Record<string, string[]> = { "address-book-export": ["g.activation"], "address-sharing": ["g.paid-conversion"] };
 /** Evidence by its source's name (walk-eng-check 6). */
 const SCOPE_EVIDENCE: Record<string, { id: string; title: string; url: string | null }[]> = {
-  "saved-addresses": [
+  "bulk-import": [
     { id: "58a87cc0-0000-4000-8000-0000000000e1", title: "Checkout interviews, September", url: "https://example.com/research/checkout-interviews" },
     { id: "58a87cc0-0000-4000-8000-0000000000e2", title: "Support tickets: retyped addresses", url: null },
   ],
@@ -5365,12 +5365,12 @@ const SHARING_OUT = { key: "address-sharing", reason: "out_of_scope" };
 
 /** Attempt 1: three rows need a person (a blocking dependency, no goal, low confidence). */
 const SCOPE_REVIEW_SET: FeatureSetSpec = { features: [SAVED, LOOKUP, BULK, LABELS, PICK, EDIT], excluded: [EXPORT_OUT, SHARING_OUT] };
-/** Attempt 2 after a send-back: Bulk edit is back in, Delivery notes is new, a requirement of Saved addresses went. */
+/** Attempt 2 after a send-back: Bulk edit is back in, Delivery notes is new, a requirement of Bulk import went. */
 const SCOPE_ATTEMPT2_SET: FeatureSetSpec = {
   features: [
     { ...SAVED, requirements: SAVED.requirements.slice(0, 2) },
     LOOKUP,
-    { ...BULK, depends_on: ["saved-addresses"] },
+    { ...BULK, depends_on: ["bulk-import"] },
     { ...LABELS, goals: [{ key: "g.early-churn", contribution: 1 }] },
     { ...PICK, confidence: 0.7 },
     NOTES,
@@ -5436,15 +5436,15 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
 
 /**
  * The "scope-review" scenario (C7): the default company plus three Baseline to PRD runs at
- * their feature set: saved-addresses (attempt 1: one blocking dependency, one feature with no
- * goal, one with low confidence that is also new, and a commenter's suggestion), saved-addresses-next (attempt
+ * their feature set: bulk-import (attempt 1: one blocking dependency, one feature with no
+ * goal, one with low confidence that is also new, and a commenter's suggestion), bulk-import-next (attempt
  * 2, for the Changed filter) and address-book (approved in SwarmCloud's console while one
  * blocking row is open, so the approval is held). With `kept`, that row is also new and a likely
  * duplicate, both kept by one call staged before each reason had its own.
  */
 export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, kept = false, manyQuestions = false, otherPrd = false) {
   // Pick address in one step is new as well as low in confidence: one feature, two calls.
-  const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1, { "pick-address": ["new_feature"] });
+  const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "bulk-import", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1, { "pick-address": ["new_feature"] });
   if (otherPrd) {
     // The owner, Nov 4: Address lookup needs Address verification, the Trust PRD's feature on the company roadmap.
     first.scope.elsewhere = { "address-verification": { title: "Address verification", prd: "Trust PRD" } };
@@ -5476,10 +5476,10 @@ export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, ke
       log: [{ revision: 1, by: displayName(commenter.email) }],
     };
   }
-  const second = seedScopeRun(db, ctx, SCOPE_ATTEMPT2_RUN, "saved-addresses-next", "2026-10-17T08:00:00Z", SCOPE_ATTEMPT2_SET, 2);
-  second.scope.previous = { "saved-addresses": "include", "address-lookup": "include", "bulk-edit": "exclude", "address-labels": "include", "pick-address": "include", "address-book-export": "exclude", "address-sharing": "exclude" };
+  const second = seedScopeRun(db, ctx, SCOPE_ATTEMPT2_RUN, "bulk-import-next", "2026-10-17T08:00:00Z", SCOPE_ATTEMPT2_SET, 2);
+  second.scope.previous = { "bulk-import": "include", "address-lookup": "include", "bulk-edit": "exclude", "address-labels": "include", "pick-address": "include", "address-book-export": "exclude", "address-sharing": "exclude" };
   second.scope.previous_requirements = {
-    "saved-addresses": ["saved-addresses-pick", "saved-addresses-save", "saved-addresses-remove"],
+    "bulk-import": ["bulk-import-pick", "bulk-import-save", "bulk-import-remove"],
     "address-lookup": ["address-lookup-postcode", "address-lookup-manual"],
     "bulk-edit": ["bulk-edit-import", "bulk-edit-review"],
     "address-labels": ["address-labels-name", "address-labels-show"],
@@ -5573,12 +5573,12 @@ export function seedRunDecisions(db: RunsDb, ctx: Omit<RunsContext, "db">, peopl
   if (many)
     plans.push(
       {
-        doc: "saved-carts",
+        doc: "referral-link",
         created_at: "2026-10-11T16:00:00Z",
         stops: [o("feature_set", 2, "2026-10-12T17:00:00Z", "Checklist first, sample project second."), a("eng_review", 3, "2026-10-13T17:00:00Z"), o("priority_order", 4, "2026-10-14T17:00:00Z"), a("prd_review", 5, "2026-10-16T17:00:00Z"), o("eng_dates", 6, "2026-10-17T17:00:00Z")],
       },
       {
-        doc: "team-workspaces",
+        doc: "team-invites",
         created_at: "2026-10-23T16:00:00Z",
         stops: [
           o("feature_set", 2, "2026-10-24T17:00:00Z", "Seats only; no usage pricing this quarter."),
@@ -5588,7 +5588,7 @@ export function seedRunDecisions(db: RunsDb, ctx: Omit<RunsContext, "db">, peopl
         ],
       },
       {
-        doc: "checkout-redesign",
+        doc: "annual-billing",
         created_at: "2026-10-26T16:00:00Z",
         stops: [o("feature_set", 2, "2026-10-27T17:00:00Z"), a("eng_review", 3, "2026-10-28T17:00:00Z", "Host it ourselves, behind the same sign-in."), o("priority_order", 4, "2026-10-29T17:00:00Z"), a("prd_review", 5, "2026-10-30T17:00:00Z")],
       },

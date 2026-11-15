@@ -17,10 +17,10 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
   await expect(page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^New/ })).toHaveAttribute("aria-selected", "true");
   const feedback = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback");
   // Feedback is one row per item, with its document and what to do.
-  const comment = feedback.locator("tr[data-row]").filter({ hasText: "Should the most recently used address be selected by default?" });
-  await expect(comment).toContainText("Checkout redesign PRD");
+  const comment = feedback.locator("tr[data-row]").filter({ hasText: "Should the current seat count be selected by default?" });
+  await expect(comment).toContainText("Annual billing PRD");
   await expect(comment.getByRole("button", { name: "Decline", exact: true })).toBeVisible();
-  await expect(comment.getByRole("link", { name: /^Open Should the most recently used address/ })).toBeVisible();
+  await expect(comment.getByRole("link", { name: /^Open Should the current seat count/ })).toBeVisible();
 
   // Approve the cost from the inbox: the run starts and leaves the list.
   await page.getByTestId("inbox-approvals").getByRole("button", { name: "Approve $53.00" }).click();
@@ -55,7 +55,7 @@ test("inbox: cancel a run paused on overrun", async ({ page }) => {
   await page.getByRole("alertdialog", { name: "Cancel run" }).getByRole("button", { name: "Cancel run" }).click();
   await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
   await page.goto("/runs");
-  await expect(page.locator('[data-testid="run-row"][data-document="team-workspaces"]')).toContainText("Cancelled");
+  await expect(page.locator('[data-testid="run-row"][data-document="team-invites"]')).toContainText("Cancelled");
 });
 
 test("inbox: retry importing a run's output Oracle stopped trying to import", async ({ page }) => {

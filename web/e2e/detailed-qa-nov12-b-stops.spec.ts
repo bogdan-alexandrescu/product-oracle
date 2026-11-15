@@ -54,7 +54,7 @@ test("eng-check: the pane's header never shows the bare key as if it were a code
   await expect(position).not.toContainText("ƒ");
   await expect(engInspector(page)).not.toContainText("f.guided-setup");
   // The list row reads by name only, as it did before (qa4-work-53): never regressed by this fix.
-  await expect(briefRow(page, "f.guided-setup")).toContainText("Guided setup");
+  await expect(briefRow(page, "f.guided-setup")).toContainText("Setup checklist");
 });
 
 test("eng-check: an answered question's check is an icon, never the ✓ glyph", async ({ page }) => {

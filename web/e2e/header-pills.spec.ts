@@ -77,7 +77,7 @@ async function pillMetrics(page: Page, testId: string, text: RegExp) {
 }
 
 /** An invented PRD title as long as real ones are (the "long-title" scenario's). */
-const LONG_TITLE = "Saved carts for returning buyers PRD";
+const LONG_TITLE = "Referral link for new teams PRD";
 
 for (const size of SIZES) {
   for (const open of [true, false]) {
@@ -88,7 +88,7 @@ for (const size of SIZES) {
       await page.addInitScript(([key]) => localStorage.setItem(key, "long-title"), [MOCK_SCENARIO_KEY] as const);
       await page.setViewportSize(size);
       await login(page);
-      await page.goto("/documents/saved-carts");
+      await page.goto("/documents/referral-link");
       await expect(page.getByRole("heading", { level: 1, name: LONG_TITLE })).toBeVisible();
       await expect(page.getByRole("link", { name: "Composition" })).toBeVisible();
       // Review settings arrives with the section states, after the document: measure the

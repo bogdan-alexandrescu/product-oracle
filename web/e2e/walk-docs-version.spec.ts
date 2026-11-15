@@ -4,10 +4,10 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openSection } from "./helpers";
 
 // walk-docs-priorities 8-10: a PRD's version page and Publish, driven as a person on the mock.
-// Saved carts v2 is a draft whose "Decisions needed" names its days in ISO; the "next-draft"
+// Referral link v2 is a draft whose "Decisions needed" names its days in ISO; the "next-draft"
 // scenario's fleet PRD (v2) has accepted changes staged for draft 3. Invented data only.
 
-const CARTS = "/documents/saved-carts/v/2";
+const CARTS = "/documents/referral-link/v/2";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 

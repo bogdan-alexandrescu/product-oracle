@@ -75,7 +75,7 @@ test("plain words: a proposed goal's Attributes read month first, its parent by 
   const attrs = panel.getByRole("definition");
   await expect(panel.locator('[data-attr="due"]')).toHaveText("Mar 31, 2027");
   await expect(panel.locator('[data-attr="period"]')).toHaveText("Mar 1 – Mar 31, 2027");
-  await expect(panel.locator('[data-attr="parent_goal"]')).toHaveText("Grow paid conversion");
+  await expect(panel.locator('[data-attr="parent_goal"]')).toHaveText("Growth");
   await expect(panel.getByText("Parent goal", { exact: true })).toBeVisible();
   await expect(panel.locator('[data-attr="target_text"]')).toHaveText("Missing");
   await expect(attrs.filter({ hasText: "2027-03" })).toHaveCount(0);
