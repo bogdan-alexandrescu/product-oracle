@@ -83,7 +83,7 @@ for (const width of [1280, 1440, 1512]) {
       expect(await cutWords(page), "a word is cut with the scrollbar taking 15 px").toEqual([]);
       // Another feature in the panel: the table's widths stay, and so do its words.
       await page.getByTestId("priority-row-F-12").getByTestId("feature-name").click();
-      await expect(inspector).toContainText("Bulk export");
+      await expect(inspector).toContainText("Referral link");
       expect(await cutWords(page), "a word is cut with another feature in the panel").toEqual([]);
       // "Conversion" sits beside its code G-B, on the code's line: the column is sized for it.
       const goal = page.getByTestId("priority-row-F-05").getByTestId("row-goals");
