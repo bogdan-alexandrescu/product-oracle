@@ -11,7 +11,7 @@ import { login } from "./helpers";
  * fix. In the "ground-truth-flags" scenario: linking the PRD's F-09 Guest seats to a feature
  * clears it and its roadmap item F-09a, so Home's count drops to 7 at once, and Undo in the
  * sheet brings back 9. A viewer reads the line and the flags with no fixes; a phone shows the
- * sheet full screen; the default company has one flag (Dark mode serves no goal), and with none
+ * sheet full screen; the default company has one flag (Setup error report serves no goal), and with none
  * left there is no line.
  */
 
@@ -108,16 +108,16 @@ for (const colorScheme of ["light", "dark"] as const)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 
-test("the default company's one flag (Dark mode serves no goal): picking a goal leaves no flags, and Home shows no line", async ({ page }) => {
+test("the default company's one flag (Setup error report serves no goal): picking a goal leaves no flags, and Home shows no line", async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await home(page, undefined, null);
   await expect(page.getByRole("region", { name: /^(Summary|Waiting for you)$/ }).first()).toBeVisible();
   await expect(count(page)).toHaveText("1 Ground Truth flag");
   await count(page).click();
   await openKind(page, "no_goal");
-  await row(page, "Dark mode").getByRole("button", { name: /Pick a goal/ }).click();
+  await row(page, "Setup error report").getByRole("button", { name: /Pick a goal/ }).click();
   await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Activation" }).click();
-  await expect(notice(page)).toContainText(/Dark mode” now serves “Activation”/);
+  await expect(notice(page)).toContainText(/Setup error report” now serves “Activation”/);
   await expect(line(page)).toHaveCount(0);
   await sheet(page).getByRole("button", { name: "Close" }).first().click();
   await page.reload();

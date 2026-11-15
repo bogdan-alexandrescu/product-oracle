@@ -55,7 +55,7 @@ test("Queue: filters by state, goal and theme, searches, and shows a filed reque
   await expect(row(page, "Invite a whole team at once")).toHaveCount(0);
   await filter(page, "Goal").selectOption("");
   await filter(page, "Search requests").fill("dark");
-  await expect(page.getByTestId("request-row")).toHaveText([/Setup error report/]);
+  await expect(page.getByTestId("request-row")).toHaveText([/Dark mode/]);
   await filter(page, "Search requests").fill("");
 
   await page.getByRole("button", { name: "New request" }).first().click();
@@ -95,20 +95,20 @@ test("Inspector: link goals, theme, feature and PRD, then qualify with a reason"
   // no_claim=the API's confirmed-goal rule.
   await login(page);
   await openRequests(page);
-  await pick(page, "Setup error report");
+  await pick(page, "Dark mode");
   const panel = inspector(page);
   await panel.getByRole("checkbox", { name: "Activation" }).check();
   await panel.getByRole("combobox", { name: "Theme", exact: true }).selectOption({ label: "Reporting" });
   await panel.getByLabel("Feature").selectOption({ label: "F-06 Setup error report" });
   await panel.getByLabel("PRD").selectOption({ index: 1 });
   await panel.getByRole("button", { name: "Save links" }).click();
-  await expect(row(page, "Setup error report").getByTestId("goal-chip")).toHaveText(["Activation"]);
-  await expect(row(page, "Setup error report")).toContainText("Reporting");
+  await expect(row(page, "Dark mode").getByTestId("goal-chip")).toHaveText(["Activation"]);
+  await expect(row(page, "Dark mode")).toContainText("Reporting");
 
   await panel.getByRole("button", { name: "Qualify", exact: true }).click();
   await panel.getByLabel("Reason").fill("Asked for by every team we spoke to");
   await panel.getByRole("button", { name: "Qualify request" }).click();
-  await expect(row(page, "Setup error report")).toContainText("Qualified");
+  await expect(row(page, "Dark mode")).toContainText("Qualified");
   await expect(panel).toContainText("Asked for by every team we spoke to");
   await expect(panel.getByRole("button", { name: "Qualify", exact: true })).toBeDisabled();
   await expect(panel.getByTestId("decide-reason")).toHaveText("Only a New request can be qualified");

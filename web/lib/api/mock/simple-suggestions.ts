@@ -145,7 +145,9 @@ type Ctx = { id: string; role: Role; names: Record<string, string>; owners?: str
 type GoalRow = { key: string; id: string; title: string };
 function goalRows(db: SimpleDb | undefined, ctx: Ctx): GoalRow[] {
   const out: GoalRow[] = Object.keys(GOALS).map((k) => ({ key: k, id: goalId(k), title: GOALS[k] }));
-  for (const g of ctx.companyGoals ?? []) if (!(g.key in GOALS)) out.push({ key: g.key, id: g.id, title: g.title });
+  // One goal per name: a Ground Truth goal named as a plan goal already listed (Growth, Activation) is that goal.
+  const named = (t: string) => out.some((x) => x.title.trim().toLowerCase() === t.trim().toLowerCase());
+  for (const g of ctx.companyGoals ?? []) if (!(g.key in GOALS) && !named(g.title)) out.push({ key: g.key, id: g.id, title: g.title });
   const map = [...Object.values(db?.map_goals ?? {}), ...Object.keys(MAP_GOALS).map((id) => (db ? mapGoalRef(db, id) : null))];
   for (const g of map) if (g && !out.some((x) => x.id === g.id || x.key === g.key)) out.push({ key: g.key, id: g.id, title: g.title });
   return out;

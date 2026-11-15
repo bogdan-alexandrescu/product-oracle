@@ -90,7 +90,7 @@ test("add a subgoal, set its target, link a feature, see the parent roll up, pic
   await expect(row).toBeVisible();
 
   // Link a feature to the subgoal.
-  await page.getByRole("button", { name: "Setup checklist" }).first().click();
+  await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
   const f = drawer(page, "Setup checklist");
   await f.getByRole("button", { name: "Link to goal" }).click();
   const link = f.getByRole("form", { name: "Link to goal" });

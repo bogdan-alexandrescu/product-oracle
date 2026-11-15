@@ -46,7 +46,7 @@ test("a proposal names the Ground Truth items, evidence and document it is about
   const evidence = dialog.getByRole("group", { name: "Evidence" });
   await expect(evidence).toContainText("Link a Ground Truth item to pick from its evidence");
   const linked = dialog.getByRole("group", { name: "Linked items" });
-  await linked.getByLabel("Find an item to link").fill("guided");
+  await linked.getByLabel("Find an item to link").fill("checklist");
   await linked.getByRole("button", { name: /^Setup checklist · Feature/ }).click();
   await expect(linked.getByRole("button", { name: "Remove Setup checklist" })).toBeVisible();
   await linked.getByLabel("Find an item to link").fill("churn");
@@ -86,7 +86,7 @@ test("editing a proposal changes its linked items, evidence and subjects", async
   await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
   const form = inspector(page).getByRole("form", { name: "Edit decision" });
   const linked = form.getByRole("group", { name: "Linked items" });
-  await linked.getByLabel("Find an item to link").fill("guided");
+  await linked.getByLabel("Find an item to link").fill("checklist");
   await linked.getByRole("button", { name: /^Setup checklist · Feature/ }).click();
   await form.getByRole("group", { name: "Evidence" }).getByRole("checkbox", { name: new RegExp(STALL) }).check();
   const about = form.getByRole("group", { name: "About" });
@@ -170,7 +170,7 @@ test("a title-only edit saves after evidence the decision rests on is removed fr
   await openCaps(page);
   await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
   const form = inspector(page).getByRole("form", { name: "Edit decision" });
-  await form.getByRole("group", { name: "Linked items" }).getByLabel("Find an item to link").fill("guided");
+  await form.getByRole("group", { name: "Linked items" }).getByLabel("Find an item to link").fill("checklist");
   await form.getByRole("group", { name: "Linked items" }).getByRole("button", { name: /^Setup checklist · Feature/ }).click();
   await form.getByRole("group", { name: "Evidence" }).getByRole("checkbox", { name: new RegExp(STALL) }).check();
   await form.getByRole("button", { name: "Save changes" }).click();

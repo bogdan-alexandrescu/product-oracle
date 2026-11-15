@@ -7,8 +7,8 @@ import { login } from "./helpers";
 /*
  * G3's priority move, ask and decision changes through the UI, on the mock layer
  * ("discussion-change-kinds" scenario): in the approver's open discussion on the feature-set
- * stop's saved-carts item, Oracle proposed moving Saved carts above Guided setup on a thin
- * reason ("Gut feeling"), asking the approver how long a cart lasts, and a decision. The
+ * stop's referral-link item, Oracle proposed moving Referral link above Setup checklist on a thin
+ * reason ("Gut feeling"), asking the approver how long a link lasts, and a decision. The
  * discussion's link opens its thread in a sheet on the run page. Apply is for approvers and
  * Oracle pushes back on a thin reason first (the mock's stand-in for C9 and the reason check);
  * Ask and Propose are for commenters too.
@@ -21,8 +21,8 @@ import { login } from "./helpers";
 const RUN = "7a11c0de-0000-4000-8000-0000000000f5";
 const COMMENTER = "commenter@example.com";
 const APPROVER = "approver@example.com";
-const MOVE = "Move Saved carts above Guided setup: Gut feeling";
-const ASK = "Ask Priya Raman: How long should a saved cart last?";
+const MOVE = "Move Referral link above Setup checklist: Gut feeling";
+const ASK = "Ask Priya Raman: How long should a referral link last?";
 const APPLY_WHY_NOT = "Approvers apply this change.";
 const DECISION = "Ship saved carts before guided setup?";
 
@@ -98,7 +98,7 @@ test("a commenter proposes a decision that lands in the decision log", async ({ 
   const form = card(page).getByTestId("change-form");
   await form.getByRole("textbox", { name: "Decision", exact: true }).fill(DECISION);
   await form.getByRole("textbox", { name: "What is being decided" }).fill("Which ships first next quarter?");
-  await form.getByRole("textbox", { name: "Options" }).fill("Saved carts first\nGuided setup first");
+  await form.getByRole("textbox", { name: "Options" }).fill("Referral link first\nSetup checklist first");
   // The pickers read GET /v1/decisions/people, which has no names: they show the email's.
   await form.getByRole("combobox", { name: "Who decides" }).selectOption({ label: "Approver" });
   await form.getByRole("button", { name: "Propose" }).click();
@@ -120,7 +120,7 @@ test("a commenter proposes a decision that lands in the decision log", async ({ 
   await expect(row).toContainText("Proposed");
   const inspector = page.getByTestId("decision-inspector").filter({ visible: true });
   await expect(inspector).toContainText(DECISION);
-  await expect(inspector.getByTestId("decision-option").filter({ hasText: "Saved carts first" })).toBeVisible();
+  await expect(inspector.getByTestId("decision-option").filter({ hasText: "Referral link first" })).toBeVisible();
 });
 
 const propose = async (page: Page, kind: string) => {
@@ -143,13 +143,13 @@ test("an approver's Ask on a waiting stop's item is that stop's question", async
   await expect(handled(page).locator("summary")).toHaveText("1 handled");
   await page.reload();
   const chip = stagingBar(page).getByTestId("staged-chip");
-  await expect(chip).toHaveText("Question saved-carts");
+  await expect(chip).toHaveText("Question referral-link");
   await expect(chip.getByTestId("chip-discussion")).toBeVisible();
 });
 
 // protects=#585 review, the scope forms and the mock's Stage as the API: an approver writes
-// "Exclude Saved carts" and "Add a requirement under Saved carts" through Propose a change,
-// and Stage refuses both with the API's 409 since no waiting feature set holds Saved carts,
+// "Exclude Referral link" and "Add a requirement under Referral link" through Propose a change,
+// and Stage refuses both with the API's 409 since no waiting feature set holds Referral link,
 // the changes staying open; fails_when=the forms lose the feature, the decision, the reason or
 // the text, or the mock stages a scope change no stop holds; no_claim=staging at a stop that
 // holds the feature (pytest: test_scope_feature_is_staged_at_the_feature_set_stop).
@@ -162,14 +162,14 @@ test("an approver writes scope changes and Stage needs a feature set holding the
   await form.getByRole("button", { name: "Exclude", exact: true }).click();
   await form.getByRole("textbox", { name: "Reason" }).fill("No goal this quarter needs it");
   await form.getByRole("button", { name: "Propose" }).click();
-  const exclude = change(page, "Exclude Saved carts: No goal this quarter needs it");
+  const exclude = change(page, "Exclude Referral link: No goal this quarter needs it");
   await exclude.getByRole("button", { name: "Stage", exact: true }).click();
   await expect(exclude).toContainText("No feature set waiting for approval has this feature");
   await expect(exclude).toHaveAttribute("data-status", "proposed");
 
   form = await propose(page, "Add, change or cut a requirement");
   await form.getByRole("button", { name: "Add", exact: true }).click();
-  await form.getByRole("combobox", { name: "Feature it belongs to" }).selectOption({ label: "Saved carts" });
+  await form.getByRole("combobox", { name: "Feature it belongs to" }).selectOption({ label: "Referral link" });
   await form.getByRole("textbox", { name: "Requirement text" }).fill("A saved cart lasts thirty days");
   await form.getByRole("button", { name: "Propose" }).click();
   const add = change(page, "A saved cart lasts thirty days");
@@ -187,22 +187,22 @@ test("an approver writes and applies a priority move and a pin", async ({ page }
   await login(page, APPROVER);
   await openDiscussion(page);
   let form = await propose(page, "Move a priority");
-  await form.getByRole("combobox", { name: "Feature", exact: true }).selectOption({ label: "Guided setup" });
-  await form.getByRole("combobox", { name: "Move above" }).selectOption({ label: "Saved carts" });
+  await form.getByRole("combobox", { name: "Feature", exact: true }).selectOption({ label: "Setup checklist" });
+  await form.getByRole("combobox", { name: "Move above" }).selectOption({ label: "Referral link" });
   const why = "Activation needs setup before carts this quarter";
   await form.getByRole("textbox", { name: "Reason" }).fill(why);
   await form.getByRole("button", { name: "Propose" }).click();
-  const moved = `Move Guided setup above Saved carts: ${why}`;
+  const moved = `Move Setup checklist above Referral link: ${why}`;
   await change(page, moved).getByRole("button", { name: "Apply", exact: true }).click();
   await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Priya Raman applied: ${moved}`);
 
   form = await propose(page, "Pin a priority");
-  await form.getByRole("combobox", { name: "Feature", exact: true }).selectOption({ label: "Saved carts" });
+  await form.getByRole("combobox", { name: "Feature", exact: true }).selectOption({ label: "Referral link" });
   await form.getByRole("spinbutton", { name: "Position" }).fill("2");
   const pinWhy = "Committed to the launch partner for next month";
   await form.getByRole("textbox", { name: "Reason" }).fill(pinWhy);
   await form.getByRole("button", { name: "Propose" }).click();
-  const pinned = `Pin Saved carts at #2: ${pinWhy}`;
+  const pinned = `Pin Referral link at #2: ${pinWhy}`;
   await change(page, pinned).getByRole("button", { name: "Apply", exact: true }).click();
   await expect(thread(page).getByTestId("discussion-system-line").last()).toHaveText(`Priya Raman applied: ${pinned}`);
   await handled(page).locator("summary").click();

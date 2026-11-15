@@ -2057,15 +2057,15 @@ export function seedDiscussionRecord(ctx: Omit<DiscussionsContext, "me" | "db">,
   return db;
 }
 
-/** G3 "discussion-change-kinds": the open discussion on the feature-set stop's saved-carts item. */
+/** G3 "discussion-change-kinds": the open discussion on the feature-set stop's referral-link item. */
 export const DISCUSSION_CHANGE_KINDS = "d15c0000-0000-4000-8000-0000000000c1";
 
 /**
  * The "discussion-change-kinds" scenario (G3's ask_person, priority_move and decision): on the
- * feature-set run's waiting checkpoint, the approver's open discussion on saved-carts, Oracle's
- * reply, and the 3 changes it proposed: move Saved carts above Guided setup on a thin reason
- * ("Gut feeling", which Apply pushes back on), ask the approver how long a cart lasts, and a
- * decision on keeping carts for guests.
+ * feature-set run's waiting checkpoint, the approver's open discussion on referral-link, Oracle's
+ * reply, and the 3 changes it proposed: move Referral link above Setup checklist on a thin reason
+ * ("Gut feeling", which Apply pushes back on), ask the approver how long a link lasts, and a
+ * decision on links for guests.
  */
 export function seedDiscussionChangeKinds(
   ctx: Omit<DiscussionsContext, "me" | "db">,
@@ -2075,7 +2075,7 @@ export function seedDiscussionChangeKinds(
   const db = emptyDiscussions();
   const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
   const at = "2026-10-22T11:00:00Z";
-  const item = "saved-carts";
+  const item = "referral-link";
   const id = DISCUSSION_CHANGE_KINDS;
   db.discussions.push({
     id,
@@ -2086,7 +2086,7 @@ export function seedDiscussionChangeKinds(
     subject_url: `/runs/${run.id}`,
     document_id: null,
     run_id: run.id,
-    title: "Saved carts: ahead of guided setup?",
+    title: "Referral link: ahead of the setup checklist?",
     visibility: "open",
     author_only: false,
     status: "open",
@@ -2105,13 +2105,13 @@ export function seedDiscussionChangeKinds(
   const reply = ctx.uuid();
   const msg = { discussion_id: id, mentions: [], created_at: at, edited_at: null, deleted_at: null };
   db.messages.push(
-    { ...msg, id: asked, author_kind: "person", author_id: approver, body: "@Oracle should saved carts go before guided setup?", mentions_oracle: true, reply_to: null },
+    { ...msg, id: asked, author_kind: "person", author_id: approver, body: "@Oracle should the referral link go before the setup checklist?", mentions_oracle: true, reply_to: null },
     {
       ...msg,
       id: reply,
       author_kind: "oracle",
       author_id: null,
-      body: "Moving saved carts up is possible; ask who owns cart expiry, and decide whether guests keep carts.",
+      body: "Moving the referral link up is possible; ask who owns link expiry, and decide whether guests get a link.",
       mentions_oracle: false,
       reply_to: asked,
       status: "complete",
@@ -2137,13 +2137,13 @@ export function seedDiscussionChangeKinds(
     created_at: at,
   });
   db.changes!.push(
-    row("priority_move", { feature_id: features.moved.id, above_feature_id: features.above.id, reason: "Gut feeling" }, "The approver asked whether saved carts should go first."),
-    row("ask_person", { asked_to: approver, prompt: "How long should a saved cart last?", category: "general" }, "Nobody has said how long a cart is kept."),
+    row("priority_move", { feature_id: features.moved.id, above_feature_id: features.above.id, reason: "Gut feeling" }, "The approver asked whether the referral link should go first."),
+    row("ask_person", { asked_to: approver, prompt: "How long should a referral link last?", category: "general" }, "Nobody has said how long a link is kept."),
     row(
       "decision",
       {
-        title: "Keep saved carts for guests?",
-        question: "Do guests keep a cart without an account?",
+        title: "Referral links for guests?",
+        question: "Do guests get a link without an account?",
         options: [
           { key: "o1", label: "Keep for 30 days" },
           { key: "o2", label: "Members only" },
@@ -2151,7 +2151,7 @@ export function seedDiscussionChangeKinds(
         approver_id: approver,
         reversibility: "reversible",
       },
-      "Guest carts change what saved carts costs to build.",
+      "Guest links change what the referral link costs to build.",
     ),
   );
   return db;

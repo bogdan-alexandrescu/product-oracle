@@ -322,7 +322,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
     confidence: 0.45,
   });
   // The goals keep the order their earlier names gave them (lib/goal-order.ts breaks a tie by title): churn, paid, activation.
-  [churn, paid].forEach((g, i) => (g.created_at = g.updated_at = `2026-10-12T08:5${8 + i}:00Z`));
+  if (!longWords) [churn, paid].forEach((g, i) => (g.created_at = g.updated_at = `2026-10-12T08:5${8 + i}:00Z`));
   const scenario = typeof localStorage !== "undefined" ? localStorage.getItem(MOCK_SCENARIO_KEY) : null;
   if (scenario === OKR_IMPORT_SCENARIO || scenario === GOAL_ATTRS_SCENARIO) {
     const shapes =
@@ -2187,7 +2187,9 @@ export function addGoalCodes(s: BaselineState) {
     "g.paid-conversion": "G-B Growth",
     "g.early-churn": "G-C Fewer accounts leaving in their first ninety days",
   };
-  for (const e of s.entities) if (e.type === "goal" && titles[e.key]) e.title = titles[e.key];
+  // Their codes order them (G-A first), as the goal order breaks a tie by title.
+  const made = s.entities.find((e) => e.key === "g.activation")?.created_at;
+  for (const e of s.entities) if (e.type === "goal" && titles[e.key]) Object.assign(e, { title: titles[e.key] }, made ? { created_at: made, updated_at: made } : {});
   const growth = s.entities.find((e) => e.key === "g.paid-conversion");
   if (growth) delete growth.attrs.current;
 }

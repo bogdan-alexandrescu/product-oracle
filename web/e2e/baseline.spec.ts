@@ -61,9 +61,9 @@ test("Ground Truth: products with their features, and an Unassigned group", asyn
   const storefront = page.getByTestId("product-p.storefront");
   await expect(storefront).toHaveAccessibleName("Features of Storefront");
   await expect(storefront.getByTestId(/^feature-/)).toHaveText([
-    /Setup checklist/,
-    /Sample data import/,
     /Referral link/,
+    /Sample data import/,
+    /Setup checklist/,
   ]);
   const admin = page.getByTestId("product-p.admin-console");
   await expect(admin.getByTestId(/^feature-/)).toHaveText([/Setup error report/, /Team invites/]);
