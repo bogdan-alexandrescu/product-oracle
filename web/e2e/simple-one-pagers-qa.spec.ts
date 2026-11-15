@@ -10,7 +10,7 @@ import { expect, test, type Page } from "./test";
  * the roadmap's Usage alerts items (one_pager.prd_items), not "No roadmap items yet"; P-9, a
  * block with nothing from the PRD says "Not in the PRD yet" once (not again for who has the
  * problem, nor for each older line that only says it); P-5, a goal code reads with its name
- * beside it ("G2 Retention"), never "G2 (retention)"; S-9, Export PDF says the download is
+ * beside it ("G2 Growth"), never "G2 (growth)"; S-9, Export PDF says the download is
  * starting and done, and says plainly when the API cannot make the PDF (its 503); V-8, the
  * One-pagers help line offers a viewer neither a wording change nor a review;
  * fails_when = the Timeline counts only the PRD's own slice, the mark repeats, a code shows
@@ -61,8 +61,8 @@ for (const phone of [false, true]) {
         await login(page);
         await page.goto("/simple/one-pagers/referral-link");
         const outcomes = page.getByRole("region", { name: "Outcomes and how we measure them" });
-        await expect(outcomes.getByText("G2 Retention: more repeat orders within 30 days.")).toBeVisible();
-        await expect(outcomes.getByText("G2 (retention)")).toHaveCount(0);
+        await expect(outcomes.getByText("G2 Growth: more new teams each week from referrals.")).toBeVisible();
+        await expect(outcomes.getByText("G2 (growth)")).toHaveCount(0);
       });
 
       test("Export PDF says the download started and finished", async ({ page }) => {

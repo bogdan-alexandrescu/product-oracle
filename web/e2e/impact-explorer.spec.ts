@@ -98,12 +98,12 @@ test("impact: the table view lists outputs by category with the inspector's depe
   await inspector.getByRole("link", { name: "Recorded change" }).first().click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
   const graph = page.getByRole("region", { name: "Lineage" });
-  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Deleted" })).toContainText("Public signup keeps the yearly price");
+  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Deleted" })).toContainText("Signup keeps the yearly price");
   await page.getByRole("button", { name: "Table" }).click();
   await page.getByRole("grid", { name: "Affected outputs" }).getByText("Acceptance tests").first().click();
   const tests = page.getByRole("complementary", { name: /Acceptance tests/ });
-  await expect(tests.getByTestId("dependency").filter({ hasText: "Public signup keeps the yearly price" })).toContainText("Deleted");
-  await expect(tests.getByText("Public signup keeps the yearly price was deleted")).toBeVisible();
+  await expect(tests.getByTestId("dependency").filter({ hasText: "Signup keeps the yearly price" })).toContainText("Deleted");
+  await expect(tests.getByText("Signup keeps the yearly price was deleted")).toBeVisible();
   await page.goBack();
   await page.getByRole("button", { name: "Table" }).click();
 

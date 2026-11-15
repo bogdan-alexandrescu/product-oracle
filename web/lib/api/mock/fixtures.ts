@@ -548,7 +548,7 @@ const SPEC_ORACLE_CITATIONS: CitationSeed[] = [
     source: "upload",
     ref: "/documents/annual-billing/v/1",
     title: "Annual billing PRD, version 1",
-    excerpt: "Show the yearly price on the plan page, before the billing step.",
+    excerpt: "Show the yearly price up front, before the billing step.",
     retrieved_at: "2026-10-17T09:00:00Z",
   },
 ];
@@ -575,7 +575,7 @@ const SPEC_REQUIREMENTS: SectionSeed = {
   key: "requirements",
   level: 2,
   heading: "Product requirements",
-  body: `${REQUIREMENTS_NOTE}\n\nFrom PRD [Annual billing PRD](/documents/annual-billing/v/1), version 1.\n\n- **req-yearly-price: Show the yearly price on the plan page** (requirement id \`5b0c…\`)\n  PRD section: [5.2 Billing step](/documents/annual-billing/v/1#s-5-2)`,
+  body: `${REQUIREMENTS_NOTE}\n\nFrom PRD [Annual billing PRD](/documents/annual-billing/v/1), version 1.\n\n- **req-yearly-price: Show the yearly price up front** (requirement id \`5b0c…\`)\n  PRD section: [5.2 Billing step](/documents/annual-billing/v/1#s-5-2)`,
 };
 const SPEC_ROLLOUT: SectionSeed = {
   key: "rollout-notes",

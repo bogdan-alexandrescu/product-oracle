@@ -241,7 +241,7 @@ export function seedSpecs({ approver, named = [] }: { approver?: SpecPerson; nam
     latest_version: 1,
     approach_status: "proposed",
     freshness: "potentially_stale",
-    requirements: [{ id: I.requirement, key: "req-yearly-price", title: "Show the yearly price on the plan page", status: "confirmed", section_keys: ["s-5-2"], missing: false }],
+    requirements: [{ id: I.requirement, key: "req-yearly-price", title: "Show the yearly price up front", status: "confirmed", section_keys: ["s-5-2"], missing: false }],
     section_keys: ["s-5-2"],
     engineering_approver_ids: named.map((x) => x.id),
     engineering_approvers: named.map(({ id, name }) => ({ id, name })),

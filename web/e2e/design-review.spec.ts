@@ -68,7 +68,7 @@ test("annotations are numbered as Oracle labels them, with a thread each and the
   await expect(notes.getByTestId("annotation").first()).toContainText("The quote shows before the address step.");
   await expect(notes.getByTestId("annotation").first()).toContainText("No comments on this annotation yet.");
   // Mockup A: each annotation names its requirements.
-  await expect(notes.getByTestId("annotation").first()).toContainText("Show the yearly price on the plan page");
+  await expect(notes.getByTestId("annotation").first()).toContainText("Show the yearly price up front");
 
   // C's filter, with counts: annotations with no comments.
   await expect(notes.getByRole("button", { name: "All 2" })).toBeVisible();

@@ -45,7 +45,7 @@ test("new run: picking a document suggestion fills the field", async ({ page }) 
   await page.getByRole("button", { name: "Start a run…" }).click();
   const dialog = page.getByRole("dialog", { name: "New run" });
   const field = dialog.getByRole("combobox", { name: "PRD document" });
-  await field.fill("team-work");
+  await field.fill("team-inv");
   await dialog.getByRole("option", { name: /team-invites/ }).click();
   await expect(field).toHaveValue("team-invites");
   await expect(dialog.getByRole("listbox", { name: "Document suggestions" })).toHaveCount(0);

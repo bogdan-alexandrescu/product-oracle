@@ -68,7 +68,7 @@ test("impact: a recorded change on a deleted Ground Truth item highlights Ground
   // A change on a deleted Ground Truth item (a requirement) belongs with Ground Truth, never PRDs,
   // when it is opened on its own (qa-plan-12: opened from a PRD's Impact, it stays with PRDs).
   const nav = await openRecordedChange(page, "Acceptance tests", true);
-  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Requirement “Public signup keeps the yearly price” deleted");
+  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Requirement “Signup keeps the yearly price” deleted");
   await expect(nav.getByTestId("nav-baseline")).toHaveAttribute("aria-current", "page");
   await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
   // Back twice (the change opened on its own, then from the table) is the PRD's Impact again.

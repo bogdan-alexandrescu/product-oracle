@@ -52,10 +52,10 @@ test.describe("desktop", () => {
     await expect(meta).not.toContainText("Oct 20");
     await expect(page.getByRole("link", { name: "Open in Detailed" })).toHaveAttribute("href", "/documents/referral-link");
 
-    await page.getByRole("button", { name: "Edit “Carts for guests without" }).click();
+    await page.getByRole("button", { name: "Edit “Links for guests without" }).click();
     // qa4-simple-prd-16: the editor and its Save come into view.
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeInViewport();
-    await page.getByLabel("New wording for").fill("Carts for guests without an account, for now");
+    await page.getByLabel("New wording for").fill("Links for guests without an account, for now");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     const banner = page.getByRole("status", { name: "Working draft" });
     await expect(banner).toContainText("nothing is published until approved");
@@ -64,10 +64,10 @@ test.describe("desktop", () => {
 
   test("the change card says You, once a before/after, and Hide closes it (qa4-simple-prd-17, 18, 23)", async ({ page }) => {
     await openFromList(page, "Referral link PRD");
-    await page.getByRole("button", { name: "Edit “Carts for guests without" }).click();
-    await page.getByLabel("New wording for").fill("Carts for guests without an account, for now");
+    await page.getByRole("button", { name: "Edit “Links for guests without" }).click();
+    await page.getByLabel("New wording for").fill("Links for guests without an account, for now");
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Carts for guests without" });
+    const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Links for guests without" });
     await expect(note).toContainText("You changed");
     await note.getByRole("button", { name: "See before/after" }).click();
     const diff = note.getByTestId("note-diff");
@@ -77,7 +77,7 @@ test.describe("desktop", () => {
     await expect(diff).toHaveCount(0);
 
     await page.reload();
-    await expect(page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Carts for guests without" })).toContainText("You changed");
+    await expect(page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Links for guests without" })).toContainText("You changed");
 
     // qa4-simple-prd-23: the file and the note say which text was exported.
     const download = page.waitForEvent("download");
@@ -207,11 +207,11 @@ test.describe("desktop", () => {
     await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Referral link PRD", exact: true }).click();
     await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
     // vqa B-13: Referral link's one-pager has its own lines; its first flow is its own Version 1.
-    const line = page.locator("li", { hasText: "Beta: Save cart" }).first();
+    const line = page.locator("li", { hasText: "Beta: Copy link" }).first();
     await line.getByRole("button", { name: "Draw the flow" }).click();
-    await page.getByRole("button", { name: /^Flow for “Beta: Save cart/ }).click();
+    await page.getByRole("button", { name: /^Flow for “Beta: Copy link/ }).click();
     const opened = page.getByTestId("flow-detail");
-    await expect(opened).toContainText("Save cart · flow");
+    await expect(opened).toContainText("Copy link · flow");
     await expect(opened).not.toContainText("Invite suggestions");
     await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
     await expect(opened).not.toContainText("(revised)");

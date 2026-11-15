@@ -7,7 +7,7 @@ import { login, openSection, section } from "./helpers";
 // their section was approved (Accept or Reject, with a reason).
 
 const DOC = "/documents/annual-billing/v/2";
-const NEW_TEXT = "Buyers leave checkout when shipping cost appears late [c:c1]. Show the full total on the cart.";
+const NEW_TEXT = "Admins leave the plan page when the yearly price appears late [c:c1]. Show it up front.";
 
 async function openEditor(page: Page, key: string, heading: string) {
   const s = await openSection(page, key);
@@ -32,7 +32,7 @@ test("edit a section by hand: the preview keeps citation chips, Save makes the n
   expect(chips).toBeGreaterThan(1);
   const { editor } = await openEditor(page, "problem", "2. Problem");
   const text = editor.getByLabel("Section text");
-  await expect(text).toHaveValue(/Buyers leave checkout when the total changes late/);
+  await expect(text).toHaveValue(/Admins leave the plan page when the yearly price shows up late/);
   // D-13: the preview is behind Edit / Preview, so the text shows once.
   const toggle = editor.getByRole("group", { name: "Edit or preview" });
   await toggle.getByRole("button", { name: "Preview" }).click();
@@ -42,13 +42,13 @@ test("edit a section by hand: the preview keeps citation chips, Save makes the n
   await toggle.getByRole("button", { name: "Edit" }).click();
   await text.fill(NEW_TEXT);
   await toggle.getByRole("button", { name: "Preview" }).click();
-  await expect(preview).toContainText("Show the full total on the cart.");
+  await expect(preview).toContainText("Show it up front.");
   await expect(preview.getByRole("button", { name: /^Citation/ })).toHaveCount(1);
   await editor.getByRole("button", { name: "Save" }).click();
 
   await expect(page).toHaveURL(/\/v\/3#problem$/);
   const saved = section(page, "problem");
-  await expect(saved).toContainText("Show the full total on the cart.");
+  await expect(saved).toContainText("Show it up front.");
   await expect(saved.getByTestId("section-editor")).toHaveCount(0);
   await expect(saved.getByTestId("rereview-chip")).toHaveText("Re-review requested");
 });
@@ -67,17 +67,17 @@ test("a save on a section that changed meanwhile is refused with Reload", async 
   await expect(other).toHaveURL(/\/v\/3#scope$/);
   await other.close();
 
-  await editor.getByLabel("Section text").fill("In scope: the shipping step only.");
+  await editor.getByLabel("Section text").fill("In scope: the billing step only.");
   await editor.getByRole("button", { name: "Save" }).click();
   const refused = editor.getByTestId("section-edit-conflict");
   await expect(refused).toContainText("Nothing was saved");
   await refused.getByRole("button", { name: "Reload" }).click();
   await expect(editor.getByLabel("Section text")).toHaveValue("In scope: the cart summary only.");
   await expect(refused).toHaveCount(0);
-  await editor.getByLabel("Section text").fill("In scope: the cart summary and the shipping step.");
+  await editor.getByLabel("Section text").fill("In scope: the plan page and the billing step.");
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(page).toHaveURL(/\/v\/4#scope$/);
-  await expect(section(page, "scope")).toContainText("the cart summary and the shipping step.");
+  await expect(section(page, "scope")).toContainText("the plan page and the billing step.");
 });
 
 test("held rewrites: a badge counts them; Accept applies the rewrite as the next version", async ({ page }) => {

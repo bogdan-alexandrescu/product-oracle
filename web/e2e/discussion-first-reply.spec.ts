@@ -69,7 +69,7 @@ async function startPrivateWithApprover(page: Page, first: string, askOracle: bo
 // protects=with a teammate picked, the first message gets no reply unasked; fails_when=a team
 // discussion gets an unasked reply; no_claim=the API's rule (pytest).
 test("with a teammate picked, the first message gets no unasked reply", async ({ page }) => {
-  await startPrivateWithApprover(page, "Between us: is the shipping step the real problem?", false);
+  await startPrivateWithApprover(page, "Between us: is the billing step the real problem?", false);
   await page.waitForTimeout(400);
   await expect(thread(page).getByTestId("oracle-reply")).toHaveCount(0);
 });

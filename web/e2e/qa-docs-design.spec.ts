@@ -32,7 +32,7 @@ test("qa-docs-35: the design page names sections, documents and requirements in 
 
   const panel = inspector(page);
   await expect(panel.getByTestId("annotation").first()).toContainText("5.2 Billing step");
-  await expect(panel.getByTestId("annotation").first()).toContainText("Show the yearly price on the plan page");
+  await expect(panel.getByTestId("annotation").first()).toContainText("Show the yearly price up front");
   await expect(panel.getByTestId("version-meta")).toContainText("From PRD");
   await expect(panel.getByTestId("version-meta")).toContainText("Annual billing PRD v1");
   await expect(panel.getByTestId("version-meta")).toContainText("Oracle · See how it was made");

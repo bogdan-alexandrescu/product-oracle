@@ -182,7 +182,7 @@ test.describe("phone", () => {
     await page.getByRole("dialog").getByRole("link", { name: "Recorded change" }).first().click();
     await expect(page).toHaveURL(/\/impact\/changes\//);
     const h1 = page.getByRole("heading", { level: 1 });
-    await expect(h1).toHaveText("Impact: Requirement “Public signup keeps the yearly price” deleted");
+    await expect(h1).toHaveText("Impact: Requirement “Signup keeps the yearly price” deleted");
     await expect(h1).toBeVisible();
     // Wrapped, not cut: the whole heading fits the screen's width.
     const fits = await h1.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= window.innerWidth);

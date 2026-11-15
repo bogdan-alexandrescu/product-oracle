@@ -140,18 +140,18 @@ test.describe("desktop, no plan", () => {
   test("the editor takes the cursor; Escape and Ctrl+Enter; an empty line says why (p3-2, 27)", async ({ page }) => {
     await paper(page);
     await line(page, "not_doing-2").hover();
-    await page.getByRole("button", { name: "Edit “Sharing a cart with someone" }).click();
+    await page.getByRole("button", { name: "Edit “Paying admins for each new" }).click();
     const box = page.getByLabel("New wording for");
     await expect(box).toBeFocused();
     expect(await box.evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart)).toBe("Paying admins for each new team.".length);
     await page.keyboard.press("Escape");
     await expect(box).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Edit “Sharing a cart with someone" })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Edit “Paying admins for each new" })).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(box).toBeFocused();
     await box.fill("");
     await expect(page.getByTestId("line-edit-empty")).toContainText("A line needs words");
-    await box.fill("Sharing a cart with a partner.");
+    await box.fill("Paying admins for a partner team.");
     await page.keyboard.press("Control+Enter");
     await expect(line(page, "not_doing-2")).toHaveAttribute("data-state", "edited");
   });
@@ -161,9 +161,9 @@ test.describe("desktop, no plan", () => {
     const text = line(page, "problem-1").getByTestId("one-pager-line-text");
     const before = (await text.boundingBox())!.width;
     await text.hover();
-    await expect(page.getByRole("button", { name: /^Edit “Shoppers build a cart/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Edit “Admins tell other teams/ })).toBeVisible();
     expect((await text.boundingBox())!.width).toBe(before);
-    await page.getByRole("button", { name: /Too many emails: one reminder per cart/ }).click();
+    await page.getByRole("button", { name: /Too many emails: one email per new team/ }).click();
     const sources = page.getByRole("region", { name: /Sources of “Too many emails/ });
     await expect(sources.getByTestId("source-line")).toHaveText("Too many emails: one email per new team, never more.");
   });
@@ -203,14 +203,14 @@ test.describe("desktop, no plan", () => {
   test("a commenter's own proposal is theirs, and withdrawn (p3-17)", async ({ page }) => {
     await paper(page, "commenter@example.com");
     await line(page, "not_doing-1").hover();
-    await page.getByRole("button", { name: "Propose wording for “Carts for guests without" }).click();
-    await page.getByLabel("New wording for").fill("Carts for guests, later.");
+    await page.getByRole("button", { name: "Propose wording for “Links for guests without" }).click();
+    await page.getByLabel("New wording for").fill("Links for guests, later.");
     await page.getByRole("button", { name: "Propose", exact: true }).click();
-    const note = page.getByRole("note").filter({ hasText: "You proposed new wording for “Carts for guests without" }).filter({ visible: true });
+    const note = page.getByRole("note").filter({ hasText: "You proposed new wording for “Links for guests without" }).filter({ visible: true });
     await expect(note).toBeVisible();
     await expect(note).not.toContainText("Theo Brandt proposes");
     await note.getByRole("button", { name: "Withdraw" }).click();
-    await expect(page.getByRole("note").filter({ hasText: "Carts for guests without" })).toHaveCount(0);
+    await expect(page.getByRole("note").filter({ hasText: "Links for guests without" })).toHaveCount(0);
   });
 
   test("presenting keeps focus on the page, and Escape stops it (p3-18, 19)", async ({ page }) => {

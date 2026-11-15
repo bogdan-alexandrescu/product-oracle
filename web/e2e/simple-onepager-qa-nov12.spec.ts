@@ -112,12 +112,12 @@ test.describe("desktop", () => {
     await expect(bets.getByTestId("not-in-gt")).toHaveCount(0);
   });
 
-  test("OP11: Referral link's stale prices risk shows once", async ({ page }) => {
+  test("OP11: Referral link's closed plans risk shows once", async ({ page }) => {
     await login(page);
     await openFromList(page, "Referral link PRD");
     const risks = page.getByRole("region", { name: "Risks and open decisions" });
     await expect(risks).toContainText("Closed plans: likely, medium impact");
-    await expect(risks.getByTestId("one-pager-line-text").filter({ hasText: /stale prices/i })).toHaveCount(1);
+    await expect(risks.getByTestId("one-pager-line-text").filter({ hasText: /closed plans/i })).toHaveCount(1);
     await expect(risks).toContainText("Too many emails");
   });
 });

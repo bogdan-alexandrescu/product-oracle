@@ -38,7 +38,7 @@ test("#18: the PRD's Goal trace names its goal, never a place code", async ({ pa
   await login(page);
   await page.goto("/documents/annual-billing/v/2");
   const trace = await openSection(page, "goal-trace");
-  await expect(trace).toContainText("Serves Activation");
+  await expect(trace).toContainText("Serves Growth");
   await expect(trace).not.toContainText("G1 (");
   await expect(trace).not.toContainText(/\bG1\b/);
 });

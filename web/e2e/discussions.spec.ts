@@ -122,7 +122,7 @@ test("a viewer opening the discussion reads it and has no composer", async ({ pa
 test("a private discussion is one locked row for the owner, and opening it says it is private", async ({ page }) => {
   await withScenario(page);
   await login(page, COMMENTER);
-  await discussProblem(page, { private: [{ email: "approver", name: "Priya Raman" }], first: "Between us: is the shipping step the real problem?" });
+  await discussProblem(page, { private: [{ email: "approver", name: "Priya Raman" }], first: "Between us: is the billing step the real problem?" });
   await expect(thread(page).getByTestId("discussion-visibility")).toHaveText("Private");
   await expect(thread(page).getByTestId("discussion-visibility")).toHaveAttribute("title", "Only the people in it can read it");
   await signOut(page);

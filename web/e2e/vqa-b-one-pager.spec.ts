@@ -41,7 +41,7 @@ test.describe("desktop", () => {
     const carts = (await problem(page).textContent())!.trim();
 
     await openFromList(page, "Annual billing PRD");
-    await expect(problem(page)).toContainText("Buyers leave checkout when the total changes late in the flow");
+    await expect(problem(page)).toContainText("Admins leave the plan page when the yearly price shows up late in the flow");
     await expect(problem(page)).not.toContainText(SEEDED_PROBLEM);
     expect((await problem(page).textContent())!.trim()).not.toBe(carts);
     // Its other blocks are its own too: its risks are its "Risks and open questions".
@@ -49,13 +49,13 @@ test.describe("desktop", () => {
   });
 
   test("B-13: Referral link's bets name the goal in words and are no template line", async ({ page }) => {
-    // protects = a bet reads its goal by name ("Link in settings: Retention") and every bet
+    // protects = a bet reads its goal by name ("Link in settings: Growth") and every bet
     // is the PRD's own; fails_when = the fixture's table shows "G2" or its Feature detail is
     // the template's "One section per feature, in priority order."
     await login(page);
     await openFromList(page, "Referral link PRD");
     const bets = page.getByRole("region", { name: "What we will build" });
-    await expect(bets).toContainText("Link in settings: Retention");
+    await expect(bets).toContainText("Link in settings: Growth");
     await expect(bets).toContainText("Keep each admin's link on our servers");
     await expect(bets).not.toContainText(/\bG\d+\b/);
     await expect(bets).not.toContainText("One section per feature");
