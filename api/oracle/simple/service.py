@@ -383,13 +383,19 @@ async def all_milestones(db: AsyncSession) -> list[TrackMilestone]:
 
 
 async def load(
-    db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | None = None, light: bool = False
+    db: AsyncSession,
+    overlays: dict[uuid.UUID, dict[str, Any]] | None = None,
+    light: bool = False,
+    routing: bool = False,
 ) -> Read:
     """Everything the read needs, as the session's principal may see it; ``overlays``
     (roadmap document id -> {item id -> fields}): the working drafts the reader sees. Inside
     every_roadmap(), every roadmap's items, not only the company roadmap's.
     ``light`` (roadmap-speed): what the flags, dates and deciders need alone; the entries'
-    goals, PRD headings and owner names are left unread (:func:`waiting`)."""
+    goals, PRD headings and owner names are left unread (:func:`waiting`). ``routing``
+    (main-ci, inbox counts): the read routes proposals to their deciders alone, so the dates
+    open drafts accepted for undated items are left unread; the entries' dates may then be
+    the estimates without them."""
     from oracle.simple import drafts
 
     today = await company_time.company_today(db)
@@ -594,6 +600,7 @@ async def load(
             r.id
             for r in rows
             if open_drafts
+            and not routing
             and r.id not in suggestions
             and dates.resolve(sourced[r.id][2], windows["later"], effort.get(r.id)).undated
         },
