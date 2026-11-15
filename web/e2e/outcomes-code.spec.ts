@@ -20,6 +20,8 @@ async function openOutcomes(page: Page) {
   await page.getByTestId("plan-tabs").filter({ visible: true }).getByTestId("plan-tab-outcomes").click();
   await expect(page).toHaveURL(/\/plan\/outcomes$/);
   await expect(page.getByTestId("outcomes-table")).toBeVisible();
+  // Every outcome, the measuring and the assessed ones too.
+  await page.getByTestId("outcome-filters").getByRole("button", { name: /^All/ }).click();
 }
 
 const inspector = (page: Page) => page.getByTestId("outcome-inspector").filter({ visible: true });
@@ -54,5 +56,5 @@ test("an item with no code keeps its name and is flagged Not in the Ground Truth
 
   await emails.click();
   await expect(inspector(page).getByTestId("not-in-gt")).toBeVisible();
-  await expect(inspector(page).getByRole("heading").first()).toHaveText("Order status emails");
+  await expect(inspector(page).getByRole("heading").first()).toHaveText(/^Order status emails/);
 });
