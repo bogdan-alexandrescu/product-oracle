@@ -116,7 +116,8 @@ test.describe("desktop", () => {
     // A span wholly in 2027 is not in the company's year (2026): it says 2027.
     const next = spans.filter((s) => s.start.startsWith("2027") && s.end.startsWith("2027"));
     expect(next.length).toBeGreaterThan(0);
-    for (const s of next) expect(s.said, s.said).toMatch(/: [A-Z][a-z]{2} \d{1,2} to [A-Z][a-z]{2} \d{1,2}, 2027/);
+    // roadmap-dates: an undated item's estimate (Oracle's suggestion) may lie wholly in 2027 too.
+    for (const s of next) expect(s.said, s.said).toMatch(/: ([A-Z][a-z]{2} \d{1,2} to|No dates yet · estimated [A-Z][a-z]{2} \d{1,2} –) [A-Z][a-z]{2} \d{1,2}, 2027/);
     // A span wholly in 2026 is in the company's year: no year.
     for (const s of spans.filter((x) => x.start.startsWith("2026") && x.end.startsWith("2026"))) {
       expect(s.said, s.said).toMatch(/: [A-Z][a-z]{2} \d{1,2} to [A-Z][a-z]{2} \d{1,2}(?!\d|, \d{4})/);
