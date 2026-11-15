@@ -88,8 +88,8 @@ test("the goal drawer shows a person's name and labelled attributes and history"
   await withScenario(page, "goal-words");
   await login(page, "commenter@example.com");
   await page.goto("/ground-truth");
-  await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
-  const d = page.getByRole("dialog", { name: "Raise activation" });
+  await page.getByTestId("goal-g.activation").getByRole("button", { name: "Activation" }).click();
+  const d = page.getByRole("dialog", { name: "Activation" });
 
   const lock = d.getByTestId("lock-note");
   await expect(lock).toContainText("Locked by Priya Raman");

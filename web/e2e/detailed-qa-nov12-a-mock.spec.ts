@@ -10,7 +10,7 @@ import { login, openSection } from "./helpers";
  * company too (Dark mode serves no goal); fails_when = the panel shows no code, or the band is
  * missing because the default company reads no flags.
  *
- * #18: protects = the PRD's Goal trace names its goal by its name ("Raise activation"), never
+ * #18: protects = the PRD's Goal trace names its goal by its name ("Activation"), never
  * by a place code (G1); fails_when = it reads "Serves G1 (activation)".
  */
 
@@ -38,7 +38,7 @@ test("#18: the PRD's Goal trace names its goal, never a place code", async ({ pa
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
   const trace = await openSection(page, "goal-trace");
-  await expect(trace).toContainText("Serves Raise activation");
+  await expect(trace).toContainText("Serves Activation");
   await expect(trace).not.toContainText("G1 (");
   await expect(trace).not.toContainText(/\bG1\b/);
 });

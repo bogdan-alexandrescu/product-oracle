@@ -78,7 +78,7 @@ test.describe("desktop", () => {
     const bulk = row(page, "Bulk edit");
     await expect(bulk.getByTestId("row-requirements")).toHaveText(/^\d+ of \d+ kept$/);
     await bulk.getByTestId("feature-title").click();
-    await expect(inspector(page).getByTestId("inspector-goal")).toHaveText("Grow paid conversion · contribution 1 of 3");
+    await expect(inspector(page).getByTestId("inspector-goal")).toHaveText("Growth · contribution 1 of 3");
     const stat = inspector(page).getByTestId("stat-requirements");
     await expect(stat.locator("dt")).toHaveText("Requirements kept");
     await expect(stat.locator("dd")).toHaveText(/^\d+ of \d+$/);

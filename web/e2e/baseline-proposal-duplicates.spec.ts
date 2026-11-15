@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 // The "proposal-duplicates" scenario (lib/api/mock/baseline.ts addDuplicateProposals): the
 // Ground Truth to PRD run's writer and critic propose the same changes twice, and four
-// proposals on Raise activation that one accept settles.
+// proposals on Activation that one accept settles.
 const PHONE = { width: 390, height: 844 };
 
 async function openProposals(page: Page) {

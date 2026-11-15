@@ -103,7 +103,7 @@ test("autonomy: an Oracle did row in the Inbox opens and the badge drops by one"
   const before = Number(await badge.textContent());
   const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Saved addresses" });
   await expect(did).toContainText("Oracle did");
-  await expect(did).toContainText("Moved 'Saved addresses' up 2 within Raise activation");
+  await expect(did).toContainText("Moved 'Saved addresses' up 2 within Activation");
   await expect(did.getByRole("button", { name: "Undo" })).toBeVisible();
   await did.getByRole("button", { name: "Open" }).click();
   await expect(badge).toHaveText(String(before - 1));

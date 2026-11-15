@@ -188,7 +188,7 @@ test("priorities: a score step's arithmetic is true, confidence a percent in eve
   expect(await f2("RICE")).toEqual(["Score = 6,000 × 1 × 90% ÷ 1 = 5,400"]);
   await expect(page.getByTestId("priority-row-F-02").getByTestId("score")).toHaveText("5,400");
   expect(await f2("Goal-weighted")).toEqual([
-    "Goal value = 3×3 (Raise activation) = 9",
+    "Goal value = 3×3 (Activation) = 9",
     "Score = 9 × 90% ÷ 1 = 8.10",
   ]);
   expect(await f2("WSJF")).toEqual(["Cost of delay = 5 + 8 + 2 = 15", "Score = 15 ÷ 2 = 7.50"]);

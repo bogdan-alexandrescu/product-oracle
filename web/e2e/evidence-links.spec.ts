@@ -95,7 +95,7 @@ test("evidence links: a commenter cites a Google Doc from a document section", a
 
   const form = goalTrace.getByRole("form", { name: "Add evidence link" });
   const target = form.getByLabel("Ground Truth item it supports");
-  await target.selectOption({ label: "goal: Raise activation" });
+  await target.selectOption({ label: "goal: Activation" });
   await form.getByLabel("Public link").fill("https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012/edit?usp=sharing");
   await form.getByRole("button", { name: "Preview" }).click();
   await expect(form.getByTestId("link-preview-title")).toHaveText("Pricing page refresh");
@@ -105,7 +105,7 @@ test("evidence links: a commenter cites a Google Doc from a document section", a
 
   // The Ground Truth item now carries it, for everyone.
   await page.goto("/ground-truth");
-  await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
-  const d = page.getByRole("dialog", { name: "Raise activation" });
+  await page.getByTestId("goal-g.activation").getByRole("button", { name: "Activation" }).click();
+  const d = page.getByRole("dialog", { name: "Activation" });
   await expect(d.getByTestId("evidence-row").filter({ hasText: "Pricing page refresh" })).toHaveCount(1);
 });

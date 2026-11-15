@@ -201,7 +201,7 @@ export function seedMetrics(ctx: MetricsContext): MetricsDb {
   const owner = ctx.members.find((m) => m.role === "owner")!;
   const approver = ctx.members.find((m) => m.email === "approver@example.com")!;
   const commenter = ctx.members.find((m) => m.email === "commenter@example.com")!;
-  const paid = ctx.goals().find((g) => g.title === "Grow paid conversion");
+  const paid = ctx.goals().find((g) => g.title === "Growth");
   db.analytics = { host: "eu", project_id: "12345", connected_by: owner.id, connected_at: "2026-10-01T16:00:00Z" };
   const metric = (fields: Partial<Metric> & Pick<Metric, "title" | "description" | "kind" | "unit" | "source" | "owner_id">, series: number[]): Metric => {
     const m: Metric = {

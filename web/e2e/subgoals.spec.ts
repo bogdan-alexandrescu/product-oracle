@@ -131,9 +131,9 @@ test("move, promote and archive a subgoal; viewers see no tree controls", async 
   const row = await churnWithSubgoal(page);
   await row.getByRole("button", { name: SUB, exact: true }).click();
   const d = drawer(page, SUB);
-  await d.getByLabel("Parent goal").selectOption({ label: "Raise activation" });
+  await d.getByLabel("Parent goal").selectOption({ label: "Activation" });
   await d.getByRole("button", { name: "Move" }).click();
-  const underActivation = page.getByTestId("goal-g.activation").getByRole("button", { name: "Hide subgoals of Raise activation" });
+  const underActivation = page.getByTestId("goal-g.activation").getByRole("button", { name: "Hide subgoals of Activation" });
   await expect(underActivation).toBeVisible();
   await expect(row.getByTestId("code-tag")).toHaveCount(0);
   await expect(page.getByTestId("goal-g.early-churn").locator('[data-attr="progress"]')).toHaveText("–");

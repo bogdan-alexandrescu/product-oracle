@@ -62,7 +62,7 @@ test("goals table: an open drawer drops Weight and Horizon, not the goal's name"
   await expect(table.getByRole("columnheader", { name: "Goal", exact: true })).toBeVisible();
   await expect(table.getByRole("columnheader", { name: "Weight" })).toBeHidden();
   await expect(table.getByRole("columnheader", { name: "Horizon" })).toBeHidden();
-  const name = table.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation", exact: true });
+  const name = table.getByTestId("goal-g.activation").getByRole("button", { name: "Activation", exact: true });
   await expect(name).toBeVisible();
   expect((await name.boundingBox())!.width).toBeGreaterThan(100);
   expect(await clippedTexts(table.getByTestId("goal-g.activation").locator("td").first())).toEqual([]);
@@ -189,7 +189,7 @@ test("interview: owner-only gap asks who owns it; the stepper has no separators"
   await openBaseline(page);
   await page.getByRole("button", { name: "Ask Oracle to sharpen 2 goals" }).click();
   const discuss = page.getByTestId("goal-discuss");
-  await expect(discuss.getByRole("heading", { name: "Who should own “Grow paid conversion”?" })).toBeVisible();
+  await expect(discuss.getByRole("heading", { name: "Who should own “Growth”?" })).toBeVisible();
   const stepper = discuss.getByTestId("interview-stepper");
   await expect(stepper.getByTestId("stepper-position")).toHaveText("Goal 1 of 2");
   expect(await stepper.innerText()).not.toContain("·");

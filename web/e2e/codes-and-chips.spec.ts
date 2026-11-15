@@ -30,10 +30,10 @@ for (const [size, viewport] of [
       const form = page.getByRole("dialog", { name: "Add an item" });
       await form.getByLabel("Kind").selectOption("feature");
       const served = form.getByRole("group", { name: "Goals it serves" });
-      await expect(served.getByLabel("Raise activation")).toBeVisible();
+      await expect(served.getByLabel("Activation")).toBeVisible();
       // The name once: the row's label, never a code chip holding it too.
-      await expect(served.getByText("Raise activation", { exact: true })).toHaveCount(1);
-      await expect(served.getByText("Grow paid conversion", { exact: true })).toHaveCount(1);
+      await expect(served.getByText("Activation", { exact: true })).toHaveCount(1);
+      await expect(served.getByText("Growth", { exact: true })).toHaveCount(1);
       await expect(served.locator(".font-mono")).toHaveCount(0);
     });
 

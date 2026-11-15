@@ -53,8 +53,8 @@ test("#2: the Pick a goal notice names F-02 Audit log", async ({ page }) => {
   await open(page);
   await openKind(page, "no_goal");
   await row(page, "Audit log").getByRole("button", { name: /Pick a goal/ }).click();
-  await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Raise activation" }).click();
-  await expect(page.getByTestId("gt-notice")).toContainText("“F-02 Audit log” now serves “Raise activation”.");
+  await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Activation" }).click();
+  await expect(page.getByTestId("gt-notice")).toContainText("“F-02 Audit log” now serves “Activation”.");
 });
 
 test("#10: the Not linked row shows Weekly digest once, as F-14 Weekly digest", async ({ page }) => {

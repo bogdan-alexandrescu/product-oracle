@@ -10,7 +10,7 @@ test("metrics: an owner adds a metric linked to a goal and sees its row", async 
   const goal = await confirmedEntity(page, {
     type: "goal",
     key: "e2e-raise-activation",
-    title: "Raise activation",
+    title: "Activation",
     attrs: { metric: "Activated teams", unit: "%", comparison: "at_least", target: 45 },
   });
 

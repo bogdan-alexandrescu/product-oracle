@@ -204,10 +204,10 @@ test("left out: a feature the set leaves out shows the goal it serves and Left o
   await openFeatureSet(page);
   await page.getByRole("button", { name: /^All/ }).click();
   const out = scopeRow(page, "address-book-export");
-  await expect(out.getByTestId("goal-chip")).toHaveText("Raise activation");
+  await expect(out.getByTestId("goal-chip")).toHaveText("Activation");
   await expect(out).not.toContainText("No goal");
   await expect(out.getByTestId("row-requirements")).toHaveText("Left out");
-  await expect(scopeRow(page, "address-sharing").getByTestId("goal-chip")).toHaveText("Grow paid conversion");
+  await expect(scopeRow(page, "address-sharing").getByTestId("goal-chip")).toHaveText("Growth");
   // A goal's name is never cut: the chip is as wide as its text.
   const chip = scopeRow(page, "saved-addresses").getByTestId("goal-chip").first();
   expect(await chip.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);

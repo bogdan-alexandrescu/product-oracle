@@ -123,7 +123,7 @@ test("qa-company-30: an Oracle did row with no codes has no chevron repeating it
   await login(page);
   await openInbox(page);
   const did = page.getByTestId("inbox-oracle-actions").locator("tr[data-row]").filter({ hasText: "Saved addresses" });
-  await expect(did).toContainText("Moved 'Saved addresses' up 2 within Raise activation");
+  await expect(did).toContainText("Moved 'Saved addresses' up 2 within Activation");
   await expect(did.getByRole("button", { name: "Show the text" })).toHaveCount(0);
 });
 

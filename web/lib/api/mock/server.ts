@@ -2058,7 +2058,7 @@ function seedSimpleHomeScenario(): Db {
 
 /**
  * build-goal-order-control, the "goal-order" scenario: "simple-home" with five confirmed goals in
- * a set order (Faster activation, Grow retention, Grow paid conversion, Keep alerts quiet, Cut
+ * a set order (Faster activation, Grow retention, Growth, Keep alerts quiet, Cut
  * support load), each with work on the roadmap. "goal-order-hard" adds three more (one with a
  * long name) and an archived one, which is not in the order. Invented data.
  */
@@ -4887,7 +4887,7 @@ function load(): Db {
   // Outcomes (H3): synthetic predictions, one due for its check, in the "outcomes" scenario.
   // "outcomes-recorded" adds a verdict Oracle recorded (H11 at Act within limits) for the owner to change.
   if (scenario === "outcomes" || scenario === "outcomes-recorded" || scenario === "outcomes-long") {
-    const goal = db.baseline.entities.find((e) => e.type === "goal" && e.title === "Raise activation");
+    const goal = db.baseline.entities.find((e) => e.type === "goal" && e.title === "Activation");
     // A goal measured in its own unit, for moving an outcome to it (the metric and unit follow).
     if (goal) {
       const attrs = { weight: 0.1, metric: "Failed payments per 100 orders", unit: "failed payments", comparison: "at_most", target: 2, current: 3 };

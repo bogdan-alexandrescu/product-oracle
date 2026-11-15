@@ -116,8 +116,8 @@ test("the default company's one flag (Dark mode serves no goal): picking a goal 
   await count(page).click();
   await openKind(page, "no_goal");
   await row(page, "Dark mode").getByRole("button", { name: /Pick a goal/ }).click();
-  await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Raise activation" }).click();
-  await expect(notice(page)).toContainText(/Dark mode” now serves “Raise activation”/);
+  await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Activation" }).click();
+  await expect(notice(page)).toContainText(/Dark mode” now serves “Activation”/);
   await expect(line(page)).toHaveCount(0);
   await sheet(page).getByRole("button", { name: "Close" }).first().click();
   await page.reload();

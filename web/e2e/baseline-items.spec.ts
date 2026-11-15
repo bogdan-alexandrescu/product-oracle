@@ -45,7 +45,7 @@ test("Ground Truth: the Features table's Add makes a feature in its product, ser
   await expect(form.getByLabel("Kind")).toHaveValue("feature");
   await form.getByLabel("Title").fill("Gift cards");
   await form.getByLabel("Product").selectOption({ label: "Storefront" });
-  await form.getByLabel("Raise activation").selectOption("3");
+  await form.getByLabel("Activation").selectOption("3");
   await form.getByRole("button", { name: "Add", exact: true }).click();
   await expect(form).toHaveCount(0);
 
@@ -53,7 +53,7 @@ test("Ground Truth: the Features table's Add makes a feature in its product, ser
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Gift cards" }).click();
   const d = page.getByRole("dialog", { name: "Gift cards" });
-  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Raise activation");
+  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Activation");
   await expect(d.getByRole("list", { name: "Part of" })).toContainText("Storefront");
 });
 
@@ -121,7 +121,7 @@ for (const scheme of ["light", "dark"] as const) {
     const form = page.getByRole("dialog", { name: "Add an item" });
     await form.getByLabel("Title").fill("Loyalty points");
     await form.getByLabel("Product").selectOption({ label: "Storefront" });
-    await form.getByLabel("Raise activation").selectOption("2");
+    await form.getByLabel("Activation").selectOption("2");
     // The first link's request (the product link) fails once, after the feature is made.
     await page.evaluate(() => {
       localStorage.setItem("po-mock-fail-once", "POST /v1/baseline/edges");
@@ -141,7 +141,7 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(rows).toHaveCount(1);
     await rows.getByRole("button", { name: "Loyalty points" }).click();
     const d = page.getByRole("dialog", { name: "Loyalty points" });
-    await expect(d.getByRole("list", { name: "Supports" })).toContainText("Raise activation");
+    await expect(d.getByRole("list", { name: "Supports" })).toContainText("Activation");
     await expect(d.getByRole("list", { name: "Part of" })).toContainText("Storefront");
   });
 }

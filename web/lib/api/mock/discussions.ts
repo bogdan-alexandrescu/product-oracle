@@ -228,7 +228,7 @@ export type DocumentSection = { document_id: string; key: string; heading: strin
 /** G2: the gateway's message when no Claude account can take a call (approvers and owners). */
 export const NO_ACCOUNT_MESSAGE =
   "No Claude account: an owner adds one on Settings > Claude accounts (or sets a fallback setup-token or API key there)";
-/** The mock's canned reply, citing the seed's "Raise activation" goal. */
+/** The mock's canned reply, citing the seed's "Activation" goal. */
 export const CANNED_REPLY = ["Yes, if caps ", "read the plan thresholds only ", "[c:1]. Detection can follow ", "once activation holds; ", "the goal does not depend on it."];
 
 const withoutView = (subject: Record<string, unknown>) => Object.fromEntries(Object.entries(subject).filter(([k]) => k !== "view"));
@@ -265,7 +265,7 @@ export const RESEARCH_START_FAILED = "Oracle couldn't start this research.";
 /** The "research-unsafe-link" scenario: the web page the research cites has an address that is not http(s) (#606 re-review). */
 export const RESEARCH_UNSAFE_LINK_SCENARIO = "research-unsafe-link";
 export const RESEARCH_UNSAFE_LINK = "javascript:alert(document.domain)";
-const CANNED_CITATIONS = [{ n: 1, kind: "entity", ref: "g.activation", title: "Goal: Raise activation", url: "/ground-truth", confidence: 0.82, low_confidence: false }];
+const CANNED_CITATIONS = [{ n: 1, kind: "entity", ref: "g.activation", title: "Goal: Activation", url: "/ground-truth", confidence: 0.82, low_confidence: false }];
 /** The web page the mock's research read (read:web): a `web` citation linking to it. */
 const RESEARCH_CITATIONS: Record<string, unknown>[] = [
   ...CANNED_CITATIONS,

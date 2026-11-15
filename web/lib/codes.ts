@@ -18,7 +18,7 @@ const KEYED = new RegExp(String.raw`^(?:${CODE})$`);
 
 export type Named = { code: string | null; name: string };
 
-/** A title's code and name: "G-B Growth" → G-B, Growth; "Raise activation" → no code. */
+/** A title's code and name: "G-B Growth" → G-B, Growth; "Activation" → no code. */
 export function named(title: string, key?: string | null): Named {
   const m = title.trim().match(TITLED);
   if (m) return { code: m[1], name: m[2] };

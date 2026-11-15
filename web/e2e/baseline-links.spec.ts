@@ -21,29 +21,29 @@ test("Ground Truth: link a feature to a goal, change its contribution, unlock it
 
   await d.getByRole("button", { name: "Link to goal" }).click();
   const form = d.getByRole("form", { name: "Link to goal" });
-  await form.getByLabel("Goal").selectOption({ label: "Raise activation" });
+  await form.getByLabel("Goal").selectOption({ label: "Activation" });
   await form.getByLabel("Contribution").selectOption("2");
   await form.getByRole("button", { name: "Link" }).click();
-  await expect(d.getByRole("status")).toContainText("Linked to “Raise activation”");
-  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Raise activation");
+  await expect(d.getByRole("status")).toContainText("Linked to “Activation”");
+  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Activation");
   // The feature × goal matrix shows the new link, and the flag goes.
   await expect(row.getByRole("img", { name: "Contribution 2 of 3" })).toBeVisible();
   await expect(row.getByTestId("flag")).toHaveCount(0);
 
-  await d.getByLabel("Contribution to Raise activation").selectOption("3");
+  await d.getByLabel("Contribution to Activation").selectOption("3");
   await expect(d.getByRole("status")).toContainText("Contribution set to 3");
   await expect(row.getByRole("img", { name: "Contribution 3 of 3" })).toBeVisible();
 
   // A person's link is locked against agents; Unlock frees it.
-  await d.getByRole("button", { name: "Unlock link to Raise activation" }).click();
+  await d.getByRole("button", { name: "Unlock link to Activation" }).click();
   await expect(d.getByRole("status")).toContainText("Unlocked");
-  await expect(d.getByRole("button", { name: "Unlock link to Raise activation" })).toHaveCount(0);
+  await expect(d.getByRole("button", { name: "Unlock link to Activation" })).toHaveCount(0);
 
-  await d.getByRole("button", { name: "Remove link to Raise activation" }).click();
+  await d.getByRole("button", { name: "Remove link to Activation" }).click();
   const ask = d.getByRole("form", { name: "Remove link" });
   await ask.getByRole("button", { name: "Back" }).click();
-  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Raise activation");
-  await d.getByRole("button", { name: "Remove link to Raise activation" }).click();
+  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Activation");
+  await d.getByRole("button", { name: "Remove link to Activation" }).click();
   await d.getByRole("form", { name: "Remove link" }).getByRole("button", { name: "Remove" }).click();
   await expect(d.getByRole("status")).toContainText("Removed the link");
   await expect(d.getByRole("list", { name: "Supports" })).toHaveCount(0);
@@ -134,9 +134,9 @@ test("Ground Truth: on a phone the Link to goal form fits", async ({ page }) => 
   const d = await openItem(page, "F-81", "Dark mode");
   await d.getByRole("button", { name: "Link to goal" }).click();
   const form = d.getByRole("form", { name: "Link to goal" });
-  await form.getByLabel("Goal").selectOption({ label: "Grow paid conversion" });
+  await form.getByLabel("Goal").selectOption({ label: "Growth" });
   const width = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(width).toBeLessThanOrEqual(390);
   await form.getByRole("button", { name: "Link" }).click();
-  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Grow paid conversion");
+  await expect(d.getByRole("list", { name: "Supports" })).toContainText("Growth");
 });

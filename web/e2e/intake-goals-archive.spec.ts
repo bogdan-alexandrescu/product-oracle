@@ -23,12 +23,12 @@ test("goal from the door, then Archive asks and the page says it is archived", a
   await page
     .getByRole("textbox", { name: "What problem does it solve?" })
     .fill("Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.");
-  await page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox", { name: /Raise activation/ }).check();
+  await page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox", { name: /Activation/ }).check();
   await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 
   const goals = page.getByTestId("intake-goals");
-  await expect(goals).toContainText("Raise activation");
+  await expect(goals).toContainText("Activation");
   await expect(goals).toContainText("to go");
   await expect(goals).not.toContainText("No confirmed company goal yet");
 

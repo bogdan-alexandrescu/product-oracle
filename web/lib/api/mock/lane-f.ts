@@ -93,8 +93,8 @@ export type FeatureSeed = {
 };
 
 // The baseline's goals (./baseline.ts), by key; GET /v1/priorities titles them as the baseline does now.
-const G1 = "Raise activation";
-const G2 = "Grow paid conversion";
+const G1 = "Activation";
+const G2 = "Growth";
 
 const FEATURES: FeatureSeed[] = [
   {

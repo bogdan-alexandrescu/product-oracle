@@ -6,7 +6,7 @@ import { login, openSection, sectionAction } from "./helpers";
 /*
  * #402 through the UI, on the mock layer ("discussion-replies" scenario): the First message
  * of a new discussion gets Oracle's live reply under the composer's rule. The mock streams a
- * canned answer in 5 pieces that cites the seed's "Raise activation" goal.
+ * canned answer in 5 pieces that cites the seed's "Activation" goal.
  *
  * Card (E2E): protects=the first message's reply streams in, and the start form's rule copy
  * and Ask Oracle; fails_when=no reply comes, or a team discussion gets an unasked one;

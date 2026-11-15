@@ -68,8 +68,8 @@ test.describe("desktop", () => {
     const row = goalsTable(page).getByTestId("goal-g.activation");
     await expect(row.getByRole("img", { name: "Not scored: no evidence yet" })).toBeVisible();
     await expect(row.getByRole("img", { name: /Confidence 78/ })).toHaveCount(0);
-    await row.getByRole("button", { name: "Raise activation", exact: true }).click();
-    const d = page.getByRole("dialog", { name: "Raise activation" });
+    await row.getByRole("button", { name: "Activation", exact: true }).click();
+    const d = page.getByRole("dialog", { name: "Activation" });
     await expect(d.getByRole("img", { name: "Not scored: no evidence yet" })).toBeVisible();
   });
 

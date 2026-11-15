@@ -39,8 +39,8 @@ async function fillAndGo(page: Page) {
   await s.getByLabel("Name").fill(NAME);
   await s.getByLabel("The problem").fill(PROBLEM);
   await s.getByLabel("Who has it").fill("Households of two or more people who shop each week");
-  await s.getByRole("button", { name: "Raise activation" }).click();
-  await expect(s.getByRole("button", { name: "Raise activation" })).toHaveAttribute("aria-pressed", "true");
+  await s.getByRole("button", { name: "Activation" }).click();
+  await expect(s.getByRole("button", { name: "Activation" })).toHaveAttribute("aria-pressed", "true");
   await s.getByRole("button", { name: "Next" }).click();
   await expect(s.getByRole("heading", { name: NAME })).toBeVisible();
 }
@@ -126,7 +126,7 @@ for (const [label, size] of [
       await expect(card.getByRole("heading", { name: "PRDs you started" })).toBeVisible();
       await expect(card.getByText(NAME)).toBeVisible();
       await expect(card.getByText("Drafting")).toBeVisible();
-      await expect(card.getByText("3 of 6 questions answered. The draft is for Raise activation.")).toBeVisible();
+      await expect(card.getByText("3 of 6 questions answered. The draft is for Activation.")).toBeVisible();
       await expect(card.getByText(/you did not know: the draft marks it as open\./)).toBeVisible();
       await expect(card.getByText(/waits on Priya Raman; the draft updates when they answer\./)).toBeVisible();
       await expect(card.getByText(/was not answered yet: the draft marks it as open\./)).toBeVisible();

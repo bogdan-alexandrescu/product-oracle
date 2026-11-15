@@ -16,8 +16,8 @@ const POSITIONS: [key: string, name: string, position: number][] = [
   ["grow-retention", "Grow retention", 1],
   ["quiet-alerts", "Keep alerts quiet", 2],
   ["faster-activation", "Faster activation", 3],
-  ["g.paid-conversion", "Grow paid conversion", 4],
-  ["g.activation", "Raise activation", 5],
+  ["g.paid-conversion", "Growth", 4],
+  ["g.activation", "Activation", 5],
 ];
 const NAMES = POSITIONS.map(([, name]) => name);
 
@@ -25,7 +25,7 @@ const NAMES = POSITIONS.map(([, name]) => name);
 function order(texts: string[]): string[] {
   const out: string[] = [];
   for (const t of texts) {
-    // "Grow paid conversion" holds no other name; check the longer names first.
+    // "Growth" holds no other name; check the longer names first.
     const name = [...NAMES].sort((a, b) => b.length - a.length).find((n) => t.includes(n));
     if (name && !out.includes(name)) out.push(name);
   }
@@ -101,7 +101,7 @@ for (const [label, viewport] of [
 
       await page.goto("/priorities");
       const byGoal = page.getByRole("table", { name: "By goal" }).getByRole("row");
-      await inOrder(byGoal, expected("Grow paid conversion", "Raise activation"));
+      await inOrder(byGoal, expected("Growth", "Activation"));
 
       // Detailed > Ground Truth > Flagged: the Goal coverage grid.
       await page.goto("/ground-truth");

@@ -11,7 +11,7 @@ import { login } from "./helpers";
  * metrics only: Weekly active teams (an output read from PostHog) and Invites sent per team
  * (an input that drives it, written by API), both owned by commenter@example.com, each with
  * an open variance in the week of Oct 12; Trial to paid rate (typed by hand, the approver's,
- * linked to Grow paid conversion). PostHog is connected, and the Weekly metrics review has
+ * linked to Growth). PostHog is connected, and the Weekly metrics review has
  * replaced the goals check-in: this Monday's occurrence is ready. The mock clock is Mon
  * 2026-10-19 12:00 UTC, the browser shows New York time and the Company time zone is
  * America/Los_Angeles. Each test states its card.
@@ -137,9 +137,9 @@ test("13b: an approver adds an output metric linked to a goal, tests its query a
   await sheet.getByLabel("Kind").selectOption("output");
   await sheet.getByLabel("Unit", { exact: true }).selectOption("%");
   await sheet.getByLabel("Good direction").selectOption("up");
-  // Grow paid conversion already has a metric; Raise activation is free and in %.
-  await expect(sheet.getByLabel("Goal").locator("option")).toHaveText(["No goal", "Raise activation"]);
-  await sheet.getByLabel("Goal").selectOption({ label: "Raise activation" });
+  // Growth already has a metric; Activation is free and in %.
+  await expect(sheet.getByLabel("Goal").locator("option")).toHaveText(["No goal", "Activation"]);
+  await sheet.getByLabel("Goal").selectOption({ label: "Activation" });
   await sheet.getByLabel("Owner").selectOption({ label: "Priya Raman" });
   await sheet.getByLabel("Source").selectOption("posthog");
   await sheet.getByLabel("Query").fill("select countIf(finished_setup) / count() * 100 from accounts where created_at between {period_start} and {period_end}");
@@ -284,7 +284,7 @@ test("the Goal select and what Save sends agree: a goal of another unit is dropp
   await sheet.getByLabel("Title").fill("Activated accounts");
   await sheet.getByLabel("What it counts").fill("Accounts that finish setup within 7 days");
   await sheet.getByLabel("Unit", { exact: true }).selectOption("%");
-  await sheet.getByLabel("Goal").selectOption({ label: "Raise activation" });
+  await sheet.getByLabel("Goal").selectOption({ label: "Activation" });
   await sheet.getByLabel("Unit", { exact: true }).selectOption({ label: "Count of…" });
   await sheet.getByLabel("Count of what", { exact: true }).fill("accounts");
   await expect(sheet.getByLabel("Goal")).toHaveValue("");
@@ -302,7 +302,7 @@ test("editing a metric whose goal is no longer confirmed saves, with No goal", a
   // confirmed-goal check (test_metrics.py).
   await withMetrics(page);
   await login(page, OWNER);
-  const drawer = await openGoal(page, "g.paid-conversion", "Grow paid conversion");
+  const drawer = await openGoal(page, "g.paid-conversion", "Growth");
   await drawer.getByRole("button", { name: "Archive" }).click();
   const ask = drawer.getByRole("form", { name: "Archive" });
   await ask.getByLabel("Reason").fill("Pricing moved to annual plans only.");
@@ -328,7 +328,7 @@ test("the inspector's goal reads Home's distance to go", async ({ page }) => {
   // no_claim=assess() itself (Home's specs).
   await withMetrics(page);
   await login(page, APPROVER);
-  const drawer = await openGoal(page, "g.paid-conversion", "Grow paid conversion");
+  const drawer = await openGoal(page, "g.paid-conversion", "Growth");
   await drawer.getByRole("button", { name: "Edit" }).click();
   const form = drawer.getByRole("form", { name: "Edit" });
   await form.getByLabel("Comparison").selectOption("below");
@@ -339,7 +339,7 @@ test("the inspector's goal reads Home's distance to go", async ({ page }) => {
   await openMetrics(page);
   await metricRow(page, "Trial to paid rate").click();
   const inspector = page.getByTestId("metric-inspector").filter({ visible: true });
-  const goal = inspector.getByRole("link", { name: "Grow paid conversion" });
+  const goal = inspector.getByRole("link", { name: "Growth" });
   await expect(goal).toBeVisible();
   await expect(inspector).toContainText("Not below");
   await expect(inspector).not.toContainText("Target met");

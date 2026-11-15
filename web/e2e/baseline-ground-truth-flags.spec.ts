@@ -197,8 +197,8 @@ test.describe("as the owner", () => {
     await openKind(page, "no_goal");
     await row(page, "Audit log").getByRole("button", { name: /Pick a goal/ }).click();
     const picker = page.getByTestId("gt-picker");
-    await picker.getByRole("button").filter({ hasText: "Raise activation" }).click();
-    await expect(page.getByTestId("gt-notice")).toContainText("“F-02 Audit log” now serves “Raise activation”.");
+    await picker.getByRole("button").filter({ hasText: "Activation" }).click();
+    await expect(page.getByTestId("gt-notice")).toContainText("“F-02 Audit log” now serves “Activation”.");
     await expect(count(page, "no_goal")).toHaveCount(0);
     await expect(total(page)).toHaveText("8");
   });
@@ -236,7 +236,7 @@ for (const viewport of [DESKTOP, PHONE])
       await expect(row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth|Link to a feature/ })).toHaveCount(0);
       await openKind(page, "no_goal");
       await row(page, "Audit log").getByRole("button", { name: /Pick a goal/ }).click();
-      await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Raise activation" }).click();
+      await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Activation" }).click();
       await expect(row(page, "Audit log")).toHaveCount(0);
       // Two flags went; the new feature, coded as it joined, brings only its own no-goal flag.
       await expect(total(page)).toHaveText(String(start - 1));

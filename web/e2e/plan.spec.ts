@@ -141,12 +141,12 @@ test("roadmap table: grouped by horizon, goal or PRD; draft items are dashed Pro
     "/documents/usage-alerts/v/1",
   );
   await expect(row(page, "Spend forecast for the month").getByTestId("plan-goal")).toHaveText("No goal");
-  await expect(row(page, "Threshold alerts on spend").getByTestId("plan-goal")).toHaveText("Raise activation");
+  await expect(row(page, "Threshold alerts on spend").getByTestId("plan-goal")).toHaveText("Activation");
   await expect(row(page, "Threshold alerts on spend").getByTestId("plan-prd")).toHaveText("Usage alerts");
 
   const group = page.getByRole("group", { name: "Group by" });
   await group.getByRole("button", { name: "Goal" }).click();
-  await expect(groups(page)).toHaveText(["Cut early churn · 1", "Grow paid conversion · 1", "Raise activation · 4", "No goal · 1"]);
+  await expect(groups(page)).toHaveText(["Cut early churn · 1", "Growth · 1", "Activation · 4", "No goal · 1"]);
   await group.getByRole("button", { name: "PRD" }).click();
   await expect(groups(page)).toHaveText(["Usage alerts PRD · 7"]);
   await group.getByRole("button", { name: "Horizon" }).click();
@@ -201,7 +201,7 @@ test("selecting a row opens the inspector with its links", async ({ page }) => {
   await expect(inspector.getByTestId("plan-why")).toContainText("ENG-405 targets Dec 9");
   // qa-plan-17, qa4-plan-3: the history gives the roadmap document's own approval date.
   await expect(inspector.getByTestId("plan-history")).toContainText("Added to Now in version 1 from PRD v1, approved Oct 5");
-  await expect(inspector.getByTestId("plan-item-goal")).toContainText("Grow paid conversion");
+  await expect(inspector.getByTestId("plan-item-goal")).toContainText("Growth");
   await expect(inspector.getByTestId("plan-item-goal")).toContainText("to go");
 });
 

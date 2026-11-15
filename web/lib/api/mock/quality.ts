@@ -71,7 +71,7 @@ type Rule = [Status, string, string[], string[]?];
 /** The fixed synthetic evaluation every version shows in mock mode (but the ones below). */
 const RULES: Record<string, Rule> = {
   problem_clarity: ["pass", "The problem names its users and its pain is backed by 2 pieces of evidence.", ["problem"]],
-  goal_alignment: ["pass", "Every linked feature (1) serves a confirmed goal: Raise activation (g.activation).", ["goal-trace"]],
+  goal_alignment: ["pass", "Every linked feature (1) serves a confirmed goal: Activation (g.activation).", ["goal-trace"]],
   evidence_provenance: ["warning", "1 piece of evidence is stale.", []],
   alternatives_tradeoffs: ["warning", "No alternatives considered: no section and no blocker with two options.", []],
   blocker_feasibility: ["pass", "No blocker is recorded; the risks section states the constraints.", ["risks"]],
@@ -192,7 +192,7 @@ export function addDecisionOutcome(
 /**
  * The "outcomes" scenario (synthetic): Saved payment methods is due for its check (38% → 42%,
  * now 41%), Guided setup checklist needs a prediction, Order status emails is measuring, and
- * six earlier predictions on Raise activation were assessed (3 held, 3 not; expected 4.2).
+ * six earlier predictions on Activation were assessed (3 held, 3 not; expected 4.2).
  */
 export function seedOutcomes(owner: string, goalId: string, roadmapVersionId: string | null): Outcome[] {
   const now = Date.now();

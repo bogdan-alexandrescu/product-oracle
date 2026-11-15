@@ -15,7 +15,7 @@ test("Home: goals show current over target, distance to go, confidence and trend
   await expect(goals.getByTestId("goals-proposed")).toHaveText("Cut early churn proposed");
 
   const activation = page.getByTestId("home-goal-G3");
-  await expect(activation).toContainText("Raise activation");
+  await expect(activation).toContainText("Activation");
   await expect(activation.getByTestId("goal-figure")).toHaveText("38%/ 45%");
   // I3: distance to go in the goal's own unit, never a percentage of target.
   await expect(activation.getByTestId("goal-to-go")).toHaveText("7 pts to go");
@@ -79,7 +79,7 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
 
   const inspector = page.getByTestId("home-inspector");
   // Goal tags load for the selected row only, in the inspector (no trace call per row).
-  await expect(inspector.getByTestId("row-goals")).toHaveText("Grow paid conversionRaise activation");
+  await expect(inspector.getByTestId("row-goals")).toHaveText("GrowthActivation");
   await expect(inspector).toContainText("PRD · selected");
   await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
   await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");

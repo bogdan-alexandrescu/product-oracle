@@ -199,7 +199,7 @@ test.describe("RP1 a: the run's priority order", () => {
     await delivery.getByRole("button", { name: /Default delivery address$/ }).first().click();
     const supports = page.getByRole("list", { name: "Supports" });
     await expect(supports.getByRole("listitem")).toHaveCount(1);
-    await expect(supports.getByRole("listitem")).toContainText("Raise activation");
+    await expect(supports.getByRole("listitem")).toContainText("Activation");
     await expect(supports.getByRole("listitem")).toContainText("Proposed");
     const needs = page.getByRole("list", { name: "Depends on" });
     await expect(needs.getByRole("listitem")).toHaveCount(1);
@@ -214,9 +214,9 @@ test.describe("RP1 a: the run's priority order", () => {
     await shared.getByRole("button", { name: /Shared team addresses$/ }).first().click();
     const link = page.getByRole("list", { name: "Supports" }).getByRole("listitem");
     await expect(link).toHaveCount(1);
-    await expect(link).toContainText("Grow paid conversion");
+    await expect(link).toContainText("Growth");
     await expect(link).toContainText("Contribution assumed");
-    await link.getByLabel("Contribution to Grow paid conversion").selectOption("2");
+    await link.getByLabel("Contribution to Growth").selectOption("2");
     await expect(link).not.toContainText("Contribution assumed");
   });
 

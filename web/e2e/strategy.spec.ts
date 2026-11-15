@@ -136,7 +136,7 @@ test("strategy: an owner opens Company and lands on Strategy with the vision, th
   await expect(strategy).toContainText("Win self-serve teams first; stop custom reporting.");
   await expect(strategy.getByTestId("focus-row")).toHaveCount(2);
   const self = strategy.getByTestId("focus-row").filter({ hasText: "Self-serve onboarding" });
-  await expect(self.getByTestId("goal-chip")).toHaveText([/Raise activation/, /Grow paid conversion/]);
+  await expect(self.getByTestId("goal-chip")).toHaveText([/Activation/, /Growth/]);
   await expect(self.getByTestId("goal-chip").first()).toContainText("7 pts to go");
   await expect(self).toContainText("4 items");
   const stop = strategy.getByTestId("stop-row");
@@ -151,7 +151,7 @@ test("strategy: an owner opens Company and lands on Strategy with the vision, th
   await expect(stack.getByRole("columnheader")).toHaveText(["Focus choice", "Goal", "Roadmap items", "Findings"]);
   // The stack starts at the vision: choices name no belief, so the vision heads the stack.
   await expect(stack.getByTestId("stack-group-under")).toContainText("Vision: Every small team plans its product like a large one.");
-  const activation = stack.getByTestId("stack-row").filter({ hasText: "Raise activation" });
+  const activation = stack.getByTestId("stack-row").filter({ hasText: "Activation" });
   await expect(activation).toContainText("Self-serve onboarding");
   await expect(activation).toContainText("3 items");
   await expect(stack.locator("[data-group]").filter({ hasText: "Not under the strategy" })).toHaveCount(1);
@@ -344,7 +344,7 @@ test("strategy: phone, the cards stack and the stack table keeps Choice, Goal an
   expect(vision && strategy).toBeTruthy();
   expect(strategy!.y).toBeGreaterThanOrEqual(vision!.y + vision!.height);
   // The stack loads after the cards, and evaluateAll does not wait: poll until the row is drawn.
-  const row = root.getByTestId("stack-row").filter({ hasText: "Raise activation" });
+  const row = root.getByTestId("stack-row").filter({ hasText: "Activation" });
   await expect(row).toBeVisible();
   await expect
     .poll(() =>

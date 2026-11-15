@@ -21,7 +21,7 @@ test("Ground Truth: goals with weight, metric, target and horizon", async ({ pag
   await expect(goals).toHaveCount(3);
 
   const activation = page.getByTestId("goal-g.activation");
-  await expect(activation).toContainText("Raise activation");
+  await expect(activation).toContainText("Activation");
   await expect(activation.locator('[data-attr="weight"]')).toHaveText("0.5");
   await expect(activation.locator('[data-attr="metric"]')).toHaveText("Accounts that finish setup within 7 days");
   await expect(activation.locator('[data-attr="target"]')).toHaveText("≥ 45%");
@@ -91,10 +91,10 @@ test("Ground Truth: the feature drawer shows links, evidence and the lock", asyn
 
   // Supports, with contribution 0-3, strongest first.
   const supports = d.getByRole("list", { name: "Supports" }).getByRole("listitem");
-  await expect(supports).toHaveText([/Raise activation/, /Grow paid conversion/]);
+  await expect(supports).toHaveText([/Activation/, /Growth/]);
   // An approver changes the contribution in place (#338).
-  await expect(d.getByLabel("Contribution to Raise activation")).toHaveValue("3");
-  await expect(d.getByLabel("Contribution to Grow paid conversion")).toHaveValue("1");
+  await expect(d.getByLabel("Contribution to Activation")).toHaveValue("3");
+  await expect(d.getByLabel("Contribution to Growth")).toHaveValue("1");
   await expect(d.getByRole("list", { name: "Depends on" })).toHaveText(/Sample data/);
   await expect(d.getByRole("list", { name: "Blocks" })).toHaveText(/Saved carts/);
 
@@ -247,7 +247,7 @@ test("Ground Truth: an approver resolves an open material conflict by picking a 
   await expect(claims.nth(0).getByTestId("confidence")).toHaveText("52%");
   await expect(claims.nth(1)).toContainText("Linear");
 
-  const logged = conflicts.filter({ hasText: "Raise activation" });
+  const logged = conflicts.filter({ hasText: "Activation" });
   await expect(logged.getByTestId("conflict-status")).toHaveText("Logged");
   await expect(logged.getByRole("button", { name: /Pick/ })).toHaveCount(0);
 
@@ -571,9 +571,9 @@ test("Ground Truth: proposals on a phone stay put when the role answers late", a
 const NOISY = {
   "Cut early churn":
     "Change Cut early churn: weight to 0.25 (was 0.2), target text to below 7% (was below 8%), horizon text to 2026-Q4 and 1 more",
-  "Raise activation":
-    "Change Raise activation: description to …the first two weeks. (was …the first week.), target to 50 (was 45)",
-  "Grow paid conversion": "No change to Grow paid conversion",
+  "Activation":
+    "Change Activation: description to …the first two weeks. (was …the first week.), target to 50 (was 45)",
+  "Growth": "No change to Growth",
 };
 
 /**
@@ -595,13 +595,13 @@ test("Ground Truth: proposal sentences show only real changes, and a no-change o
     await expect(rows.filter({ hasText: title }).getByTestId("proposal-summary")).toHaveText(sentence);
   }
 
-  const noChange = rows.filter({ hasText: "Grow paid conversion" });
+  const noChange = rows.filter({ hasText: "Growth" });
   await expect(noChange.getByRole("button", { name: "Accept" })).toHaveCount(0);
   await expect(noChange.getByRole("button", { name: "Reject" })).toHaveCount(0);
   await noChange.getByRole("button", { name: "Dismiss" }).click();
   await expect(page.getByRole("status")).toContainText("Proposal dismissed");
   await expect(rows).toHaveCount(5);
-  await expect(rows.filter({ hasText: "Grow paid conversion" })).toHaveCount(0);
+  await expect(rows.filter({ hasText: "Growth" })).toHaveCount(0);
   await expect(tab.getByTestId("tab-count-proposals")).toHaveText("5");
   // Proposals that change something still offer Accept and Reject.
   await expect(rows.filter({ hasText: "Cut early churn" }).getByRole("button", { name: "Accept" })).toBeVisible();

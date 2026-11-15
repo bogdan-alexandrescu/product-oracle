@@ -120,8 +120,8 @@ test("phone Ground Truth: the feature × goal ledger is a list of whole feature 
   await expect(feature).toBeVisible();
   await expect(feature.getByRole("button", { name: "Guided setup" })).toBeVisible();
   // Its two goal links by goal name, with their strength.
-  await expect(feature.getByText("Raise activation", { exact: true })).toBeVisible();
-  await expect(feature.getByText("Grow paid conversion", { exact: true })).toBeVisible();
+  await expect(feature.getByText("Activation", { exact: true })).toBeVisible();
+  await expect(feature.getByText("Growth", { exact: true })).toBeVisible();
   await expect(feature.getByRole("img", { name: /^Contribution \d of 3/ })).toHaveCount(2);
   // A flagged feature shows its flag as on desktop, not an unexplained dot.
   await expect(page.getByTestId("feature-F-81").getByText("Serves no goal")).toBeVisible();
