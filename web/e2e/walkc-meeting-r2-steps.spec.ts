@@ -62,12 +62,14 @@ test("5d: a move applied from the chat shows on the open Roadmap step at once", 
   await startReview(page);
   await tap(steps(page).getByRole("button", { name: "2 Roadmap" }));
   const row = page.getByRole("region", { name: "Roadmap slice" }).getByRole("listitem").filter({ hasText: "Welcome video" });
-  await expect(row).toContainText("Welcome video · Later");
+  // Welcome video has no code, so it carries the "Not in the Ground Truth" flag (simple-home-qa-nov14 #1).
+  await expect(row.getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
+  await expect(row).toContainText("Ground Truth · Later");
   const card = await cardFor(page, "move Welcome video to Now");
   await tap(card.getByRole("button", { name: "Apply", exact: true }));
   await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
   // The step follows the chat without opening the page again.
-  await expect(row).toContainText("Welcome video · Now");
+  await expect(row).toContainText("Ground Truth · Now");
   await expect(row.getByRole("button", { name: "Move Welcome video to Later" })).toBeVisible();
   await expect(row.getByRole("button", { name: "Move Welcome video to Now" })).toHaveCount(0);
 });

@@ -85,6 +85,7 @@ test("with no dated plan, a bucket for one of the roadmap's own goals takes new 
   await expect(retention.locator("[data-code]").first()).toBeVisible();
 
   const add = retention.getByTestId("add-task");
+  // Train BV b50e4c8fd renamed the bucket's "+ Add a task" to "+ Add a feature".
   await add.getByRole("button", { name: "+ Add a feature" }).click();
   const form = add.getByTestId("task-form");
   await expect(form).toContainText("Goal: Grow retention");
