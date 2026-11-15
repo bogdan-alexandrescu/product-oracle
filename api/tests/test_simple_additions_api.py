@@ -793,6 +793,38 @@ async def test_date_suggestion_survives_publishing_an_added_item(client):
         assert sug is not None and sug.status == "open" and sug.basis == "Two sprints"
 
 
+
+async def test_picked_quarter_survives_publishing_a_quarter_add(client):
+    """Review (QA Nov 14 follow-ups): a quarter add approved before its dates are accepted keeps
+    its quarter on the published copy, so its estimate stays in that quarter, not Later's."""
+    w = await World().build()
+    c = (await w.add(client, "owner", "Saved search filters", kind="quarter", value="2027-Q1"))[
+        "change"
+    ]
+    iid = c["target"]["item_id"]
+    ds = (await client.get("/v1/simple/drafts", headers=w.as_("decider"))).json()
+    d = next(x for x in ds if x["document"]["id"] == w.roadmap_id)
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/submit", headers=w.as_("decider"))
+    assert r.status_code == 200, r.text
+    for who in ("decider", "approver"):
+        r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=w.as_(who))
+        assert r.status_code == 200, r.text
+    assert r.json()["status"] == "approved", r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert await s.get(RoadmapItem, uuid.UUID(iid)) is None
+        copy = await s.scalar(
+            select(RoadmapItem).where(
+                RoadmapItem.title == "Saved search filters",
+                RoadmapItem.roadmap_version_id.is_not(None),
+            )
+        )
+        assert copy.picked_quarter == date(2027, 1, 1)
+    item = (await w.items(client))[str(copy.id)]
+    assert item["picked_quarter"] == "2027-01-01"
+    assert (item["start"]["date"], item["end"]["date"]) == ("2027-01-01", "2027-03-31")
+    assert item["estimated"] and item["horizon"] == "next"
+
+
 GOALS = "/v1/simple/goals"
 ROLES = ("owner", "decider", "approver", "commenter", "viewer")
 
