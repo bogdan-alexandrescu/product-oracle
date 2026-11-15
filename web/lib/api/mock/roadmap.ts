@@ -1442,6 +1442,8 @@ export interface PlanContext extends RoadmapContext {
   drift?: (key: string, origin: PlanItem["origin"]) => Schemas["PlanDrift"][];
   /** walkc-roadmap-tasks: the decided decisions about an item (by key, as Simple's item reads them). */
   decided?: (key: string) => Schemas["SimpleDecidedRef"][];
+  /** outcomes-code (plan.service): an item's code by its id (codes.code_of). */
+  code?: (id: string) => string | null;
 }
 
 /** One item of the mock plan: an approved row, its draft twin (when the roadmap draft changes it), or a new draft row. */
@@ -1796,7 +1798,8 @@ export function routePlan(ctx: PlanContext, db: RoadmapDb, req: Request, p: stri
   if (p[2]) return null;
   const scope = q.get("scope") ?? "all";
   if (scope !== "all" && scope !== "approved") return json(422, { detail: "scope: all or approved" });
-  return json(200, planOut(ctx, db, scope));
+  const out = planOut(ctx, db, scope);
+  return json(200, { ...out, items: out.items.map((i) => ({ ...i, code: ctx.code?.(i.id) ?? null })) });
 }
 
 /**

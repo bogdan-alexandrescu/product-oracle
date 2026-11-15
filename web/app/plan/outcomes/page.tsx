@@ -5,7 +5,7 @@ import { Suspense, useState, useSyncExternalStore } from "react";
 
 import { DeleteMenu } from "@/components/ArtifactMenu";
 import { Button, Chip, type ChipKind, type Column, confirmInPage, DataTable, type FilterChip, FilterChips, InfoTip, Inspector, InspectorRow, InspectorSection, Notice, Page, PageHeader, PageSkeleton, Panel, Sheet, Split } from "@/components/ds";
-import { Named, NotInGt } from "@/components/simple/FeatureName";
+import { Named, NOT_IN_GT, NotInGt } from "@/components/simple/FeatureName";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CATEGORY_LABEL } from "@/app/intakes/[id]/_lib";
@@ -88,6 +88,13 @@ function itemNamed(o: Outcome): { code: string | null; title: string } | null {
   const m = /^([A-Z][A-Z0-9]*-\d+[a-z]?)\s+(\S.*)$/.exec(o.title);
   const code = o.roadmap_item_code ?? null;
   return m && (!code || code === m[1]) ? { code: m[1], title: m[2] } : { code, title: o.title };
+}
+
+/** outcomes-code: an Item picker's option, as itemNamed names it: "F-21 Saved payment methods" (a title that leads
+ * with its code reads it once); one with no code flagged. */
+function pickWords(i: { code?: string | null; title: string }): string {
+  if (!i.code) return `${i.title} · ${NOT_IN_GT}`;
+  return i.title.startsWith(`${i.code} `) ? i.title : `${i.code} ${i.title}`;
 }
 
 /** The outcome's name: its item's code and title, flagged when it has no code (FeatureName's Named and NotInGt). */
@@ -1257,9 +1264,10 @@ function TrackOutcomeForm({
             <option value="">
               {itemsQ.loading ? "Loading…" : "Choose an approved item"}
             </option>
+            {/* outcomes-code: each item by its code and name ("F-21 Saved payment methods"); one with no code flagged. */}
             {items.map((i) => (
               <option key={i.id} value={i.id}>
-                {i.title}
+                {pickWords(i)}
               </option>
             ))}
           </select>
