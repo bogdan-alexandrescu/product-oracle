@@ -172,8 +172,17 @@ export const PRIORITIES_PLAN_KEY_RESULTS_SCENARIO = "priorities-plan-key-results
 export function seedPlanKeyResults<E extends { id: string; key: string; title: string; type: string; status: string; parent_id?: string | null; attrs?: Record<string, unknown> | null }>(entities: E[], db: SimpleDb): void {
   const template = entities.find((e) => e.type === "goal" && e.status === "confirmed");
   if (!template || !db.plan) throw new Error(`${PRIORITIES_PLAN_KEY_RESULTS_SCENARIO}: the seed has no goal or no plan`);
-  const growth = { ...template, id: stableUuid("simple-goal/plan-growth"), key: "plan-growth", title: "Growth", parent_id: null, attrs: { metric: "Weekly active teams", weight: 1 } };
-  entities.push(growth, { ...template, id: stableUuid("simple-goal/plan-activation"), key: "plan-activation", title: "Activation", parent_id: growth.id, attrs: { metric: "Teams that finish setup in a day", weight: 1 } });
+  // One goal per name: the Ground Truth's own Growth and Activation (baseline.ts) take the plan's shape, else they are added.
+  const named = (title: string, add: E): E => {
+    const had = entities.find((e) => e.type === "goal" && sameName(e.title) === sameName(title));
+    if (had) return had;
+    entities.push(add);
+    return add;
+  };
+  const growth = named("Growth", { ...template, id: stableUuid("simple-goal/plan-growth"), key: "plan-growth", title: "Growth" });
+  Object.assign(growth, { status: "confirmed", parent_id: null, attrs: { metric: "Weekly active teams", weight: 1 } });
+  const activation = named("Activation", { ...template, id: stableUuid("simple-goal/plan-activation"), key: "plan-activation", title: "Activation" });
+  Object.assign(activation, { status: "confirmed", parent_id: growth.id, attrs: { metric: "Teams that finish setup in a day", weight: 1 } });
   const gb = (db.goal_buckets = seedGoalBuckets());
   gb.features = gb.features.filter((f) => f.key !== "F-20");
 }

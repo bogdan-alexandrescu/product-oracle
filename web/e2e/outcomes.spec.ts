@@ -6,7 +6,7 @@ import { login } from "./helpers";
  * H3 Predicted versus actual, driven through the UI as a person would, on the mock API
  * ("outcomes" scenario, synthetic: Saved payment methods is due for its check, 38% → 42%
  * and now 41%; Guided setup checklist needs a prediction; Order status emails is measuring;
- * six earlier predictions on Raise activation were assessed, 3 held).
+ * six earlier predictions on Activation were assessed, 3 held).
  *
  * Each test states its card: protects (the observable), fails_when (the wrong result it
  * rejects), no_claim (what green does not prove).

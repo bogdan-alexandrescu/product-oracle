@@ -16,14 +16,14 @@ async function sourceRow(page: Page, title: string): Promise<Locator> {
 
 test("Sources: each source's confidence beside it, low ones marked, a note when there is no score", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openTab(page, "Sources");
 
-  const github = await sourceRow(page, "Address form loses state on back navigation");
+  const github = await sourceRow(page, "Card form loses state on back navigation");
   await expect(github.getByTestId("source-label")).toHaveText("GitHub · High confidence");
   await expect(github.getByText("Low confidence")).toHaveCount(0);
 
-  const slack = await sourceRow(page, "#product thread on checkout drop-off");
+  const slack = await sourceRow(page, "#product thread on yearly plans");
   await expect(slack.getByTestId("source-label")).toHaveText("Slack · High confidence");
 
   // Low confidence: the app's low-confidence chip (a warn chip), said once (qa4-docs-19: no raw score).
@@ -34,7 +34,7 @@ test("Sources: each source's confidence beside it, low ones marked, a note when 
   await expect(low).toHaveClass(/bg-warn-bg/);
 
   // No score: the note, as text (its angle brackets are characters, not markup).
-  const goals = await sourceRow(page, "Q4 goals: activation and retention");
+  const goals = await sourceRow(page, "Q4 goals: activation and growth");
   await expect(goals.getByTestId("source-label")).toHaveText(`Notion · ${NOTE}`);
   await expect(goals.locator("g1")).toHaveCount(0);
 
@@ -45,7 +45,7 @@ test("Sources: each source's confidence beside it, low ones marked, a note when 
 
 test("citation card: confidence beside the source, low ones marked, the note when unscored", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const problem = await openSection(page, "problem");
 
   await problem.getByTestId("cite-c4").hover();

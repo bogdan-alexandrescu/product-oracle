@@ -920,7 +920,7 @@ function Links({
   const out = (t: EdgeOut["type"]) => detail.edges_out.filter((e) => e.type === t && e.status !== "rejected");
   const inn = (t: EdgeOut["type"]) => detail.edges_in.filter((e) => e.type === t && e.status !== "rejected");
   const link = (id: string) => {
-    // A feature end shows its Ground Truth code as a goal end does (F-85 Team invites).
+    // A feature end shows its Ground Truth code as a goal end does (F-05 Team invites).
     const feature = tags.has(id) ? undefined : graph?.entities.find((e) => e.id === id && e.type === "feature");
     return (
       <span className="flex min-w-0 items-center gap-2">

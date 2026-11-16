@@ -3,15 +3,15 @@ import { expect, test, type Locator, type Page } from "./test";
 import { login, sectionStrip } from "./helpers";
 import { contrast } from "./contrast-helpers";
 
-// QA pass 3, docs lane: the Publish page (Saved carts v2: a PRD with a brief, no section
+// QA pass 3, docs lane: the Publish page (Referral link v2: a PRD with a brief, no section
 // reviewed; Visit reminders v1: ready to publish), the version page's review counts (Saved
 // carts v2, the early shipping cost technical brief v1) and the Usage alerts roadmap v1 Items
 // tab (default scenario: Behaviour's text writes GA Dec 15, 2026, whose schedule basis ENG-413
 // was withdrawn, so Approve version is blocked; v1 has no earlier version).
 
-const CARTS = "saved-carts";
-const CARTS_V2 = "/documents/saved-carts/v/2";
-const TECH_BRIEF_V1 = "/documents/checkout-redesign-early-shipping-cost-spec/v/1";
+const CARTS = "referral-link";
+const CARTS_V2 = "/documents/referral-link/v/2";
+const TECH_BRIEF_V1 = "/documents/annual-billing-early-yearly-price-spec/v/1";
 const ITEMS = "/documents/usage-alerts-roadmap/v/1/items";
 
 const visible = (page: Page, testId: string) => page.getByTestId(testId).filter({ visible: true });
@@ -137,7 +137,7 @@ test.describe("desktop", () => {
       await page.goto(url);
       const stat = page.getByTestId("review-panel").filter({ visible: true }).getByTestId("stat-reviewed");
       await expect(stat).toBeVisible();
-      // PT1 a: Saved carts reads as a PRD, with no outline rail to cross-check the panel
+      // PT1 a: Referral link reads as a PRD, with no outline rail to cross-check the panel
       // against; the panel is the one count there.
       if (await page.getByTestId("prd-contents").filter({ visible: true }).count()) {
         await expect(stat).toContainText("Reviewed");

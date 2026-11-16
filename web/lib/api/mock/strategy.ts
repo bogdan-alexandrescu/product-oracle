@@ -120,8 +120,8 @@ export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vis
     const e = entities.find((x) => x.type === "goal" && x.key === key);
     return e ? { id: e.id, key: e.key, title: e.title } : { id: uuid(), key, title };
   };
-  const activation = node("g.activation", "Raise activation");
-  const conversion = node("g.paid-conversion", "Grow paid conversion");
+  const activation = node("g.activation", "Activation");
+  const conversion = node("g.paid-conversion", "Growth");
   const retention = node("retention", "Retention");
   const reports = node("custom-reports", "Custom report builder");
   const items = [uuid(), uuid(), uuid()];

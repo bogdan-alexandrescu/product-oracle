@@ -46,7 +46,7 @@ test("approvable: a stored problem that no longer applies does not hold Approve"
   await openCheck(page, "eng-check-stale");
   await expect(page.getByTestId("briefs-problem")).toHaveCount(0);
   const approve = bar(page).getByRole("button", { name: "Approve" });
-  for (const key of ["f.guided-setup", "f.sample-data", "f.saved-carts"]) await feasible(page, key);
+  for (const key of ["f.guided-setup", "f.sample-data", "f.referral-link"]) await feasible(page, key);
   await row(page, "f.guided-setup").getByRole("button").first().click();
   await expect(inspector(page).getByText("Depends on Account health ledger (Safety PRD)")).toBeVisible();
   await inspector(page).getByRole("textbox", { name: /^Answer: Does the payment sandbox/ }).fill("Yes, the sandbox takes test orders.");

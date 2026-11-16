@@ -34,7 +34,7 @@ const buttons = (r: Locator) => r.locator("td").last().locator("button, a");
 
 const METRIC = "Add a metric that shows the outbound check works";
 const QUANTIFY = "Can we quantify the demand from the sales calls?";
-const QUESTION = "Who can see a workspace's billing page?";
+const QUESTION = "Can an invited teammate join as a viewer instead?";
 const REMARK = "The scope reads well as it is.";
 
 async function inbox(page: Page) {

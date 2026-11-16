@@ -7,7 +7,7 @@ import { login, openTab } from "./helpers";
 /*
  * G8 Slack bridge through the UI, on the mock layer (lib/api/mock/slack.ts): Slack itself is
  * never called. The "slack-bridge" scenario seeds Oracle's Slack install ("Example Co", with
- * the bridge's scopes), the "discussion-replies" discussions on team-workspaces v2's Problem
+ * the bridge's scopes), the "discussion-replies" discussions on team-invites v2's Problem
  * (the commenter's private one with the approver, and the commenter's open "Caps: ship
  * without detection?"), and the approver's open discussion mirrored to #product. The default
  * scenario has no install.
@@ -17,7 +17,7 @@ import { login, openTab } from "./helpers";
  * covered by the API tests.
  */
 
-const SEEDED = "/documents/team-workspaces/v/2";
+const SEEDED = "/documents/team-invites/v/2";
 const PRIVATE_TITLE = "Problem: who owns the admin role?";
 const OPEN_TITLE = "Caps: ship without detection?";
 const COMMENTER = "commenter@example.com";

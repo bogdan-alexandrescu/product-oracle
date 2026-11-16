@@ -6,14 +6,14 @@ import { login } from "./helpers";
 // E3b Roadmap diffs for PRD drafts: a PRD draft's Roadmap tab compared with the previous
 // draft or the approved plan, item by item.
 //
-// The default mock seeds checkout-redesign v1 (Cart review and Shipping step in Now, Guest
-// checkout in Next, One-tap wallet pay in Later) and v2 (Guest checkout moved to Now, the
-// Shipping step's date removed, Saved addresses new, wallet pay gone). The "approved-plan"
+// The default mock seeds annual-billing v1 (Plan review and Billing step in Now, Guest
+// checkout in Next, One-tap wallet pay in Later) and v2 (Public signup moved to Now, the
+// Billing step's date removed, Bulk import new, wallet pay gone). The "approved-plan"
 // scenario adds usage-alerts-roadmap v1 approved (Behaviour in Now, Success metrics in Next)
 // and usage-alerts v2, a draft whose items move Behaviour to Next and add Spend limits.
 
-const V1 = "/documents/checkout-redesign/v/1/roadmap";
-const V2 = "/documents/checkout-redesign/v/2/roadmap";
+const V1 = "/documents/annual-billing/v/1/roadmap";
+const V2 = "/documents/annual-billing/v/2/roadmap";
 const ALERTS_V2 = "/documents/usage-alerts/v/2/roadmap";
 
 // Next keeps recently visited routes mounted (hidden): only the visible page's elements.
@@ -27,7 +27,7 @@ const chip = (page: Page, name: RegExp) => visible(page, "items-filter").getByRo
 // no_claim = the real API (mocked; its rows are covered by pytest).
 test("a draft's Roadmap tab opens on what changed since the previous draft", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await visible(page, "version-tab-roadmap").click();
   await expect(page).toHaveURL(new RegExp(`${V2}$`));
   await expect(visible(page, "compare-previous")).toHaveText("Draft v1");
@@ -35,9 +35,9 @@ test("a draft's Roadmap tab opens on what changed since the previous draft", asy
   await expect(chip(page, /^Changed/)).toHaveAttribute("aria-pressed", "true");
   await expect(visible(page, "filter-changed")).toHaveText("Changed4");
   await expect(visible(page, "items-compare-summary")).toHaveText("Since draft v1: 1 new · 1 dropped · 1 moved · 1 changed");
-  await expect(row(page, "Guest checkout").getByTestId("item-change")).toHaveText("Next → Now");
-  await expect(row(page, "Shipping step").getByTestId("item-change")).toHaveText("Date removed");
-  await expect(row(page, "Saved addresses").getByTestId("item-change")).toHaveText("New");
+  await expect(row(page, "Public signup").getByTestId("item-change")).toHaveText("Next → Now");
+  await expect(row(page, "Billing step").getByTestId("item-change")).toHaveText("Date removed");
+  await expect(row(page, "Bulk import").getByTestId("item-change")).toHaveText("New");
   const ghost = visible(page, "roadmap-item-ghost");
   await expect(ghost).toHaveCount(1);
   await expect(ghost.locator("s")).toHaveText("One-tap wallet pay");
@@ -49,10 +49,10 @@ test("a draft's Roadmap tab opens on what changed since the previous draft", asy
   });
   expect(group).toBe("later");
   // The unchanged item waits for All.
-  await expect(row(page, "Cart review")).toHaveCount(0);
+  await expect(row(page, "Plan review")).toHaveCount(0);
   await chip(page, /^All/).click();
   await expect(page).toHaveURL(/filter=all/);
-  await expect(row(page, "Cart review")).toHaveCount(1);
+  await expect(row(page, "Plan review")).toHaveCount(1);
 });
 
 // Card draft-inspector (#177 criterion 7): protects = the inspector says what changed since
@@ -61,7 +61,7 @@ test("a draft's Roadmap tab opens on what changed since the previous draft", asy
 test("the inspector shows what changed since draft v1 and the item's history", async ({ page }) => {
   await login(page);
   await page.goto(V2);
-  await row(page, "Guest checkout").click();
+  await row(page, "Public signup").click();
   const what = visible(page, "item-what-changed");
   await expect(what).toContainText("What changed since draft v1");
   await expect(what).toContainText("Horizon: Next → Now");
@@ -120,6 +120,6 @@ test("on a phone the draft's compare control wraps without a sideways scroll", a
   await login(page);
   await page.goto(V2);
   await expect(visible(page, "items-compare")).toBeVisible();
-  await expect(row(page, "Saved addresses").getByTestId("item-change")).toHaveText("New");
+  await expect(row(page, "Bulk import").getByTestId("item-change")).toHaveText("New");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

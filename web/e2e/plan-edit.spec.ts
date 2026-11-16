@@ -265,9 +265,9 @@ test("Edit plan: a feature takes the code of its approved item's PRD section", a
 });
 
 // protects = (codes.feature_reads: published items in creation order, across roadmaps) a feature with no code of its own takes the
-// code of its oldest published item's PRD section: Guided setup's item in the Billing roadmap's version (section f-41) was made
+// code of its oldest published item's PRD section: Setup checklist's item in the Billing roadmap's version (section f-41) was made
 // before the one in the Invoices roadmap's (section f-42), though the mock stored Invoices' first, so an item added linked to
-// Guided setup holds F-41: "F-41 Launch flow" is refused naming it, "F-42 Launch flow" is added; fails_when = the mock reads
+// Setup checklist holds F-41: "F-41 Launch flow" is refused naming it, "F-42 Launch flow" is added; fails_when = the mock reads
 // published versions grouped by roadmap, so the feature reads F-42; no_claim = the API's order (api/oracle/roadmap/codes.py).
 test("Edit plan: a feature takes the code of its oldest published item's section across roadmaps", async ({ page }) => {
   await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, PLAN_TWO_ROADMAPS_SCENARIO] as const);
@@ -275,14 +275,14 @@ test("Edit plan: a feature takes the code of its oldest published item's section
   await page.getByTestId("plan-edit").click();
   await expect(changes(page)).toContainText(/Changes to approved version 1 of Usage alerts roadmap/);
 
-  await changes(page).getByLabel("Ground Truth feature").selectOption({ label: "Guided setup" });
+  await changes(page).getByLabel("Ground Truth feature").selectOption({ label: "Setup checklist" });
   await changes(page).getByLabel("Horizon of the new item").selectOption("later");
   await changes(page).getByRole("button", { name: "Add item" }).click();
-  await expect(lane(page, "later").getByTestId("edit-item").filter({ hasText: "Guided setup" })).toContainText("New");
+  await expect(lane(page, "later").getByTestId("edit-item").filter({ hasText: "Setup checklist" })).toContainText("New");
 
   await changes(page).getByLabel("New item title").fill("F-41 Launch flow");
   await changes(page).getByRole("button", { name: "Add item" }).click();
-  await expect(changes(page)).toContainText("F-41 is already the code of F-41 Guided setup");
+  await expect(changes(page)).toContainText("F-41 is already the code of F-41 Setup checklist");
   await expect(editItem(page, "F-41 Launch flow")).toHaveCount(0);
 
   await changes(page).getByLabel("New item title").fill("F-42 Launch flow");

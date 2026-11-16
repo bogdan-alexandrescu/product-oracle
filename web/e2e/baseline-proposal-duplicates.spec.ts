@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 // The "proposal-duplicates" scenario (lib/api/mock/baseline.ts addDuplicateProposals): the
 // Ground Truth to PRD run's writer and critic propose the same changes twice, and four
-// proposals on Raise activation that one accept settles.
+// proposals on Activation that one accept settles.
 const PHONE = { width: 390, height: 844 };
 
 async function openProposals(page: Page) {
@@ -28,7 +28,7 @@ for (const [where, size] of [["desktop", null], ["phone", PHONE]] as const) {
      * fails_when: the critic's proposal has its own card, the card offers Accept instead of the
      * choice, or the other value is still asked for after the pick.
      */
-    test("two values for Dark mode's status are one choice", async ({ page }) => {
+    test("two values for Setup error report's status are one choice", async ({ page }) => {
       await openProposals(page);
       await expect(card(page, "Not committed to yet.")).toHaveCount(0);
       const dark = card(page, "Mentioned as next up in the planning call");
@@ -45,14 +45,14 @@ for (const [where, size] of [["desktop", null], ["phone", PHONE]] as const) {
     /**
      * protects: a feature added twice under near-identical titles is one card naming the other
      * role and its title; accepting it closes the other as already done.
-     * fails_when: "Add saved address" has its own card, the role or its title is not named, or
+     * fails_when: "Add bulk imports" has its own card, the role or its title is not named, or
      * it is left open.
      */
     test("a feature proposed twice is one card, also proposed by the critic", async ({ page }) => {
       await openProposals(page);
       const added = card(page, "Asked for in the planning call.");
       await expect(added).toHaveCount(1);
-      await expect(added.getByTestId("also-proposed")).toHaveText("Also proposed by Critic as “Add saved address”");
+      await expect(added.getByTestId("also-proposed")).toHaveText("Also proposed by Critic as “Add bulk imports”");
       await added.getByRole("button", { name: "Accept", exact: true }).click();
       await expect(page.getByRole("status")).toContainText("1 other proposal was already done and is closed.");
       await expect(card(page, "Asked for in the planning call.")).toHaveCount(0);

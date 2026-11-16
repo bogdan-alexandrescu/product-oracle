@@ -248,7 +248,7 @@ test("fix-work review: New request does not offer a rejected goal", async ({ pag
   await page.getByRole("button", { name: "New request" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New request" });
   const goals = dialog.getByTestId("new-request-goal");
-  await expect(goals.filter({ hasText: "Raise activation" })).toHaveCount(1);
+  await expect(goals.filter({ hasText: "Activation" })).toHaveCount(1);
   await expect(goals.filter({ hasText: "Cut early churn" })).toHaveCount(0);
   await expect(dialog).not.toContainText("(not confirmed yet)");
 });
@@ -288,8 +288,8 @@ test("fix-work review: filters, ticked requests and the open request stay across
   await login(page);
   await openRequests(page);
   const filters = page.getByTestId("request-filters");
-  await expect(goalFilter(page).locator("option", { hasText: "Raise activation" })).toHaveCount(1);
-  await goalFilter(page).selectOption({ label: "Raise activation" });
+  await expect(goalFilter(page).locator("option", { hasText: "Activation" })).toHaveCount(1);
+  await goalFilter(page).selectOption({ label: "Activation" });
   await filters.getByLabel("Search requests").fill("e");
   await rows(page).filter({ hasText: "Weekly summary email" }).getByRole("checkbox", { name: "Select Weekly summary email" }).check();
   await rows(page).filter({ hasText: "Weekly summary email" }).getByRole("button", { name: "Weekly summary email" }).click();
@@ -299,7 +299,7 @@ test("fix-work review: filters, ticked requests and the open request stay across
   await expect(page.getByTestId("theme-row").first()).toBeVisible();
   await tab(page, "all").click();
   await expect(rows(page).first()).toBeVisible();
-  await expect(goalFilter(page).locator("option:checked")).toHaveText("Raise activation");
+  await expect(goalFilter(page).locator("option:checked")).toHaveText("Activation");
   await expect(filters.getByLabel("Search requests")).toHaveValue("e");
   await expect(rows(page).filter({ hasText: "Weekly summary email" }).getByRole("checkbox")).toBeChecked();
   await expect(page.getByRole("button", { name: "Start a PRD from 1 request" })).toBeVisible();
@@ -309,6 +309,6 @@ test("fix-work review: filters, ticked requests and the open request stay across
   await tab(page, "new").click();
   await expect(page).toHaveURL(/\/requests\/to-decide$/);
   const toDecide = page.getByTestId("new-requests");
-  await expect(toDecide.getByLabel("Goal", { exact: true }).locator("option:checked")).toHaveText("Raise activation");
+  await expect(toDecide.getByLabel("Goal", { exact: true }).locator("option:checked")).toHaveText("Activation");
   await expect(toDecide.getByLabel("Search requests")).toHaveValue("e");
 });

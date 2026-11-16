@@ -73,7 +73,7 @@ test.describe("Goal map editors in the tracks grid", () => {
     const drawer = page.getByRole("dialog", { name: "New PRD from a milestone" });
     await drawer.getByText("1. Scale").click();
     await drawer.getByRole("button", { name: "Start the PRD" }).click();
-    await expect(page.getByPlaceholder("For example: Saved shipping addresses")).toHaveValue("32 demos per rep");
+    await expect(page.getByPlaceholder("For example: Bulk import from a file")).toHaveValue("32 demos per rep");
   });
 
   test("a goal's Not measured leads to Pick its metric; once picked, it reads", async ({ page }) => {

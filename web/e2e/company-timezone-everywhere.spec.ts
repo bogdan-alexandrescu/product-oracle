@@ -64,13 +64,13 @@ test("Inbox: a revoke's retry deadline in the Company time zone", async ({ page 
 });
 
 // protects: a document's version history shows import times and days in the Company time
-// zone: v1 of Team workspaces, imported 11:00 UTC on Oct 12, is Oct 13 in Auckland.
+// zone: v1 of Team invites, imported 11:00 UTC on Oct 12, is Oct 13 in Auckland.
 // fails_when: the version shows Oct 12 (New York) or an unlabelled time.
 // no_claim: version numbering.
 test("version history: import times and days in the Company time zone", async ({ page }) => {
   await login(page);
   await setZone(page, "Pacific/Auckland");
-  await page.goto("/documents/team-workspaces");
+  await page.goto("/documents/team-invites");
   // Imported 11:00 UTC on Oct 12: midnight starting Oct 13 in Auckland (Oct 12 in New York).
   await expect(page.getByRole("row", { name: /^Version 1 / })).toContainText("Oct 13, 12:00 AM GMT+13");
 });

@@ -5,7 +5,7 @@ import { login } from "./helpers";
 /*
  * Outcomes edits (owner, Nov 13), Change goal: an outcome's goal is picked from the company
  * goals in its inspector; the table's Goal follows and the prediction stays as written. Mock
- * API, "outcomes" scenario (synthetic: Order status emails measures Raise activation).
+ * API, "outcomes" scenario (synthetic: Order status emails measures Activation).
  *
  * Each test states its card: protects (the observable), fails_when (the wrong result it
  * rejects), no_claim (what green does not prove).
@@ -44,6 +44,6 @@ test("a viewer reads the goal without a picker", async ({ page }) => {
   // one; no_claim=the API's 403 (tests/test_outcome_goal_change.py).
   await start(page, "viewer");
   await row(page, "Order status emails").click();
-  await expect(inspector(page)).toContainText("Raise activation");
+  await expect(inspector(page)).toContainText("Activation");
   await expect(inspector(page).getByLabel("Goal")).toHaveCount(0);
 });

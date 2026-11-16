@@ -7,7 +7,7 @@ import { login, section, selectText } from "./helpers";
 // 720 px column, with a contents rail that stays in view, lights the section being read and
 // shows each section's review state; the review bar shows on the section being read only.
 
-const CARTS = "/documents/saved-carts/v/2";
+const CARTS = "/documents/referral-link/v/2";
 const BIG = "/documents/platform-handbook/v/1";
 
 const DESKTOP = [
@@ -24,7 +24,7 @@ async function open(page: Page, url: string, size: { width: number; height: numb
   await page.goto(url);
 }
 
-/** Saved carts in Full: its brief, then the full version. */
+/** Referral link in Full: its brief, then the full version. */
 async function fullCarts(page: Page) {
   await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
   await expect(section(page, "sources-list")).toBeVisible();
@@ -60,7 +60,7 @@ for (const size of DESKTOP)
         ["summary", "1 Summary"],
         ["decisions", "8 Decisions needed"],
         ["feature-detail", "9 Feature detail"],
-        ["feature-sync", "9.2 Cart on every device"],
+        ["feature-settings", "9.2 Link in settings"],
         ["milestones", "10 Milestones"],
         ["milestone-ga", "10.2 General release"],
         ["sources-list", "12.1 Sources"],
@@ -132,19 +132,19 @@ for (const size of DESKTOP)
       const rail = contents(page);
       // Approve from the review bar of the section being read; its dot turns Approved.
       await rail.getByRole("link", { name: /^9\s*Feature detail/ }).click();
-      await rail.getByRole("link", { name: /^9\.2\s*Cart on every device/ }).click();
-      const sync = section(page, "feature-sync");
+      await rail.getByRole("link", { name: /^9\.2\s*Link in settings/ }).click();
+      const sync = section(page, "feature-settings");
       const bar = sync.getByTestId("review-bar");
       await bar.getByRole("button", { name: "Approve" }).click();
       await bar.getByTestId("verdict-submit").click();
       await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
-      await expect(rail.getByRole("link", { name: /^9\.2\s*Cart on every device/ }).getByRole("img", { name: "Approved" })).toBeVisible();
+      await expect(rail.getByRole("link", { name: /^9\.2\s*Link in settings/ }).getByRole("img", { name: "Approved" })).toBeVisible();
 
       // Comment on a selection in another section.
       await rail.getByRole("link", { name: /^6\s*Non-goals/ }).click();
       const commentButton = page.getByRole("button", { name: /^Comment(\s+c)?$/ });
       await expect(async () => {
-        await selectText(page, "non-goals", "Sharing a cart with someone else");
+        await selectText(page, "non-goals", "Paying admins for each new team");
         await expect(commentButton).toBeVisible({ timeout: 1000 });
       }).toPass();
       await commentButton.click();
@@ -155,16 +155,16 @@ for (const size of DESKTOP)
       await expect(section(page, "non-goals").locator("[data-comment-ids]").first()).toBeVisible();
 
       // Edit from a section's menu, even one not being read.
-      const reminder = section(page, "feature-reminder");
-      await reminder.getByRole("button", { name: "Actions for Reminder email" }).click();
+      const reminder = section(page, "feature-joined");
+      await reminder.getByRole("button", { name: "Actions for Joined email" }).click();
       await reminder.getByRole("menuitem", { name: "Edit the text yourself" }).click();
       const editor = reminder.getByTestId("section-editor");
       await expect(editor).toBeVisible();
       await editor.getByLabel("Section text").fill("One reminder email per cart, a day after it was left.");
       await editor.getByRole("button", { name: "Save" }).click();
-      await expect(page).toHaveURL(/\/v\/3#feature-reminder$/);
-      await expect(section(page, "feature-reminder")).toContainText("One reminder email per cart, a day after it was left.");
-      await expect(section(page, "feature-reminder").getByRole("heading").first()).toHaveText("9.3 Reminder email");
+      await expect(page).toHaveURL(/\/v\/3#feature-joined$/);
+      await expect(section(page, "feature-joined")).toContainText("One reminder email per cart, a day after it was left.");
+      await expect(section(page, "feature-joined").getByRole("heading").first()).toHaveText("9.3 Joined email");
     });
 
     test(`a viewer sees no Approve or Edit (${at})`, async ({ page }) => {

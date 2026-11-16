@@ -50,12 +50,12 @@ async function expectNothingCut(page: Page) {
 
 test("qa-company-6: the check-in's pre-read gives paid conversion the current value Home shows", async ({ page }) => {
   // protects=qa-company-6, the goals block reads the same goals as Home; fails_when=it says
-  // "No current value" for Grow paid conversion (9.4% of 12%); no_claim=the API (test_rituals.py).
+  // "No current value" for Growth (9.4% of 12%); no_claim=the API (test_rituals.py).
   await openRituals(page);
   await ritualRow(page, "Weekly goals check-in").getByTestId("last-pre-read").click();
   await expect(page.getByRole("heading", { level: 2, name: "Weekly goals check-in" })).toBeVisible();
-  const goals = page.getByTestId("ritual-block").filter({ hasText: "Grow paid conversion" });
-  await expect(goals).toContainText("Grow paid conversion: 9.4% of 12% · 2.6 pts to go");
+  const goals = page.getByTestId("ritual-block").filter({ hasText: "Growth" });
+  await expect(goals).toContainText("Growth: 9.4% of 12% · 2.6 pts to go");
   await expect(goals).not.toContainText("No current value");
 });
 

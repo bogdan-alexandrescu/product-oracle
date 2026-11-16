@@ -50,6 +50,6 @@ test("a private discussion's link says it is private to someone not in it", asyn
   await page.goto(`/runs/${RUN}?discussion=${RUN_DISCUSSION_PRIVATE}`);
   await expect(sheet(page)).toBeVisible();
   await expect(sheet(page).getByTestId("discussion-private")).toHaveText("This discussion is private");
-  await expect(sheet(page)).not.toContainText("Saved addresses: who pays for storage?");
+  await expect(sheet(page)).not.toContainText("Bulk import: who pays for storage?");
   await expect(sheet(page)).not.toContainText("Storage costs are still open with finance.");
 });

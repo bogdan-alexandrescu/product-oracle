@@ -8,7 +8,7 @@ import { feedbackState, login, openSection, openTab, sectionAction, showAll } fr
 /*
  * C5 late answers: an answer given after drafting started becomes a feedback item on the
  * draft, linked back to its question, so the next draft takes it. The "late-answers" mock
- * scenario is "before-drafting" with its brief drafting into the Checkout redesign PRD: the
+ * scenario is "before-drafting" with its brief drafting into the Annual billing PRD: the
  * answers given by then are the draft run's; admin@example.com still has two questions.
  *
  * Test card: protects=a late answer reaches the PRD's feedback and leads back to its
@@ -56,7 +56,7 @@ test("a late answer becomes feedback on the PRD and links back to its question",
 
   // The PRD's Feedback lists it as a whole-draft item, open.
   await drafting(page).getByRole("link", { name: "Open the PRD's feedback" }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/\d+\?feedback=open/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/\d+\?feedback=open/);
   await openTab(page, "Feedback");
   await feedbackState(page, "Open");
   const item = page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: REPLY });
@@ -98,12 +98,12 @@ test("a late answer leaves the PRD's feedback when its finding goes back to priv
     await expect(finding.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
   };
   const listed = async () => {
-    await page.goto("/documents/checkout-redesign/v/2");
+    await page.goto("/documents/annual-billing/v/2");
     await openTab(page, "Feedback");
     await feedbackState(page, "Open");
     await showAll(page);
     // Loaded: the open comment on the address cards is listed whatever the late answer does.
-    await expect(page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: "most recently used address" })).toHaveCount(1);
+    await expect(page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: "current seat count" })).toHaveCount(1);
     return page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: REPLY });
   };
   await expect(await listed()).toHaveCount(1);
@@ -155,7 +155,7 @@ test("a late answer someone declined stays, its quote withheld, while its findin
     await expect(finding.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
   };
   const declined = async () => {
-    await page.goto("/documents/checkout-redesign/v/2");
+    await page.goto("/documents/annual-billing/v/2");
     await openTab(page, "Feedback");
     await feedbackState(page, "Declined");
     await showAll(page);
@@ -195,7 +195,7 @@ test("a late answer's accepted suggestion is withheld with it while its finding 
   await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
 
   // Oracle's review answered it; the approver accepts an edited answer restating it.
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openTab(page, "Feedback");
   await feedbackState(page, "Open");
   const open = page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: REPLY });
@@ -212,7 +212,7 @@ test("a late answer's accepted suggestion is withheld with it while its finding 
     await expect(finding.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
   };
   const done = async () => {
-    await page.goto("/documents/checkout-redesign/v/2");
+    await page.goto("/documents/annual-billing/v/2");
     await openTab(page, "Feedback");
     await feedbackState(page, "Done");
     await showAll(page);
@@ -243,7 +243,7 @@ test("a late answer's lines in a version's reports and their export are withheld
   await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
 
   // The answer is accepted on v2, then a refinement makes v3, whose reports read the item.
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openTab(page, "Feedback");
   await feedbackState(page, "Open");
   const open = page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: REPLY });
@@ -257,10 +257,10 @@ test("a late answer's lines in a version's reports and their export are withheld
   await refine.getByLabel("Instruction").fill("Name the first-time buyer segment explicitly.");
   await refine.getByRole("button", { name: "Refine", exact: true }).click();
   await refine.getByRole("button", { name: "Accept as next version" }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/3/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/3/);
 
   const reports = async () => {
-    await page.goto("/documents/checkout-redesign/v/3");
+    await page.goto("/documents/annual-billing/v/3");
     await openTab(page, "History");
     const panel = page.getByTestId("reports-panel").filter({ visible: true });
     await panel.getByRole("tab", { name: "Resolution report" }).click();

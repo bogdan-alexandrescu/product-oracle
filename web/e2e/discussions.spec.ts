@@ -7,15 +7,15 @@ import { login, openSection, openTab, section, sectionAction, signOut } from "./
  * G1 Discussion model through the UI, on the mock layer ("discussions" scenario): a thread
  * per subject, open by default, private when its starter says so, made open again by the
  * starter alone after a warning naming what it exposes. The scenario seeds one private
- * discussion the commenter started with the approver on team-workspaces v2's Problem, with
- * 3 messages from the 2 of them; checkout-redesign has none.
+ * discussion the commenter started with the approver on team-invites v2's Problem, with
+ * 3 messages from the 2 of them; annual-billing has none.
  *
  * Each test's card: protects=<the observable>; fails_when=<the wrong result>; no_claim=<what
  * green does not prove>. The real API's rules are covered by api/tests/test_discussions*.py.
  */
 
-const DOC = "/documents/checkout-redesign/v/2";
-const SEEDED = "/documents/team-workspaces/v/2";
+const DOC = "/documents/annual-billing/v/2";
+const SEEDED = "/documents/team-invites/v/2";
 const SEEDED_TITLE = "Problem: who owns the admin role?";
 const COMMENTER = "commenter@example.com";
 const APPROVER = "approver@example.com";
@@ -33,7 +33,7 @@ async function discussProblem(page: Page, opts: { private?: { email: string; nam
   const s = await openSection(page, "problem");
   await sectionAction(s, "2. Problem", "Start a discussion");
   const form = page.getByTestId("start-discussion").filter({ visible: true });
-  await expect(form.getByRole("textbox", { name: "Title" })).toHaveValue("Checkout redesign PRD · 2. Problem");
+  await expect(form.getByRole("textbox", { name: "Title" })).toHaveValue("Annual billing PRD · 2. Problem");
   if (opts.private) {
     await form.getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
     await expect(form).toContainText("Only the people you pick can read it. Everyone else sees that a private discussion exists.");
@@ -94,7 +94,7 @@ test("discuss a section: the mention shows as a chip, the Discussion chip counts
   await thread(page).getByRole("button", { name: "All feedback" }).click();
   await expect(discussionChip(page)).toHaveText(/^Discussion\s*1$/);
   await expect(rows(page)).toHaveCount(1);
-  await expect(rows(page)).toContainText("Checkout redesign PRD · 2. Problem");
+  await expect(rows(page)).toContainText("Annual billing PRD · 2. Problem");
   await expect(openFeedback).toHaveText(before!);
 });
 
@@ -108,7 +108,7 @@ test("a viewer opening the discussion reads it and has no composer", async ({ pa
 
   await login(page, VIEWER);
   await page.goto(DOC);
-  await openDiscussion(page, "Checkout redesign PRD · 2. Problem");
+  await openDiscussion(page, "Annual billing PRD · 2. Problem");
   await expect(thread(page).getByTestId("discussion-message").first()).toContainText("Is the drop-off at shipping or at payment?");
   // #370: a control a role can never use is hidden, with no role note: no composer, no note.
   await expect(thread(page)).not.toContainText("Viewers can read but not write here.");
@@ -122,7 +122,7 @@ test("a viewer opening the discussion reads it and has no composer", async ({ pa
 test("a private discussion is one locked row for the owner, and opening it says it is private", async ({ page }) => {
   await withScenario(page);
   await login(page, COMMENTER);
-  await discussProblem(page, { private: [{ email: "approver", name: "Priya Raman" }], first: "Between us: is the shipping step the real problem?" });
+  await discussProblem(page, { private: [{ email: "approver", name: "Priya Raman" }], first: "Between us: is the billing step the real problem?" });
   await expect(thread(page).getByTestId("discussion-visibility")).toHaveText("Private");
   await expect(thread(page).getByTestId("discussion-visibility")).toHaveAttribute("title", "Only the people in it can read it");
   await signOut(page);
@@ -232,7 +232,7 @@ test("make open: only the starter, after a warning with the counts; then the own
   await thread(page).getByRole("menuitem", { name: "Make open" }).click();
   const warning = page.getByTestId("make-open-warning");
   await expect(warning).toContainText(
-    "Make this discussion open? Everyone who can see Team workspaces PRD · 1. Problem will read its 3 messages from 2 people, including what was written while it was private.",
+    "Make this discussion open? Everyone who can see Team invites PRD · 1. Problem will read its 3 messages from 2 people, including what was written while it was private.",
   );
   await warning.getByRole("button", { name: "Keep private" }).click();
   await expect(warning).toHaveCount(0);

@@ -6,7 +6,7 @@ import { login, openSection, sectionAction } from "./helpers";
 /*
  * #402 through the UI, on the mock layer ("discussion-replies" scenario): the First message
  * of a new discussion gets Oracle's live reply under the composer's rule. The mock streams a
- * canned answer in 5 pieces that cites the seed's "Raise activation" goal.
+ * canned answer in 5 pieces that cites the seed's "Activation" goal.
  *
  * Card (E2E): protects=the first message's reply streams in, and the start form's rule copy
  * and Ask Oracle; fails_when=no reply comes, or a team discussion gets an unasked one;
@@ -14,7 +14,7 @@ import { login, openSection, sectionAction } from "./helpers";
  * api/tests/test_discussion_first_reply.py.
  */
 
-const DOC = "/documents/checkout-redesign/v/2";
+const DOC = "/documents/annual-billing/v/2";
 const COMMENTER = "commenter@example.com";
 const ASK = "Can caps ship without detection?";
 
@@ -69,7 +69,7 @@ async function startPrivateWithApprover(page: Page, first: string, askOracle: bo
 // protects=with a teammate picked, the first message gets no reply unasked; fails_when=a team
 // discussion gets an unasked reply; no_claim=the API's rule (pytest).
 test("with a teammate picked, the first message gets no unasked reply", async ({ page }) => {
-  await startPrivateWithApprover(page, "Between us: is the shipping step the real problem?", false);
+  await startPrivateWithApprover(page, "Between us: is the billing step the real problem?", false);
   await page.waitForTimeout(400);
   await expect(thread(page).getByTestId("oracle-reply")).toHaveCount(0);
 });

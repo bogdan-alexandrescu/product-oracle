@@ -4,12 +4,12 @@ import { MOCK_DENY_KEY } from "../lib/api/mock/server";
 import { login, openTab } from "./helpers";
 import { contrast } from "./contrast-helpers";
 
-// QA pass 1, docs lane: the version page /documents/<doc>/v/<n> (Saved carts v2, a PRD with a
+// QA pass 1, docs lane: the version page /documents/<doc>/v/<n> (Referral link v2, a PRD with a
 // brief; the early shipping cost technical brief, v1 earlier and v2 latest), driven as a person.
 
-const CARTS = "/documents/saved-carts/v/2";
-const BRIEF_V1 = "/documents/checkout-redesign-early-shipping-cost-spec/v/1";
-const BRIEF_V2 = "/documents/checkout-redesign-early-shipping-cost-spec/v/2";
+const CARTS = "/documents/referral-link/v/2";
+const BRIEF_V1 = "/documents/annual-billing-early-yearly-price-spec/v/1";
+const BRIEF_V2 = "/documents/annual-billing-early-yearly-price-spec/v/2";
 const PHONE = { width: 390, height: 844 };
 
 /** Errors in the console and uncaught ones (React's hydration error #418 among them). */
@@ -37,7 +37,7 @@ test.describe("desktop", () => {
   test("qa-docs-5: the technical brief's versions load with no console error", async ({ page }) => {
     const errors = collectErrors(page);
     await openVersion(page, BRIEF_V1);
-    await expect(page.getByTestId("doc-header")).toContainText("Early shipping cost: technical brief");
+    await expect(page.getByTestId("doc-header")).toContainText("Early yearly price: technical brief");
     await page.goto(BRIEF_V2);
     await expect(page.getByTestId("document-sections")).toBeVisible();
     expect(errors).toEqual([]);
@@ -95,7 +95,7 @@ test.describe("desktop", () => {
     // PT1 a: the outline rail is gone on a PRD; its contents rail names rows the same way.
     const first = page.getByTestId("prd-contents").locator("a[data-outline-key]").first();
     await expect(first).toContainText("Introduction");
-    await expect(first).not.toContainText("Saved carts PRD");
+    await expect(first).not.toContainText("Referral link PRD");
   });
 
   test("qa-docs-49: the contents filter narrows and clears; feedback filters wait for feedback", async ({ page }) => {
@@ -110,7 +110,7 @@ test.describe("desktop", () => {
     await find.fill("");
     await expect(nav.locator("a[data-outline-key]").first()).toBeVisible();
 
-    // Saved carts has no feedback yet: its panel shows no filter chips, only the empty state.
+    // Referral link has no feedback yet: its panel shows no filter chips, only the empty state.
     await expect(panel(page).getByTestId("feedback-state")).toHaveCount(0);
 
     // A version with no feedback at all shows no filters.
@@ -230,7 +230,7 @@ test.describe("phone", () => {
     await openVersion(page, BRIEF_V1);
     const h1 = page.getByTestId("doc-header").getByRole("heading", { level: 1 });
     await expect(h1).toBeVisible();
-    await expect(h1).toContainText("Early shipping cost: technical brief");
+    await expect(h1).toContainText("Early yearly price: technical brief");
     const cut = await h1.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
     expect(cut).toBe(false);
   });

@@ -32,7 +32,7 @@ Returning buyers abandon at the shipping step.
 ## Features by milestone {#brief-items}
 | Milestone | Feature | Goal | Outcome |
 |---|---|---|---|
-| [Beta](#milestone-beta) | [Saved addresses](#feature-saved-addresses) | Activation | Less typing |
+| [Beta](#milestone-beta) | [Saved addresses](#feature-bulk-import) | Activation | Less typing |
 |  | [One-page checkout](#feature-one-page) | Activation | One step to pay |
 
 ## Roadmap {#brief-roadmap}
@@ -51,7 +51,7 @@ Returning buyers abandon at the shipping step.
 
 ## Feature detail {#feature-detail}
 
-### Saved addresses {#feature-saved-addresses}
+### Saved addresses {#feature-bulk-import}
 Buyers pick a saved address instead of typing it.
 
 ### One-page checkout {#feature-one-page}

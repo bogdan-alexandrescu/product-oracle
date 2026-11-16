@@ -116,7 +116,7 @@ test.describe("at 390 px", () => {
 
   test("B-20: a tap on the overview's warnings chip opens its warnings", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/team-workspaces");
+    await page.goto("/documents/team-invites");
     const chip = page.getByTestId("versions-table").getByTestId("overview-warnings-chip").filter({ visible: true });
     await expect(chip).toHaveText("1 warning");
     const tip = page.getByRole("tooltip").filter({ visible: true });

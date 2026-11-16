@@ -10,7 +10,7 @@ import { login } from "./helpers";
  */
 
 const SPEC_ID = "c3000000-0000-4000-8000-000000000001";
-const BRIEF = "/documents/checkout-redesign-early-shipping-cost-spec/v/1";
+const BRIEF = "/documents/annual-billing-early-yearly-price-spec/v/1";
 
 /** The page's one way back and Go to Home; no other link names the same list. */
 async function expectWaysOn(page: Page, back: string, backHref: string | RegExp) {

@@ -31,8 +31,8 @@ async function expectWhyNot(row: Locator, reason: string) {
   await expect(row.getByRole("button", { name: "Stage" })).toHaveAttribute("aria-describedby", (await tip.getAttribute("id"))!);
 }
 
-const DOC = "/documents/checkout-redesign/v/2";
-const DOC_HOME = "/documents/checkout-redesign";
+const DOC = "/documents/annual-billing/v/2";
+const DOC_HOME = "/documents/annual-billing";
 const LOCKED_DOC = "/documents/usage-alerts/v/1";
 const COMMENTER = "commenter@example.com";
 const APPROVER = "approver@example.com";
@@ -95,8 +95,8 @@ test("the panel is about the open section, or General", async ({ page }) => {
   await page.goto(DOC);
   await openSection(page, "problem");
   await strip(page).click();
-  await expect(panel(page).getByTestId("hop-about")).toHaveText(/^New chat about Checkout redesign PRD · .*Problem$/);
-  await expect(panel(page).getByRole("textbox", { name: "Ask Oracle" })).toHaveAttribute("placeholder", /^Ask about Checkout redesign PRD · .*Problem…$/);
+  await expect(panel(page).getByTestId("hop-about")).toHaveText(/^New chat about Annual billing PRD · .*Problem$/);
+  await expect(panel(page).getByRole("textbox", { name: "Ask Oracle" })).toHaveAttribute("placeholder", /^Ask about Annual billing PRD · .*Problem…$/);
   await expect(panel(page).getByTestId("hop-visibility")).toHaveText(/Just you and Oracle/);
   await expect(panel(page).getByTestId("hop-empty")).toHaveText("Nothing yetAsk why something is ranked, what to cut, or what is missing.");
   await panel(page).getByRole("button", { name: "General" }).click();
@@ -110,16 +110,16 @@ test("the diff and publish pages are about their document, and a chat started th
   await login(page);
   await page.goto(`${DOC_HOME}/diff`);
   await strip(page).click();
-  await expect(panel(page).getByTestId("hop-about")).toHaveText("New chat about Checkout redesign PRD");
+  await expect(panel(page).getByTestId("hop-about")).toHaveText("New chat about Annual billing PRD");
   // The panel stays open (remembered) on the publish page.
   await page.goto(`${DOC_HOME}/publish`);
-  await expect(panel(page).getByTestId("hop-about")).toHaveText("New chat about Checkout redesign PRD");
+  await expect(panel(page).getByTestId("hop-about")).toHaveText("New chat about Annual billing PRD");
   await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill("What is left before we publish?");
   await panel(page).getByRole("button", { name: "Send" }).click();
   await expect(panel(page).getByTestId("discussion-thread")).toBeVisible();
   // In the thread its own header names the subject; the panel's About chip is for the list (qa-shell-20).
   await expect(panel(page).getByTestId("hop-about")).toHaveCount(0);
-  await expect(panel(page).getByTestId("discussion-thread")).toContainText("Checkout redesign PRD");
+  await expect(panel(page).getByTestId("discussion-thread")).toContainText("Annual billing PRD");
 });
 
 // D-4: on a phone (390, touch), through the header's Ask sheet.

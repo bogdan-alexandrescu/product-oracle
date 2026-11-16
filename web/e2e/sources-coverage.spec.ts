@@ -88,13 +88,13 @@ test("coverage: Used in leads to the Ground Truth item and to the document versi
   await openCoverage(page);
   const used = inspector(page).getByRole("list", { name: "Used in" });
   await expect(used.getByRole("listitem")).toHaveCount(3);
-  await used.getByRole("link", { name: /Dark mode/ }).click();
+  await used.getByRole("link", { name: /Setup error report/ }).click();
   await expect(page).toHaveURL(/\/ground-truth\?entity=[0-9a-f-]+$/);
-  await expect(page.getByRole("dialog", { name: "Dark mode" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: /Setup error report/ })).toBeVisible();
 
   await page.goBack();
-  await used.getByRole("link", { name: /Checkout redesign PRD/ }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2$/);
+  await used.getByRole("link", { name: /Annual billing PRD/ }).click();
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2$/);
 });
 
 test("coverage: a search shows Results; Coverage brings the table back with the same source", async ({ page }) => {

@@ -16,7 +16,7 @@ import { expect, test, type Locator, type Page } from "./test";
  *   (plan-prd-order.spec.ts).
  */
 
-const TEAM = "Team workspaces PRD";
+const TEAM = "Team invites PRD";
 
 /** A PRD's title as a list may name it ("Online deposits at booking PRD" in the link picker). */
 const plain = (t: string) => t.trim().replace(/ PRD$/, "");
@@ -54,7 +54,7 @@ test.describe("every list of PRDs follows a move on One-pagers", () => {
   test("Simple › Decisions' PRD filter", async ({ page }) => {
     await login(page);
     const order = await moveUp(page, TEAM);
-    expect(order.indexOf(TEAM)).toBeLessThan(order.indexOf("Saved carts PRD"));
+    expect(order.indexOf(TEAM)).toBeLessThan(order.indexOf("Referral link PRD"));
     await page.goto("/simple/decisions");
     await inOrder(page.getByRole("combobox", { name: "PRD", exact: true }).locator("option"), order, 7);
   });
@@ -108,13 +108,13 @@ test.describe("every list of PRDs follows a move on One-pagers", () => {
   test("Home's In flight PRDs in review", async ({ page }) => {
     await login(page);
     const order = await moveUp(page, TEAM, 4);
-    expect(order.indexOf(TEAM)).toBeLessThan(order.indexOf("Checkout redesign PRD"));
+    expect(order.indexOf(TEAM)).toBeLessThan(order.indexOf("Annual billing PRD"));
     await page.goto("/home");
     const prds = page.getByTestId("home-in-flight-table").getByTestId("flight-row").and(page.locator('[data-kind="prd"]'));
     await expect(prds).toHaveCount(3);
     const got = (await prds.allInnerTexts()).map((t) => t.split("\n")[0].trim());
     expect(got).toEqual(order.filter((t) => got.includes(t)));
-    expect(got).toEqual([TEAM, "Checkout redesign PRD", "Clinic outreach PRD"]);
+    expect(got).toEqual([TEAM, "Annual billing PRD", "Clinic outreach PRD"]);
   });
 
   test("the Roadmap card's PRD picker", async ({ page }) => {

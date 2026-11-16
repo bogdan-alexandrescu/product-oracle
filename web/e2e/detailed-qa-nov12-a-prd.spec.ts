@@ -4,8 +4,8 @@ import { login } from "./helpers";
 
 /*
  * Detailed visual QA, Nov 12, 2026 (pass A), findings 6 and 17, on a PRD version's Roadmap tab
- * (Checkout redesign PRD v2, seeded in lib/api/mock/draft-roadmap.ts: Cart review is the
- * Ground Truth feature F-41; Guest checkout, Shipping step and Saved addresses name no feature;
+ * (Annual billing PRD v2, seeded in lib/api/mock/draft-roadmap.ts: Plan review is the
+ * Ground Truth feature F-41; Public signup, Billing step and Bulk import name no feature;
  * v1's One-tap wallet pay was dropped). Driven through the UI on the mock API; invented data only.
  */
 
@@ -29,9 +29,9 @@ const chip = (page: Page, name: RegExp) =>
 
 async function openRoadmap(page: Page) {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await visible(page, "version-tab-roadmap").click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/roadmap/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/roadmap/);
   await expect(visible(page, "draft-roadmap-status")).toHaveAttribute(
     "data-status",
     "ready",
@@ -46,22 +46,22 @@ test("#6: each roadmap item shows its feature code before its name, and one with
   await openRoadmap(page);
   await chip(page, /^All/).click();
   const cart = row(page, "cart-review");
-  await expect(cart).toContainText("F-41 Cart review shows the full price");
+  await expect(cart).toContainText("F-41 Plan review shows the yearly price");
   await expect(cart.getByTestId("not-in-ground-truth")).toHaveCount(0);
-  for (const key of ["guest-checkout", "shipping-step", "saved-addresses"]) {
+  for (const key of ["public-signup", "shipping-step", "bulk-import"]) {
     await expect(row(page, key).getByTestId("not-in-ground-truth")).toHaveText(
       "Not in the Ground Truth",
     );
   }
-  // Saved addresses keeps its check problem beside the flag.
+  // Bulk import keeps its check problem beside the flag.
   await expect(
-    row(page, "saved-addresses").getByTestId("draft-roadmap-chips"),
+    row(page, "bulk-import").getByTestId("draft-roadmap-chips"),
   ).toHaveText("Date unverified");
 
   // The item's panel names it the same way.
   await cart.click();
   await expect(visible(page, "roadmap-item-inspector")).toContainText(
-    "F-41 Cart review shows the full price",
+    "F-41 Plan review shows the yearly price",
   );
 });
 

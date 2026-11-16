@@ -406,7 +406,7 @@ export function mapGoalRef(db: Pick<SimpleDb, "goal_buckets">, id: string): Sche
  * once another scenario's data loads the ones it added are taken out again. Invented data.
  */
 const GOAL_ORDER_GOALS: Record<string, string> = {
-  "g.paid-conversion": "Grow paid conversion",
+  "g.paid-conversion": "Growth",
   "support-load": "Cut support load",
   "guided-week": "Make the first week feel guided for every new team, from sign-up to their first shared report",
   "mid-size": "Win more mid-size teams",

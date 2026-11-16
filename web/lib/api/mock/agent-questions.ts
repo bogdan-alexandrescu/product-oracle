@@ -2,7 +2,7 @@
  * AQ1 Cards atop the review, as oracle.runs.agent_questions: the questions a run's agents asked
  * at a stop (the segment's agent_questions.yaml), each with its options and the agent's pick,
  * and the answers the stop's approver role or above gives until it is decided. Invented people
- * and text: the "scope-review" scenario's Saved addresses PRD at its feature set.
+ * and text: the "scope-review" scenario's Bulk import PRD at its feature set.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -22,7 +22,7 @@ function base(other: Person): StoredAgentQuestion[] {
     {
       id: "q1",
       role: "architect",
-      feature: "saved-addresses",
+      feature: "bulk-import",
       question: "Does a way to send an address to the courier exist already, or do we build it?",
       why: "The design needs a send path to the courier. I found a half-built one in the order service but no tests and no caller.",
       options: [
@@ -70,11 +70,11 @@ function base(other: Person): StoredAgentQuestion[] {
 function more(other: Person): StoredAgentQuestion[] {
   const rows: [string, string | null, string, string, string, string, string][] = [
     ["analyst", "address-labels", "Are labels free text, or a fixed list (Home, Work, Other)?", "free", "Free text", "fixed", "A fixed list"],
-    ["architect", "pick-address", "Show the saved addresses as a list or as a single picker with the last one used already chosen, given that most shoppers on phones have exactly one address?", "picker", "One picker, last used chosen", "list", "A list of every address"],
+    ["architect", "pick-address", "Show the imported rows as a list or as a single picker with the last one used already chosen, given that most shoppers on phones have exactly one address?", "picker", "One picker, last used chosen", "list", "A list of every address"],
     ["analyst", "address-edit", "When an address is edited, do orders already placed keep the old one?", "keep", "Placed orders keep the old address", "update", "Placed orders follow the edit"],
     ["architect", null, "Store delivery notes with the address or with each order?", "address", "With the address", "order", "With each order"],
     ["analyst", null, "Is the deadline the holiday sale on Dec 11, or is a January date acceptable?", "dec", "Dec 11, cut what does not fit", "jan", "January, keep the whole set"],
-    ["architect", "saved-addresses", "How many addresses may one account keep?", "ten", "Up to 10", "any", "No limit"],
+    ["architect", "bulk-import", "How many addresses may one account keep?", "ten", "Up to 10", "any", "No limit"],
     ["analyst", "bulk-edit", "Import from a spreadsheet file, or paste rows into a box?", "file", "A spreadsheet file", "paste", "Paste rows"],
   ];
   return rows.map(([role, feature, question, a, al, b, bl], i) => ({

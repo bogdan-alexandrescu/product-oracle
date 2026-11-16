@@ -27,7 +27,7 @@ async function openStop(page: Page) {
   await page.addInitScript((key) => localStorage.setItem(key, "feature-set-two"), MOCK_SCENARIO_KEY);
   await login(page);
   await page.getByTestId("nav-runs").click();
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").click();
   return page.getByTestId("checkpoint-feature_set");
 }
 

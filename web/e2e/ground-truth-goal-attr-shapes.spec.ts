@@ -82,7 +82,7 @@ test("edit: attributes read in words, the parent goal is picked by name, one lis
   const form = panel.getByRole("form", { name: "Edit" });
 
   await expect(form.getByRole("combobox", { name: "Parent goal" })).toHaveValue("g.paid-conversion");
-  await expect(form.getByRole("combobox", { name: "Parent goal" }).locator("option:checked")).toHaveText("Grow paid conversion");
+  await expect(form.getByRole("combobox", { name: "Parent goal" }).locator("option:checked")).toHaveText("Growth");
   const open = form.getByRole("textbox", { name: "Open values" });
   await expect(open).toHaveValue("live helpers\n50 replied threads a day\nof threads answered within an hour");
   const split = form.getByRole("group", { name: "Reply split" });
@@ -114,7 +114,7 @@ test("edit: attributes read in words, the parent goal is picked by name, one lis
     "Chat threads: 40",
     "Review by: Mar 15, 2027",
   ]);
-  await expect(panel.locator('[data-attr="parent_goal"]')).toHaveText("Grow paid conversion");
+  await expect(panel.locator('[data-attr="parent_goal"]')).toHaveText("Growth");
   await plainAttributes(panel);
 });
 

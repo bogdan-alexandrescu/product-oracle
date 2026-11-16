@@ -57,8 +57,8 @@ test("Pick a goal on a goal it is only proposed to serve confirms that link", as
   await openKind(page, "no_goal");
   await row(page, "no_goal", "Alert rules").getByRole("button", { name: /Pick a goal/ }).click();
   const picker = page.getByTestId("gt-picker");
-  await picker.getByRole("button").filter({ hasText: "Raise activation" }).click();
-  await expect(page.getByTestId("gt-notice")).toContainText("“F-30 Alert rules” now serves “Raise activation”.");
+  await picker.getByRole("button").filter({ hasText: "Activation" }).click();
+  await expect(page.getByTestId("gt-notice")).toContainText("“F-30 Alert rules” now serves “Activation”.");
   await expect(row(page, "no_goal", "Alert rules")).toHaveCount(0);
 });
 
@@ -66,10 +66,10 @@ test("Pick a goal on a proposed link keeps the contribution picked", async ({ pa
   await open(page);
   await openKind(page, "no_goal");
   await row(page, "no_goal", "Alert rules").getByRole("button", { name: /Pick a goal/ }).click();
-  await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Raise activation" }).click();
-  await expect(page.getByTestId("gt-notice")).toContainText("“F-30 Alert rules” now serves “Raise activation”.");
+  await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Activation" }).click();
+  await expect(page.getByTestId("gt-notice")).toContainText("“F-30 Alert rules” now serves “Activation”.");
   await page.getByTestId("feature-F-30").getByRole("button", { name: "Alert rules" }).click();
-  await expect(page.getByRole("dialog", { name: "Alert rules" }).getByLabel("Contribution to Raise activation")).toHaveValue("2");
+  await expect(page.getByRole("dialog", { name: "Alert rules" }).getByLabel("Contribution to Activation")).toHaveValue("2");
 });
 
 test("A code another feature holds offers Link to a feature on its item", async ({ page }) => {

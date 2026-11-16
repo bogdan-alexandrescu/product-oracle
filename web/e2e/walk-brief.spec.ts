@@ -145,18 +145,18 @@ for (const [name, viewport] of VIEWPORTS) {
       await login(page);
       await openNewPrd(page);
       await writeBrief(page, "Example gift cards");
-      await page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox", { name: /Raise activation/ }).check();
+      await page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox", { name: /Activation/ }).check();
       await page.getByRole("button", { name: "Continue" }).first().click();
       await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
       await expect(page.getByRole("heading", { level: 1, name: "Example gift cards" })).toBeVisible();
 
       const panel = await sidePanel(page);
       const goals = panel.getByTestId("intake-goals");
-      await expect(goals.getByTestId("intake-goals-picked")).toContainText("Raise activation");
-      await expect(goals.getByTestId("intake-goals-picked")).not.toContainText("Grow paid conversion");
+      await expect(goals.getByTestId("intake-goals-picked")).toContainText("Activation");
+      await expect(goals.getByTestId("intake-goals-picked")).not.toContainText("Growth");
       const suggested = goals.getByTestId("intake-goals-suggested");
       await expect(suggested).toContainText("Oracle suggests");
-      await expect(suggested).toContainText("Grow paid conversion");
+      await expect(suggested).toContainText("Growth");
       await expect(suggested).toContainText("The brief speaks to it");
 
       const template = panel.getByTestId("intake-template");
@@ -181,8 +181,8 @@ for (const [name, viewport] of VIEWPORTS) {
       await page.goto("/inbox");
       await expect(page.getByTestId("inbox-needs")).toBeVisible();
       const rows = page.locator("[role=tabpanel]").getByTestId("inbox-questions").locator("[data-row]").filter({ visible: true });
-      await expect(rows.filter({ hasText: "Checkout redesign" }).first()).toBeVisible();
-      await expect(rows.filter({ hasText: /PRD (drafted|in review|approved) · Checkout redesign/ }).first()).toBeVisible();
+      await expect(rows.filter({ hasText: "Annual billing" }).first()).toBeVisible();
+      await expect(rows.filter({ hasText: /PRD (drafted|in review|approved) · Annual billing/ }).first()).toBeVisible();
       await expect(rows.filter({ hasText: `Before drafting · ${BEFORE_DRAFTING.title}` })).toHaveCount(0);
     });
   });

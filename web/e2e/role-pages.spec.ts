@@ -92,7 +92,7 @@ for (const role of ROLES) {
     await login(page, email(role));
 
     // A PRD: no old role note; a viewer reads it with View only.
-    await page.goto("/documents/team-workspaces/v/2");
+    await page.goto("/documents/team-invites/v/2");
     await expect(page.getByTestId("doc-status").filter({ visible: true })).toBeVisible();
     await expect(page.getByTestId("role-note")).toHaveCount(0);
     await expect(page.getByText("Read only", { exact: true })).toHaveCount(0);

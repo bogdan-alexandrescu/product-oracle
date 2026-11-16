@@ -760,14 +760,14 @@ export function inboxActions(db: AutonomyDb, me: string): Schemas["InboxOracleAc
 }
 
 /** The "oracle-did" scenario: Oracle moved a priority within its goal and told the owner. */
-export function seedOracleDid(ownerId: string, id: string, summary = "Moved 'Saved addresses' up 2 within Raise activation"): OracleActionRow {
+export function seedOracleDid(ownerId: string, id: string, summary = "Moved 'Bulk import' up 2 within Activation"): OracleActionRow {
   return {
     id,
     responsibility: "priorities",
     responsibility_title: "Order priorities",
     summary,
-    subject: { kind: "feature", key: "saved-addresses", href: "/priorities" },
-    undo: { method: "POST", path: "/v1/priorities/moves/undo", body: { feature: "saved-addresses" } },
+    subject: { kind: "feature", key: "bulk-import", href: "/priorities" },
+    undo: { method: "POST", path: "/v1/priorities/moves/undo", body: { feature: "bulk-import" } },
     created_at: new Date(Date.now() - 20 * 60_000).toISOString(),
     undone_at: null,
     notify_ids: [ownerId],

@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 /*
  * Third QA pass on Company › Decisions, driven through the UI on the default mock scenario.
- * The mock seeds five judgement calls: D-1 "Publish Checkout redesign PRD v2" (recorded when a
+ * The mock seeds five judgement calls: D-1 "Publish Annual billing PRD v2" (recorded when a
  * version was published), D-5 "Ship usage caps before anomaly detection" (proposed by
  * Theo Brandt, Priya Raman is its approver, "Caps first" is Oracle's pick). Each test names the
  * finding it protects.
@@ -13,7 +13,7 @@ import { login } from "./helpers";
 const APPROVER = "approver@example.com";
 const VIEWER = "viewer@example.com";
 const CAPS = "Ship usage caps before anomaly detection";
-const PUBLISH = "Publish Checkout redesign PRD v2";
+const PUBLISH = "Publish Annual billing PRD v2";
 
 const rows = (page: Page) => page.getByTestId("decision-row");
 const row = (page: Page, text: string) => rows(page).filter({ hasText: text });

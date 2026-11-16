@@ -53,7 +53,7 @@ test.describe("at 1440", () => {
     // protects=qa-company-8/-9; fails_when=Progress reads "Step 8/9", "1/4" or "Paused at
     // 1/1", or a PRD in review shows Next "Review"; no_claim=the phone's compact rows.
     await openHome(page);
-    const prd = flight(page, "checkout-redesign", "prd");
+    const prd = flight(page, "annual-billing", "prd");
     await expect(prd).toBeVisible();
     const progress = await column(page, "Progress");
     const next = await column(page, "Next");
@@ -62,7 +62,7 @@ test.describe("at 1440", () => {
 
     await expect(prd.locator("td").nth(progress)).toHaveText("Step 8 of 9");
     await expect(prd.locator("td").nth(next)).toHaveText("Publish");
-    await expect(flight(page, "team-workspaces").getByTestId("row-paused")).toHaveText(/^Paused at segment \d+ of \d+$/);
+    await expect(flight(page, "team-invites").getByTestId("row-paused")).toHaveText(/^Paused at segment \d+ of \d+$/);
     // A run waiting on a person: Next is that person's step.
     await expect(flight(page, "team-onboarding").locator("td").nth(next)).toHaveText("Confirm the Ground Truth");
     await expect(flight(page, "team-onboarding").getByTestId("row-segments")).toHaveText(/^Segment \d+ of \d+$/);

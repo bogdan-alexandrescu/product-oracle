@@ -5,7 +5,7 @@ import { login } from "./helpers";
 
 /*
  * QA pass 4 on the Feature set review page, /runs/<id>/review/<checkpoint> (qa4-work-39, 41, 43,
- * 44, 45, 46), driven through the UI on the mock's "scope-review" scenario: the Saved addresses
+ * 44, 45, 46), driven through the UI on the mock's "scope-review" scenario: the Bulk import
  * PRD at its feature set, where Bulk edit depends on a left-out feature, Address labels serves
  * no goal and Pick address in one step has a low confidence (the three rows under Needs you).
  */
@@ -21,10 +21,10 @@ async function seeded(page: Page, email: string) {
   await login(page, email);
 }
 
-/** Runs › Saved addresses PRD › Review feature set, as a person goes there. */
+/** Runs › Bulk import PRD › Review feature set, as a person goes there. */
 async function openReview(page: Page) {
   await page.goto("/runs");
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').filter({ visible: true }).getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').filter({ visible: true }).getByRole("link").first().click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+/);
@@ -78,7 +78,7 @@ test.describe("desktop", () => {
     const bulk = row(page, "Bulk edit");
     await expect(bulk.getByTestId("row-requirements")).toHaveText(/^\d+ of \d+ kept$/);
     await bulk.getByTestId("feature-title").click();
-    await expect(inspector(page).getByTestId("inspector-goal")).toHaveText("Grow paid conversion · contribution 1 of 3");
+    await expect(inspector(page).getByTestId("inspector-goal")).toHaveText("Growth · contribution 1 of 3");
     const stat = inspector(page).getByTestId("stat-requirements");
     await expect(stat.locator("dt")).toHaveText("Requirements kept");
     await expect(stat.locator("dd")).toHaveText(/^\d+ of \d+$/);

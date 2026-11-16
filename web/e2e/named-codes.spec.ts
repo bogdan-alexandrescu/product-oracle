@@ -40,7 +40,7 @@ test("Plan, Ground Truth and Priorities draw names, never a place code or a slug
   expect(await mainText(page)).not.toMatch(BARE);
 
   await page.goto("/ground-truth");
-  await expect(page.getByTestId("feature-F-82")).toBeVisible();
+  await expect(page.getByTestId("feature-F-01")).toBeVisible();
   await expect(page.locator("main").getByTestId("code-tag").filter({ hasText: "G-B" }).first()).toBeVisible();
   expect(await mainText(page)).not.toMatch(BARE);
 
@@ -140,7 +140,7 @@ test("the Confidence panel shows source titles, no id in the card either; a cita
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
 
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const cite = (await openSection(page, "problem")).getByTestId("cite-c4");
   await cite.click();
   await expect(card).toBeVisible();
@@ -202,10 +202,10 @@ test("Before drafting's Goals draws each goal with its chip, never a place code"
   await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/documents$/);
   await page.getByRole("link", { name: "New PRD" }).click();
-  await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses for repeat buyers");
+  await page.getByRole("textbox", { name: "Title" }).fill("Bulk import for repeat buyers");
   await page
     .getByRole("textbox", { name: "What problem does it solve?" })
-    .fill("Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.");
+    .fill("Returning buyers retype their address at every checkout. Bulk import would make repeat checkout faster.");
   const door = page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox");
   // The goals load after the form draws (Loading meanwhile): all() lists only what is drawn (#520).
   await expect(door.first()).toBeVisible();
@@ -257,7 +257,7 @@ test("keyboard: Tab passes the chip; Enter opens the card, Tab leaves it; Escape
 
 test("keyboard: a citation chip's card takes focus on open, Tab leaves it, and Escape gives focus back", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const problem = await openSection(page, "problem");
   const cite = problem.getByTestId("cite-c4");
   const card = page.getByTestId("code-card");

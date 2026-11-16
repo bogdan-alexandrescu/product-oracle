@@ -37,11 +37,11 @@ for (const size of SIZES) {
     test("runs list: a dollar figure only on the cost approval and the overrun", async ({ page }) => {
       await openRuns(page);
       const rows = page.getByTestId("run-row");
-      // B3: the seed also holds the finished Ground Truth to PRD run on saved-carts whose agents made the
+      // B3: the seed also holds the finished Ground Truth to PRD run on referral-link whose agents made the
       // Ground Truth proposals (lib/api/mock/baseline.ts AGENT_RUN), so five runs, as runs.spec.ts counts.
       await expect(rows).toHaveCount(5);
       // Waiting, running and finished rows carry no cost.
-      for (const slug of ["team-onboarding", "checkout-redesign", "saved-carts"]) {
+      for (const slug of ["team-onboarding", "annual-billing", "referral-link"]) {
         const row = rows.and(page.locator(`[data-document="${slug}"]`));
         await expect(row).toBeVisible();
         await expect(row).not.toContainText(DOLLARS);
@@ -50,7 +50,7 @@ for (const size of SIZES) {
       // The decisions: the estimate awaiting approval, spent of estimate on the overrun, both prominent.
       const approval = rows.and(page.locator('[data-document="usage-alerts-v2"]'));
       await expect(approval.locator('[data-cost="prominent"]')).toHaveText(/^\$[\d,.]+ estimated$/);
-      const overrun = rows.and(page.locator('[data-document="team-workspaces"]'));
+      const overrun = rows.and(page.locator('[data-document="team-invites"]'));
       await expect(overrun.locator('[data-cost="prominent"]')).toHaveText("$14.20 of $9.00 estimated");
     });
 
@@ -69,7 +69,7 @@ for (const size of SIZES) {
     });
 
     test("run page of a finished run: the same small line, no section", async ({ page }) => {
-      const inspector = await openRun(page, "checkout-redesign", "Feedback loop");
+      const inspector = await openRun(page, "annual-billing", "Feedback loop");
       await expect(inspector.getByTestId("run-cost-section")).toHaveCount(0);
       await expect(inspector.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$8.10 of $9.00 estimated");
     });
@@ -89,7 +89,7 @@ for (const size of SIZES) {
     });
 
     test("run page paused on overrun: the Overrun section, prominent, with ceiling, no per-segment cost", async ({ page }) => {
-      const inspector = await openRun(page, "team-workspaces", "Feedback loop");
+      const inspector = await openRun(page, "team-invites", "Feedback loop");
       const section = inspector.getByTestId("run-cost-section");
       await expect(section).toContainText("Overrun");
       await expect(section.locator('[data-cost="prominent"]')).toHaveText("$14.20 of $9.00 estimated");

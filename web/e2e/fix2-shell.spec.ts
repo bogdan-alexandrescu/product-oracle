@@ -119,7 +119,7 @@ test("intake: Start drafting says it waits for the estimate", async ({ page }) =
   await page.getByRole("textbox", { name: "Title" }).fill("Setup checklist");
   await page
     .getByRole("textbox", { name: "What problem does it solve?" })
-    .fill("Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.");
+    .fill("Returning buyers retype their address at every checkout. Bulk import would make repeat checkout faster.");
   await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();

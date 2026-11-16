@@ -5,7 +5,7 @@ import { login } from "./helpers";
 /*
  * #349: track an outcome, add a learning and retire a learning by hand, driven through the
  * UI as a person would, on the mock API ("outcomes" scenario, synthetic: the approved Usage
- * alerts roadmap's items serve Raise activation; one active learning, "Ask for the metric's
+ * alerts roadmap's items serve Activation; one active learning, "Ask for the metric's
  * baseline before drafting", is on record).
  *
  * Each test states its card: protects (the observable), fails_when (the wrong result it
@@ -41,7 +41,7 @@ test("an approver tracks an outcome for a roadmap item", async ({ page }) => {
   const form = page.getByTestId("track-outcome-form");
   await form.getByLabel("Item").selectOption({ label: "Threshold alerts on spend · Not in the Ground Truth" });
   await expect(form.getByLabel("Goal")).toHaveValue(/.+/);
-  await expect(form.getByLabel("Goal").locator("option:checked")).toHaveText("Raise activation");
+  await expect(form.getByLabel("Goal").locator("option:checked")).toHaveText("Activation");
   await form.getByLabel("Expected effect").fill("+5 weekly active teams");
   await form.getByLabel("Metric").fill("Weekly active teams");
   await form.getByLabel("Check date").fill("2027-02-01");
@@ -53,7 +53,7 @@ test("an approver tracks an outcome for a roadmap item", async ({ page }) => {
   await row.click();
   await expect(inspector(page)).toContainText("Weekly active teams");
   await expect(inspector(page)).toContainText("+5 weekly active teams");
-  await expect(inspector(page)).toContainText("Raise activation");
+  await expect(inspector(page)).toContainText("Activation");
 
   await page.getByRole("button", { name: "Track outcome" }).click();
   await expect(

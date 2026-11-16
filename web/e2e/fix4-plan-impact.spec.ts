@@ -6,7 +6,7 @@ import { login } from "./helpers";
 /*
  * fix4 QA findings on the Impact explorer (/impact/entities/<id>, /impact/changes/<id> and a
  * PRD version's Impact), driven through the UI on the mock API. The "impact" scenario gives
- * checkout-redesign's v1 downstream outputs; "Checkout flow (user flow)" rests on the Guided
+ * annual-billing's v1 downstream outputs; "Checkout flow (user flow)" rests on the Guided
  * setup feature, and the acceptance tests on requirement R-90, since deleted.
  */
 
@@ -22,12 +22,12 @@ async function openWhatIf(page: Page, key: string, title: string) {
   await expect(page).toHaveURL(/\/impact\/entities\/[^/?]+$/);
 }
 
-/** PRDs > Checkout redesign > v2 > Impact. */
+/** PRDs > Annual billing > v2 > Impact. */
 async function openVersionImpact(page: Page) {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await page.getByRole("link", { name: "Impact", exact: true }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
 }
 
 /** ... > Impact > Table > Acceptance tests > "Recorded change" (the R-90 deletion). */
@@ -46,19 +46,19 @@ test.describe("desktop", () => {
 
   test("qa-plan-10: a what-if names the item by its title, never its Ground Truth key", async ({ page }) => {
     await scenario(page, "impact");
-    await openWhatIf(page, "F-82", "Guided setup");
+    await openWhatIf(page, "F-01", "Setup checklist");
     const sidebar = page.getByRole("complementary", { name: "Regeneration plan" });
     const planRow = sidebar.getByTestId("plan-row").filter({ hasText: flowTitle });
     await planRow.getByRole("button").first().click();
-    await expect(planRow).toContainText("Guided setup changed");
+    await expect(planRow).toContainText("Setup checklist changed");
     await expect(planRow).not.toContainText("f.guided-setup");
 
     await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
     await page.getByRole("grid", { name: "Affected outputs" }).getByText(flowTitle).first().click();
     const insp = page.getByRole("complementary", { name: flowTitle });
     await expect(insp).toContainText("Why it's affected");
-    await expect(insp.getByRole("listitem").filter({ hasText: "Guided setup changed" }).first()).toBeVisible();
-    await expect(insp.getByTestId("dependency").filter({ hasText: "Guided setup" })).toContainText("Guided setup · Feature");
+    await expect(insp.getByRole("listitem").filter({ hasText: "Setup checklist changed" }).first()).toBeVisible();
+    await expect(insp.getByTestId("dependency").filter({ hasText: "Setup checklist" })).toContainText("Setup checklist · Feature");
     await expect(insp).not.toContainText("f.guided-setup");
     await expect(page.getByRole("grid", { name: "Affected outputs" })).not.toContainText("f.guided-setup");
   });
@@ -86,17 +86,17 @@ test.describe("desktop", () => {
     await scenario(page, "impact");
     await openR90Change(page);
     const back = page.getByTestId("impact-back").filter({ visible: true });
-    await expect(back).toHaveText("‹ Impact of Checkout redesign PRD v2");
+    await expect(back).toHaveText("‹ Impact of Annual billing PRD v2");
     const nav = page.getByRole("navigation", { name: "Oracle" });
     await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
     await expect(nav.getByTestId("nav-baseline")).not.toHaveAttribute("aria-current", "page");
     await back.click();
-    await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
+    await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/impact$/);
   });
 
   test("qa-plan-41: the output's kind reads 'User flow' everywhere its title says user flow", async ({ page }) => {
     await scenario(page, "impact");
-    await openWhatIf(page, "F-82", "Guided setup");
+    await openWhatIf(page, "F-01", "Setup checklist");
     await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
     const grid = page.getByRole("grid", { name: "Affected outputs" });
     await expect(grid).toContainText("User flow · 1");
@@ -109,7 +109,7 @@ test.describe("desktop", () => {
 
   test("qa-plan-42: a preview's header chip says what would be affected, not stale", async ({ page }) => {
     await scenario(page, "impact");
-    await openWhatIf(page, "F-82", "Guided setup");
+    await openWhatIf(page, "F-01", "Setup checklist");
     await expect(page.getByText("Preview only; nothing is marked stale", { exact: false }).first()).toBeVisible();
     const chip = page.locator("[data-page-header]").getByTestId("impact-count");
     await expect(chip).toHaveText("1 would be affected");
@@ -127,7 +127,7 @@ test.describe("desktop", () => {
 
   test("qa-plan-44: the plan's action is a neutral status chip, 'Plan: regenerate'", async ({ page }) => {
     await scenario(page, "impact");
-    await openWhatIf(page, "F-82", "Guided setup");
+    await openWhatIf(page, "F-01", "Setup checklist");
     const sidebar = page.getByRole("complementary", { name: "Regeneration plan" });
     const chip = sidebar.getByTestId("plan-row").filter({ hasText: flowTitle }).getByTestId("plan-action");
     await expect(chip).toHaveText("Plan: regenerate");
@@ -136,7 +136,7 @@ test.describe("desktop", () => {
 
   test("qa-plan-45: 'Reconcile…' is a bordered button like 'Mark reviewed'", async ({ page }) => {
     await scenario(page, "impact");
-    await openWhatIf(page, "F-82", "Guided setup");
+    await openWhatIf(page, "F-01", "Setup checklist");
     const sidebar = page.getByRole("complementary", { name: "Regeneration plan" });
     const row = sidebar.getByTestId("plan-row").filter({ hasText: flowTitle });
     await row.getByRole("button").first().click();
@@ -154,16 +154,16 @@ test.describe("desktop", () => {
 
   test("qa-plan-46: the lineage node shows the item's kind in full beside its what-if link", async ({ page }) => {
     await scenario(page, "impact");
-    await openWhatIf(page, "F-82", "Guided setup");
-    const upstream = page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-upstream").filter({ hasText: "Guided setup" });
+    await openWhatIf(page, "F-01", "Setup checklist");
+    const upstream = page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-upstream").filter({ hasText: "Setup checklist" });
     const sub = upstream.getByTestId("lineage-upstream-sub");
     await expect(sub).toHaveText("Feature · locked");
     expect(await sub.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-    await expect(upstream.getByRole("link", { name: "What if Guided setup changed?" })).toBeVisible();
+    await expect(upstream.getByRole("link", { name: "What if Setup checklist changed?" })).toBeVisible();
   });
 
   test("qa-plan-47: an item nothing is built from says when Impact will show something", async ({ page }) => {
-    await openWhatIf(page, "F-83", "Sample data");
+    await openWhatIf(page, "F-02", "Sample data import");
     const empty = page.getByTestId("impact-empty");
     await expect(empty).toContainText("No outputs depend on this item yet. Nothing to regenerate.");
     await expect(empty).toContainText("When a roadmap, spec or other output is built from it, Impact shows what a change to it would reach.");
@@ -176,13 +176,13 @@ test.describe("phone", () => {
   test("qa-plan-62: a recorded change's full title is in the page body", async ({ page }) => {
     await scenario(page, "impact");
     await login(page);
-    await page.goto("/documents/checkout-redesign/v/2/impact");
+    await page.goto("/documents/annual-billing/v/2/impact");
     // On a phone the table is the way to an output's sheet.
     await page.getByRole("button", { name: /Acceptance tests v1/ }).first().click();
     await page.getByRole("dialog").getByRole("link", { name: "Recorded change" }).first().click();
     await expect(page).toHaveURL(/\/impact\/changes\//);
     const h1 = page.getByRole("heading", { level: 1 });
-    await expect(h1).toHaveText("Impact: Requirement “Guest checkout keeps the cart” deleted");
+    await expect(h1).toHaveText("Impact: Requirement “Signup keeps the yearly price” deleted");
     await expect(h1).toBeVisible();
     // Wrapped, not cut: the whole heading fits the screen's width.
     const fits = await h1.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= window.innerWidth);

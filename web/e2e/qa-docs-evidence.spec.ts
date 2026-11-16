@@ -4,16 +4,16 @@ import { login } from "./helpers";
 import { contrast } from "./contrast-helpers";
 
 /*
- * QA pass 1, docs lane: the Evidence tab of a PRD version (/documents/saved-carts/v/2/evidence),
+ * QA pass 1, docs lane: the Evidence tab of a PRD version (/documents/referral-link/v/2/evidence),
  * as a person opens it from the version's tabs.
  */
 
 async function openEvidence(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page);
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   await page.getByTestId("version-tab-evidence").filter({ visible: true }).click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\/evidence/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/evidence/);
   await expect(page.getByTestId("evidence-matrix")).toBeVisible();
 }
 

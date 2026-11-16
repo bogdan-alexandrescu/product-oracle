@@ -43,7 +43,7 @@ for (const [device, viewport] of [
   test(`${device}: list rows as dense as the frame, Not decided no taller than its words`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await openCheck(page);
-    // Sample data has no questions: its second line is only the verdict, Not decided.
+    // Sample data import has no questions: its second line is only the verdict, Not decided.
     const verdict = page.locator('[data-testid="brief-row"][data-feature="f.sample-data"]').getByTestId("brief-verdict");
     await expect(verdict).toHaveText("Not decided");
     const cell = (await verdict.boundingBox())!;

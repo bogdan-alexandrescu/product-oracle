@@ -4,7 +4,7 @@
  * roadmap yet (SeedItem.draft_roadmap). Change dates keeps an item draft with typed dates;
  * Leave out drops it; Approve these N dates puts the items on the roadmap with their dates.
  *
- * The "meeting-draft-dates" scenario: the Saved carts PRD, a draft whose run dated six items
+ * The "meeting-draft-dates" scenario: the Referral link PRD, a draft whose run dated six items
  * (invented). Its items land on the Onboarding roadmap, the company's first, as the API's
  * _target picks when a PRD has no items on a roadmap yet.
  */
@@ -12,14 +12,14 @@ import type { Schemas } from "@/lib/api/client";
 import { stableUuid } from "./ids";
 import { roadmapOut, type SeedItem, type SimpleDb } from "./simple-roadmap";
 
-export const SAVED_CARTS = { slug: "saved-carts", title: "Saved carts" };
+export const SAVED_CARTS = { slug: "referral-link", title: "Referral link" };
 
 type DraftRow = [string, string, SeedItem["horizon"], string, string, string];
 
 const DRAFT: DraftRow[] = [
   ["R-1", "Save a cart for later", "now", "2026-11-09", "2026-12-18", "Priya Natarajan"],
   ["R-2", "Carts kept across devices", "next", "2026-12-07", "2027-01-22", "Tomás Ferreira"],
-  ["R-3", "Price-drop note on saved carts", "next", "2027-01-11", "2027-02-12", "Priya Natarajan"],
+  ["R-3", "Price-drop note on referral links", "next", "2027-01-11", "2027-02-12", "Priya Natarajan"],
   ["R-4", "Shared carts for teams", "next", "2027-01-25", "2027-03-19", "Ama Owusu"],
   ["R-5", "Saved-cart reminder emails", "later", "2027-03-01", "2027-04-16", "Jonas Lindqvist"],
   ["R-6", "Turn a cart into a quote", "later", "2027-04-05", "2027-05-28", "Ama Owusu"],
@@ -41,11 +41,11 @@ export function seedMeetingDraftDates(db: SimpleDb, prdId: string, version = 1):
 }
 
 /**
- * RP2 'Draft layer on roadmap' ("roadmap-draft-layer" scenario, invented): Saved carts and Team
+ * RP2 'Draft layer on roadmap' ("roadmap-draft-layer" scenario, invented): Referral link and Team
  * workspaces in draft, and two drafts the layer leaves out: Online deposits' PRD was replaced,
  * Clinic outreach's run was cancelled.
  */
-export const WORKSPACES = { slug: "team-workspaces", title: "Team workspaces" };
+export const WORKSPACES = { slug: "team-invites", title: "Team invites" };
 export const WORKSPACES_DRAFT: DraftRow[] = [
   ["W-1", "Invite a whole team", "now", "2026-11-16", "2026-12-11", "Lena Fischer"],
   ["W-2", "Team roles and rights", "next", "2026-12-14", "2027-02-05", "Kofi Mensah"],

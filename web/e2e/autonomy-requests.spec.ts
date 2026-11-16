@@ -101,6 +101,6 @@ test("autonomy: Triage requests below Recommend hides Oracle's suggestions, and 
   await expect(row(page, "requests").getByTestId("autonomy-pending")).toHaveCount(0);
   inspector = await openSaveMyCard(page);
   const suggestion = inspector.getByTestId("request-suggestion");
-  await expect(suggestion).toContainText("Same need as saved addresses");
+  await expect(suggestion).toContainText("Same need as imported rows");
   await expect(suggestion.getByRole("button", { name: "Accept suggestion" })).toBeVisible();
 });

@@ -10,7 +10,7 @@ const stripItem = (page: Page, key: string) => outlineRow(page, key);
 
 test("sections: the contents and the hash pick the current section; back / forward walk it", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   // A PRD shows every section at once (PT1 a): the first one is current on arrival.
   await expect(stripItem(page, "title")).toHaveAttribute("aria-current", "location");
 
@@ -33,21 +33,21 @@ test("sections: the contents and the hash pick the current section; back / forwa
   await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "location");
 
   // A link opens its section: #key, and the older #s-key.
-  await page.goto("/documents/checkout-redesign/v/2#metrics");
+  await page.goto("/documents/annual-billing/v/2#metrics");
   await expect(section(page, "metrics")).toBeVisible();
   await expect(stripItem(page, "metrics")).toHaveAttribute("aria-current", "location");
   await page.goto("about:blank");
-  await page.goto("/documents/checkout-redesign/v/2#s-scope");
+  await page.goto("/documents/annual-billing/v/2#s-scope");
   await expect(section(page, "scope")).toBeVisible();
   // A key that itself starts with s- is matched first.
   await page.goto("about:blank");
-  await page.goto("/documents/checkout-redesign/v/2#s-5-3");
+  await page.goto("/documents/annual-billing/v/2#s-5-3");
   await expect(section(page, "s-5-3")).toBeVisible();
 });
 
 test("sections: ] [ j k and Shift+Arrow step to the next and previous section", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2#users");
+  await page.goto("/documents/annual-billing/v/2#users");
   await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "location");
   // Keys act on the page, not in a field.
   await page.locator("body").click({ position: { x: 700, y: 30 } });
@@ -73,7 +73,7 @@ test("sections: ] [ j k and Shift+Arrow step to the next and previous section", 
 
 test("sections: one review bar on screen; evidence and refine sit in the ⋯ menu", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await expect(page.getByTestId("review-bar").filter({ visible: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: /^Add evidence link|^Ask Oracle to rewrite/ }).filter({ visible: true })).toHaveCount(0);
   const problem = await openSection(page, "problem");
@@ -94,7 +94,7 @@ test("sections: one review bar on screen; evidence and refine sit in the ⋯ men
 
 test("sections: reviewing the open section marks it in the outline and counts it", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   // The review panel's own count, not the old rail's "review-progress" (PT1 a: contents rows
   // carry a status dot, not a count).
   const count = page.getByTestId("review-panel").filter({ visible: true }).getByTestId("stat-reviewed");
@@ -118,7 +118,7 @@ test("sections: the inspector shows the open section's comments first; All shows
   page,
 }) => {
   await login(page);
-  await page.goto("/documents/team-workspaces/v/2#problem");
+  await page.goto("/documents/team-invites/v/2#problem");
   const comments = page.getByTestId("comment").filter({ visible: true });
   await expect(section(page, "problem")).toBeVisible();
   await expect(comments).toHaveCount(2);
@@ -148,7 +148,7 @@ test("sections: the inspector shows the open section's comments first; All shows
 test("sections: on a phone, one section per screen, Review one tap away, no sideways scroll", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
-  await page.goto("/documents/team-workspaces/v/2#problem");
+  await page.goto("/documents/team-invites/v/2#problem");
   await expect(section(page, "problem")).toBeVisible();
   await expect(page.getByTestId("review-bar").filter({ visible: true })).toHaveCount(1);
   await page.getByTestId("phone-review").click();

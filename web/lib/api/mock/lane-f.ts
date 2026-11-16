@@ -93,8 +93,8 @@ export type FeatureSeed = {
 };
 
 // The baseline's goals (./baseline.ts), by key; GET /v1/priorities titles them as the baseline does now.
-const G1 = "Raise activation";
-const G2 = "Grow paid conversion";
+const G1 = "Activation";
+const G2 = "Growth";
 
 const FEATURES: FeatureSeed[] = [
   {
@@ -1622,18 +1622,18 @@ export function slidePreviewHtml(t: Tokens, slideCss: string | null | undefined,
   const vars = Object.entries(c)
     .map(([k, v]) => `--color-${k}: ${v};`)
     .join(" ");
-  const title = kind === "prd" ? "Saved carts PRD" : "Product roadmap";
+  const title = kind === "prd" ? "Referral link PRD" : "Product roadmap";
   const brief =
     kind === "prd"
       ? [
-          ["Summary", "Returning buyers keep their cart for 30 days."],
-          ["Goal trace", "G1 Activation: high contribution."],
-          ["Requirements", "R1 Carts persist for 30 days. R2 Prices refresh on return."],
+          ["Summary", "Each admin gets a link that brings new teams in."],
+          ["Goal trace", "G2 Growth: high contribution."],
+          ["Requirements", "R1 Links last for 90 days. R2 Admins hear when a team joins."],
         ]
       : [
-          ["Now", "Saved carts · Faster checkout"],
-          ["Next", "Bulk ordering"],
-          ["Later", "Marketplace"],
+          ["Now", "Referral link · Self-serve checkout"],
+          ["Next", "Bulk import"],
+          ["Later", "Public signup"],
         ];
   const builtin = !!variant && THEME_SEEDS.some((s) => s.key === variant);
   const theme = builtin ? variant! : "preview";

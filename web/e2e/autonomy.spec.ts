@@ -101,14 +101,14 @@ test("autonomy: an Oracle did row in the Inbox opens and the badge drops by one"
   const badge = page.getByTestId("nav-inbox-badge");
   await expect(badge).toHaveText(/^\d+$/);
   const before = Number(await badge.textContent());
-  const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Saved addresses" });
+  const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Bulk import" });
   await expect(did).toContainText("Oracle did");
-  await expect(did).toContainText("Moved 'Saved addresses' up 2 within Raise activation");
+  await expect(did).toContainText("Moved 'Bulk import' up 2 within Activation");
   await expect(did.getByRole("button", { name: "Undo" })).toBeVisible();
   await did.getByRole("button", { name: "Open" }).click();
   await expect(badge).toHaveText(String(before - 1));
   await page.getByRole("tab", { name: /^Done/ }).click();
-  await expect(page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Saved addresses" })).toBeVisible();
+  await expect(page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Bulk import" })).toBeVisible();
   await page.reload();
   await expect(badge).toHaveText(String(before - 1));
 });

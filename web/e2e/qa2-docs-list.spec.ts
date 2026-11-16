@@ -80,9 +80,9 @@ test.describe("desktop", () => {
   // qa-docs-34: the table and the panel write dates one way, in the Company time zone.
   test("qa-docs-34: the panel's Created and Updated read as the table's dates", async ({ page }) => {
     await openList(page);
-    const r = row(page, "Saved carts PRD");
+    const r = row(page, "Referral link PRD");
     await r.locator("td").last().click({ position: { x: 4, y: 4 } });
-    await expect(inspector(page)).toContainText("Saved carts PRD");
+    await expect(inspector(page)).toContainText("Referral link PRD");
     const tableDate = (await r.locator("td").nth(4).innerText()).trim();
     const day = /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/;
     expect(tableDate).toMatch(day);
@@ -93,7 +93,7 @@ test.describe("desktop", () => {
   // qa-docs-6: the title names the version the panel shows.
   test("qa-docs-6: picking v1 in Versions makes the title read v1", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/saved-carts");
+    await page.goto("/documents/referral-link");
     const table = page.getByTestId("versions-table");
     await expect(table).toBeVisible();
     const suffix = page.getByRole("heading", { level: 1 }).locator("[data-title-suffix]");
@@ -106,7 +106,7 @@ test.describe("desktop", () => {
   // qa-docs-17: the empty Engineering specs card says what unlocks a spec.
   test("qa-docs-17: with no approved version, the specs card says to approve one", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/saved-carts");
+    await page.goto("/documents/referral-link");
     await expect(page.getByTestId("engineering-specs-empty")).toHaveText(
       "No engineering spec yet. Approve a version to request a spec.",
     );
@@ -119,7 +119,7 @@ test.describe("desktop", () => {
     await page.getByTestId("theme-dark").click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     const errors = collectErrors(page);
-    await page.goto("/documents/saved-carts");
+    await page.goto("/documents/referral-link");
     await expect(page.getByTestId("versions-table")).toBeVisible();
     await page.goto("/documents");
     await expect(page.getByTestId("document-row").first()).toBeVisible();
@@ -129,10 +129,10 @@ test.describe("desktop", () => {
   // qa-docs-31: Publish shows the same crumb as the document's other pages.
   test("qa-docs-31: the Publish page's breadcrumb names the PRD and its status", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/saved-carts/publish");
+    await page.goto("/documents/referral-link/publish");
     const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
     await expect(crumb.getByRole("link", { name: "PRDs" })).toBeVisible();
-    await expect(crumb.getByRole("link", { name: "Saved carts PRD" })).toHaveAttribute("href", "/documents/saved-carts");
+    await expect(crumb.getByRole("link", { name: "Referral link PRD" })).toHaveAttribute("href", "/documents/referral-link");
     await expect(crumb).toContainText(/Draft|In review|Approved/);
   });
 });
@@ -144,7 +144,7 @@ for (const scheme of ["light", "dark"] as const) {
     // qa-docs-18: Required sections tick in the app's own box, not the browser's.
     test(`qa-docs-18: Required sections use the app's tick box (${scheme})`, async ({ page }) => {
       await login(page);
-      await page.goto("/documents/checkout-redesign");
+      await page.goto("/documents/annual-billing");
       await page.getByRole("button", { name: "Review settings" }).click();
       const sheet = page.getByRole("dialog", { name: "Review settings" });
       const box = sheet.getByTestId("required-sections").getByRole("checkbox").first();

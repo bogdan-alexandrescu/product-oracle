@@ -28,17 +28,17 @@ test("qa-docs-35: the design page names sections, documents and requirements in 
   await open(page, FLOW);
   const main = page.locator("main");
   const stale = page.getByTestId("stale-notice").filter({ visible: true });
-  await expect(stale).toContainText('Section "5.2 Shipping step" changed in Checkout redesign PRD');
+  await expect(stale).toContainText('Section "5.2 Billing step" changed in Annual billing PRD');
 
   const panel = inspector(page);
-  await expect(panel.getByTestId("annotation").first()).toContainText("5.2 Shipping step");
-  await expect(panel.getByTestId("annotation").first()).toContainText("Show shipping cost on the cart");
+  await expect(panel.getByTestId("annotation").first()).toContainText("5.2 Billing step");
+  await expect(panel.getByTestId("annotation").first()).toContainText("Show the yearly price up front");
   await expect(panel.getByTestId("version-meta")).toContainText("From PRD");
-  await expect(panel.getByTestId("version-meta")).toContainText("Checkout redesign PRD v1");
+  await expect(panel.getByTestId("version-meta")).toContainText("Annual billing PRD v1");
   await expect(panel.getByTestId("version-meta")).toContainText("Oracle · See how it was made");
 
   // No ids, keys, slugs, hashes or media types on screen.
-  for (const raw of ["s-5-2", "checkout-redesign", "req-shipping-cost", "cost-early", "c3000000", "sha256", "image/svg+xml", "prd_to_spec", "claude-code", "→"]) {
+  for (const raw of ["s-5-2", "annual-billing", "req-yearly-price", "cost-early", "c3000000", "sha256", "image/svg+xml", "prd_to_spec", "claude-code", "→"]) {
     await expect(main.getByText(raw, { exact: false }).filter({ visible: true })).toHaveCount(0);
   }
 
@@ -94,7 +94,7 @@ test.describe("phone", () => {
     await open(page, FLOW);
     const h1 = page.getByRole("heading", { level: 1 });
     await expect(h1).toBeVisible();
-    await expect(h1).toContainText("Early shipping cost: user flows");
+    await expect(h1).toContainText("Early yearly price: user flows");
     // Not the screen-reader-only 1 px heading: a real, wrapped title.
     const box = await h1.boundingBox();
     expect(box && box.height >= 20 && box.width >= 200).toBeTruthy();

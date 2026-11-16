@@ -8,7 +8,7 @@ import { login } from "./helpers";
  * Visual QA pass F, Company › Metrics (F-4, F-14, F-40, F-45, F-46), driven through the UI on
  * the mock layer's "metrics" scenario: Weekly active teams (412 teams in the week of Oct 12,
  * +37 on the week before), and Trial to paid rate (typed by hand, 13 weeks from Jul 20 to
- * Oct 12, linked to Grow paid conversion with a target of 12%). The mock clock is Mon
+ * Oct 12, linked to Growth with a target of 12%). The mock clock is Mon
  * 2026-10-19. Each test's card: protects; fails_when; no_claim.
  */
 

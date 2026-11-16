@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 /*
  * Fourth QA pass on Company › Metrics, driven through the UI as a person would. The default
- * mock scenario has no metrics; Raise activation is a confirmed goal in % (target 45%, current
+ * mock scenario has no metrics; Activation is a confirmed goal in % (target 45%, current
  * 38% measured Oct 1, so Home reads "7 pts to go"). The mock clock is Thu 2026-10-22, so the
  * last complete week, the one Record a value offers first, is the week of Oct 12. Each test
  * names the finding it protects.
@@ -65,10 +65,10 @@ test.describe("desktop", () => {
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();
 
-    await addMetric(page, "Activation rate", "Raise activation");
+    await addMetric(page, "Activation rate", "Activation");
     const inspector = page.getByTestId("metric-inspector").filter({ visible: true });
     await expect(inspector).toContainText("Activation rate");
-    await expect(inspector.getByRole("link", { name: "Raise activation" })).toBeVisible();
+    await expect(inspector.getByRole("link", { name: "Activation" })).toBeVisible();
     await expect(inspector).toContainText("7 pts to go");
     await expect(inspector.getByRole("combobox", { name: "Week" })).toHaveValue("2026-10-12");
     await recordValue(inspector, "41");

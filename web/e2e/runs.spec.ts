@@ -50,7 +50,7 @@ test("runs list shows each run with its status, and cost only on the approval an
   const approval = rows.and(page.locator('[data-document="usage-alerts-v2"]'));
   await expect(approval).toContainText("Awaiting cost approval");
   await expect(approval.locator('[data-cost="prominent"]')).toContainText("estimated");
-  const overrun = rows.and(page.locator('[data-document="team-workspaces"]'));
+  const overrun = rows.and(page.locator('[data-document="team-invites"]'));
   await expect(overrun).toContainText("Paused: over budget");
   await expect(overrun.locator('[data-cost="prominent"]')).toHaveText("$14.20 of $9.00 estimated");
 });
@@ -221,7 +221,7 @@ async function seedRejectedDraft(page: Page, withProblems = false): Promise<stri
       error = `prd.md was rejected: ${problems.map((p) => `[${p.code}] ${p.message}`).join("; ")}`;
       summary = "Oracle refused prd.md: 24 citations use source 'x', which isn't accepted; 102 references fail because of them.";
     }
-    const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "guest-checkout", document_id: null, created_at: at, started_at: at };
+    const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "public-signup", document_id: null, created_at: at, started_at: at };
     const segments: S[] = run.segments;
     for (const s of segments) {
       Object.assign(s, {
@@ -252,7 +252,7 @@ async function seedRejectedDraft(page: Page, withProblems = false): Promise<stri
     });
     Object.assign(run, { status: "awaiting_checkpoint", waiting_on: "prd_review" });
     db.runs.runs.push(run);
-    db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Guest checkout PRD\n---\n\n# Guest checkout PRD {#title}\n";
+    db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Public signup PRD\n---\n\n# Public signup PRD {#title}\n";
     localStorage.setItem(key, JSON.stringify(db));
     return id;
   }, withProblems);
@@ -278,7 +278,7 @@ test("a rejected draft: Retry import imports it, and the segment links the PRD",
   await expect(review.getByRole("button", { name: "Request changes" })).toBeEnabled();
 
   await retry.click();
-  await expect(prd).toContainText(/Imported as (?!guest-checkout).+ v1/);
+  await expect(prd).toContainText(/Imported as (?!public-signup).+ v1/);
   await expect(prd).not.toContainText("Draft not imported");
   await expect(retry).toHaveCount(0);
   // Nothing is decided: the review still waits for a person, who may approve it now.
@@ -289,7 +289,7 @@ test("a rejected draft: Retry import imports it, and the segment links the PRD",
   await expect(review.getByTestId("cannot-approve")).toHaveCount(0);
 
   await prd.getByRole("link", { name: / v1$/ }).click();
-  await expect(page).toHaveURL(/\/documents\/guest-checkout\/v\/1$/);
+  await expect(page).toHaveURL(/\/documents\/public-signup\/v\/1$/);
 });
 
 const SUMMARY = "Oracle refused prd.md: 24 citations use source 'x', which isn't accepted; 102 references fail because of them.";
@@ -322,7 +322,7 @@ test("a rejected draft reads Draft rejected, with one summary line and every pro
 
   // The runs list says it too.
   await page.getByTestId("nav-runs").click();
-  const row = page.locator('[data-testid="run-row"][data-document="guest-checkout"]');
+  const row = page.locator('[data-testid="run-row"][data-document="public-signup"]');
   await expect(row.getByTestId("run-draft-rejected")).toHaveText("Draft rejected");
   await expect(row.getByTestId("run-draft-rejected")).toHaveAttribute("title", SUMMARY);
   await expect(page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByTestId("run-draft-rejected")).toHaveCount(0);
@@ -537,7 +537,7 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
     await expect(page.getByText(`Run ${short("team-onboarding")}`)).toHaveCount(0);
     await context.close();
   }
-  expect(Object.keys(ids[0]!).sort()).toEqual(["checkout-redesign", "saved-carts", "team-onboarding", "team-workspaces", "usage-alerts-v2"]);
+  expect(Object.keys(ids[0]!).sort()).toEqual(["annual-billing", "referral-link", "team-invites", "team-onboarding", "usage-alerts-v2"]);
   expect(ids[1]).toEqual(ids[0]);
   expect(dates[1]).toEqual(dates[0]);
 });

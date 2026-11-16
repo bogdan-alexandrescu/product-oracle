@@ -288,7 +288,7 @@ export function seedRequests(input: { ownerId: string; goals: { id: string }[]; 
     body: "Asked twice in the support channel this month.", requester_kind: "customer",
     suggestion: {
       theme_id: checkout.id, theme_title: checkout.title, goal_ids: [g0], duplicate_of: null, feature_id: feature,
-      confidence: 0.72, rationale: "Same need as saved addresses: less typing at every order", run_id: null, at: daysAgo(1), accepted: [],
+      confidence: 0.72, rationale: "Same need as imported rows: less typing at every order", run_id: null, at: daysAgo(1), accepted: [],
     },
   });
   add(2, "Dark mode", "slack", { requester_kind: "team" });

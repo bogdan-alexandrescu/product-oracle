@@ -81,7 +81,7 @@ test("an Inbox row stays one plain link; its expanded detail names the codes in 
   await withCodes(page);
   await login(page);
   await page.goto("/inbox");
-  const row = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Saved addresses" });
+  const row = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Bulk import" });
   await expect(row.getByRole("link", { name: /within G-B/ })).toBeVisible();
   await expect(row.getByTestId("named-code")).toHaveCount(0);
 
@@ -90,7 +90,7 @@ test("an Inbox row stays one plain link; its expanded detail names the codes in 
   await more.click();
   await expect(more).toHaveAttribute("aria-expanded", "true");
   const quote = page.getByTestId("need-quote");
-  await expect(quote).toHaveText("Moved 'Saved addresses' up 2 within G-B, ahead of G-Z");
+  await expect(quote).toHaveText("Moved 'Bulk import' up 2 within G-B, ahead of G-Z");
   // G-B is a company goal; G-Z is not known and stays plain.
   await expect(quote.getByTestId("named-code")).toHaveText(["G-B"]);
 

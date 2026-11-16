@@ -10,7 +10,7 @@ import { login, openSection } from "./helpers";
  * chips are This section / All sections / General, and the Inbox shows the item with
  * "General" in place of a section.
  */
-const DOC = "/documents/checkout-redesign/v/2";
+const DOC = "/documents/annual-billing/v/2";
 const REMARK = "The goals don't match the problem statement.";
 
 const panel = (page: Page) => page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true });
@@ -100,7 +100,7 @@ test("a viewer has no whole-draft entry; the new item reaches the approver's Inb
 
   // Its link opens the version's Feedback, where the answer waits on the item.
   await row.getByRole("link", { name: REMARK, exact: true }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\?feedback=open/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\?feedback=open/);
   const mine = items(page).filter({ hasText: REMARK });
   await expect(mine).toHaveCount(1);
   await expect(mine).toHaveAttribute("data-kind", "suggestion");

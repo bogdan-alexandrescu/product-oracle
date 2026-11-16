@@ -38,7 +38,7 @@ for (const phone of [false, true]) {
       await signIn(page, ADMIN.email, "simple-waits");
       // Oldest first, each with what it is, which PRD it is for and since when it waits.
       await expect(stops(page)).toHaveCount(3);
-      const feature = page.getByRole("region", { name: "Feature set: Saved addresses PRD" });
+      const feature = page.getByRole("region", { name: "Feature set: Bulk import PRD" });
       const review = page.getByRole("region", { name: "Engineering review: Offline sync PRD" });
       const dates = page.getByRole("region", { name: "Engineering dates: Usage alerts PRD" });
       await expect(feature).toContainText("A run waits on you to go on. Waiting since Sat, Oct 17");

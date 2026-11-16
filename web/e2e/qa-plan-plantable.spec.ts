@@ -67,7 +67,7 @@ for (const width of [1440, 1512]) {
     await expect(prd).toHaveAttribute("title", "Usage alerts PRD v1");
     await notCut(prd);
     await notCut(threshold.getByTestId("plan-goal").getByTestId("code-name"));
-    await expect(threshold.getByTestId("plan-goal")).toHaveText("Raise activation");
+    await expect(threshold.getByTestId("plan-goal")).toHaveText("Activation");
 
     // prod-4: three goals read as the first in full and "+2", the others named on hover.
     const dashboard = row(page, "Usage dashboard");
@@ -76,7 +76,7 @@ for (const width of [1440, 1512]) {
     await notCut(goal.getByTestId("code-name"));
     const more = goal.getByTestId("plan-goal-more");
     await expect(more).toHaveText("+2 goals");
-    await expect(more).toHaveAttribute("title", /Grow paid conversion.*Cut early churn/);
+    await expect(more).toHaveAttribute("title", /Growth.*Cut early churn/);
     const gb = (await goal.boundingBox())!;
     const mb = (await more.boundingBox())!;
     expect(mb.x + mb.width).toBeLessThanOrEqual(gb.x + gb.width + 1);

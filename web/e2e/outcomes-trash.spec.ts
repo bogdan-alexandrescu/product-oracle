@@ -6,7 +6,7 @@ import { login } from "./helpers";
  * Outcomes edits (owner, Nov 13), Move to Trash: an outcome goes to Trash from its
  * inspector's menu, leaves the list, its filter counts and the Priorities track record, and
  * Settings › Trash restores it. Mock API, "outcomes" scenario (synthetic: six earlier
- * predictions on Raise activation were assessed, 3 held).
+ * predictions on Activation were assessed, 3 held).
  *
  * Each test states its card: protects (the observable), fails_when (the wrong result it
  * rejects), no_claim (what green does not prove).

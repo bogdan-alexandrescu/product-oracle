@@ -20,7 +20,7 @@ import { login } from "./helpers";
 
 const NEW_PERSON = "new.person@example.com";
 const METRIC = "Add a metric that shows the outbound check works";
-const ADDRESS = "Should the most recently used address be selected by default?";
+const ADDRESS = "Should the current seat count be selected by default?";
 
 const tabs = (page: Page) => page.getByTestId("inbox-state-tabs");
 const tab = (page: Page, name: string) => tabs(page).getByRole("tab", { name: new RegExp(`^${name}`) });
@@ -122,8 +122,8 @@ test("qa-company-30: an Oracle did row with no codes has no chevron repeating it
   await scenario(page, "oracle-did");
   await login(page);
   await openInbox(page);
-  const did = page.getByTestId("inbox-oracle-actions").locator("tr[data-row]").filter({ hasText: "Saved addresses" });
-  await expect(did).toContainText("Moved 'Saved addresses' up 2 within Raise activation");
+  const did = page.getByTestId("inbox-oracle-actions").locator("tr[data-row]").filter({ hasText: "Bulk import" });
+  await expect(did).toContainText("Moved 'Bulk import' up 2 within Activation");
   await expect(did.getByRole("button", { name: "Show the text" })).toHaveCount(0);
 });
 

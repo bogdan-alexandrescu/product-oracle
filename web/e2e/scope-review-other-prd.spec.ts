@@ -13,7 +13,7 @@ async function openReview(page: Page) {
   await page.addInitScript((key) => localStorage.setItem(key, "scope-review-other-prd"), MOCK_SCENARIO_KEY);
   await login(page, "approver@example.com");
   await page.getByTestId("nav-runs").click();
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Feature set" })).toBeAttached();

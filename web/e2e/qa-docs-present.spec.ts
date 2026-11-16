@@ -2,13 +2,13 @@ import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
 
-// QA pass 1, docs lane: Present mode of Saved carts v2 (a draft), opened from the version.
+// QA pass 1, docs lane: Present mode of Referral link v2 (a draft), opened from the version.
 
 async function openPresent(page: Page) {
   await login(page);
-  await page.goto("/documents/saved-carts/v/2");
+  await page.goto("/documents/referral-link/v/2");
   await page.getByRole("link", { name: "Present" }).filter({ visible: true }).first().click();
-  await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\/present$/);
+  await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2\/present$/);
   await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
 }
 
@@ -28,7 +28,7 @@ test.describe("desktop", () => {
     expect(text).not.toMatch(/· draft|imported /);
     // Not again in the control bar.
     await expect(page.getByRole("navigation", { name: "Presentation" })).not.toContainText("Imported");
-    await expect(page.getByRole("navigation", { name: "Presentation" })).not.toContainText("Saved carts PRD");
+    await expect(page.getByRole("navigation", { name: "Presentation" })).not.toContainText("Referral link PRD");
   });
 
   test("qa-docs-59: no account button sits over the slide controls", async ({ page }) => {
@@ -49,7 +49,7 @@ test.describe("desktop", () => {
     }
     // Exit still leads back to the version, with its rail.
     await page.getByRole("link", { name: "Exit" }).click();
-    await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2$/);
+    await expect(page).toHaveURL(/\/documents\/referral-link\/v\/2$/);
     await expect(page.getByTestId("user-menu")).toBeVisible();
   });
 });
@@ -59,7 +59,7 @@ test.describe("phone", () => {
 
   test("qa-docs-6: the slide fills the screen's width, its title and footer in full", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/saved-carts/v/2/present");
+    await page.goto("/documents/referral-link/v/2/present");
     await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
     const slide = (await page.getByTestId("audience-view").locator(".current-slide").boundingBox())!;
     expect(slide.x).toBeGreaterThanOrEqual(0);
@@ -81,7 +81,7 @@ test("qa-docs-6 / qa-docs-30: dark theme, the phone slide fits and its banner re
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: "dark" });
   await login(page);
-  await page.goto("/documents/saved-carts/v/2/present");
+  await page.goto("/documents/referral-link/v/2/present");
   await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
   const slide = (await page.getByTestId("audience-view").locator(".current-slide").boundingBox())!;
   expect(slide.x + slide.width).toBeLessThanOrEqual(390);

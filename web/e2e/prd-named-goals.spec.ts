@@ -4,7 +4,7 @@ import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 // PRD source words: Oracle's own PRD checks name each goal by its name with its code beside
-// it ("Raise activation (g.activation)"), never by the bare code. The mock's quality rules
+// it ("Activation (g.activation)"), never by the bare code. The mock's quality rules
 // read as the API's (oracle.quality.criteria.goal_alignment).
 
 async function openQuality(page: Page, path: string) {
@@ -18,9 +18,9 @@ const rulesSaid = (page: Page) =>
   page.getByTestId("quality-inspector").getByTestId("evaluator").filter({ hasText: "Rules" }).first();
 
 test("a PRD's goal check names the goal it serves by its name, with the code beside it", async ({ page }) => {
-  await openQuality(page, "/documents/team-workspaces/v/2/quality");
+  await openQuality(page, "/documents/team-invites/v/2/quality");
   await page.locator('[data-testid="criterion-row"][data-key="goal_alignment"]').click();
-  await expect(rulesSaid(page)).toContainText("serves a confirmed goal: Raise activation (g.activation)");
+  await expect(rulesSaid(page)).toContainText("serves a confirmed goal: Activation (g.activation)");
 });
 
 test("a PRD whose goals are proposed says so as the API does, never by a bare code", async ({ page }) => {

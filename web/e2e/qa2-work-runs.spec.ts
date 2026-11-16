@@ -108,7 +108,7 @@ test("rirs-6: who may decide a checkpoint, in words", async ({ page }) => {
 });
 
 test("rirs-15: a checkpoint turned off reads Not asked, with why on hover", async ({ page }) => {
-  await openRun(page, "Saved carts");
+  await openRun(page, "Referral link");
   const chip = page.getByTestId("segment-checkpoint").first();
   await expect(chip).toContainText("Not asked (checkpoint skipped)");
   await expect(chip).not.toContainText(": off");
@@ -118,7 +118,7 @@ test("rirs-15: a checkpoint turned off reads Not asked, with why on hover", asyn
 test("rirs-17: the header's document and decisions link are set apart, with no unexplained (new)", async ({ page }) => {
   await openRun(page, "Paused");
   const head = header(page);
-  await expect(head.getByTestId("run-document")).toHaveText("Team workspaces PRD");
+  await expect(head.getByTestId("run-document")).toHaveText("Team invites PRD");
   await expect(head.getByTestId("run-header-sep")).toBeVisible();
   await expect(head).not.toContainText("(new)");
   await expect(head).not.toContainText(/PRD\s*Decisions in this run/);

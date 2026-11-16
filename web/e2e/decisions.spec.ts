@@ -145,10 +145,10 @@ test("the class switch keeps checkpoint records apart; From and the URL keep the
   await expect(row(page, /Approve Feature set · /)).toHaveCount(0);
 
   await chip(page, "Kind", "Checkpoints").click();
-  await expect(row(page, "Approve Feature set · Checkout redesign PRD run")).toBeVisible();
-  await expect(row(page, "Send back Feature set · Checkout redesign PRD run")).toBeVisible();
+  await expect(row(page, "Approve Feature set · Annual billing PRD run")).toBeVisible();
+  await expect(row(page, "Send back Feature set · Annual billing PRD run")).toBeVisible();
   await expect(row(page, "Price the team plan per seat")).toHaveCount(0);
-  await expect(row(page, "Approve Feature set · Checkout redesign PRD run")).toContainText("—");
+  await expect(row(page, "Approve Feature set · Annual billing PRD run")).toContainText("—");
 
   // Two quick picks: From is picked before All has taken, and both stay.
   await chip(page, "Kind", "All kinds").click();
@@ -163,7 +163,7 @@ test("the class switch keeps checkpoint records apart; From and the URL keep the
   await expect(rows(page)).toHaveCount(1);
 
   await chip(page, "From", "Checkpoint send-backs").click();
-  await row(page, "Send back Feature set · Checkout redesign PRD run").click();
+  await row(page, "Send back Feature set · Annual billing PRD run").click();
   const inspector = page.getByTestId("decision-inspector").filter({ visible: true });
   await expect(inspector).toContainText("Size the export feature again");
   await expect(inspector.getByRole("link", { name: "Open run" })).toBeVisible();
@@ -189,7 +189,7 @@ test("the run page's Decisions in this run opens the log on Checkpoints with tha
     "Approve Priority order",
     "Approve PRD review",
   ]) {
-    await expect(row(page, `${title} · Checkout redesign PRD run`)).toHaveCount(1);
+    await expect(row(page, `${title} · Annual billing PRD run`)).toHaveCount(1);
   }
 });
 
@@ -199,7 +199,7 @@ test("a section's Record a decision opens Propose decision about that section", 
   // on the way or the new decision is not findable by its subject; no_claim=the mock's
   // section ids stand in for the API's.
   await login(page, COMMENTER);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const goalTrace = await openSection(page, "goal-trace");
   await sectionAction(goalTrace, "1. Goal trace", "Record a decision about 1. Goal trace");
   await expect(page).toHaveURL(/\/company\/decisions\?subject=section/);

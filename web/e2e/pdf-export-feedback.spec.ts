@@ -22,7 +22,7 @@ import { expect, test, type Page } from "./test";
 //   note says so ("It runs to 2 pages"); fails_when = the note is missing; no_claim = the
 //   layout itself (the API's check, test_pdf_export_text.py).
 
-const CARTS = "/documents/saved-carts/v/2";
+const CARTS = "/documents/referral-link/v/2";
 const ONE_PAGER = "/simple/prds/guided-setup";
 
 for (const [name, viewport] of [
@@ -42,7 +42,7 @@ for (const [name, viewport] of [
       const pdf = page.getByRole("button", { name: "Export PDF", exact: true });
       const download = page.waitForEvent("download");
       await pdf.click();
-      expect((await download).suggestedFilename()).toBe("saved-carts-v2.pdf");
+      expect((await download).suggestedFilename()).toBe("referral-link-v2.pdf");
       await expect(pdf).toBeHidden();
       await expect(page.getByRole("status").filter({ hasText: "PDF downloaded" })).toBeVisible();
     });

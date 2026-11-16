@@ -7,9 +7,9 @@ import { login, signOut } from "./helpers";
 /**
  * C7 Scope review: the feature-set stop reviewed row by row at /runs/<id>/review/<checkpoint>,
  * driven through the UI over the mock API ("scope-review" scenario, web/lib/api/mock/runs.ts
- * seedScopeReviewRuns): saved-addresses (attempt 1: Bulk edit depends on the left-out Address
+ * seedScopeReviewRuns): bulk-import (attempt 1: Bulk edit depends on the left-out Address
  * book export, Address labels serves no goal, Pick address in one step has a low confidence,
- * and a commenter suggested leaving Edit a saved address out), saved-addresses-next (attempt
+ * and a commenter suggested leaving Edit an imported row out), bulk-import-next (attempt
  * 2) and address-book (approved in the console while Bulk edit's dependency blocks).
  */
 
@@ -41,8 +41,8 @@ const bar = (page: Page) => page.getByTestId("decision-bar");
 // (api/tests/test_scope_review.py).
 test("a blocking dependency disables Approve until Include <dependency> fixes it", async ({ page }) => {
   await seeded(page);
-  await openReview(page, "saved-addresses");
-  await expect(page.getByTestId("scope-for")).toHaveText("For Saved addresses PRD · attempt 1");
+  await openReview(page, "bulk-import");
+  await expect(page.getByTestId("scope-for")).toHaveText("For Bulk import PRD · attempt 1");
   await expect(page.getByRole("button", { name: /^Needs you/ })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("scope-row")).toHaveCount(3);
   const approve = bar(page).getByRole("button", { name: /^Approve/ });
@@ -63,7 +63,7 @@ test("a blocking dependency disables Approve until Include <dependency> fixes it
 // it leaves the row out; no_claim = the review file a send-back writes.
 test("leave out asks a reason, stages a chip, and removing the chip undoes it", async ({ page }) => {
   await seeded(page);
-  await openReview(page, "saved-addresses");
+  await openReview(page, "bulk-import");
   const labels = row(page, "Address labels");
   await expect(labels.getByTestId("row-reasons")).toContainText("No confirmed goal");
   await labels.getByRole("button", { name: "Leave out", exact: true }).click();
@@ -86,7 +86,7 @@ test("leave out asks a reason, stages a chip, and removing the chip undoes it", 
 // enhancement quality.
 test("enhance a requirement, then edit and accept the suggestion", async ({ page }) => {
   await seeded(page);
-  await openReview(page, "saved-addresses");
+  await openReview(page, "bulk-import");
   const pick = row(page, "Pick address in one step");
   await pick.getByRole("button", { name: "Requirements of Pick address in one step" }).click();
   const req = pick.getByTestId("requirement-pick-address-one-screen");
@@ -109,23 +109,23 @@ test("enhance a requirement, then edit and accept the suggestion", async ({ page
 // under its feature, locked; no_claim = the agents' own proposals (unchanged).
 test("add a requirement, approve with edits, and the Ground Truth lists it under its feature, locked", async ({ page }) => {
   await seeded(page);
-  await openReview(page, "saved-addresses");
+  await openReview(page, "bulk-import");
   // The blocking dependency first, so Approve is open.
   await row(page, "Bulk edit").getByRole("button", { name: "Include dependency" }).click();
   await page.getByRole("button", { name: /^All/ }).click();
-  await row(page, "Saved addresses").getByTestId("feature-title").click();
+  await row(page, "Bulk import").getByTestId("feature-title").click();
   const inspector = page.getByTestId("scope-inspector");
-  await expect(inspector).toContainText("Saved addresses");
+  await expect(inspector).toContainText("Bulk import");
   await inspector.getByRole("button", { name: "Add requirement" }).click();
-  const text = "The buyer sees which saved address was used last";
+  const text = "The buyer sees which imported row was used last";
   await inspector.getByRole("textbox", { name: "Requirement", exact: true }).fill(text);
   await inspector.getByRole("textbox", { name: /Acceptance criteria/ }).fill("The last used address is marked");
   await inspector.getByRole("button", { name: "Add", exact: true }).click();
-  const added = row(page, "Saved addresses").locator('[data-added="true"]');
+  const added = row(page, "Bulk import").locator('[data-added="true"]');
   await expect(added).toHaveCount(1);
   await expect(added).toContainText(text);
   await expect(added.getByTestId("yours")).toHaveText("Yours");
-  await expect(bar(page).getByTestId("staged-chip").filter({ hasText: "+ Requirement on Saved addresses" })).toBeVisible();
+  await expect(bar(page).getByTestId("staged-chip").filter({ hasText: "+ Requirement on Bulk import" })).toBeVisible();
 
   await bar(page).getByRole("button", { name: "Approve with 2 edits" }).click();
   // Rows still under Needs you: Approve says so first.
@@ -134,7 +134,7 @@ test("add a requirement, approve with edits, and the Ground Truth lists it under
   await expect(page.getByTestId("checkpoint-feature_set")).toContainText("Approved");
 
   await page.goto("/ground-truth");
-  const feature = page.getByTestId("feature-saved-addresses");
+  const feature = page.getByTestId("feature-bulk-import");
   await expect(feature).toBeVisible();
   const requirement = page.locator('[data-testid^="requirement-r."]').filter({ hasText: text });
   await expect(requirement).toBeVisible();
@@ -149,7 +149,7 @@ test("add a requirement, approve with edits, and the Ground Truth lists it under
 // apply it; no_claim = notifications.
 test("a commenter suggests leave out; the approver accepts it", async ({ page }) => {
   await seeded(page, COMMENTER);
-  await openReview(page, "saved-addresses");
+  await openReview(page, "bulk-import");
   await expect(page.getByRole("button", { name: /^Approve/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Send back to agents" })).toHaveCount(0);
   const labels = row(page, "Address labels");
@@ -162,7 +162,7 @@ test("a commenter suggests leave out; the approver accepts it", async ({ page })
 
   await signOut(page);
   await login(page, APPROVER);
-  await openReview(page, "saved-addresses");
+  await openReview(page, "bulk-import");
   const again = row(page, "Address labels");
   await expect(again.getByTestId("suggested-by")).toHaveText("Suggested by Theo Brandt: Leave out · Not now");
   await again.getByTestId("feature-title").click();
@@ -180,14 +180,14 @@ test("a commenter suggests leave out; the approver accepts it", async ({ page })
 // no_claim = the re-run's own memory (D5).
 test("the Changed filter on attempt 2 lists only rows that differ from attempt 1", async ({ page }) => {
   await seeded(page);
-  await openReview(page, "saved-addresses-next");
-  await expect(page.getByTestId("scope-for")).toHaveText("For Saved addresses next PRD · attempt 2");
+  await openReview(page, "bulk-import-next");
+  await expect(page.getByTestId("scope-for")).toHaveText("For Bulk import next PRD · attempt 2");
   await page.getByRole("button", { name: /^Changed/ }).click();
   const rows = page.getByTestId("scope-row");
   await expect(rows).toHaveCount(3);
   await expect(row(page, "Delivery notes").getByTestId("changed-chip")).toHaveText("New in attempt 2");
   await expect(row(page, "Bulk edit").getByTestId("changed-chip")).toHaveText("Was left out");
-  await expect(row(page, "Saved addresses").getByTestId("changed-chip")).toHaveText("Requirements changed");
+  await expect(row(page, "Bulk import").getByTestId("changed-chip")).toHaveText("Requirements changed");
   await expect(row(page, "Address labels")).toHaveCount(0);
   await expect(row(page, "Address lookup")).toHaveCount(0);
 });
@@ -273,7 +273,7 @@ for (const [email, who, writes, suggests] of [
 ] as const) {
   test(`${who} sees the row edits only if their role may make them`, async ({ page }) => {
     await seeded(page, email);
-    await openReview(page, "saved-addresses");
+    await openReview(page, "bulk-import");
     const pick = row(page, "Pick address in one step");
     await pick.getByRole("button", { name: "Requirements of Pick address in one step" }).click();
     const req = pick.getByTestId("requirement-pick-address-one-screen");
@@ -295,7 +295,7 @@ for (const email of [APPROVER, COMMENTER]) {
   test(`the run page at the feature set renders for ${email.split("@")[0]} with one Review link`, async ({ page }) => {
     await seeded(page, email);
     await page.getByTestId("nav-runs").click();
-    await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
+    await page.locator('[data-testid="run-row"][data-document="bulk-import"]').getByRole("link").first().click();
     await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
     const segment = page.getByTestId("segment-feature_set");
     await expect(segment.getByRole("link", { name: "Review feature set" })).toHaveCount(1);

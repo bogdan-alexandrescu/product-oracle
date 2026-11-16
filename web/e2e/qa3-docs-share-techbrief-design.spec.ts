@@ -4,13 +4,13 @@ import { login } from "./helpers";
 
 /*
  * QA pass 3, docs lane (fix4-docs-share): the tech brief page and a spec's design page
- * /specs/<id>/design/<versionId>, on the mock API's seeded spec: Checkout redesign PRD →
- * "Early shipping cost: technical brief" (v1 potentially stale, v2 the latest) → its user flow
+ * /specs/<id>/design/<versionId>, on the mock API's seeded spec: Annual billing PRD →
+ * "Early yearly price: technical brief" (v1 potentially stale, v2 the latest) → its user flow
  * and wireframes. Driven through the UI as a person would.
  */
 
-const BRIEF_V1 = "/documents/checkout-redesign-early-shipping-cost-spec/v/1";
-const BRIEF_V2 = "/documents/checkout-redesign-early-shipping-cost-spec/v/2";
+const BRIEF_V1 = "/documents/annual-billing-early-yearly-price-spec/v/1";
+const BRIEF_V2 = "/documents/annual-billing-early-yearly-price-spec/v/2";
 const SPEC_ID = "c3000000-0000-4000-8000-000000000001";
 const FLOW = `/specs/${SPEC_ID}/design/c3000000-0000-4000-8000-000000000012`;
 const WIRE = `/specs/${SPEC_ID}/design/c3000000-0000-4000-8000-000000000013`;
@@ -34,9 +34,9 @@ test.describe("desktop", () => {
     await login(page, "approver@example.com");
     await page.goto(BRIEF_V1);
     const reasons = visible(page, "spec-staleness").getByTestId("spec-staleness-reasons");
-    await expect(reasons).toHaveText('Section "5.2 Shipping step" changed in Checkout redesign PRD');
+    await expect(reasons).toHaveText('Section "5.2 Billing step" changed in Annual billing PRD');
     await expect(visible(page, "spec-staleness")).not.toContainText("s-5-2");
-    await expect(visible(page, "spec-staleness")).not.toContainText("checkout-redesign");
+    await expect(visible(page, "spec-staleness")).not.toContainText("annual-billing");
   });
 
   test("qa-docs-19: a wireframe's annotation reads '1. <note>', numbered once, no ids or keys", async ({ page }) => {
@@ -185,10 +185,10 @@ test.describe("phone", () => {
     await login(page, "approver@example.com");
     await page.goto(BRIEF_V1);
     const h1 = page.getByTestId("doc-header").getByRole("heading", { level: 1 });
-    await expect(h1).toContainText("Early shipping cost: technical brief");
+    await expect(h1).toContainText("Early yearly price: technical brief");
     const title = page.getByTestId("phone-title");
     await expect(title).not.toHaveText("");
-    await expect(title).not.toContainText("Early shipping cost");
+    await expect(title).not.toContainText("Early yearly price");
   });
 
   test("qa-docs-81: the version tabs wrap on a phone, none cut mid-word", async ({ page }) => {
@@ -199,7 +199,7 @@ test.describe("phone", () => {
     for (const link of await links.all()) {
       await expect(link).toBeVisible();
       expect(await link.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-      expect(await link.getAttribute("title")).toMatch(/^Early shipping cost: .+ · v\d+$/);
+      expect(await link.getAttribute("title")).toMatch(/^Early yearly price: .+ · v\d+$/);
     }
     expect(await tabs.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight)).toBe(true);
   });
@@ -208,6 +208,6 @@ test.describe("phone", () => {
     await openDesign(page, FLOW, "approver@example.com");
     await expect(page.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Review the design" }).click();
-    await expect(page.getByRole("dialog", { name: /Review · Early shipping cost: user flows/ })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: /Review · Early yearly price: user flows/ })).toBeVisible();
   });
 });

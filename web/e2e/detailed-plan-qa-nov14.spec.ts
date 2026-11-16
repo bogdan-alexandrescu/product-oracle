@@ -37,32 +37,32 @@ for (const size of ["desktop", "phone"] as const) {
 }
 
 test("the feature drawer's Depends on and Blocked by name each feature with its code", async ({ page }) => {
-  // protects=Saved carts' drawer reads F-85 Team invites and F-82 Guided setup; fails_when=the names show
+  // protects=Referral link's drawer reads F-05 Team invites and F-01 Setup checklist; fails_when=the names show
   // without codes; no_claim=the links' edits (baseline-links).
   await login(page);
   await page.goto("/ground-truth");
-  await page.getByTestId("feature-F-84").getByRole("button", { name: /Saved carts/ }).click();
-  const d = page.getByRole("dialog", { name: "Saved carts" });
+  await page.getByTestId("feature-F-12").getByRole("button", { name: /Referral link/ }).click();
+  const d = page.getByRole("dialog", { name: "Referral link" });
   const deps = d.getByRole("list", { name: "Depends on" });
-  await expect(deps.getByTestId("code-tag")).toHaveText("F-85");
+  await expect(deps.getByTestId("code-tag")).toHaveText("F-05");
   await expect(deps).toContainText("Team invites");
-  await expect(d.getByRole("list", { name: "Blocked by" }).getByTestId("code-tag")).toHaveText("F-82");
+  await expect(d.getByRole("list", { name: "Blocked by" }).getByTestId("code-tag")).toHaveText("F-01");
 });
 
 test("Items: Flagged features, Conflicts and Proposals name each feature with its code", async ({ page }) => {
-  // protects=F-81 Dark mode, F-84 Saved carts in the Flagged table, the conflict's heading and the proposal's
+  // protects=F-06 Setup error report, F-12 Referral link in the Flagged table, the conflict's heading and the proposal's
   // sentence; Usage export (only proposed) keeps no code; fails_when=the names show alone; no_claim=goals.
   await login(page);
   await page.goto("/ground-truth");
   await page.getByRole("tab", { name: /Items/ }).click();
   await page.getByRole("tab", { name: /Flagged items/ }).click();
-  await expect(page.getByRole("button", { name: "F-81 Dark mode", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "F-84 Saved carts", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "F-06 Setup error report", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "F-12 Referral link", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Usage export", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: /Conflicts/ }).click();
-  await expect(page.getByRole("list", { name: "Conflicts" })).toContainText("F-84 Saved carts");
+  await expect(page.getByRole("list", { name: "Conflicts" })).toContainText("F-12 Referral link");
   await page.getByRole("tab", { name: /Proposals/ }).click();
-  await expect(page.getByTestId("proposal-summary").filter({ hasText: "delivery status" })).toContainText("Set F-81 Dark mode");
+  await expect(page.getByTestId("proposal-summary").filter({ hasText: "delivery status" })).toContainText("Set F-06 Setup error report");
 });
 
 test("Proposals: the lock rule is on Accept, not a paragraph", async ({ page }) => {

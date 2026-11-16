@@ -33,8 +33,8 @@ function setup(role: IntakeContext["role"] = "commenter") {
 test("intake mock: new idea, summary, a batch, answers and research", async () => {
   const { call, ctx, runs } = setup();
   const created = await call("POST", "/v1/intakes", {
-    title: "Saved addresses",
-    brief: "Returning buyers retype their address at every checkout. Add saved addresses.",
+    title: "Bulk import",
+    brief: "Returning buyers retype their address at every checkout. Add imported rows.",
   });
   expect(created.status).toBe(201);
   const intake = created.body.intake;

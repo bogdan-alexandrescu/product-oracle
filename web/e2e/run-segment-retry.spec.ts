@@ -23,7 +23,7 @@ async function seedFailedRun(page: Page, overBudget = false): Promise<string> {
     const base = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
     const id = "7a11c0de-0000-4000-8000-0000000000e9";
     const at = "2026-10-17T09:00:00Z";
-    const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "guest-checkout", document_id: null, created_at: at, started_at: at };
+    const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "public-signup", document_id: null, created_at: at, started_at: at };
     const segments: S[] = run.segments;
     const failed = segments.find((s) => s.name === "prd_draft")!;
     for (const s of segments) {
@@ -72,7 +72,7 @@ test("a run that failed at its PRD draft: Retry runs that step again, the steps 
   await login(page);
   const id = await seedFailedRun(page);
   await page.goto(`/runs/${id}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Guest checkout · Ground Truth to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Public signup · Ground Truth to PRD" })).toBeVisible();
   await expect(status(page)).toHaveText("Failed");
 
   const prd = page.getByTestId("segment-prd_draft");

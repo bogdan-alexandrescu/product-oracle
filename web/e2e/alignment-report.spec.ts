@@ -80,7 +80,7 @@ test("report page: the headline, a panel per track, needs attention linking to t
   await expect(link).toHaveAttribute("href", "/plan?item=usage-alerts:alert-digest");
   await expect(first).toContainText("ENG-413");
   await expect(first).toContainText("The team re-estimated");
-  // Checkout redesign has a track and no approved roadmap yet, as on the Plan.
+  // Annual billing has a track and no approved roadmap yet, as on the Plan.
   await expect(tracks.nth(1).getByTestId("track-health")).toHaveText("No roadmap");
   await expect(page.getByTestId("report-slack").filter({ visible: true })).toContainText("Posted to #plan on Oct 19");
 

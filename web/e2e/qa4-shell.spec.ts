@@ -83,14 +83,14 @@ test("qa4-shell-2, 3: PRDs that fail to load show the error and Try again only, 
 test("qa4-shell-2 review: a reload that fails after a good load keeps the PRDs under the error", async ({ page }) => {
   await login(page);
   await page.goto("/documents");
-  const kept = page.getByTestId("document-row").filter({ hasText: "Saved carts PRD" });
+  const kept = page.getByTestId("document-row").filter({ hasText: "Referral link PRD" });
   await expect(kept).toBeVisible();
   const rows = await page.getByTestId("document-row").count();
   // Deleting a PRD reloads the list; that reload fails.
   await failGets(page, "/v1/documents");
-  await kept.getByRole("button", { name: "Actions for Saved carts PRD" }).click();
+  await kept.getByRole("button", { name: "Actions for Referral link PRD" }).click();
   await page.getByRole("menuitem", { name: "Delete…" }).click();
-  const dialog = page.getByRole("dialog", { name: "Delete Saved carts PRD" });
+  const dialog = page.getByRole("dialog", { name: "Delete Referral link PRD" });
   const external = dialog.getByLabel("Delete it here; the external copy stays where it is");
   await expect(dialog.getByRole("button", { name: "Move to Trash" })).toBeVisible();
   if (await external.isVisible()) await external.check();

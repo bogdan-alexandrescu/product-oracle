@@ -224,9 +224,9 @@ test.describe("F-1: a list that fails to load says so and Try again loads it", (
 
   test("A document's History › Oracle's work", async ({ page }) => {
     await login(page);
-    await failGets(page, "/v1/documents/team-workspaces/llm-jobs");
+    await failGets(page, "/v1/documents/team-invites/llm-jobs");
     // A deep page: the version view, then its History tab.
-    await page.goto("/documents/team-workspaces/v/2");
+    await page.goto("/documents/team-invites/v/2");
     await page.getByRole("tab", { name: /^History/ }).filter({ visible: true }).click();
     const jobs = page.getByTestId("jobs-panel").filter({ visible: true });
     const notice = await expectLoadError(jobs, "Oracle's work");

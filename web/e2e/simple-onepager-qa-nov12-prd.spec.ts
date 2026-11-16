@@ -4,7 +4,7 @@ import { expect, test, type Page } from "./test";
 
 /*
  * QA findings of Nov 12, 2026 on a PRD's one-pager (docs/qa/2026-11-12/simple-goalmap.md),
- * driven through the UI against the mock's invented PRDs (Guided setup, Saved carts PRD; the
+ * driven through the UI against the mock's invented PRDs (Guided setup, Referral link PRD; the
  * mock's today is Oct 22).
  *
  * OP1: protects = a roadmap item of the plan's When card with no code ("No milestone":
@@ -15,7 +15,7 @@ import { expect, test, type Page } from "./test";
  * Product manager's lane's too, reads its feature's code with its name, the whole name on hover;
  * fails_when = a bar reads "Pricing pa…" with no code. OP9: protects = "The whole PRD" reads its
  * days month first ("needed by Nov 1, 2026"); fails_when = an ISO day shows. OP10: protects =
- * a feature the whole PRD names with no code (Save cart, Cart on every device, Reminder email)
+ * a feature the whole PRD names with no code (Copy link, Link in settings, Joined email)
  * is flagged "Not in the Ground Truth" in "Features by milestone" and in its own detail section;
  * fails_when = a bare name shows. no_claim = the API (the PRD's text is as written).
  */
@@ -41,7 +41,7 @@ test.describe("desktop 1440", () => {
   test.use({ viewport: DESKTOP });
 
   test("OP9: the whole PRD's decisions read their days month first", async ({ page }) => {
-    await openOnePager(page, /^Saved carts/);
+    await openOnePager(page, /^Referral link/);
     const decisions = prdSection(page, "decisions");
     await decisions.scrollIntoViewIfNeeded();
     await expect(decisions).toContainText("needed by Nov 1, 2026", { useInnerText: true });
@@ -50,16 +50,16 @@ test.describe("desktop 1440", () => {
   });
 
   test("OP10: a feature with no code is flagged in Features by milestone and in Feature detail", async ({ page }) => {
-    await openOnePager(page, /^Saved carts/);
+    await openOnePager(page, /^Referral link/);
     const table = prdSection(page, "brief-items").getByRole("region", { name: "Table" });
     await table.scrollIntoViewIfNeeded();
-    for (const name of ["Save cart", "Cart on every device", "Reminder email"]) {
+    for (const name of ["Copy link", "Link in settings", "Joined email"]) {
       const cell = table.getByRole("cell").filter({ hasText: name });
       await expect(cell.getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
     }
     // Only the feature column is flagged: the milestones and goals are not features.
     await expect(table.getByTestId("not-in-gt")).toHaveCount(3);
-    for (const key of ["feature-save-cart", "feature-sync", "feature-reminder"]) {
+    for (const key of ["feature-copy-link", "feature-settings", "feature-joined"]) {
       await expect(prdSection(page, key).getByRole("heading").first().getByTestId("not-in-gt")).toBeVisible();
     }
     // A section that is no feature carries no flag.

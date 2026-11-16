@@ -61,7 +61,7 @@ test("list and pane: the lead picks a feature from the list, decides it at the t
   await expect(list(page)).toContainText("9 features");
   // At rest: the first feature in the pane, its verdict and size on top.
   await expect(pane(page).getByTestId("brief-position")).toHaveText("Feature 1 of 9");
-  await expect(pane(page).getByRole("heading", { level: 2 })).toHaveText("Guided setup");
+  await expect(pane(page).getByRole("heading", { level: 2 })).toHaveText("Setup checklist");
   await expect(row(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Not decided");
   await expect(row(page, "f.guided-setup").getByTestId("brief-questions")).toHaveText("1 blocking0 of 2 answered");
   // The row says why it holds Approve in the gate's own words.

@@ -13,8 +13,8 @@ const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 const NAME = "Shared grocery lists";
 const PROBLEM = "People who shop for a household keep separate lists, so they buy the same things twice and forget others.";
-const A = "Raise activation";
-const B = "Grow paid conversion";
+const A = "Activation";
+const B = "Growth";
 
 const simple = (page: Page) => page.getByTestId("simple-page");
 const sheet = (page: Page) => page.getByTestId("np-sheet");

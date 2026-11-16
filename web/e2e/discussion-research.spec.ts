@@ -5,7 +5,7 @@ import { login, openTab, signOut } from "./helpers";
 
 /*
  * G2 §4 Research this, from inside a discussion, on the mock layer ("discussion-replies"
- * scenario: the open "Caps: ship without detection?" discussion on team-workspaces v2, with
+ * scenario: the open "Caps: ship without detection?" discussion on team-invites v2, with
  * the commenter's question). An approver clicks Research this on the question, sees the
  * run's cost before it starts, starts it, and the thread says Oracle is researching; the
  * mock's run then answers, and the answer shows in the thread as Oracle's, marked as
@@ -18,7 +18,7 @@ import { login, openTab, signOut } from "./helpers";
  * by api/tests/test_discussion_research.py.
  */
 
-const SEEDED = "/documents/team-workspaces/v/2";
+const SEEDED = "/documents/team-invites/v/2";
 const TITLE = "Caps: ship without detection?";
 const QUESTION = "Can caps ship without detection?";
 const COMMENTER = "commenter@example.com";

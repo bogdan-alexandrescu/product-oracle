@@ -44,8 +44,8 @@ const I = {
 function prdSectionDependency(id: string): Schemas["TraceDependency"] {
   return {
     id, freshness: "potentially_stale", caused_by_change_id: null, stale_since: AT, reconciled_by: null, reconciled_at: null, note: null,
-    upstream: { document_slug: "checkout-redesign", document_kind: "prd", version_number: 1, section_key: "s-5-2", deleted: false },
-    reasons: ["section s-5-2 changed in checkout-redesign"],
+    upstream: { document_slug: "annual-billing", document_kind: "prd", version_number: 1, section_key: "s-5-2", deleted: false },
+    reasons: ["section s-5-2 changed in annual-billing"],
   };
 }
 
@@ -126,13 +126,13 @@ const fail = (status: number, detail: string) => json(status, { detail });
 
 const FLOW_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" style="filter:grayscale(100%)"><title>Checkout with an early quote</title>' +
-  '<rect id="cart" x="10" y="20" width="110" height="40" fill="#eee" stroke="#333"/><text x="65" y="45" text-anchor="middle">Cart</text>' +
+  '<rect id="cart" x="10" y="20" width="110" height="40" fill="#eee" stroke="#333"/><text x="65" y="45" text-anchor="middle">Plan</text>' +
   '<rect id="quote" x="180" y="20" width="110" height="40" fill="#eee" stroke="#333"/><text x="235" y="45" text-anchor="middle">Quote</text>' +
   '<line x1="120" y1="40" x2="180" y2="40" stroke="#333"/></svg>\n';
 const wireframe = (n: number) =>
-  `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Cart ${n}</title>` +
+  `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Plan page ${n}</title>` +
   `<style>html{filter:grayscale(100%)!important}body{font-family:system-ui,sans-serif;padding:16px}.oracle-annotations ol{list-style:none;margin:0;padding:0}</style></head>` +
-  `<body><main data-oracle-wireframe="1"><h1 id="heading-${n}">Cart ${n}</h1><div data-annotation="cost">Shipping: $4.99 (mocked)</div>` +
+  `<body><main data-oracle-wireframe="1"><h1 id="heading-${n}">Plan page ${n}</h1><div data-annotation="cost">Yearly: $480 (mocked)</div>` +
   `<button type="button">Continue</button></main>` +
   // Oracle's sanitiser writes each annotation's label into the footer (api/oracle/specs/sanitize.py).
   `<aside class="oracle-annotations"><ol><li><strong>1.</strong> The quote shows before the address step.</li></ol></aside></body></html>\n`;
@@ -157,18 +157,18 @@ const note = (target: string): Schemas["AnnotationOut"] => ({
   id: "cost-early", target, note: "The quote shows before the address step.", section_key: "s-5-2", requirement_ids: [I.requirement], reviews: [],
 });
 const guestNote: Schemas["AnnotationOut"] = {
-  id: "guest-path", target: "cart", note: "Guests skip the saved-address branch.", section_key: null, requirement_ids: [], reviews: [],
+  id: "guest-path", target: "cart", note: "Guests skip the bulk-imports branch.", section_key: null, requirement_ids: [], reviews: [],
 };
 
 function design(kind: "user_flow" | "wireframe", versionId = kind === "user_flow" ? I.flowVersion : I.wireVersion, number = 1): Design {
   const flow = kind === "user_flow";
   const outputs: Schemas["DesignOutputOut"][] = flow
     ? [{ name: "checkout-flow.svg", title: "Checkout with an early quote", screen: null, media_type: "image/svg+xml", size_bytes: FLOW_SVG.length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("quote"), guestNote], removed: [], content_url: `/v1/design-artifacts/${versionId}/outputs/checkout-flow.svg` }]
-    : [1, 2].map((n) => ({ name: `cart-${n}.html`, title: `Cart ${n}`, screen: `cart-${n}`, media_type: "text/html", size_bytes: wireframe(n).length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("cost")], removed: n === 2 ? ["<blink> element (content kept)"] : [], content_url: `/v1/design-artifacts/${versionId}/outputs/cart-${n}.html` }));
+    : [1, 2].map((n) => ({ name: `cart-${n}.html`, title: `Plan page ${n}`, screen: `cart-${n}`, media_type: "text/html", size_bytes: wireframe(n).length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("cost")], removed: n === 2 ? ["<blink> element (content kept)"] : [], content_url: `/v1/design-artifacts/${versionId}/outputs/cart-${n}.html` }));
   return {
     request_id: flow ? I.flowRequest : I.wireRequest,
     kind,
-    title: flow ? "Early shipping cost: user flows" : "Early shipping cost: wireframes",
+    title: flow ? "Early yearly price: user flows" : "Early yearly price: wireframes",
     version: version(versionId, flow ? I.flowRequest : I.wireRequest, flow ? "potentially_stale" : "fresh", number),
     outputs,
     reviews: [],
@@ -219,7 +219,7 @@ export function specStates(key: string, body: string, approved: boolean, depth: 
  */
 export function seedSpecs({ approver, named = [] }: { approver?: SpecPerson; named?: SpecPerson[] } = {}): SpecsDb {
   const parts: [string, string, string, Schemas["SpecSectionOut"]["part"]][] = [
-    ["spec", "Early shipping cost: technical brief", "brief", "context"],
+    ["spec", "Early yearly price: technical brief", "brief", "context"],
     ["summary", "Summary", "brief", "context"],
     ["requirements", "Product requirements", "brief", "product_requirement"],
     ["approach", "Proposed engineering approach", "brief", "engineering_approach"],
@@ -230,18 +230,18 @@ export function seedSpecs({ approver, named = [] }: { approver?: SpecPerson; nam
     ["sources", "Sources and data points", "detail", "context"],
   ];
   const spec: Spec = {
-    request: request(I.request, "tech_brief", "Early shipping cost: technical brief", {
-      document_slug: "checkout-redesign-early-shipping-cost-spec", depth: "brief", design: true, screens: 2,
+    request: request(I.request, "tech_brief", "Early yearly price: technical brief", {
+      document_slug: "annual-billing-early-yearly-price-spec", depth: "brief", design: true, screens: 2,
       engineering_approver_ids: named.map((x) => x.id), document_id: I.document, design_request_ids: { user_flow: I.flowRequest, wireframe: I.wireRequest },
     }),
-    document_slug: "checkout-redesign-early-shipping-cost-spec",
+    document_slug: "annual-billing-early-yearly-price-spec",
     document_id: I.document,
     prd: null,
     depth: "brief",
     latest_version: 1,
     approach_status: "proposed",
     freshness: "potentially_stale",
-    requirements: [{ id: I.requirement, key: "req-shipping-cost", title: "Show shipping cost on the cart", status: "confirmed", section_keys: ["s-5-2"], missing: false }],
+    requirements: [{ id: I.requirement, key: "req-yearly-price", title: "Show the yearly price up front", status: "confirmed", section_keys: ["s-5-2"], missing: false }],
     section_keys: ["s-5-2"],
     engineering_approver_ids: named.map((x) => x.id),
     engineering_approvers: named.map(({ id, name }) => ({ id, name })),
@@ -259,8 +259,8 @@ export function seedSpecs({ approver, named = [] }: { approver?: SpecPerson; nam
     }),
     design: [design("user_flow"), design("wireframe", I.wireVersion, 2)],
     stale: [
-      { kind: "artifact_version", category: "engineering_spec", artifact_kind: "tech_brief", document_kind: null, artifact_version_id: I.specVersion, request_id: I.request, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early shipping cost: technical brief", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [prdSectionDependency(I.specDependency)], reasons: ["section s-5-2 changed in checkout-redesign"] },
-      { kind: "artifact_version", category: "wireframe", artifact_kind: "user_flow", document_kind: null, artifact_version_id: I.flowVersion, request_id: I.flowRequest, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early shipping cost: user flows", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [], reasons: ["section s-5-2 changed in checkout-redesign"] },
+      { kind: "artifact_version", category: "engineering_spec", artifact_kind: "tech_brief", document_kind: null, artifact_version_id: I.specVersion, request_id: I.request, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early yearly price: technical brief", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [prdSectionDependency(I.specDependency)], reasons: ["section s-5-2 changed in annual-billing"] },
+      { kind: "artifact_version", category: "wireframe", artifact_kind: "user_flow", document_kind: null, artifact_version_id: I.flowVersion, request_id: I.flowRequest, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early yearly price: user flows", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [], reasons: ["section s-5-2 changed in annual-billing"] },
     ],
     run_id: I.run,
     run_status: "succeeded",
@@ -276,9 +276,9 @@ export function seedSpecs({ approver, named = [] }: { approver?: SpecPerson; nam
     : [];
   // qa4-docs-8: the full engineering spec document has its spec request, as in the API (a
   // spec document is only ever written by one), so the PRD lists it under Engineering specs.
-  const fullSlug = "checkout-redesign-early-shipping-cost-engineering-spec";
+  const fullSlug = "annual-billing-early-yearly-price-engineering-spec";
   const fullRequest = {
-    ...request(I.fullRequest, "engineering_spec", "Early shipping cost: engineering spec", {
+    ...request(I.fullRequest, "engineering_spec", "Early yearly price: engineering spec", {
       document_slug: fullSlug, depth: "full", design: false, screens: 0, engineering_approver_ids: named.map((x) => x.id), document_id: I.fullDocument,
     }),
     requirement_ids: [],

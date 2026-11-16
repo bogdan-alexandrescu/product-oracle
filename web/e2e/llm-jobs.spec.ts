@@ -14,7 +14,7 @@ function feedbackItem(page: Page, text: string) {
 
 test("Oracle's work: status, account and cost behind Details, and a clear no-account failure that can be retried", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/team-workspaces/v/2");
+  await page.goto("/documents/team-invites/v/2");
   await openTab(page, "History");
   const panel = page.getByTestId("jobs-panel").filter({ visible: true });
   const kind = (name: string) => panel.getByTestId("llm-job").filter({ has: page.getByTestId("job-kind").getByText(name, { exact: true }) });
@@ -38,7 +38,7 @@ test("Oracle's work: status, account and cost behind Details, and a clear no-acc
 
 test("suggestion cards: classification, duplicates, edit and accept, and a pushback the approver overrides", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/team-workspaces/v/2");
+  await page.goto("/documents/team-invites/v/2");
   await openTab(page, "Feedback");
 
   const demand = feedbackItem(page, "how many teams asked");
@@ -80,7 +80,7 @@ test("suggestion cards: classification, duplicates, edit and accept, and a pushb
 
 test("take Oracle's advice: the suggestion is dismissed and the feedback declined", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/team-workspaces/v/2");
+  await page.goto("/documents/team-invites/v/2");
   await openTab(page, "Feedback");
   const item = feedbackItem(page, "custom roles");
   await item.getByRole("button", { name: "Take the advice" }).click();
@@ -98,7 +98,7 @@ test("an accepted suggestion goes into the next draft: one build, diff preview, 
   // Asked first, as the run page asks (qa-company-1).
   await page.getByRole("alertdialog", { name: "Cancel run" }).getByRole("button", { name: "Cancel run" }).click();
   await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
-  await page.goto("/documents/team-workspaces/v/2");
+  await page.goto("/documents/team-invites/v/2");
   await openTab(page, "Feedback");
   await feedbackItem(page, "how many teams asked").getByRole("button", { name: "Accept", exact: true }).click();
   await expect(feedbackItem(page, "how many teams asked").getByTestId("suggestion")).toContainText("Accepted");
@@ -116,7 +116,7 @@ test("an accepted suggestion goes into the next draft: one build, diff preview, 
   await expect(preview.locator("ins").first()).toContainText("Seven in ten sales calls");
   await sheet.getByRole("button", { name: "Apply as draft 3" }).click();
 
-  await expect(page).toHaveURL(/\/documents\/team-workspaces\/v\/3/);
+  await expect(page).toHaveURL(/\/documents\/team-invites\/v\/3/);
   const revised = await openSection(page, "problem");
   await expect(revised).toContainText("Seven in ten sales calls");
   // Section ids are kept; the other sections are untouched.
@@ -138,7 +138,7 @@ test("an accepted suggestion goes into the next draft: one build, diff preview, 
 
 test("refine from an approver's instruction alone, editing before accepting", async ({ page }) => {
   await login(page, "approver@example.com");
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const users = await openSection(page, "users");
   await sectionAction(users, "3. Users and jobs", /^Ask Oracle to rewrite/);
   const refine = users.getByTestId("refine-panel");
@@ -148,13 +148,13 @@ test("refine from an approver's instruction alone, editing before accepting", as
   await refine.getByRole("button", { name: "Edit first" }).click();
   await refine.getByLabel("Your edit of the section body").fill("First-time buyers on mobile are the segment that matters most.");
   await refine.getByRole("button", { name: "Accept as next version" }).click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/3/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/3/);
   await expect(section(page, "users")).toContainText("First-time buyers on mobile are the segment that matters most.");
 });
 
 test("locked sections offer no refinement", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/team-workspaces/v/2");
+  await page.goto("/documents/team-invites/v/2");
   const scope = await openSection(page, "scope");
   await scope.getByRole("button", { name: "Actions for 3. Scope" }).click();
   await expect(scope.getByRole("menuitem", { name: /^Ask Oracle to rewrite/ })).toBeVisible();
@@ -170,7 +170,7 @@ test("locked sections offer no refinement", async ({ page }) => {
 
 test("reports on a version: write, read both tabs, export", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openTab(page, "History");
   const reports = page.getByTestId("reports-panel").filter({ visible: true });
   await expect(reports).toContainText("No reports yet.");
@@ -181,18 +181,18 @@ test("reports on a version: write, read both tabs, export", async ({ page }) => 
 
   await reports.getByRole("tab", { name: "What changed since v1" }).click();
   const changes = reports.getByRole("region", { name: "What changed" });
-  await expect(changes).toContainText("5.3 Saved addresses");
+  await expect(changes).toContainText("5.3 Seat count");
   await expect(reports.getByTestId("new-sources")).toContainText("Q3 support ticket export");
 
   const download = page.waitForEvent("download");
   await reports.getByRole("button", { name: "Export reports MD" }).click();
-  expect((await download).suggestedFilename()).toBe("checkout-redesign-v2-reports.md");
+  expect((await download).suggestedFilename()).toBe("annual-billing-v2-reports.md");
 });
 
 for (const email of ["viewer@example.com", "commenter@example.com"]) {
   test(`roles: ${email.split("@")[0]}s read suggestions and jobs but cannot act`, async ({ page }) => {
     await login(page, email);
-    await page.goto("/documents/team-workspaces/v/2");
+    await page.goto("/documents/team-invites/v/2");
     await openSection(page, "problem");
     // A commenter's ⋯ menu offers evidence only; a viewer has no menu. Every section keeps its
     // own ⋯ menu now, so scope to this one.
@@ -222,7 +222,7 @@ for (const email of ["viewer@example.com", "commenter@example.com"]) {
 
 test("an owner turns a job kind off for a document", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   await openTab(page, "History");
   const settings = page.getByTestId("llm-job-settings").filter({ visible: true });
   const review = settings.getByLabel("Suggest changes from feedback");
@@ -240,7 +240,7 @@ test("an owner turns a job kind off for a document", async ({ page }) => {
 
 test("a new comment queues review comments, and Oracle's suggestion appears on it", async ({ page }) => {
   await login(page);
-  await page.goto("/documents/team-workspaces/v/2");
+  await page.goto("/documents/team-invites/v/2");
   await openSection(page, "scope");
   // Select again until the Comment button shows: under load the view can still be wiring its
   // selection listener (or re-rendering the section) when the first selection lands.
@@ -251,11 +251,11 @@ test("a new comment queues review comments, and Oracle's suggestion appears on i
       const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
       while (walker.nextNode()) {
         const node = walker.currentNode as Text;
-        const at = node.data.indexOf("One invoice per workspace");
+        const at = node.data.indexOf("One click for a teammate to join");
         if (at >= 0) {
           const range = document.createRange();
           range.setStart(node, at);
-          range.setEnd(node, at + "One invoice per workspace".length);
+          range.setEnd(node, at + "One click for a teammate to join".length);
           window.getSelection()!.removeAllRanges();
           window.getSelection()!.addRange(range);
           return;

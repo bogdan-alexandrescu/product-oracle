@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 /*
  * QA findings on Company › Decisions (Detailed), driven through the UI on the mock layer.
- * The mock seeds five judgement calls: D-1 "Publish Checkout redesign PRD v2" (the owner
+ * The mock seeds five judgement calls: D-1 "Publish Annual billing PRD v2" (the owner
  * approved it; Oracle wrote the record), D-4 "Price the team plan per seat" (decided, its
  * review has come), D-5 "Ship usage caps before anomaly detection" (proposed, waits on the
  * approver), and two more the owner decided.
@@ -13,7 +13,7 @@ import { login } from "./helpers";
 const APPROVER = "approver@example.com";
 const CAPS = "Ship usage caps before anomaly detection";
 const PRICED = "Price the team plan per seat";
-const PUBLISH = "Publish Checkout redesign PRD v2";
+const PUBLISH = "Publish Annual billing PRD v2";
 
 const rows = (page: Page) => page.getByTestId("decision-row");
 const row = (page: Page, text: string) => rows(page).filter({ hasText: text });
@@ -185,11 +185,11 @@ test("a decision the owner took: Driver is the owner, About names the document, 
   await expect(peopleRow(page, "Driver")).not.toContainText("Oracle");
   await expect(
     inspector(page).getByRole("link", {
-      name: "Checkout redesign PRD",
+      name: "Annual billing PRD",
       exact: true,
     }),
-  ).toHaveAttribute("href", "/documents/checkout-redesign");
-  await expect(inspector(page)).not.toContainText("checkout-redesign");
+  ).toHaveAttribute("href", "/documents/annual-billing");
+  await expect(inspector(page)).not.toContainText("annual-billing");
   await expect(peopleRow(page, "Decided")).toHaveText(/[A-Z][a-z]{2} \d{1,2}, \d{4}$/);
   await expect(inspector(page)).not.toContainText(/\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec) \d{4}/);
   await expect(row(page, PUBLISH)).toContainText(/[A-Z][a-z]{2} \d{1,2}, \d{4}/);

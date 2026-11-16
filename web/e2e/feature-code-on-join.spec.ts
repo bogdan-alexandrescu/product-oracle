@@ -52,16 +52,16 @@ test("confirming a proposed feature gives it its code", async ({ page }) => {
   await login(page);
   await page.goto("/ground-truth");
   await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
-  // A run proposed Dark mode (invented): it is not in the Ground Truth yet, so it has no code (a run's key).
+  // A run proposed Setup error report (invented): it is not in the Ground Truth yet, so it has no code (a run's key).
   await page.evaluate(() => {
     const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
-    Object.assign(db.baseline.entities.find((e: { key: string }) => e.key === "F-81"), { status: "proposed", key: "f.dark-mode" });
+    Object.assign(db.baseline.entities.find((e: { key: string }) => e.key === "F-06"), { status: "proposed", key: "f.dark-mode" });
     localStorage.setItem("po-mock-db-v2", JSON.stringify(db));
   });
   await page.reload();
-  const row = page.getByTestId("product-p.admin-console").getByRole("row").filter({ hasText: "Dark mode" });
-  await row.getByRole("button", { name: /Dark mode/ }).first().click();
-  const d = page.getByRole("dialog", { name: /Dark mode/ });
+  const row = page.getByTestId("product-p.admin-console").getByRole("row").filter({ hasText: "Setup error report" });
+  await row.getByRole("button", { name: /Setup error report/ }).first().click();
+  const d = page.getByRole("dialog", { name: /Setup error report/ });
   await d.getByRole("button", { name: "Confirm" }).click();
-  await expect(d.getByRole("status").filter({ hasText: "Confirmed" })).toContainText(/Confirmed “Dark mode” as F-\d{2,}\./);
+  await expect(d.getByRole("status").filter({ hasText: "Confirmed" })).toContainText(/Confirmed “Setup error report” as F-\d{2,}\./);
 });

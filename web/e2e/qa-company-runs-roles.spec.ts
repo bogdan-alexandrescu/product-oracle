@@ -21,7 +21,7 @@ for (const role of ["viewer", "commenter"] as const) {
     await openRuns(page, role);
     const table = page.getByTestId("runs-table");
     await expect(run(page, "usage-alerts-v2")).toContainText("Awaiting cost approval");
-    await expect(run(page, "team-workspaces")).toContainText("Paused: over budget");
+    await expect(run(page, "team-invites")).toContainText("Paused: over budget");
     // Give the inbox (whose checkpoints say who decides) time to answer before counting buttons.
     await page.waitForTimeout(1000);
     await expect(table.getByRole("button", { name: /^(Approve|Decide|Resume|Review|Review items|Open|Cancel run)$/ })).toHaveCount(0);
@@ -41,7 +41,7 @@ test("an owner gets each row's action", async ({ page }) => {
   await openRuns(page);
   // The cost approval and the overrun open the run, where Approve and Resume are (qa-work-17).
   await expect(run(page, "usage-alerts-v2").getByRole("button", { name: "Open" })).toBeVisible();
-  await expect(run(page, "team-workspaces").getByRole("button", { name: "Open" })).toBeVisible();
+  await expect(run(page, "team-invites").getByRole("button", { name: "Open" })).toBeVisible();
   await expect(run(page, "team-onboarding").getByRole("button", { name: "Decide" })).toBeVisible();
 });
 
@@ -49,15 +49,15 @@ test("runs are named by document and flow, with no slug or short id", async ({ p
   await openRuns(page);
   const table = page.getByTestId("runs-table");
   await expect(run(page, "team-onboarding").getByRole("link").first()).toHaveText("Team onboarding PRD");
-  await expect(run(page, "team-workspaces").getByRole("link").first()).toHaveText("Team workspaces PRD");
+  await expect(run(page, "team-invites").getByRole("link").first()).toHaveText("Team invites PRD");
   await expect(table).not.toContainText("team-onboarding");
   await expect(table).not.toContainText("usage-alerts-v2");
   await expect(table.getByRole("columnheader", { name: "Run" })).toHaveCount(0);
-  await run(page, "team-workspaces").getByTestId("run-status").click();
+  await run(page, "team-invites").getByTestId("run-status").click();
   const inspector = page.getByRole("complementary", { name: "Run" }).filter({ visible: true });
   await expect(inspector).toContainText("Selected run");
   await expect(inspector).not.toContainText(/Run [0-9a-f]{4}\b/);
-  await expect(inspector.getByRole("heading", { name: "Team workspaces PRD" })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: "Team invites PRD" })).toBeVisible();
 });
 
 test.describe("on a phone", () => {

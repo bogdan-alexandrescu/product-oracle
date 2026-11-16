@@ -7,7 +7,7 @@ import { login, openSection, openTab, sectionAction } from "./helpers";
  * #561 review (MAJOR 1): every surface that shows a stored Claude-pool refusal says when it
  * failed, in the Company time zone, and words the refusal as what was so then: nothing on the
  * page says every account is spent now. The "stored-refusals" scenario: a feedback loop, its
- * segment, checkout-redesign v2's roadmap items and Clinic outreach's draft 6 build failed on
+ * segment, annual-billing v2's roadmap items and Clinic outreach's draft 6 build failed on
  * Oct 18 on a refusal stored before #403's wording; a refinement asked for now is refused.
  */
 const FAILED = "Failed Oct 18, 4:12 PM PDT";
@@ -28,7 +28,7 @@ test.beforeEach(async ({ page }) => {
 
 test("a failed run says when it failed once, the refusal in the past", async ({ page }) => {
   await page.goto("/runs");
-  await page.locator('[data-testid="run-row"][data-document="checkout-redesign"]').filter({ hasText: "Failed" }).getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="annual-billing"]').filter({ hasText: "Failed" }).getByRole("link").first().click();
 
   const notes = page.getByTestId("failed-at");
   // The run's banner says when, then what was so; the segment row does not repeat it.
@@ -39,7 +39,7 @@ test("a failed run says when it failed once, the refusal in the past", async ({ 
 });
 
 test("roadmap items that failed say when, the refusal in the past", async ({ page }) => {
-  await page.goto("/documents/checkout-redesign/v/2/roadmap");
+  await page.goto("/documents/annual-billing/v/2/roadmap");
   const status = page.getByTestId("draft-roadmap-status").filter({ visible: true });
   await expect(status).toHaveAttribute("data-status", "failed");
   await expect(status.getByTestId("failed-at")).toHaveText(`${FAILED}.`);
@@ -58,7 +58,7 @@ test("a next-draft build that failed says when on its chip, the refusal in the p
 });
 
 test("a refinement the pool refused says when it failed, the refusal in the past", async ({ page }) => {
-  await page.goto("/documents/checkout-redesign/v/2");
+  await page.goto("/documents/annual-billing/v/2");
   const users = await openSection(page, "users");
   await sectionAction(users, "3. Users and jobs", /^Ask Oracle to rewrite/);
   const refine = users.getByTestId("refine-panel");
@@ -122,7 +122,7 @@ test("a code map the pool refused says when it failed, the refusal in the past",
 test("a discussion reply the pool refused reads the refusal in the past", async ({ page }) => {
   // #644 re-review (MAJOR 1): an approver opening a discussion whose Oracle reply failed on a
   // stored refusal reads it as what was so then, its time in words, not "is spent" now.
-  await page.goto("/documents/team-workspaces/v/2");
+  await page.goto("/documents/team-invites/v/2");
   await openTab(page, "Feedback");
   const panel = page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true });
   await panel.getByTestId("feedback-discussions").click();

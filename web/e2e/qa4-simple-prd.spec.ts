@@ -3,7 +3,7 @@ import { expect, test, type Page } from "./test";
 
 /*
  * QA pass 4 on the Simple PRD pages (qa4-simple-prd-N), driven through the UI on the mock's
- * invented PRDs: Saved carts PRD (two versions, never approved, last changed Oct 18), Usage
+ * invented PRDs: Referral link PRD (two versions, never approved, last changed Oct 18), Usage
  * alerts PRD and Guided setup (the seeded one-pager, with a drawn flow on its first bet).
  */
 
@@ -26,11 +26,11 @@ test.describe("desktop", () => {
   test.use({ viewport: DESKTOP });
 
   test("Start review opens the form for any PRD, named by its title (qa4-simple-prd-1, 28)", async ({ page }) => {
-    await openFromList(page, "Saved carts PRD");
+    await openFromList(page, "Referral link PRD");
     await page.getByRole("button", { name: "Start a review meeting" }).click();
     const sheet = page.getByRole("dialog", { name: "Start a review" });
     await expect(sheet.getByRole("button", { name: "Start", exact: true })).toBeVisible();
-    await expect(sheet).toContainText("Saved carts PRD");
+    await expect(sheet).toContainText("Referral link PRD");
     await expect(sheet).not.toContainText("No such PRD");
     await sheet.getByRole("button", { name: "Close" }).click();
 
@@ -44,18 +44,18 @@ test.describe("desktop", () => {
     await page.goto("/simple/one-pagers");
     await page.getByRole("button", { name: "About One-pagers" }).focus();
     await expect(page.getByRole("tooltip").filter({ hasText: "Open a PRD to read it on one page, change its wording or start a review." })).toBeVisible();
-    const row = page.getByTestId("one-pager-row").filter({ hasText: "Saved carts PRD" });
+    const row = page.getByTestId("one-pager-row").filter({ hasText: "Referral link PRD" });
     await expect(row).toContainText("Updated Oct 18, 2026");
-    await row.getByRole("link", { name: "Saved carts PRD" }).click();
+    await row.getByRole("link", { name: "Referral link PRD" }).click();
     const meta = page.getByTestId("one-pager-meta");
     await expect(meta).toContainText("Version 2");
     await expect(meta).not.toContainText("Oct 20");
-    await expect(page.getByRole("link", { name: "Open in Detailed" })).toHaveAttribute("href", "/documents/saved-carts");
+    await expect(page.getByRole("link", { name: "Open in Detailed" })).toHaveAttribute("href", "/documents/referral-link");
 
-    await page.getByRole("button", { name: "Edit “Carts for guests without" }).click();
+    await page.getByRole("button", { name: "Edit “Links for guests without" }).click();
     // qa4-simple-prd-16: the editor and its Save come into view.
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeInViewport();
-    await page.getByLabel("New wording for").fill("Carts for guests without an account, for now");
+    await page.getByLabel("New wording for").fill("Links for guests without an account, for now");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     const banner = page.getByRole("status", { name: "Working draft" });
     await expect(banner).toContainText("nothing is published until approved");
@@ -63,11 +63,11 @@ test.describe("desktop", () => {
   });
 
   test("the change card says You, once a before/after, and Hide closes it (qa4-simple-prd-17, 18, 23)", async ({ page }) => {
-    await openFromList(page, "Saved carts PRD");
-    await page.getByRole("button", { name: "Edit “Carts for guests without" }).click();
-    await page.getByLabel("New wording for").fill("Carts for guests without an account, for now");
+    await openFromList(page, "Referral link PRD");
+    await page.getByRole("button", { name: "Edit “Links for guests without" }).click();
+    await page.getByLabel("New wording for").fill("Links for guests without an account, for now");
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Carts for guests without" });
+    const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Links for guests without" });
     await expect(note).toContainText("You changed");
     await note.getByRole("button", { name: "See before/after" }).click();
     const diff = note.getByTestId("note-diff");
@@ -77,17 +77,17 @@ test.describe("desktop", () => {
     await expect(diff).toHaveCount(0);
 
     await page.reload();
-    await expect(page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Carts for guests without" })).toContainText("You changed");
+    await expect(page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Links for guests without" })).toContainText("You changed");
 
     // qa4-simple-prd-23: the file and the note say which text was exported.
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: "Export PDF" }).click();
-    expect((await download).suggestedFilename()).toBe("Saved carts PRD v2 last version one-pager.pdf");
+    expect((await download).suggestedFilename()).toBe("Referral link PRD v2 last version one-pager.pdf");
     await expect(page.getByRole("status").filter({ hasText: "PDF downloaded" })).toContainText("without the working draft's changes");
   });
 
   test("Present centres each slide (qa4-simple-prd-5, C-8)", async ({ page }) => {
-    await openFromList(page, "Saved carts PRD");
+    await openFromList(page, "Referral link PRD");
     await page.getByRole("button", { name: "Present" }).click();
     await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
     const slide = (await page.getByTestId("slide").boundingBox())!;
@@ -97,7 +97,7 @@ test.describe("desktop", () => {
   });
 
   test("the timeline's labels keep their phrases whole and its words agree (qa4-simple-prd-14, 15)", async ({ page }) => {
-    // C-13: Saved carts has no roadmap slice of its own now; Guided setup's strip is the one with milestones.
+    // C-13: Referral link has no roadmap slice of its own now; Guided setup's strip is the one with milestones.
     await login(page);
     await page.goto("/simple/one-pagers/guided-setup");
     const strip = page.getByLabel("Timeline strip");
@@ -119,7 +119,7 @@ test.describe("desktop", () => {
   });
 
   test("a commenter's card starts at its own padding (qa4-simple-prd-21)", async ({ page }) => {
-    await openFromList(page, "Saved carts PRD", COMMENTER);
+    await openFromList(page, "Referral link PRD", COMMENTER);
     // The contents row grows when the whole PRD's tabs arrive: measure once the page is whole.
     await expect(page.getByTestId("prd-whole")).toBeVisible();
     const card = (await page.getByRole("article", { name: "One-pager" }).boundingBox())!;
@@ -166,10 +166,10 @@ test.describe("desktop", () => {
     await page.goto("/simple/meetings");
     await page.getByRole("button", { name: "Start review" }).first().click();
     const sheet = page.getByRole("dialog", { name: "Start a review" });
-    await expect(sheet.getByLabel("PRD")).toContainText("Saved carts PRD");
+    await expect(sheet.getByLabel("PRD")).toContainText("Referral link PRD");
     const titles = await sheet.getByLabel("PRD").locator("option").allTextContents();
     expect(titles).toContain("Guided setup");
-    expect(titles).toContain("Saved carts PRD");
+    expect(titles).toContain("Referral link PRD");
     // Each PRD the list ranks keeps its place; one it does not rank comes after them.
     const ranked = titles.filter((t) => company.includes(t));
     expect(ranked.length).toBeGreaterThan(1);
@@ -196,7 +196,7 @@ test.describe("desktop", () => {
   });
 
   test("a bet's first flow is titled after its line, as Version 1 (qa4-simple-prd-22)", async ({ page }) => {
-    // A bet drawn on Guided setup first: its flow is that PRD's own, never Saved carts'.
+    // A bet drawn on Guided setup first: its flow is that PRD's own, never Referral link's.
     await login(page);
     await page.goto("/simple/one-pagers/guided-setup");
     const first = page.locator("li", { hasText: "Invite suggestions from the admin" }).first();
@@ -204,14 +204,14 @@ test.describe("desktop", () => {
     await expect(page.getByRole("button", { name: /^Flow for “Invite suggestions/ })).toBeVisible();
 
     await page.goto("/simple/one-pagers");
-    await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Saved carts PRD", exact: true }).click();
+    await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Referral link PRD", exact: true }).click();
     await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
-    // vqa B-13: Saved carts' one-pager has its own lines; its first flow is its own Version 1.
-    const line = page.locator("li", { hasText: "Beta: Save cart" }).first();
+    // vqa B-13: Referral link's one-pager has its own lines; its first flow is its own Version 1.
+    const line = page.locator("li", { hasText: "Beta: Copy link" }).first();
     await line.getByRole("button", { name: "Draw the flow" }).click();
-    await page.getByRole("button", { name: /^Flow for “Beta: Save cart/ }).click();
+    await page.getByRole("button", { name: /^Flow for “Beta: Copy link/ }).click();
     const opened = page.getByTestId("flow-detail");
-    await expect(opened).toContainText("Save cart · flow");
+    await expect(opened).toContainText("Copy link · flow");
     await expect(opened).not.toContainText("Invite suggestions");
     await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
     await expect(opened).not.toContainText("(revised)");
@@ -248,14 +248,14 @@ test.describe("phone", () => {
   });
 
   test("a viewer sees no Start review (qa4-simple-prd-26)", async ({ page }) => {
-    await openFromList(page, "Saved carts PRD", VIEWER);
+    await openFromList(page, "Referral link PRD", VIEWER);
     await expect(page.getByRole("link", { name: "Open in Detailed" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Start a review meeting" })).toHaveCount(0);
     await expect(page.getByTestId("start-review-why")).toHaveCount(0);
   });
 
   test("a commenter's reason to ask an owner sits on its own line, over nothing (qa4-simple-prd-2)", async ({ page }) => {
-    await openFromList(page, "Saved carts PRD", COMMENTER);
+    await openFromList(page, "Referral link PRD", COMMENTER);
     const why = page.getByTestId("start-review-why");
     await expect(why).toHaveText("Ask an owner to start a review");
     const box = (await why.boundingBox())!;

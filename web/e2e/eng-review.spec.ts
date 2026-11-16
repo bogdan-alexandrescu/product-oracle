@@ -105,7 +105,7 @@ test("lead decides: Approve waits for every verdict and the blocking answer, the
   await verdict(page, "f.guided-setup", "Feasible");
   await expect(bar(page).getByTestId("eng-tally")).toHaveText("1 of 3 decided · 1 blocking question");
   await verdict(page, "f.sample-data", "Feasible with changes", "Ship a smaller catalogue first");
-  await verdict(page, "f.saved-carts", "Not feasible as scoped", "Needs a server-side cart store we do not have");
+  await verdict(page, "f.referral-link", "Not feasible as scoped", "Needs a server-side cart store we do not have");
   await expect(bar(page).getByTestId("eng-tally")).toHaveText("3 of 3 decided · 1 blocking question");
   await expect(approve).toBeDisabled();
 
@@ -115,20 +115,20 @@ test("lead decides: Approve waits for every verdict and the blocking answer, the
   await expect(inspector(page).getByTestId("answer")).toContainText("Yes, the sandbox takes test orders. · ");
   await expect(bar(page).getByTestId("eng-tally")).toHaveText("3 of 3 decided");
 
-  await row(page, "f.saved-carts").getByRole("button").first().click();
+  await row(page, "f.referral-link").getByRole("button").first().click();
   await inspector(page).getByRole("group", { name: "Size" }).getByRole("button", { name: "XL" }).click();
-  await expect(row(page, "f.saved-carts").getByTestId("brief-size")).toContainText("XL");
+  await expect(row(page, "f.referral-link").getByTestId("brief-size")).toContainText("XL");
   // Nothing is lost on refresh: the choices are the shared draft's.
   await page.reload();
-  await expect(row(page, "f.saved-carts").getByTestId("brief-verdict")).toHaveText("Not feasible as scoped");
+  await expect(row(page, "f.referral-link").getByTestId("brief-verdict")).toHaveText("Not feasible as scoped");
   await expect(approve).toBeEnabled();
   await approve.click();
 
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByTestId("segment-priority").getByTestId("segment-state")).toHaveText("Running");
   await page.goto("/ground-truth");
-  await page.getByTestId("feature-F-84").getByRole("button", { name: "Saved carts" }).click();
-  await expect(page.getByRole("dialog", { name: "Saved carts" }).locator('[data-attr="effort"]')).toHaveText("XL");
+  await page.getByTestId("feature-F-12").getByRole("button", { name: "Referral link" }).click();
+  await expect(page.getByRole("dialog", { name: "Referral link" }).locator('[data-attr="effort"]')).toHaveText("XL");
 });
 
 test("started from the UI: a run from the sheet waits at its Engineering check and is approved there", async ({ page }) => {
@@ -148,7 +148,7 @@ test("started from the UI: a run from the sheet waits at its Engineering check a
   await expect(line).toContainText("3 features · 1 blocking");
   await line.getByRole("link", { name: "Review" }).click();
 
-  for (const key of ["price-early", "guest-checkout", "saved-cards"]) await verdict(page, key, "Feasible");
+  for (const key of ["price-early", "public-signup", "saved-cards"]) await verdict(page, key, "Feasible");
   await row(page, "price-early").getByRole("button").first().click();
   await inspector(page).getByRole("textbox", { name: /^Answer:/ }).fill("Yes, within 150 ms.");
   await inspector(page).getByRole("button", { name: "Answer" }).click();
@@ -205,11 +205,11 @@ test("inspector per feature: a note typed for one feature never saves against an
   await row(page, "f.sample-data").getByRole("button").first().click();
   await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible with changes", exact: true }).click();
   await inspector(page).getByRole("textbox", { name: "What changes" }).fill("Ship a smaller catalogue first");
-  await row(page, "f.saved-carts").getByRole("button").first().click();
-  await expect(inspector(page)).toHaveAccessibleName("Brief: Saved carts");
+  await row(page, "f.referral-link").getByRole("button").first().click();
+  await expect(inspector(page)).toHaveAccessibleName("Brief: Referral link");
   await expect(inspector(page).getByRole("textbox", { name: "What changes" })).toHaveCount(0);
   await expect(inspector(page).getByRole("button", { name: "Save verdict" })).toHaveCount(0);
-  await expect(row(page, "f.saved-carts").getByTestId("brief-verdict")).toHaveText("Not decided");
+  await expect(row(page, "f.referral-link").getByTestId("brief-verdict")).toHaveText("Not decided");
 });
 
 test("check once: the lead's row says Waiting, an approver sees the check on its line only", async ({ page }) => {

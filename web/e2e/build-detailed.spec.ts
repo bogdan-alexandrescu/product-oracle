@@ -40,7 +40,7 @@ for (const size of SIZES) {
       // Reason and Accept; Accept makes version 3 and the drawer closes back to the page;
       // fails_when=the rewrites open inline above the sections, or squeezed; no_claim=Reject (section-edit).
       await login(page);
-      await page.goto("/documents/checkout-redesign/v/2");
+      await page.goto("/documents/annual-billing/v/2");
       await expect(page.getByTestId("document-sections")).toBeVisible();
       // PT1 a: the PRD page has no outer "prd-layout" grid any more; "prd-look" is its layout now.
       const layout = page.getByTestId("prd-look");

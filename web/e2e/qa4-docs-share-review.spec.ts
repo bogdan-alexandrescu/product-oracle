@@ -11,7 +11,7 @@ import { login } from "./helpers";
  * layer, driven as a person would; the mock clock is pinned at Oct 22, 2026.
  */
 
-const PRD = "/documents/checkout-redesign";
+const PRD = "/documents/annual-billing";
 
 test.use({ viewport: { width: 1440, height: 900 } });
 

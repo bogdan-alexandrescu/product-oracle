@@ -111,7 +111,7 @@ test("PRD patch: shows what it adds to the PRD, and is dismissed with a reason",
   await openTab(page, "Proposals");
   const card = proposals(page).getByTestId("proposal").filter({ hasText: "Add to the PRD: Customer and user" });
   const diff = card.getByTestId("proposal-diff");
-  await expect(diff).toContainText("saved-addresses v2");
+  await expect(diff).toContainText("bulk-import v2");
   await expect(diff).toContainText("context.users");
   await expect(diff.locator("ins")).toContainText("Returning buyers on the web shop, signed in.");
   await card.getByRole("button", { name: "Dismiss" }).click();

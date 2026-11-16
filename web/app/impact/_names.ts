@@ -10,13 +10,13 @@ import type { Report } from "./_lib";
 
 /*
  * Human names for what an impact report points at by reference (qa-plan-10): a document by
- * its title ("Checkout redesign PRD"), a section by its heading ("Success metrics"), never a
+ * its title ("Annual billing PRD"), a section by its heading ("Success metrics"), never a
  * slug, "slug@2#metrics" or a section key. The report carries slugs, version numbers and
  * section keys; the documents and versions it names give their titles and headings.
  */
 
 export type Names = {
-  /** "Checkout redesign PRD"; the slug in words until the document has loaded. */
+  /** "Annual billing PRD"; the slug in words until the document has loaded. */
   doc: (slug: string) => string;
   /** "Success metrics": a section's heading without its number; the key in words until known. */
   section: (key: string, slug?: string | null, n?: number | null) => string;
@@ -26,7 +26,7 @@ export type Names = {
   words: (text: string) => string;
 };
 
-/** "checkout-redesign@2#metrics" → { slug, n, key }. */
+/** "annual-billing@2#metrics" → { slug, n, key }. */
 export function parseRef(ref: string | null | undefined): { slug: string; n: number | null; key: string | null } | null {
   const m = ref ? /^([a-z0-9][\w-]*)@(\d+)(?:#(.+))?$/i.exec(ref) : null;
   return m ? { slug: m[1], n: Number(m[2]), key: m[3] ?? null } : null;
@@ -116,7 +116,7 @@ export function useNames(report: Report | undefined, extraSlug?: string | null):
       const list = keys.split(", ").map((k) => `“${section(k)}”`);
       return list.length === 1 ? `the ${list[0]} section` : `the ${list.join(", ")} sections`;
     });
-    // Longest first, so "checkout-redesign-spec" is not read as "checkout-redesign".
+    // Longest first, so "annual-billing-spec" is not read as "annual-billing".
     for (const slug of [...slugs].sort((a, b) => b.length - a.length)) {
       t = t.replace(new RegExp(`(^|[\\s(])${escape(slug)}(?=$|[\\s),.;:])`, "g"), (_, pre: string) => `${pre}${doc(slug)}`);
     }
@@ -133,7 +133,7 @@ export const useNamesOf = () => useContext(NamesContext);
 
 /**
  * qa-plan-12: where a recorded change's page was opened from (its "?from="), as its back link:
- * a PRD version's Impact ("Impact of Checkout redesign PRD v2"). Anything else (or a path that
+ * a PRD version's Impact ("Impact of Annual billing PRD v2"). Anything else (or a path that
  * is not this site's) is ignored, and the page leads back to what the change is about.
  */
 export function parseFrom(from: string | null | undefined, names: Names): { href: string; label: string } | null {
@@ -160,13 +160,13 @@ const CAUSE: Record<string, string> = {
 const causeWords = (cause: string) => CAUSE[cause] ?? cause.replace(/^(?:section|document|version|entity)_/, "").replaceAll("_", " ");
 
 export type SubjectWords = {
-  /** "Checkout redesign PRD v2 › Success metrics section edited". */
+  /** "Annual billing PRD v2 › Success metrics section edited". */
   title: string;
   /** The title without the version it names ("Success metrics section edited"), for a page whose back link names it. */
   short: string;
-  /** The version the title starts with ("Checkout redesign PRD v2"), when it names one. */
+  /** The version the title starts with ("Annual billing PRD v2"), when it names one. */
   where: string | null;
-  /** Where the report's subject lives, for the back link: "Checkout redesign PRD v2" at its version page. */
+  /** Where the report's subject lives, for the back link: "Annual billing PRD v2" at its version page. */
   back: { href: string; label: string } | null;
   /** The document and version the subject names, where it names one: the lineage shows that version. */
   version: { slug: string; n: number } | null;
@@ -195,7 +195,7 @@ export function subjectWords(report: Report, names: Names): SubjectWords {
   const kindKey = ref ? /^([a-z_]+):(.+)$/.exec(ref) : null;
   const kind = kindKey?.[1] ?? c?.subject_kind ?? report.subject.kind;
   const titled = report.subject.title;
-  // A recorded change on a baseline item: its kind and title, quoted ("Requirement “Guest checkout
+  // A recorded change on a baseline item: its kind and title, quoted ("Requirement “Public signup
   // keeps the cart” deleted"), so the verb never reads as part of the title.
   const named =
     titled && c && kindKey

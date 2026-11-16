@@ -3,8 +3,8 @@ import { expect, test, type Page } from "./test";
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
-// QA pass 4, docs lane: Compare (/documents/checkout-redesign/diff), Composition
-// (/documents/checkout-redesign/composition), Publish (/documents/<doc>/publish) and the tech
+// QA pass 4, docs lane: Compare (/documents/annual-billing/diff), Composition
+// (/documents/annual-billing/composition), Publish (/documents/<doc>/publish) and the tech
 // brief page (/briefs/<id>), driven as a person on the mock app.
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -15,14 +15,14 @@ async function asRole(page: Page, role: "viewer" | "commenter" | "approver") {
 
 async function openCompare(page: Page) {
   await login(page);
-  await page.goto("/documents/checkout-redesign/diff");
+  await page.goto("/documents/annual-billing/diff");
   await expect(page.getByRole("heading", { level: 1, name: "Changes from v1 to v2" })).toBeVisible();
   await expect(page.getByTestId("diff-section").first()).toBeVisible();
 }
 
 async function openComposition(page: Page) {
   await login(page, "approver@example.com");
-  await page.goto("/documents/checkout-redesign");
+  await page.goto("/documents/annual-billing");
   await page.getByRole("link", { name: "Composition" }).first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Composition" })).toBeVisible();
   await expect(page.getByTestId("composition-modules")).toBeVisible();
@@ -47,7 +47,7 @@ test.describe("desktop", () => {
 
   test("qa4-docs-10: a link to one version on both sides asks for two, and shows no diff beside it", async ({ page }) => {
     await login(page);
-    await page.goto("/documents/checkout-redesign/diff?from=2&to=2");
+    await page.goto("/documents/annual-billing/diff?from=2&to=2");
     await expect(page.getByText("Pick two versions")).toBeVisible();
     await expect(page.getByRole("heading", { level: 1, name: "Compare versions" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1, name: /Changes from/ })).toHaveCount(0);
@@ -91,7 +91,7 @@ test.describe("desktop", () => {
     const dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
     const outline = dialog.getByTestId("outline-full");
     await expect(outline.locator("li > span.font-medium").first()).toHaveText("Introduction");
-    await expect(outline).not.toContainText("Checkout redesign PRD");
+    await expect(outline).not.toContainText("Annual billing PRD");
   });
 
   test("qa4-docs-50: module numbers run in reading order and no Selection column repeats the group", async ({ page }) => {
@@ -127,7 +127,7 @@ test.describe("desktop", () => {
 
   test("qa4-docs-53: an answered question no longer reads Blocking; an open one says Not answered yet", async ({ page }) => {
     await login(page, "viewer@example.com");
-    await page.goto("/documents/checkout-redesign");
+    await page.goto("/documents/annual-billing");
     await page.getByTestId("tech-briefs").getByRole("link", { name: "Show the full price early" }).click();
     await expect(page).toHaveURL(/\/briefs\/[0-9a-f-]+$/);
     const answered = page.getByTestId("brief-question-q1");

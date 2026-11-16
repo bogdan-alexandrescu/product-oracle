@@ -2,11 +2,11 @@ import { expect, test, type Locator, type Page } from "./test";
 
 import { login } from "./helpers";
 
-// QA pass 4, docs lane: the Roadmap tab of a PRD version (Checkout redesign PRD v2, seeded in
-// lib/api/mock/draft-roadmap.ts: 4 items, 3 Now and 1 Next; Saved addresses carries a GA date
+// QA pass 4, docs lane: the Roadmap tab of a PRD version (Annual billing PRD v2, seeded in
+// lib/api/mock/draft-roadmap.ts: 4 items, 3 Now and 1 Next; Bulk import carries a GA date
 // with no confirmed schedule; v1's One-tap wallet pay was dropped), driven as a person.
 
-const VERSION = "/documents/checkout-redesign/v/2";
+const VERSION = "/documents/annual-billing/v/2";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
@@ -20,7 +20,7 @@ async function openRoadmap(page: Page, email?: string) {
   await login(page, email);
   await page.goto(VERSION);
   await visible(page, "version-tab-roadmap").click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/roadmap/);
+  await expect(page).toHaveURL(/\/documents\/annual-billing\/v\/2\/roadmap/);
   await expect(visible(page, "draft-roadmap-status")).toHaveAttribute("data-status", "ready");
 }
 
@@ -29,7 +29,7 @@ test.describe("desktop", () => {
 
   test("qa4-docs-3: the milestone shows Dec 15, 2026 and the whole Not in Now chip, clear of Confidence", async ({ page }) => {
     await openRoadmap(page);
-    const saved = row(page, "saved-addresses");
+    const saved = row(page, "bulk-import");
     await expect(saved).toContainText("GA");
     await expect(saved.getByTestId("refused-date")).toHaveText("Dec 15, 2026");
     await expect(saved).not.toContainText("2026-12-15");
@@ -56,8 +56,8 @@ test.describe("desktop", () => {
     await openRoadmap(page);
     const notice = visible(page, "draft-roadmap-problem");
     await expect(notice).toHaveCount(1);
-    await expect(notice).toHaveText("Date unverified · Saved addresses: the Dec 15, 2026 date has no confirmed schedule behind it yet");
-    await expect(notice).not.toContainText("saved-addresses");
+    await expect(notice).toHaveText("Date unverified · Bulk import: the Dec 15, 2026 date has no confirmed schedule behind it yet");
+    await expect(notice).not.toContainText("bulk-import");
     await expect(notice).not.toContainText("2026-12-15");
   });
 
@@ -96,7 +96,7 @@ test.describe("desktop", () => {
     await expect(status).not.toContainText(/deriv/i);
     await expect(visible(page, "items-compare")).toBeVisible();
     await expect(visible(page, "items-compare-summary")).toHaveText("Since draft v1: 1 new · 1 dropped · 1 moved · 1 changed");
-    await expect(row(page, "saved-addresses")).toBeVisible();
+    await expect(row(page, "bulk-import")).toBeVisible();
   });
 });
 
@@ -105,7 +105,7 @@ test.describe("phone", () => {
 
   test("qa4-docs-3: on a phone the milestone reads GA Dec 15, 2026 with Not in Now", async ({ page }) => {
     await openRoadmap(page);
-    const saved = row(page, "saved-addresses");
+    const saved = row(page, "bulk-import");
     await expect(saved.getByTestId("refused-date")).toHaveText("Dec 15, 2026");
     await expect(saved).not.toContainText("2026-12-15");
     await expect(saved.getByText("Not in Now", { exact: true })).toBeVisible();
@@ -114,7 +114,7 @@ test.describe("phone", () => {
   test("qa4-docs-48: a card shows one dash per empty field, and the info icon stays beside its label", async ({ page }) => {
     await openRoadmap(page);
     await visible(page, "items-filter").getByRole("button", { name: /^All/ }).click();
-    for (const key of ["cart-review", "guest-checkout", "shipping-step"]) {
+    for (const key of ["cart-review", "public-signup", "shipping-step"]) {
       const text = await row(page, key).evaluate((el) => (el as HTMLElement).innerText.replace(/\s+/g, " "));
       expect(text, key).toContain("Depends on");
       expect(text, key).not.toMatch(/—\s*—/);

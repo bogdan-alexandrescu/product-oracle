@@ -54,7 +54,7 @@ test.describe("desktop", () => {
   test("words typed before Present are still in the editor after it (C-8)", async ({ page }) => {
     await login(page);
     await page.goto("/simple/one-pagers");
-    await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Saved carts PRD" }).click();
+    await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Referral link PRD" }).click();
     await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
     await page.locator('[data-line="not_doing-1"]').hover();
     await page.locator('[data-line="not_doing-1"]').getByRole("button", { name: /^Edit “/ }).click();
@@ -73,10 +73,10 @@ test.describe("desktop", () => {
   test("the status chip reads the PRD's own summary, as the list does, without loading every PRD", async ({ page }) => {
     await login(page);
     await page.goto("/simple/one-pagers");
-    const row = page.getByTestId("one-pager-row").filter({ hasText: "Team workspaces PRD" });
+    const row = page.getByTestId("one-pager-row").filter({ hasText: "Team invites PRD" });
     await expect(row).toContainText("In review");
-    await row.getByRole("link", { name: "Team workspaces PRD" }).click();
-    await expect(page.getByRole("heading", { level: 1, name: "Team workspaces PRD" })).toBeVisible();
+    await row.getByRole("link", { name: "Team invites PRD" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Team invites PRD" })).toBeVisible();
     await expect(page.getByTestId("one-pager-status")).toHaveText("In review");
     // Opened afresh (a link from elsewhere), the page asks for this PRD only.
     await page.reload();
@@ -115,7 +115,7 @@ test.describe("phone", () => {
   test("a touch that scrolls from a hidden Edit leaves its keyboard Enter working", async ({ page }) => {
     await login(page);
     await page.goto("/simple/one-pagers");
-    await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Team workspaces PRD" }).click();
+    await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Team invites PRD" }).click();
     await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
     const edit = page.locator('[data-line="bets-1"] [data-edit-for]');
     const e = (await edit.boundingBox())!;
