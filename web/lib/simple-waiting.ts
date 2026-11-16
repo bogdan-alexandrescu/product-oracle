@@ -1,6 +1,7 @@
 "use client";
 
 import { api, unwrap } from "@/lib/api/client";
+import { STALE_OK } from "@/lib/api/shared-reads";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { invalidateWaiting as invalidateInbox, onWaitingChanged, waitingChanged } from "@/lib/waiting";
 
@@ -16,11 +17,19 @@ let hit: { at: number | null; promise: ReturnType<typeof fetchWaiting> } | null 
 
 const fetchWaiting = () => unwrap(api.GET("/v1/simple/decisions/waiting"));
 
-export function loadWaiting() {
+/** The one list's URL, as lib/api/shared-reads' onReadChanged names it. */
+export const WAITING_URL = "/v1/simple/decisions/waiting";
+
+/**
+ * staleOk (simple-call-budget): a part of a page that the rail's count already covers (the Inbox's
+ * broken links) takes the rail's answer as the rail does, so moving there never reads it again.
+ */
+export function loadWaiting(staleOk = false) {
   // QA: a read still on its way is shared however long it takes (the rail's, then the page's
   // once its own list arrives), so a slow answer is never asked for twice; fresh is counted from
   // when it answered.
   if (hit && (hit.at === null || Date.now() - hit.at < FRESH_MS)) return hit.promise;
+  if (staleOk) return unwrap(api.GET(WAITING_URL, { headers: { [STALE_OK]: "1" } }));
   const promise = fetchWaiting();
   const mine: NonNullable<typeof hit> = { at: null, promise };
   hit = mine;

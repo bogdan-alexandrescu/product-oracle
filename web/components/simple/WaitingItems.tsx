@@ -9,7 +9,8 @@ import { useOpenFeature } from "@/components/simple/OpenFeature";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { fixChange, OP_WORDS, type BrokenLink, type FixOp } from "@/lib/simple-home";
 import { errorMessage } from "@/lib/use-query";
-import { invalidateWaiting, loadWaiting, onWaitingChanged, waitingChanged } from "@/lib/simple-waiting";
+import { onReadChanged } from "@/lib/api/shared-reads";
+import { invalidateWaiting, loadWaiting, onWaitingChanged, WAITING_URL, waitingChanged } from "@/lib/simple-waiting";
 
 export type WaitingItem = Schemas["SimpleWaitingItem"];
 type Waiting = Schemas["SimpleDecisionsWaitingOut"];
@@ -20,11 +21,14 @@ type Waiting = Schemas["SimpleDecisionsWaitingOut"];
  * Read again whenever an action anywhere changed what waits (waitingChanged), so what I act on
  * leaves every page at once. undefined: not read yet.
  */
-export function useWaitingList(): { data: Waiting | undefined; error: unknown; reload: () => void } {
+export function useWaitingList({ staleOk = false }: { staleOk?: boolean } = {}): { data: Waiting | undefined; error: unknown; reload: () => void } {
   const [data, setData] = useState<Waiting | undefined>(undefined);
   const [error, setError] = useState<unknown>(null);
   const [changes, setChanges] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
+  // simple-call-budget: taken as the rail takes it (lib/simple-waiting loadWaiting), it reads again
+  // when the shared answer behind it changed, as the rail's count does.
+  useEffect(() => (staleOk ? onReadChanged((url) => url === WAITING_URL && setChanges((c) => c + 1)) : undefined), [staleOk]);
   // QA: a read begun before a change still lands while no later one has (never "Loading…" for
   // as long as the later read takes); an older answer never lands over a newer one.
   const shown = useRef(-1);
@@ -36,7 +40,7 @@ export function useWaitingList(): { data: Waiting | undefined; error: unknown; r
       shown.current = n;
       apply();
     };
-    loadWaiting()
+    loadWaiting(staleOk)
       // Review: a read begun before an action never lands after it (the action's own read does).
       .then((d) => alive && land(() => (setData(d), setError(null))))
       // counts-failed-part: a failed read drops what the last one read, so no out-of-date number
@@ -45,7 +49,7 @@ export function useWaitingList(): { data: Waiting | undefined; error: unknown; r
     return () => {
       alive = false;
     };
-  }, [changes]);
+  }, [changes, staleOk]);
   // counts-wait review: Try again on a failed read reads the list again.
   return { data, error, reload: () => setChanges((c) => c + 1) };
 }
