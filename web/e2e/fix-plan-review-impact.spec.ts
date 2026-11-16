@@ -43,7 +43,7 @@ test("impact: the lineage names a Ground Truth item's kind, not its raw key", as
   await expect(upstream).not.toContainText("f.setup-checklist");
   // The link to the what-if names the item too.
   await expect(upstream.getByRole("link", { name: "What if Setup checklist changed?" })).toBeVisible();
-  await expect(upstream.getByRole("link", { name: /f\.guided-setup/ })).toHaveCount(0);
+  await expect(upstream.getByRole("link", { name: /f\.setup-checklist/ })).toHaveCount(0);
 });
 
 /**

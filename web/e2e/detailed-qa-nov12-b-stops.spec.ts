@@ -42,7 +42,7 @@ const scopeRow = (page: Page, title: string) => page.getByTestId("scope-row").fi
 
 test("eng-check: the pane's header never shows the bare key as if it were a code", async ({ page }) => {
   // protects=detailed-b 3; fails_when=the header's small type shows "f.setup-checklist" (or a
-  // mangled "ƒ.guided-setup") beside "Feature 1 of 3"; no_claim=a feature whose key really is
+  // mangled "ƒ.setup-checklist") beside "Feature 1 of 3"; no_claim=a feature whose key really is
   // code-shaped, which still shows it (named()/namedText(), web/lib/codes.ts).
   await openCheck(page);
   await briefRow(page, "f.setup-checklist").getByRole("button").first().click();
