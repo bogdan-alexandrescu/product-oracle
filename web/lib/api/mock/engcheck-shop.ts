@@ -10,7 +10,7 @@ const lines = (...xs: string[]) => xs.join("\n");
 
 export const SHOP_BRIEFS: Brief[] = [
   {
-    key: "f.guided-setup",
+    key: "f.setup-checklist",
     title: "Setup checklist",
     size: "m",
     depends_on: [],
@@ -52,7 +52,7 @@ export const SHOP_BRIEFS: Brief[] = [
     key: "f.referral-link",
     title: "Referral link",
     size: "l",
-    depends_on: ["f.guided-setup"],
+    depends_on: ["f.setup-checklist"],
     approach: lines(
       "Give each store owner a referral link that brings another owner straight to signup, with the referring store remembered.",
       "Today signup has no way to know who sent a new owner. We add a referral_links table keyed by store, with the link code, created time and last-used time.",

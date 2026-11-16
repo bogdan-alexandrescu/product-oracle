@@ -67,7 +67,7 @@ test.describe("EC1 b and EC2 b: the Engineering check", () => {
     // Beside the Approve, on its line.
     expect(Math.abs((await box(sendBack)).y + (await box(sendBack)).height / 2 - ((await box(approve)).y + (await box(approve)).height / 2))).toBeLessThan(4);
 
-    await row(page, "f.guided-setup").getByRole("button").first().click();
+    await row(page, "f.setup-checklist").getByRole("button").first().click();
     const questions = pane(page).getByTestId("brief-question");
     await expect(questions).toHaveCount(2);
     const ask = pane(page).getByRole("button", { name: "Ask the architect" });

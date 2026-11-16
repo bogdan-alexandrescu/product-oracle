@@ -129,7 +129,7 @@ for (const [name, viewport] of [
 
     test("answered: the answer, who answered and Edit; no empty box until Edit", async ({ page }) => {
       await openCheck(page, "eng-check");
-      await select(page, "f.guided-setup");
+      await select(page, "f.setup-checklist");
       await inspector(page).getByRole("textbox", { name: `Answer: ${SANDBOX}` }).fill("Yes, the sandbox takes test orders.");
       await inspector(page).getByRole("button", { name: "Answer", exact: true }).first().click();
       const answered = inspector(page).getByTestId("answer");
@@ -153,25 +153,25 @@ for (const [name, viewport] of [
 
     test("answer draft: a verdict saved while an answer is typed keeps the typed text", async ({ page }) => {
       await openCheck(page, "eng-check");
-      await select(page, "f.guided-setup");
+      await select(page, "f.setup-checklist");
       const answer = inspector(page).getByRole("textbox", { name: `Answer: ${PHONES}` });
       await answer.fill("Yes, the checklist");
       await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible", exact: true }).click();
       // Back in the box, as a person does, and on typing while the verdict saves.
       await tapAtEnd(answer);
       await answer.pressSequentially(" shows on phones too.");
-      await expect(briefRow(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Feasible");
+      await expect(briefRow(page, "f.setup-checklist").getByTestId("brief-verdict")).toHaveText("Feasible");
       await expect(answer).toHaveValue("Yes, the checklist shows on phones too.");
 
       // Kept by question, not by the open panel: another feature and back.
       await select(page, "f.sample-data");
-      await select(page, "f.guided-setup");
+      await select(page, "f.setup-checklist");
       await expect(inspector(page).getByRole("textbox", { name: `Answer: ${PHONES}` })).toHaveValue("Yes, the checklist shows on phones too.");
     });
 
     test("answer draft: letters typed during a slow verdict save all land at the caret, in order", async ({ page }) => {
       await openCheck(page, "eng-check");
-      await select(page, "f.guided-setup");
+      await select(page, "f.setup-checklist");
       // The verdict's save answers late (the mock's slow knob), so the letters below are typed while it runs.
       const checkpoint = new URL(page.url()).pathname.split("/").pop();
       await page.evaluate(
@@ -187,10 +187,10 @@ for (const [name, viewport] of [
       await tapAtEnd(answer);
       await answer.pressSequentially(" shows");
       // Still saving: the row has no verdict yet.
-      await expect(briefRow(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Not decided");
+      await expect(briefRow(page, "f.setup-checklist").getByTestId("brief-verdict")).toHaveText("Not decided");
       await answer.pressSequentially(" on phones", { delay: 250 });
       await answer.pressSequentially(" too, every letter", { delay: 100 });
-      await expect(briefRow(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Feasible");
+      await expect(briefRow(page, "f.setup-checklist").getByTestId("brief-verdict")).toHaveText("Feasible");
       await answer.pressSequentially(".");
       const typed = "Yes, the checklist shows on phones too, every letter.";
       await expect(answer).toHaveValue(typed);

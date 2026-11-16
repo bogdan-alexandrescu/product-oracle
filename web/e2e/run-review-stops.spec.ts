@@ -103,7 +103,7 @@ test("the staged chips name each change by its feature, with a count only past t
   await expect(page.getByTestId("brief-row")).toHaveCount(3);
   const bar = page.getByTestId("decision-bar");
 
-  await verdict(page, "f.guided-setup", "Feasible");
+  await verdict(page, "f.setup-checklist", "Feasible");
   await inspector(page)
     .getByRole("textbox", { name: /^Answer: Does the payment sandbox/ })
     .fill("Yes, the sandbox takes test orders.");

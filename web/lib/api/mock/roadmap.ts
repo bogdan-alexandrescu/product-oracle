@@ -166,7 +166,7 @@ export const PLAN_SECTION_LINKED_SCENARIO = "plan-section-linked";
 export const PLAN_SECTION_FEATURE_SCENARIO = "plan-section-feature";
 /**
  * Edit plan's codes (codes.feature_reads): "alerts-approved" and two more roadmaps, each with a published version whose item of the
- * Ground Truth feature Guided setup comes from another PRD section: the Billing roadmap's from f-41, then the Invoices roadmap's
+ * Ground Truth feature Setup checklist comes from another PRD section: the Billing roadmap's from f-41, then the Invoices roadmap's
  * from f-42 (TWO_ROADMAPS).
  */
 export const PLAN_TWO_ROADMAPS_SCENARIO = "plan-two-roadmaps";
@@ -1669,7 +1669,7 @@ export function seededPlanItems(slug: string, version: number, sectionCode?: Roa
 
 /**
  * "plan-two-roadmaps": two roadmaps' published versions, stored in the order listed (Invoices first) but made the other way round,
- * each with an item of Guided setup from its own PRD section.
+ * each with an item of Setup checklist from its own PRD section.
  */
 const TWO_ROADMAPS = [
   { slug: "invoices-roadmap", title: "Invoices roadmap", created_at: "2026-10-12T09:00:00Z", section: "f-42" },
@@ -1678,7 +1678,7 @@ const TWO_ROADMAPS = [
 
 /**
  * "plan-two-roadmaps": usage-alerts-roadmap v1 approved, and the roadmaps of TWO_ROADMAPS, copied from it, each with version 1
- * published (``edits``), its item linked to ``feature`` (Guided setup's id).
+ * published (``edits``), its item linked to ``feature`` (Setup checklist's id).
  */
 export function seedTwoRoadmaps<D extends Doc, V extends Version>(ctx: { documents: D[]; versions: V[] }, edits: PlanEditsDb, feature: string) {
   const doc = ctx.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
@@ -1691,7 +1691,7 @@ export function seedTwoRoadmaps<D extends Doc, V extends Version>(ctx: { documen
     const id = stableUuid(`doc:${r.slug}`);
     ctx.documents.push({ ...structuredClone(doc), id, slug: r.slug, title: r.title });
     ctx.versions.push({ ...structuredClone(v1), id: stableUuid(`version:${r.slug}:1`), document_id: id, created_at: r.created_at, approved_at: null });
-    edits.versions[r.slug] = { 1: [{ key: "guided-setup", title: "Guided setup", horizon: "now", feature_id: feature, section: r.section }] };
+    edits.versions[r.slug] = { 1: [{ key: "setup-checklist", title: "Setup checklist", horizon: "now", feature_id: feature, section: r.section }] };
   }
 }
 

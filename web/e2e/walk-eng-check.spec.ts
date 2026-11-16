@@ -59,7 +59,7 @@ for (const size of [
   test(`feasibility above the bar: at ${size.width} px the verdict buttons and the list end above the decision bar and a verdict click records it`, async ({ page }) => {
     await page.setViewportSize(size);
     await openCheckAsLead(page);
-    await row(page, "f.guided-setup").getByRole("button").first().click();
+    await row(page, "f.setup-checklist").getByRole("button").first().click();
     // A tall pane: the note a verdict with changes asks for is open.
     await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible with changes", exact: true }).click();
     await expect(inspector(page).getByRole("textbox", { name: "What changes" })).toBeVisible();
@@ -76,16 +76,16 @@ for (const size of [
     expect(list!.y + list!.height).toBeLessThanOrEqual(barBox!.y + 1);
     // Every verdict button is clickable: the click lands on it, never on the bar.
     await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible", exact: true }).click({ timeout: 5_000 });
-    await expect(row(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Feasible");
+    await expect(row(page, "f.setup-checklist").getByTestId("brief-verdict")).toHaveText("Feasible");
     await expect(bar(page).getByTestId("eng-tally")).toContainText("1 of 3 decided");
   });
 }
 
 test("answered: the list row counts the answered questions until each question of a feature is answered", async ({ page }) => {
   await openCheckAsLead(page);
-  const questions = row(page, "f.guided-setup").getByTestId("brief-questions");
+  const questions = row(page, "f.setup-checklist").getByTestId("brief-questions");
   await expect(questions).toHaveText("1 blocking0 of 2 answered");
-  await row(page, "f.guided-setup").getByRole("button").first().click();
+  await row(page, "f.setup-checklist").getByRole("button").first().click();
   const boxes = inspector(page).getByRole("textbox", { name: /^Answer: / });
   await boxes.first().fill("Yes, the sandbox takes test orders.");
   await inspector(page).getByRole("button", { name: "Answer", exact: true }).first().click();

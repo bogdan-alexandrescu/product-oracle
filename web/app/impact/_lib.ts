@@ -117,7 +117,7 @@ export function upstreamOf(d: Dependency, names?: Names): Upstream {
 /** "Annual billing PRD v1 · Scope": a dependency's upstream in one line. */
 export function upstreamLine(d: Dependency, names?: Names): string {
   const u = d.upstream;
-  // qa-plan-10: the item by its title and kind ("Guided setup · Feature"), never its baseline key.
+  // qa-plan-10: the item by its title and kind ("Setup checklist · Feature"), never its baseline key.
   if (u.entity) return `${u.entity.title} · ${statusLabel(u.entity.type)}`;
   return [whereOf(u, names), sectionOf(u, names)].filter(Boolean).join(" · ") || "Upstream";
 }
