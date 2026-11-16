@@ -119,14 +119,14 @@ for (const [name, size] of [
   ["phone", PHONE],
 ] as const) {
   test(`check (${name}): features show their names only, never their keys`, async ({ page }) => {
-    // protects=qa4-work-53; fails_when=a feature key (f.guided-setup) shows under or beside its name.
+    // protects=qa4-work-53; fails_when=a feature key (f.setup-checklist) shows under or beside its name.
     await page.setViewportSize(size);
     await openCheck(page);
     // EC1 b (owner, Nov 1): the list shows the name; the key shows only in small type by the title in the pane.
-    await expect(briefRow(page, "f.guided-setup").getByRole("button").first()).toContainText("Setup checklist");
+    await expect(briefRow(page, "f.setup-checklist").getByRole("button").first()).toContainText("Setup checklist");
     await expect(briefRow(page, "f.sample-data").getByRole("button").first()).toContainText("Sample data import");
     const table = page.getByRole("region", { name: "Features" });
-    for (const key of ["f.guided-setup", "f.sample-data", "f.referral-link"]) await expect(table).not.toContainText(key);
+    for (const key of ["f.setup-checklist", "f.sample-data", "f.referral-link"]) await expect(table).not.toContainText(key);
   });
 }
 
@@ -136,7 +136,7 @@ test("check: no code map reads in plain words, the panel names what a feature de
   await openCheck(page);
   const guess = "Oracle could not read the code, so this approach is a guess";
   // EC1 b (owner, Nov 1): said once, in the pane, not on every row of the list.
-  await expect(briefRow(page, "f.guided-setup")).not.toContainText(guess);
+  await expect(briefRow(page, "f.setup-checklist")).not.toContainText(guess);
   await expect(page.getByRole("region", { name: "Features" })).not.toContainText("No code map");
   await briefRow(page, "f.referral-link").getByRole("button").first().click();
   const panel = page.getByTestId("brief-inspector");
@@ -144,7 +144,7 @@ test("check: no code map reads in plain words, the panel names what a feature de
   await expect(panel).toContainText(guess);
   await expect(panel).not.toContainText("No code map");
   await expect(panel).toContainText("Depends on Setup checklist");
-  await expect(panel).not.toContainText("f.guided-setup");
+  await expect(panel).not.toContainText("f.setup-checklist");
   // EC1 b (owner, Nov 4): a quiet accent link after "None for this feature.", not grey text and not a button below.
   await expect(panel.getByRole("button", { name: "Ask the architect" })).toHaveClass(/text-accent/);
 });

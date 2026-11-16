@@ -159,7 +159,7 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
       {!report.preview && counts!.under_review > 0 && <Chip kind="na">{counts!.under_review} under review</Chip>}
     </>
   );
-  // qa-plan-61: one sentence, "Impact: Guided setup", not the title and a suffix run together.
+  // qa-plan-61: one sentence, "Impact: Setup checklist", not the title and a suffix run together.
   // qa4-plan-45: a back link that names the version ("‹ Impact of Annual billing PRD v2")
   // leaves it out of the title: "Impact: Success metrics section edited".
   const named = !!subject?.where && !!backTo?.label.endsWith(subject.where);

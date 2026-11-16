@@ -51,7 +51,7 @@ test.describe("desktop", () => {
     const planRow = sidebar.getByTestId("plan-row").filter({ hasText: flowTitle });
     await planRow.getByRole("button").first().click();
     await expect(planRow).toContainText("Setup checklist changed");
-    await expect(planRow).not.toContainText("f.guided-setup");
+    await expect(planRow).not.toContainText("f.setup-checklist");
 
     await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
     await page.getByRole("grid", { name: "Affected outputs" }).getByText(flowTitle).first().click();
@@ -59,8 +59,8 @@ test.describe("desktop", () => {
     await expect(insp).toContainText("Why it's affected");
     await expect(insp.getByRole("listitem").filter({ hasText: "Setup checklist changed" }).first()).toBeVisible();
     await expect(insp.getByTestId("dependency").filter({ hasText: "Setup checklist" })).toContainText("Setup checklist · Feature");
-    await expect(insp).not.toContainText("f.guided-setup");
-    await expect(page.getByRole("grid", { name: "Affected outputs" })).not.toContainText("f.guided-setup");
+    await expect(insp).not.toContainText("f.setup-checklist");
+    await expect(page.getByRole("grid", { name: "Affected outputs" })).not.toContainText("f.setup-checklist");
   });
 
   test("qa-plan-11: the change's subject node fits its title and date, no word cut", async ({ page }) => {

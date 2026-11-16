@@ -55,7 +55,7 @@ test("confirming a proposed feature gives it its code", async ({ page }) => {
   // A run proposed Setup error report (invented): it is not in the Ground Truth yet, so it has no code (a run's key).
   await page.evaluate(() => {
     const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
-    Object.assign(db.baseline.entities.find((e: { key: string }) => e.key === "F-06"), { status: "proposed", key: "f.dark-mode" });
+    Object.assign(db.baseline.entities.find((e: { key: string }) => e.key === "F-06"), { status: "proposed", key: "f.setup-error-report" });
     localStorage.setItem("po-mock-db-v2", JSON.stringify(db));
   });
   await page.reload();

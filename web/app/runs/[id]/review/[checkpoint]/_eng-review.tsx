@@ -577,7 +577,7 @@ function BriefPane({
   const answered = f.questions.filter((q) => edit(acts, `answer:${q.id}`)).length;
   // The picked verdict is filled in as soon as it is clicked, before its note is saved.
   const shown = picking ?? current?.verdict ?? null;
-  // detailed-b 3: the key shows only when it reads as a code; a raw internal key ("f.guided-setup")
+  // detailed-b 3: the key shows only when it reads as a code; a raw internal key ("f.setup-checklist")
   // never draws as if it were one.
   const n = named(f.title, f.key);
 

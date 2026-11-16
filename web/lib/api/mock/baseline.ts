@@ -390,7 +390,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
   const console_ = entity("product", "p.admin-console", "Admin console", { body: "Settings, members and billing." });
 
   // Features.
-  const guided = entity("feature", "F-01", "Setup checklist", {
+  const setupChecklist = entity("feature", "F-01", "Setup checklist", {
     body: "A short checklist that walks a new account through its first product, payment method and test order.",
     attrs: { status: "in_progress", effort: "M" },
     confidence: 0.71,
@@ -411,7 +411,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
     attrs: { status: "shipped", effort: "S" },
     confidence: 0.68,
   });
-  const dark = entity("feature", "F-06", "Setup error report", {
+  const setupErrorReport = entity("feature", "F-06", "Setup error report", {
     body: "A report in the admin console of what failed during setup.",
     attrs: { status: "idea", effort: "M" },
     confidence: 0.52,
@@ -423,44 +423,44 @@ export function seedBaseline(uuid: () => string): BaselineState {
   });
   // Each got its code when it joined the Ground Truth (fixes.code_on_join): the slug it was
   // proposed under stays its alias, so a run's briefs that name it by that slug still find it.
-  const joined: [EntityRow, string][] = [[dark, "f.dark-mode"], [guided, "f.guided-setup"], [sample, "f.sample-data"], [carts, "f.referral-link"], [invites, "f.team-invites"]];
+  const joined: [EntityRow, string][] = [[setupErrorReport, "f.setup-error-report"], [setupChecklist, "f.setup-checklist"], [sample, "f.sample-data"], [carts, "f.referral-link"], [invites, "f.team-invites"]];
   for (const [e, slug] of joined) {
     const shot = { type: e.type, key: e.key, title: e.title, body: e.body, attrs: e.attrs, status: e.status };
     s.revisions!.push({ id: uuid(), entity_id: e.id, edge_id: null, before: { ...shot, key: slug }, after: shot, actor: "system", reason: null, created_at: "2026-09-01T09:00:00Z" });
   }
 
-  edge(guided, "part_of", storefront);
+  edge(setupChecklist, "part_of", storefront);
   edge(sample, "part_of", storefront);
   edge(carts, "part_of", storefront);
   edge(invites, "part_of", console_);
-  edge(dark, "part_of", console_);
+  edge(setupErrorReport, "part_of", console_);
   // Usage export has no product yet.
 
-  edge(guided, "supports", activation, { contribution: 3 });
-  edge(guided, "supports", paid, { contribution: 1 });
+  edge(setupChecklist, "supports", activation, { contribution: 3 });
+  edge(setupChecklist, "supports", paid, { contribution: 1 });
   edge(sample, "supports", activation, { contribution: 2 });
   edge(carts, "supports", paid, { contribution: 2 });
   edge(invites, "supports", activation, { contribution: 1 });
   edge(usage, "supports", paid, { contribution: 1 });
 
-  edge(guided, "depends_on", sample);
-  edge(guided, "blocks", carts);
+  edge(setupChecklist, "depends_on", sample);
+  edge(setupChecklist, "blocks", carts);
 
-  cite(guided, "github:issue", { source: 0.9, freshness: 0.85, mentions: 0.6, goal_impact: 0.75 }, {
+  cite(setupChecklist, "github:issue", { source: 0.9, freshness: 0.85, mentions: 0.6, goal_impact: 0.75 }, {
     url: "https://github.com/example-org/storefront/issues/128",
     ref: "example-org/storefront#128",
     excerpt: "New accounts stall before adding a payment method; a setup checklist should point them to it.",
     retrieved_at: "2026-10-14T10:05:00Z",
     itemTitle: "Setup checklist for new accounts",
   });
-  cite(guided, "slack", { source: 0.5, freshness: 0.8, mentions: 0.4, goal_impact: 0.5 }, {
+  cite(setupChecklist, "slack", { source: 0.5, freshness: 0.8, mentions: 0.4, goal_impact: 0.5 }, {
     url: "https://example.slack.com/archives/C0GROWTH/p1760000000",
     ref: "#growth thread",
     excerpt: "Support keeps walking people through the same first three steps by hand.",
     retrieved_at: "2026-10-13T16:40:00Z",
     private: true,
   });
-  cite(guided, "fireflies", { source: 0.7, freshness: 0.9, mentions: 0.8, goal_impact: 0.6 }, {
+  cite(setupChecklist, "fireflies", { source: 0.7, freshness: 0.9, mentions: 0.8, goal_impact: 0.6 }, {
     url: "https://app.example-notes.com/view/onboarding-review",
     ref: "Onboarding review (meeting)",
     excerpt: "Agreed to ship the checklist before the sample store work lands.",
@@ -498,7 +498,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
     retrieved_at: "2026-09-30T08:00:00Z",
     itemTitle: "Invite teammates from setup",
   });
-  cite(dark, "slack", { source: 0.5, freshness: 0.6, mentions: 0.6, goal_impact: 0.3 }, {
+  cite(setupErrorReport, "slack", { source: 0.5, freshness: 0.6, mentions: 0.6, goal_impact: 0.3 }, {
     url: "https://example.slack.com/archives/C0DESIGN/p1760500000",
     ref: "#design thread",
     excerpt: "A few admins asked to see why setup failed.",
@@ -593,8 +593,8 @@ export function seedBaseline(uuid: () => string): BaselineState {
       decided_at: null,
       created_at,
     });
-  proposal(guided, { attrs: { effort: "L" } }, "The setup review estimated more work than planned.", "2026-10-16T08:10:00Z");
-  proposal(dark, { attrs: { status: "planned" } }, "Mentioned as next up in the planning call, under FR-06.", "2026-10-16T08:12:00Z");
+  proposal(setupChecklist, { attrs: { effort: "L" } }, "The setup review estimated more work than planned.", "2026-10-16T08:10:00Z");
+  proposal(setupErrorReport, { attrs: { status: "planned" } }, "Mentioned as next up in the planning call, under FR-06.", "2026-10-16T08:12:00Z");
   // And one from a commenter: no run. A fixed id, so the ids seeded after it stay put.
   s.proposals.push({
     id: COMMENTER_PROPOSAL,
@@ -2058,10 +2058,10 @@ export function addStatusOverlapProposals(s: BaselineState, uuid: () => string) 
  * ranked second would point at the wrong claim.
  */
 export function addThreeWayConflict(s: BaselineState, uuid: () => string) {
-  const dark = s.entities.find((e) => e.key === "F-06")!;
+  const setupErrorReport = s.entities.find((e) => e.key === "F-06")!;
   s.conflicts.push({
     id: uuid(),
-    entity_id: dark.id,
+    entity_id: setupErrorReport.id,
     edge_id: null,
     field: "attrs.status",
     claims: [

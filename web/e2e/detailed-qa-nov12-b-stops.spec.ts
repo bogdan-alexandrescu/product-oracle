@@ -8,7 +8,7 @@ import { login } from "./helpers";
  * QA findings, Nov 12, 2026, fix lane B (invented data only, mock layer):
  * - detailed-b 3: a review stop's feature or item shows its code with its name, through the
  *   app's named()/namedText() (web/lib/codes.ts); a key that is not code-shaped never draws
- *   bare, as if it were one (the Engineering check's pane header used to show "f.guided-setup"
+ *   bare, as if it were one (the Engineering check's pane header used to show "f.setup-checklist"
  *   next to "Feature 1 of 3").
  * - detailed-b 4: the ✓ glyph drew as an empty box in Chromium; every "done" mark across the
  *   Feature set and Engineering check review stops is the app's check icon (an svg) instead.
@@ -41,27 +41,27 @@ async function openScope(page: Page) {
 const scopeRow = (page: Page, title: string) => page.getByTestId("scope-row").filter({ has: page.getByTestId("feature-title").filter({ hasText: title }) });
 
 test("eng-check: the pane's header never shows the bare key as if it were a code", async ({ page }) => {
-  // protects=detailed-b 3; fails_when=the header's small type shows "f.guided-setup" (or a
-  // mangled "ƒ.guided-setup") beside "Feature 1 of 3"; no_claim=a feature whose key really is
+  // protects=detailed-b 3; fails_when=the header's small type shows "f.setup-checklist" (or a
+  // mangled "ƒ.setup-checklist") beside "Feature 1 of 3"; no_claim=a feature whose key really is
   // code-shaped, which still shows it (named()/namedText(), web/lib/codes.ts).
   await openCheck(page);
-  await briefRow(page, "f.guided-setup").getByRole("button").first().click();
-  await expect(page.locator('[data-testid="brief-row"][data-feature="f.guided-setup"][aria-current="true"]')).toHaveCount(1);
+  await briefRow(page, "f.setup-checklist").getByRole("button").first().click();
+  await expect(page.locator('[data-testid="brief-row"][data-feature="f.setup-checklist"][aria-current="true"]')).toHaveCount(1);
 
   const position = engInspector(page).getByTestId("brief-position");
   await expect(position).toContainText("Feature 1 of 3");
-  await expect(position).not.toContainText("f.guided-setup");
+  await expect(position).not.toContainText("f.setup-checklist");
   await expect(position).not.toContainText("ƒ");
-  await expect(engInspector(page)).not.toContainText("f.guided-setup");
+  await expect(engInspector(page)).not.toContainText("f.setup-checklist");
   // The list row reads by name only, as it did before (qa4-work-53): never regressed by this fix.
-  await expect(briefRow(page, "f.guided-setup")).toContainText("Setup checklist");
+  await expect(briefRow(page, "f.setup-checklist")).toContainText("Setup checklist");
 });
 
 test("eng-check: an answered question's check is an icon, never the ✓ glyph", async ({ page }) => {
   // protects=detailed-b 4; fails_when="Answered" shows the literal ✓ character instead of an
   // svg (the character drew as an empty box in Chromium).
   await openCheck(page);
-  await briefRow(page, "f.guided-setup").getByRole("button").first().click();
+  await briefRow(page, "f.setup-checklist").getByRole("button").first().click();
   await engInspector(page).getByRole("textbox", { name: `Answer: ${SANDBOX}` }).fill("Yes, the sandbox takes test orders.");
   await engInspector(page).getByRole("button", { name: "Answer", exact: true }).first().click();
 

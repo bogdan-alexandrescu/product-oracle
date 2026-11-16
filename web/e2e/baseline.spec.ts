@@ -84,7 +84,7 @@ test("Ground Truth: the feature drawer shows links, evidence and the lock", asyn
   await page.getByTestId("feature-F-01").getByRole("button", { name: "Setup checklist" }).click();
   const d = drawer(page, "Setup checklist");
   await expect(d).toBeVisible();
-  await expect(d).not.toContainText("f.guided-setup");
+  await expect(d).not.toContainText("f.setup-checklist");
   await expect(d).toContainText("Feature");
   await expect(d).toContainText("A short checklist that walks a new account");
   await expect(d.locator('[data-attr="effort"]')).toHaveText("M");

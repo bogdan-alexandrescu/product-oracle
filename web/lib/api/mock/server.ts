@@ -6857,11 +6857,11 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
 
 /** #346: the change-set mock's view of the db; a proposal imports the next version, copied from its base. */
 function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsContext {
-  const guided = db.roadmap?.two_roadmaps && db.baseline.entities.find((e) => e.type === "feature" && (e.key === "F-01" || e.key === "f.guided-setup"));
-  // The scenario's Guided setup has no code of its own (still its slug), so it takes its oldest published section's.
-  if (guided && guided.key === "F-01") guided.key = "f.guided-setup";
+  const setupChecklist = db.roadmap?.two_roadmaps && db.baseline.entities.find((e) => e.type === "feature" && (e.key === "F-01" || e.key === "f.setup-checklist"));
+  // The scenario's Setup checklist has no code of its own (still its slug), so it takes its oldest published section's.
+  if (setupChecklist && setupChecklist.key === "F-01") setupChecklist.key = "f.setup-checklist";
   // Seeded lazily, on the first change-set request: a page opened before Edit plan shows usage-alerts-roadmap v1 not yet approved.
-  if (guided) seedTwoRoadmaps(db, (db.plan_edits ??= emptyPlanEdits()), guided.id);
+  if (setupChecklist) seedTwoRoadmaps(db, (db.plan_edits ??= emptyPlanEdits()), setupChecklist.id);
   let codes: Record<string, string> | undefined;
   return {
     userId: me.id,

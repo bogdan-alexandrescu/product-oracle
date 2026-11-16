@@ -3222,7 +3222,7 @@ export function seedEngCheckAnsweredByIdRun(db: RunsDb, ctx: Omit<RunsContext, "
   const cp = r.checkpoints.find((c) => c.status === "pending" && c.kind === "eng_review")!;
   const at = "2026-10-17T15:20:00Z";
   const answers: Record<string, EngAnswer[]> = {
-    "f.guided-setup": [{ question_id: "q1", answer: "Yes, the sandbox takes test orders.", by, at }],
+    "f.setup-checklist": [{ question_id: "q1", answer: "Yes, the sandbox takes test orders.", by, at }],
   };
   Object.assign(cp, { status: "approved", decided_by: by, decided_at: at });
   cp.payload = { ...cp.payload, briefs: { verdicts: {}, sizes: {}, answers }, decided: { role: "commenter", via: "oracle", by } };
@@ -3239,7 +3239,7 @@ export function seedEngCheckUnmappedRun(db: RunsDb, ctx: Omit<RunsContext, "db">
   const cp = r.checkpoints.find((c) => c.kind === "eng_review" && c.status === "pending")!;
   const file: BriefsMaps = {
     cites: {
-      "f.guided-setup": [["module:onboarding", "touches[0].ref"], ["module:storefront", "touches[1].ref"]],
+      "f.setup-checklist": [["module:onboarding", "touches[0].ref"], ["module:storefront", "touches[1].ref"]],
       "f.sample-data": [["module:storefront", "touches[0].ref"], ["model:catalogue", "reuse"]],
       "f.referral-link": [["module:storefront", "reuse"]],
     },
@@ -4217,9 +4217,9 @@ const LOCAL_BRIEFS: Brief[] = [
 
 /** The "eng-check" scenario's briefs, on the baseline's own features (their efforts M, S, L). */
 const SEEDED_BRIEFS: Brief[] = [
-  { key: "f.guided-setup", title: "Setup checklist", approach: "Reuse the onboarding checklist and add the test-order step.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Does the payment sandbox take test orders without a live account?", blocking: true }, { id: "q2", question: "Show the checklist on phones too?", blocking: false }] },
+  { key: "f.setup-checklist", title: "Setup checklist", approach: "Reuse the onboarding checklist and add the test-order step.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Does the payment sandbox take test orders without a live account?", blocking: true }, { id: "q2", question: "Show the checklist on phones too?", blocking: false }] },
   { key: "f.sample-data", title: "Sample data import", approach: "A fixed catalogue copied into the new store on first sign-in.", size: "s", depends_on: [], questions: [] },
-  { key: "f.referral-link", title: "Referral link", approach: "A referral link per owner, kept on the server and shown in setup.", size: "l", depends_on: ["f.guided-setup"], questions: [] },
+  { key: "f.referral-link", title: "Referral link", approach: "A referral link per owner, kept on the server and shown in setup.", size: "l", depends_on: ["f.setup-checklist"], questions: [] },
 ];
 
 /** What a brief file says of the code maps: the ids each feature cites (with where: touches[i].ref or reuse) and the repositories it names. */

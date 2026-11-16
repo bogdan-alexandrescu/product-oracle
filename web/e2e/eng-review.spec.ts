@@ -100,16 +100,16 @@ test("lead decides: Approve waits for every verdict and the blocking answer, the
   const approve = bar(page).getByRole("button", { name: "Approve" });
   await expect(approve).toBeDisabled();
   await expect(bar(page).getByTestId("eng-tally")).toHaveText("0 of 3 decided · 1 blocking question");
-  await expect(row(page, "f.guided-setup").getByTestId("brief-questions")).toHaveText("1 blocking0 of 2 answered");
+  await expect(row(page, "f.setup-checklist").getByTestId("brief-questions")).toHaveText("1 blocking0 of 2 answered");
 
-  await verdict(page, "f.guided-setup", "Feasible");
+  await verdict(page, "f.setup-checklist", "Feasible");
   await expect(bar(page).getByTestId("eng-tally")).toHaveText("1 of 3 decided · 1 blocking question");
   await verdict(page, "f.sample-data", "Feasible with changes", "Ship a smaller catalogue first");
   await verdict(page, "f.referral-link", "Not feasible as scoped", "Needs a server-side cart store we do not have");
   await expect(bar(page).getByTestId("eng-tally")).toHaveText("3 of 3 decided · 1 blocking question");
   await expect(approve).toBeDisabled();
 
-  await row(page, "f.guided-setup").getByRole("button").first().click();
+  await row(page, "f.setup-checklist").getByRole("button").first().click();
   await inspector(page).getByRole("textbox", { name: /^Answer: Does the payment sandbox/ }).fill("Yes, the sandbox takes test orders.");
   await inspector(page).getByRole("button", { name: "Answer" }).first().click();
   await expect(inspector(page).getByTestId("answer")).toContainText("Yes, the sandbox takes test orders. · ");
@@ -190,7 +190,7 @@ test("can_suggest false: a viewer (mock role) reads the screen with no Suggest",
 test("phone: at 390 px the rows are cards, the decision bar stays on screen and nothing scrolls sideways", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openCheckAsLead(page);
-  const first = await row(page, "f.guided-setup").boundingBox();
+  const first = await row(page, "f.setup-checklist").boundingBox();
   const second = await row(page, "f.sample-data").boundingBox();
   expect(first && second && second.y >= first.y + first.height).toBeTruthy();
   await expect(bar(page).getByRole("button", { name: "Approve" })).toBeInViewport();
