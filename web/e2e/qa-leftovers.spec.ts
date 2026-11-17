@@ -58,7 +58,11 @@ test("agenda sheet: a chip that adds a feature shows its code with its name", as
   for (const chip of await chips.all()) {
     await expect(chip).toHaveText(/^\+ (F-\d+[a-j]? \S.*|.*Not in the Ground Truth)$/);
   }
-  await expect(sheet.getByRole("button", { name: /^\+ F-\d+[a-j]? Alert routing by team$/ })).toBeVisible();
+  // A feature taken off the agenda comes back as a chip that reads as its row did (its code, or the flag).
+  const row = sheet.getByTestId("agenda-row").filter({ hasText: "Mobile alert push" });
+  const code = (await row.locator("code.simple-code").allInnerTexts())[0];
+  await tap(sheet.getByRole("button", { name: "Remove Mobile alert push" }));
+  await expect(sheet.getByRole("button", { name: /^\+ .*Mobile alert push/ })).toHaveText(code ? `+ ${code} Mobile alert push` : /^\+ Mobile alert push\s*Not in the Ground Truth$/);
 });
 
 // protects=on a phone, a toast at the bottom never covers the page's last button once scrolled to the end;
