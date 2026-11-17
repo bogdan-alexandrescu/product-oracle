@@ -765,7 +765,10 @@ export function MsLayer(props: MsLayerProps) {
     const n = seenDay.get(date) ?? 0;
     seenDay.set(date, n + 1);
     const many = byDay.get(date) ?? 1;
-    if (n === 0) {
+    // qa-nov17 #7: one scrolled left of the Timeline's track (under its names column) draws no
+    // diamond, count or line over the names; its bars' ties still show.
+    const off = !!props.span && mx < props.span[0] - 1;
+    if (n === 0 && !off) {
       // Their count, a small badge on the diamond's top-right corner: it sits wholly above the
       // diamonds' own boxes, so it never covers the next one at any zoom (its names in its tooltip),
       // and above the Today pill's top too (QA Nov 12 #8: touching it, it found no place off a month's name).
@@ -816,7 +819,7 @@ export function MsLayer(props: MsLayerProps) {
       out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={msCode(m)} title={`${words(m)}, ${fullDay(date)}`} kind={m.kind ?? "delivery"} day={date} onPointerDown={grab(m)} />);
     }
     // A line through every group, its words in the band under the date axis.
-    out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(msCode(m))}` }} />);
+    if (!off) out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(msCode(m))}` }} />);
     // Each item it waits on tied to it by a dotted line; one that ends after it is late (red).
     for (const id of m.item_ids) {
       const r = rowOf(id);
