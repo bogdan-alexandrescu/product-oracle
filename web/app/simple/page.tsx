@@ -287,7 +287,7 @@ export default function SimpleHome() {
       const r = await questionActions.decide(q, a, true);
       // Only when it can be undone: otherwise the toast says it and the row goes as on any list.
       if (r && r.change.status !== "proposed" && r.change.can_undo) {
-        const label = [r.words, me?.name, meetingMoment(new Date().toISOString(), zone)].filter(Boolean).join(" · ");
+        const label = [r.words, me?.name, meetingMoment(new Date().toISOString(), zone, true)].filter(Boolean).join(" · ");
         setDecidedHere((d) => [...d.filter((x) => x.id !== q.id), { ...q, column: "decided", chosen: r.words, decided_label: label, undo_id: r.change.id }]);
       }
       return r;
@@ -503,6 +503,7 @@ export default function SimpleHome() {
   // build-rundecide RD3 a: the PRDs' questions I own wait in a card per PRD; this card keeps the other judgement calls.
   const decisionRows = waiting.data && decisions.data ? homeDecisionRows([], decisions.data) : undefined;
   const prdWaiting = waitingByPrd([...(waiting.data?.questions ?? []).filter((q) => !decidedHere.some((d) => d.id === q.id)), ...decidedHere]);
+  const openCount = (qs: Question[]) => qs.filter((q) => !decidedHere.includes(q)).length;
   const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0;
   const proposalsEmpty = !!changes.data && proposalRows.length === 0;
   const quiet = !(revisit && inbox.loading) && decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0 && stopCount === 0 && myTasks.length === 0 && alsoWaiting.length === 0 && moreInInbox === 0;
@@ -1055,7 +1056,8 @@ export default function SimpleHome() {
             <header className="flex flex-wrap items-baseline gap-x-3">
               <h2 className="simple-h2 flex-1">Waiting for you: {prd.title}</h2>
               <span className="simple-meta">
-                {questions.length} {questions.length === 1 ? "decision" : "decisions"} you own · also on its review meeting&apos;s agenda
+                {/* qa-nov17 #2: a row decided here stays (with Undo) but no longer counts. */}
+                {openCount(questions)} {openCount(questions) === 1 ? "decision" : "decisions"} you own · also on its review meeting&apos;s agenda
               </span>
             </header>
             <div className="mt-3">

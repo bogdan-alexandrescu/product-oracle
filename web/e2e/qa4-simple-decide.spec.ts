@@ -92,7 +92,8 @@ for (const phone of [false, true]) {
         await tap(steps(page).getByRole("button", { name: "2 Roadmap" }));
         const span = page.getByTestId("roadmap-span").first();
         await expect(span).toBeVisible();
-        await expect(span).toHaveCSS("white-space", "nowrap");
+        // qa-nov17 #1: each part of the span stays on one line; a phone breaks it only at its "·".
+        await expect(span.locator("span").first()).toHaveCSS("white-space", "nowrap");
         const restores = await page.getByRole("button", { name: /^Restore / }).count();
         const cut = page.getByRole("button", { name: /^Cut / }).first();
         await tap(cut);

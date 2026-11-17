@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 import { Button, confirmInPage, Icon, InfoTip, toast } from "@/components/ds";
 import { usePhoneAsk } from "@/components/ds/AppShell";
@@ -610,7 +610,10 @@ function RoadmapSlice({ m, reload, refresh, open }: { m: Meeting; reload: () => 
           <li key={i.id} data-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
             {/* QA Nov 12 (#1): on a phone the name takes its own row; the buttons wrap below it. */}
             <span className="min-w-0 flex-1 max-[600px]:basis-full">
-              <FeatureName id={i.id} code={i.code} title={i.title} open={open} strong /> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{spanOf(i, zone)}</span>
+              <FeatureName id={i.id} code={i.code} title={i.title} open={open} strong /> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span data-testid="roadmap-span">
+                {/* qa-nov17 #1: each part stays whole, so on a phone the line breaks only at its "·". */}
+                {spanOf(i, zone).split(" · ").map((part, n) => <Fragment key={n}>{n > 0 && " · "}<span className="whitespace-nowrap">{part}</span></Fragment>)}
+              </span>
             </span>
             {/* qa-simple-decide-45: a cut item comes back with Restore. */}
             {m.can.change && i.status === "cut" && (
