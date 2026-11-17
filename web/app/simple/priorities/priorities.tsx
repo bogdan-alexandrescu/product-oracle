@@ -710,7 +710,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                   )}
                   <OwnKey r={r} />
                   <span className="flex flex-none items-center">
-                    <MarkFor featureId={r.feature_id} />
+                    <MarkFor featureId={r.feature_id} checked />
                   </span>
                 </span>
                 {/* PR1: a feature with no Ground Truth code is flagged, never given made-up letters. */}
