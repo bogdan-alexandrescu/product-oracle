@@ -1857,8 +1857,11 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     if (gone) lent.push(resolve(db, gone));
     x.r = lent.find((r) => !undated(r)) ?? x.r;
   }
-  // additions._parts: a parent or a part by its display code ("" when none) and name.
-  const partRef = (x: SeedItem, inTrash = false) => ({ id: db.ids[x.key] ?? reader.full.ids[x.key], code: prdCode(x.section) ?? "", title: x.title, cut: !x.merged_into && x.status === "cut", in_trash: inTrash });
+  // qa-nov17: a parent, part or kept item reads its display code as service.load's Entry.code does: its
+  // Ground Truth feature's (Setup checklist: F-01), else its PRD section's.
+  const shownCode = (x: SeedItem) => (x.feature_id && db.feature_codes?.[x.feature_id]) || prdCode(x.section);
+  // additions._parts: a parent or a part by its display code ("" when none) and name; one in Trash by its name only.
+  const partRef = (x: SeedItem, inTrash = false) => ({ id: db.ids[x.key] ?? reader.full.ids[x.key], code: inTrash ? "" : shownCode(x) || "", title: x.title, cut: !x.merged_into && x.status === "cut", in_trash: inTrash });
   const pathOf = (s: SeedItem) => {
     const gone = trashedParent(s);
     return [...(gone ? [partRef(gone, true)] : []), ...ancestorsOf(s).reverse().map((a) => partRef(a))];
@@ -1868,7 +1871,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   // found in the merged item's own roadmap, as the API's by_key is keyed by (roadmap id, key).
   const ref = (k: string, roadmap: string) => {
     const x = db.items.find((y) => y.key === k && y.roadmap === roadmap && !y.trashed);
-    return x ? { id: db.ids[k], code: prdCode(x.section) || x.title, title: x.title } : { id: "", code: "", title: "a deleted feature" };
+    return x ? { id: db.ids[k], code: shownCode(x) || x.title, title: x.title } : { id: "", code: "", title: "a deleted feature" };
   };
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
   const slices = db.plan ? planSlices() : [];

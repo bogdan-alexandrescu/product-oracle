@@ -25,8 +25,9 @@ import { expect, test, type Page } from "./test";
  * count at 3 and 6 months; fails_when = it reads "No track · N items".
  * Card ms-axis-clear: protects = an approved milestone's chip never lies under a band diamond, and at
  * 6 months no band label is cut to its code; fails_when = they overlap, or a label reads "M…".
- * Card tb-phone-gantt-long: protects = a long track name in the phone Gantt ends in an ellipsis with
- * its health mark and goal line in view; fails_when = the name pushes them out of its column.
+ * Card tb-phone-gantt-long: protects = a long track name in the phone Gantt reads whole (qa-nov17 #5:
+ * it wraps, never cut) with its health mark and goal line in view; fails_when = the name is cut or
+ * pushes them out of its column.
  * Card ms-tip-words: protects = a label's tooltip reads "Builds toward <goal>", "Served by N items"
  * and its measure line; fails_when = it reads "Advances" or "Waits on", or lacks the measure.
  * Card ms-panel-rows: protects = the panel sets Date and Track side by side (a hand-off: its From and
@@ -256,7 +257,8 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     for (const w of widths) expect(w).toBeGreaterThan(70);
   });
 
-  test("on a phone the Gantt's long track name ends in an ellipsis, its health mark and goal in view", async ({ page }) => {
+  // qa-nov17 #5 changed this on purpose: on a phone's Gantt the long name wraps whole, never cut.
+  test("on a phone the Gantt's long track name reads whole, its health mark and goal in view", async ({ page }) => {
     await open(page);
     await page.getByTestId("tracks-open").click();
     const sheet = page.getByTestId("tracks-sheet");
@@ -276,8 +278,13 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
     const group = page.getByTestId("chart-group").filter({ hasText: long.slice(0, 8) }).first();
     await expect(group).toBeVisible();
     const box = (await group.boundingBox())!;
-    const name = group.getByTestId("track-name-tip").locator("span").first();
-    expect(await name.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true);
+    const name = group.getByTestId("track-name");
+    await expect(name).toHaveText(long);
+    expect(await name.evaluate((e) => e.scrollWidth <= e.clientWidth && e.scrollHeight <= e.clientHeight)).toBe(true);
+    const n = (await name.boundingBox())!;
+    expect(n.x).toBeGreaterThanOrEqual(box.x - 1);
+    expect(n.x + n.width).toBeLessThanOrEqual(box.x + box.width + 1);
+    expect(n.y + n.height).toBeLessThanOrEqual(box.y + box.height + 1);
     const mark = (await group.getByTestId("track-health").boundingBox())!;
     expect(mark.x + mark.width).toBeLessThanOrEqual(box.x + box.width);
     expect(mark.width).toBeGreaterThan(4);
@@ -414,6 +421,9 @@ test.describe("Roadmap: track bands and milestone kinds", () => {
       await card(page).getByTestId("ms-save").click();
       await expect(card(page)).toBeHidden();
     }
+    // Clicking the later diamonds slid the Timeline on, so the first ones (Nov 20) went under the
+    // names column, where qa-nov17 #7 draws no diamond: the whole span (All) has every one in its track.
+    await page.getByTestId("zoom-all").click();
     const gems = page.locator('[data-testid="ms-diamond"], [data-testid="ms-prd-diamond"]');
     for (const kind of ["goal", "sub_goal", "delivery", "decision", "outside", "handoff"]) {
       const of = gems.and(page.locator(`[data-kind="${kind}"]`));
