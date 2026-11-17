@@ -333,6 +333,12 @@ export function ZoomTimeline(props: TimelineProps) {
 
 /** qa-nov17: a broken link's words after its feature's coded name: its own name dropped from
  * their front, the other features they name by code and name ("‘F-12 Alert rules engine’"). */
+const REASON_WORDS: Record<string, string> = {
+  dependency_order: "starts before what it depends on ends",
+  outside_milestone: "ends after its milestone",
+  cut_with_dependents: "is cut, others depend on it",
+};
+
 export function shortReason(i: Item, f: Flag, items: ReadonlyMap<string, Item>): string {
   const own = `‘${i.title}’ `;
   let r = f.reason.startsWith(own) ? f.reason.slice(own.length) : f.reason;
@@ -380,7 +386,11 @@ export function ConflictPanel({
           <button type="button" onClick={() => onShow(i.key)} className="text-left font-semibold hover:underline">
             {itemName(i)}
           </button>{" "}
-          {shortReason(i, codedFlag(i, f, data.goal_milestones, data.milestones), byId)}
+          {/* qa-nov17: a few words in sight, the whole reason behind its (i) (prose guard). */}
+          <span data-testid="conflict-short">{REASON_WORDS[f.kind] ?? "has a broken link"}</span>{" "}
+          <InfoTip label="what is broken" align="start" testId="conflict-reason-tip">
+            {shortReason(i, codedFlag(i, f, data.goal_milestones, data.milestones), byId)}
+          </InfoTip>
         </span>
         <div className="max-w-full min-w-0">
           <FixButtons

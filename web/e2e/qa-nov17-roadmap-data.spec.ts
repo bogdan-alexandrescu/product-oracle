@@ -169,9 +169,13 @@ test("10: every broken-link row reads the feature with its code, then a short re
     expect(text).toMatch(/^F-\d+ Weekly alert digest/);
     expect(text).not.toContain("‘Weekly alert digest’");
   }
-  // The end past its milestone is said in words, as the link is, not only behind an (i).
-  await expect.poll(async () => (await rows.filter({ hasText: "after its milestone" }).innerText()).includes("after its milestone")).toBe(true);
-  await expect.poll(async () => (await rows.filter({ hasText: "starts" }).innerText()).includes("which it depends on, ends")).toBe(true);
+  // Each row says what is broken in a few words in sight, the end past its milestone as the link is;
+  // the whole reason, other features by code, behind its (i).
+  await expect(rows.getByTestId("conflict-short").filter({ hasText: "starts before what it depends on ends" })).toBeVisible();
+  await expect(rows.getByTestId("conflict-short").filter({ hasText: "ends after its milestone" })).toBeVisible();
+  const link = rows.filter({ hasText: "starts before" });
+  await tap(link.getByRole("button", { name: "About what is broken" }));
+  await expect(link.getByRole("tooltip")).toContainText(/which it depends on, ends/);
 });
 
 test("10: the Trash dialog and its note name the feature with its code", async ({ page }) => {
