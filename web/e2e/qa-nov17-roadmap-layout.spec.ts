@@ -126,6 +126,15 @@ test.describe("desktop", () => {
         expect(box.x, `${zoom}: ${text || "a milestone line"} lies over the names`).toBeGreaterThanOrEqual(head.x + head.width - 1);
     }
   });
+  test("timeline: an opened item's panel starts near the top of the screen, not at its foot (#9)", async ({ page }) => {
+    // protects: QA Nov 17 #9: at 1440 x 900, opening an item on the Timeline brings the chart's top into view, so its side panel opens tall, as on the Gantt
+    // fails_when: the panel opens as a short strip at the foot of the screen (its top far down the screen)
+    await open(page, "timeline");
+    await page.getByTestId("timeline-row-name").first().click();
+    const panel = page.getByTestId("item-panel");
+    await expect(panel).toBeVisible();
+    await expect.poll(async () => (await panel.boundingBox())!.y).toBeLessThan(300);
+  });
 });
 
 test.describe("phone", () => {
