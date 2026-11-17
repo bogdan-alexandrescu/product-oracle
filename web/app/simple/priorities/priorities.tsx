@@ -700,7 +700,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                   to the far right; the title and its pill wrap as one group, so every title starts at one x. */}
               <span className={`flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1 ${mayChange && r.item_id ? "max-sm:pr-7" : ""}`} data-testid="prio-name">
                 {/* PR3: the title, its code and its pill stay on one line; the title wraps on its own. */}
-                <span className="flex min-w-0 max-w-full items-center gap-x-2" data-testid="prio-named">
+                <span className="flex min-w-0 max-w-full items-center gap-x-2 max-sm:flex-wrap max-sm:gap-y-1" data-testid="prio-named">
                   {open ? (
                     <button type="button" className="min-w-0 text-left font-medium hover:underline" data-testid="prio-title" onClick={() => open(r)}>
                       {r.title}
