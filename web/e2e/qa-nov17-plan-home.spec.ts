@@ -20,11 +20,12 @@ test("qa-nov17 plan 1: a phone's outcome sheet says Outcome once on top, the ful
 });
 
 test("qa-nov17 plan 2: the Outcomes table shows 'Not in the Ground Truth' whole", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "outcomes-long"));
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page);
   await page.goto("/plan/outcomes");
   await page.getByTestId("outcome-filters").getByRole("button", { name: /^All/ }).click();
-  const flag = page.getByTestId("outcome-row").filter({ hasText: "Order status emails" }).getByTestId("not-in-gt").first();
+  const flag = page.getByTestId("outcome-row").getByTestId("not-in-gt").first();
   await expect(flag).toHaveText("Not in the Ground Truth");
   const inner = flag.locator("span").first();
   expect(await inner.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
