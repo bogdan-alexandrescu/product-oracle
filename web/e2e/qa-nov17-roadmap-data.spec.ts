@@ -157,3 +157,31 @@ test("11: the panel's Oracle suggests block says how Oracle reached its dates be
   await expect(block.getByRole("tooltip")).toBeVisible();
   await expect(block.getByRole("tooltip")).toContainText(/It starts .* runs \d+ days/);
 });
+
+test("10: every broken-link row reads the feature with its code, then a short reason, other features by code too", async ({ page }) => {
+  await login(page);
+  await openRoadmap(page);
+  const rows = page.getByTestId("conflicts").locator('[data-testid="conflict"][data-item="alert-digest"]');
+  await expect(rows).toHaveCount(2);
+  for (const row of await rows.all()) {
+    // The feature first, by its code and name, as a button that opens it; then the reason in words.
+    const text = await row.innerText();
+    expect(text).toMatch(/^F-\d+ Weekly alert digest/);
+    expect(text).not.toContain("‘Weekly alert digest’");
+  }
+  // The end past its milestone is said in words, as the link is, not only behind an (i).
+  await expect.poll(async () => (await rows.filter({ hasText: "after its milestone" }).innerText()).includes("after its milestone")).toBe(true);
+  await expect.poll(async () => (await rows.filter({ hasText: "starts" }).innerText()).includes("which it depends on, ends")).toBe(true);
+});
+
+test("10: the Trash dialog and its note name the feature with its code", async ({ page }) => {
+  await login(page);
+  await openRoadmap(page);
+  await openItem(page, "alert-digest");
+  await tap(panel(page).getByRole("button", { name: "More actions" }));
+  await tap(panel(page).getByRole("menuitem", { name: "Move to Trash…" }));
+  const ask = page.getByRole("alertdialog");
+  await expect(ask).toContainText(/Move F-\d+ Weekly alert digest to Trash\?/);
+  await tap(ask.getByRole("button", { name: "Move to Trash" }));
+  await expect(page.getByTestId("toasts")).toContainText(/Moved F-\d+ Weekly alert digest to Trash\./);
+});
