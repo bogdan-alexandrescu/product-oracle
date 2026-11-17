@@ -2404,7 +2404,8 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
   const tasks = useBucketTasks({ rows: data.rows, plan: null, may: rights.task, reload: reloadAll, setNote, setError });
   // EG1 a without a dated plan: each goal's ⋯ (Edit goal, Move up and down, Archive, Delete, or
   // the asks), its owner, its form in place, the note with Undo and the Archived goals fold.
-  const [editingGoal, setEditingGoal] = useState<string | null>(null);
+  // qa-nov17 G1: ?edit=<goal id> opens that goal's form (Rename on the Goal map, for a goal that lacks its date).
+  const [editingGoal, setEditingGoal] = useState<string | null>(useSearchParams().get("edit"));
   const year = data.today.slice(0, 4);
   const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
   // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine;
@@ -2700,7 +2701,8 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
   const goals = planGoals(plan);
   const noGoal = plan.slices.some((x) => !x.goal);
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
-  const [editing, setEditing] = useState<string | null>(null);
+  // qa-nov17 G1: ?edit=<goal id> opens that goal's form (Rename on the Goal map, for a goal that lacks its date).
+  const [editing, setEditing] = useState<string | null>(useSearchParams().get("edit"));
   const [note, setNote] = useState<Note | null>(null);
   const noteSlot = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
