@@ -593,8 +593,8 @@ function Composer({
         <Button type="submit" variant="solid" disabled={sending || !text.trim() || anyBlocked}>
           Send
         </Button>
-        {/* qa-shell-14: just you and Oracle in a private chat, Oracle always replies: no box to tick. */}
-        {!(solo && d.visibility === "private") && (
+        {/* qa-shell-14: just you and Oracle, Oracle always replies: no box to tick (open too, qa-nov17 ask 2). */}
+        {!solo && (
           <label className="inline-flex items-center gap-1.5 text-sm text-text">
             <input type="checkbox" checked={askOracle} onChange={(e) => setAskOracle(e.target.checked)} />
             Ask Oracle
