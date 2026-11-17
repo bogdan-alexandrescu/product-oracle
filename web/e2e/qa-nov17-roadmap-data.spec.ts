@@ -69,7 +69,7 @@ test("1: dates set here close Oracle's old date suggestion: panel, Needs a decis
 
   await openTray(page);
   await expect(dateRow(page, "Alert routing by team")).toHaveCount(0);
-  expect(await datesCount(page).catch(() => 0)).toBe(before - 1);
+  await expect.poll(() => datesCount(page).catch(() => 0)).toBe(before - 1);
 
   // After a reload it stays closed.
   await page.reload();
@@ -114,7 +114,7 @@ test("2: a dependency that moves a feature's estimate leaves one estimate in its
   await expect(panel(page).getByTestId("card-suggestion")).toBeVisible();
   await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
   const pick = panel(page).getByLabel("Feature it depends on");
-  const value = await pick.locator("option", { hasText: "Weekly alert digest" }).getAttribute("value");
+  const value = await pick.locator("option", { hasText: "Weekly alert digest" }).first().getAttribute("value");
   await pick.selectOption(value!);
   await tap(panel(page).getByRole("button", { name: "Save" }));
   await expect(panel(page).getByTestId("card-depends")).toContainText("Weekly alert digest");
