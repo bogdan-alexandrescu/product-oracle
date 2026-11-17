@@ -57,13 +57,14 @@ for (const v of SIZES) {
       await openPriorities(page, "?tab=ranked");
       const options = await page.locator("#prio-line option").allTextContents();
       for (const start of ["Key date: Customer conference", "Milestone: Beta"]) {
-        const label = options.find((o) => o.startsWith(start));
+        // qa-nov17 G8: a milestone's option reads its code with its name ("Milestone: M6 Beta").
+        const label = options.find((o) => o.replace(/^Milestone: M\d+ /, "Milestone: ").startsWith(start));
         expect(label, options.join(" | ")).toBeTruthy();
         await lineSelect(page).selectOption({ label: label! });
         const heads = page.getByTestId("prio-part-head");
         await expect(heads).toHaveCount(2);
         // Wait for the picked line's own parts: the last line's parts are still up a moment.
-        const name = label!.slice(start.indexOf(":") + 1).split(" · ")[0].trim();
+        const name = label!.slice(start.indexOf(":") + 1).split(" · ")[0].trim().replace(/^M\d+ /, "");
         await expect(heads.nth(0)).toContainText(name);
         await expect(heads.nth(0)).toContainText(/^Makes .+/);
         await expect(heads.nth(1)).toContainText(/^Misses .+/);

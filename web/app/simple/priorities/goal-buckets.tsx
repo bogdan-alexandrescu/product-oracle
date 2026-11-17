@@ -10,6 +10,7 @@ import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { useCodedMilestone } from "./milestone-codes";
 import { CodeTag, goalLabel, gtCode, milestoneColour, planFeatures, weeksWords } from "./plan-buckets";
 
 /*
@@ -390,6 +391,8 @@ export function FeatureRows({
   /** Rows after the plan's: tasks added since, and "+ Add a task". */
   tail?: ReactNode;
 }) {
+  // qa-nov17 G8: a task's own milestone by its code and name as the roadmap reads it ("M6 Beta").
+  const coded = useCodedMilestone();
   const features = planFeatures(plan, goal)
     .filter((f) => !task?.cut(f))
     .map((f) => (task ? { ...f, name: task.name(f) } : f));
@@ -489,7 +492,7 @@ export function FeatureRows({
               })}
               {own && (
                 <span data-testid="task-milestone" title={`Its own milestone: ${own}`} className="inline-flex h-5 items-center whitespace-nowrap rounded-full bg-surface2 px-2 text-[12px] font-[650] text-text2">
-                  {own}
+                  {coded(own)}
                 </span>
               )}
             </span>

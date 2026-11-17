@@ -60,7 +60,7 @@ test.describe("QA pass 4: simple-plan, phone", () => {
   test("a milestone line keeps the page phone-wide and the line one line", async ({ page }) => {
     await setUp(page, { phone: true });
     await open(page);
-    const label = (await page.locator("#prio-line option").allTextContents()).find((o) => o.startsWith("Milestone: Beta"))!;
+    const label = (await page.locator("#prio-line option").allTextContents()).find((o) => /^Milestone: (M\d+ )?Beta/.test(o))!;
     await lineSelect(page).selectOption({ label });
     // build-plan QP1: two headed parts in place of the pills and the divider; the headings wrap, the page does not scroll sideways.
     const heads = page.getByTestId("prio-part-head");

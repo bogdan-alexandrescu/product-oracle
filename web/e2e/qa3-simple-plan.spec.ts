@@ -103,7 +103,7 @@ test.describe("QA pass 3: simple-plan, the line", () => {
         if (parts) expect(parts).toBe(2);
         else await expect(page.getByTestId("line-divider")).toHaveCount(1);
       }
-      if (label.startsWith("Milestone: Beta")) {
+      if (/^Milestone: (M\d+ )?Beta/.test(label)) {
         // Weekly alert digest is tagged Milestone Beta and misses it: said in so many words.
         const own = page.locator('[data-testid="prio-misses"][data-own="true"]');
         if ((await own.count()) > 0) await expect(own.first()).toContainText("Misses its own milestone");

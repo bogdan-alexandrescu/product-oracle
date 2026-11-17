@@ -7,6 +7,7 @@ import { api, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { BTN, nextNoteId, TaskActions, type Note } from "./goal-buckets";
+import { useCodedMilestone } from "./milestone-codes";
 import { gtCode } from "./plan-buckets";
 
 export { TaskActions };
@@ -338,6 +339,8 @@ export function TaskRow({
   /** panel-menu: the feature it is part of ("part of Alert rules engine"), beside its name. */
   partOf?: ReactNode;
 }) {
+  // qa-nov17 G8: the milestone by its code and name as the roadmap reads it ("M6 Beta").
+  const coded = useCodedMilestone();
   return (
     <li
       data-testid="plan-feature"
@@ -385,7 +388,7 @@ export function TaskRow({
       {milestone && (
         <span className="flex flex-none gap-1 max-sm:order-last max-sm:basis-full max-sm:pl-[60px]">
           <span data-testid="task-milestone" className="inline-flex h-5 items-center whitespace-nowrap rounded-full bg-surface2 px-2 text-[12px] font-[650] text-text2">
-            {milestone}
+            {coded(milestone)}
           </span>
         </span>
       )}

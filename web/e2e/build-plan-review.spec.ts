@@ -58,7 +58,7 @@ for (const v of SIZES) {
       await expect(page.getByTestId("prio-goal-filter")).toBeVisible();
       await expect(page.getByText("Loading priorities…")).toHaveCount(0);
       const options = await page.locator("#prio-line option").allTextContents();
-      const label = options.find((o) => o.startsWith("Milestone: Beta"));
+      const label = options.find((o) => /^Milestone: (M\d+ )?Beta/.test(o));
       expect(label, options.join(" | ")).toBeTruthy();
       await page.getByTestId("line-picker").getByLabel("Line", { exact: true }).selectOption({ label: label! });
       await expect(page.getByTestId("prio-part-head")).toHaveCount(2);

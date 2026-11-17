@@ -268,7 +268,7 @@ for (const [where, use] of [
         await expect(select).toHaveValue("now");
         await expect(page.getByTestId("line-caption").first()).toContainText("miss this quarter");
         const options = await select.locator("option").allTextContents();
-        expect(options).toEqual(expect.arrayContaining([expect.stringMatching(/^Key date: Customer conference · Nov 14, 2026$/), expect.stringMatching(/^Milestone: Beta · /), "Pick a date…"]));
+        expect(options).toEqual(expect.arrayContaining([expect.stringMatching(/^Key date: Customer conference · Nov 14, 2026$/), expect.stringMatching(/^Milestone: (M\d+ )?Beta · /), "Pick a date…"]));
         const kd = (await select.locator("option", { hasText: "Customer conference" }).getAttribute("value"))!;
         await select.selectOption(kd);
         await expect(page).toHaveURL(new RegExp(`line=${encodeURIComponent(kd).replace(/%3A/i, "(:|%3A)")}`));

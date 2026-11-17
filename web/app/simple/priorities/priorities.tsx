@@ -25,6 +25,7 @@ import { Named, NotInGt } from "@/components/simple/FeatureName";
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, otherGoal, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { goalKeysOf, KeyResultList, liftedMoves, topGoalBuckets, topGoalPlan, topGoalPriorities, usePriorityKeyResults, type PriorityKeyResults } from "./key-results";
+import { useCodedMilestone } from "./milestone-codes";
 import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
 import { MsCard, MsProvider, MsToast, useMilestones } from "../roadmap/_milestones";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan, weeksWords } from "./plan-buckets";
@@ -550,6 +551,11 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
   // by key, so two goals with one name keep apart; a row known only from the plan, by name.
   const params = useSearchParams();
   const open = useContext(OpenRow);
+  const coded = useCodedMilestone();
+  const msWords = (name: string, itemId: string | null) => {
+    const w = coded(name, { itemId });
+    return w === name ? `Milestone ${name}` : w;
+  };
   const goal = params.get("goal");
   const goalName = params.get("name") ?? goal;
   // kr-in-priorities: a key result's list finds its rows too (each row reads its top-level goal).
@@ -736,7 +742,8 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                     Ends {calendarDay(r.end_date)} · Estimate pending
                   </span>
                 )}
-                {r.milestone && <span data-testid="prio-milestone" className="min-w-0 max-w-full [overflow-wrap:anywhere]">Milestone {r.milestone}</span>}
+                {/* qa-nov17 G8: by its code and name as the roadmap reads it ("M6 Beta"); "Milestone Beta" only when it has no code. */}
+                {r.milestone && <span data-testid="prio-milestone" className="min-w-0 max-w-full [overflow-wrap:anywhere]">{msWords(r.milestone, r.item_id)}</span>}
                 {/* qa-simple-plan-3: value · confidence · weeks · score, in the order of the score's formula; no bar. */}
                 <Numbers r={r} mayChange={mayChange} changed={changed} />
               </span>
@@ -1987,6 +1994,13 @@ function lineWords(data: Out): string {
 
 /** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date (a PRD's milestones "From the PRD: <name> · <day>") · each dated milestone (one the PRD already lists on its day shows once, from the PRD: prio-line-once) · Pick a date. */
 function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void }) {
+  // qa-nov17 G8: a milestone's line by its code and name as the roadmap reads it ("Milestone: M6 Beta · Nov 30, 2026").
+  const coded = useCodedMilestone();
+  const msLine = (l: { key: string; label: string }) => {
+    const at = l.label.lastIndexOf(" · ");
+    if (at < 0) return l.label;
+    return `${coded(l.label.slice(0, at), { id: l.key.startsWith("milestone:") ? l.key.slice("milestone:".length) : null })}${l.label.slice(at)}`;
+  };
   const current = data.line ?? { key: "now", kind: "now" as const, label: "This quarter (Now)", date: null };
   // Picking a date, the date field takes the select's place (one control); a picked day is the select's own option.
   const [picking, setPicking] = useState(false);
@@ -2066,7 +2080,7 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
             // place of "Key date", so the chosen line fits a phone's box); it changes in the PRD, never here.
             const options = ls.map((l) => (
               <option key={l.key} value={l.key} title={l.prd ? `A key date from the PRD; change it in the PRD, ${l.prd.title}` : undefined}>
-                {l.kind === "key_date" ? `${l.prd ? "From the PRD" : "Key date"}: ${l.label}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
+                {l.kind === "key_date" ? `${l.prd ? "From the PRD" : "Key date"}: ${l.label}` : l.kind === "milestone" ? `Milestone: ${msLine(l)}` : l.label}
               </option>
             ));
             // prio-company: each PRD's milestones listed under its name.
