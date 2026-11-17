@@ -593,8 +593,8 @@ function Composer({
         <Button type="submit" variant="solid" disabled={sending || !text.trim() || anyBlocked}>
           Send
         </Button>
-        {/* qa-shell-14: just you and Oracle in a private chat, Oracle always replies: no box to tick. */}
-        {!(solo && d.visibility === "private") && (
+        {/* qa-shell-14: just you and Oracle, Oracle always replies: no box to tick (open too, qa-nov17 ask 2). */}
+        {!solo && (
           <label className="inline-flex items-center gap-1.5 text-sm text-text">
             <input type="checkbox" checked={askOracle} onChange={(e) => setAskOracle(e.target.checked)} />
             Ask Oracle
@@ -1019,9 +1019,12 @@ export function DiscussionThread({
           )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-text2">
-          <span title={VISIBILITY_TIP[d.visibility]} data-testid="discussion-visibility" className="inline-flex">
-            <Chip kind={priv ? "warn" : "line"}>{priv ? "Private" : "Open"}</Chip>
-          </span>
+          {/* qa-nov17 ask 4: a closed discussion shows one state, Closed, not "Open" beside it. */}
+          {open && (
+            <span title={VISIBILITY_TIP[d.visibility]} data-testid="discussion-visibility" className="inline-flex">
+              <Chip kind={priv ? "warn" : "line"}>{priv ? "Private" : "Open"}</Chip>
+            </span>
+          )}
           <button
             type="button"
             data-testid="discussion-people"
@@ -1062,14 +1065,12 @@ export function DiscussionThread({
             if (ok) setEditing(null);
           }}
         >
-          <textarea
-            aria-label={editing === "title" ? "Title" : "Summary"}
-            rows={editing === "title" ? 1 : 3}
-            maxLength={editing === "title" ? 200 : 1200}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            className={TEXTAREA}
-          />
+          {/* qa-nov17 ask 7: a title is one line; Enter saves it. */}
+          {editing === "title" ? (
+            <input aria-label="Title" maxLength={200} value={draft} onChange={(e) => setDraft(e.target.value)} className={`${TEXTAREA} h-10`} />
+          ) : (
+            <textarea aria-label="Summary" rows={3} maxLength={1200} value={draft} onChange={(e) => setDraft(e.target.value)} className={TEXTAREA} />
+          )}
           <div className="flex gap-2">
             <Button type="submit" variant="solid" disabled={busy || (editing === "title" && !draft.trim())}>
               Save

@@ -80,8 +80,9 @@ test("the chip's Make measurable opens Discuss with Missing chips and Oracle's t
   await quick.getByRole("button", { name: "Ask someone…" }).click();
   await expect(thread(page).getByRole("textbox", { name: "Message" })).toHaveValue("@");
   await expect(thread(page).getByRole("listbox", { name: "People to mention" })).toBeVisible();
-  // The interview opens with Ask Oracle on.
-  await expect(thread(page).getByRole("checkbox", { name: "Ask Oracle" })).toBeChecked();
+  // The interview opens with Oracle replying: just you and Oracle, no box to tick (qa-nov17 ask 2).
+  await expect(thread(page).getByTestId("oracle-rule")).toHaveText("Oracle will reply");
+  await expect(thread(page).getByRole("checkbox", { name: "Ask Oracle" })).toHaveCount(0);
 });
 
 // protects=criterion 10.2: a discussion ends in a typed change a person applies: the approver

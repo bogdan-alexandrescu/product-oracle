@@ -435,7 +435,7 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
     return { start_date: s.start, end_date: s.end };
   };
   const move = (i: Item, start: string, end: string) =>
-    card(`Move ${i.title} to ${dayWords(start)} – ${dayWords(end, true)}`, "move_dates", i, { item_id: i.id }, stored(i), { start_date: start, end_date: end }, { kind: "dates", item_id: i.id, start_date: start, end_date: end, current: currentDates(i) });
+    card(`Move ${label(i)} to ${dayWords(start)} – ${dayWords(end, true)}`, "move_dates", i, { item_id: i.id }, stored(i), { start_date: start, end_date: end }, { kind: "dates", item_id: i.id, start_date: start, end_date: end, current: currentDates(i) });
   const length = (i: Item) => Math.round((msOf(i.end.date) - msOf(i.start.date)) / DAY);
 
   if ((m = /^move (.+) to (now|next|later)$/i.exec(t))) {
@@ -444,7 +444,7 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
       const i = findItem(items, x);
       if (!isItem(i)) return i;
       const horizon = h.toLowerCase();
-      return card(`Move ${i.title} to ${horizon[0].toUpperCase()}${horizon.slice(1)}`, "change_horizon", i, { item_id: i.id }, { horizon: i.horizon }, { horizon }, { kind: "horizon", item_id: i.id, horizon });
+      return card(`Move ${label(i)} to ${horizon[0].toUpperCase()}${horizon.slice(1)}`, "change_horizon", i, { item_id: i.id }, { horizon: i.horizon }, { horizon }, { kind: "horizon", item_id: i.id, horizon });
     });
   }
   if (/^move .+ to .+$/i.test(t)) {
