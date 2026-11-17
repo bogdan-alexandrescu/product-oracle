@@ -34,6 +34,14 @@ Test cards (protects / fails_when / no_claim):
   "I couldn't read that just now." with retry; Retry queues a new job and its answer
   completes the line; Retry on a line that did not fail is 409; fails_when=a failed read
   stays "Reading that…" forever or Retry is missing; no_claim=the worker's own retries.
+- test_a_spent_pool_says_until_when_with_no_retry: protects=a read that failed because
+  every Claude account was spent (the job's error_reason and next_reset_at) says until
+  when, month first in the company's zone (the year only when not this year), with no
+  Retry (a retry is refused); fails_when=it shows the generic line, offers Retry or an
+  ISO time.
+- test_a_cleared_window_or_another_failure_keeps_the_generic_line: protects=once the
+  window has cleared, or for any other failure, the generic line with Retry;
+  fails_when=a cleared or other failure loses Retry.
 - test_reader_roles_in_a_meeting: protects=in a meeting the reader's cards follow the
   change mode and gesture rules per role (owner and decider apply, approver and commenter
   propose); a viewer's free-form change gets the viewer note and no card;
@@ -55,6 +63,7 @@ Test cards (protects / fails_when / no_claim):
 """
 
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -66,6 +75,7 @@ from oracle.jobs.models import LlmJob
 from oracle.llm import gateway
 from oracle.simple import chat
 from oracle.tenancy import tenant_session
+from oracle.tenant_settings_api import DEFAULTS
 from tests.test_simple_chat_api import (
     ASK,
     CARDS,
@@ -113,9 +123,16 @@ async def last(client, ctx, who, meeting=None) -> dict:
     return r.json()["messages"][-1]
 
 
-async def read(ctx, answer: Any, seen: list | None = None, fail: str | None = None) -> int:
+async def read(
+    ctx,
+    answer: Any,
+    seen: list | None = None,
+    fail: str | None = None,
+    cause: tuple[str, datetime | None] | None = None,
+) -> int:
     """Run every queued chat_reader job as the worker would, with a fake model answer
-    (``fail``: the job's end state instead)."""
+    (``fail``: the job's end state instead; ``cause``: the pool's reason and next reset the
+    worker stores when no Claude account could take the call)."""
 
     async def ask(kind, payload):
         assert kind == "chat_reader"
@@ -135,6 +152,11 @@ async def read(ctx, answer: Any, seen: list | None = None, fail: str | None = No
             assert job is not None
             if fail:
                 job.status = fail
+                if cause is not None:
+                    job.error = (
+                        "No Claude account can take this call: every Claude account is spent"
+                    )
+                    job.error_reason, job.next_reset_at = cause
             else:
                 job.output = await kinds.RUNNERS["chat_reader"](s, job, ask)
                 job.status = "succeeded"
@@ -301,6 +323,48 @@ async def test_failed_read_offers_retry(client, end):
     assert m["kind"] == "cards" and len(m["cards"]) == 1
     r = await client.post(f"/v1/simple/chat/messages/{m['id']}/retry", headers=ctx.as_("owner"))
     assert r.status_code == 409
+
+
+SPENT = "no_account_available"
+
+
+@pytest.mark.parametrize(
+    ("resets", "words"),
+    [
+        (datetime(2026, 11, 3, 17, 59, tzinfo=UTC), "Tue Nov 3, 9:59 AM"),
+        (datetime(2027, 1, 5, 17, 59, tzinfo=UTC), "Tue Jan 5, 2027, 9:59 AM"),
+    ],
+)
+async def test_a_spent_pool_says_until_when_with_no_retry(client, monkeypatch, resets, words):
+    monkeypatch.setitem(DEFAULTS, "company_timezone", "America/Los_Angeles")
+    ctx = await make_people()
+    await World(ctx).build()
+    await post(client, ctx, "owner", "kick ledger down the road a month")
+    await read(ctx, None, fail="failed", cause=(SPENT, resets))
+    m = await last(client, ctx, "owner")
+    assert m["kind"] == "failed" and m["retry"] is False
+    assert m["body"] == f"Oracle's Claude accounts are used up until {words}."
+    r = await client.post(f"/v1/simple/chat/messages/{m['id']}/retry", headers=ctx.as_("owner"))
+    assert r.status_code == 409
+
+
+@pytest.mark.parametrize(
+    "cause",
+    [
+        (SPENT, NOW - timedelta(minutes=1)),  # the window has cleared since
+        (SPENT, None),
+        ("pool_paused", None),
+        ("no_accounts_registered", None),
+    ],
+)
+async def test_a_cleared_window_or_another_failure_keeps_the_generic_line(client, cause):
+    ctx = await make_people()
+    await World(ctx).build()
+    await post(client, ctx, "owner", "kick ledger down the road a month")
+    await read(ctx, None, fail="failed", cause=cause)
+    m = await last(client, ctx, "owner")
+    assert m["kind"] == "failed" and m["retry"] is True
+    assert m["body"] == "I couldn't read that just now."
 
 
 MAY = {"owner": "apply", "decider": "apply", "approver": "propose", "commenter": "propose"}

@@ -26,7 +26,7 @@ import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type Bra
 import { capabilitiesOut } from "./capabilities";
 import { daysInWords } from "./days";
 import { stripRawTokens } from "@/lib/raw-tokens";
-import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
+import { POOL_SPENT_SCENARIO, SIMPLE_CHAT_POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal, poolSpentUntil } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
 import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, logReadable, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionLogRow, type DecisionsContext, type DecisionsDb } from "./decisions";
@@ -658,6 +658,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * 12 more roadmaps each from its own PRD, 8 goals, 6 tracks, dated and undated, with dependencies).
  * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
  * presents; everyone attends), for change by chat and "Walk me through it" (./simple-chat.ts);
+ * "simple-chat-pool-spent" as "simple-chat" on "pool-spent"'s spent Claude pool: a line the
+ * chat's reader reads fails, saying until when (chat.SPENT_UNTIL), with no Retry.
  * "simple-chat-stray" as "simple-chat" with an earlier build's discussion reply already in the
  * meeting's chat (meet-chat-kind).
  * "meet-chat-right-prd" as "simple-chat" with the meeting reviewing Guided setup, whose features
@@ -4557,14 +4559,14 @@ function load(): Db {
                     db.simple_roadmap!.plan!.goalless = true;
                     return db;
                   }
-              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "meet-chat-right-prd" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider" || scenario === "roadmap-talk-tracker-done" || scenario === "roadmap-talk-two-deps"
+              : scenario === "simple-chat" || scenario === SIMPLE_CHAT_POOL_SPENT_SCENARIO || scenario === "simple-chat-stray" || scenario === "meet-chat-right-prd" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider" || scenario === "roadmap-talk-tracker-done" || scenario === "roadmap-talk-two-deps"
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
                     // chat-reader: the two "Delivery …" items its rules talk about.
                     if (db.simple_roadmap) seedReaderItems(db.simple_roadmap);
                     // roadmap-talk: F-16 Adaptive pacing, F-17 Sign-up work, F-18 Reliability work and the M1–M3 milestones.
-                    if (!["simple-chat", "simple-chat-stray", "meet-chat-right-prd"].includes(scenario) && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
+                    if (!["simple-chat", SIMPLE_CHAT_POOL_SPENT_SCENARIO, "simple-chat-stray", "meet-chat-right-prd"].includes(scenario) && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
                     // item-chat-understands review: Adaptive pacing reads Done because of its tracker, with no shipped mark of its own.
                     if (scenario === "roadmap-talk-tracker-done" && db.simple_roadmap) db.simple_roadmap.items.find((x) => x.key === "adaptive-pacing")!.status = "done";
                     // meet-chat-right-prd: the meeting reviews Guided setup, its features on its draft roadmap.
@@ -8852,6 +8854,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       return id;
     };
     const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, ...askFiling, linked: undeclines(db), declined: declinedBy(db), proposeTo: (d: string | null) => reviews.proposeTo(d),
+      spentPool: () => poolSpentUntil(localStorage.getItem(MOCK_SCENARIO_KEY)),
       // ask_actions.slack_reach: whether Slack sends a pinged person the message (connected, and their review-requested ping on).
       slackReach: (id: string): "on" | "off" | "none" => {
         const install = ensureReports(db, db.user_id, reportLive(db, me)).integration;

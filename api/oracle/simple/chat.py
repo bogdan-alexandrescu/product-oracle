@@ -116,6 +116,9 @@ HERE_PLAIN = "Here is the change. Apply or discard it."
 NEITHER: dict[str, Any] = {"label": "Neither", "op": None, "args": {}}
 READING = "Reading that…"
 COULD_NOT_READ = "I couldn't read that just now."
+# A read that failed because every Claude account was spent (the job's error_reason and
+# next_reset_at, set by the worker): until when, with no Retry until the window clears.
+SPENT_UNTIL = "Oracle's Claude accounts are used up until {when}."
 SAY_AGAIN = "Say it another way."
 # qa-simple-decide-3: a question in a meeting's chat is kept for the minutes' open questions
 # (minutes.Record.questions); Ask Oracle answers it.
@@ -1210,7 +1213,8 @@ async def thread(
         names = await _names(db, {m.author_id for m in msgs if m.author_id})
         reads = {r.message_id: r for r in await db.scalars(
             select(SimpleChatRead).where(SimpleChatRead.discussion_id == d.id))}  # fmt: skip
-        jobs = await _job_states(db, [r.job_id for r in reads.values() if r.job_id])
+        jobs = await _job_rows(db, [r.job_id for r in reads.values() if r.job_id])
+        zone = await company_time.company_time_zone(db) if jobs else company_time.DEFAULT_ZONE
         for m in msgs:
             person = m.author_kind == "person"
             r = reads.get(m.id)
@@ -1219,8 +1223,14 @@ async def thread(
                 # Not a chat kind (a discussion reply left here before meet-chat-kind): its
                 # body reads as an answer, so one stray line never takes the chat down.
                 kind = "answer"
-            if kind == "pending" and r is not None and jobs.get(r.job_id) in DEAD:  # type: ignore[arg-type]
+            job = jobs.get(r.job_id) if r is not None and r.job_id else None
+            spent_until = None
+            if kind == "pending" and job is not None and job.status in DEAD:
                 kind, body = "failed", COULD_NOT_READ
+                spent_until = _spent_until(job)
+                if spent_until is not None:
+                    body = SPENT_UNTIL.format(when=company_time.until_in_words(spent_until, zone))
+            retry = kind == "failed" and spent_until is None
             choices = [ChatChoiceOut(index=i, label=c["label"])
                        for i, c in enumerate(r.choices or [])] if r is not None else []  # fmt: skip
             messages.append(ChatMessageOut(
@@ -1230,7 +1240,7 @@ async def thread(
                 at=(r.answered_at if r is not None and r.answered_at else m.created_at),
                 kind=kind,  # type: ignore[arg-type]
                 cards=by_msg.get(m.id, []), reply_to=m.reply_to, choices=choices,
-                picked=r.picked if r is not None else None, retry=kind == "failed",
+                picked=r.picked if r is not None else None, retry=retry,
                 source=_talk().source_label(m.citations),
                 links=_talk().links_of(m.citations),
                 live_reads=[x for x in m.citations or []
@@ -1496,13 +1506,29 @@ async def _attach(
 # --------------------------------------------------------------------------- the reader
 
 
-async def _job_states(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
+async def _job_rows(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, Any]:
+    """Each job's status and, when no Claude account could take its call, the pool's
+    reason and next reset (the structured cause the worker stores)."""
     if not ids:
         return {}
     from oracle.jobs.models import LlmJob
 
-    rows = await db.execute(select(LlmJob.id, LlmJob.status).where(LlmJob.id.in_(ids)))
-    return {i: st for i, st in rows.all()}
+    rows = await db.execute(
+        select(LlmJob.id, LlmJob.status, LlmJob.error_reason, LlmJob.next_reset_at).where(
+            LlmJob.id.in_(ids)
+        )
+    )
+    return {row.id: row for row in rows.all()}
+
+
+def _spent_until(job: Any) -> datetime | None:
+    """When a failed read's spent pool clears, while that is still ahead; None otherwise."""
+    from oracle.claude_accounts.accounts import Unavailable
+
+    if job.status != "failed" or job.error_reason != Unavailable.NO_ACCOUNT_AVAILABLE:
+        return None
+    at = job.next_reset_at
+    return at if at is not None and at > company_time.now() else None
 
 
 async def _enqueue_read(db: AsyncSession, principal: Any, read: SimpleChatRead) -> None:
@@ -2070,9 +2096,12 @@ async def retry(db: AsyncSession, principal: Any, message_id: uuid.UUID) -> Chat
     read, _ = await _read_of(db, principal, message_id)
     msg = await db.get(DiscussionMessage, read.message_id)
     assert msg is not None
-    states = await _job_states(db, [read.job_id] if read.job_id else [])
-    if msg.prompt != "pending" or states.get(read.job_id) not in DEAD:  # type: ignore[arg-type]
+    jobs = await _job_rows(db, [read.job_id] if read.job_id else [])
+    job = jobs.get(read.job_id) if read.job_id else None
+    if msg.prompt != "pending" or job is None or job.status not in DEAD:
         raise ChatError(409, "Only a line Oracle could not read is read again")
+    if _spent_until(job) is not None:
+        raise ChatError(409, "Oracle's Claude accounts are used up; read it again once they clear")
     msg.body = READING
     await _enqueue_read(db, principal, read)
     await db.commit()

@@ -48,6 +48,8 @@ const ASSIGN_FLOOR = 0.15;
 
 /** The scenario whose only account is over its weekly limit, so no call can run (#403). */
 export const POOL_SPENT_SCENARIO = "pool-spent";
+/** "simple-chat" on the spent pool: a line Simple's Ask Oracle reads fails until the window clears. */
+export const SIMPLE_CHAT_POOL_SPENT_SCENARIO = "simple-chat-pool-spent";
 
 const at = (ms: number) => new Date(Date.now() + ms).toISOString();
 const MIN = 60_000;
@@ -63,7 +65,7 @@ function seed(scenario: string | null): PoolDb {
     claude_organization: null,
   };
   const personal = "a1111111-0000-4000-8000-000000000001";
-  if (scenario === POOL_SPENT_SCENARIO)
+  if (scenario === POOL_SPENT_SCENARIO || scenario === SIMPLE_CHAT_POOL_SPENT_SCENARIO)
     return {
       accounts: [
         {
@@ -279,6 +281,27 @@ export function poolRefusal(scenario: string | null): string | null {
   const pool = poolOf(load(scenario));
   if (pool.takes_calls || pool.reason !== "no_account_available" || !pool.until) return null;
   return `No Claude account can take this call: every Claude account is spent; the earliest window clears ${inWords(pool.until, timeZone())}`;
+}
+
+/**
+ * When the spent pool's earliest window clears, and that moment as Simple's chat says it
+ * (company_time.until_in_words: "Sat Oct 24, 6:00 PM", the year only when not this year);
+ * null when the pool takes calls or waits on no clock.
+ */
+export function poolSpentUntil(scenario: string | null): { until: string; words: string } | null {
+  const pool = poolOf(load(scenario));
+  if (pool.takes_calls || pool.reason !== "no_account_available" || !pool.until) return null;
+  return { until: pool.until, words: untilInWords(pool.until, timeZone()) };
+}
+
+function untilInWords(iso: string, zone: string): string {
+  const parts = (d: Date, opts: Intl.DateTimeFormatOptions) => {
+    const got = new Intl.DateTimeFormat("en-US", { timeZone: zone, ...opts }).formatToParts(d);
+    return (t: Intl.DateTimeFormatPartTypes) => got.find((x) => x.type === t)?.value ?? "";
+  };
+  const v = parts(new Date(iso), { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  const year = v("year") === parts(new Date(), { year: "numeric" })("year") ? "" : `, ${v("year")}`;
+  return `${v("weekday")} ${v("month")} ${v("day")}${year}, ${v("hour")}:${v("minute")} ${v("dayPeriod")}`;
 }
 
 const LABEL = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/;
