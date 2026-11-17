@@ -552,7 +552,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
   const params = useSearchParams();
   const open = useContext(OpenRow);
   const coded = useCodedMilestone();
-  const msWords = (name: string, itemId: string | null) => {
+  const msWords = (name: string, itemId?: string | null) => {
     const w = coded(name, { itemId });
     return w === name ? `Milestone ${name}` : w;
   };
