@@ -153,3 +153,12 @@ def in_words(moment: datetime, zone: str = DEFAULT_ZONE) -> str:
         f"{local:%a %b} {local.day}, {hour}:{local:%M} {'AM' if local.hour < 12 else 'PM'} "
         f"{local.tzname()}"
     )
+
+
+def until_in_words(moment: datetime, zone: str = DEFAULT_ZONE) -> str:
+    """``moment`` in ``zone`` as "Wed Nov 18, 9:59 AM", with its year ("Tue Jan 5, 2027,
+    9:59 AM") only when that is not this year in ``zone``."""
+    local = _local(moment, zone)
+    hour = local.hour % 12 or 12
+    year = f", {local.year}" if local.year != today(zone).year else ""
+    return f"{local:%a %b} {local.day}{year}, {hour}:{local:%M} {'AM' if local.hour < 12 else 'PM'}"
