@@ -11,7 +11,7 @@ import {
 /**
  * Simple Priorities: stable item codes on Value / effort (#723; the owner's pick "Short code +
  * highlight"). Each mark shows a short code that never changes with rank (the feature's code,
- * F-06 for alert-digest in the mock; one with no Ground Truth code shows none, setup-import's included, never made-up letters, PR1); the
+ * F-79 for alert-digest in the mock; one with no Ground Truth code shows none, setup-import's included, never made-up letters, PR1); the
  * ranked side list shows the same code beside the rank; the item just moved stays highlighted
  * on the chart and in the list with "moved #a → #b" ("now #b (effort n weeks)" for a re-estimate) until the next move (an accepted proposal
  * included). Every action is driven through the UI (a mouse drag, a finger's touch drag, the
@@ -96,7 +96,7 @@ const markCodes = chartCodes;
 const CODES: Record<string, string | null> = {
   "setup-checklist": null,
   "alert-rules": null,
-  "alert-digest": "F-06",
+  "alert-digest": "F-79",
   "alert-mobile": null,
   "setup-import": null,
   "alert-export": null,
@@ -113,7 +113,7 @@ const CODES: Record<string, string | null> = {
 test.describe("desktop", () => {
   /**
    * Card simple-priorities-codes-drag: protects = each Value / effort mark shows its short
-   * stable code (F-06; none for setup-import, never ARB…), never its rank; dragging setup-import across a quadrant re-ranks
+   * stable code (F-79; none for setup-import, never ARB…), never its rank; dragging setup-import across a quadrant re-ranks
    * it (#5 → #2) while every mark keeps its code (or none), its side-list row shows the
    * new rank, still with no code, and "moved #5 → #2", the mark is highlighted, the hover card
    * keeps the rank, and the legend says codes stay with the item; fails_when = a mark shows a
@@ -218,13 +218,13 @@ test.describe("desktop", () => {
     await expect(ranked.getByTestId("prio-rank")).toHaveText("2");
     await expect(
       admin.locator('[data-testid="prio-row"][data-code="alert-digest"]').getByTestId("prio-own-key"),
-    ).toHaveText("F-06");
+    ).toHaveText("F-79");
     await admin.getByRole("tab", { name: "Goal buckets" }).click();
     await expect(
       admin.locator(
         '[data-testid="goal-bucket"][data-key="grow-retention"]',
       ),
-    ).toContainText("F-06");
+    ).toContainText("F-79");
     await expect(
       admin.locator(
         '[data-testid="goal-bucket"][data-key="grow-retention"]',

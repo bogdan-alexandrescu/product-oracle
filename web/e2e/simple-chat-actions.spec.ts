@@ -143,13 +143,13 @@ for (const [phone, dark] of [
       // no_claim: the sheet's own edits (meeting-agenda-edit.spec.ts)
       await startReview(page);
       await expect(page.getByTestId("agenda-strip")).toContainText("Item 1 of");
-      // The strip names the item taken next; Setup checklist has no code, so its flag shows
-      // beside the name (simple-home-qa-nov14 #1), never in it.
+      // The strip names the item taken next by its code and name; Setup checklist is the Ground
+      // Truth's F-01 (qa-nov17), so it carries no flag.
       const strip = page.getByTestId("agenda-next");
       const takenNext = async () => {
-        await expect(strip.locator("button[data-feature]")).toHaveText("Setup checklist");
+        await expect(strip.locator("button[data-feature]")).toHaveText("F-01 Setup checklist");
         await expect(strip).toContainText(/^Next:/);
-        await expect(strip.getByTestId("not-in-gt")).toHaveText("Not in the Ground Truth");
+        await expect(strip.getByTestId("not-in-gt")).toHaveCount(0);
       };
 
       const next = await understood(chat(page), "next: Setup checklist", "Take Setup checklist next");

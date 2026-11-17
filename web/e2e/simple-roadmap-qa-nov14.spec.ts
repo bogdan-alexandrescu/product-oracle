@@ -93,7 +93,7 @@ test.describe("desktop", () => {
   });
 
   test("Now / Next / Later shows the track milestone its cards are measured against (#3)", async ({ page }) => {
-    // protects: QA Nov 14 #3: the Now column has the track's "Beta · Nov 30", the milestone F-06's red flag names
+    // protects: QA Nov 14 #3: the Now column has the track's "Beta · Nov 30", the milestone F-79's red flag names
     // fails_when: the Now column shows only the goal milestones, so Beta is nowhere on the page
     // By name, not number: the Goal map's milestones are numbered on this roadmap too, so Beta's code is not M1.
     await open(page, "board");

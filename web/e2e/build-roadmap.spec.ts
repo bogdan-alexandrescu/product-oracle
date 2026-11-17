@@ -170,8 +170,8 @@ for (const [name, use] of [
       await scroll.evaluate((el) => (el.scrollLeft += 500));
       await expect.poll(() => scroll.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
       // Clicking another item's name swaps the panel, no closing first.
-      // docs/ground-truth.md: an item in no Ground Truth feature reads its name with its flag.
-      await row(page, "setup-checklist").getByRole("button", { name: "Setup checklist Not in the Ground Truth", exact: true }).click();
+      // docs/ground-truth.md: a feature reads its code with its name (qa-nov17: Setup checklist is F-01).
+      await row(page, "setup-checklist").getByRole("button", { name: "F-01 Setup checklist", exact: true }).click();
       await expect(side.getByTestId("floating-card")).toContainText("Setup checklist");
       await expect(row(page, "setup-checklist")).toHaveAttribute("data-open", "true");
       await expect(row(page, "alert-rules")).not.toHaveAttribute("data-open", "true");

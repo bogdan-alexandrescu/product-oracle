@@ -1151,7 +1151,7 @@ function seedRoadmapEditFixes(): Db {
 
 /**
  * roadmap-edit-fixes round 1 "roadmap-edit-fixes-2": "simple-home", with Alert history export
- * waiting on the Weekly alert digest by its code in lower case (f-06), Sample data import on the
+ * waiting on the Weekly alert digest by its code in lower case (f-79), Sample data import on the
  * Setup checklist by its key and by its feature's key (both kept), the Alert rules engine done
  * (the digest that starts before it ends is not broken), and the cut In-app tour waiting on the
  * Setup checklist past its start (a cut item's link counts nowhere).
@@ -1161,7 +1161,7 @@ function seedRoadmapEditFixes2(): Db {
   const items = db.simple_roadmap!.items;
   const at = (key: string) => items.find((x) => x.key === key);
   const exportItem = at("alert-export");
-  if (exportItem) exportItem.depends = ["f-06"];
+  if (exportItem) exportItem.depends = ["f-79"];
   const checklist = at("setup-checklist");
   if (checklist) checklist.feature_key = "guided-checklist";
   const sample = at("setup-import");
@@ -1368,7 +1368,7 @@ function seedSimplePlanScenario(datedAll = false): Db {
   const existing: Record<string, string> = { "F-01": "setup-checklist", "F-02": "setup-import" };
   // The plan's own item carries each other plan feature's code: the default roadmap's item of the
   // same PRD section (F-03 Health log) keeps its name but not the code, so one code names one item.
-  // A code is the PRD's own: another PRD's item (Usage alerts' F-06 Weekly alert digest) keeps it.
+  // A code names one feature (docs/ground-truth.md): Usage alerts' Weekly alert digest is F-79, not the plan's F-06.
   for (const x of rm.items) {
     if (x.roadmap === "onboarding-roadmap" && x.section && byFeature.has(x.section.toUpperCase()) && !Object.values(existing).includes(x.key)) Object.assign(x, { section: undefined, heading: undefined });
   }
@@ -1552,6 +1552,12 @@ function seedSimplePlanLanesScenario(): Db {
   return db;
 }
 
+/** The Weekly alert digest as the F-06 of Usage alerts' own plan (its section f-06), for the scenarios that plan it. */
+function usagePlanDigest(rm: SimpleDb): void {
+  const digest = rm.items.find((x) => x.key === "alert-digest");
+  if (digest) Object.assign(digest, { section: "f-06", heading: "F-06 Weekly digest of fired alerts" });
+}
+
 /**
  * roadmap-gantt, the "simple-plan-two" scenario: "simple-plan" with a second planned PRD (Usage
  * alerts: its Weekly alert digest, F-06, is in the same plan's M1) whose plan this reader
@@ -1562,6 +1568,8 @@ function seedSimplePlanTwoScenario(): Db {
   const db = seedSimplePlanScenario();
   const rm = db.simple_roadmap!;
   rm.plan = { ...rm.plan!, prds: ["usage-alerts"], hidden: ["usage-alerts"] };
+  // Usage alerts' hidden plan reads the same plan features: its digest is that plan's F-06 here (qa-nov17 left this scenario as it was).
+  usagePlanDigest(rm);
   const signup = rm.items.find((x) => x.key === "plan-f-13");
   if (signup) signup.goal = "growth";
   return db;
@@ -1577,6 +1585,7 @@ function seedOnePagerPlanSlicesScenario(): Db {
   const db = seedSimplePlanScenario();
   const rm = db.simple_roadmap!;
   rm.plan = { ...rm.plan!, prds: ["usage-alerts"], hidden: ["usage-alerts"], partly_dated: true };
+  usagePlanDigest(rm);
   return db;
 }
 
@@ -4171,6 +4180,15 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
  */
 let cached: { raw: string; db: Db } | null = null;
 
+/** qa-nov17: a seeded item that is a Ground Truth feature (SeedItem.gt_key) is linked to it (RoadmapItem.feature_id), as the API serves it. */
+function linkSeededFeatures(db: Db): void {
+  for (const it of db.simple_roadmap?.items ?? []) {
+    // Unlinked (null) by a person stays so; with no such feature it stays as it was.
+    const id = it.gt_key && it.feature_id === undefined ? db.baseline.entities.find((e) => e.type === "feature" && e.key === it.gt_key)?.id : undefined;
+    if (id) it.feature_id = id;
+  }
+}
+
 function load(): Db {
   const raw = localStorage.getItem(STORAGE_KEY);
   const hit = cached;
@@ -5074,6 +5092,7 @@ function load(): Db {
   if (db.simple_roadmap) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   // pre-demo QA P-6 with P-1: the panel reads the goal each map feature serves from the first load too.
   if (db.simple_roadmap) db.simple_roadmap.map_goals = goalMapGoals(db.goal_map, db.baseline.entities.filter((e) => e.type === "goal"));
+  linkSeededFeatures(db);
   save(db);
   // The caller owns this object now (see `cached`).
   cached = null;
@@ -8527,6 +8546,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_roadmap.prd_milestones = prdMilestonesOf(db);
   // lane-gt-ui: an item reads its feature's code (service.load's Entry.code).
   db.simple_roadmap.feature_codes = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature" && /^[A-Z]{1,3}-\d+[a-j]?$/.test(e.key)).map((e) => [e.id, e.key]));
+  linkSeededFeatures(db);
   db.simple_roadmap.feature_keys = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature").map((e) => [e.id, e.key]));
   db.simple_roadmap.feature_titles = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected").map((e) => [e.id, e.title]));
   // changes.py set_feature: the feature is a baseline feature, not rejected.

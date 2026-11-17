@@ -61,7 +61,7 @@ test("an approved PRD's items show once on the Simple roadmap", async ({ page })
   // docs/ground-truth.md: a feature shows its code with its name; Alert history export is in no
   // Ground Truth feature, so it reads by its name alone (flagged Not in the Ground Truth).
   const items = [
-    ["F-06 Weekly alert digest", "2027-02-19", "Feb 19, 2027"],
+    ["F-79 Weekly alert digest", "2027-02-19", "Feb 19, 2027"],
     ["Alert history export", "2027-02-26", "Feb 26, 2027"],
   ] as const;
 
@@ -122,7 +122,7 @@ test("a copy the draft holds already shows as the one item it copies", async ({ 
   await page.getByTestId("format-gantt").click();
   await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
   // docs/ground-truth.md: a feature shows its code with its name.
-  const bar = page.locator('g[data-testid="bar"][aria-label^="F-06 Weekly alert digest:"]');
+  const bar = page.locator('g[data-testid="bar"][aria-label^="F-79 Weekly alert digest:"]');
   await expect(bar).toHaveCount(1);
   await expect(bar).toHaveAttribute("data-end", "2027-02-19");
 });

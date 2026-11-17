@@ -185,7 +185,7 @@ for (const scheme of ["light", "dark"] as const) {
       const c = boardCard(page, TWIN_KEY);
       await expect(column(page, "later").locator(`[data-item="${TWIN_KEY}"]`)).toBeVisible();
       await expect(c.getByTestId("draft-tag")).toHaveText("Draft");
-      await expect(c.getByTestId("board-looks-like")).toHaveText("Looks like F-06 Weekly alert digest");
+      await expect(c.getByTestId("board-looks-like")).toHaveText("Looks like F-79 Weekly alert digest");
       // one-feature-panel: the added draft opens its panel at once; close it to reach the tray.
       const added = page.getByTestId("floating-card");
       await expect(added.getByRole("heading", { name: TWIN })).toBeVisible();
@@ -200,7 +200,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(toastWith(page, `Merged '${TWIN}' into Weekly alert digest in your working draft`)).toBeVisible();
       await tray.getByRole("button", { name: "Close" }).click();
       await expect(column(page, "later").getByTestId("board-below").locator(`[data-item="${TWIN_KEY}"]`)).toBeVisible();
-      await expect(c.getByTestId("item-merged")).toHaveText("Merged into F-06 Weekly alert digest");
+      await expect(c.getByTestId("item-merged")).toHaveText("Merged into F-79 Weekly alert digest");
       await boardCard(page, "alert-digest").click();
       await expect(page.getByTestId("floating-card").getByTestId("card-reasons")).toContainText(`Merged ${TWIN} (${TWIN_KEY}) into it.`);
       await page.getByTestId("floating-card").getByRole("button", { name: "Close" }).click();

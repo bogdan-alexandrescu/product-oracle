@@ -6,7 +6,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * roadmap-edit-fixes round 1 (Nov 5, after the first seven fixes): what applying the owner's
  * roadmap answers through Simple's feature panel met, walked as an owner on a desktop
  * (1440x900) and a phone (390x844). The "roadmap-edit-fixes-2" scenario: Alert history export
- * waits on the Weekly alert digest by its code in lower case (f-06); Sample data import waits on
+ * waits on the Weekly alert digest by its code in lower case (f-79); Sample data import waits on
  * the Setup checklist by its key and by its feature's key; the Alert rules engine is done; the
  * cut In-app tour waits on the Setup checklist past its own start.
  *

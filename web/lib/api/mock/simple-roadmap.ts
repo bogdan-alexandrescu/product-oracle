@@ -129,6 +129,8 @@ interface SeedItem {
   prd_key?: string;
   /** The Ground Truth feature it is (RoadmapItem.feature_id): an approved PRD's item matches by it. */
   feature_id?: string | null;
+  /** qa-nov17: the key of the Ground Truth feature a seeded item is (F-01); the mock links it (feature_id) once the baseline is seeded. */
+  gt_key?: string;
   /** approved-prd-roadmap: its dates as the PRD has them (ISO days; no start: end-only). */
   dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
   /** build-runplan RP2: the PRD it belongs to when not its roadmap's own (./meeting-draft.ts). */
@@ -746,11 +748,13 @@ export const trackPlace = (db: { track_order?: string[] }, k: string): number =>
 
 const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
-  { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 }, section: "f-06", heading: "F-06 Weekly digest of fired alerts" },
+  // qa-nov17: one code names one feature: the digest's PRD section is F-79 (the Ground Truth's F-06 is Setup error
+  // report), and Setup checklist is the Ground Truth's F-01 (gt_key).
+  { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 }, section: "f-79", heading: "F-79 Weekly digest of fired alerts" },
   { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"], status: "in_progress" },
   { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker" },
   { key: "alert-sso", title: "Alert routing by team", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "low", depends: ["alert-export"] },
-  { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", status: "in_progress", gates: [{ phase: "Beta", day: 40 }] },
+  { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", status: "in_progress", gates: [{ phase: "Beta", day: 40 }], gt_key: "F-01" },
   { key: "setup-import", title: "Sample data import", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 20, end: 60, source: "typed", status: "in_progress", depends: ["setup-checklist"], gates: [{ phase: "beta", day: 75 }], risks: [{ flag: "dependency_order", note: "The checklist's last step is not needed" }] },
   { key: "setup-tour", title: "In-app tour", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", status: "cut", start: 30, end: 75, source: "typed" },
   { key: "setup-video", title: "Welcome video", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", depends: ["setup-tour"] },

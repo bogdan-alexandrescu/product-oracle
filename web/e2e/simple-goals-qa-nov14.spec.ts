@@ -155,19 +155,19 @@ test.describe("Value / effort", () => {
   });
 
   test("a row held after a coded feature names it with its code and name", async ({ page }) => {
-    // fails_when: the pill reads "after F-06" with the name only in its tip, and the selected row has no second line
+    // fails_when: the pill reads "after F-79" with the name only in its tip, and the selected row has no second line
     await openPriorities(page, "value-effort");
     const setup = page.getByTestId("side-row").filter({ hasText: "Setup checklist" });
     await setup.getByRole("button").first().click();
     await card(page).getByRole("button", { name: "Add a dependency" }).click();
-    await card(page).getByLabel("Feature it depends on").selectOption({ label: "F-06 Weekly alert digest" });
+    await card(page).getByLabel("Feature it depends on").selectOption({ label: "F-79 Weekly alert digest" });
     await card(page).getByRole("button", { name: "Save" }).click();
     const held = setup.getByTestId("side-held");
     await expect(held).toBeVisible();
     // No code without its name: the pill says "after", the selected row's second line names the feature.
-    await expect(held).toHaveText(/^after(\s+F-06\s+Weekly alert digest)?$/);
-    await expect(setup.getByTestId("side-after")).toHaveText(/^after\s+F-06\s+Weekly alert digest$/);
-    await expect(setup.getByTestId("side-after").locator(".simple-code")).toHaveText("F-06");
+    await expect(held).toHaveText(/^after(\s+F-79\s+Weekly alert digest)?$/);
+    await expect(setup.getByTestId("side-after")).toHaveText(/^after\s+F-79\s+Weekly alert digest$/);
+    await expect(setup.getByTestId("side-after").locator(".simple-code")).toHaveText("F-79");
     expect(await cutOff(page, setup.getByTestId("prio-title"))).toBe(false);
   });
 

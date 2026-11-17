@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from "./test";
 
 /*
  * Visual QA, Nov 12, 2026 (docs/qa/2026-11-12/simple-roadmap.md), the Roadmap page's own parts:
- * #1 the Needs a decision panel names each item by its code and name ("F-06 Weekly alert digest"),
+ * #1 the Needs a decision panel names each item by its code and name ("F-79 Weekly alert digest"),
  * an item with no code flagged "Not in the Ground Truth"; #5 an end past its milestone names the
  * milestone with its code ("M1 Beta"); #12 "Undone" answers in the bottom-right corner its
  * "Moved …" toast was in, never over the page's title; #14 the Waterfall's "Drag a bar …" line
@@ -49,7 +49,7 @@ test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test("Needs a decision names items by code and name, flags one with no code, and names the milestone with its code", async ({ page }) => {
-    // protects: in the owner's Needs a decision panel at 1440 px, the broken-links line for Weekly alert digest reads "F-06 Weekly alert digest" with no Not in the Ground Truth mark, a broken item with no code carries "Not in the Ground Truth", and the digest's end past its milestone names it "M1 Beta"
+    // protects: in the owner's Needs a decision panel at 1440 px, the broken-links line for Weekly alert digest reads "F-79 Weekly alert digest" with no Not in the Ground Truth mark, a broken item with no code carries "Not in the Ground Truth", and the digest's end past its milestone names it "M1 Beta"
     // fails_when: an item is named by its title alone, an item with no code shows no mark, or the reason says "after its milestone ‘Beta’"
     // no_claim: the chart's rows and cards, the exports, and the API's own reason words
     await open(page);
@@ -57,7 +57,7 @@ test.describe("desktop", () => {
     const tray = page.getByTestId("decision-tray");
     await expect(tray).toBeVisible();
     const digest = tray.getByTestId("tray-broken").filter({ has: page.getByTestId("tray-item").filter({ hasText: "Weekly alert digest" }) });
-    await expect(digest.getByTestId("tray-item")).toHaveText("F-06 Weekly alert digest");
+    await expect(digest.getByTestId("tray-item")).toHaveText("F-79 Weekly alert digest");
     await expect(digest.getByTestId("not-in-gt")).toHaveCount(0);
     await expect(digest.getByTestId("flag-reason").filter({ hasText: "after its milestone" })).toContainText(/after its milestone ‘M\d+ Beta’/);
     // A broken item with no code is flagged beside its name.

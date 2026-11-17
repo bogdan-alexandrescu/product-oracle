@@ -78,7 +78,7 @@ test.describe("desktop", () => {
       const key = await r.getAttribute("data-item");
       const name = (await r.locator("button[title]").first().textContent())!.trim();
       expect(name.length, `${key} carries its name`).toBeGreaterThan(2);
-      // docs/ground-truth.md: a feature shows its code with its name ("F-06 Weekly alert digest");
+      // docs/ground-truth.md: a feature shows its code with its name ("F-79 Weekly alert digest");
       // one with no code reads its name with the Not in the Ground Truth flag; never a bare id.
       expect(name, `${key}'s name is never a bare id`).not.toMatch(/^[A-Z]-\d+[a-z]?$|#\d/);
       const coded = /^[A-Z]-\d+[a-z]? \S{2,}/.test(name);

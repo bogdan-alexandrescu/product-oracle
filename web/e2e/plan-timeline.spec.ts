@@ -57,8 +57,8 @@ test.describe("desktop", () => {
     const undated = timeline.getByTestId("plan-timeline-undated-item");
     await expect(undated).toHaveText(["Budgets per team"]);
     // docs/ground-truth.md: a feature shows its code with its name, so a coded item's bar reads
-    // "F-06 Weekly alert digest"; the table's Item column holds the title, the same item.
-    await expect(drawn.filter({ hasText: "Weekly alert digest" })).toHaveText("F-06 Weekly alert digest");
+    // "F-79 Weekly alert digest"; the table's Item column holds the title, the same item.
+    await expect(drawn.filter({ hasText: "Weekly alert digest" })).toHaveText("F-79 Weekly alert digest");
     const named = (await drawn.allTextContents()).map((t) => t.replace(/^[A-Z]-\d+[a-z]? /, ""));
     expect([...named, ...(await undated.allTextContents())].sort()).toEqual([...titles].sort());
     // In the Group by's groups, with Today's line, a milestone and a dependency.

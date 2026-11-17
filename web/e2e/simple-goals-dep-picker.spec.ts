@@ -5,7 +5,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * goals-dep-picker: the feature panel's Add a dependency finds a feature from another PRD by
  * searching its code and name ("Or a feature from another PRD"), never by a raw key a person
  * cannot know. Opened from a one-pager's plan row and from the Goal map. Mock default scenario
- * (invented data): Setup checklist (Guided setup) picks F-06 Weekly alert digest (Usage alerts).
+ * (invented data): Setup checklist (Guided setup) picks F-79 Weekly alert digest (Usage alerts).
  */
 
 const SIZES = [
@@ -20,7 +20,7 @@ async function tap(l: Locator) {
 
 const panel = (page: Page) => page.getByTestId("floating-card");
 
-/** Add a dependency, search "digest", pick F-06 Weekly alert digest, save: Depends on shows it. */
+/** Add a dependency, search "digest", pick F-79 Weekly alert digest, save: Depends on shows it. */
 async function addDigestBySearch(page: Page) {
   const deps = panel(page).getByTestId("card-depends");
   await expect(deps).not.toContainText("Weekly alert digest");
@@ -29,13 +29,13 @@ async function addDigestBySearch(page: Page) {
   await expect(panel(page).getByPlaceholder(/feature key/)).toHaveCount(0);
   const search = panel(page).getByLabel("Or a feature from another PRD");
   await search.fill("digest");
-  const result = panel(page).getByTestId("card-depends-search").getByRole("button", { name: /^F-06\s*Weekly alert digest$/ });
+  const result = panel(page).getByTestId("card-depends-search").getByRole("button", { name: /^F-79\s*Weekly alert digest$/ });
   await expect(result).toBeVisible();
   await expect(panel(page).getByRole("button", { name: "Save" })).toBeDisabled();
   await tap(result);
   await expect(result).toHaveAttribute("aria-pressed", "true");
   await tap(panel(page).getByRole("button", { name: "Save" }));
-  await expect(deps.getByTestId("card-depends-row").getByRole("button", { name: /^F-06\s*Weekly alert digest$/ })).toBeVisible();
+  await expect(deps.getByTestId("card-depends-row").getByRole("button", { name: /^F-79\s*Weekly alert digest$/ })).toBeVisible();
 }
 
 for (const size of SIZES) {

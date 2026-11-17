@@ -80,7 +80,7 @@ async function deleteFeature(page: Page, item: { key: string; title: string }) {
   const bar = page.locator(`[data-testid="timeline-row"][data-item="${item.key}"] [data-testid="timeline-bar"]`);
   await bar.click({ button: "right" });
   await page.getByTestId("feature-menu").getByRole("menuitem", { name: "Delete feature" }).click();
-  // docs/ground-truth.md: the toast names the feature with its code ("Moved F-06 Weekly alert digest to Trash.").
+  // docs/ground-truth.md: the toast names the feature with its code ("Moved F-79 Weekly alert digest to Trash.").
   await expect(page.getByTestId("toasts")).toContainText(new RegExp(`Moved ([A-Z]+-\\d+[a-z]? )?${item.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} to Trash\\.`));
   await expect(bar).toHaveCount(0);
 }

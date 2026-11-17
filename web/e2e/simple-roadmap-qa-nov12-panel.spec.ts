@@ -5,7 +5,7 @@ import { expect, test, type Page } from "./test";
 
 /*
  * Visual QA of Simple's Roadmap, Nov 12, 2026: the feature panel (#2, #5, #9, #10) and the Goal
- * map's panel (GM2). Mock data, clock pinned to Oct 22, 2026: Weekly alert digest (F-06) sits under
+ * map's panel (GM2). Mock data, clock pinned to Oct 22, 2026: Weekly alert digest (F-79) sits under
  * the roadmap's milestone M1 Beta; Alert rules engine has no code.
  */
 

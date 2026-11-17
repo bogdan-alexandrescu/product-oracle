@@ -324,7 +324,7 @@ test.describe("QA pass 3: simple-plan, a dated plan", () => {
     expect(await chip.evaluate((e) => getComputedStyle(e).fontFamily)).not.toMatch(/mono/i);
     // The outside list names no code that the plan uses for another feature.
     const outside = page.getByTestId("plan-outside");
-    if ((await outside.count()) > 0) await expect(outside).not.toContainText("F-06 Weekly alert digest");
+    if ((await outside.count()) > 0) await expect(outside).not.toContainText("F-79 Weekly alert digest");
   });
 
   /* qa-simple-plan-37, -39: 'M1 · 4 weeks'; one heading; on a phone the weeks keep their unit. */

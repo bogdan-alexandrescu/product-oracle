@@ -13,7 +13,7 @@ import { expect, test, type Locator, type Page } from "./test";
  *
  * - "the row: no flow yet, drawing, then the drawing swaps in": protects=A's row: "No flow yet"
  *   with "Ask Oracle to draw it" and "Oracle draws the steps and the screen they touch, from the
- *   PRD."; asked, "Oracle is drawing the flow", the stages "Read F-06 · Draw the steps · Draw the
+ *   PRD."; asked, "Oracle is drawing the flow", the stages "Read F-79 · Draw the steps · Draw the
  *   screen" with a bar and "Updates here by itself; you can close the card. Started ..."; when the
  *   job ends the live thumbnail (the real shapes: a decision diamond) swaps in without a reload
  *   with the flow's name, "New", "5 steps · 1 screen" and "Version 1 · drawn ...", then "Open
@@ -103,7 +103,7 @@ for (const phone of [false, true]) {
         await expect(drawing).toContainText("Oracle is drawing the flow");
         await expect(drawing).toContainText("About a minute");
         const stages = drawing.getByRole("list", { name: "Stages" }).getByRole("listitem");
-        await expect(stages).toHaveText(["Read F-06", "Draw the steps", "Draw the screen"]);
+        await expect(stages).toHaveText(["Read F-79", "Draw the steps", "Draw the screen"]);
         await expect(drawing.getByRole("progressbar", { name: "Drawing" })).toBeVisible();
         await expect(drawing).toContainText("Updates here by itself; you can close the card. Started");
         // The job lands: the live thumbnail swaps itself in, no reload.

@@ -5,7 +5,7 @@ import { expect, test, type Locator, type Page } from "./test";
 
 /*
  * fix4, the roadmap item card, its talk with Oracle and the Ask panel's change cards, driven
- * through the UI on the mock: the default scenario (Weekly alert digest, F-06, depends on Alert
+ * through the UI on the mock: the default scenario (Weekly alert digest, F-79, depends on Alert
  * rules engine and starts before it ends; D-7 is open on it) and "roadmap-talk" (Adaptive
  * pacing, F-16). Desktop 1440x900, phone 390x844; light and dark where colours change.
  */
@@ -69,15 +69,15 @@ test.describe("desktop 1440x900", () => {
     await expect(card.getByTestId("card-decisions")).toHaveText("Send the digest weekly or daily?");
     await expect(card.getByTestId("card-decisions").getByRole("link", { name: "Send the digest weekly or daily?" })).toBeVisible();
     await expect(card.getByTestId("card-reasons")).not.toContainText("(draft");
-    await expect(card.getByTestId("card-reasons")).not.toContainText("F-06");
+    await expect(card.getByTestId("card-reasons")).not.toContainText("F-79");
     await expect(card.getByTestId("card-needed")).toHaveText("None");
     // BGD (Nov 4): the item's own code shows once (its chip, or since PR 1404 its editable Code field); no other code shows.
     await expect(card).toContainText("Send the digest weekly or daily?");
-    expect((await card.innerText()).replace(/^\s*F-06\s*/, "").replace(/\bCode\s+F-06\b/, "")).not.toMatch(/\b[FD]-\d/);
+    expect((await card.innerText()).replace(/^\s*F-79\s*/, "").replace(/\bCode\s+F-79\b/, "")).not.toMatch(/\b[FD]-\d/);
     const talk = await openTalk(card);
     await expect(talk.getByRole("heading", { name: "Talk about Weekly alert digest", exact: true })).toBeVisible();
     await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", "Ask about Weekly alert digest, or ask for a change…");
-    expect((await card.innerText()).replace(/^\s*F-06\s*/, "").replace(/\bCode\s+F-06\b/, "")).not.toMatch(/\b[FD]-\d/);
+    expect((await card.innerText()).replace(/^\s*F-79\s*/, "").replace(/\bCode\s+F-79\b/, "")).not.toMatch(/\b[FD]-\d/);
 
     await card.getByRole("button", { name: "Close" }).click();
     const rules = await openCard(page, "alert-rules");
