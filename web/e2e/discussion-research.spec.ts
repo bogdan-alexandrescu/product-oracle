@@ -90,10 +90,13 @@ test("a web page Oracle's research cites shows as a link to it", async ({ page }
   await thread(page).getByTestId("research-confirm").getByRole("button", { name: "Start research" }).click();
   const answer = thread(page).getByTestId("discussion-message").filter({ has: page.getByTestId("research-answer") });
   await expect(answer).toBeVisible({ timeout: 15_000 });
+  // qa-nov17 ask 3: in a reply the chip reads its number alone; its name and card say Web.
   const chip = answer.getByTestId("cite-c-2");
-  await expect(chip).toContainText("Web");
+  await expect(chip).toHaveText("2");
+  await expect(chip).toHaveAttribute("aria-label", /^Citation 2: Web/);
   await chip.hover();
   const card = page.getByRole("tooltip");
+  await expect(card.getByTestId("cite-source")).toContainText("Web");
   await expect(card).toContainText("Caps at Example");
   await expect(card.getByRole("link", { name: /Open source/ })).toHaveAttribute("href", WEB_URL);
 });
