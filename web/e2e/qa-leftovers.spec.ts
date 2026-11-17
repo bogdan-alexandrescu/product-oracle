@@ -1,5 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
@@ -170,4 +170,44 @@ test("Simple Inbox at 1440: the For cells wrap, never cut on one line", async ({
   const needs = page.getByTestId("inbox-needs");
   await whole(needs.locator('span[title="I lead support and need to read the PRD."]').first());
   await whole(needs.locator(".truncate", { hasText: /Ground Truth proposal · Team onboarding/ }).last());
+});
+
+// protects=Home's "Not this" on a feature's dates says Dismissed with an Undo that brings the row back; once
+// dismissed, the feature's panel reads its horizon with no dates yet, never the horizon's window as Oracle's
+// estimate; fails_when=the toast has no Undo, Undo leaves the row gone, or the panel reads "Apr 1, 2027 – … ·
+// Oracle's estimate"; no_claim=the API's reopen (pytest test_undo_a_dismissal_reopens_the_item).
+test("Home: Not this on dates to confirm has Undo; once dismissed the panel reads Later · no dates yet", async ({ page }) => {
+  await page.setViewportSize(DESKTOP);
+  await login(page);
+  await page.goto("/simple");
+  const dates = page.getByTestId("home-also-waiting").getByRole("listitem", { name: "Dates to confirm: Health log" });
+  await tap(dates.getByRole("button", { name: "Not this" }));
+  await expect(dates).toHaveCount(0);
+  const toast = page.getByTestId("toasts").getByRole("status").filter({ hasText: "Dismissed" });
+  await tap(toast.getByRole("button", { name: "Undo" }));
+  await expect(dates).toBeVisible();
+  await tap(dates.getByRole("button", { name: "Not this" }));
+  await expect(dates).toHaveCount(0);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await openRoadmapItem(page, "setup-health-log");
+  const shown = page.getByTestId("floating-card").getByTestId("card-dates");
+  await expect(shown).toContainText("Later · no dates yet");
+  await expect(shown).not.toContainText("Oracle's estimate");
+});
+
+// protects=the panel's Move to Trash… names the feature with its code, in the ask and the toast, as a row's
+// Delete does; fails_when="Move Health log to Trash?" with no code; no_claim=which code it has.
+test("feature panel (Priorities, Roadmap): Move to Trash… names the feature with its code", async ({ page }) => {
+  await page.setViewportSize(DESKTOP);
+  await login(page);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await openRoadmapItem(page, "setup-health-log");
+  const panel = page.getByTestId("floating-card");
+  await tap(panel.getByRole("button", { name: "More actions" }));
+  await tap(panel.getByRole("menuitem", { name: "Move to Trash…" }));
+  const ask = page.getByRole("alertdialog", { name: /^Move F-\d+[a-j]? Health log to Trash\?$/ });
+  await tap(ask.getByRole("button", { name: "Move to Trash" }));
+  await expect(page.getByTestId("toasts")).toContainText(/Moved F-\d+[a-j]? Health log to Trash\./);
 });

@@ -59,6 +59,10 @@ Test cards (protects / fails_when / no_claim):
   per milestone (each slice once) and its span, the same for every role; fails_when=the plan
   is missing, its totals differ from the plan endpoint's or a role reads another plan;
   no_claim=the web's drawing (Playwright's simple-priorities-plan spec).
+- test_undo_a_dismissal_reopens_the_item (qa-leftovers, Home QA #6): protects=Undo on
+  "Not this" (POST .../reopen) opens every slice the dismissal closed, so the roadmap shows
+  the suggestion again; a viewer is refused and an open one is 409; fails_when=the route is
+  missing or reopens one slice only; no_claim=the web toast (Playwright's qa-leftovers spec).
 - test_priority_rows_say_whether_they_are_in_the_plan: protects=each Priorities row says
   whether its item is the plan PRD's (in_plan), so Goal buckets still lists the roadmap's items
   outside the plan; fails_when=a row outside the plan reads as in it, or the plan's row does
@@ -374,6 +378,35 @@ async def test_dismissing_a_slice_dismisses_the_item(client):
         await s.commit()
         assert {x.status for x in await s.scalars(select(RoadmapDateSuggestion))} == {"dismissed"}
 
+
+
+async def test_undo_a_dismissal_reopens_the_item(client):
+    """Home QA #6: the "Not this" toast's Undo reopens what the dismissal closed (every
+    slice of the item), and the roadmap shows the suggestion again."""
+    ctx = await make_ctx()
+    await seed(ctx, items=("f-03",))
+    async with tenant_session(ctx.tenant_id) as s:
+        await suggestions.regenerate(s)
+        await s.commit()
+    rows = (await client.get("/v1/simple/roadmap/date-suggestions",
+                             headers=ctx.as_("owner"))).json()  # fmt: skip
+    first = next(r for r in rows if r["slice_code"] == "F-03a")
+    url = f"/v1/simple/roadmap/date-suggestions/{first['id']}"
+    r = await client.post(f"{url}/dismiss", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{url}/reopen", headers=ctx.as_("viewer"))
+    assert r.status_code == 403, r.text
+    r = await client.post(f"{url}/reopen", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "open"
+    async with tenant_session(ctx.tenant_id) as s:
+        states = {x.slice_code: x.status for x in await s.scalars(select(RoadmapDateSuggestion))}
+    assert states == {"F-03a": "open", "F-03b": "open"}
+    roadmap = (await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))).json()
+    item = next(i for i in roadmap["items"] if i["key"] == "f-03")
+    assert item["suggestion"] is not None
+    r = await client.post(f"{url}/reopen", headers=ctx.as_("owner"))
+    assert r.status_code == 409, r.text
 
 PROSE_ANSWER = {
     "milestones": [
