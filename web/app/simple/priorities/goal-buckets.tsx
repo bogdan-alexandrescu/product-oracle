@@ -451,7 +451,7 @@ export function FeatureRows({
               </>
             )}
             {/* PR10: the name keeps room for a few words; the milestone chips wrap beside it instead. */}
-            <span data-testid="plan-feature-name" className="min-w-[10rem] flex-1">
+            <span data-testid="plan-feature-name" className="min-w-[10rem] flex-1 max-sm:min-w-0 max-sm:basis-0">
               {onOpen ? (
                 <button type="button" data-testid="plan-feature-open" title={`Open ${f.name}`} className="text-left hover:underline" onClick={() => onOpen(f)}>
                   {f.name}
