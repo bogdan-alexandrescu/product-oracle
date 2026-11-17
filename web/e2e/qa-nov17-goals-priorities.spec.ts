@@ -23,7 +23,7 @@ test.describe("Priorities, desktop", () => {
     // protects: the Ranked list's pill on a feature with an old proof says "Exists · checked <month day>"
     // fails_when: the pill reads "Exists · proof old"
     await openPriorities(page);
-    const pill = rankedRow(page, "Alert routing by team").getByTestId("prio-name").getByTestId("cs-mark");
+    const pill = rankedRow(page, "Alert routing by team").first().getByTestId("prio-name").getByTestId("cs-mark").first();
     await expect(pill).toHaveText(/^Exists · checked [A-Z][a-z]{2} \d{1,2}(, \d{4})?$/);
   });
 
@@ -40,7 +40,7 @@ test.describe("Priorities, desktop", () => {
     // names wrap rather than end in "…"
     // fails_when: the mark has no title naming the feature, or a side-list name is cut
     await openPriorities(page, "value-effort");
-    const mark = page.getByTestId("vxe-point").filter({ has: page.getByTestId("vxe-name").filter({ hasText: "Weekly alert digest" }) });
+    const mark = page.getByTestId("vxe-point").filter({ has: page.getByTestId("vxe-name").filter({ hasText: "Weekly alert digest" }) }).first();
     await expect(mark).toHaveAttribute("title", "F-79 Weekly alert digest");
     const names = page.getByTestId("side-row").getByTestId("prio-title");
     await expect(names.first()).toBeVisible();
