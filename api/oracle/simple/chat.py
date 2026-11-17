@@ -1531,15 +1531,6 @@ def _spent_until(job: Any) -> datetime | None:
     return at if at is not None and at > company_time.now() else None
 
 
-async def _job_states(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
-    if not ids:
-        return {}
-    from oracle.jobs.models import LlmJob
-
-    rows = await db.execute(select(LlmJob.id, LlmJob.status).where(LlmJob.id.in_(ids)))
-    return {i: st for i, st in rows.all()}
-
-
 async def _enqueue_read(db: AsyncSession, principal: Any, read: SimpleChatRead) -> None:
     from oracle.jobs.models import LlmJob
 
@@ -2105,9 +2096,12 @@ async def retry(db: AsyncSession, principal: Any, message_id: uuid.UUID) -> Chat
     read, _ = await _read_of(db, principal, message_id)
     msg = await db.get(DiscussionMessage, read.message_id)
     assert msg is not None
-    states = await _job_states(db, [read.job_id] if read.job_id else [])
-    if msg.prompt != "pending" or states.get(read.job_id) not in DEAD:  # type: ignore[arg-type]
+    jobs = await _job_rows(db, [read.job_id] if read.job_id else [])
+    job = jobs.get(read.job_id) if read.job_id else None
+    if msg.prompt != "pending" or job is None or job.status not in DEAD:
         raise ChatError(409, "Only a line Oracle could not read is read again")
+    if _spent_until(job) is not None:
+        raise ChatError(409, "Oracle's Claude accounts are used up; read it again once they clear")
     msg.body = READING
     await _enqueue_read(db, principal, read)
     await db.commit()
