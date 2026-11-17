@@ -44,7 +44,7 @@ test("an open Ask Oracle thread on a spent Claude pool offers Retry once the win
   await expect(line.getByRole("button", { name: "Retry" })).toHaveCount(0);
 
   // Past the window (Oct 25, 1:00 AM UTC), with the thread still open: no reload.
-  await page.clock.fastForward("62:00:00");
+  await page.clock.fastForward(62 * 60 * 60 * 1000);
   await expect(line.getByTestId("chat-message-body")).toHaveText("I couldn't read that just now.");
   await expect(panel.getByText("Oracle's Claude accounts are used up")).toHaveCount(0);
 
