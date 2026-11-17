@@ -43,6 +43,26 @@ test.describe("Priorities, desktop", () => {
   });
 });
 
+test.describe("Goal buckets, desktop", () => {
+  test.use({ viewport: DESKTOP });
+
+  test("G6: Archive goal lists the bucket's draft and says where they go without 'The other'", async ({ page }) => {
+    // protects: Archive goal on Faster activation lists every feature the bucket shows (its draft Team invite nudges too),
+    // and with none going to another goal the choice reads "They go:"
+    // fails_when: the draft is left out, or the dialog says "The other N:" after nothing
+    await openPriorities(page, "buckets");
+    await page.getByRole("button", { name: "More for Faster activation" }).first().click();
+    await page.getByRole("menuitem", { name: "Archive goal" }).click();
+    const dialog = page.getByRole("dialog", { name: "Archive Faster activation" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId("goal-feature").filter({ hasText: "Team invite nudges" })).toHaveCount(1);
+    const n = await dialog.getByTestId("goal-feature").count();
+    await expect(dialog).toContainText(`It holds ${n} features`);
+    await expect(dialog.getByText(/^The other \d+:$/)).toHaveCount(0);
+    await expect(dialog.getByText("They go:", { exact: true })).toBeVisible();
+  });
+});
+
 test.describe("Goal map, desktop", () => {
   test.use({ viewport: DESKTOP });
 
