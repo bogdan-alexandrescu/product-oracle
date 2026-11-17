@@ -26,7 +26,7 @@ import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type Bra
 import { capabilitiesOut } from "./capabilities";
 import { daysInWords } from "./days";
 import { stripRawTokens } from "@/lib/raw-tokens";
-import { POOL_SPENT_SCENARIO, SIMPLE_CHAT_POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
+import { POOL_SPENT_SCENARIO, SIMPLE_CHAT_POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal, poolSpentUntil } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
 import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, logReadable, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionLogRow, type DecisionsContext, type DecisionsDb } from "./decisions";
@@ -8854,6 +8854,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       return id;
     };
     const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, ...askFiling, linked: undeclines(db), declined: declinedBy(db), proposeTo: (d: string | null) => reviews.proposeTo(d),
+      spentPool: () => poolSpentUntil(localStorage.getItem(MOCK_SCENARIO_KEY)),
       // ask_actions.slack_reach: whether Slack sends a pinged person the message (connected, and their review-requested ping on).
       slackReach: (id: string): "on" | "off" | "none" => {
         const install = ensureReports(db, db.user_id, reportLive(db, me)).integration;

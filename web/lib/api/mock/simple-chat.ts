@@ -114,6 +114,8 @@ interface StoredMessage {
   links?: { label: string; href: string }[];
   /** #710 in Simple: the live reads Oracle's answer used (chat.ChatMessageOut.live_reads). */
   live_reads?: Record<string, unknown>[];
+  /** Private: a line that failed on a spent Claude pool: when its window clears (chat._spent_until). */
+  spent_until?: string;
   /** Private: the reader's job for a pending (or failed) line. */
   reading?: { text: string; role: Role; meeting_id: string | null; attempts: number; ask: boolean; document_id?: string | null };
 }
@@ -220,6 +222,8 @@ export interface ChatDb {
 
 export type ChatCtx = SimpleChangesCtx & {
   roles: Record<string, Role>;
+  /** When no Claude account can take a call (every one spent): when the earliest window clears, and those words. */
+  spentPool?: () => { until: string; words: string } | null;
   /** A commenter's decision on Ask as an open decision of the decision log (POST /v1/decisions as them); its id. */
   proposeDecision?: (b: Schemas["DecisionCreate"]) => Promise<string | null>;
   /** Who confirms it (ChatMeetings.proposeTo). */
@@ -1163,10 +1167,21 @@ function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx, s
   const t = chat.threads[key];
   if (!t) return;
   for (const msg of t.messages) {
+    // As chat.thread: once the spent pool's window has cleared, the line is the generic failure with Retry.
+    if (msg.kind === "failed" && msg.spent_until && Date.parse(msg.spent_until) <= Date.now()) {
+      Object.assign(msg, { body: "I couldn't read that just now.", retry: true, spent_until: undefined });
+      readerWrote = true;
+    }
     if (msg.kind !== "pending" || !msg.reading) continue;
     readerWrote = true;
     const r = msg.reading;
     r.attempts += 1;
+    // The reader's job fails when no Claude account can take its call: until when, and no Retry while spent.
+    const spent = ctx.spentPool?.() ?? null;
+    if (spent) {
+      Object.assign(msg, { kind: "failed", body: `Oracle's Claude accounts are used up until ${spent.words}.`, retry: false, spent_until: spent.until });
+      continue;
+    }
     // A line saying "slowly" stays pending for 25 reads (longer than the Ask chat's first wait).
     if (/\bslowly\b/i.test(r.text) && r.attempts < 25) continue;
     if (/\bflaky\b/i.test(r.text) && r.attempts === 1) {
