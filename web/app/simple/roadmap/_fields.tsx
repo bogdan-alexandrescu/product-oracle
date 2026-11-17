@@ -186,10 +186,12 @@ function refs<T extends { id: string }>(
 function datesReason(item: Item): string {
   // roadmap-dates: an undated item's estimate is Oracle's suggestion, else the quarter it was added to.
   const picked = item.picked_quarter ? quarterOf(item.picked_quarter) : null;
-  if (item.estimated && item.suggestion) {
-    const out = picked && (item.start.date < picked.start || item.end.date >= nextQuarter(picked.start));
+  const out = picked && (item.start.date < picked.start || item.end.date >= nextQuarter(picked.start));
+  if (item.estimated && item.suggestion)
     return `Oracle suggested these dates: ${item.suggestion.basis}${out ? ` They fall outside ${picked.label}, the quarter it was added to: there is no room for it there.` : ""} Set dates to override them.`;
-  }
+  // qa-nov17: a new dependency outdates the suggestion; the estimate after it can leave the quarter.
+  if (item.estimated && out)
+    return `Oracle estimated these dates after what it depends on. They fall outside ${picked.label}, the quarter it was added to. Set dates to override them.`;
   if (item.estimated && picked)
     return `Oracle estimated these dates as ${picked.label}, the quarter it was added to, until it suggests dates. Set dates to override them.`;
   if (item.estimated)
