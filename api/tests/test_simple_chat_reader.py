@@ -37,7 +37,8 @@ Test cards (protects / fails_when / no_claim):
 - test_a_spent_pool_says_until_when_with_no_retry: protects=a read that failed because
   every Claude account was spent (the job's error_reason and next_reset_at) says until
   when, month first in the company's zone (the year only when not this year), with no
-  Retry; fails_when=it shows the generic line, offers Retry or an ISO time.
+  Retry (a retry is refused); fails_when=it shows the generic line, offers Retry or an
+  ISO time.
 - test_a_cleared_window_or_another_failure_keeps_the_generic_line: protects=once the
   window has cleared, or for any other failure, the generic line with Retry;
   fails_when=a cleared or other failure loses Retry.
@@ -343,6 +344,8 @@ async def test_a_spent_pool_says_until_when_with_no_retry(client, monkeypatch, r
     m = await last(client, ctx, "owner")
     assert m["kind"] == "failed" and m["retry"] is False
     assert m["body"] == f"Oracle's Claude accounts are used up until {words}."
+    r = await client.post(f"/v1/simple/chat/messages/{m['id']}/retry", headers=ctx.as_("owner"))
+    assert r.status_code == 409
 
 
 @pytest.mark.parametrize(
