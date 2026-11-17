@@ -1019,9 +1019,12 @@ export function DiscussionThread({
           )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-text2">
-          <span title={VISIBILITY_TIP[d.visibility]} data-testid="discussion-visibility" className="inline-flex">
-            <Chip kind={priv ? "warn" : "line"}>{priv ? "Private" : "Open"}</Chip>
-          </span>
+          {/* qa-nov17 ask 4: a closed discussion shows one state, Closed, not "Open" beside it. */}
+          {open && (
+            <span title={VISIBILITY_TIP[d.visibility]} data-testid="discussion-visibility" className="inline-flex">
+              <Chip kind={priv ? "warn" : "line"}>{priv ? "Private" : "Open"}</Chip>
+            </span>
+          )}
           <button
             type="button"
             data-testid="discussion-people"
