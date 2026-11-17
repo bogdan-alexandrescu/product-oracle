@@ -564,7 +564,16 @@ export function MsLayer(props: MsLayerProps) {
         const at = Number(el.dataset.l0);
         const w = widths[n];
         if (el.dataset.testid === "ms-add-hint") {
-          const spans = props.keepOff ?? [];
+          // qa-nov17 #3/#6: it keeps off the band's chips and counts, the diamonds, the Today pill and
+          // the header's names it would sit on, as well as the axis's names (keepOff).
+          const hb = el.getBoundingClientRect();
+          const chart = layer.closest("[data-testid=simple-chart]") ?? layer;
+          const near0 = [...chart.querySelectorAll<Element>("[data-keep-clear], [data-testid=ms-label], [data-testid=ms-prd-label], [data-testid=ms-band-more], [data-testid=ms-same-day], [data-testid=ms-diamond], [data-testid=ms-prd-diamond]")]
+            .filter((o) => o !== el && !el.contains(o))
+            .map((o) => o.getBoundingClientRect())
+            .filter((r) => r.width > 0 && r.top < hb.bottom + 2 && r.bottom > hb.top - 2)
+            .map((r): [number, number] => [r.left - lx, r.right - lx]);
+          const spans = [...(props.keepOff ?? []), ...near0];
           const free = (l: number) => l >= lo && l + w <= hi && spans.every(([a, c]) => l >= c + 6 || l + w <= a - 6);
           const near = [Math.min(Math.max(at, lo), hi - w), ...spans.flatMap(([a, c]) => [c + 8, a - 6 - w])].filter(free);
           const l = near.length ? near.reduce((p, q) => (Math.abs(q - at) < Math.abs(p - at) ? q : p)) : null;

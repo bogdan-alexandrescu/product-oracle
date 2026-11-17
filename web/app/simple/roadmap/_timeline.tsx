@@ -528,7 +528,9 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
     // finding 18: pack rows in date order left to right, so a later mark never takes a lower
     // row an earlier one needed (the list above is built milestone-ends, then tracks, then key
     // dates, not by date).
-    return placeMarks([...list].sort((a, b) => a.x - b.x), chartW, flags);
+    // qa-nov17 #3/#6: Today first, so its pill (drawn on the first row) holds that row and a mark
+    // just before today (a key date's words) takes the next row, never under the pill.
+    return placeMarks([list[0], ...list.slice(1).sort((a, b) => a.x - b.x)], chartW, flags);
   }, [data, sc, chartW, compact, flags]);
   // roadmap-milestone-codes: the Gantt's milestone band under the date axis.
   const band = useMsBand(compact);
@@ -1042,7 +1044,7 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
                 if (!mk) return null;
                 const cy = baseline(mk.row) - 4;
                 return (
-                  <g key={m.id} data-testid="track-milestone" data-row={mk.row} transform={`translate(${mk.x}, ${cy})`}>
+                  <g key={m.id} data-testid="track-milestone" data-row={mk.row} data-keep-clear transform={`translate(${mk.x}, ${cy})`}>
                     <rect x={-5} y={-5} width={10} height={10} transform="rotate(45)" fill="var(--warn)" />
                     {/* QA Nov 12 #5: named by its roadmap code, as the Timeline and the board name it ("M1 Beta"). */}
                     <text data-testid="track-milestone-label" x={mk.side === "after" ? 9 : -9} y={4} fontSize={11} fontWeight={700} fill="var(--text2)" textAnchor={mk.side === "after" ? "start" : "end"}>
@@ -1060,8 +1062,8 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
                 <g key={k.id} data-testid="key-date-marker" data-name={k.name} data-date={k.date} data-draft={k.in_draft ? "true" : undefined} data-row={mk.row} pointerEvents="none">
                   <title>{`${k.name} · ${shortDay(k.date)}${k.note ? ` · ${k.note}` : ""} (${k.roadmap.title})`}</title>
                   <line x1={kx} x2={kx} y1={lineTop(kx, mk.row, cy + 5)} y2={l.height} stroke="var(--accent-ink)" strokeWidth={1} opacity={0.7} strokeDasharray={k.in_draft ? "3 3" : undefined} />
-                  <rect x={kx - 5} y={cy - 5} width={10} height={10} transform={`rotate(45 ${kx} ${cy})`} fill={k.in_draft ? "var(--surface)" : "var(--accent-ink)"} stroke="var(--accent-ink)" />
-                  <text x={mk.side === "after" ? kx + 9 : kx - 9} y={cy + 4} fontSize={11} fontWeight={700} fill="var(--accent-ink)" textAnchor={mk.side === "after" ? "start" : "end"} data-testid="key-date-label">
+                  <rect data-keep-clear x={kx - 5} y={cy - 5} width={10} height={10} transform={`rotate(45 ${kx} ${cy})`} fill={k.in_draft ? "var(--surface)" : "var(--accent-ink)"} stroke="var(--accent-ink)" />
+                  <text x={mk.side === "after" ? kx + 9 : kx - 9} y={cy + 4} fontSize={11} fontWeight={700} fill="var(--accent-ink)" textAnchor={mk.side === "after" ? "start" : "end"} data-testid="key-date-label" data-keep-clear>
                     {k.name}
                   </text>
                 </g>
