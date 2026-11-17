@@ -1065,14 +1065,12 @@ export function DiscussionThread({
             if (ok) setEditing(null);
           }}
         >
-          <textarea
-            aria-label={editing === "title" ? "Title" : "Summary"}
-            rows={editing === "title" ? 1 : 3}
-            maxLength={editing === "title" ? 200 : 1200}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            className={TEXTAREA}
-          />
+          {/* qa-nov17 ask 7: a title is one line; Enter saves it. */}
+          {editing === "title" ? (
+            <input aria-label="Title" maxLength={200} value={draft} onChange={(e) => setDraft(e.target.value)} className={`${TEXTAREA} h-10`} />
+          ) : (
+            <textarea aria-label="Summary" rows={3} maxLength={1200} value={draft} onChange={(e) => setDraft(e.target.value)} className={TEXTAREA} />
+          )}
           <div className="flex gap-2">
             <Button type="submit" variant="solid" disabled={busy || (editing === "title" && !draft.trim())}>
               Save
