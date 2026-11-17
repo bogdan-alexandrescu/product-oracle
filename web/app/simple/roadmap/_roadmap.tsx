@@ -1272,7 +1272,22 @@ export function SimpleRoadmap() {
   // roadmap-done (owner, Nov 4): a done (shipped) item leaves the plan: no view draws it and no
   // count reads it (the API checks it no more); it is kept under the Done list, which opens it.
   const all = roadmap.data;
-  const data = useMemo(() => (all ? { ...all, items: all.items.filter((i) => i.status !== "done") } : undefined), [all]);
+  const data = useMemo(() => {
+    if (!all) return undefined;
+    const items = all.items.filter((i) => i.status !== "done");
+    if (!f.goal) return { ...all, items };
+    // qa-nov17 #12: under a Goal filter the milestones are that goal's too (its tracks' and its
+    // items'), as the rows are; the key dates stay.
+    const goals = new Set(all.items.flatMap((i) => (i.goal ? [i.goal.id, ...(krs.parentOf(i.goal.id)?.key === f.goal ? [krs.parentOf(i.goal.id)!.id] : [])] : [])));
+    const ids = new Set(all.items.map((i) => i.id));
+    const trackGoal = new Map((all.tracks ?? []).map((t) => [t.id, t.goal_id ?? null]));
+    return {
+      ...all,
+      items,
+      goal_milestones: (all.goal_milestones ?? []).filter((m) => !!m.goal_id && goals.has(m.goal_id)),
+      milestones: all.milestones.filter((m) => goals.has(trackGoal.get(m.track_id) ?? "") || m.item_ids.some((id) => ids.has(id))),
+    };
+  }, [all, f.goal, krs]);
   const doneItems = useMemo(() => (all?.items ?? []).filter((i) => i.status === "done"), [all]);
   // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
   // tb-mk: the Timeline always draws track bands, in the tracks' order, then No track; Group by Track the same bands.
