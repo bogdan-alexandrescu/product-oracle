@@ -2083,6 +2083,9 @@ class ChatMessageOut(BaseModel):
     choices: list[ChatChoiceOut] = Field(default_factory=list)
     picked: int | None = None
     retry: bool = False
+    # spent-pool: a line that failed on a spent Claude pool, when its window clears (the
+    # thread then reads Retry); None otherwise.
+    retry_after: dt.datetime | None = None
     # roadmap-talk: where an item talk's answer comes from ("From the PRD · F-06 …").
     source: str | None = None
     # ask-length-limit: where a part Oracle cannot change yet is changed (Priorities, Roadmap).

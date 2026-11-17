@@ -64686,6 +64686,18 @@
             "title": "Retry",
             "default": false
           },
+          "retry_after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After"
+          },
           "source": {
             "anyOf": [
               {
