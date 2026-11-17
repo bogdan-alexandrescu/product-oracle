@@ -1896,12 +1896,13 @@ function threadOut(db: SimpleDb, chat: ChatDb, t: Thread | null, ctx: ChatCtx, m
     understood: true,
     id: t?.id ?? null,
     meeting_id: meeting?.id ?? null,
-    messages: (t?.messages ?? []).map(({ card_ids, choice_drafts: _drafts, reading: _reading, ...msg }) => {
+    messages: (t?.messages ?? []).map(({ card_ids, choice_drafts: _drafts, reading: _reading, spent_until, ...msg }) => {
       void _drafts;
       void _reading;
       // meet-chat-kind: as the API's thread(), a line that is not a chat kind reads as an answer.
       const kind = (KINDS.includes(msg.kind) ? msg.kind : "answer") as ChatKind;
-      return { source: null, links: [], ...msg, kind, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) };
+      // spent-pool: as chat.thread, a line failed on a spent pool serves when its window clears.
+      return { source: null, links: [], ...msg, kind, retry_after: spent_until ?? null, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) };
     }),
     rules: meeting ? rulesOut(meeting, ctx) : null,
     ask_id: t?.ask_id ?? null,

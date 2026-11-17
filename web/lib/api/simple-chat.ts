@@ -108,6 +108,8 @@ export type ChatMessage = {
   picked: number | null;
   /** A failed line: Retry reads it again. */
   retry: boolean;
+  /** spent-pool: a line failed on a spent Claude pool, when its window clears; null otherwise. */
+  retry_after?: string | null;
   /** roadmap-talk: where Oracle's answer comes from ("From the PRD · F-06 Adaptive pacing"); null otherwise. */
   source?: string | null;
   /** ask-length-limit: where the parts Oracle cannot change yet are changed (Priorities, Roadmap). */
