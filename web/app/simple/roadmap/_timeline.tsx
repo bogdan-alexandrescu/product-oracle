@@ -536,10 +536,12 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
     // just before today (a key date's words) takes the next row, never under the pill.
     return placeMarks([list[0], ...list.slice(1).sort((a, b) => a.x - b.x)], chartW, flags);
   }, [data, sc, chartW, compact, flags]);
-  // roadmap-milestone-codes: the Gantt's milestone band under the date axis.
+  // roadmap-milestone-codes: the Gantt's milestone band under the date axis. qa-nov17 #3: the
+  // Waterfall draws the same band, so it gets its own room too, never over the key dates' names.
   const band = useMsBand(compact);
-  const msBandH = format === "gantt" ? band : 0;
-  const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1))) + msBandH;
+  const msBandH = format === "gantt" || format === "waterfall" ? band : 0;
+  // qa-nov17 #3: the band's diamonds sit on the axis 4 px under the last row of names, never on them.
+  const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1))) + (msBandH ? 4 + msBandH : 0);
   // qa4-simple-roadmap-16: a phone's waterfall wraps its goals' names and gives each warning a band under its bar.
   const wrapRows = compact && format === "waterfall";
   // The names wrap beside the Current-state pill after them: the pill's width, by item.
