@@ -88,6 +88,11 @@ test.describe("Goal map, desktop", () => {
     const name = page.getByLabel("Goal", { exact: true });
     await expect(name).toBeFocused();
     await name.fill("Sign-ups per rep each day");
+    // The date is asked here (and a measure or target, when the goal lacks one).
+    const measure = page.getByLabel("Measure: the number that shows it");
+    if (!(await measure.inputValue())) await measure.fill("sign-ups per rep per day");
+    const target = page.getByLabel("Target", { exact: true });
+    if (!(await target.inputValue())) await target.fill("40");
     const by = page.getByLabel("By", { exact: true });
     if (!(await by.inputValue())) await by.fill("Dec 31");
     await page.getByRole("button", { name: "Save goal" }).click();
