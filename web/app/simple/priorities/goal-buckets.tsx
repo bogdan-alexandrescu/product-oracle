@@ -584,7 +584,8 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, 
             )}
             {rest > 0 && (
               <>
-                <p className="font-[650]">The other {rest}:</p>
+                {/* qa-nov17 G6: "The other N" only after the ones that go to another goal. */}
+                <p className="font-[650]">{multi.length ? `The other ${rest}:` : "They go:"}</p>
                 <label className="flex flex-wrap items-center gap-2">
                   <input type="radio" name="archive-to" checked={mode === "move"} onChange={() => setMode("move")} className="h-4 w-4 accent-[var(--accent)]" /> <span className="whitespace-nowrap">Move to</span>
                   <select

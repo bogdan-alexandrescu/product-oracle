@@ -3079,7 +3079,8 @@ function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan
     // and own key; never a draft only named as the row (a same-name twin is another feature).
     const rowById = new Map(data.rows.map((r) => [r.feature_id, r]));
     for (const r of data.drafts) {
-      if (!serves(r)) continue;
+      // qa-nov17 G6: a draft the goal's bucket lists (by its goal, as the bucket reads it) is the goal's too.
+      if (!serves(r) && !(r.goal && sameGoal(r.goal.title, title))) continue;
       const row = r.linked && r.row_feature_id ? rowById.get(r.row_feature_id) : undefined;
       add(r.code, r.title, [r.item_id, row?.feature_id], lift(r.goal_ids), row?.own_key ?? undefined, keptKr(r.goal_ids));
     }
