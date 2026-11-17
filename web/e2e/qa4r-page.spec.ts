@@ -129,7 +129,8 @@ test.describe("desktop", () => {
     await format(page, "timeline");
     const listed = page.getByTestId("conflicts").locator('[data-testid="conflict"][data-item="alert-digest"]');
     await expect(listed).toHaveCount(2);
-    await expect(listed.filter({ hasText: warnings[1] })).toBeVisible();
+    // qa-nov17: the broken link is its coded feature, then its reason in the card's words.
+    await expect(listed.filter({ hasText: warnings[1].replace(/^‘Weekly alert digest’ /, "") }).getByRole("button", { name: "F-79 Weekly alert digest" })).toBeVisible();
     // qa-nov17: the end past its milestone is said in words too, after the feature's coded name.
     await expect(listed.filter({ hasText: "after its milestone" })).toBeVisible();
     await openRoadmapItem(page, "alert-digest");

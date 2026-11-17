@@ -166,7 +166,7 @@ for (const [phone, dark] of [
       const skipNext = await understood(chat(page), "skip Setup checklist", "Skip Setup checklist");
       await apply(skipNext);
       await expect(strip).not.toContainText("Setup checklist");
-      expect((await skippedInSheet(page)).sort()).toEqual(["Setup checklist", "Team invite nudges"]);
+      expect((await skippedInSheet(page)).sort()).toEqual(["F-01 Setup checklist", "Team invite nudges"]);
 
       await tap(skipNext.getByRole("button", { name: "Undo" }));
       await expect(skipNext.getByTestId("chat-card-outcome")).toContainText("Undone");

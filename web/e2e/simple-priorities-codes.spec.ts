@@ -94,7 +94,7 @@ const markCodes = chartCodes;
 
 // PR1 (QA Nov 12): a feature with no Ground Truth code shows none on its mark (never made-up letters).
 const CODES: Record<string, string | null> = {
-  "setup-checklist": null,
+  "setup-checklist": "F-01",
   "alert-rules": null,
   "alert-digest": "F-79",
   "alert-mobile": null,
