@@ -114,6 +114,18 @@ test.describe("desktop", () => {
     await expect(labels.getByTestId("not-in-gt").first()).toBeVisible();
     expect(await cutWords(labels, flags)).toEqual([]);
   });
+  test("timeline: no goal milestone diamond or line draws over the names column (#7)", async ({ page }) => {
+    // protects: QA Nov 17 #7: at 3 and 6 months a goal milestone just left of the window in view (Oct 31) draws no diamond over the names header and no line through the row names
+    // fails_when: a goal milestone's diamond or line starts left of the names column's right edge
+    await open(page, "timeline");
+    for (const zoom of ["zoom-3m", "zoom-6m"]) {
+      await page.getByTestId(zoom).click();
+      await expect(page.getByTestId(zoom)).toHaveAttribute("aria-pressed", "true");
+      const head = (await page.getByTestId("timeline-names-head").boundingBox())!;
+      for (const { text, box } of [...(await boxes(page.getByTestId("ms-diamond"))), ...(await boxes(page.getByTestId("ms-line")))])
+        expect(box.x, `${zoom}: ${text || "a milestone line"} lies over the names`).toBeGreaterThanOrEqual(head.x + head.width - 1);
+    }
+  });
 });
 
 test.describe("phone", () => {
