@@ -217,7 +217,10 @@ async def inbox_rows(
         )
     if not rows:
         return []
-    read = await service.load(db)
+    from oracle.simple import drafts
+
+    # qa-nov17: the working draft the person sees, as Needs a decision's count reads it.
+    read = await service.load(db, await drafts.overlays_for(db, principal))
     by_id = read.by_id()
     per_item: dict[uuid.UUID, list[RoadmapDateSuggestion]] = defaultdict(list)
     for s in rows:
