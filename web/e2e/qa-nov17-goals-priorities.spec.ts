@@ -59,3 +59,19 @@ test.describe("Goal map, desktop", () => {
     }
   });
 });
+
+test.describe("Priorities, phone", () => {
+  test.use({ viewport: PHONE });
+
+  test("G7: a Goal buckets row keeps its ✎ and ⋯ on the name's line", async ({ page }) => {
+    // protects: at 390 a bucket row's edit and more buttons sit beside the feature's name
+    // fails_when: ✎ and ⋯ wrap to a line under the name
+    await openPriorities(page, "buckets");
+    const row = page.getByTestId("plan-feature").filter({ has: page.getByTestId("plan-feature-name").filter({ hasText: "Weekly alert digest" }) }).first();
+    const name = (await row.getByTestId("plan-feature-name").boundingBox())!;
+    const more = (await row.getByRole("button", { name: /^More for / }).boundingBox())!;
+    const mid = more.y + more.height / 2;
+    expect(mid).toBeGreaterThanOrEqual(name.y - 4);
+    expect(mid).toBeLessThanOrEqual(name.y + name.height + 4);
+  });
+});
