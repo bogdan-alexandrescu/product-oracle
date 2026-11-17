@@ -429,7 +429,9 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   } else {
     const run = ctx.runs().find((r) => r.id === p[2]);
     if (!run) return json(404, { detail: "Run not found" });
-    root = runItem(run);
+    // qa-nov17 runs 3, as oracle.trash.service._root_said: the run by its day and the document it wrote.
+    const wrote = ctx.documents.find((d) => d.id === run.document_id || d.slug === run.document_slug)?.title ?? null;
+    root = { ...runItem(run), created_at: run.created_at, wrote };
     runs = [run];
   }
   const items = [...docs.map(docItem), ...intakes.map(intakeItem), ...runs.map(runItem)].filter((i) => i.id !== root.id);

@@ -240,10 +240,14 @@ async def test_a_deleted_run_says_its_day_and_what_it_wrote(client, owner, runti
     resp = await client.request("DELETE", f"/v1/runs/{run['id']}", headers=auth)
     assert resp.status_code == 200, resp.text
     [row] = (await client.get("/v1/trash", headers=auth)).json()
-    roadmap = next(d for d in (await client.get("/v1/documents", headers=auth)).json() if d["slug"] == ROADMAP)
+    roadmap = next(
+        d for d in (await client.get("/v1/documents", headers=auth)).json() if d["slug"] == ROADMAP
+    )
     for root in (resp.json()["root"], row["root"]):
         assert root["wrote"] == roadmap["title"]
-        assert datetime.fromisoformat(root["created_at"]) == datetime.fromisoformat(run["created_at"])
+        assert datetime.fromisoformat(root["created_at"]) == datetime.fromisoformat(
+            run["created_at"]
+        )
 
 
 async def test_regenerate_estimate_names_inputs_by_title_and_version_never_slug(
