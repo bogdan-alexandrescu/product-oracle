@@ -65,7 +65,7 @@ test.describe("QA pass 4: simple-plan, phone", () => {
     // build-plan QP1: two headed parts in place of the pills and the divider; the headings wrap, the page does not scroll sideways.
     const heads = page.getByTestId("prio-part-head");
     await expect(heads).toHaveCount(2);
-    await expect(heads.nth(1)).toContainText("Misses Beta");
+    await expect(heads.nth(1)).toContainText(/Misses (M\d+ )?Beta/);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     await expect(page.getByLabel("Ranked list").getByTestId("prio-misses")).toHaveCount(0);
   });

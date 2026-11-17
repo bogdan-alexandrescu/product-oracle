@@ -2119,6 +2119,19 @@ const localDay = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() 
 /** The line inside a sentence: "this quarter", "Nov 20, 2026", "Beta · Dec 4, 2026" (never the picker's "By " or "(Now)"). */
 const lineLabel = (data: Out): string => (!data.line || data.line.kind === "now" ? "this quarter" : data.line.label.replace(/^By /, ""));
 
+/** qa-nov17 G8: the line inside a sentence, a milestone's by its code and name as the Line picker reads it ("M6 Beta · Nov 30, 2026"). */
+function useLineLabel(): (data: Out) => string {
+  const coded = useCodedMilestone();
+  return (data) => {
+    const words = lineLabel(data);
+    const l = data.line;
+    if (!l || l.kind !== "milestone") return words;
+    const at = words.lastIndexOf(" · ");
+    if (at < 0) return words;
+    return `${coded(words.slice(0, at), { id: l.key.startsWith("milestone:") ? l.key.slice("milestone:".length) : null })}${words.slice(at)}`;
+  };
+}
+
 /**
  * A row's goal: the item's, else the plan's (a row the item does not give a goal, but the plan
  * does, each feature under the goal it moves most), as Goal buckets shows it.
@@ -2191,6 +2204,7 @@ function lineSplit(rows: Row[]): number {
  * of its own, each opening the feature's panel (prio-company: never one run-on sentence of names).
  */
 function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }) {
+  const lineWordsOf = useLineLabel();
   const misses = data.rows.filter((r) => !r.above_line);
   const [open, setOpen] = useState(false);
   const openRow = useContext(OpenRow);
@@ -2198,7 +2212,7 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
     <div data-testid="line-caption" className={`mb-2 text-[length:var(--simple-small)] text-text2 ${compact ? "leading-[21px]" : ""}`}>
       <p className="flex flex-wrap items-center gap-x-2">
         <span className="font-medium text-accent-ink">
-          {misses.length} of {data.rows.length} miss {lineLabel(data)}
+          {misses.length} of {data.rows.length} miss {lineWordsOf(data)}
         </span>
         <ScoreTip />
         {misses.length > 0 && (
@@ -2225,32 +2239,34 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
 
 /** A row's own mark when it misses the line; compact (Value/effort's side list, B): a small "Misses" chip, the line in its title. */
 function MissesTag({ data, row, compact = false }: { data: Out; row?: Row; compact?: boolean }) {
+  const lineWordsOf = useLineLabel();
   // qa-simple-plan-27: a feature tagged with the very milestone the line is drawn at misses its own milestone.
   const own = !!row?.milestone && data.line?.kind === "milestone" && data.line.label.split(" · ")[0] === row.milestone;
   if (own && !compact)
     return (
       <span data-testid="prio-misses" data-own="true" className="min-w-0 max-w-full rounded-full bg-crit-bg px-2 text-[length:var(--simple-small)] font-medium text-crit">
-        Misses its own milestone, {lineLabel(data)}
+        Misses its own milestone, {lineWordsOf(data)}
       </span>
     );
   if (compact)
     return (
-      <span data-testid="prio-misses" title={`Misses ${lineLabel(data)}`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
+      <span data-testid="prio-misses" title={`Misses ${lineWordsOf(data)}`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
         Misses
       </span>
     );
   return (
     <span data-testid="prio-misses" className="flex-none whitespace-nowrap rounded-full border border-line-strong bg-surface px-2 text-[length:var(--simple-small)] text-text2">
-      Misses {lineLabel(data)}
+      Misses {lineWordsOf(data)}
     </span>
   );
 }
 /** A part's heading over the ranked list split at a dated line: "Makes Customer conference · Nov 14, 2026 · 1 feature, in rank order". */
 function PartHead({ data, makes, n }: { data: Out; makes: boolean; n: number }) {
+  const lineWordsOf = useLineLabel();
   return (
-    <li data-testid="prio-part-head" aria-label={`${makes ? "Makes" : "Misses"} ${lineLabel(data)}`} className={`flex flex-wrap items-baseline gap-x-2 pt-2 ${makes ? "" : "mt-2 border-t-2 border-accent-ink pt-3"}`}>
+    <li data-testid="prio-part-head" aria-label={`${makes ? "Makes" : "Misses"} ${lineWordsOf(data)}`} className={`flex flex-wrap items-baseline gap-x-2 pt-2 ${makes ? "" : "mt-2 border-t-2 border-accent-ink pt-3"}`}>
       <span className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
-        {makes ? "Makes" : "Misses"} {lineLabel(data)}
+        {makes ? "Makes" : "Misses"} {lineWordsOf(data)}
       </span>
       <span className="text-[length:var(--simple-small)] text-text2" data-testid="prio-part-count">
         {n} {n === 1 ? "feature" : "features"}, in rank order
@@ -2372,13 +2388,14 @@ function EffortEdit({ r, changed }: { r: Row; changed: Changed }) {
 
 /** The divider row, drawn only when every row after it misses the line. */
 function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }) {
+  const lineWordsOf = useLineLabel();
   return (
     <li role="separator" data-testid="line-divider" className={`flex items-center gap-2 text-[length:var(--simple-small)] font-medium text-accent-ink ${compact ? "py-0.5 leading-[21px]" : "py-1"}`}>
       <span aria-hidden className="h-0.5 w-6 flex-none bg-accent-ink" />
       {/* qa-simple-plan-19: "misses it" kept together, so no word is left alone on a line. */}
       {/* qa4-simple-plan-28: one line on a phone (the rest said to screen readers), a rule each side. */}
       <span className="min-w-0 whitespace-nowrap sm:whitespace-normal">
-        The line: {lineLabel(data)}
+        The line: {lineWordsOf(data)}
         <span className="sr-only sm:not-sr-only"> · everything below misses{"\u00a0"}it</span>
       </span>
       <span aria-hidden className="h-0.5 flex-1 bg-accent-ink" />

@@ -190,7 +190,7 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
   test("the move dialog closes on Escape, keeps focus, and a move can go back to Oracle's rank", async ({ page }) => {
     await setUp(page);
     await open(page);
-    const handle = page.getByRole("button", { name: "Drag Setup checklist to reorder" });
+    const handle = page.getByRole("button", { name: "Drag Setup checklist (F-01) to reorder" });
     await handle.focus();
     await page.keyboard.press("ArrowDown");
     const dialog = page.getByRole("dialog", { name: /Why move Setup checklist/ });
@@ -216,7 +216,7 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
     );
     expect(new Set(xs).size).toBe(1);
     await moved.getByRole("button", { name: "Back to Oracle's rank" }).click();
-    await expect(toast(page, "Moved Setup checklist back to Oracle's rank")).toBeVisible();
+    await expect(toast(page, "Moved Setup checklist (F-01) back to Oracle's rank")).toBeVisible();
     await expect(moved.getByTestId("prio-override")).toHaveCount(0);
     await expect(moved.getByTestId("prio-ghost")).toHaveCount(0);
   });
@@ -235,7 +235,7 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
       const b = (await r.getByTestId("prio-goal").boundingBox())!;
       expect(Math.abs(a.y - b.y)).toBeLessThan(6);
     }
-    await dragRow(page, "Setup checklist", 3);
+    await dragRow(page, "Setup checklist (F-01)", 3);
     const dialog = page.getByRole("dialog", { name: /Why move Setup checklist/ });
     await dialog.getByLabel(/Reason/).fill("Setup first");
     await dialog.getByRole("button", { name: "Move" }).click();
@@ -270,7 +270,7 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
       const rankX = await page.getByTestId("prio-rank").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().x)));
       expect(new Set(rankX).size).toBe(1);
     }
-    const handle = page.getByRole("button", { name: "Drag Setup checklist to reorder" });
+    const handle = page.getByRole("button", { name: "Drag Setup checklist (F-01) to reorder" });
     await handle.focus();
     await page.keyboard.press("ArrowDown");
     const dialog = page.getByRole("dialog", { name: /Why move Setup checklist/ });

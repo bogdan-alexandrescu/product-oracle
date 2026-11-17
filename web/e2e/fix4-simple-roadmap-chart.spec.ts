@@ -98,8 +98,9 @@ test.describe("desktop", () => {
     const added = rows.filter({ has: page.locator(`button[title="${title}"]`) });
     await expect(added).toHaveCount(1);
     // A new item is in no Ground Truth feature yet: its title, its Draft tag, and the Not in the
-    // Ground Truth flag (docs/ground-truth.md), never refused.
-    await expect(added.locator("button[title]").first()).toHaveText(/^Push notifications for alerts\s*Draft\s*Not in the Ground Truth$/);
+    // Ground Truth flag (docs/ground-truth.md), never refused. qa-nov17: the names column's flag may read
+    // the short "Not in GT", its full words said to a screen reader.
+    await expect(added.locator("button[title]").first()).toHaveText(/^Push notifications for alerts\s*Draft\s*(Not in GT\s*)?Not in the Ground Truth$/);
   });
 
   test("qa-30: the month axis reads three-letter months, the first in sight with its year", async ({ page }) => {
