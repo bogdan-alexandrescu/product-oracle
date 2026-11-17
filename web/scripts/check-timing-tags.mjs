@@ -82,10 +82,6 @@ function memberClock(of, name, clocks) {
   return name === "bigint" && clockRef(of, clocks)?.name === "hrtime" ? { object: "process", name } : null;
 }
 
-function isClockRef(n, clocks) {
-  return !!clockRef(n, clocks);
-}
-
 /** The clock the call `n` reads, also through .call(), .apply() or .bind()(): { object, name, args }, args being those the clock gets; or null. */
 function calledClock(n, clocks) {
   if (!ts.isCallExpression(n)) return null;
