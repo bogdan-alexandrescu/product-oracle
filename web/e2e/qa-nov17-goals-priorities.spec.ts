@@ -74,4 +74,26 @@ test.describe("Priorities, phone", () => {
     expect(mid).toBeGreaterThanOrEqual(name.y - 4);
     expect(mid).toBeLessThanOrEqual(name.y + name.height + 4);
   });
+
+  test("G9: a ranked row's title keeps its width; the pill drops under it", async ({ page }) => {
+    // protects: at 390 a ranked row's name wraps as words do, never one word per line beside its pill and ⋯
+    // fails_when: a title of three or more words takes more than two lines
+    await openPriorities(page);
+    const rows = page.getByTestId("prio-row").filter({ has: page.getByTestId("prio-name").getByTestId("cs-mark") });
+    await expect(rows.first()).toBeVisible();
+    let checked = 0;
+    for (const r of await rows.all()) {
+      const title = r.getByTestId("prio-title");
+      const words = ((await title.textContent()) ?? "").trim().split(/\s+/).length;
+      if (words < 3) continue;
+      const [height, line] = await title.evaluate((el) => {
+        const cs = getComputedStyle(el);
+        const lh = parseFloat(cs.lineHeight);
+        return [el.getBoundingClientRect().height, Number.isNaN(lh) ? parseFloat(cs.fontSize) * 1.4 : lh];
+      });
+      expect(height, `${await title.textContent()} wraps a word per line`).toBeLessThanOrEqual(line * 2 + 2);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
 });
