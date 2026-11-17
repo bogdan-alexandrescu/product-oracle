@@ -280,6 +280,14 @@ export function ZoomTimeline(props: TimelineProps) {
     ? (data.items.find((i) => i.key === openKey) ?? null)
     : null;
   const side = !phone && !!openItem;
+  // qa-nov17 #9: an item opening in the side panel brings the chart's top into view (as the other
+  // formats do), so the panel opens full height, never a short strip at the foot of the screen.
+  const row = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = row.current;
+    if (!side || !el) return;
+    if (el.getBoundingClientRect().top > 12) el.scrollIntoView({ block: "start" });
+  }, [side, openKey]);
   return (
     // The page reads its chart (and its format) by simple-chart, as the other formats give it.
     <div data-testid="simple-chart" data-format="timeline" data-view="zoom">
@@ -288,7 +296,7 @@ export function ZoomTimeline(props: TimelineProps) {
           <Key data={data} />
         </div>
         <ConflictPanel {...props} onShow={onOpen} />
-        <div className={side ? "flex items-start gap-3" : ""}>
+        <div ref={row} className={`scroll-mt-3 ${side ? "flex items-start gap-3" : ""}`}>
           {/* The chart's bars, date words and today line stack inside its own context (isolate),
            * so they never paint over the item's panel, nor its talk widened over the chart. */}
           <div className="isolate min-w-0 flex-1">
