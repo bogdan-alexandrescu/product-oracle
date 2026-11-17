@@ -137,10 +137,12 @@ test("11: Needs a decision keeps its count in sight and says what it counts behi
   await openTray(page);
   const scope = tray(page).getByTestId("tray-scope");
   await expect(scope).toContainText(/^\d+( here, \d+ in all)? to decide/);
-  await expect(scope).not.toContainText("working draft");
-  await expect(scope).not.toContainText("broken links, dates to confirm");
+  // Its words show only from the (i) (their text is in the page, hidden, until then).
+  await expect.poll(() => scope.innerText()).not.toContain("working draft");
+  await expect.poll(() => scope.innerText()).not.toContain("broken links, dates to confirm");
   await tap(scope.getByRole("button", { name: "About what is counted" }));
-  await expect(page.getByText("In your roadmaps' working drafts: broken links, dates to confirm, proposals, items pulled in and suggested features.")).toBeVisible();
+  await expect(scope.getByRole("tooltip")).toBeVisible();
+  await expect(scope.getByRole("tooltip")).toHaveText("In your roadmaps' working drafts: broken links, dates to confirm, proposals, items pulled in and suggested features.");
 });
 
 test("11: the panel's Oracle suggests block says how Oracle reached its dates behind an (i)", async ({ page }) => {
@@ -149,8 +151,9 @@ test("11: the panel's Oracle suggests block says how Oracle reached its dates be
   await openItem(page, "alert-sso");
   const block = panel(page).getByTestId("card-suggestion");
   await expect(block).toContainText("Oracle suggests");
-  await expect(block).not.toContainText(" days");
-  await expect(block).not.toContainText("It starts");
+  await expect.poll(() => block.innerText()).not.toContain(" days");
+  await expect.poll(() => block.innerText()).not.toContain("It starts");
   await tap(block.getByRole("button", { name: "About Oracle's dates" }));
-  await expect(page.getByText(/^It starts .* runs \d+ days/)).toBeVisible();
+  await expect(block.getByRole("tooltip")).toBeVisible();
+  await expect(block.getByRole("tooltip")).toContainText(/It starts .* runs \d+ days/);
 });
