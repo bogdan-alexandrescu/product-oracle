@@ -27,6 +27,7 @@ import {
   PageHeader,
   Panel,
   Split,
+  toast,
   ViewOnly,
   type Column,
 } from "@/components/ds";
@@ -44,6 +45,8 @@ const ROLES: { role: Role; label: string; can: string }[] = [
   { role: "viewer", label: "Viewer", can: "reads documents, versions, diffs, feedback and exports" },
 ];
 export const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.role, r.label])) as Record<Role, string>;
+/** "an Approver", "a Commenter". */
+const aRole = (role: Role) => `${/^[AEIOU]/.test(ROLE_LABEL[role]) ? "an" : "a"} ${ROLE_LABEL[role]}`;
 const INVITE_FORM = "invite-form";
 const PEOPLE = "people";
 /** A3: the engineering lead is a flag any commenter or above carries, not a fifth role. */
@@ -536,13 +539,28 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           return;
         }
       }
-      replace(await membersApi.patch(m.id, hand_over.length ? { role: next, hand_over } : { role: next }));
+      const updated = await membersApi.patch(m.id, hand_over.length ? { role: next, hand_over } : { role: next });
+      replace(updated);
       setDemoting(null);
+      // qa-nov17: the change says so, with Undo (as Inbox's access approval does).
+      if (updated.role !== m.role) {
+        toast({ message: `${personName(m)} is now ${aRole(updated.role)}`, action: { label: "Undo", onClick: () => void undoRole(m) } });
+      }
     } catch (e) {
       if (demoting) setDemoteError(errorMessage(e));
       else setError(errorMessage(e));
     } finally {
       setSaving(null);
+    }
+  }
+
+  /** Undo from the toast: back to the role `m` had. */
+  async function undoRole(m: Member) {
+    try {
+      replace(await membersApi.patch(m.id, { role: m.role }));
+      toast({ message: `${personName(m)} is ${aRole(m.role)} again` });
+    } catch (e) {
+      setError(errorMessage(e));
     }
   }
 
