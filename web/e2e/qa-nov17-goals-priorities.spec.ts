@@ -46,6 +46,27 @@ test.describe("Priorities, desktop", () => {
 test.describe("Goal map, desktop", () => {
   test.use({ viewport: DESKTOP });
 
+  test("G1: Rename on a goal with no date opens its edit form in Goal buckets, its name in focus", async ({ page }) => {
+    // protects: a goal's ⋯ > Rename on the Goal map, for a goal with no date, opens that goal's ✎ form on Goal buckets
+    // so the date is asked in the same step, and the rename saves
+    // fails_when: Rename edits the name in place and the save is refused ("A goal needs a measure, a target and a date")
+    await login(page);
+    await page.goto("/simple/goals");
+    await expect(page.getByTestId("gm-grid")).toBeVisible();
+    await page.locator('[data-testid^="gm-menu-g-"]').first().click();
+    await page.getByRole("menuitem", { name: "Rename" }).click();
+    await expect(page).toHaveURL(/\/simple\/priorities\?tab=buckets&edit=/);
+    await expect(page.getByRole("heading", { name: "Edit goal" })).toBeVisible();
+    const name = page.getByLabel("Goal", { exact: true });
+    await expect(name).toBeFocused();
+    await name.fill("Sign-ups per rep each day");
+    const by = page.getByLabel("By", { exact: true });
+    if (!(await by.inputValue())) await by.fill("Dec 31");
+    await page.getByRole("button", { name: "Save goal" }).click();
+    await expect(page.getByRole("heading", { name: "Edit goal" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Sign-ups per rep each day" })).toBeVisible();
+  });
+
   test("G5: a chip's milestone line wraps rather than ending in '…'", async ({ page }) => {
     // protects: on the Goal map, each feature chip's milestone words are readable in full (up to two lines)
     // fails_when: a chip's milestone line is cut on one line
