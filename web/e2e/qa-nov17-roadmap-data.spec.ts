@@ -130,3 +130,27 @@ test("2: a dependency that moves a feature's estimate leaves one estimate in its
   await openTray(page);
   await expect(dateRow(page, "Alert routing by team")).toHaveCount(0);
 });
+
+test("11: Needs a decision keeps its count in sight and says what it counts behind an (i)", async ({ page }) => {
+  await login(page);
+  await openRoadmap(page);
+  await openTray(page);
+  const scope = tray(page).getByTestId("tray-scope");
+  await expect(scope).toContainText(/^\d+( here, \d+ in all)? to decide/);
+  await expect(scope).not.toContainText("working draft");
+  await expect(scope).not.toContainText("broken links, dates to confirm");
+  await tap(scope.getByRole("button", { name: "About what is counted" }));
+  await expect(page.getByText("In your roadmaps' working drafts: broken links, dates to confirm, proposals, items pulled in and suggested features.")).toBeVisible();
+});
+
+test("11: the panel's Oracle suggests block says how Oracle reached its dates behind an (i)", async ({ page }) => {
+  await login(page);
+  await openRoadmap(page);
+  await openItem(page, "alert-sso");
+  const block = panel(page).getByTestId("card-suggestion");
+  await expect(block).toContainText("Oracle suggests");
+  await expect(block).not.toContainText(" days");
+  await expect(block).not.toContainText("It starts");
+  await tap(block.getByRole("button", { name: "About Oracle's dates" }));
+  await expect(page.getByText(/^It starts .* runs \d+ days/)).toBeVisible();
+});
