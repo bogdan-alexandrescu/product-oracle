@@ -68,4 +68,23 @@ test.describe("desktop", () => {
       noneMeet("+ Milestone", await boxes(chart.getByTestId("ms-add-hint")), chips);
     });
   }
+  test("timeline: a milestone's label sits beside its own day, and a key date's name is never under a diamond (#4)", async ({ page }) => {
+    // protects: QA Nov 17 #4: at All 3 years each milestone label starts at its own dashed line ("M6 Beta · Nov 30" was drawn five months on, at Apr); at 6 months no key date's name lies under a goal milestone's diamond ("…eting")
+    // fails_when: a label starts more than 30 px from its line, or a key date's name and a diamond overlap
+    await open(page, "timeline");
+    await page.getByTestId("zoom-all").click();
+    await expect(page.getByTestId("zoom-all")).toHaveAttribute("aria-pressed", "true");
+    const labels = page.getByTestId("timeline-milestone").filter({ visible: true });
+    await expect(labels.first()).toBeVisible();
+    for (const l of await labels.all()) {
+      const day = (await l.getAttribute("data-day"))!;
+      expect(day, "a label names its day").toBeTruthy();
+      const line = (await page.locator(`[data-testid="timeline-milestone-line"][data-day="${day}"]`).first().boundingBox())!;
+      const b = (await l.boundingBox())!;
+      expect(Math.abs(b.x - line.x), `${await l.textContent()} sits by its day`).toBeLessThanOrEqual(30);
+    }
+    await page.getByTestId("zoom-6m").click();
+    await expect(page.getByTestId("zoom-6m")).toHaveAttribute("aria-pressed", "true");
+    noneMeet("key date", await boxes(page.getByTestId("timeline-key-date-label")), await boxes(page.getByTestId("ms-diamond")));
+  });
 });
