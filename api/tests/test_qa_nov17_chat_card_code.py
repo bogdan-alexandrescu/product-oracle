@@ -17,8 +17,9 @@ from oracle.simple import chat
 
 
 def entry(code: str | None) -> SimpleNamespace:
-    row = SimpleNamespace(id=uuid.uuid4(), title="Weekly alert digest", start_date=date(2026, 10, 31),
-                          end_date=date(2026, 12, 10), date_source="typed")  # fmt: skip
+    row = SimpleNamespace(id=uuid.uuid4(), title="Weekly alert digest",
+                          start_date=date(2026, 10, 31), end_date=date(2026, 12, 10),
+                          date_source="typed")  # fmt: skip
     day = lambda d: SimpleNamespace(date=d)  # noqa: E731
     resolved = SimpleNamespace(start=day(date(2026, 10, 31)), end=day(date(2026, 12, 10)),
                                undated=False, source="typed")  # fmt: skip
@@ -31,9 +32,8 @@ def ctx(e: SimpleNamespace) -> SimpleNamespace:
 
 def test_change_cards_name_the_item_with_its_code() -> None:
     e = entry("F-06")
-    assert chat._b_horizon(ctx(e), {"item": "Weekly alert digest", "horizon": "next"})["summary"] == (
-        "Move F-06 Weekly alert digest to Next"
-    )
+    moved = chat._b_horizon(ctx(e), {"item": "Weekly alert digest", "horizon": "next"})
+    assert moved["summary"] == "Move F-06 Weekly alert digest to Next"
     moved = chat._b_move(ctx(e), {"item": "Weekly alert digest", "shift": "2 weeks later"})
     assert moved["summary"].startswith("Move F-06 Weekly alert digest to Nov 14 – ")
     # No code: the title alone.

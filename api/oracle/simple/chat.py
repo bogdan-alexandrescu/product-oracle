@@ -646,7 +646,7 @@ def _b_horizon(c: Ctx, a: dict[str, Any]) -> Built:
     h = _need(a, "horizon").lower()
     if h not in ("now", "next", "later"):
         raise ValueError("horizon: now, next or later")
-    return _kw(f"Move {e.row.title} to {h.capitalize()}", "change_horizon", e,
+    return _kw(f"Move {_talk().label(e)} to {h.capitalize()}", "change_horizon", e,
                {"item_id": str(e.row.id)}, {"horizon": e.horizon}, {"horizon": h},
                {"kind": "horizon", "item_id": str(e.row.id), "horizon": h})  # fmt: skip
 
@@ -676,7 +676,7 @@ def _b_move(c: Ctx, a: dict[str, Any]) -> Built:
         start = day
         end = start + timedelta(days=29 if r.undated else length)
     s, en = start.isoformat(), end.isoformat()
-    card = _kw(f"Move {e.row.title} to {_day_words(start)} – {_day_words(end, True)}",
+    card = _kw(f"Move {_talk().label(e)} to {_day_words(start)} – {_day_words(end, True)}",
                "move_dates", e, {"item_id": str(e.row.id)}, _dates(e),
                {"start_date": s, "end_date": en},
                {"kind": "dates", "item_id": str(e.row.id), "start_date": s,
