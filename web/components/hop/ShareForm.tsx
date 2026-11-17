@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useFeatureStates } from "@/components/current-state/CurrentState";
 import { Button } from "@/components/ds";
@@ -20,15 +20,19 @@ export function ShareForm({ id, onShared, onCancel }: { id: string; onShared: (i
   const states = useFeatureStates();
   const read = !!states.data || !!states.error;
   const features = useMemo(() => (states.data?.features ?? []).map((f) => named(f.title, f.code)), [states.data]);
+  // qa-leftovers: the box is filled once, as it opens; a read again later (the features or the
+  // answer) never wipes what the person has typed since.
+  const filled = useRef(false);
   useEffect(() => {
-    if (!read) return;
+    if (!read || filled.current) return;
     let live = true;
     Promise.all([
       unwrap(api.GET("/v1/discussions/{discussion_id}", { params: { path: { discussion_id: id } } })),
       unwrap(api.GET("/v1/discussions/{discussion_id}/messages", { params: { path: { discussion_id: id }, query: { limit: 200 } } })),
     ])
       .then(([d, page]) => {
-        if (!live) return;
+        if (!live || filled.current) return;
+        filled.current = true;
         const lastReply = [...page.items].reverse().find((m) => m.author_kind === "oracle" && m.body && !m.deleted);
         setTitle(d.title);
         // ask-phone QA row 1: the first message is everyone's to read, so Oracle's raw citation

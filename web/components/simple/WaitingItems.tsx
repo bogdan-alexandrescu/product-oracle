@@ -258,6 +258,13 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
           ) : (
             <Named item={{ code, title: item.title }} />
           )}
+          {/* qa-leftovers: a row holding more than one broken link says how many, as the count above it counts links. */}
+          {breaks.length > 1 && (
+            <span className="text-text2" data-testid="waiting-links">
+              {" "}
+              · {breaks.length} links
+            </span>
+          )}
           {/* simple-home-qa-nov14 #1: a roadmap item with no code is flagged, never hidden. */}
           {ref && <NotInGt item={ref} />}
           {/* port-AN 5: the row's why sits in its (i), so the one list stays one line a row. */}
