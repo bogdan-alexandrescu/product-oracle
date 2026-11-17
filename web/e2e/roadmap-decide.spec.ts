@@ -421,10 +421,11 @@ test("under a filter, Needs a decision says N here, M in all on one basis, and 1
   await page.getByTestId("needs-decision").click();
   const scope = tray(page).getByTestId("tray-scope");
   // The whole count is every roadmap the reader sees, and says so.
-  const m = /^(\d+) here, (\d+) in all to decide in your roadmaps' working drafts/.exec(await scope.innerText());
+  const m = /^(\d+) here, (\d+) in all to decide/.exec(await scope.innerText());
   expect(m).not.toBeNull();
   // No roadmap is chosen: the sentence counts every roadmap's draft, never "this roadmap's" too.
-  await expect(scope).toContainText("in your roadmaps' working drafts");
+  // qa-nov17: said behind the scope's (i).
+  await expect(scope).toContainText("In your roadmaps' working drafts");
   await expect(scope).not.toContainText("this roadmap's working draft");
   const tiles = await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts();
   // The tiles count what the filters show "of" the whole roadmap's (QA Nov 14 #7): their wholes add up to the "in all"
@@ -481,12 +482,12 @@ test("Needs a decision names this roadmap's draft only when one roadmap is chose
   await open(page);
   await page.getByTestId("needs-decision").click();
   const scope = tray(page).getByTestId("tray-scope");
-  await expect(scope).toContainText("in your roadmaps' working drafts");
+  await expect(scope).toContainText("In your roadmaps' working drafts");
   await expect(scope).not.toContainText("this roadmap's working draft");
   await tray(page).getByRole("button", { name: "Close" }).click();
   await page.getByTestId("filter-roadmap").selectOption({ label: "Alerts roadmap" });
   await page.getByTestId("needs-decision").click();
-  await expect(scope).toContainText("in this roadmap's working draft");
+  await expect(scope).toContainText("In this roadmap's working draft");
   await expect(scope).not.toContainText("your roadmaps");
 });
 

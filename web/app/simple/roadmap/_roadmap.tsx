@@ -865,7 +865,11 @@ function DecisionTray({
       <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
         {/* Review: under a filter, every kind on one basis: what these filters show, and the whole roadmap's. */}
         {/* Review: "this roadmap's" only when one roadmap is chosen; else every roadmap's draft is counted. */}
-        {whole !== here ? `${here} here, ${whole} in all` : whole} to decide {oneRoadmap ? "in this roadmap's working draft" : "in your roadmaps' working drafts"}: broken links, dates to confirm, proposals, items pulled in and suggested features.
+        {whole !== here ? `${here} here, ${whole} in all` : whole} to decide{" "}
+        {/* qa-nov17: where and what is counted, behind the (i). */}
+        <InfoTip label="what is counted" align="start" testId="tray-scope-tip">
+          {oneRoadmap ? "In this roadmap's working draft" : "In your roadmaps' working drafts"}: broken links, dates to confirm, proposals, items pulled in and suggested features.
+        </InfoTip>
         {allLinks !== undefined && allLinks !== counts.links && (
           <span data-testid="tray-links-here">
             {" "}

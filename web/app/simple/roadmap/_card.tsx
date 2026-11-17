@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { Button, confirmInPage, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { FeatureName } from "@/components/simple/FeatureName";
+import { InfoTip } from "@/components/ds/InfoTip";
 import { useFitViewport } from "@/lib/fit-viewport";
 import { FlowPanel, subjectOf, type FlowSubject } from "@/components/simple/FlowVisual";
 import { FlowDiagram, Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
@@ -372,8 +373,16 @@ export function SuggestionBody({
           </>
         )}
         Oracle suggests {yearSpan(s.start_date, s.end_date)}
+        {/* qa-nov17: how Oracle reached these dates, behind the (i). */}
+        {s.basis && (
+          <>
+            {" "}
+            <InfoTip label="Oracle's dates" align="start" testId="suggestion-basis-tip">
+              {s.basis}
+            </InfoTip>
+          </>
+        )}
       </p>
-      <p className="mt-1 text-sm text-text2">{s.basis}</p>
       {editing ? (
         <form
           className="mt-2 flex flex-wrap items-end gap-2"

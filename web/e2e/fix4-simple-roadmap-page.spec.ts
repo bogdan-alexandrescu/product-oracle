@@ -57,7 +57,9 @@ test.describe("desktop", () => {
     await expect(tiles).toHaveCount(5);
     const sum = (await tiles.locator("b").allTextContents()).reduce((s, t) => s + Number(t), 0);
     expect(sum).toBe(n);
-    await expect(tray.getByTestId("tray-scope")).toContainText(`${n} to decide in your roadmaps' working drafts`);
+    // qa-nov17: the count in sight, where it counts behind the (i).
+    await expect(tray.getByTestId("tray-scope")).toContainText(`${n} to decide`);
+    await expect(tray.getByTestId("tray-scope")).toContainText("In your roadmaps' working drafts");
     await expect(tray.getByTestId("tray-broken").filter({ hasText: "Team invite nudges" })).toHaveCount(0);
     await expect(tray.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" })).toHaveCount(1);
     await expect(tray.getByTestId("tray-flag").filter({ hasText: "Team invite nudges" })).toBeVisible();
