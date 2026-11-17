@@ -18,7 +18,7 @@ export function LowConfidence() {
  * Inline citation: shows the source; the shared card (#304) shows its title, date, excerpt
  * and link on hover, focus or tap. The chip is excluded from comment anchoring text.
  */
-export function CitationChip({ citeKey, citation, number }: { citeKey: string; citation?: CitationOut; number?: number }) {
+export function CitationChip({ citeKey, citation, number, bare = false }: { citeKey: string; citation?: CitationOut; number?: number; bare?: boolean }) {
   if (!citation) {
     return (
       <span {...{ [IGNORE_ATTR]: "" }} className="cite-chip cite-chip-missing" title={`Unknown citation ${citeKey}`}>
@@ -44,7 +44,8 @@ export function CitationChip({ citeKey, citation, number }: { citeKey: string; c
           .join(", ")}
         trigger={
           <>
-            {SOURCE_LABEL[citation.source]}
+            {/* `bare`: the number alone in running text (a discussion reply, qa-nov17 ask 3); the card names the source. */}
+            {!(bare && number != null) && SOURCE_LABEL[citation.source]}
             {number != null && <span className="tnum text-text2">{number}</span>}
           </>
         }
