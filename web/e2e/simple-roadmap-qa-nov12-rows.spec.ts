@@ -53,7 +53,9 @@ test.describe("desktop", () => {
     await rules.scrollIntoViewIfNeeded();
     await expect(rules.getByTestId("timeline-row-name")).toHaveText(/^Alert rules engine/);
     await expect(rules.getByTestId("not-in-gt")).toBeVisible();
-    await expect(rules.getByTestId("not-in-gt")).toHaveText(NOT_IN_GT);
+    // qa-nov17 #8: the names column's flag reads "Not in GT", its full words in its title.
+    await expect(rules.getByTestId("not-in-gt")).toHaveAttribute("title", NOT_IN_GT);
+    await expect(rules.getByTestId("not-in-gt")).toContainText(NOT_IN_GT);
   });
 
   test("the Today pill leaves when today scrolls out of the 3 months' view", async ({ page }) => {

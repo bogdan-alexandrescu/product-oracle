@@ -40,10 +40,12 @@ function Mark({ t }: { t: Track }) {
 }
 
 /** A track band's header (`stack`: the Gantt's two lines, the goal under the name). */
-export function TrackHead({ data, laneKey, title, stack = false }: { data: Roadmap; laneKey: string; title: string; stack?: boolean }) {
+export function TrackHead({ data, laneKey, title, stack = false, wrap = false }: { data: Roadmap; laneKey: string; title: string; stack?: boolean; wrap?: boolean }) {
   const t = (data.tracks ?? []).find((x) => x.id === laneKey);
-  if (!t) return <span className={`truncate font-semibold ${stack ? "text-[15px] leading-[18px]" : ""}`}>{title}</span>;
-  const name = <span className="truncate font-semibold">{t.title}</span>;
+  // qa-nov17 #5: `wrap` (a phone's Gantt): the name wraps whole in its taller row, never cut.
+  const cut = wrap ? "min-w-0 whitespace-normal break-words" : "truncate";
+  if (!t) return <span className={`${cut} font-semibold ${stack ? (wrap ? "text-sm leading-[16px]" : "text-[15px] leading-[18px]") : ""}`}>{title}</span>;
+  const name = <span data-testid="track-name" className={`${cut} font-semibold`}>{t.title}</span>;
   const prds = t.prds.map((p) => p.title).join(", ");
   const words = `${t.title}${t.goal_name ? ` · ${t.goal_name}` : ""} ${t.health === "on_track" ? "✓ On track" : "⚠ Needs a look"}`;
   const nameTip = (
@@ -64,11 +66,11 @@ export function TrackHead({ data, laneKey, title, stack = false }: { data: Roadm
   if (stack)
     return (
       <>
-        <span data-testid="track-head" data-words={words} className="pointer-events-auto flex min-w-0 items-center gap-1.5 text-[15px] leading-[18px]">
+        <span data-testid="track-head" data-words={words} className={`pointer-events-auto flex min-w-0 items-center gap-1.5 ${wrap ? "text-sm leading-[16px]" : "text-[15px] leading-[18px]"}`}>
           {nameTip}
           {health}
         </span>
-        {t.goal_name && <span className="truncate text-xs leading-[15px] text-text2">{t.goal_name}</span>}
+        {t.goal_name && <span className={`${cut} text-xs leading-[15px] text-text2`}>{t.goal_name}</span>}
       </>
     );
   return (

@@ -7,6 +7,8 @@ import { Chip } from "@/components/ds/Chip";
 
 /** The words of the flag a feature with no Ground Truth code carries. */
 export const NOT_IN_GT = "Not in the Ground Truth";
+/** qa-nov17 #5/#8: the flag's short words where a narrow column would cut the long ones (whole in its title). */
+export const NOT_IN_GT_SHORT = "Not in GT";
 
 /** A feature's code chip, then its name: "F-12 Alert rules engine". */
 export function Named({ item }: { item: { code?: string | null; title: string } }) {
@@ -22,12 +24,20 @@ export function Named({ item }: { item: { code?: string | null; title: string } 
  * The flag a feature with no Ground Truth code carries: the Roadmap's warn chip, on every page.
  * Given an item, it shows only when the item has no code.
  */
-export function NotInGt({ item, className = "ml-1.5 h-5! px-2! text-xs!" }: { item?: { code?: string | null }; className?: string }) {
+export function NotInGt({ item, className = "ml-1.5 h-5! px-2! text-xs!", short = false }: { item?: { code?: string | null }; className?: string; short?: boolean }) {
   if (item?.code) return null;
   return (
-    <Chip kind="warn" className={`shrink-0 ${className}`} title={NOT_IN_GT} data-testid="not-in-gt">
-      {/* A narrow row may cut the words (its title keeps them whole). */}
-      <span className="truncate">{NOT_IN_GT}</span>
+    <Chip kind="warn" className={`shrink-0 ${className}`} title={NOT_IN_GT} data-testid="not-in-gt" data-short={short ? "" : undefined}>
+      {short ? (
+        // qa-nov17 #5/#8: a names column's flag is whole in short words, never cut; read in full.
+        <>
+          <span aria-hidden>{NOT_IN_GT_SHORT}</span>
+          <span className="sr-only">{NOT_IN_GT}</span>
+        </>
+      ) : (
+        // A narrow row may cut the words (its title keeps them whole).
+        <span className="truncate">{NOT_IN_GT}</span>
+      )}
     </Chip>
   );
 }

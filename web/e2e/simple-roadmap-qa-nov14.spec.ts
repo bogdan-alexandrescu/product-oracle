@@ -58,7 +58,10 @@ test.describe("desktop", () => {
     // fails_when: a name is cut to "Te…" while the "Not in the Ground Truth" tag stays whole
     await open(page, "timeline");
     await expect(row(page, "setup-ideas")).toBeVisible();
-    const cut = await page.$$eval('[data-testid="timeline-row-name"]', (els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent));
+    // qa-nov17 #8: a name is cut only to keep its row's flags whole ("Draft", "Not in GT").
+    const cut = await page.$$eval('[data-testid="timeline-row-name"]', (els) =>
+      els.filter((e) => e.scrollWidth > e.clientWidth + 1 && !e.parentElement?.querySelector('[data-testid="not-in-gt"], [data-testid="draft-tag"]')).map((e) => e.textContent),
+    );
     expect(cut).toEqual([]);
     await expect(row(page, "setup-ideas").getByTestId("timeline-row-name")).toHaveText("Team invite nudges");
     await expect(row(page, "setup-ideas").getByTestId("not-in-gt")).toHaveAttribute("title", NOT_IN_GT);

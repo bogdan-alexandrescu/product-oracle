@@ -1449,7 +1449,8 @@ const TimelineRow = memo(function TimelineRow({
           )}
           {/* QA Nov 12 #1: the code before the name (F-06 Weekly alert digest), cut as the name was. */}
           {/* QA Nov 14 #1: the name has the row first, whole; the tags after it are cut instead. */}
-          <span data-testid="timeline-row-name" className="max-w-full shrink-0 truncate" style={lk.name}>
+          {/* qa-nov17 #8: its flags stay whole ("Draft", "Not in GT"); a long name is cut instead, whole in the row's title. */}
+          <span data-testid="timeline-row-name" className="max-w-full min-w-0 shrink truncate" style={lk.name}>
             {itemName(i)}
             {/* panel-menu: a merged feature says where it went, by code and name as its panel does. */}
             {i.merged_into && <span data-testid="row-merged" className="ml-1 text-text2">· Merged into {mergedName(i, (id) => byId.get(id))}</span>}
@@ -1458,7 +1459,7 @@ const TimelineRow = memo(function TimelineRow({
             <span
               data-testid="draft-tag"
               title={lk.chip}
-              className="min-w-0 shrink truncate rounded-full bg-surface2 px-1.5 text-[11px] text-text2"
+              className="flex-none rounded-full bg-surface2 px-1.5 text-[11px] text-text2"
             >
               {lk.chip}
             </span>
@@ -1469,7 +1470,7 @@ const TimelineRow = memo(function TimelineRow({
             </span>
           )}
           {/* QA Nov 12 #2: an item with no Ground Truth code says so on its row (small, after its name). */}
-          <NotInGt item={i} className="h-[18px]! min-w-0 shrink! px-1.5! text-[11px]!" />
+          <NotInGt item={i} short className="h-[18px]! px-1.5! text-[11px]!" />
         </button>
         <div className="relative" style={{ width: trackW }}>
           <div
