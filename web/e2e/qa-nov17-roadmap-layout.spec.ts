@@ -36,6 +36,11 @@ async function boxes(l: Locator): Promise<{ text: string; box: Box }[]> {
   return out;
 }
 
+/** No two of these boxes overlap ("Board meeting" and "M6 Beta" drawn on each other). */
+function apart(a: { text: string; box: Box }[]) {
+  for (const [i, x] of a.entries()) for (const y of a.slice(i + 1)) expect(meets(x.box, y.box), `"${x.text}" lies on "${y.text}"`).toBe(false);
+}
+
 function noneMeet(what: string, a: { text: string; box: Box }[], b: { text: string; box: Box }[]) {
   for (const x of a) for (const y of b) expect(meets(x.box, y.box), `${what}: "${x.text}" lies on "${y.text}"`).toBe(false);
 }
@@ -69,6 +74,7 @@ test.describe("desktop", () => {
       expect(names.length).toBeGreaterThan(0);
       noneMeet("Today pill", await boxes(chart.getByTestId("today-pill")), names);
       noneMeet("same-day count", await boxes(chart.getByTestId("ms-same-day")), names);
+      apart(names);
       const chips = [
         ...(await boxes(chart.getByTestId("ms-label"))),
         ...(await boxes(chart.getByTestId("ms-prd-label"))),
@@ -183,7 +189,20 @@ test.describe("phone", () => {
     await expect(chart.getByTestId("ms-diamond").first()).toBeVisible();
     const names = [...(await boxes(chart.getByTestId("key-date-label"))), ...(await boxes(chart.getByTestId("track-milestone-label"))), ...(await boxes(chart.getByTestId("milestone-end-label")))];
     expect(names.length).toBeGreaterThan(0);
-    const chips = [...(await boxes(chart.getByTestId("ms-label"))), ...(await boxes(chart.getByTestId("ms-prd-label"))), ...(await boxes(chart.getByTestId("ms-band-more"))), ...(await boxes(chart.getByTestId("ms-diamond")))];
+    const chips = [...(await boxes(chart.getByTestId("ms-label"))), ...(await boxes(chart.getByTestId("ms-prd-label"))), ...(await boxes(chart.getByTestId("ms-band-more"))), ...(await boxes(chart.getByTestId("ms-same-day"))), ...(await boxes(chart.getByTestId("ms-diamond")))];
     noneMeet("header name", names, chips);
   });
+  for (const format of ["gantt", "waterfall"] as const) {
+    test(`${format}: the header's names keep off each other and the same-day counts (#3)`, async ({ page }) => {
+      // protects: QA Nov 17 #3: on a 390 px phone no same-day count is drawn on a key date's name ("Board mee❷g") and no two of the header's names overlap
+      // fails_when: a same-day count and a header name, or two header names, overlap
+      await open(page, format);
+      const chart = page.getByTestId("simple-chart");
+      await expect(chart.getByTestId("ms-same-day").first()).toBeVisible();
+      const names = [...(await boxes(chart.getByTestId("key-date-label"))), ...(await boxes(chart.getByTestId("track-milestone-label"))), ...(await boxes(chart.getByTestId("milestone-end-label")))];
+      expect(names.length).toBeGreaterThan(0);
+      apart(names);
+      noneMeet("same-day count", await boxes(chart.getByTestId("ms-same-day")), names);
+    });
+  }
 });
