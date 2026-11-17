@@ -290,6 +290,16 @@ export function usePendingPoll(
     );
     return () => window.clearTimeout(timer);
   }, [pending, thread]);
+  // spent-pool: a line failed on a spent pool is read once more when its window clears (it then offers Retry).
+  const clears = thread?.messages.reduce((at, m) => (m.retry_after ? Math.min(at, Date.parse(m.retry_after)) : at), Infinity) ?? Infinity;
+  useEffect(() => {
+    if (clears === Infinity) return;
+    // Never sooner than a pending poll (a clock ahead of the API's would read it in a loop), and
+    // a delay past setTimeout's ~24.8 days is capped: that read then schedules the rest.
+    const wait = Math.min(Math.max(clears - Date.now(), PENDING_POLL_MS), 2 ** 31 - 1);
+    const timer = window.setTimeout(() => void latest.current(), wait);
+    return () => window.clearTimeout(timer);
+  }, [clears, thread]);
 }
 
 /**

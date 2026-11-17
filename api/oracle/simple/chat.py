@@ -1240,7 +1240,7 @@ async def thread(
                 at=(r.answered_at if r is not None and r.answered_at else m.created_at),
                 kind=kind,  # type: ignore[arg-type]
                 cards=by_msg.get(m.id, []), reply_to=m.reply_to, choices=choices,
-                picked=r.picked if r is not None else None, retry=retry,
+                picked=r.picked if r is not None else None, retry=retry, retry_after=spent_until,
                 source=_talk().source_label(m.citations),
                 links=_talk().links_of(m.citations),
                 live_reads=[x for x in m.citations or []

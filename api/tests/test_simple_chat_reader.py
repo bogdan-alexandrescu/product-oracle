@@ -37,11 +37,12 @@ Test cards (protects / fails_when / no_claim):
 - test_a_spent_pool_says_until_when_with_no_retry: protects=a read that failed because
   every Claude account was spent (the job's error_reason and next_reset_at) says until
   when, month first in the company's zone (the year only when not this year), with no
-  Retry (a retry is refused); fails_when=it shows the generic line, offers Retry or an
-  ISO time.
+  Retry (a retry is refused), and serves when the window clears (retry_after, so an open
+  thread reads itself again then); fails_when=it shows the generic line, offers Retry, an
+  ISO time or no retry_after.
 - test_a_cleared_window_or_another_failure_keeps_the_generic_line: protects=once the
-  window has cleared, or for any other failure, the generic line with Retry;
-  fails_when=a cleared or other failure loses Retry.
+  window has cleared, or for any other failure, the generic line with Retry and no
+  retry_after; fails_when=a cleared or other failure loses Retry.
 - test_reader_roles_in_a_meeting: protects=in a meeting the reader's cards follow the
   change mode and gesture rules per role (owner and decider apply, approver and commenter
   propose); a viewer's free-form change gets the viewer note and no card;
@@ -344,6 +345,7 @@ async def test_a_spent_pool_says_until_when_with_no_retry(client, monkeypatch, r
     m = await last(client, ctx, "owner")
     assert m["kind"] == "failed" and m["retry"] is False
     assert m["body"] == f"Oracle's Claude accounts are used up until {words}."
+    assert datetime.fromisoformat(m["retry_after"]) == resets
     r = await client.post(f"/v1/simple/chat/messages/{m['id']}/retry", headers=ctx.as_("owner"))
     assert r.status_code == 409
 
@@ -365,6 +367,7 @@ async def test_a_cleared_window_or_another_failure_keeps_the_generic_line(client
     m = await last(client, ctx, "owner")
     assert m["kind"] == "failed" and m["retry"] is True
     assert m["body"] == "I couldn't read that just now."
+    assert m["retry_after"] is None
 
 
 MAY = {"owner": "apply", "decider": "apply", "approver": "propose", "commenter": "propose"}

@@ -19809,6 +19809,8 @@ export interface components {
              * @default false
              */
             retry: boolean;
+            /** Retry After */
+            retry_after?: string | null;
             /** Source */
             source?: string | null;
             /** Links */
