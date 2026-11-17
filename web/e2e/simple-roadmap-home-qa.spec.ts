@@ -131,7 +131,8 @@ test.describe("desktop", () => {
     const breaks = group.getByTestId("conflict");
     await expect(breaks).toHaveCount(2);
     await expect(breaks.first()).toContainText("starts");
-    await expect(breaks.nth(1).getByTestId("conflict-why")).toBeVisible();
+    // qa-nov17: its reason in words, after the feature's coded name, as the first's.
+    await expect(breaks.nth(1)).toContainText("after its milestone");
     expect(await group.locator("ul").first().evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe("2px");
     const [a, b] = [(await breaks.first().boundingBox())!, (await breaks.nth(1).boundingBox())!];
     expect(b.y).toBeGreaterThanOrEqual(a.y + a.height - 1);

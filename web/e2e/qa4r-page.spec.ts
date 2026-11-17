@@ -130,10 +130,8 @@ test.describe("desktop", () => {
     const listed = page.getByTestId("conflicts").locator('[data-testid="conflict"][data-item="alert-digest"]');
     await expect(listed).toHaveCount(2);
     await expect(listed.filter({ hasText: warnings[1] })).toBeVisible();
-    const why = listed.getByTestId("conflict-why");
-    await why.hover();
-    await expect(page.getByRole("tooltip").filter({ hasText: warnings[0] })).toBeVisible();
-    await page.mouse.move(0, 0);
+    // qa-nov17: the end past its milestone is said in words too, after the feature's coded name.
+    await expect(listed.filter({ hasText: "after its milestone" })).toBeVisible();
     await openRoadmapItem(page, "alert-digest");
     const flags = page.getByTestId("item-panel").getByTestId("card-flags");
     for (const w of warnings) await expect(flags).toContainText(w);
