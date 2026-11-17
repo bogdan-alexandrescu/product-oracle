@@ -42,3 +42,20 @@ test.describe("Priorities, desktop", () => {
     }
   });
 });
+
+test.describe("Goal map, desktop", () => {
+  test.use({ viewport: DESKTOP });
+
+  test("G5: a chip's milestone line wraps rather than ending in '…'", async ({ page }) => {
+    // protects: on the Goal map, each feature chip's milestone words are readable in full (up to two lines)
+    // fails_when: a chip's milestone line is cut on one line
+    await login(page);
+    await page.goto("/simple/goals");
+    const lines = page.getByTestId("gm-chip-ms");
+    await expect(lines.first()).toBeVisible();
+    for (const l of await lines.all()) {
+      const cut = await l.evaluate((el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1);
+      expect(cut, `${await l.textContent()} is cut`).toBe(false);
+    }
+  });
+});
