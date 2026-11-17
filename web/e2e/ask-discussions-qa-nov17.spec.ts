@@ -83,7 +83,6 @@ test("2: a solo open discussion shows no Ask Oracle box beside Oracle will reply
 // (the source is in its card); fails_when=the chip carries the source's name ("Oracle Ground
 // Truth 1") or a space is left before it; no_claim=the card's contents.
 test("3: a discussion reply's citation is a small number after the word", async ({ page }) => {
-  await page.setViewportSize(PHONE);
   await login(page, "commenter@example.com");
   await page.goto("/documents/annual-billing/v/2");
   await openSection(page, "problem");
@@ -113,16 +112,26 @@ test("4: a closed discussion shows Closed, not Open beside it", async ({ page })
 });
 
 // protects=finding 5 (mock): Ask's change card names the feature with its code; fails_when="Move
-// Weekly alert digest to Next". finding 6: an undone card shows no warning; fails_when=a
-// warning shows on the Undone card; no_claim=which warnings an open card shows.
-test("5 and 6: the move card names the feature with its code, and once undone shows no warning", async ({ page }) => {
+// Weekly alert digest to Next"; no_claim=the API (pytest).
+test("5: the move card names the feature with its code", async ({ page }) => {
+  await page.setViewportSize(DESKTOP);
+  await login(page);
+  await page.goto("/simple/roadmap");
+  const panel = await openAsk(page);
+  await send(panel, "move Weekly alert digest to next");
+  await expect(panel.getByTestId("chat-card").last().getByTestId("chat-card-summary")).toHaveText(/^Move F-\d+ Weekly alert digest to Next$/, { timeout: 15_000 });
+});
+
+// protects=finding 6: an undone card shows no warning; fails_when=a warning shows on the Undone
+// card; no_claim=which warnings an open card shows.
+test("6: an undone move card shows no warning", async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await login(page);
   await page.goto("/simple/roadmap");
   const panel = await openAsk(page);
   await send(panel, "move Weekly alert digest to next");
   const card = panel.getByTestId("chat-card").last();
-  await expect(card.getByTestId("chat-card-summary")).toHaveText(/^Move F-\d+ Weekly alert digest to Next$/, { timeout: 15_000 });
+  await expect(card.getByTestId("chat-card-summary")).toContainText("Weekly alert digest to Next", { timeout: 15_000 });
   await card.getByRole("button", { name: "Apply", exact: true }).click();
   await expect(card).toHaveAttribute("data-status", "applied");
   await card.getByRole("button", { name: "Undo this change" }).click();
