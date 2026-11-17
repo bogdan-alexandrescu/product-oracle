@@ -40,6 +40,17 @@ function noneMeet(what: string, a: { text: string; box: Box }[], b: { text: stri
   for (const x of a) for (const y of b) expect(meets(x.box, y.box), `${what}: "${x.text}" lies on "${y.text}"`).toBe(false);
 }
 
+/** The flags and names in `scope` that clip their words ("Not in the Ground …", "D…", "Usage alerts t…"). */
+async function cutWords(scope: Locator, selector: string): Promise<string[]> {
+  return scope.evaluate(
+    (root, sel) =>
+      [...root.querySelectorAll<HTMLElement>(sel)]
+        .filter((e) => !e.classList.contains("sr-only") && e.getClientRects().length > 0 && e.clientWidth > 0 && getComputedStyle(e).overflowX !== "visible" && e.scrollWidth > e.clientWidth + 1)
+        .map((e) => e.textContent ?? ""),
+    selector,
+  );
+}
+
 test.describe("desktop", () => {
   test.use(DESKTOP);
 
@@ -86,5 +97,43 @@ test.describe("desktop", () => {
     await page.getByTestId("zoom-6m").click();
     await expect(page.getByTestId("zoom-6m")).toHaveAttribute("aria-pressed", "true");
     noneMeet("key date", await boxes(page.getByTestId("timeline-key-date-label")), await boxes(page.getByTestId("ms-diamond")));
+  });
+  test("timeline and gantt: the names column's flags read whole (#8)", async ({ page }) => {
+    // protects: QA Nov 17 #8: in the Timeline's names column "Draft" and the Not in the Ground Truth flag are never cut ("D…", "Not in the Grou…"), the flag keeps its full words in its title; the Gantt's rows, Below the line too, keep the flag whole
+    // fails_when: a Draft tag or a flag clips its words
+    await open(page, "timeline");
+    const rows = page.getByTestId("timeline-row");
+    await expect(rows.first()).toBeVisible();
+    const flag = page.locator('[data-testid="timeline-row"] [data-testid="not-in-gt"]').first();
+    await expect(flag).toHaveAttribute("title", "Not in the Ground Truth");
+    const flags = '[data-testid="not-in-gt"], [data-testid="not-in-gt"] *, [data-testid="draft-tag"]';
+    expect(await cutWords(page.locator("body"), flags.split(", ").map((x) => `[data-testid="timeline-row"] ${x}`).join(", "))).toEqual([]);
+    await page.getByTestId("format-gantt").click();
+    await expect(page.getByTestId("format-gantt")).toHaveAttribute("aria-pressed", "true");
+    const labels = page.getByTestId("chart-labels");
+    await expect(labels.getByTestId("not-in-gt").first()).toBeVisible();
+    expect(await cutWords(labels, flags)).toEqual([]);
+  });
+});
+
+test.describe("phone", () => {
+  test.use(PHONE);
+
+  test("gantt: band names, flags and chips read whole and each row holds its words (#5)", async ({ page }) => {
+    // protects: QA Nov 17 #5: on a 390 px phone the Gantt's band names wrap whole ("Usage alerts t…" was cut), the Not in the Ground Truth flag reads whole in short words with its full words in its title, a row's name and badges stay inside the row, and the Today pill lies on no header name
+    // fails_when: a band name or flag clips its words, a row's words run into the next row, or the Today pill covers a name
+    await open(page, "gantt");
+    const labels = page.getByTestId("chart-labels");
+    await expect(labels.getByTestId("chart-label").first()).toBeVisible();
+    expect(await cutWords(labels, '[data-testid="track-head"] *, [data-testid="not-in-gt"], [data-testid="not-in-gt"] *, [data-testid="draft-tag"]')).toEqual([]);
+    await expect(labels.getByTestId("not-in-gt").first()).toHaveAttribute("title", "Not in the Ground Truth");
+    for (const row of await labels.getByTestId("chart-label").all()) {
+      const box = (await row.boundingBox())!;
+      const inner = await row.evaluate((el) => [...el.querySelectorAll<HTMLElement>("*")].filter((e) => e.getClientRects().length > 0).map((e) => e.getBoundingClientRect().bottom));
+      expect(Math.max(...inner), `${await row.textContent()} stays in its row`).toBeLessThanOrEqual(box.y + box.height + 1);
+    }
+    const chart = page.getByTestId("simple-chart");
+    const names = [...(await boxes(chart.getByTestId("key-date-label"))), ...(await boxes(chart.getByTestId("track-milestone-label"))), ...(await boxes(chart.getByTestId("milestone-end-label")))];
+    noneMeet("Today pill", await boxes(chart.getByTestId("today-pill")), names);
   });
 });
