@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { useFeatureStates } from "@/components/current-state/CurrentState";
 import { Button } from "@/components/ds";
 import { InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap } from "@/lib/api/client";
-import { stripRawTokens } from "@/lib/raw-tokens";
+import { named } from "@/lib/codes";
+import { plainText } from "@/lib/raw-tokens";
 import { errorMessage } from "@/lib/use-query";
 
 /** Share as discussion (G7 3.1): the chat's summary, edited, opens an open discussion on the same subject. */
@@ -14,7 +16,12 @@ export function ShareForm({ id, onShared, onCancel }: { id: string; onShared: (i
   const [text, setText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // qa-nov17 ask 1: the features, so each one the answer names reads with its code ("F-06 Weekly alert digest").
+  const states = useFeatureStates();
+  const read = !!states.data || !!states.error;
+  const features = useMemo(() => (states.data?.features ?? []).map((f) => named(f.title, f.code)), [states.data]);
   useEffect(() => {
+    if (!read) return;
     let live = true;
     Promise.all([
       unwrap(api.GET("/v1/discussions/{discussion_id}", { params: { path: { discussion_id: id } } })),
@@ -25,14 +32,14 @@ export function ShareForm({ id, onShared, onCancel }: { id: string; onShared: (i
         const lastReply = [...page.items].reverse().find((m) => m.author_kind === "oracle" && m.body && !m.deleted);
         setTitle(d.title);
         // ask-phone QA row 1: the first message is everyone's to read, so Oracle's raw citation
-        // tokens ("[c:1]") are not carried into it.
-        setText(stripRawTokens(d.summary ?? lastReply?.body ?? ""));
+        // tokens ("[c:1]") are not carried into it; nor its markdown ("**", "###", qa-nov17 ask 1).
+        setText(plainText(d.summary ?? lastReply?.body ?? "", features));
       })
       .catch((e) => live && setError(errorMessage(e)));
     return () => {
       live = false;
     };
-  }, [id]);
+  }, [id, read, features]);
   const post = async () => {
     if (!text?.trim()) return;
     setBusy(true);

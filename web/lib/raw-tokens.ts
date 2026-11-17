@@ -57,6 +57,31 @@ export function stripRawTokens(text: string): string {
   return out.replace(OPENER, "");
 }
 
+/** A feature as an answer names it: its name, and its code when it has one ("F-06"). */
+export type CodedName = { name: string; code: string | null };
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * qa-nov17 ask 1: an answer's small markdown as the plain text a person's message is: no
+ * raw marker and no "**", a "### Goal" line as "Goal:", a "- x" line as "• x", and each
+ * feature named after its code ("F-06 Weekly alert digest") where the words do not say it.
+ */
+export function plainText(text: string, features: CodedName[] = []): string {
+  const out = stripRawTokens(text)
+    .replace(/\*\*/g, "")
+    .replace(/^[ \t]*#{1,6}[ \t]+(.*?)[ \t#]*$/gm, (_, h: string) => (!h || /[:.?!]$/.test(h) ? h : `${h}:`))
+    .replace(/^([ \t]*)[-*+][ \t]+/gm, "$1• ");
+  const coded = new Map(features.filter((f) => f.code && f.name.trim().length >= 3).map((f) => [f.name.trim(), f.code!]));
+  if (!coded.size) return out;
+  const alts = [...coded.keys()].sort((a, b) => b.length - a.length).map(escapeRe).join("|");
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts})(?![\\p{L}\\p{N}])`, "gu");
+  return out.replace(re, (name: string, at: number, all: string) => {
+    const code = coded.get(name)!;
+    return new RegExp(`(?<![\\p{L}\\p{N}-])${escapeRe(code)}[ \\t]*$`, "u").test(all.slice(0, at)) ? name : `${code} ${name}`;
+  });
+}
+
 const opt = (s: string | null | undefined) => (s == null ? s : stripRawTokens(s));
 
 type Flow = Schemas["SimpleFlow"];
