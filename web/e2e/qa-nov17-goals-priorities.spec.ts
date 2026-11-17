@@ -27,6 +27,14 @@ test.describe("Priorities, desktop", () => {
     await expect(pill).toHaveText(/^Exists · checked [A-Z][a-z]{2} \d{1,2}(, \d{4})?$/);
   });
 
+  test("G8: the Beta milestone reads by its code and name on the Ranked list and its Line picker", async ({ page }) => {
+    // protects: one milestone has one name: "M<n> Beta" on a ranked row's chip and in the Line picker, as the roadmap reads it
+    // fails_when: the chip reads "Milestone Beta" or the picker "Milestone: Beta · …" with no code
+    await openPriorities(page);
+    await expect(page.getByTestId("prio-milestone").filter({ hasText: "Beta" }).first()).toHaveText(/^M\d+ Beta$/);
+    await expect(page.locator("#prio-line option").filter({ hasText: /Beta · / }).first()).toHaveText(/^Milestone: M\d+ Beta · [A-Z][a-z]{2} \d{1,2}, \d{4}$/);
+  });
+
   test("G4: a Value / effort mark names its feature on hover; the side list's names are not cut", async ({ page }) => {
     // protects: a mark showing only its code ("F-06") carries the code with the name as its tooltip, and the side list's
     // names wrap rather than end in "…"
