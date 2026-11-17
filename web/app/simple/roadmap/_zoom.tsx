@@ -601,6 +601,8 @@ function DayChart(props: TimelineProps) {
   // the diamonds that would cut it (while it stays inside the chart), and a label that would
   // cut the one before folds into that one's "+N" chip, as the 3 months' crowded labels do.
   const needOf = (words: string) => (fit ? Math.min(16 + words.length * 7, MS_FIT_W) : 56);
+  // qa-nov17 #4: where not even its code and name fit beside its day, its bare diamond (named in its tip), never a cut label.
+  const dotOnly = (bare: boolean, short: string, room: number) => bare || (fit && room < needOf(short));
   const marks = (data.milestones ?? [])
     .filter((m) => m.date && m.status !== "dropped" && m.date >= t0 && m.date <= t1)
     .sort((a, b) => (a.date as string).localeCompare(b.date as string))
@@ -1069,10 +1071,10 @@ function DayChart(props: TimelineProps) {
                 onBlur={() => setMsTip(null)}
                 onClick={(e) => openMs(m.id, e.currentTarget)}
                 className="min-w-0 cursor-pointer overflow-hidden rounded-full border border-line bg-surface px-2 text-xs leading-4 text-ellipsis whitespace-nowrap text-text hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
-                style={{ maxWidth: room < Infinity && !bare ? room : undefined }}
+                style={{ maxWidth: room < Infinity && !dotOnly(bare, short, room) ? room : undefined }}
               >
                 {/* QA Nov 12 #8: never "M1 B…" at All 3 years: its code and name where its words would be cut. */}
-                {bare ? "◆" : fit && room < needOf(words) ? short : words}
+                {dotOnly(bare, short, room) ? "◆" : fit && room < needOf(words) ? short : words}
               </button>
               {more.length > 0 && (
                 <div className="group relative flex-none">
