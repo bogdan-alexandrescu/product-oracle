@@ -139,7 +139,7 @@ test.describe("desktop", () => {
     // protects: QA Nov 17 #12: with Filters > Goal = Grow retention the Timeline's milestone band lists only milestones building toward Grow retention, and the board's milestone chips narrow with the rows; the key dates stay
     // fails_when: a milestone of another goal still shows under the Goal filter, or the board keeps every milestone chip
     await open(page, "board");
-    const chips = page.getByTestId("ms-board-track");
+    const chips = page.getByTestId("ms-board-chip");
     await expect(chips.first()).toBeVisible();
     const before = await chips.count();
     const keys = await page.getByTestId("ms-board-key").count();

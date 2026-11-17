@@ -35,8 +35,8 @@ async function closePanel(page: Page) {
 
 async function setDates(page: Page, start: string, end: string) {
   await tap(panel(page).getByRole("button", { name: "Change the dates" }));
-  await panel(page).getByLabel("Start").fill(start);
-  await panel(page).getByLabel("End").fill(end);
+  await panel(page).getByLabel("Start", { exact: true }).fill(start);
+  await panel(page).getByLabel("End", { exact: true }).fill(end);
   await tap(panel(page).getByRole("button", { name: "Save" }));
   await expect(panel(page).getByTestId("card-dates-kind")).toHaveText("Set here");
 }
