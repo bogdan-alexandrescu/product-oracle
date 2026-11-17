@@ -379,7 +379,6 @@ async def test_dismissing_a_slice_dismisses_the_item(client):
         assert {x.status for x in await s.scalars(select(RoadmapDateSuggestion))} == {"dismissed"}
 
 
-
 async def test_undo_a_dismissal_reopens_the_item(client):
     """Home QA #6: the "Not this" toast's Undo reopens what the dismissal closed (every
     slice of the item), and the roadmap shows the suggestion again."""
@@ -407,6 +406,7 @@ async def test_undo_a_dismissal_reopens_the_item(client):
     assert item["suggestion"] is not None
     r = await client.post(f"{url}/reopen", headers=ctx.as_("owner"))
     assert r.status_code == 409, r.text
+
 
 PROSE_ANSWER = {
     "milestones": [

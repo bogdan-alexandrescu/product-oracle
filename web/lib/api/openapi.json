@@ -43836,6 +43836,59 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/roadmap/date-suggestions/{suggestion_id}/reopen": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Reopen Date Suggestion",
+        "description": "Undo a dismissal: the suggestion is open again (409 when it is not dismissed).",
+        "operationId": "reopen_date_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Suggestion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateSuggestionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/roadmap/milestones": {
       "post": {
         "tags": [

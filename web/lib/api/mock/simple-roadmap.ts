@@ -2471,12 +2471,23 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     if (me.role !== "owner" && me.role !== "approver") return json(403, { detail: "Requires the approver role" });
     return json(200, { open: regenerate(db, today) });
   }
-  // D-b: accept and edit are changes (./simple-changes.ts routes them); dismiss is here.
-  if (m !== "POST" || !p[4] || p[5] !== "dismiss") return null;
+  // D-b: accept and edit are changes (./simple-changes.ts routes them); dismiss and its Undo (reopen) are here.
+  if (m !== "POST" || !p[4] || (p[5] !== "dismiss" && p[5] !== "reopen")) return null;
   const s = db.suggestions.find((x) => x.id === p[4]);
   const item = s && visibleItems(db, me.role).find((x) => db.ids[x.key] === s.item_id);
   if (!s || !item) return json(404, { detail: "No such date suggestion" });
   if (!canDecideItem(db, item, me)) return json(403, { detail: "Only an owner or the roadmap's decider (with no decider, its owner) decides date suggestions" });
+  if (p[5] === "reopen") {
+    // As the API: every slice the same dismissal closed (same person, same moment) opens again.
+    if (s.status !== "dismissed") return json(409, { detail: `This suggestion is ${s.status}, not dismissed` });
+    const rows = db.suggestions.filter(
+      (x) => x === s || (s.slice_code != null && x.item_id === s.item_id && x.status === "dismissed" && x.slice_code != null && x.decided_by === s.decided_by && x.decided_at === s.decided_at),
+    );
+    const keys = new Set(rows.map((x) => x.slice_code ?? ""));
+    if (db.suggestions.some((x) => x.item_id === s.item_id && x.status === "open" && keys.has(x.slice_code ?? ""))) return json(409, { detail: "The item has an open date suggestion again" });
+    for (const x of rows) Object.assign(x, { status: "open", decided_by: null, decided_at: null });
+    return json(200, { ...s, can_decide: true });
+  }
   if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
   const at = new Date(mockNowMs()).toISOString();
   // As the API: dismissing a planned item's row dismisses every open slice of the item.

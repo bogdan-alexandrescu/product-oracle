@@ -199,6 +199,9 @@ function datesReason(item: Item): string {
   return `${datesFrom(item)}. Set dates here to override them.`;
 }
 
+/** Home QA #6: an estimate that is only its horizon's window (no suggestion, no picked quarter). */
+const windowOnly = (item: Item): boolean => item.estimated && !item.suggestion && !item.picked_quarter;
+
 /** Which the dates are: set here, from a date source, or Oracle's estimate. */
 function datesKind(item: Item): string {
   if (item.estimated) return "Oracle's estimate";
@@ -419,9 +422,15 @@ export function PanelFields({
         canChange={canChange}
         value={
           <>
-            {/* simple-home-qa-nov14 #4, roadmap-dates: Oracle's one estimate, its suggested span when it has one (the item's own dates). */}
-            {yearSpan(item.start.date, item.end.date)} ·{" "}
-            <span data-testid="card-dates-kind">{datesKind(item)}</span>{" "}
+            {/* simple-home-qa-nov14 #4, roadmap-dates: Oracle's one estimate, its suggested span when it has one (the item's own dates);
+                Home QA #6: only its horizon's window is no dates yet ("Later · no dates yet"). */}
+            {windowOnly(item) ? (
+              <span data-testid="card-dates-kind">{HORIZON_WORDS[item.horizon]} · no dates yet</span>
+            ) : (
+              <>
+                {yearSpan(item.start.date, item.end.date)} · <span data-testid="card-dates-kind">{datesKind(item)}</span>
+              </>
+            )}{" "}
             {/* QA Nov 12 #10: the circled (i) every other why on the page uses. */}
             <InfoTip label="these dates" align="start" testId="card-dates-why">
               {datesReason(item)}
