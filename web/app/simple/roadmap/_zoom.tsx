@@ -266,6 +266,8 @@ const MS_CHIP_W = 30;
 const MS_FIT_W = 180;
 /** Short of All 3 years, a label steps at most this far (px) past its day to clear the diamonds. */
 const MS_FIT_STEP = 120;
+/** qa-nov17 #4: how far (px) a label may sit right of its day at All 3 years: beside its own line. */
+const MS_BESIDE = 24;
 const fullDay = (d: string) => calendarDay(d, { month: "short", day: "numeric", year: "numeric" });
 const ROW_H = 34;
 
@@ -593,12 +595,20 @@ function DayChart(props: TimelineProps) {
       const words = `◆ ${joinedWords(m, joined)} · ${shortDay(m.date as string)}`;
       // At All 3 years the whole chart is in sight (no slide can lose a label), so a label steps
       // past a row of diamonds (one a month) as far as it needs to read whole, inside the chart.
-      const whole = fit ? clear(at, needOf(words)) : null;
-      const need = whole != null && whole + 4 + needOf(words) <= trackW ? needOf(words) : 56;
-      const left = whole != null && need > 56 ? whole : near(fit ? at : Math.max(at, sl));
+      // qa-nov17 #4: a label stays beside its own day, never stepping on to another date's (at All 3
+      // years "M6 Beta · Nov 30" was drawn at Apr): with no room there, its line keeps a bare
+      // diamond chip, its words in its tip and its card.
+      const step = fit ? clear(at, needOf(words)) : null;
+      const whole = step != null && step - at <= MS_BESIDE ? step : null;
+      const need0 = whole != null && whole + 4 + needOf(words) <= trackW ? needOf(words) : 56;
+      const base = fit ? at : Math.max(at, sl);
+      const left0 = whole != null && need0 > 56 ? whole : near(base);
+      const bare = left0 - base > (fit ? MS_BESIDE : MS_FIT_STEP);
+      const left = bare ? base - 8 : left0;
+      const need = bare ? 16 : need0;
       const next = [...gems, ...(pill ? [pill[0] + 12] : [])].sort((a, b) => a - b).find((g) => g - 12 >= left + 4);
       // A label too short for its words at All 3 years keeps its code and name ("M1 Beta"), its day in its tip.
-      return { m, at, words, short: joinedWords(m, joined), left, need, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
+      return { m, at, words, short: joinedWords(m, joined), bare, left, need, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
     });
   const msGroups: { head: (typeof marks)[number]; more: (typeof marks)[number][]; room: number }[] = [];
   for (const k of marks) {
@@ -617,6 +627,8 @@ function DayChart(props: TimelineProps) {
   // past the milestone labels and the Today pill; with no room near its day, its diamond alone.
   const taken: [number, number][] = msGroups.map(({ head, more, room }) => [head.left + 4, head.left + 4 + Math.min(head.need, room) + (more.length ? MS_CHIP_W : 0)]);
   if (pill) taken.push(pill);
+  // qa-nov17 #4: nor under a goal milestone's diamond ("…eting").
+  for (const g of gems) taken.push([g - 8, g + 8]);
   const keyMarks = drawnKeyDates(data)
     .filter((k) => k.date >= t0 && k.date <= t1 && (fit || x(k.date) >= sl))
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -1022,7 +1034,7 @@ function DayChart(props: TimelineProps) {
               />
             ) : null,
           )}
-          {msGroups.map(({ head: { m, left, words, short }, more, room }) => (
+          {msGroups.map(({ head: { m, left, words, short, bare }, more, room }) => (
             <div
               key={m.id}
               // QA Nov 12 #8: a same-day count (the band's) keeps clear of a label and its chip.
@@ -1033,6 +1045,7 @@ function DayChart(props: TimelineProps) {
               <button
                 type="button"
                 data-testid="timeline-milestone"
+                data-day={m.date}
                 aria-label={msWords(m)}
                 aria-expanded={msCard === m.id}
                 onPointerEnter={(e) => setMsTip({ id: m.id, left: labelW + left + 4, top: 42 + (e.currentTarget.offsetHeight - 18) })}
@@ -1041,10 +1054,10 @@ function DayChart(props: TimelineProps) {
                 onBlur={() => setMsTip(null)}
                 onClick={(e) => openMs(m.id, e.currentTarget)}
                 className="min-w-0 cursor-pointer overflow-hidden rounded-full border border-line bg-surface px-2 text-xs leading-4 text-ellipsis whitespace-nowrap text-text hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
-                style={{ maxWidth: room < Infinity ? room : undefined }}
+                style={{ maxWidth: room < Infinity && !bare ? room : undefined }}
               >
                 {/* QA Nov 12 #8: never "M1 B…" at All 3 years: its code and name where its words would be cut. */}
-                {fit && room < needOf(words) ? short : words}
+                {bare ? "◆" : fit && room < needOf(words) ? short : words}
               </button>
               {more.length > 0 && (
                 <div className="group relative flex-none">

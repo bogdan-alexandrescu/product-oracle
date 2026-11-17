@@ -48,6 +48,11 @@ test("#8: at All 3 years a milestone's label reads its code and name whole, and 
   const labels = page.getByTestId("timeline-milestone");
   await expect(labels.first()).toBeVisible();
   for (const l of await labels.all()) {
+    // qa-nov17 #4: one with no room beside its own day is its bare diamond, named in its tip.
+    if ((await l.textContent())?.trim() === "◆") {
+      await expect(l).toHaveAttribute("aria-label", /^M\d+ \S/);
+      continue;
+    }
     await expect(l).toContainText(/M\d+ \S/);
     expect(await l.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `${await l.textContent()} is whole`).toBe(true);
   }
