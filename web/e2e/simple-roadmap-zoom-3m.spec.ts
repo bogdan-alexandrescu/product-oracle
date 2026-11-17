@@ -122,7 +122,8 @@ function readsWhole(scheme: "light" | "dark") {
     await open(page, scheme);
     const head = page.getByTestId("timeline-names-head");
     // By name: the Goal map's milestones are numbered on this roadmap too, so Beta's code is not M1.
-    const label = page.getByTestId("timeline-milestone").filter({ hasText: /M\d+ Beta/ });
+    // qa-nov17 #4: by its accessible name, as at All a label with no room beside its day is its bare diamond.
+    const label = page.getByTestId("timeline-milestone").and(page.getByRole("button", { name: /^M\d+ Beta, / }));
     // The label reads whole: all of it between the names column and the chart's right edge.
     const clear = async (z: string) => {
       const h = (await head.boundingBox())!;
@@ -132,7 +133,8 @@ function readsWhole(scheme: "light" | "dark") {
       expect(b.x + b.width).toBeLessThanOrEqual(v.x + v.width);
       // roadmap-milestone-codes: its roadmap code first. QA Nov 12 #8: at All 3 years, where its
       // words have no room, it keeps its code and name ("M1 Beta"), never "M1 B…".
-      await expect(label).toHaveText(z === "all" ? /^(◆ M\d+ Beta · Nov 30|M\d+ Beta)$/ : /^◆ M\d+ Beta · Nov 30$/);
+      // qa-nov17 #4: or, with not even that room beside its day, its bare diamond (named in its tip).
+      await expect(label).toHaveText(z === "all" ? /^(◆ M\d+ Beta · Nov 30|M\d+ Beta|◆)$/ : /^◆ M\d+ Beta · Nov 30$/);
       // The "+ Milestone" hint on the axis keeps off it.
       const hint = page.getByTestId("ms-add-hint");
       if (await hint.isVisible()) {
