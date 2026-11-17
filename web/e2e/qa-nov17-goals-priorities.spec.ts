@@ -33,7 +33,7 @@ test.describe("Priorities, desktop", () => {
     // fails_when: the mark has no title naming the feature, or a side-list name is cut
     await openPriorities(page, "value-effort");
     const mark = page.getByTestId("vxe-point").filter({ has: page.getByTestId("vxe-name").filter({ hasText: "Weekly alert digest" }) });
-    await expect(mark).toHaveAttribute("title", "F-06 Weekly alert digest");
+    await expect(mark).toHaveAttribute("title", "F-79 Weekly alert digest");
     const names = page.getByTestId("side-row").getByTestId("prio-title");
     await expect(names.first()).toBeVisible();
     for (const n of await names.all()) {
@@ -65,6 +65,24 @@ test.describe("Goal map, desktop", () => {
     await page.getByRole("button", { name: "Save goal" }).click();
     await expect(page.getByRole("heading", { name: "Edit goal" })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Sign-ups per rep each day" })).toBeVisible();
+  });
+
+  test("G2: a feature's panel from the Goal map places it in one of its goal's milestones", async ({ page }) => {
+    // protects: Milestone > Change in the panel opened from a Goal map chip saves a milestone the picker offers
+    // fails_when: the save is refused with "That milestone is not on this item's roadmap."
+    await login(page);
+    await page.goto("/simple/goals");
+    await expect(page.getByTestId("gm-grid")).toBeVisible();
+    await page.getByTestId("gm-chip").filter({ hasText: "Rep call script hints" }).first().getByRole("button").first().click();
+    const panel = page.getByTestId("floating-card");
+    await expect(panel).toBeVisible();
+    await panel.getByRole("button", { name: "Change the milestone" }).click();
+    const picker = panel.getByLabel("Milestone", { exact: true });
+    const option = picker.locator("option").filter({ hasText: /^M1 25 sign-ups per rep/ }).first();
+    await picker.selectOption((await option.getAttribute("value"))!);
+    await panel.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("That milestone is not on this item's roadmap.")).toHaveCount(0);
+    await expect(panel.getByTestId("card-milestone")).toContainText("25 sign-ups per rep");
   });
 
   test("G5: a chip's milestone line wraps rather than ending in '…'", async ({ page }) => {
