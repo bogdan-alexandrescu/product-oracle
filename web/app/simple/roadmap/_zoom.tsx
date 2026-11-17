@@ -25,7 +25,6 @@ import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { InfoTip } from "@/components/ds/InfoTip";
 import { addMonths, calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
-import { LINK_KINDS } from "@/lib/roadmap-links";
 
 import { FixButtons, fixCount, type Act } from "./_card";
 import {
@@ -332,6 +331,15 @@ export function ZoomTimeline(props: TimelineProps) {
   );
 }
 
+/** qa-nov17: a broken link's words after its feature's coded name: its own name dropped from
+ * their front, the other features they name by code and name ("‘F-12 Alert rules engine’"). */
+export function shortReason(i: Item, f: Flag, items: ReadonlyMap<string, Item>): string {
+  const own = `‘${i.title}’ `;
+  let r = f.reason.startsWith(own) ? f.reason.slice(own.length) : f.reason;
+  for (const o of items.values()) if (o.id !== i.id && o.code && r.includes(`‘${o.title}’`)) r = r.replace(`‘${o.title}’`, `‘${itemName(o)}’`);
+  return r;
+}
+
 /** QR3 A: the broken links in a panel of their own above the chart (the Timeline's and the
  * Waterfall's), each with its words in full and its three fixes; Hide folds it to one line. */
 export function ConflictPanel({
@@ -365,27 +373,15 @@ export function ConflictPanel({
         data-item={i.key}
         className={`flex px-3 py-2 ${stacked ? "flex-col gap-1" : "flex-wrap items-center gap-3"}`}
       >
-        {LINK_KINDS.includes(f.kind) ? (
-          <button
-            type="button"
-            onClick={() => onShow(i.key)}
-            className={`text-left text-sm text-text hover:underline ${stacked ? "" : "min-w-[16rem] flex-1"}`}
-          >
-            {f.reason}
-          </button>
-        ) : (
-          // Pre-demo QA S-5: an end past its milestone counts here too; its feature's name
-          // shows, its sentence behind the (i) (no visible prose).
-          <span className={`flex items-center gap-1 text-sm text-text ${stacked ? "" : "min-w-[16rem] flex-1"}`}>
-            <button type="button" onClick={() => onShow(i.key)} className="text-left hover:underline">
-              {itemName(i)}
-            </button>
-            <InfoTip label={itemName(i)} align="start" testId="conflict-why">
-              {/* QA Nov 12 #5: the milestone by its code and name ("M1 Beta"). */}
-              {codedFlag(i, f, data.goal_milestones, data.milestones).reason}
-            </InfoTip>
-          </span>
-        )}
+        {/* qa-nov17: every row one form: the feature by its code and name (it opens it), then its
+            reason in short words, other features by code too; an end past its milestone (pre-demo
+            QA S-5) is said as a link is. QA Nov 12 #5: the milestone by its code and name ("M1 Beta"). */}
+        <span className={`text-sm text-text ${stacked ? "" : "min-w-[16rem] flex-1"}`}>
+          <button type="button" onClick={() => onShow(i.key)} className="text-left font-semibold hover:underline">
+            {itemName(i)}
+          </button>{" "}
+          {shortReason(i, codedFlag(i, f, data.goal_milestones, data.milestones), byId)}
+        </span>
         <div className="max-w-full min-w-0">
           <FixButtons
             item={i}
@@ -635,24 +631,25 @@ function DayChart(props: TimelineProps) {
   // past the milestone labels and the Today pill; with no room near its day, its diamond alone.
   const taken: [number, number][] = msGroups.map(({ head, more, room }) => [head.left + 4, head.left + 4 + Math.min(head.need, room) + (more.length ? MS_CHIP_W : 0)]);
   if (pill) taken.push(pill);
-  // qa-nov17 #4: nor under a goal milestone's diamond ("…eting").
-  for (const g of gems) taken.push([g - 8, g + 8]);
+  // qa-nov17 #4: a name never lies under a goal milestone's diamond ("…eting"); its own small
+  // diamond may sit by one.
+  const under: [number, number][] = gems.map((g) => [g - 8, g + 8]);
   const keyMarks = drawnKeyDates(data)
     .filter((k) => k.date >= t0 && k.date <= t1 && (fit || x(k.date) >= sl))
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((k) => {
       const at = x(k.date);
       const need = Math.min(24 + k.name.length * 7.5, 160);
-      const free = (a0: number, b0: number) => taken.every(([a, b]) => b + 2 <= a0 || a - 2 >= b0);
+      const free = (a0: number, b0: number, also: [number, number][] = []) => [...taken, ...also].every(([a, b]) => b + 2 <= a0 || a - 2 >= b0);
       let l = at + 2;
-      for (const [a, b] of [...taken].sort((p, q) => p[0] - q[0])) if (b + 2 > l && a - 2 < l + need) l = b + 2;
+      for (const [a, b] of [...taken, ...under].sort((p, q) => p[0] - q[0])) if (b + 2 > l && a - 2 < l + need) l = b + 2;
       let w = need;
       if (l - at > 140 || l + need > trackW) {
         // Else on its day, cut ("Customer conf…", whole in its tip) to the room before the next label.
         l = at + 2;
-        w = Math.min(need, trackW - l, ...taken.filter(([a]) => a >= l).map(([a]) => a - 4 - l));
+        w = Math.min(need, trackW - l, ...[...taken, ...under].filter(([a]) => a >= l).map(([a]) => a - 4 - l));
       }
-      const named = w >= 60 && free(l, l + w);
+      const named = w >= 60 && free(l, l + w, under);
       // Its diamond alone where its name has no room; none over another label or the Today pill.
       const gem = !named && free(at - 6, at + 6);
       if (named) taken.push([l, l + w]);
