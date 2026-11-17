@@ -373,7 +373,7 @@ export function TaskRow({
           {code}
         </span>
       )}{" "}
-      <span data-testid="plan-feature-name" className="min-w-[10rem] flex-1">
+      <span data-testid="plan-feature-name" className="min-w-[10rem] flex-1 max-sm:min-w-0 max-sm:basis-0">
         {onOpen || feature ? (
           <button type="button" data-testid="plan-feature-open" data-feature={feature} title={`Open ${name}`} className="text-left hover:underline" onClick={onOpen}>
             {name}

@@ -85,7 +85,7 @@ test.describe("Goal map, desktop", () => {
     await page.getByRole("menuitem", { name: "Rename" }).click();
     await expect(page).toHaveURL(/\/simple\/priorities\?tab=buckets&edit=/);
     await expect(page.getByRole("heading", { name: "Edit goal" })).toBeVisible();
-    const name = page.getByLabel("Goal", { exact: true });
+    const name = page.getByRole("textbox", { name: "Goal", exact: true });
     await expect(name).toBeFocused();
     await name.fill("Sign-ups per rep each day");
     // The date is asked here (and a measure or target, when the goal lacks one).

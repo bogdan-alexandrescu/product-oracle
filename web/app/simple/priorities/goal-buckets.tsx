@@ -167,6 +167,18 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
   const [left, setLeft] = useState<Partial<Record<keyof Fields, boolean>>>({});
   const leave = (k: keyof Fields) => () => setLeft((x) => (x[k] ? x : { ...x, [k]: true }));
   const lacks = (k: keyof Fields, missing: boolean) => !!left[k] && missing;
+  // qa-nov17 G1: opened from a link (Rename on the Goal map), the page's own load takes focus after
+  // autoFocus; the name takes it back once the page has settled, in view.
+  const nameEl = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      const n = nameEl.current;
+      if (!n || document.activeElement === n || n.form?.contains(document.activeElement)) return;
+      n.focus();
+      n.scrollIntoView({ block: "center" });
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, []);
   return (
     <form
       data-testid="goal-form"
@@ -199,7 +211,7 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
         <span className="text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal {order} in the order; change it in the Ground Truth</span>
       </div>
       <Field label="Goal" error={lacks("title", !f.title.trim()) ? "Name the goal." : undefined} now={now.title}>
-        <textarea autoFocus rows={f.title.length > 60 ? 2 : 1} value={f.title} onChange={set("title")} onBlur={leave("title")} className={`${INPUT} h-auto py-1.5`} />
+        <textarea ref={nameEl} autoFocus rows={f.title.length > 60 ? 2 : 1} value={f.title} onChange={set("title")} onBlur={leave("title")} className={`${INPUT} h-auto py-1.5`} />
       </Field>
       <Field label="Measure: the number that shows it" error={lacks("measure", !f.measure.trim()) ? "Add a measure." : undefined} now={now.measure}>
         <input value={f.measure} onChange={set("measure")} onBlur={leave("measure")} placeholder="For example: repeat orders a month" className={lacks("measure", !f.measure.trim()) ? BAD : INPUT} />
