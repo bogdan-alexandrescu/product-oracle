@@ -135,6 +135,23 @@ test.describe("desktop", () => {
     await expect(panel).toBeVisible();
     await expect.poll(async () => (await panel.boundingBox())!.y).toBeLessThan(300);
   });
+  test("timeline and board: a Goal filter shows that goal's milestones only, key dates kept (#12)", async ({ page }) => {
+    // protects: QA Nov 17 #12: with Filters > Goal = Grow retention the Timeline's milestone band lists only milestones building toward Grow retention, and the board's milestone chips narrow with the rows; the key dates stay
+    // fails_when: a milestone of another goal still shows under the Goal filter, or the board keeps every milestone chip
+    await open(page, "board");
+    const chips = page.getByTestId("ms-board-track");
+    await expect(chips.first()).toBeVisible();
+    const before = await chips.count();
+    const keys = await page.getByTestId("ms-board-key").count();
+    await page.getByRole("combobox", { name: "Goal", exact: true }).selectOption({ label: "Grow retention" });
+    await expect.poll(() => chips.count()).toBeLessThan(before);
+    await expect(page.getByTestId("ms-board-key")).toHaveCount(keys);
+    await page.getByTestId("format-timeline").click();
+    await expect(page.getByTestId("format-timeline")).toHaveAttribute("aria-pressed", "true");
+    const labels = page.getByTestId("ms-label");
+    await expect(labels.first()).toBeAttached();
+    for (const l of await labels.all()) await expect(l).toHaveAttribute("aria-label", /Builds toward Grow retention$/);
+  });
 });
 
 test.describe("phone", () => {
