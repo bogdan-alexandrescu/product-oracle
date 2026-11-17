@@ -287,7 +287,7 @@ export default function SimpleHome() {
       const r = await questionActions.decide(q, a, true);
       // Only when it can be undone: otherwise the toast says it and the row goes as on any list.
       if (r && r.change.status !== "proposed" && r.change.can_undo) {
-        const label = [r.words, me?.name, meetingMoment(new Date().toISOString(), zone)].filter(Boolean).join(" · ");
+        const label = [r.words, me?.name, meetingMoment(new Date().toISOString(), zone, true)].filter(Boolean).join(" · ");
         setDecidedHere((d) => [...d.filter((x) => x.id !== q.id), { ...q, column: "decided", chosen: r.words, decided_label: label, undo_id: r.change.id }]);
       }
       return r;
