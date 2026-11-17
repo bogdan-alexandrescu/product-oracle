@@ -1248,7 +1248,7 @@ const flow = (items: string[]) => `[${items.map((x) => JSON.stringify(x)).join("
 
 /** feature_set.yaml (version 1) for a set. */
 function featureSetYaml(spec: FeatureSetSpec, document: string | null | undefined,segment: string, attempt: number): string {
-  const lines = [`# ${segment} (attempt ${attempt})`, "version: 1", `document: ${document ?? "example-prd"}`, "features:"];
+  const lines = [`# ${segmentLabel(segment)} (attempt ${attempt})`, "version: 1", `document: ${document ?? "example-prd"}`, "features:"];
   for (const f of spec.features) {
     lines.push(
       `  - key: ${f.key}`,
@@ -1395,7 +1395,7 @@ const LOCAL_ORDER: OrderSpec = {
 
 /** priority.yaml (version 1) for an order. */
 function priorityYaml(spec: OrderSpec, segment: string, attempt: number): string {
-  const lines = [`# ${segment} (attempt ${attempt})`, "version: 1", `method: ${spec.method}`, "order:"];
+  const lines = [`# ${segmentLabel(segment)} (attempt ${attempt})`, "version: 1", `method: ${spec.method}`, "order:"];
   spec.order.forEach((o, i) => {
     lines.push(`  - key: ${o.key}`, `    rank: ${i + 1}`, `    score: ${o.score}`, `    explanation: ${JSON.stringify(o.explanation)}`);
     for (const n of NEW_INPUTS) if (o[n] != null) lines.push(`    ${n}: ${o[n]}`);
@@ -1734,11 +1734,21 @@ function tellOrderSaved(ctx: RunsContext, r: RunOut) {
   });
 }
 
-function fileContent(name: string, segment: string, attempt: number, document?: string | null): string {
+/** qa-nov17 runs 9: a segment by its label ("Ground Truth proposal"), never its key, in a file's first line. */
+function segmentLabel(segment: string): string {
+  for (const f of FLOW_CATALOG.flows) {
+    const s = f.segments.find((x) => x.name === segment);
+    if (s) return s.title;
+  }
+  return segment;
+}
+
+function fileContent(name: string, key: string, attempt: number, document?: string | null): string {
+  const segment = segmentLabel(key);
   if (name === "tech_briefs.yaml") return briefsYaml(LOCAL_BRIEFS, attempt);
   if (name === "eng_dates.yaml") return datesYaml({ ...LOCAL_DATES, prd: null, problems: [] }, attempt);
-  if (name === "feature_set.yaml") return featureSetYaml(LOCAL_FEATURE_SET, document, segment, attempt);
-  if (name === "priority.yaml") return priorityYaml(LOCAL_ORDER, segment, attempt);
+  if (name === "feature_set.yaml") return featureSetYaml(LOCAL_FEATURE_SET, document, key, attempt);
+  if (name === "priority.yaml") return priorityYaml(LOCAL_ORDER, key, attempt);
   if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt}, a sample.\n`;
   if (name === "roadmap.md") return `---\ntitle: Example product roadmap\nkind: roadmap\n---\n\n# Example product roadmap {#roadmap}\n\nDraft ${attempt}, a sample.\n`;
   if (name === "roadmap_items.yaml") {
