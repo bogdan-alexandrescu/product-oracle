@@ -167,7 +167,8 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
     const side = await page.getByTestId("side-row").evaluateAll((els) => els.map((e) => e.getAttribute("data-above")));
     expect(side).toEqual(above);
     const code = page.getByTestId("side-code").first();
-    expect(await code.getAttribute("title")).toBe(await page.getByTestId("side-row").first().getByTestId("prio-title").getAttribute("title"));
+    // The chip's tip names its feature, code with name (qa-nov17 G4).
+    expect(await code.getAttribute("title")).toBe(`${(await code.textContent())!.trim()} ${await page.getByTestId("side-row").first().getByTestId("prio-title").getAttribute("title")}`);
     expect(await code.evaluate((e) => getComputedStyle(e).fontFamily)).not.toMatch(/mono/i);
   });
 });

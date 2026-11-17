@@ -199,7 +199,8 @@ for (const size of ["desktop", "phone"] as const) {
       for (const [r, name, word, means, proof] of kinds) {
         const it = item(r, name);
         await expect(it.getByTestId("cs-mark")).toHaveText(word);
-        await pillAfter(it.getByText(name, { exact: true }), it.getByTestId("cs-mark"));
+        // The name may carry its feature code before it ("F-01 Setup checklist").
+        await pillAfter(it.getByRole("button", { name: new RegExp(`^(F-\\d+ )?${name}$`) }), it.getByTestId("cs-mark"));
         await tap(it.getByRole("button", { name: `What ${word} means` }));
         const card = it.getByTestId("cs-mark-card");
         await expect(card).toBeVisible();

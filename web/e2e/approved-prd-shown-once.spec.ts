@@ -152,6 +152,6 @@ test("an item keyed phase-2 is its own item, never folded into phase", async ({ 
   // Both are on the roadmap, each by its own name (neither is read as a copy of the other), with
   // the code of the feature they were copied from before it (docs/ground-truth.md: a feature
   // shows its code with its name).
-  for (const title of ["F-06 Reminder rollout", "F-06 Reminder rollout two"])
+  for (const title of ["F-79 Reminder rollout", "F-79 Reminder rollout two"])
     await expect(page.getByTestId("simple-roadmap").getByRole("button", { name: title, exact: true }).first()).toBeVisible();
 });
