@@ -528,6 +528,7 @@ export function Measurements({ goal, canWrite, onChanged }: { goal: EntityDetail
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const unit = typeof goal.attrs?.unit === "string" ? goal.attrs.unit : "";
+  const hasValue = goal.attrs?.current != null && goal.attrs.current !== "";
   const rows = q.data ?? [];
 
   async function run(fn: () => Promise<unknown>) {
@@ -576,7 +577,18 @@ export function Measurements({ goal, canWrite, onChanged }: { goal: EntityDetail
         {q.loading && !q.data ? (
           <Loading />
         ) : rows.length === 0 ? (
-          <p className="text-text2">{unit ? "No values recorded yet" : "Give the goal its unit, then record values here"}</p>
+          <p className="text-text2">
+            {!unit ? (
+              "Give the goal its unit, then record values here"
+            ) : hasValue ? (
+              // qa-nov17 plan 4: Home draws this goal's trend from its value history, so say what is missing.
+              <>
+                No dated values yet <InfoTip label="dated values">Home&apos;s trend uses this goal&apos;s value history</InfoTip>
+              </>
+            ) : (
+              "No values recorded yet"
+            )}
+          </p>
         ) : (
           <>
             <MeasurementChart rows={rows} unit={unit} />

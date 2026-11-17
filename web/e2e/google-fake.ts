@@ -29,14 +29,15 @@ if (!window.__clicks) {
 }
 `;
 
-const GIS = `
+// closed: the person closes Google's sign-in popup (its error_callback, popup_closed).
+const gis = (closed: boolean) => `
 ${CLICKS}
 window.google = window.google || {};
 window.google.accounts = { oauth2: { initTokenClient(config) {
   window.__drive.tokenClient = { client_id: config.client_id, scope: config.scope, login_hint: config.login_hint };
   return { requestAccessToken() {
     (window.__drive.signIns = window.__drive.signIns || []).push({ inClick: !!window.__inClick });
-    setTimeout(() => config.callback({ access_token: "fake-drive-token", expires_in: 3599, scope: config.scope }), 0);
+    setTimeout(() => ${closed} ? config.error_callback({ type: "popup_closed" }) : config.callback({ access_token: "fake-drive-token", expires_in: 3599, scope: config.scope }), 0);
   } };
 } } };
 `;
@@ -88,7 +89,7 @@ window.gapi = { load(name, options) {
 }
 
 /** Fakes Google for `page`; returns the list of Google URLs the page asked for. */
-export async function fakeGoogle(page: Page, files: FakeDriveFile[], opts: { cancel?: boolean; delayMs?: number } = {}) {
+export async function fakeGoogle(page: Page, files: FakeDriveFile[], opts: { cancel?: boolean; delayMs?: number; signInClosed?: boolean } = {}) {
   const asked: string[] = [];
   await page.route(/^https:\/\/([a-z0-9-]+\.)*(google\.com|googleapis\.com|gstatic\.com|googleusercontent\.com)\//, async (route) => {
     const url = route.request().url();
@@ -100,7 +101,7 @@ export async function fakeGoogle(page: Page, files: FakeDriveFile[], opts: { can
       return route.fulfill({ contentType: "text/javascript", body: gapi(files, !!opts.cancel) });
     }
     if (url === "https://accounts.google.com/gsi/client") {
-      return route.fulfill({ contentType: "text/javascript", body: GIS });
+      return route.fulfill({ contentType: "text/javascript", body: gis(!!opts.signInClosed) });
     }
     return route.abort();
   });
