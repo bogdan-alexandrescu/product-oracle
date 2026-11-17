@@ -1756,6 +1756,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   }}
                   data-testid="vxe-point"
                   data-code={r.code}
+                  title={r.own_key ? `${r.own_key} ${r.title}` : r.title}
                   data-above={r.above_line ? "true" : "false"}
                   data-moved={isMoved ? "true" : undefined}
                   data-shape={shapeOf(r)}
@@ -1916,11 +1917,11 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   </span>
                   {/* The mark's code, so a mark and its row read alike (Value / effort only; the ranked rows name the feature). */}
                   {r.own_key && (
-                    <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
+                    <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={`${r.own_key} ${r.title}`}>
                       {r.own_key}
                     </span>
                   )}
-                  <span className="min-w-0 flex-1 truncate" data-testid="prio-title" title={r.title}>
+                  <span className="line-clamp-2 min-w-0 flex-1 [overflow-wrap:anywhere]" data-testid="prio-title" title={r.title}>
                     {r.title}
                   </span>
                   {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}
