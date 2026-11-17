@@ -1254,7 +1254,8 @@ export function FloatingCard({
           </dl>
         </div>
         <div>
-          {item.suggestion?.status === "open" && onSuggestion && (
+          {/* qa-nov17: one estimate only: a suggestion other than the estimate shown (a dependency moved it) is not offered. */}
+          {item.suggestion?.status === "open" && onSuggestion && !(item.estimated && (item.suggestion.start_date !== item.start.date || item.suggestion.end_date !== item.end.date)) && (
             <section className="mt-3 rounded-lg border border-line p-2" data-testid="card-suggestion" data-waits>
               <SuggestionBody
                 item={item}

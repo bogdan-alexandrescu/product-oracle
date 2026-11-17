@@ -1613,6 +1613,15 @@ export function itemSuggestion(db: SimpleDb, itemId: string): Suggestion | undef
   return { ...first, start_date: start, end_date: end };
 }
 
+/**
+ * qa-nov17 (service.load): an open suggestion is offered only while the item is undated and its
+ * estimate (after what it depends on) still is the suggestion's: dates set here or a new
+ * dependency outdate it, so its row, its panel block and the counts clear at once.
+ */
+function offered(r: Resolved, sug: Suggestion | undefined): Suggestion | undefined {
+  return sug && r.start.estimated && r.end.estimated && r.start.date === sug.start_date && r.end.date === sug.end_date ? sug : undefined;
+}
+
 /** dates.quarter_word: "Q2 2027". */
 const quarterWord = (first: string) => `Q${Math.floor((Number(first.slice(5, 7)) - 1) / 3) + 1} ${first.slice(0, 4)}`;
 
@@ -1874,7 +1883,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const [code, title] = codedTitle(s.title, prdCode(s.section));
     const rm = ROADMAPS[s.roadmap];
     const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, "-"));
-    const suggestion = itemSuggestion(db, db.ids[s.key]);
+    const suggestion = offered(own.get(s.key)!, itemSuggestion(db, db.ids[s.key]));
     return {
       id: db.ids[s.key], key: s.key, title, outcome: s.outcome ?? null, note: s.note ?? null, horizon: horizonOfDates(r, quarterWindows(today)),
       estimate_pending: !!s.estimate_pending,
@@ -2385,11 +2394,14 @@ export function settleDrafting(db: SimpleDb): void {
 export function dateSuggestionInboxRows(db: SimpleDb | undefined, me: { id: string; role: Role }, seen: string | null): Schemas["InboxSimpleDateSuggestion"][] {
   if (!db) return [];
   const seeds = new Map(visibleItems(db, me.role).map((s) => [db.ids[s.key], s]));
+  // qa-nov17 (suggestions.inbox_rows): one the read no longer offers is not asked.
+  const all = new Map([...seeds.values()].map((s) => [s.key, { s, r: resolve(db, s) }]));
+  afterDependencies(all);
   const out: Schemas["InboxSimpleDateSuggestion"][] = [];
   const done = new Set<string>();
   for (const x of [...db.suggestions].filter((y) => y.status === "open").sort((a, b) => (a.created_at < b.created_at ? 1 : -1))) {
     const s = seeds.get(x.item_id);
-    if (done.has(x.item_id) || !s || !canDecideItem(db, s, me)) continue;
+    if (done.has(x.item_id) || !s || !canDecideItem(db, s, me) || !offered(all.get(s.key)!.r, itemSuggestion(db, x.item_id))) continue;
     done.add(x.item_id);
     const span = itemSuggestion(db, x.item_id) ?? x;
     out.push({

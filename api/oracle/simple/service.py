@@ -694,6 +694,15 @@ async def load(
         e.resolved = moved[e.row.id]
         e.horizon = dates.horizon_of(e.resolved, windows)
         e.window = windows[e.horizon]
+        # qa-nov17: an open date suggestion is offered only while the item is undated and its
+        # estimate (after what it depends on) still is the suggestion's: dates set here or a
+        # new dependency outdate it, so its row, its panel block and the counts clear at once.
+        if e.suggestion is not None:
+            s = e.suggestion
+            span = e.suggestion_span or (s.start_date, s.end_date)
+            r = e.resolved
+            if not r.undated or (r.start.date, r.end.date) != span:
+                e.suggestion, e.suggestion_span = None, None
     # feature-parts: each part's ancestors; with no dates of its own, a part reads its
     # nearest dated ancestor's (a parent in Trash still lends its own typed dates).
     await _ancestors(db, entries)

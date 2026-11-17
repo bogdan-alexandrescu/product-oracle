@@ -344,8 +344,15 @@ export async function suggestion(id: string, how: "accept" | "edit" | "dismiss",
       : how === "edit"
         ? await api.POST("/v1/simple/roadmap/date-suggestions/{suggestion_id}/edit", { ...path, body: dates! })
         : await api.POST("/v1/simple/roadmap/date-suggestions/{suggestion_id}/dismiss", path);
-  if (!r.data) throw new ChangeFailed(detailOf(r.error), r.response.status);
+  if (!r.data) {
+    // qa-nov17: a suggestion accepted after the item got dates answers 409 "outdated: …": said in plain words.
+    const words = detailOf(r.error);
+    throw new ChangeFailed(r.response.status === 409 && words.startsWith("outdated") ? OUTDATED_DATES : words, r.response.status);
+  }
 }
+
+/** qa-nov17: what Accept of Oracle's dates says when the item's dates changed since. */
+export const OUTDATED_DATES = "Dates were changed since Oracle suggested these";
 
 /** fix4 qa-simple-roadmap-21: who decides a proposal, by name ("Dana Lee", "Dana Lee or Sam
  * Ortiz"); with none named, the roadmap's owner. */

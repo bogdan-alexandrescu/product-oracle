@@ -225,7 +225,8 @@ async def inbox_rows(
     out = []
     for item_id, ss in per_item.items():
         e = by_id.get(item_id)
-        if e is None or not service.can_decide(principal, e, read.deciders):
+        # qa-nov17: one the read no longer offers (dates set here, a new dependency) is not asked.
+        if e is None or e.suggestion is None or not service.can_decide(principal, e, read.deciders):
             continue
         first = ss[0]
         out.append(
