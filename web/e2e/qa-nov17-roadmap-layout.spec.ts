@@ -77,6 +77,7 @@ test.describe("desktop", () => {
         ...(await boxes(chart.getByTestId("ms-diamond"))),
       ];
       noneMeet("+ Milestone", await boxes(chart.getByTestId("ms-add-hint")), chips);
+      noneMeet("header name", names, chips);
     });
   }
   test("timeline: a milestone's label sits beside its own day, and a key date's name is never under a diamond (#4)", async ({ page }) => {
@@ -173,5 +174,16 @@ test.describe("phone", () => {
     const chart = page.getByTestId("simple-chart");
     const names = [...(await boxes(chart.getByTestId("key-date-label"))), ...(await boxes(chart.getByTestId("track-milestone-label"))), ...(await boxes(chart.getByTestId("milestone-end-label")))];
     noneMeet("Today pill", await boxes(chart.getByTestId("today-pill")), names);
+  });
+  test("waterfall: no key date's or track milestone's name lies under a goal milestone's chip or diamond (#3)", async ({ page }) => {
+    // protects: QA Nov 17 #3: on a 390 px phone the Waterfall's "M6 Beta" and "Board meeting" are never drawn under the milestone band's diamonds or chips
+    // fails_when: a header name and a milestone chip or diamond overlap
+    await open(page, "waterfall");
+    const chart = page.getByTestId("simple-chart");
+    await expect(chart.getByTestId("ms-diamond").first()).toBeVisible();
+    const names = [...(await boxes(chart.getByTestId("key-date-label"))), ...(await boxes(chart.getByTestId("track-milestone-label"))), ...(await boxes(chart.getByTestId("milestone-end-label")))];
+    expect(names.length).toBeGreaterThan(0);
+    const chips = [...(await boxes(chart.getByTestId("ms-label"))), ...(await boxes(chart.getByTestId("ms-prd-label"))), ...(await boxes(chart.getByTestId("ms-band-more"))), ...(await boxes(chart.getByTestId("ms-diamond")))];
+    noneMeet("header name", names, chips);
   });
 });
