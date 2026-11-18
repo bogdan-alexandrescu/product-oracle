@@ -313,6 +313,58 @@ async def decide(
     return s, item, True
 
 
+async def reopen(
+    db: AsyncSession, principal: Any, suggestion_id: uuid.UUID
+) -> tuple[RoadmapDateSuggestion, RoadmapItem, bool]:
+    """Undo a dismissal (commits): the suggestion is open again, with every slice of the
+    item the same dismissal closed (same person, same moment)."""
+    read = await service.load(db)
+    s = await db.get(RoadmapDateSuggestion, suggestion_id, with_for_update=True)
+    entry = read.by_id().get(s.item_id) if s is not None else None
+    if s is None or entry is None:
+        raise SuggestionError(404, "No such date suggestion")
+    if not service.can_decide(principal, entry, read.deciders):
+        raise SuggestionError(
+            403,
+            "Only an owner or the roadmap's decider (with no decider, its owner) decides "
+            "date suggestions",
+        )
+    if s.status != "dismissed":
+        raise SuggestionError(409, f"This suggestion is {s.status}, not dismissed")
+    rows = [s]
+    if s.slice_code is not None:
+        rows += list(
+            await db.scalars(
+                select(RoadmapDateSuggestion).where(
+                    RoadmapDateSuggestion.item_id == s.item_id,
+                    RoadmapDateSuggestion.status == "dismissed",
+                    RoadmapDateSuggestion.slice_code.is_not(None),
+                    RoadmapDateSuggestion.decided_by == s.decided_by,
+                    RoadmapDateSuggestion.decided_at == s.decided_at,
+                    RoadmapDateSuggestion.id != s.id,
+                )
+            )
+        )
+    keys = {(x.slice_code or "") for x in rows}
+    taken = await db.scalars(
+        select(RoadmapDateSuggestion).where(
+            RoadmapDateSuggestion.item_id == s.item_id, RoadmapDateSuggestion.status == "open"
+        )
+    )
+    if any((x.slice_code or "") in keys for x in taken):
+        raise SuggestionError(409, "The item has an open date suggestion again")
+    for x in rows:
+        x.status, x.decided_by, x.decided_at = "open", None, None
+    await audit.record(
+        db, principal, "roadmap_date_suggestion.reopen", "roadmap_date_suggestion", s.id,
+        data={"item_id": str(entry.row.id), "start_date": _iso(s.start_date),
+              "end_date": _iso(s.end_date)},
+    )  # fmt: skip
+    await db.commit()
+    await db.refresh(s)
+    return s, entry.row, True
+
+
 def _planned(e: service.Entry, view: Any) -> list[tuple[str, dates.Suggestion]] | None:
     """One suggestion per dated slice of the item's feature in its PRD's plan; None when
     the plan does not place the item."""

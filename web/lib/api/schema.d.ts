@@ -12734,6 +12734,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap/date-suggestions/{suggestion_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Date Suggestion
+         * @description Undo a dismissal: the suggestion is open again (409 when it is not dismissed).
+         */
+        post: operations["reopen_date_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/roadmap/milestones": {
         parameters: {
             query?: never;
@@ -44481,6 +44501,8 @@ export interface components {
             estimate_pending: boolean;
             /** Picked Quarter */
             picked_quarter?: string | null;
+            /** Estimate Basis */
+            estimate_basis?: ("suggestion" | "quarter") | null;
             /** Date Basis */
             date_basis?: string | null;
             suggestion?: components["schemas"]["DateSuggestionOut"] | null;
@@ -75489,6 +75511,37 @@ export interface operations {
         };
     };
     dismiss_date_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DateSuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_date_suggestion: {
         parameters: {
             query?: never;
             header?: never;

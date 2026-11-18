@@ -755,6 +755,7 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "remove_evidence",
         "remove_priority_override",
         "render_document_blocker_strategy",
+        "reopen_date_suggestion",
         "reopen_goal_suggestion",
         "reopen_request",
         "reopen_track_alert",

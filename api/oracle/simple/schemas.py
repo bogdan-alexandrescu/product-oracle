@@ -340,6 +340,10 @@ class SimpleRoadmapItem(BaseModel):
     # roadmap-dates: the first day of the quarter Quick Add put it in (an undated item is
     # estimated inside it until Oracle suggests dates); null: none picked.
     picked_quarter: dt.date | None = None
+    # roadmap-dates (dates.Resolved.basis): where an estimate's dates come from, Oracle's
+    # suggestion (open, or accepted into an open draft) or the picked quarter; null: its
+    # window, or dates a source gives.
+    estimate_basis: Literal["suggestion", "quarter"] | None = None
     # approved-roadmap-to-simple: the applied roadmap version's words for the dates
     # ("engineering estimate", "founder commitment", "set by <person>"); null when the
     # dates are not the version's (none applied, or a person changed them since).
