@@ -135,7 +135,7 @@ function usePeople() {
 const fieldsOf = (g: Goal, year: string): Fields => ({ title: g.title, measure: g.measure ?? "", target: g.target ?? "", due: dayOf(g.due, year), owner: g.owner_id ?? null, on_roadmap: g.on_roadmap ?? true });
 
 /** GB1 a: the goal's header turned into a small form, right where it sits. */
-export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: { start: Fields; goal?: Goal; order: number; title: string; year: string; onSave: (f: Fields & { day: string }, seen?: Goal, refused?: (line: string) => void) => Promise<void>; onCancel: () => void }) {
+export function GoalForm({ start, goal, order, title, year, linked, onSave, onCancel }: { start: Fields; goal?: Goal; order: number; title: string; year: string; linked?: boolean; onSave: (f: Fields & { day: string }, seen?: Goal, refused?: (line: string) => void) => Promise<void>; onCancel: () => void }) {
   // milestone-kinds: whether its target date shows on the roadmap, set where who may edit the goal edits it.
   const [f, setF] = useState<Fields>(goal?.can_edit ? { on_roadmap: goal.on_roadmap ?? true, ...start } : start);
   // The goal as it read when the form opened: its save is refused if it changed since.
@@ -168,9 +168,11 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
   const leave = (k: keyof Fields) => () => setLeft((x) => (x[k] ? x : { ...x, [k]: true }));
   const lacks = (k: keyof Fields, missing: boolean) => !!left[k] && missing;
   // qa-nov17 G1: opened from a link (Rename on the Goal map), the page's own load takes focus after
-  // autoFocus; the name takes it back once the page has settled, in view.
+  // autoFocus; the name takes it back once the page has settled, in view. Never on an Edit in
+  // place: the page stays where the person is.
   const nameEl = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
+    if (!linked) return;
     const t = window.setTimeout(() => {
       const n = nameEl.current;
       if (!n || document.activeElement === n || n.form?.contains(document.activeElement)) return;
@@ -178,7 +180,7 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
       n.scrollIntoView({ block: "center" });
     }, 300);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [linked]);
   return (
     <form
       data-testid="goal-form"

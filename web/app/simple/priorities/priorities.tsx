@@ -2436,7 +2436,8 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
   // EG1 a without a dated plan: each goal's ⋯ (Edit goal, Move up and down, Archive, Delete, or
   // the asks), its owner, its form in place, the note with Undo and the Archived goals fold.
   // qa-nov17 G1: ?edit=<goal id> opens that goal's form (Rename on the Goal map, for a goal that lacks its date).
-  const [editingGoal, setEditingGoal] = useState<string | null>(useSearchParams().get("edit"));
+  const linked = useSearchParams().get("edit");
+  const [editingGoal, setEditingGoal] = useState<string | null>(linked);
   const year = data.today.slice(0, 4);
   const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
   // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine;
@@ -2554,6 +2555,7 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
                   order={rec.order}
                   title="Edit goal"
                   year={year}
+                  linked={rec.id === linked}
                   onCancel={() => setEditingGoal(null)}
                   onSave={async (f, seen, refused) => {
                     if (await writes.edit(rec, f, year, seen, refused)) setEditingGoal(null);
@@ -2733,7 +2735,8 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
   const noGoal = plan.slices.some((x) => !x.goal);
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
   // qa-nov17 G1: ?edit=<goal id> opens that goal's form (Rename on the Goal map, for a goal that lacks its date).
-  const [editing, setEditing] = useState<string | null>(useSearchParams().get("edit"));
+  const linked = useSearchParams().get("edit");
+  const [editing, setEditing] = useState<string | null>(linked);
   const [note, setNote] = useState<Note | null>(null);
   const noteSlot = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -2898,6 +2901,7 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
                   order={rec.order}
                   title="Edit goal"
                   year={year}
+                  linked={rec.id === linked}
                   onCancel={() => setEditing(null)}
                   onSave={async (f, seen, refused) => {
                     if (await writes.edit(rec, f, year, seen, refused)) setEditing(null);

@@ -175,8 +175,11 @@ export function chartPicture(svg: SVGSVGElement, labels: HTMLElement | null): Pi
       if (!words) continue;
       const lane = (el as HTMLElement).dataset.testid === "chart-group" ? ' data-testid="export-lane"' : "";
       // Two lines where one cannot hold them and the row has room: the name, then its notes.
+      // qa-nov17: a goal lane (a phone's wrapped band is tall enough for two) stays one line,
+      // its goal and metric whole in smaller type, while 11 px holds them.
       const [first, ...rest] = words.split(" · ");
-      if (widthOf(words, 13) > labelW - 14 && rest.length && r.height >= 32) {
+      const oneLine = !!lane && widthOf(words, 11) <= labelW - 14;
+      if (widthOf(words, 13) > labelW - 14 && rest.length && r.height >= 32 && !oneLine) {
         rows.push(`<text${lane} x="10" y="${y + r.height / 2 - 2}" font-size="13" fill="var(--text)">${esc(fit(first, labelW - 14, 13))}</text>`);
         rows.push(`<text x="10" y="${y + r.height / 2 + 12}" font-size="11" fill="var(--text2)">${esc(fit(rest.join(" · "), labelW - 14, 11))}</text>`);
       } else {
