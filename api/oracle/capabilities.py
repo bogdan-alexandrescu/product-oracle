@@ -295,6 +295,7 @@ PER_ITEM: dict[str, Role | None] = {
     "reject_goal_suggestion": "owner",
     "remind_simple_one_pager_reviewers": "owner",
     "remove_evidence": "approver",
+    "reopen_date_suggestion": "owner",
     "reopen_goal_suggestion": "owner",
     # A waived strategy finding is reopened by whoever may waive it (an approver for some
     # kinds, else an owner; oracle.strategy.router).
