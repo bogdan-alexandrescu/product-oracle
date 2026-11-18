@@ -126,5 +126,9 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
     await page.getByTestId("format-timeline").click();
     await expect(row(page.locator("body"), "setup-health-log")).toContainText(words);
+    // fails_when: the viewer's panel reads "Later · no dates yet" (the accepted dates are no suggestion)
+    await row(page.locator("body"), "setup-health-log").getByRole("button", { name: /^F-\d+ Health log$/ }).click();
+    await expect(panel(page).getByTestId("card-dates")).toContainText("Apr 1 – Apr 28, 2027 · Oracle's estimate");
+    await expect(panel(page).getByTestId("card-dates")).not.toContainText("no dates yet");
   });
 });

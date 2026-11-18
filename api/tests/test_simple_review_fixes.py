@@ -42,6 +42,10 @@ Test cards (protects / fails_when / no_claim):
   working draft, never the published rows; undo reopens the suggestion; a non-decider's
   accept is a proposal that writes nothing; fails_when=any route writes the published
   version's dates; no_claim=the MCP transport (tools are the routes).
+- test_dates_accepted_into_a_draft_stay_a_viewer_s_suggested_estimate: protects=Nov 17 QA,
+  a viewer's undated item whose suggestion the owner accepted into a working draft says its
+  estimate is a suggestion (estimate_basis); fails_when=it reads null, as its window does;
+  no_claim=the web's words.
 - test_stale_suggestion_is_409_outdated: protects=S2-minor, a suggestion accepted after
   tracker or engineering dates arrived answers 409 outdated and writes nothing;
   fails_when=the arriving dates are overwritten; no_claim=which source wins (S2).
@@ -381,6 +385,22 @@ async def test_suggestions_go_through_the_change_engine(client):
     assert r.status_code == 201, r.text
     async with tenant_session(ctx.tenant_id) as s:
         assert (await s.get(RoadmapDateSuggestion, uuid.UUID(b["id"]))).status == "open"
+
+
+async def test_dates_accepted_into_a_draft_stay_a_viewer_s_suggested_estimate(client):
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["move_dates"])
+    viewer = by_key(await roadmap(client, w, "viewer"))
+    assert viewer["move_dates-u"]["estimate_basis"] == "suggestion"
+    assert viewer["move_dates-a"]["estimate_basis"] is None
+    sid = w.suggestion["move_dates-u"]
+    r = await client.post(f"{SUGGESTIONS}/{sid}/accept", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    # The viewer reads the published, undated item: the draft's dates, with no open
+    # suggestion, are still Oracle's suggested estimate, not its window.
+    item = by_key(await roadmap(client, w, "viewer"))["move_dates-u"]
+    assert item["estimated"] is True and item["suggestion"] is None
+    assert item["estimate_basis"] == "suggestion"
 
 
 async def test_stale_suggestion_is_409_outdated(client):
