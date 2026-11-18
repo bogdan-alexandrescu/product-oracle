@@ -142,7 +142,7 @@ test("a viewer's one box still answers the plan and changes nothing (desktop)", 
   const panel = await openAsk(page, false);
   await expect(panel.getByRole("textbox")).toHaveCount(1);
   await say(panel, "move Weekly alert digest to H1");
-  const card = panel.getByTestId("chat-card").filter({ hasText: "Move Weekly alert digest to Jan 1" });
+  const card = panel.getByTestId("chat-card").filter({ hasText: "Move F-06 Weekly alert digest to Jan 1" });
   await expect(card.getByRole("button", { name: "Apply" })).toBeDisabled();
   await expect(card.getByTestId("chat-card-why-not")).toHaveText("Viewers read the plan; they don't change it");
   await say(panel, "Summarise this page for me");

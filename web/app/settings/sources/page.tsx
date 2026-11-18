@@ -787,7 +787,8 @@ function SourceRow({
         {allowlist && (items.length + unnamed > 0 || folders.text === "") && !(source.kind === "github" && items.length > 0) && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">{allowlist.label}</Label>
-            <span className="min-w-0 truncate text-text" title={picks.title} data-testid="source-picks">
+            {/* qa-nov17 runs 7: picked files wrap whole on a phone; channels stay on one line with the full list in the title (AC 14). */}
+            <span className={`min-w-0 truncate text-text${source.kind === "slack" ? "" : " max-[600px]:break-words max-[600px]:whitespace-normal"}`} title={picks.title} data-testid="source-picks">
               {/* A Slack source reads nothing until it has a channel (qa-onboarding-4). */}
               {picks.text || (source.kind === "slack" ? "Pick channels to read" : "none yet")}
             </span>

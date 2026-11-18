@@ -104,7 +104,8 @@ function OutcomeName({ o }: { o: Outcome }) {
   return (
     <>
       <Named item={item} />
-      <NotInGt item={item} />
+      {/* qa-nov17 plan 2: the flag wraps in the narrow Item column, never cut to "Not in the Gr…". */}
+      <NotInGt item={item} className="mt-1 h-auto! min-h-5 px-2! py-0.5! text-xs! leading-4! whitespace-normal! [&>span]:overflow-visible! [&>span]:whitespace-normal!" />
     </>
   );
 }
@@ -487,7 +488,8 @@ function Outcomes() {
         {phone && active && (
           <Sheet
             open={sheet}
-            title={outcomeWords(active)}
+            // qa-nov17 plan 1: the kind, as Requests' "Request"; the inspector names the outcome in full.
+            title="Outcome"
             onClose={() => setSheet(false)}
             testId="outcome-sheet"
           >

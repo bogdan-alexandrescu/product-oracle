@@ -299,6 +299,18 @@ def _said(resolved: Resolved, row: Any) -> dict[str, Any]:
     return describe(row)
 
 
+async def _root_said(db: AsyncSession, root: Any) -> dict[str, Any]:
+    """A delete's root as the toast and Trash name it: a run by its day and the document it
+    wrote (qa-nov17 runs 3), as _said names a run that goes with a document."""
+    if not isinstance(root, Run):
+        return describe(root)
+    wrote = None
+    if root.document_id is not None:
+        stmt = select(Document.title).where(Document.id == root.document_id)
+        wrote = await db.scalar(stmt.execution_options(**ALL))
+    return {**describe(root), "created_at": root.created_at.isoformat(), "wrote": wrote}
+
+
 def preview(resolved: Resolved) -> dict[str, Any]:
     """What the delete dialog lists."""
     rows = [r for r in resolved.rows() if r is not resolved.root]
@@ -419,7 +431,7 @@ async def delete_root(
         root_id=root.id,
         # What it was built from outside this delete: Restore says if that is gone.
         root={
-            **describe(root),
+            **await _root_said(db, root),
             "built_from": [describe(d) for d in sources],
             # Track alerts it closed: a restore reopens them.
             "closed_alerts": closed,

@@ -255,7 +255,12 @@ export default function HomePage() {
         status={
           ((waiting != null && waiting > 0) || setup?.hidden) && (
             <>
-              {waiting != null && waiting > 0 && <Chip kind="acc">{waiting} waiting</Chip>}
+              {/* qa-nov17 plan 3: the count leads to what it counts, as Needs you's "Inbox →". */}
+              {waiting != null && waiting > 0 && (
+                <Link href="/inbox" className="rounded-full hover:underline" data-testid="home-waiting">
+                  <Chip kind="acc">{waiting} waiting</Chip>
+                </Link>
+              )}
               {setup?.hidden && <SetupChip setup={setup} onShow={() => hideSetup(false)} busy={setupBusy} />}
             </>
           )
