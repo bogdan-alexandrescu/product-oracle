@@ -1879,6 +1879,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       id: db.ids[s.key], key: s.key, title, outcome: s.outcome ?? null, note: s.note ?? null, horizon: horizonOfDates(r, quarterWindows(today)),
       estimate_pending: !!s.estimate_pending,
       picked_quarter: s.quarter?.start ?? null,
+      // service.item_out: where an estimate's dates come from (dates.Resolved.basis).
+      estimate_basis: r.start.estimated && r.end.estimated ? (r.basis ?? null) : null,
       // Its feature's code (F-12), else its own (codedTitle: the title's, else its PRD section's), as service.load's Entry.code.
       code: (s.feature_id && db.feature_codes?.[s.feature_id]) || code,
       // every-field-editable (service.item_out): a code set_code may not change, and where it comes from.

@@ -131777,6 +131777,21 @@
             ],
             "title": "Picked Quarter"
           },
+          "estimate_basis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "suggestion",
+                  "quarter"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Basis"
+          },
           "date_basis": {
             "anyOf": [
               {

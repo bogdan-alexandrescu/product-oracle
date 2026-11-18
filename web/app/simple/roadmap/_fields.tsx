@@ -190,6 +190,8 @@ function datesReason(item: Item): string {
     const out = picked && (item.start.date < picked.start || item.end.date >= nextQuarter(picked.start));
     return `Oracle suggested these dates: ${item.suggestion.basis}${out ? ` They fall outside ${picked.label}, the quarter it was added to: there is no room for it there.` : ""} Set dates to override them.`;
   }
+  if (item.estimated && item.estimate_basis === "suggestion")
+    return "These dates were accepted from Oracle's suggestion in a draft that is not published yet. Set dates to override them.";
   if (item.estimated && picked)
     return `Oracle estimated these dates as ${picked.label}, the quarter it was added to, until it suggests dates. Set dates to override them.`;
   if (item.estimated)
@@ -199,8 +201,9 @@ function datesReason(item: Item): string {
   return `${datesFrom(item)}. Set dates here to override them.`;
 }
 
-/** Home QA #6: an estimate that is only its horizon's window (no suggestion, no picked quarter). */
-const windowOnly = (item: Item): boolean => item.estimated && !item.suggestion && !item.picked_quarter;
+/** Home QA #6: an estimate that is only its horizon's window (no suggestion, open or accepted
+ * into an open draft, and no picked quarter). */
+const windowOnly = (item: Item): boolean => item.estimated && !item.estimate_basis && !item.suggestion && !item.picked_quarter;
 
 /** Which the dates are: set here, from a date source, or Oracle's estimate. */
 function datesKind(item: Item): string {
