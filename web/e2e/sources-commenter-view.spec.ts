@@ -32,7 +32,7 @@ for (const role of ["commenter", "viewer"] as const) {
     const list = page.getByTestId("inbox-sources");
     await expect(list).toContainText(LEGACY);
     await expect(list.getByTestId("source-need-text").filter({ hasText: "Too many channels" })).toBeVisible();
-    await expect(list.getByTestId("need-by-role").first()).toHaveText("View only");
+    await expect(list.getByTestId("need-by-role").first()).toHaveText("Ask an owner");
     await expect(list.getByRole("link")).toHaveCount(0);
     await expect(list.getByRole("button", { name: /^(Edit|Pick fewer|Share again|Reconnect)/ })).toHaveCount(0);
 

@@ -1472,6 +1472,7 @@ def item_out(
         estimated=r.estimated,
         estimate_pending=row.estimate_pending,
         picked_quarter=row.picked_quarter,
+        estimate_basis=r.basis if r.estimated else None,
         date_basis=approved_roadmap.date_basis(row),
         suggestion=suggestion_out(e.suggestion, row, may, e.suggestion_span)
         if e.suggestion is not None

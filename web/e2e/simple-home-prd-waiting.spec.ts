@@ -59,15 +59,17 @@ for (const phone of [false, true]) {
       await row.getByRole("group", { name: /^Answers for / }).getByRole("button", { name: "3 invites" }).click();
       await expect(count).toHaveText(String(n - 1));
       // vqa-simple-runs (RD3 a, frame "done"): the decided question stays where it was, with the
-      // answer, who and when, and Undo in its row; the card still counts it.
-      await expect(row.getByTestId("question-decided")).toHaveText(/^3 invites · Avery Stone · \w{3} \w{3} \d{1,2}, \d{1,2}:\d{2} [AP]M$/);
+      // answer, who and when (with its zone, qa-nov17 #4), and Undo in its row; the card's count
+      // drops at once, as the tile's does (qa-nov17 #2).
+      await expect(row.getByTestId("question-decided")).toHaveText(/^3 invites · Avery Stone · \w{3} \w{3} \d{1,2}, \d{1,2}:\d{2} [AP]M (PDT|PST)$/);
       await expect(row.getByRole("button", { name: "Another answer" })).toHaveCount(0);
-      await expect(card).toContainText("9 decisions you own · also on its review meeting's agenda");
+      await expect(card).toContainText("8 decisions you own · also on its review meeting's agenda");
       await expect(page.getByText(/Decided Q6 Invite limit on the free plan: 3 invites/)).toHaveCount(0);
       // Undo puts it back as it was, to decide again.
       await row.getByRole("button", { name: "Undo" }).click();
       await expect(row.getByRole("button", { name: "Another answer" })).toBeVisible();
       await expect(count).toHaveText(String(n));
+      await expect(card).toContainText("9 decisions you own · also on its review meeting's agenda");
     });
 
     test("a question decided on the card is not shown decided again after leaving Home and coming back", async ({ page }) => {

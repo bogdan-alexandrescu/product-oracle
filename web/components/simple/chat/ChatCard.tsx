@@ -204,7 +204,8 @@ export function ChatCard({
   const startCorrect = () => setFields(fields ? null : Object.fromEntries(shown.map((f) => [f, correct?.values[f] ?? ""])));
   // qa4-simple-roadmap-41: in the item card's talk, only the flags the change brings.
   const known = (item: string, kind: string, subject: string | null | undefined) => !!talk?.known.has(flagKey(item, kind, subject));
-  const red = actionsOnly ? [] : card.flags.flatMap((f) => f.flags.filter((x) => x.state === "red" && !known(f.item_id, x.kind, x.subject)).map((x) => ({ item: f.item_id, ...x })));
+  // qa-nov17 ask 6: a card's warnings are what it would do; undone, discarded or declined it shows none.
+  const red = actionsOnly || !["open", "applied", "proposed"].includes(card.status) ? [] : card.flags.flatMap((f) => f.flags.filter((x) => x.state === "red" && !known(f.item_id, x.kind, x.subject)).map((x) => ({ item: f.item_id, ...x })));
   // fix4 qa-simple-roadmap-24: moving a dependency makes no sense once the item is cut, so a
   // cut offers no fixes: its Apply says the dependents stay (their red reasons stay shown
   // above it). fix5-cut-dependents: beside it, "Cut it and its dependents" (only when items

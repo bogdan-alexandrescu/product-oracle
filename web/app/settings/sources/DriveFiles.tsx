@@ -167,7 +167,8 @@ export function DriveFiles({
       .then((picked) => {
         if (picked?.length) onChange(merge(latest.current, picked));
       })
-      .catch((e) => setError(errorMessage(e)))
+      // qa-nov17 runs 1: Google's own reason ("Google sign-in was closed"), never "Cannot reach the API.".
+      .catch((e) => setError(e instanceof Error ? e.message : errorMessage(e)))
       .finally(() => setBusy(false));
   }
 

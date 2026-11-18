@@ -106,7 +106,7 @@ function itemOf(i: WaitingItem): string | null {
   return q < 0 ? null : new URLSearchParams(i.href.slice(q + 1)).get("item");
 }
 
-type Act = { label: string; run: () => Promise<unknown>; done: string; primary?: boolean };
+type Act = { label: string; run: () => Promise<unknown>; done: string; primary?: boolean; undo?: () => Promise<unknown> };
 
 /** A decision-log call's Decide: its proposed option, then each other option. */
 function decideActs(d: Schemas["DecisionOut"]): Act[] {
@@ -139,7 +139,13 @@ function actionsOf(i: WaitingItem): Act[] {
   if (i.kind === "date") {
     return [
       { label: "Confirm", primary: true, done: "Dates confirmed", run: () => unwrap(api.POST("/v1/simple/roadmap/date-suggestions/{suggestion_id}/accept", suggestion)) },
-      { label: "Not this", done: "Dismissed", run: () => unwrap(api.POST("/v1/simple/roadmap/date-suggestions/{suggestion_id}/dismiss", suggestion)) },
+      {
+        label: "Not this",
+        done: "Dismissed",
+        run: () => unwrap(api.POST("/v1/simple/roadmap/date-suggestions/{suggestion_id}/dismiss", suggestion)),
+        // Home QA #6: the toast's Undo opens the suggestion again.
+        undo: () => unwrap(api.POST("/v1/simple/roadmap/date-suggestions/{suggestion_id}/reopen", suggestion)),
+      },
     ];
   }
   if (i.kind === "goal_suggestion") {
@@ -225,7 +231,7 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
   // simple-home-qa-nov14 #2: the feature's name opens its one panel where the page gives an opener.
   const open = useOpenFeature();
   const acts = item.kind === "decision" ? (call ? decideActs(call) : []) : actionsOf(item);
-  const act = async (run: () => Promise<unknown>, done: string, key?: string) => {
+  const act = async (run: () => Promise<unknown>, done: string, key?: string, undo?: () => Promise<unknown>) => {
     setBusy(true);
     try {
       await run();
@@ -235,7 +241,20 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
       } else setGone(true);
       invalidateWaiting();
       waitingChanged();
-      toast({ message: done });
+      toast({
+        message: done,
+        action: undo && {
+          label: "Undo",
+          onClick: () =>
+            void undo().then(
+              () => {
+                invalidateWaiting();
+                waitingChanged();
+              },
+              (e: unknown) => toast({ message: errorMessage(e) }),
+            ),
+        },
+      });
     } catch (e) {
       toast({ message: errorMessage(e) });
       setBusy(false);
@@ -258,6 +277,13 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
           ) : (
             <Named item={{ code, title: item.title }} />
           )}
+          {/* qa-leftovers: a row holding more than one broken link says how many, as the count above it counts links. */}
+          {breaks.length > 1 && (
+            <span className="text-text2" data-testid="waiting-links">
+              {" "}
+              · {breaks.length} links
+            </span>
+          )}
           {/* simple-home-qa-nov14 #1: a roadmap item with no code is flagged, never hidden. */}
           {ref && <NotInGt item={ref} />}
           {/* port-AN 5: the row's why sits in its (i), so the one list stays one line a row. */}
@@ -279,7 +305,7 @@ export function WaitingRow({ item, links }: { item: WaitingItem; links?: Waiting
         ) : acts.length ? (
           <>
             {acts.map((a) => (
-              <button key={a.label} type="button" disabled={busy} className={`simple-button${a.primary ? " simple-button-primary" : ""}`} onClick={() => void act(a.run, a.done)}>
+              <button key={a.label} type="button" disabled={busy} className={`simple-button${a.primary ? " simple-button-primary" : ""}`} onClick={() => void act(a.run, a.done, undefined, a.undo)}>
                 {a.label}
               </button>
             ))}

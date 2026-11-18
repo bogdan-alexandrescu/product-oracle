@@ -233,6 +233,23 @@ async def test_trash_names_each_run_as_the_delete_dialog_did(client, owner, runt
     assert datetime.fromisoformat(item["created_at"]) == datetime.fromisoformat(said["created_at"])
 
 
+async def test_a_deleted_run_says_its_day_and_what_it_wrote(client, owner, runtime):
+    """qa-nov17 runs 3: a run moved to Trash by itself is named by its day and its document
+    (the toast and Trash's row), never by its flow."""
+    _, auth, run = await _world(client, owner, runtime)
+    resp = await client.request("DELETE", f"/v1/runs/{run['id']}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    [row] = (await client.get("/v1/trash", headers=auth)).json()
+    roadmap = next(
+        d for d in (await client.get("/v1/documents", headers=auth)).json() if d["slug"] == ROADMAP
+    )
+    for root in (resp.json()["root"], row["root"]):
+        assert root["wrote"] == roadmap["title"]
+        assert datetime.fromisoformat(root["created_at"]) == datetime.fromisoformat(
+            run["created_at"]
+        )
+
+
 async def test_regenerate_estimate_names_inputs_by_title_and_version_never_slug(
     client, owner, runtime
 ):

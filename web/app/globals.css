@@ -754,6 +754,11 @@ code .date-mark {
     scroll-padding-top: var(--phone-top-bar);
     scroll-padding-bottom: var(--phone-tab-bar);
   }
+  /* qa-leftovers: while a toast shows at the bottom (components/ds/Toast.tsx sets --toast-room),
+     the page ends that much lower, so its last buttons scroll clear of the toast. */
+  #main {
+    padding-bottom: var(--toast-room, 0px);
+  }
 }
 /* A Simple page and its parts (components/simple/SimplePage.tsx): the tokens above, nothing hard-coded. */
 .simple-page {

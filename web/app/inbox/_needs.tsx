@@ -181,8 +181,10 @@ const BASE_COLUMNS: Column<Need>[] = [
   },
 ];
 
+// qa-leftovers: the "For" cell (a proposal's item, an access request's quote) wraps to two lines at
+// every width rather than being cut on one; below 1100 px it wraps in full, as before.
 export const NEED_COLUMNS: Column<Need>[] = BASE_COLUMNS.map((c) =>
-  c.key === "kind" || c.key === "context" ? { ...c, className: `${c.className ?? ""} ${SIDE_WRAP}` } : c,
+  c.key === "kind" ? { ...c, className: `${c.className ?? ""} ${SIDE_WRAP}` } : c.key === "context" ? { ...c, wrap: true, className: `${c.className ?? ""} ${SIDE_WRAP} ${WRAP_TWO}` } : c,
 );
 
 /**
@@ -1910,7 +1912,8 @@ export function sourceNeeds(sources: Schemas["SourceOut"][], mayEdit = true): Ne
           {fix.action}
         </LinkButton>
       ) : (
-        <ByRole who="View only" title="Your role cannot edit sources: approvers and owners can" />
+        // qa-leftovers: what resolves it for a role that cannot edit sources, not only that it cannot.
+        <ByRole who="Ask an owner" title="Your role cannot edit sources: approvers and owners can" />
       ),
     };
   });

@@ -198,6 +198,24 @@ export function ToastHost() {
     };
   }, [id]);
   const clearTop = dialogTop != null && dialogTop.id === id ? dialogTop.top : null;
+  // qa-leftovers: on a phone, while a toast sits at the bottom, the page gets room below its end
+  // (--toast-room, the main area's bottom padding), so its last buttons scroll clear of it.
+  const atBottom = id != null && !up && clearTop == null;
+  useLayoutEffect(() => {
+    if (!atBottom) return;
+    const root = document.documentElement;
+    const measure = () => {
+      const box = host.current?.querySelector('[role="status"]')?.getBoundingClientRect();
+      if (window.innerWidth > 600 || !box || document.querySelector('[aria-modal="true"], [data-sheet="bottom"]')) return root.style.removeProperty("--toast-room");
+      root.style.setProperty("--toast-room", `${Math.ceil(window.innerHeight - box.top + 8)}px`);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      root.style.removeProperty("--toast-room");
+    };
+  }, [id, atBottom]);
   useEffect(() => {
     show = (ask) => setShown({ place: pagePlace, ...ask, id: ++next.current });
     hide = (message) => setShown((s) => (s?.message === message ? null : s));

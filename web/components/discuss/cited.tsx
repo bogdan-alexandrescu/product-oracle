@@ -66,7 +66,8 @@ export function LiveChip({ c }: { c: Cite }) {
 }
 
 /**
- * Oracle's text with each `[c:n]` drawn as a citation chip. While it streams (`live`, #406) a
+ * Oracle's text with each `[c:n]` drawn as a citation chip, its number alone (its card names
+ * the source, qa-nov17 ask 3). While it streams (`live`, #406) a
  * marker is held back until it is complete and its citation has arrived. With `loose`, a marker whose
  * citation is not known still shows as a numbered chip (a change's rationale); otherwise it
  * is dropped (a reply only cites what it carries).
@@ -93,9 +94,10 @@ export function ReplyBody({
           return read ? <LiveChip key={i} c={read} /> : null;
         }
         const n = /^\[c:(\d+)\]$/.exec(part)?.[1];
-        if (!n) return <span key={i}>{part}</span>;
+        // qa-nov17 ask 3: no space left between a word and its number ("only [c:1]." reads "only 1.").
+        if (!n) return <span key={i}>{/^\[c:\d+\]$/.test(parts[i + 1] ?? "") ? part.replace(/[ \t]+$/, "") : part}</span>;
         const c = citations.find((x) => x.kind !== "live" && x.n === Number(n));
-        if (c) return <CitationChip key={i} citeKey={`c-${n}`} citation={chipCitation(c)} number={c.n} />;
+        if (c) return <CitationChip key={i} citeKey={`c-${n}`} citation={chipCitation(c)} number={c.n} bare />;
         return loose ? (
           <span key={i} className="cite-chip" data-testid={`cite-c-${n}`}>
             <span className="tnum text-text2">{n}</span>
