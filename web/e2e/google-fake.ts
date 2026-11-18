@@ -91,6 +91,8 @@ window.gapi = { load(name, options) {
 /** Fakes Google for `page`; returns the list of Google URLs the page asked for. */
 export async function fakeGoogle(page: Page, files: FakeDriveFile[], opts: { cancel?: boolean; delayMs?: number; signInClosed?: boolean } = {}) {
   const asked: string[] = [];
+  // The mock app's own stand-in (lib/google-picker-mock.ts) steps aside for this one.
+  await page.addInitScript(() => ((window as { __googleFaked?: boolean }).__googleFaked = true));
   await page.route(/^https:\/\/([a-z0-9-]+\.)*(google\.com|googleapis\.com|gstatic\.com|googleusercontent\.com)\//, async (route) => {
     const url = route.request().url();
     asked.push(url);

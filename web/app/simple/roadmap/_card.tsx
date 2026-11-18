@@ -18,6 +18,7 @@ import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
 import { NameEdit, PanelFields } from "./_fields";
+import { itemName } from "./_gtflag";
 import { CutBy } from "./_removed";
 import { TasksPart } from "./_tasks";
 import {
@@ -1058,7 +1059,7 @@ export function FloatingCard({
               {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
               {menuItem(
                 item.can_decide ? "Move to Trash…" : "Propose: move to Trash…",
-                () => void remove({ id: item.id, title: item.title, parts: item.parts, rows: pointsAt(item, items), propose: !item.can_decide, deciders: item.deciders }),
+                () => void remove({ id: item.id, title: itemName(item), parts: item.parts, rows: pointsAt(item, items), propose: !item.can_decide, deciders: item.deciders }),
                 true,
               )}
             </div>

@@ -44,6 +44,8 @@ const strip = (page: Page) => page.getByTestId("agenda-strip");
 const sheet = (page: Page) => page.getByRole("dialog", { name: "Agenda" });
 const rows = (page: Page) => sheet(page).getByTestId("agenda-row");
 const NOT_IN_GT = "Not in the Ground Truth";
+// qa-leftovers: an add chip reads "+ F-31 Alert routing by team" (or the name flagged when it has no code).
+const addChip = (name: string) => new RegExp(`^\\+ (F-\\d+[a-j]? )?${name}( ${NOT_IN_GT})?$`);
 // simple-home-qa-nov12 #2: a feature's code chip (F-06) leads its name; the order is read by names,
 // without the "Not in the Ground Truth" flag an uncoded feature carries (simple-home-qa-nov14 #1).
 const names = async (page: Page) =>
@@ -88,14 +90,14 @@ test.describe("desktop", () => {
     await tap(s.getByRole("button", { name: "Save" }));
     await expect(rows(page).nth(2)).toContainText("Quiet hours by default");
     // A typed topic and a feature: four features of the PRD are not on the agenda yet.
-    for (const f of ["Alert routing by team", "Alert snooze", "Spend limit alerts", "Alert email templates"]) await expect(s.getByRole("button", { name: `+ ${f}` })).toBeVisible();
+    for (const f of ["Alert routing by team", "Alert snooze", "Spend limit alerts", "Alert email templates"]) await expect(s.getByRole("button", { name: addChip(f) })).toBeVisible();
     await s.getByLabel("Add a feature or a topic").fill("Beta date sign-off");
     await s.getByLabel("Add a feature or a topic").press("Enter");
     await expect(rows(page).last()).toContainText("Beta date sign-off");
     await expect(rows(page).last()).toContainText("5 min · topic · added by Avery Stone");
-    await tap(s.getByRole("button", { name: "+ Alert routing by team" }));
+    await tap(s.getByRole("button", { name: addChip("Alert routing by team") }));
     await expect(rows(page).last()).toContainText("Alert routing by team");
-    await expect(s.getByRole("button", { name: "+ Alert routing by team" })).toHaveCount(0);
+    await expect(s.getByRole("button", { name: addChip("Alert routing by team") })).toHaveCount(0);
     // Down by dragging: Mobile alert push dropped on the last row.
     await rows(page).filter({ hasText: "Mobile alert push" }).dragTo(rows(page).last());
     await expect.poll(async () => (await names(page)).at(-1)).toBe("Mobile alert push");

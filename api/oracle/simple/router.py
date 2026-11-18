@@ -11,7 +11,8 @@ a run's token is refused (the ``simple`` area is in no run-token scope, oracle.m
   can_decide) applies it into the roadmap's working draft, approvers and commenters
   propose it; never the published version's dates. 409 ``outdated`` when the item has
   dates now.
-- ``POST .../date-suggestions/{id}/dismiss``: who decides (can_decide).
+- ``POST .../date-suggestions/{id}/dismiss``: who decides (can_decide); ``.../reopen``
+  undoes it (the toast's Undo).
 - ``GET /v1/simple/roadmap/draft-prds``: viewer and up, the draft layer (RP2): each PRD the
   reader sees whose run's draft roadmap holds dated items not approved yet
   (oracle.simple.roadmap_drafts). ``POST .../draft-prds/items/{id}/dates|leave-out``:
@@ -257,6 +258,18 @@ async def dismiss_date_suggestion(
 ) -> DateSuggestionOut:
     """Dismiss: the item stays undated."""
     return await _decide(db, principal, suggestion_id, "dismiss")
+
+
+@router.post("/date-suggestions/{suggestion_id}/reopen", response_model=DateSuggestionOut)
+async def reopen_date_suggestion(
+    suggestion_id: uuid.UUID, principal: Reader, db: TenantDB
+) -> DateSuggestionOut:
+    """Undo a dismissal: the suggestion is open again (409 when it is not dismissed)."""
+    try:
+        s, item, may = await suggestions.reopen(db, principal, suggestion_id)
+    except suggestions.SuggestionError as e:
+        raise HTTPException(e.status, str(e)) from e
+    return service.suggestion_out(s, item, may)
 
 
 # --------------------------------------------------------------------------- goal milestones

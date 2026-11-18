@@ -302,11 +302,22 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload, codeOf }: {
               <input id="agenda-add-name" placeholder="Type a name" value={adding} onChange={(e) => setAdding(e.target.value)} className={FIELD} maxLength={200} enterKeyHint="done" />
               {addable.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {addable.map((f) => (
-                    <button key={f.id} type="button" disabled={busy} className="rounded-full border border-line px-2.5 py-0.5 text-sm hover:bg-surface2" onClick={() => add({ op: "add", feature_id: f.id })}>
-                      + {f.title}
-                    </button>
-                  ))}
+                  {addable.map((f) => {
+                    // qa-leftovers: its code with its name, as the rows above; flagged when it has none.
+                    const known = codeOf?.(f.id);
+                    return (
+                      <button key={f.id} type="button" disabled={busy} className="rounded-full border border-line px-2.5 py-0.5 text-sm hover:bg-surface2" onClick={() => add({ op: "add", feature_id: f.id })}>
+                        +{" "}
+                        {known && (
+                          <>
+                            <code className="simple-code">{known}</code>{" "}
+                          </>
+                        )}
+                        {f.title}
+                        {known === "" && <NotInGt />}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </form>

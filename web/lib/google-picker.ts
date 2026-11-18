@@ -13,6 +13,7 @@
  * synchronously (no await before it), so popup blockers let it through.
  */
 import type { Schemas } from "@/lib/api/client";
+import { installMockGoogle, mockGoogleOn } from "@/lib/google-picker-mock";
 
 export const GAPI_SRC = "https://apis.google.com/js/api.js";
 export const GIS_SRC = "https://accounts.google.com/gsi/client";
@@ -93,6 +94,8 @@ const loading = new Map<string, Promise<void>>();
 /** Loads one of Google's two scripts, once. Any other URL is refused. */
 function loadScript(src: typeof GAPI_SRC | typeof GIS_SRC): Promise<void> {
   if (src !== GAPI_SRC && src !== GIS_SRC) return Promise.reject(new Error("Unexpected script host"));
+  // qa-leftovers: the mock app picks from invented example docs, never Google's real sign-in.
+  if (mockGoogleOn()) return Promise.resolve(installMockGoogle());
   const known = loading.get(src);
   if (known) return known;
   const promise = new Promise<void>((resolve, reject) => {
