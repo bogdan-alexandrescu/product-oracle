@@ -189,12 +189,13 @@ function datesReason(item: Item): string {
   const out = picked && (item.start.date < picked.start || item.end.date >= nextQuarter(picked.start));
   if (item.estimated && item.suggestion)
     return `Oracle suggested these dates: ${item.suggestion.basis}${out ? ` They fall outside ${picked.label}, the quarter it was added to: there is no room for it there.` : ""} Set dates to override them.`;
+  // qa-nov17: a new dependency outdates the suggestion (its basis stays "suggestion"); the estimate
+  // after it can leave the quarter.
+  if (item.estimated && out && (item.depends_on.length > 0 || item.estimate_basis !== "suggestion"))
+    return `Oracle estimated these dates after what it depends on. They fall outside ${picked.label}, the quarter it was added to. Set dates to override them.`;
   // qa-leftovers: dates accepted from Oracle's suggestion into an open draft.
   if (item.estimated && item.estimate_basis === "suggestion")
     return "These dates were accepted from Oracle's suggestion in a draft that is not published yet. Set dates to override them.";
-  // qa-nov17: a new dependency outdates the suggestion; the estimate after it can leave the quarter.
-  if (item.estimated && out)
-    return `Oracle estimated these dates after what it depends on. They fall outside ${picked.label}, the quarter it was added to. Set dates to override them.`;
   if (item.estimated && picked)
     return `Oracle estimated these dates as ${picked.label}, the quarter it was added to, until it suggests dates. Set dates to override them.`;
   if (item.estimated)

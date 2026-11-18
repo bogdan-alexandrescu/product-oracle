@@ -164,7 +164,7 @@ test.describe("desktop 1440x900", () => {
     await expect(panel.getByTestId("ask-chat")).toBeVisible();
     await say(panel, "  move Weekly alert digest to Q2 ");
     await expect(panel.getByTestId("ask-about")).toHaveText("Move Weekly alert digest to Q2");
-    const c = panel.getByTestId("chat-card").filter({ hasText: "Move F-06 Weekly alert digest" });
+    const c = panel.getByTestId("chat-card").filter({ hasText: "Move F-79 Weekly alert digest" });
     await expect(c).toBeVisible();
     await expect(c.getByTestId("chat-card-change")).toContainText("Before:");
     await expect(c.getByTestId("chat-card-change")).toContainText("→ After:");
