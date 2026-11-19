@@ -1180,6 +1180,14 @@ function seedSimpleDatedMove(): Db {
   return db;
 }
 
+/** flakes-dates "simple-quarter-dates": "simple-home" with Health log added to Q2 2027, so Oracle's suggestion sits inside that quarter. */
+function seedSimpleQuarterDates(): Db {
+  const db = seedSimpleHomeScenario();
+  const log = db.simple_roadmap!.items.find((x) => x.key === "setup-health-log");
+  if (log) log.quarter = { start: "2027-04-01", end: "2027-06-30" };
+  return db;
+}
+
 /**
  * inbox-meeting-proposals "meeting-agenda-owner" scenario: "meeting-agenda" with the onboarding
  * roadmap decided by approver@example.com, so a review of Usage alerts that cuts the Welcome
@@ -4313,6 +4321,8 @@ function load(): Db {
                 ? seedRoadmapEditFixes2
               : scenario === "simple-dated-move"
                 ? seedSimpleDatedMove
+              : scenario === "simple-quarter-dates"
+                ? seedSimpleQuarterDates
               : scenario === PLAN_SAME_KEY_SCENARIO
                 ? seedPlanSameKeyScenario
               : scenario === PLAN_TIMELINE_SCENARIO || scenario === PLAN_TIMELINE_EDIT_SCENARIO

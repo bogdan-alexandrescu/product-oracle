@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import { Button, InfoTip, Sheet, toast } from "@/components/ds";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
@@ -143,6 +143,24 @@ async function send(body: ChangeIn): Promise<Sent> {
 type Opened = Pick<Row, "feature_id" | "item_id" | "code" | "title">;
 /** one-feature-panel: a ranked row's name opens the feature's panel (the roadmap's). */
 const OpenRow = createContext<((r: Opened) => void) | null>(null);
+
+/** The goal whose form is open, ?edit=<goal id> opening it once (flakes-dates): the link leaves
+ * the URL at once, so a tab come back to or a reload opens nothing again, and the name takes the
+ * focus only while that first form is open (`linked`), never on a later Edit in place. */
+function useLinkedGoalEdit(): [string | null, (id: string | null) => void, string | null] {
+  const param = useSearchParams().get("edit");
+  const setParams = useSetParams();
+  const [editing, setEditing] = useState<string | null>(param);
+  const [linked, setLinked] = useState<string | null>(param);
+  useEffect(() => {
+    if (param) setParams({ edit: null });
+  }, [param, setParams]);
+  const set = useCallback((id: string | null) => {
+    setLinked(null);
+    setEditing(id);
+  }, []);
+  return [editing, set, linked];
+}
 
 export function Priorities() {
   const params = useSearchParams();
@@ -2436,8 +2454,7 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
   // EG1 a without a dated plan: each goal's ⋯ (Edit goal, Move up and down, Archive, Delete, or
   // the asks), its owner, its form in place, the note with Undo and the Archived goals fold.
   // qa-nov17 G1: ?edit=<goal id> opens that goal's form (Rename on the Goal map, for a goal that lacks its date).
-  const linked = useSearchParams().get("edit");
-  const [editingGoal, setEditingGoal] = useState<string | null>(linked);
+  const [editingGoal, setEditingGoal, linked] = useLinkedGoalEdit();
   const year = data.today.slice(0, 4);
   const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
   // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine;
@@ -2735,8 +2752,7 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
   const noGoal = plan.slices.some((x) => !x.goal);
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
   // qa-nov17 G1: ?edit=<goal id> opens that goal's form (Rename on the Goal map, for a goal that lacks its date).
-  const linked = useSearchParams().get("edit");
-  const [editing, setEditing] = useState<string | null>(linked);
+  const [editing, setEditing, linked] = useLinkedGoalEdit();
   const [note, setNote] = useState<Note | null>(null);
   const noteSlot = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);

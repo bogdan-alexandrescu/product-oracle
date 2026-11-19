@@ -11,6 +11,11 @@ Test cards (protects / fails_when / no_claim):
   its dependency ends; a fully estimated bar moves after it, keeping its length; a typed
   start stays; fails_when=the end-only item starts at its window's start, or the fully
   estimated bar stays wholly before its dependency's end; no_claim=cycles' order.
+- test_accepted_suggestion_moved_by_a_dependency_reads_its_dependencies: protects=a bar
+  estimated from Oracle's suggestion (accepted into a draft) that a dependency moves is
+  estimated after what it depends on (basis "dependencies"); one it leaves keeps its
+  suggestion's basis, a moved quarter's keeps the quarter's; fails_when=the moved bar still
+  reads the suggestion's basis; no_claim=the open suggestion's clearing (service.load).
 """
 
 from datetime import date
@@ -53,3 +58,20 @@ def test_estimated_starts_follow_dependencies():
     assert got["c"].start == Dated(date(2026, 11, 11), "estimated", True)
     assert got["c"].end == Dated(date(2026, 12, 11), "estimated", True)
     assert got["e"].start == d(2026, 10, 2)
+
+
+def test_accepted_suggestion_moved_by_a_dependency_reads_its_dependencies():
+    est = lambda y, m, day: d(y, m, day, True)  # noqa: E731
+    got = dates.after_dependencies(
+        {
+            "a": Resolved(d(2026, 10, 1), d(2026, 11, 10)),
+            "b": Resolved(est(2026, 10, 1), est(2026, 10, 31), "suggestion"),
+            "c": Resolved(est(2026, 12, 1), est(2026, 12, 20), "suggestion"),
+            "q": Resolved(est(2026, 10, 1), est(2026, 10, 31), "quarter"),
+        },
+        {"b": ["a"], "c": ["a"], "q": ["a"]},
+    )
+    assert got["b"].start == est(2026, 11, 11)
+    assert got["b"].basis == "dependencies"
+    assert got["c"].basis == "suggestion"
+    assert got["q"].basis == "quarter"
