@@ -66,8 +66,8 @@ VIEWS = {
 # Each view's body on the seed as 3eea4a0 answered it (the company's id masked).
 # roadmap-dates: picked_quarter, and undated items estimated by their suggestions.
 DIGESTS = {
-    "roadmap": "6256dacc30fc9d41afce5f455ab23a639b7f55f69cb4b21da2f8e18768dd96be",
-    "roadmap-viewer": "f2b31ff472b981b7d5caa839fb08b319512cbb96c1460cc16f1ed919970ed73d",
+    "roadmap": "d3fe3df4a336a16c9724012402bd74b9cbdd9f3b2bd68a9c35dd01caaee733f2",
+    "roadmap-viewer": "e7de33db7cf603473d6ed98e93604347bbea3c857f85b40421373fe8c79a5c0f",
     "priorities": "1471b1dcc8f5186e1e1227e91a2bde13d28d48b9ba8971869df141851d6c5277",
     "priorities-viewer": "6f5a79e3aef918833c7e6fda07988bbed353c7e59ee907b3d793b6a3c5550001",
     "decisions": "e5265b88addf7bd45293bc4041094ac5e6d46a38a00b94bbd175f6a22e6ec400",
