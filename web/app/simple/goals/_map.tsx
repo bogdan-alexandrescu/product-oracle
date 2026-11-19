@@ -254,7 +254,8 @@ function goalMenu(g: GmGoal, ms: M[], c: Ctx) {
   if (!c.map.can_edit) return null;
   const next = ms.find((m) => m.status !== "met") ?? ms[0];
   const items = [
-    { w: "Rename", on: () => c.setRenaming(g.id) },
+    // qa-nov17 G1: a goal with no measure, target or date is renamed in its Goal buckets form, which asks for them in the same step.
+    { w: "Rename", on: () => void c.act.whole(g.id).then((ok) => (ok ? c.setRenaming(g.id) : ok === false && c.go(`/simple/priorities?tab=buckets&edit=${encodeURIComponent(g.id)}`))) },
     ...(next ? [{ w: "Add a feature", on: () => c.onAttach(next.id) }] : []),
     { w: "Propose a milestone", on: () => c.onEdit({ kind: "propose", goal: g.id }) },
     { w: "Pick its metric", on: () => c.onEdit({ kind: "metric", goal: g.id }) },
@@ -478,6 +479,16 @@ function useActs(map: GoalMap, setMap: (m: GoalMap) => void, reload: () => Promi
         failed(e);
       }
     },
+    /** Whether a goal's bucket has its measure, target and date, so a rename alone saves; null when it cannot be read. */
+    whole: async (id: string): Promise<boolean | null> => {
+      try {
+        const b = (await unwrap(api.GET("/v1/simple/goal-buckets"))).goals.find((x) => x.id === id);
+        return !b || (!!b.measure && !!b.target && !!b.due);
+      } catch (e) {
+        failed(e);
+        return null;
+      }
+    },
     rename: async (id: string, name: string, was: string) => {
       const m = map.milestones.find((x) => x.id === id);
       // A goal's name through its goal bucket, its measure, target and date as they are.
@@ -689,7 +700,7 @@ function TracksGrid({ chips, lines, c }: { chips: Chip[]; lines: Map<string, KrL
                         <FeatureName item={{ code: c.codes.get(f.id), title: f.name }} />
                       </span>
                       {/* The milestones' codes and names, as people named them (a list, not prose). */}
-                      <span data-user-content className="block truncate text-[11.5px] text-text2" title={f.ms.length ? f.ms.map((m) => mWords(m, c)).join(" · ") : undefined}>
+                      <span data-user-content data-testid="gm-chip-ms" className="line-clamp-2 text-[11.5px] text-text2 [overflow-wrap:anywhere]" title={f.ms.length ? f.ms.map((m) => mWords(m, c)).join(" · ") : undefined}>
                         {f.ms.length ? f.ms.map((m) => mWords(m, c)).join(" · ") : "No milestone"}
                       </span>
                     </button>

@@ -50,7 +50,7 @@ test.describe("desktop", () => {
     // no_claim: that the viewer is blocked from every edit in the panel; the phone is the S-1 phone test
     await roadmap(page, VIEWER);
     const row = page.locator('[data-testid="timeline-row"][data-item="alert-digest"]');
-    await row.getByText("F-06 Weekly alert digest", { exact: true }).click();
+    await row.getByText("F-79 Weekly alert digest", { exact: true }).click();
     await expect(card(page)).toBeVisible();
     await expect(card(page)).toContainText("Weekly alert digest");
     await expect(card(page)).toContainText("You can read this feature");
@@ -131,7 +131,8 @@ test.describe("desktop", () => {
     const breaks = group.getByTestId("conflict");
     await expect(breaks).toHaveCount(2);
     await expect(breaks.first()).toContainText("starts");
-    await expect(breaks.nth(1).getByTestId("conflict-why")).toBeVisible();
+    // qa-nov17: its reason in words, after the feature's coded name, as the first's.
+    await expect(breaks.nth(1)).toContainText("after its milestone");
     expect(await group.locator("ul").first().evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe("2px");
     const [a, b] = [(await breaks.first().boundingBox())!, (await breaks.nth(1).boundingBox())!];
     expect(b.y).toBeGreaterThanOrEqual(a.y + a.height - 1);

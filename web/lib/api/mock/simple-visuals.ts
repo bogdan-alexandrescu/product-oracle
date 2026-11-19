@@ -40,7 +40,7 @@ export interface VisualsDb {
   visuals: Record<string, MockVisual>;
   /** Subjects whose next drawing fails (the job ends without one), then draw on Retry. */
   failOnce?: string[];
-  /** Subjects named with their code, as the API's `subject_name` ("F-06 Weekly alert digest"). */
+  /** Subjects named with their code, as the API's `subject_name` ("F-79 Weekly alert digest"). */
   names?: Record<string, string>;
 }
 
@@ -56,7 +56,7 @@ interface Ctx {
   id: string;
   role: string;
   names: Record<string, string>;
-  /** A roadmap item's name as the API's subject_name ("F-06 Weekly alert digest", or its title). */
+  /** A roadmap item's name as the API's subject_name ("F-79 Weekly alert digest", or its title). */
   itemName?: (id: string) => string | null;
   /** As visuals.may_revise of a one-pager line: who changes the PRD directly (an owner, its decider, its track owner while an approver). */
   edits?: (documentId: string) => boolean;
@@ -225,7 +225,7 @@ export function seedVisuals(): VisualsDb {
   const db: VisualsDb = {
     visuals: {},
     failOnce: [`feature:${stableUuid("simple-item/alert-export")}`],
-    names: { [`feature:${stableUuid("simple-item/alert-digest")}`]: "F-06 Weekly alert digest", [`feature:${stableUuid("simple-item/alert-export")}`]: "Alert history export" },
+    names: { [`feature:${stableUuid("simple-item/alert-digest")}`]: "F-79 Weekly alert digest", [`feature:${stableUuid("simple-item/alert-export")}`]: "Alert history export" },
   };
   const failBet = typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_VISUAL_FAIL_KEY);
   if (failBet) db.failOnce!.push(`one_pager_line:${betSubject(failBet)}`);

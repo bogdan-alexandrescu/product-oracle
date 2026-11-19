@@ -78,7 +78,7 @@ test.describe("desktop", () => {
       const key = await r.getAttribute("data-item");
       const name = (await r.locator("button[title]").first().textContent())!.trim();
       expect(name.length, `${key} carries its name`).toBeGreaterThan(2);
-      // docs/ground-truth.md: a feature shows its code with its name ("F-06 Weekly alert digest");
+      // docs/ground-truth.md: a feature shows its code with its name ("F-79 Weekly alert digest");
       // one with no code reads its name with the Not in the Ground Truth flag; never a bare id.
       expect(name, `${key}'s name is never a bare id`).not.toMatch(/^[A-Z]-\d+[a-z]?$|#\d/);
       const coded = /^[A-Z]-\d+[a-z]? \S{2,}/.test(name);
@@ -98,8 +98,9 @@ test.describe("desktop", () => {
     const added = rows.filter({ has: page.locator(`button[title="${title}"]`) });
     await expect(added).toHaveCount(1);
     // A new item is in no Ground Truth feature yet: its title, its Draft tag, and the Not in the
-    // Ground Truth flag (docs/ground-truth.md), never refused.
-    await expect(added.locator("button[title]").first()).toHaveText(/^Push notifications for alerts\s*Draft\s*Not in the Ground Truth$/);
+    // Ground Truth flag (docs/ground-truth.md), never refused. qa-nov17: the names column's flag may read
+    // the short "Not in GT", its full words said to a screen reader.
+    await expect(added.locator("button[title]").first()).toHaveText(/^Push notifications for alerts\s*Draft\s*(Not in GT\s*)?Not in the Ground Truth$/);
   });
 
   test("qa-30: the month axis reads three-letter months, the first in sight with its year", async ({ page }) => {
@@ -137,7 +138,7 @@ test.describe("desktop", () => {
     const ask = page.getByTestId("ask-chat").filter({ visible: true });
     await ask.getByLabel("Message Oracle").fill("move Weekly alert digest to Q4 2031");
     await ask.getByRole("button", { name: "Send" }).click();
-    const card = ask.getByTestId("chat-card").filter({ hasText: /Move F-06 Weekly alert digest to Oct 1/ });
+    const card = ask.getByTestId("chat-card").filter({ hasText: /Move F-79 Weekly alert digest to Oct 1/ });
     await card.getByRole("button", { name: "Preview" }).click();
     const ghost = page.getByTestId("preview-ghost");
     await expect(ghost).toHaveAttribute("data-start", "2031-10-01");

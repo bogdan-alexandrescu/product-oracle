@@ -286,16 +286,16 @@ for (const size of SIZES)
       await format(page, "board");
       await tap(boardCard(page, "setup-tour"));
       await expect(panel(page).getByTestId("item-cut")).toBeVisible();
-      await partOf(page, "Setup checklist");
-      await expect(panel(page).getByTestId("card-part-of")).toHaveText("Part of Setup checklist");
-      await tap(panel(page).getByTestId("card-part-of").getByRole("button", { name: "Setup checklist" }));
+      await partOf(page, "F-01 Setup checklist");
+      await expect(panel(page).getByTestId("card-part-of")).toHaveText("Part of F-01 Setup checklist");
+      await tap(panel(page).getByTestId("card-part-of").getByRole("button", { name: "F-01 Setup checklist" }));
       await expect(panel(page).getByTestId("card-parts").getByTestId("card-part").filter({ hasText: "In-app tour" })).toContainText("(cut)");
       await tap(panel(page).getByTestId("card-parts").getByRole("button", { name: "In-app tour" }));
       await menu(page, "Part of…");
       const form = panel(page).getByTestId("card-parent-edit");
       await form.getByLabel("Part of").selectOption({ label: "Not a part of another feature" });
       await tap(form.getByRole("button", { name: "Save", exact: true }));
-      await expect(toasts(page)).toContainText("Took 'In-app tour' out of Setup checklist");
+      await expect(toasts(page)).toContainText("Took 'In-app tour' out of F-01 Setup checklist");
       await expect(panel(page).getByTestId("card-part-of")).toHaveCount(0);
     });
 

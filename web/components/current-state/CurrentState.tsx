@@ -503,7 +503,7 @@ export function ReadyBand({ data, onChanged }: { data: FeatureStates; onChanged:
       </div>
       {open && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-3" data-testid="cs3-dialog" onClick={() => !moving && setOpen(null)}>
-          <div role="dialog" aria-modal="true" aria-label={`Move ${open.title} to Running today`} onClick={(e) => e.stopPropagation()} className="w-[520px] max-w-full rounded-2xl border border-line bg-surface p-5 shadow-2xl">
+          <div role="dialog" aria-modal="true" aria-label={`Move ${featureName(open)} to Running today`} onClick={(e) => e.stopPropagation()} className="w-[520px] max-w-full rounded-2xl border border-line bg-surface p-5 shadow-2xl">
             <h2 className="mb-1 text-[18px] font-semibold">Move {featureName(open)} to Running today?</h2>
             <p className="mb-3 text-[14px] text-text2">Oracle found proof that it runs today:</p>
             <ul className="mb-4 space-y-1.5 text-[14px]">

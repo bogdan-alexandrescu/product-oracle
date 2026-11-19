@@ -203,7 +203,8 @@ for (const view of VIEWS) {
           // A milestone a plan chip already names shows once, as that chip.
           const chip = name ? row.getByTestId("plan-chip").filter({ hasText: name }) : null;
           if (chip && (await chip.count())) await expect(row.getByTestId("task-milestone")).toHaveCount(0);
-          else if (name) await expect(row.getByTestId("task-milestone")).toHaveText(name);
+          // qa-nov17 G8: with its roadmap code when it has one ("M6 Beta").
+          else if (name) await expect(row.getByTestId("task-milestone")).toHaveText(new RegExp(`^(M\\d+ )?${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
           else await expect(row.getByTestId("task-milestone")).toHaveCount(0);
         }
         await row.getByRole("button", { name: "Edit Setup failure alerts" }).click();

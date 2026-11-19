@@ -75,12 +75,12 @@ for (const phone of [false, true]) {
         await expect(rows.last()).toBeInViewport({ ratio: 1 });
         expect(await slide.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
         // Each milestone's items are a count; their names show on asking (and on hover).
-        await expect(slide.getByText("Setup checklist", { exact: true })).toHaveCount(0);
+        await expect(slide.getByText("F-01 Setup checklist", { exact: true })).toHaveCount(0);
         const show = slide.getByRole("button", { name: /^Show the names in / });
         await expect(show.first()).toHaveAttribute("title", /\S/);
         while (await show.count()) await show.first().click();
         // A feature named on the timeline slide opens the one feature panel, over the slide.
-        await slide.getByText("Setup checklist", { exact: true }).first().click();
+        await slide.getByText("F-01 Setup checklist", { exact: true }).first().click();
         const panel = page.getByTestId("item-panel");
         await expect(panel).toBeVisible();
         // On a phone the panel is a display:contents wrapper with no box of its own (its viewport

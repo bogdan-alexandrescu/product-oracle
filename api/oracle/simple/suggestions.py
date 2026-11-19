@@ -217,7 +217,10 @@ async def inbox_rows(
         )
     if not rows:
         return []
-    read = await service.load(db)
+    from oracle.simple import drafts
+
+    # qa-nov17: the working draft the person sees, as Needs a decision's count reads it.
+    read = await service.load(db, await drafts.overlays_for(db, principal))
     by_id = read.by_id()
     per_item: dict[uuid.UUID, list[RoadmapDateSuggestion]] = defaultdict(list)
     for s in rows:
@@ -225,7 +228,8 @@ async def inbox_rows(
     out = []
     for item_id, ss in per_item.items():
         e = by_id.get(item_id)
-        if e is None or not service.can_decide(principal, e, read.deciders):
+        # qa-nov17: one the read no longer offers (dates set here, a new dependency) is not asked.
+        if e is None or e.suggestion is None or not service.can_decide(principal, e, read.deciders):
             continue
         first = ss[0]
         out.append(

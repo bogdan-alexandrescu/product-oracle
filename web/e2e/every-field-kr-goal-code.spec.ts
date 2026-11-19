@@ -77,13 +77,13 @@ test.describe("a roadmap item's feature code", () => {
   }
 
   test("the owner gives it a free code, with Undo; a taken one is refused in plain words", async ({ page }) => {
-    // protects=the panel's Code: a code another feature has is refused ("F-06 is already the code
-    // of F-06 Weekly alert digest") and nothing changes; a free one (typed f-31) shows as F-31
+    // protects=the panel's Code: a code another feature has is refused ("F-79 is already the code
+    // of F-79 Weekly alert digest") and nothing changes; a free one (typed f-31) shows as F-31
     // before its name and Undo takes it off; fails_when=no Code field, a taken code lands, or Undo
     // leaves it; no_claim=the Ground Truth page's list.
     await openExport(page);
-    await giveCode(page, "F-06");
-    await expect(toast(page, "F-06 is already the code of F-06 Weekly alert digest")).toBeVisible();
+    await giveCode(page, "F-79");
+    await expect(toast(page, "F-79 is already the code of F-79 Weekly alert digest")).toBeVisible();
     await expect(panel(page).getByTestId("card-code")).toHaveText(NO_CODE);
     await giveCode(page, "f-31");
     await expect(panel(page).getByTestId("card-code")).toHaveText("F-31");
@@ -139,7 +139,7 @@ test.describe("a roadmap item's feature code", () => {
     await page.goto("/simple/roadmap");
     await expect(page.getByTestId("simple-roadmap")).toBeVisible();
     await openRoadmapItem(page, "alert-digest");
-    await expect(panel(page).getByTestId("card-code")).toContainText("F-06");
+    await expect(panel(page).getByTestId("card-code")).toContainText("F-79");
     await expect(panel(page).getByRole("button", { name: "Change the code" })).toHaveCount(0);
     await panel(page).getByRole("button", { name: "About this code" }).click();
     await expect(panel(page).getByText("It comes from its PRD's section: change it in the PRD.")).toBeVisible();
@@ -168,13 +168,13 @@ test.describe("an added item's code", () => {
 
   // protects=adding an item whose title starts with a code another item has is refused in
   // set_code's plain words and nothing is added; a free code adds; fails_when=two items read
-  // F-06 after the add; no_claim=a proposal accepted after the code was taken (pytest).
+  // F-79 after the add; no_claim=a proposal accepted after the code was taken (pytest).
   test("a code another item has is refused in plain words; a free one adds", async ({ page }) => {
     await login(page);
     await page.goto("/simple/roadmap");
     await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-    const sheet = await addFromSheet(page, "F-06 Night digest");
-    await expect(toast(page, "F-06 is already the code of F-06 Weekly alert digest")).toBeVisible();
+    const sheet = await addFromSheet(page, "F-79 Night digest");
+    await expect(toast(page, "F-79 is already the code of F-79 Weekly alert digest")).toBeVisible();
     await expect(page.getByTestId("timeline-row").filter({ hasText: "Night digest" })).toHaveCount(0);
     await sheet.getByLabel("Title").fill("F-37 Night digest");
     await sheet.getByRole("button", { name: "Add", exact: true }).click();

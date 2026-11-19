@@ -10,6 +10,7 @@ import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { useCodedMilestone } from "./milestone-codes";
 import { CodeTag, goalLabel, gtCode, milestoneColour, planFeatures, weeksWords } from "./plan-buckets";
 
 /*
@@ -134,7 +135,7 @@ function usePeople() {
 const fieldsOf = (g: Goal, year: string): Fields => ({ title: g.title, measure: g.measure ?? "", target: g.target ?? "", due: dayOf(g.due, year), owner: g.owner_id ?? null, on_roadmap: g.on_roadmap ?? true });
 
 /** GB1 a: the goal's header turned into a small form, right where it sits. */
-export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: { start: Fields; goal?: Goal; order: number; title: string; year: string; onSave: (f: Fields & { day: string }, seen?: Goal, refused?: (line: string) => void) => Promise<void>; onCancel: () => void }) {
+export function GoalForm({ start, goal, order, title, year, linked, onSave, onCancel }: { start: Fields; goal?: Goal; order: number; title: string; year: string; linked?: boolean; onSave: (f: Fields & { day: string }, seen?: Goal, refused?: (line: string) => void) => Promise<void>; onCancel: () => void }) {
   // milestone-kinds: whether its target date shows on the roadmap, set where who may edit the goal edits it.
   const [f, setF] = useState<Fields>(goal?.can_edit ? { on_roadmap: goal.on_roadmap ?? true, ...start } : start);
   // The goal as it read when the form opened: its save is refused if it changed since.
@@ -166,6 +167,20 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
   const [left, setLeft] = useState<Partial<Record<keyof Fields, boolean>>>({});
   const leave = (k: keyof Fields) => () => setLeft((x) => (x[k] ? x : { ...x, [k]: true }));
   const lacks = (k: keyof Fields, missing: boolean) => !!left[k] && missing;
+  // qa-nov17 G1: opened from a link (Rename on the Goal map), the page's own load takes focus after
+  // autoFocus; the name takes it back once the page has settled, in view. Never on an Edit in
+  // place: the page stays where the person is.
+  const nameEl = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!linked) return;
+    const t = window.setTimeout(() => {
+      const n = nameEl.current;
+      if (!n || document.activeElement === n || n.form?.contains(document.activeElement)) return;
+      n.focus();
+      n.scrollIntoView({ block: "center" });
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [linked]);
   return (
     <form
       data-testid="goal-form"
@@ -198,7 +213,7 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
         <span className="text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal {order} in the order; change it in the Ground Truth</span>
       </div>
       <Field label="Goal" error={lacks("title", !f.title.trim()) ? "Name the goal." : undefined} now={now.title}>
-        <textarea autoFocus rows={f.title.length > 60 ? 2 : 1} value={f.title} onChange={set("title")} onBlur={leave("title")} className={`${INPUT} h-auto py-1.5`} />
+        <textarea ref={nameEl} autoFocus rows={f.title.length > 60 ? 2 : 1} value={f.title} onChange={set("title")} onBlur={leave("title")} className={`${INPUT} h-auto py-1.5`} />
       </Field>
       <Field label="Measure: the number that shows it" error={lacks("measure", !f.measure.trim()) ? "Add a measure." : undefined} now={now.measure}>
         <input value={f.measure} onChange={set("measure")} onBlur={leave("measure")} placeholder="For example: repeat orders a month" className={lacks("measure", !f.measure.trim()) ? BAD : INPUT} />
@@ -390,6 +405,8 @@ export function FeatureRows({
   /** Rows after the plan's: tasks added since, and "+ Add a task". */
   tail?: ReactNode;
 }) {
+  // qa-nov17 G8: a task's own milestone by its code and name as the roadmap reads it ("M6 Beta").
+  const coded = useCodedMilestone();
   const features = planFeatures(plan, goal)
     .filter((f) => !task?.cut(f))
     .map((f) => (task ? { ...f, name: task.name(f) } : f));
@@ -451,7 +468,7 @@ export function FeatureRows({
               </>
             )}
             {/* PR10: the name keeps room for a few words; the milestone chips wrap beside it instead. */}
-            <span data-testid="plan-feature-name" className="min-w-[10rem] flex-1">
+            <span data-testid="plan-feature-name" className="min-w-[10rem] flex-1 max-sm:min-w-0 max-sm:basis-0">
               {onOpen ? (
                 <button type="button" data-testid="plan-feature-open" title={`Open ${f.name}`} className="text-left hover:underline" onClick={() => onOpen(f)}>
                   {f.name}
@@ -489,7 +506,7 @@ export function FeatureRows({
               })}
               {own && (
                 <span data-testid="task-milestone" title={`Its own milestone: ${own}`} className="inline-flex h-5 items-center whitespace-nowrap rounded-full bg-surface2 px-2 text-[12px] font-[650] text-text2">
-                  {own}
+                  {coded(own)}
                 </span>
               )}
             </span>
@@ -584,7 +601,8 @@ export function ArchiveDialog({ goal, plan, featuresOf, gb, onClose, onArchive, 
             )}
             {rest > 0 && (
               <>
-                <p className="font-[650]">The other {rest}:</p>
+                {/* qa-nov17 G6: "The other N" only after the ones that go to another goal. */}
+                <p className="font-[650]">{multi.length ? `The other ${rest}:` : "They go:"}</p>
                 <label className="flex flex-wrap items-center gap-2">
                   <input type="radio" name="archive-to" checked={mode === "move"} onChange={() => setMode("move")} className="h-4 w-4 accent-[var(--accent)]" /> <span className="whitespace-nowrap">Move to</span>
                   <select

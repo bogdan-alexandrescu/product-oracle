@@ -88,7 +88,7 @@ for (const size of SIZES) {
       await expect(looped).toBeDisabled();
       await expect(looped).toContainText("Needs this one: it would make a loop");
       // The search for another PRD's feature does not let it through either.
-      await panel(page).getByLabel("Or a feature from another PRD").fill("F-06");
+      await panel(page).getByLabel("Or a feature from another PRD").fill("F-79");
       await expect(panel(page).getByTestId("card-depends-search").getByRole("button", { name: /Weekly alert digest/, disabled: false })).toHaveCount(0);
       await expect(panel(page).getByRole("button", { name: "Save" })).toBeDisabled();
       await expect(panel(page).getByTestId("card-depends")).not.toContainText("Weekly alert digest");

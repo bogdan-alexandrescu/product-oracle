@@ -64,13 +64,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
           const key = (await c.getAttribute("data-item"))!;
           // Pre-demo QA S-5 (7821685f4): an end past its milestone is listed too, by its
           // feature's name with its sentence behind an (i); a link reads its sentence whole.
-          if (await c.getByTestId("conflict-why").count()) {
-            await c.getByTestId("conflict-why").hover();
-            await expect(c.getByRole("tooltip")).toBeVisible();
-            await expect(c.getByRole("tooltip")).toContainText("after its milestone");
-            await page.mouse.move(0, 0);
-            await expect(c.getByRole("tooltip")).toBeHidden();
-          } else await expect(c).toContainText(/starts/);
+          // qa-nov17: every row says its reason in words, the end past its milestone too.
+          await expect(c).toContainText(/starts|after its milestone|ends/);
           const bar = bars(page).and(page.locator(`[data-item="${key}"]`));
           await expect(bar).toBeVisible();
           await expect(bar, `${key}: a listed warning's bar is flagged as broken`).not.toHaveAttribute("data-broken", "false");

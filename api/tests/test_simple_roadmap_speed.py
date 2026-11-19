@@ -43,12 +43,12 @@ VIEWS = {
 # Each view's body on the seed as 5c6d57bed answered it (the company's id masked).
 # roadmap-dates: picked_quarter, and undated items estimated by their suggestions.
 DIGESTS = {
-    "goal": "b86a3e9a8bcc3d6c11cc6d95ae8db2ef60415c2c711b0c7af5499facef65ff0c",
-    "track": "e82b6cf178727f05e2263cd473509c77ebdf91e3dbf3780e25fa72672e39175d",
-    "prd": "bbbbe8946f9a5b9fb82e708edae9150af35a6365c63e68534ba820f29c6e409b",
-    "one-roadmap": "c138f1caf6e83d7a7a66c000ed7552322d8c7492c5d1449c387efabd8c3268f4",
-    "viewer": "872388339d6505e34dea086243719faf26d4600b031747c60494dbc2d0fb98c2",
-    "waiting": "5f6ba384f78e86590d629e1f984326f672fbd5ab653f69a0edab9beda48db1b6",
+    "goal": "1e37021e8b0542f7d314557c34e23401255db8407ae013fe67577d126bec891b",
+    "track": "a93a51a4ef0a5f5c918f198e79007bb0b288f73ff14cda26fd99c13dc6aabbc5",
+    "prd": "f56ca97c00059db531a4978da7ece2e387365fd405585445fb601dac1c4cba53",
+    "one-roadmap": "2c728178828c7d74a525071458012f4437d398f7e1c5ed69ad7af020c623751d",
+    "viewer": "ae631f6d6a89f26223af12a8838369dc43ec96a60be1a89e2f70919c2ffeeed8",
+    "waiting": "6ec46197015480da730ce7e5d0b228599ec45f31eb3ddac72fe02b136eef19b6",
     "waiting-viewer": "8e3c599ef74b60ae7cc28c7bbcbee560464dfc074a18d9e9ac36e11f81feded5",
 }
 

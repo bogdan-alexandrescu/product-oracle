@@ -167,7 +167,8 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
     const side = await page.getByTestId("side-row").evaluateAll((els) => els.map((e) => e.getAttribute("data-above")));
     expect(side).toEqual(above);
     const code = page.getByTestId("side-code").first();
-    expect(await code.getAttribute("title")).toBe(await page.getByTestId("side-row").first().getByTestId("prio-title").getAttribute("title"));
+    // The chip's tip names its feature, code with name (qa-nov17 G4).
+    expect(await code.getAttribute("title")).toBe(`${(await code.textContent())!.trim()} ${await page.getByTestId("side-row").first().getByTestId("prio-title").getAttribute("title")}`);
     expect(await code.evaluate((e) => getComputedStyle(e).fontFamily)).not.toMatch(/mono/i);
   });
 });
@@ -225,9 +226,9 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
       const shares = await page.getByTestId("bucket-share").allTextContents();
       expect(shares.reduce((n, s) => n + Number(s.replace("%", "")), 0)).toBe(100);
       const activation = page.locator('[data-testid="goal-bucket"][data-key="faster-activation"]');
-      // qa4-simple-plan-12: each code a chip beside its name (Weekly alert digest's F-06); Sample data import has none.
+      // qa4-simple-plan-12: each code a chip beside its name (Weekly alert digest's F-79); Sample data import has none.
       const retention = page.locator('[data-testid="goal-bucket"][data-key="grow-retention"]');
-      await expect(retention.getByTestId("bucket-features").locator("li").filter({ hasText: "Weekly alert digest" }).getByTestId("prio-code")).toHaveText("F-06");
+      await expect(retention.getByTestId("bucket-features").locator("li").filter({ hasText: "Weekly alert digest" }).getByTestId("prio-code")).toHaveText("F-79");
       await expect(activation.getByTestId("bucket-features").locator("li").filter({ hasText: "Sample data import" }).getByTestId("prio-code")).toHaveCount(0);
       // PR1 (QA Nov 12): a feature with no Ground Truth code shows no made-up initials, it is flagged.
       await expect(activation.getByTestId("bucket-features").locator("li").filter({ hasText: "Setup checklist" }).getByTestId("prio-code").filter({ hasText: /^SC$/ })).toHaveCount(0);

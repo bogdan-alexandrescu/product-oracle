@@ -5,7 +5,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * One feature panel (BGD, Nov 4): a feature opens the same panel from the Roadmap, Priorities
  * and a one-pager's plan rows, its code before its name; every field is changed there, saved
  * through the change engine with Undo. A viewer reads it with no edit controls. Driven against
- * the mock's default scenario (Weekly alert digest, F-06, depends on Alert rules engine).
+ * the mock's default scenario (Weekly alert digest, F-79, depends on Alert rules engine).
  */
 
 const SIZES = [
@@ -53,7 +53,7 @@ for (const size of SIZES) {
       await openRoadmapItem(page, "alert-digest");
       await expect(panel(page)).toBeVisible();
       // The code chip comes before the name.
-      await expect(panel(page).getByTestId("card-name")).toHaveText(/^F-06\s*Weekly alert digest/);
+      await expect(panel(page).getByTestId("card-name")).toHaveText(/^F-79\s*Weekly alert digest/);
 
       await rename(page, "Weekly alert summary");
 
@@ -153,11 +153,11 @@ for (const size of SIZES) {
       await openRoadmapItem(page, "setup-checklist");
       await expect(panel(page).getByTestId("card-name")).toContainText("Setup checklist");
       await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
-      await panel(page).getByLabel("Feature it depends on").selectOption({ label: "F-06 Weekly alert digest" });
+      await panel(page).getByLabel("Feature it depends on").selectOption({ label: "F-79 Weekly alert digest" });
       await tap(panel(page).getByRole("button", { name: "Save" }));
-      const dep = panel(page).getByTestId("card-depends-row").getByRole("button", { name: /^F-06\s*Weekly alert digest$/ });
+      const dep = panel(page).getByTestId("card-depends-row").getByRole("button", { name: /^F-79\s*Weekly alert digest$/ });
       await expect(dep).toBeVisible();
-      await expect(panel(page).getByTestId("card-depends")).not.toContainText("Feature F-06");
+      await expect(panel(page).getByTestId("card-depends")).not.toContainText("Feature F-79");
 
       await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
       await panel(page).getByLabel("Or a feature from another PRD").fill("F-404");
@@ -167,7 +167,7 @@ for (const size of SIZES) {
       await expect(panel(page).getByTestId("card-depends")).not.toContainText("F-404");
 
       await tap(dep);
-      await expect(panel(page).getByTestId("card-name")).toHaveText(/^F-06\s*Weekly alert digest/);
+      await expect(panel(page).getByTestId("card-name")).toHaveText(/^F-79\s*Weekly alert digest/);
     });
 
     test("a Priorities row opens the same panel, and its name changes there", async ({ page }) => {

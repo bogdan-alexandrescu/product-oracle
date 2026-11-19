@@ -102,7 +102,7 @@ for (const phone of [false, true]) {
         await expect(digest).toBeDisabled();
         await expect(digest).toContainText("it would make a loop");
         // The search for another PRD's feature does not offer it as a choice either.
-        await panel(page).getByLabel("Or a feature from another PRD").fill("F-06");
+        await panel(page).getByLabel("Or a feature from another PRD").fill("F-79");
         await expect(panel(page).getByTestId("card-depends-search").getByRole("button", { name: /Weekly alert digest/, disabled: false })).toHaveCount(0);
         await expect(panel(page).getByRole("button", { name: "Save" })).toBeDisabled();
         await tap(panel(page).getByRole("button", { name: "Cancel" }));

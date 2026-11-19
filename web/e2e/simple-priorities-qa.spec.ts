@@ -123,7 +123,8 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
           if (size === "1440") await mark.hover();
           else await mark.click();
           await expect(mark.getByTestId("vxe-name")).toBeVisible();
-          await expect(mark.getByTestId("vxe-name")).toHaveText("#1 Setup checklist");
+          // qa-nov17: Setup checklist is the Ground Truth's F-01, so its tag reads its code too.
+          await expect(mark.getByTestId("vxe-name")).toHaveText("#1 F-01 · Setup checklist");
           await page.mouse.move(0, 0);
           // V-4: every two marks keep a gap (no touching rings); a count is a mark too.
           const boxes = await page.locator('[data-testid="vxe-point"], [data-testid="vxe-crowd"]').evaluateAll((es) => es.map((e) => e.querySelector("svg")!.getBoundingClientRect()).map((b) => [b.left, b.top, b.right, b.bottom]));

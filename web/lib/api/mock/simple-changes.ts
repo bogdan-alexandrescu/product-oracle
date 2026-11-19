@@ -1014,8 +1014,8 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   if (pickedMs && typeof pickedMs === "object" && pickedMs.id) {
     const refused = pickRefused(db, target.item_id, pickedMs.id);
     if (refused) return json(422, { detail: refused });
-    const gm = (db.goal_milestones ?? []).find((m) => m.id === pickedMs.id)!;
-    after.milestone = { id: gm.id, name: `${gm.code} ${gm.name}`, date: null, date_source: null };
+    const gm = pickableMilestone(db, pickedMs.id)!;
+    after.milestone = { id: gm.id, name: `${gm.code} ${gm.name}`.trim(), date: null, date_source: null };
   }
   if (body.op === "set_goal_measure") {
     // targets.py: the goal the item's read shows; a measure (target and date may be empty); before as read, else 409.
@@ -1066,9 +1066,18 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   return json(201, { change: view(db, ctx, change), flags: [] });
 }
 
+/** qa-nov17 G2: a milestone the panel offers, by id, with its roadmap: a goal's own (goal_milestones), or the
+ * Goal map's (map_milestones: the roadmap's own TrackMilestone rows, which the API checks the same way). */
+function pickableMilestone(db: SimpleDb, id: unknown): { id: string; code: string; name: string; roadmap: string; deleted?: boolean } | null {
+  const gm = (db.goal_milestones ?? []).find((m) => m.id === id);
+  if (gm) return gm;
+  const mm = db.map_milestones?.milestones.find((m) => m.id === id);
+  return mm ? { id: mm.id, code: mm.code ?? "", name: mm.name, roadmap: db.map_milestones!.roadmap } : null;
+}
+
 /** item-milestone (changes._roadmap_milestone): why a goal milestone cannot be picked for the item, in its plain words; null when it can. */
 function pickRefused(db: SimpleDb, itemId: unknown, milestoneId: unknown): string | null {
-  const gm = (db.goal_milestones ?? []).find((m) => m.id === milestoneId);
+  const gm = pickableMilestone(db, milestoneId);
   const k = keyOf(db, itemId);
   if (!gm || !k || gm.roadmap !== seed(db, k).roadmap) return "That milestone is not on this item's roadmap.";
   return gm.deleted ? "That milestone was deleted." : null;

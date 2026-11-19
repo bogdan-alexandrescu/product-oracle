@@ -57,7 +57,9 @@ test.describe("desktop", () => {
     await expect(tiles).toHaveCount(5);
     const sum = (await tiles.locator("b").allTextContents()).reduce((s, t) => s + Number(t), 0);
     expect(sum).toBe(n);
-    await expect(tray.getByTestId("tray-scope")).toContainText(`${n} to decide in your roadmaps' working drafts`);
+    // qa-nov17: the count in sight, where it counts behind the (i).
+    await expect(tray.getByTestId("tray-scope")).toContainText(`${n} to decide`);
+    await expect(tray.getByTestId("tray-scope")).toContainText("In your roadmaps' working drafts");
     await expect(tray.getByTestId("tray-broken").filter({ hasText: "Team invite nudges" })).toHaveCount(0);
     await expect(tray.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" })).toHaveCount(1);
     await expect(tray.getByTestId("tray-flag").filter({ hasText: "Team invite nudges" })).toBeVisible();
@@ -72,7 +74,7 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
     const labels = page.getByTestId("chart-labels");
     // A milestone reads its code with its name ("M1 Beta"), a feature its code with its name
-    // ("F-06 Weekly alert digest"), as docs/ground-truth.md has every feature read.
+    // ("F-79 Weekly alert digest"), as docs/ground-truth.md has every feature read.
     const beta = labels.getByTestId("chart-group").filter({ hasText: /^M\d+ Beta \(/ });
     await expect(beta).toHaveCount(1);
     // The digest's row sits under the Beta heading, before the next group's.
@@ -83,7 +85,7 @@ test.describe("desktop", () => {
           let group = "";
           for (const r of rows) {
             if (r.getAttribute("data-testid") === "label-title") {
-              if (r.textContent?.trim() === "F-06 Weekly alert digest") return group;
+              if (r.textContent?.trim() === "F-79 Weekly alert digest") return group;
             } else group = (r.textContent ?? "").trim();
           }
           return null;

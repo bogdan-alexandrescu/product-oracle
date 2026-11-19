@@ -136,7 +136,7 @@ for (const phone of [false, true]) {
       /**
        * Card simple-suggest-chat: protects = in Ask Oracle, "Suggest a feature for Grow retention: "
        * and the person's own words;
-       * Oracle restates it, flags the look-alike by its code and name ("It looks like F-06 Weekly
+       * Oracle restates it, flags the look-alike by its code and name ("It looks like F-79 Weekly
        * alert digest, which …", never the item's key)
        * and shows ONE card with Preview / Apply / Discard; Apply files it as the person's own
        * suggestion, under People in the goal's drawer; fails_when = there is no
@@ -155,7 +155,7 @@ for (const phone of [false, true]) {
         const chat = page.getByTestId("ask-chat-thread").filter({ visible: true });
         await expect(chat).toContainText("I understood one change: suggest Weekly digest for admins for Grow retention.");
         // The look-alike by its display code and name, never its key (suggest review).
-        await expect(chat).toContainText("It looks like F-06 Weekly alert digest, which has a similar name.");
+        await expect(chat).toContainText("It looks like F-79 Weekly alert digest, which has a similar name.");
         await expect(chat).not.toContainText("alert-digest");
         const card = chat.getByTestId("chat-card");
         await expect(card).toHaveCount(1);

@@ -564,7 +564,16 @@ export function MsLayer(props: MsLayerProps) {
         const at = Number(el.dataset.l0);
         const w = widths[n];
         if (el.dataset.testid === "ms-add-hint") {
-          const spans = props.keepOff ?? [];
+          // qa-nov17 #3/#6: it keeps off the band's chips and counts, the diamonds, the Today pill and
+          // the header's names it would sit on, as well as the axis's names (keepOff).
+          const hb = el.getBoundingClientRect();
+          const chart = layer.closest("[data-testid=simple-chart]") ?? layer;
+          const near0 = [...chart.querySelectorAll<Element>("[data-keep-clear], [data-testid=ms-label], [data-testid=ms-prd-label], [data-testid=ms-band-more], [data-testid=ms-same-day], [data-testid=ms-diamond], [data-testid=ms-prd-diamond]")]
+            .filter((o) => o !== el && !el.contains(o))
+            .map((o) => o.getBoundingClientRect())
+            .filter((r) => r.width > 0 && r.top < hb.bottom + 2 && r.bottom > hb.top - 2)
+            .map((r): [number, number] => [r.left - lx, r.right - lx]);
+          const spans = [...(props.keepOff ?? []), ...near0];
           const free = (l: number) => l >= lo && l + w <= hi && spans.every(([a, c]) => l >= c + 6 || l + w <= a - 6);
           const near = [Math.min(Math.max(at, lo), hi - w), ...spans.flatMap(([a, c]) => [c + 8, a - 6 - w])].filter(free);
           const l = near.length ? near.reduce((p, q) => (Math.abs(q - at) < Math.abs(p - at) ? q : p)) : null;
@@ -601,7 +610,9 @@ export function MsLayer(props: MsLayerProps) {
     };
     const place = () => {
       const lx = layer.getBoundingClientRect().left;
-      const keep = [...chart.querySelectorAll("[data-keep-clear], [data-testid=ms-diamond], [data-testid=ms-prd-diamond]")].map(boxOf).filter((o) => o.r > o.l && o.b > o.t);
+      // qa-nov17 #3: the header's names (a key date's, a track milestone's, a milestone's end) and
+      // the band's chips too, so a count is never drawn on "Board meeting".
+      const keep = [...chart.querySelectorAll("[data-keep-clear], [data-testid=key-date-label], [data-testid=track-milestone-label], [data-testid=milestone-end-label], [data-testid=ms-label], [data-testid=ms-prd-label], [data-testid=ms-band-more], [data-testid=ms-diamond], [data-testid=ms-prd-diamond]")].map(boxOf).filter((o) => o.r > o.l && o.b > o.t);
       const names = chart.querySelector("[data-testid=timeline-names-head]");
       const floor = names ? boxOf(names).r : -Infinity;
       const taken: Box[] = [];
@@ -609,6 +620,7 @@ export function MsLayer(props: MsLayerProps) {
       const sorted = badges.sort((a, b) => Number(a.dataset.mx) - Number(b.dataset.mx));
       for (const el of sorted) {
         el.style.left = `${Number(el.dataset.mx) + 3}px`;
+        el.style.top = `${el.dataset.top}px`;
         el.style.visibility = "";
       }
       const boxes = sorted.map(boxOf);
@@ -620,18 +632,27 @@ export function MsLayer(props: MsLayerProps) {
           el.style.visibility = "hidden";
           continue;
         }
-        const free = (l: number) => {
-          const o = { ...at, l, r: l + w };
+        const h = at.b - at.t;
+        const free = (l: number, t = at.t) => {
+          const o = { l, r: l + w, t, b: t + h };
           return l >= floor && !keep.some((k) => meets(o, k)) && !taken.some((k) => meets(o, k));
         };
         let l = mx + 3;
+        let t = at.t;
         if (!free(l)) {
           const near = [mx - 3 - w];
           for (let d = 1; d <= BADGE_NEAR; d++) near.push(mx + 3 + d, mx - 3 - w - d);
-          l = near.find(free) ?? l;
+          const found = near.find((c) => free(c));
+          // qa-nov17 #3: no room on the header's row (a key date's name fills it on a phone): the
+          // count drops onto its diamond's own row (centred on it), just past the diamond.
+          const row = at.t + 18;
+          const low = found == null ? [mx + 11, mx - 11 - w].find((c) => free(c, row)) : undefined;
+          if (found != null) l = found;
+          else if (low != null) [l, t] = [low, row];
         }
         el.style.left = `${l - lx}px`;
-        taken.push({ ...at, l, r: l + w });
+        if (t !== at.t) el.style.top = `${Number(el.dataset.top) + t - at.t}px`;
+        taken.push({ l, r: l + w, t, b: t + h });
       }
     };
     place();
@@ -756,7 +777,10 @@ export function MsLayer(props: MsLayerProps) {
     const n = seenDay.get(date) ?? 0;
     seenDay.set(date, n + 1);
     const many = byDay.get(date) ?? 1;
-    if (n === 0) {
+    // qa-nov17 #7: one scrolled left of the Timeline's track (under its names column) draws no
+    // diamond, count or line over the names; its bars' ties still show.
+    const off = !!props.span && mx < props.span[0] - 1;
+    if (n === 0 && !off) {
       // Their count, a small badge on the diamond's top-right corner: it sits wholly above the
       // diamonds' own boxes, so it never covers the next one at any zoom (its names in its tooltip),
       // and above the Today pill's top too (QA Nov 12 #8: touching it, it found no place off a month's name).
@@ -768,6 +792,7 @@ export function MsLayer(props: MsLayerProps) {
             data-testid="ms-same-day"
             data-ms-badge
             data-mx={mx}
+            data-top={axisY - 24}
             aria-expanded={dayList === date}
             data-ms-pop
             data-ms-pop-button
@@ -807,7 +832,7 @@ export function MsLayer(props: MsLayerProps) {
       out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={msCode(m)} title={`${words(m)}, ${fullDay(date)}`} kind={m.kind ?? "delivery"} day={date} onPointerDown={grab(m)} />);
     }
     // A line through every group, its words in the band under the date axis.
-    out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(msCode(m))}` }} />);
+    if (!off) out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: height - axisY - 6, borderLeft: `1.5px solid ${msEdge(msCode(m))}` }} />);
     // Each item it waits on tied to it by a dotted line; one that ends after it is late (red).
     for (const id of m.item_ids) {
       const r = rowOf(id);

@@ -25,6 +25,7 @@ import { Named, NotInGt } from "@/components/simple/FeatureName";
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, otherGoal, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { goalKeysOf, KeyResultList, liftedMoves, topGoalBuckets, topGoalPlan, topGoalPriorities, usePriorityKeyResults, type PriorityKeyResults } from "./key-results";
+import { useCodedMilestone } from "./milestone-codes";
 import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
 import { MsCard, MsProvider, MsToast, useMilestones } from "../roadmap/_milestones";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan, weeksWords } from "./plan-buckets";
@@ -550,6 +551,11 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
   // by key, so two goals with one name keep apart; a row known only from the plan, by name.
   const params = useSearchParams();
   const open = useContext(OpenRow);
+  const coded = useCodedMilestone();
+  const msWords = (name: string, itemId?: string | null) => {
+    const w = coded(name, { itemId });
+    return w === name ? `Milestone ${name}` : w;
+  };
   const goal = params.get("goal");
   const goalName = params.get("name") ?? goal;
   // kr-in-priorities: a key result's list finds its rows too (each row reads its top-level goal).
@@ -700,7 +706,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                   to the far right; the title and its pill wrap as one group, so every title starts at one x. */}
               <span className={`flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1 ${mayChange && r.item_id ? "max-sm:pr-7" : ""}`} data-testid="prio-name">
                 {/* PR3: the title, its code and its pill stay on one line; the title wraps on its own. */}
-                <span className="flex min-w-0 max-w-full items-center gap-x-2" data-testid="prio-named">
+                <span className="flex min-w-0 max-w-full items-center gap-x-2 max-sm:flex-wrap max-sm:gap-y-1" data-testid="prio-named">
                   {open ? (
                     <button type="button" className="min-w-0 text-left font-medium hover:underline" data-testid="prio-title" onClick={() => open(r)}>
                       {r.title}
@@ -710,7 +716,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                   )}
                   <OwnKey r={r} />
                   <span className="flex flex-none items-center">
-                    <MarkFor featureId={r.feature_id} />
+                    <MarkFor featureId={r.feature_id} checked />
                   </span>
                 </span>
                 {/* PR1: a feature with no Ground Truth code is flagged, never given made-up letters. */}
@@ -736,7 +742,8 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                     Ends {calendarDay(r.end_date)} · Estimate pending
                   </span>
                 )}
-                {r.milestone && <span data-testid="prio-milestone" className="min-w-0 max-w-full [overflow-wrap:anywhere]">Milestone {r.milestone}</span>}
+                {/* qa-nov17 G8: by its code and name as the roadmap reads it ("M6 Beta"); "Milestone Beta" only when it has no code. */}
+                {r.milestone && <span data-testid="prio-milestone" className="min-w-0 max-w-full [overflow-wrap:anywhere]">{msWords(r.milestone, r.item_id)}</span>}
                 {/* qa-simple-plan-3: value · confidence · weeks · score, in the order of the score's formula; no bar. */}
                 <Numbers r={r} mayChange={mayChange} changed={changed} />
               </span>
@@ -1756,6 +1763,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   }}
                   data-testid="vxe-point"
                   data-code={r.code}
+                  title={r.own_key ? `${r.own_key} ${r.title}` : r.title}
                   data-above={r.above_line ? "true" : "false"}
                   data-moved={isMoved ? "true" : undefined}
                   data-shape={shapeOf(r)}
@@ -1916,11 +1924,11 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   </span>
                   {/* The mark's code, so a mark and its row read alike (Value / effort only; the ranked rows name the feature). */}
                   {r.own_key && (
-                    <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
+                    <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={`${r.own_key} ${r.title}`}>
                       {r.own_key}
                     </span>
                   )}
-                  <span className="min-w-0 flex-1 truncate" data-testid="prio-title" title={r.title}>
+                  <span className="line-clamp-2 min-w-0 flex-1 [overflow-wrap:anywhere]" data-testid="prio-title" title={r.title}>
                     {r.title}
                   </span>
                   {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}
@@ -1986,6 +1994,13 @@ function lineWords(data: Out): string {
 
 /** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date (a PRD's milestones "From the PRD: <name> · <day>") · each dated milestone (one the PRD already lists on its day shows once, from the PRD: prio-line-once) · Pick a date. */
 function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void }) {
+  // qa-nov17 G8: a milestone's line by its code and name as the roadmap reads it ("Milestone: M6 Beta · Nov 30, 2026").
+  const coded = useCodedMilestone();
+  const msLine = (l: { key: string; label: string }) => {
+    const at = l.label.lastIndexOf(" · ");
+    if (at < 0) return l.label;
+    return `${coded(l.label.slice(0, at), { id: l.key.startsWith("milestone:") ? l.key.slice("milestone:".length) : null })}${l.label.slice(at)}`;
+  };
   const current = data.line ?? { key: "now", kind: "now" as const, label: "This quarter (Now)", date: null };
   // Picking a date, the date field takes the select's place (one control); a picked day is the select's own option.
   const [picking, setPicking] = useState(false);
@@ -2065,7 +2080,7 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
             // place of "Key date", so the chosen line fits a phone's box); it changes in the PRD, never here.
             const options = ls.map((l) => (
               <option key={l.key} value={l.key} title={l.prd ? `A key date from the PRD; change it in the PRD, ${l.prd.title}` : undefined}>
-                {l.kind === "key_date" ? `${l.prd ? "From the PRD" : "Key date"}: ${l.label}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
+                {l.kind === "key_date" ? `${l.prd ? "From the PRD" : "Key date"}: ${l.label}` : l.kind === "milestone" ? `Milestone: ${msLine(l)}` : l.label}
               </option>
             ));
             // prio-company: each PRD's milestones listed under its name.
@@ -2103,6 +2118,19 @@ const localDay = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() 
 
 /** The line inside a sentence: "this quarter", "Nov 20, 2026", "Beta · Dec 4, 2026" (never the picker's "By " or "(Now)"). */
 const lineLabel = (data: Out): string => (!data.line || data.line.kind === "now" ? "this quarter" : data.line.label.replace(/^By /, ""));
+
+/** qa-nov17 G8: the line inside a sentence, a milestone's by its code and name as the Line picker reads it ("M6 Beta · Nov 30, 2026"). */
+function useLineLabel(): (data: Out) => string {
+  const coded = useCodedMilestone();
+  return (data) => {
+    const words = lineLabel(data);
+    const l = data.line;
+    if (!l || l.kind !== "milestone") return words;
+    const at = words.lastIndexOf(" · ");
+    if (at < 0) return words;
+    return `${coded(words.slice(0, at), { id: l.key.startsWith("milestone:") ? l.key.slice("milestone:".length) : null })}${words.slice(at)}`;
+  };
+}
 
 /**
  * A row's goal: the item's, else the plan's (a row the item does not give a goal, but the plan
@@ -2176,6 +2204,7 @@ function lineSplit(rows: Row[]): number {
  * of its own, each opening the feature's panel (prio-company: never one run-on sentence of names).
  */
 function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }) {
+  const lineWordsOf = useLineLabel();
   const misses = data.rows.filter((r) => !r.above_line);
   const [open, setOpen] = useState(false);
   const openRow = useContext(OpenRow);
@@ -2183,7 +2212,7 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
     <div data-testid="line-caption" className={`mb-2 text-[length:var(--simple-small)] text-text2 ${compact ? "leading-[21px]" : ""}`}>
       <p className="flex flex-wrap items-center gap-x-2">
         <span className="font-medium text-accent-ink">
-          {misses.length} of {data.rows.length} miss {lineLabel(data)}
+          {misses.length} of {data.rows.length} miss {lineWordsOf(data)}
         </span>
         <ScoreTip />
         {misses.length > 0 && (
@@ -2210,32 +2239,34 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
 
 /** A row's own mark when it misses the line; compact (Value/effort's side list, B): a small "Misses" chip, the line in its title. */
 function MissesTag({ data, row, compact = false }: { data: Out; row?: Row; compact?: boolean }) {
+  const lineWordsOf = useLineLabel();
   // qa-simple-plan-27: a feature tagged with the very milestone the line is drawn at misses its own milestone.
   const own = !!row?.milestone && data.line?.kind === "milestone" && data.line.label.split(" · ")[0] === row.milestone;
   if (own && !compact)
     return (
       <span data-testid="prio-misses" data-own="true" className="min-w-0 max-w-full rounded-full bg-crit-bg px-2 text-[length:var(--simple-small)] font-medium text-crit">
-        Misses its own milestone, {lineLabel(data)}
+        Misses its own milestone, {lineWordsOf(data)}
       </span>
     );
   if (compact)
     return (
-      <span data-testid="prio-misses" title={`Misses ${lineLabel(data)}`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
+      <span data-testid="prio-misses" title={`Misses ${lineWordsOf(data)}`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
         Misses
       </span>
     );
   return (
     <span data-testid="prio-misses" className="flex-none whitespace-nowrap rounded-full border border-line-strong bg-surface px-2 text-[length:var(--simple-small)] text-text2">
-      Misses {lineLabel(data)}
+      Misses {lineWordsOf(data)}
     </span>
   );
 }
 /** A part's heading over the ranked list split at a dated line: "Makes Customer conference · Nov 14, 2026 · 1 feature, in rank order". */
 function PartHead({ data, makes, n }: { data: Out; makes: boolean; n: number }) {
+  const lineWordsOf = useLineLabel();
   return (
-    <li data-testid="prio-part-head" aria-label={`${makes ? "Makes" : "Misses"} ${lineLabel(data)}`} className={`flex flex-wrap items-baseline gap-x-2 pt-2 ${makes ? "" : "mt-2 border-t-2 border-accent-ink pt-3"}`}>
+    <li data-testid="prio-part-head" aria-label={`${makes ? "Makes" : "Misses"} ${lineWordsOf(data)}`} className={`flex flex-wrap items-baseline gap-x-2 pt-2 ${makes ? "" : "mt-2 border-t-2 border-accent-ink pt-3"}`}>
       <span className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
-        {makes ? "Makes" : "Misses"} {lineLabel(data)}
+        {makes ? "Makes" : "Misses"} {lineWordsOf(data)}
       </span>
       <span className="text-[length:var(--simple-small)] text-text2" data-testid="prio-part-count">
         {n} {n === 1 ? "feature" : "features"}, in rank order
@@ -2357,13 +2388,14 @@ function EffortEdit({ r, changed }: { r: Row; changed: Changed }) {
 
 /** The divider row, drawn only when every row after it misses the line. */
 function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }) {
+  const lineWordsOf = useLineLabel();
   return (
     <li role="separator" data-testid="line-divider" className={`flex items-center gap-2 text-[length:var(--simple-small)] font-medium text-accent-ink ${compact ? "py-0.5 leading-[21px]" : "py-1"}`}>
       <span aria-hidden className="h-0.5 w-6 flex-none bg-accent-ink" />
       {/* qa-simple-plan-19: "misses it" kept together, so no word is left alone on a line. */}
       {/* qa4-simple-plan-28: one line on a phone (the rest said to screen readers), a rule each side. */}
       <span className="min-w-0 whitespace-nowrap sm:whitespace-normal">
-        The line: {lineLabel(data)}
+        The line: {lineWordsOf(data)}
         <span className="sr-only sm:not-sr-only"> · everything below misses{"\u00a0"}it</span>
       </span>
       <span aria-hidden className="h-0.5 flex-1 bg-accent-ink" />
@@ -2403,7 +2435,9 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
   const tasks = useBucketTasks({ rows: data.rows, plan: null, may: rights.task, reload: reloadAll, setNote, setError });
   // EG1 a without a dated plan: each goal's ⋯ (Edit goal, Move up and down, Archive, Delete, or
   // the asks), its owner, its form in place, the note with Undo and the Archived goals fold.
-  const [editingGoal, setEditingGoal] = useState<string | null>(null);
+  // qa-nov17 G1: ?edit=<goal id> opens that goal's form (Rename on the Goal map, for a goal that lacks its date).
+  const linked = useSearchParams().get("edit");
+  const [editingGoal, setEditingGoal] = useState<string | null>(linked);
   const year = data.today.slice(0, 4);
   const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
   // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine;
@@ -2521,6 +2555,7 @@ function UndatedBuckets({ data, suggestions, kr }: { data: Out; suggestions: Goa
                   order={rec.order}
                   title="Edit goal"
                   year={year}
+                  linked={rec.id === linked}
                   onCancel={() => setEditingGoal(null)}
                   onSave={async (f, seen, refused) => {
                     if (await writes.edit(rec, f, year, seen, refused)) setEditingGoal(null);
@@ -2699,7 +2734,9 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
   const goals = planGoals(plan);
   const noGoal = plan.slices.some((x) => !x.goal);
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
-  const [editing, setEditing] = useState<string | null>(null);
+  // qa-nov17 G1: ?edit=<goal id> opens that goal's form (Rename on the Goal map, for a goal that lacks its date).
+  const linked = useSearchParams().get("edit");
+  const [editing, setEditing] = useState<string | null>(linked);
   const [note, setNote] = useState<Note | null>(null);
   const noteSlot = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -2864,6 +2901,7 @@ function PlanBuckets({ data, plan: read, suggestions, kr }: { data: Out; plan: S
                   order={rec.order}
                   title="Edit goal"
                   year={year}
+                  linked={rec.id === linked}
                   onCancel={() => setEditing(null)}
                   onSave={async (f, seen, refused) => {
                     if (await writes.edit(rec, f, year, seen, refused)) setEditing(null);
@@ -3076,7 +3114,8 @@ function goalFeatures(gb: Schemas["GoalBucketsOut"] | undefined, data: Out, plan
     // and own key; never a draft only named as the row (a same-name twin is another feature).
     const rowById = new Map(data.rows.map((r) => [r.feature_id, r]));
     for (const r of data.drafts) {
-      if (!serves(r)) continue;
+      // qa-nov17 G6: a draft the goal's bucket lists (by its goal, as the bucket reads it) is the goal's too.
+      if (!serves(r) && !(r.goal && sameGoal(r.goal.title, title))) continue;
       const row = r.linked && r.row_feature_id ? rowById.get(r.row_feature_id) : undefined;
       add(r.code, r.title, [r.item_id, row?.feature_id], lift(r.goal_ids), row?.own_key ?? undefined, keptKr(r.goal_ids));
     }

@@ -191,7 +191,8 @@ for (const size of ["desktop", "phone"] as const) {
       await expect(legend.getByRole("button", { name: "Exists 3" })).toBeVisible();
       const fresh = total - 7;
       await expect(legend.getByRole("button", { name: `New ${fresh}` })).toBeVisible();
-      await expect(rows.locator('[data-mark="exists_old"]')).toHaveText("Exists · proof old");
+      // qa-nov17 G3: a ranked row's old proof reads the day it was checked, never "proof old".
+      await expect(rows.locator('[data-mark="exists_old"]')).toHaveText("Exists · checked Sep 11");
       // The pill follows the title, so every title starts at one x.
       for (const row of (await rows.all()).slice(0, 3)) await pillAfter(row.getByTestId("prio-title"), row.getByTestId("cs-mark"));
       // cs2-b: right next to the name, not pushed to the far right of the row. Nov 12 QA PR3 (the
@@ -204,6 +205,17 @@ for (const size of ["desktop", "phone"] as const) {
         const end = (await named.boundingBox())!;
         const title = (await row.getByTestId("prio-title").boundingBox())!;
         const p = (await row.getByTestId("cs-mark").boundingBox())!;
+        if (size === "phone") {
+          // qa-nov17 G9: at 390 the title keeps its width and the pill drops right under it, starting
+          // the next line, or right after the code when the code dropped too.
+          const below = end.y >= title.y + title.height - 1;
+          const from = below ? end.x + end.width : title.x;
+          expect(p.y, "the pill drops right under the name").toBeGreaterThanOrEqual(title.y + title.height - 1);
+          expect(p.y, "the pill drops right under the name").toBeLessThanOrEqual(title.y + title.height + 8);
+          expect(p.x - from, "the pill starts the line under the name").toBeGreaterThanOrEqual(0);
+          expect(p.x - from, "the pill starts the line under the name").toBeLessThanOrEqual(16);
+          continue;
+        }
         const gap = p.x - (end.x + end.width);
         expect(gap, "the pill is right after the name").toBeGreaterThanOrEqual(0);
         expect(gap, "the pill is right after the name").toBeLessThanOrEqual(16);

@@ -17,7 +17,8 @@ const NOT_IN_GT = "Not in the Ground Truth";
 
 /** The flag's look: what kind of chip it is, and its colours and shape as a person sees them. */
 async function look(flag: Locator) {
-  await expect(flag).toHaveText(NOT_IN_GT);
+  // qa-nov17 #8: the Roadmap names column reads "Not in GT", its full words read aloud and in its title.
+  await expect(flag).toContainText(NOT_IN_GT);
   return {
     kind: await flag.getAttribute("data-kind"),
     ...(await flag.evaluate((e) => {

@@ -129,6 +129,8 @@ interface SeedItem {
   prd_key?: string;
   /** The Ground Truth feature it is (RoadmapItem.feature_id): an approved PRD's item matches by it. */
   feature_id?: string | null;
+  /** qa-nov17: the key of the Ground Truth feature a seeded item is (F-01); the mock links it (feature_id) once the baseline is seeded. */
+  gt_key?: string;
   /** approved-prd-roadmap: its dates as the PRD has them (ISO days; no start: end-only). */
   dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
   /** build-runplan RP2: the PRD it belongs to when not its roadmap's own (./meeting-draft.ts). */
@@ -746,11 +748,13 @@ export const trackPlace = (db: { track_order?: string[] }, k: string): number =>
 
 const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
-  { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 }, section: "f-06", heading: "F-06 Weekly digest of fired alerts" },
+  // qa-nov17: one code names one feature: the digest's PRD section is F-79 (the Ground Truth's F-06 is Setup error
+  // report), and Setup checklist is the Ground Truth's F-01 (gt_key).
+  { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 }, section: "f-79", heading: "F-79 Weekly digest of fired alerts" },
   { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"], status: "in_progress" },
   { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker" },
   { key: "alert-sso", title: "Alert routing by team", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "low", depends: ["alert-export"] },
-  { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", status: "in_progress", gates: [{ phase: "Beta", day: 40 }] },
+  { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", status: "in_progress", gates: [{ phase: "Beta", day: 40 }], gt_key: "F-01" },
   { key: "setup-import", title: "Sample data import", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 20, end: 60, source: "typed", status: "in_progress", depends: ["setup-checklist"], gates: [{ phase: "beta", day: 75 }], risks: [{ flag: "dependency_order", note: "The checklist's last step is not needed" }] },
   { key: "setup-tour", title: "In-app tour", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", status: "cut", start: 30, end: 75, source: "typed" },
   { key: "setup-video", title: "Welcome video", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", depends: ["setup-tour"] },
@@ -1129,7 +1133,7 @@ function leadDays(db: SimpleDb, s: SeedItem): number {
 }
 
 /** roadmap-dates (dates.Resolved.basis): where an undated bar's estimate comes from. */
-type EstimateBasis = "suggestion" | "quarter";
+type EstimateBasis = "suggestion" | "quarter" | "dependencies";
 type Resolved = { start: Dated; end: Dated; basis?: EstimateBasis };
 
 function resolve(db: SimpleDb, s: SeedItem): Resolved {
@@ -1613,6 +1617,15 @@ export function itemSuggestion(db: SimpleDb, itemId: string): Suggestion | undef
   return { ...first, start_date: start, end_date: end };
 }
 
+/**
+ * qa-nov17 (service.load): an open suggestion is offered only while the item is undated and its
+ * estimate (after what it depends on) still is the suggestion's: dates set here or a new
+ * dependency outdate it, so its row, its panel block and the counts clear at once.
+ */
+function offered(r: Resolved, sug: Suggestion | undefined): Suggestion | undefined {
+  return sug && r.start.estimated && r.end.estimated && r.start.date === sug.start_date && r.end.date === sug.end_date ? sug : undefined;
+}
+
 /** dates.quarter_word: "Q2 2027". */
 const quarterWord = (first: string) => `Q${Math.floor((Number(first.slice(5, 7)) - 1) / 3) + 1} ${first.slice(0, 4)}`;
 
@@ -1844,8 +1857,11 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     if (gone) lent.push(resolve(db, gone));
     x.r = lent.find((r) => !undated(r)) ?? x.r;
   }
-  // additions._parts: a parent or a part by its display code ("" when none) and name.
-  const partRef = (x: SeedItem, inTrash = false) => ({ id: db.ids[x.key] ?? reader.full.ids[x.key], code: prdCode(x.section) ?? "", title: x.title, cut: !x.merged_into && x.status === "cut", in_trash: inTrash });
+  // qa-nov17: a parent, part or kept item reads its display code as service.load's Entry.code does: its
+  // Ground Truth feature's (Setup checklist: F-01), else its PRD section's.
+  const shownCode = (x: SeedItem) => (x.feature_id && db.feature_codes?.[x.feature_id]) || prdCode(x.section);
+  // additions._parts: a parent or a part by its display code ("" when none) and name; one in Trash by its name only.
+  const partRef = (x: SeedItem, inTrash = false) => ({ id: db.ids[x.key] ?? reader.full.ids[x.key], code: inTrash ? "" : shownCode(x) || "", title: x.title, cut: !x.merged_into && x.status === "cut", in_trash: inTrash });
   const pathOf = (s: SeedItem) => {
     const gone = trashedParent(s);
     return [...(gone ? [partRef(gone, true)] : []), ...ancestorsOf(s).reverse().map((a) => partRef(a))];
@@ -1855,7 +1871,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   // found in the merged item's own roadmap, as the API's by_key is keyed by (roadmap id, key).
   const ref = (k: string, roadmap: string) => {
     const x = db.items.find((y) => y.key === k && y.roadmap === roadmap && !y.trashed);
-    return x ? { id: db.ids[k], code: prdCode(x.section) || x.title, title: x.title } : { id: "", code: "", title: "a deleted feature" };
+    return x ? { id: db.ids[k], code: shownCode(x) || x.title, title: x.title } : { id: "", code: "", title: "a deleted feature" };
   };
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
   const slices = db.plan ? planSlices() : [];
@@ -1874,13 +1890,15 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const [code, title] = codedTitle(s.title, prdCode(s.section));
     const rm = ROADMAPS[s.roadmap];
     const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, "-"));
-    const suggestion = itemSuggestion(db, db.ids[s.key]);
+    const open = itemSuggestion(db, db.ids[s.key]);
+    const suggestion = offered(own.get(s.key)!, open);
     return {
       id: db.ids[s.key], key: s.key, title, outcome: s.outcome ?? null, note: s.note ?? null, horizon: horizonOfDates(r, quarterWindows(today)),
       estimate_pending: !!s.estimate_pending,
       picked_quarter: s.quarter?.start ?? null,
-      // service.item_out: where an estimate's dates come from (dates.Resolved.basis).
-      estimate_basis: r.start.estimated && r.end.estimated ? (r.basis ?? null) : null,
+      // service.item_out: where an estimate's dates come from (dates.Resolved.basis); qa-nov17
+      // (service.load): what it depends on once that outdated its open suggestion.
+      estimate_basis: r.start.estimated && r.end.estimated ? (r.basis === "suggestion" && open && !suggestion ? "dependencies" : (r.basis ?? null)) : null,
       // Its feature's code (F-12), else its own (codedTitle: the title's, else its PRD section's), as service.load's Entry.code.
       code: (s.feature_id && db.feature_codes?.[s.feature_id]) || code,
       // every-field-editable (service.item_out): a code set_code may not change, and where it comes from.
@@ -2387,11 +2405,14 @@ export function settleDrafting(db: SimpleDb): void {
 export function dateSuggestionInboxRows(db: SimpleDb | undefined, me: { id: string; role: Role }, seen: string | null): Schemas["InboxSimpleDateSuggestion"][] {
   if (!db) return [];
   const seeds = new Map(visibleItems(db, me.role).map((s) => [db.ids[s.key], s]));
+  // qa-nov17 (suggestions.inbox_rows): one the read no longer offers is not asked.
+  const all = new Map([...seeds.values()].map((s) => [s.key, { s, r: resolve(db, s) }]));
+  afterDependencies(all);
   const out: Schemas["InboxSimpleDateSuggestion"][] = [];
   const done = new Set<string>();
   for (const x of [...db.suggestions].filter((y) => y.status === "open").sort((a, b) => (a.created_at < b.created_at ? 1 : -1))) {
     const s = seeds.get(x.item_id);
-    if (done.has(x.item_id) || !s || !canDecideItem(db, s, me)) continue;
+    if (done.has(x.item_id) || !s || !canDecideItem(db, s, me) || !offered(all.get(s.key)!.r, itemSuggestion(db, x.item_id))) continue;
     done.add(x.item_id);
     const span = itemSuggestion(db, x.item_id) ?? x;
     out.push({

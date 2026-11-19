@@ -22,16 +22,16 @@ async function scenario(page: Page, name: string) {
 for (const size of ["desktop", "phone"] as const) {
   test(`Ground Truth's feature list, Running today and Still to build name each feature with its code (${size})`, async ({ page }) => {
     // protects=the Ground Truth tab's rows, Running today's table and its Still to build chips read "F-110
-    // Annual plan offer", "F-06 Weekly alert digest"; fails_when=they read the name alone; no_claim=features with no Ground Truth code (they keep the name).
+    // Annual plan offer", "F-79 Weekly alert digest"; fails_when=they read the name alone; no_claim=features with no Ground Truth code (they keep the name).
     if (size === "phone") await page.setViewportSize(PHONE);
     await login(page);
     await page.goto("/ground-truth");
     const list = page.getByTestId("cs-desired");
     await list.getByRole("button", { name: /more$/ }).click();
     await expect(list.getByTestId("cs-desired-row").filter({ hasText: "Annual plan offer" })).toContainText("F-110 Annual plan offer");
-    await expect(list.getByTestId("cs-desired-row").filter({ hasText: "Setup checklist" })).not.toContainText(/F-\d/);
+    await expect(list.getByTestId("cs-desired-row").filter({ hasText: "Setup checklist" })).toContainText("F-01 Setup checklist");
     await page.getByTestId("cs-tabs").getByRole("tab", { name: /Running today/ }).click();
-    await expect(page.getByTestId("cs1-row").filter({ hasText: "Weekly alert digest" })).toContainText("F-06 Weekly alert digest");
+    await expect(page.getByTestId("cs1-row").filter({ hasText: "Weekly alert digest" })).toContainText("F-79 Weekly alert digest");
     await expect(page.getByTestId("cs-still-chip").filter({ hasText: "Annual plan offer" })).toContainText("F-110 Annual plan offer");
   });
 }

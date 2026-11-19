@@ -46,7 +46,7 @@ const rows = (page: Page) => sheet(page).getByTestId("agenda-row");
 const NOT_IN_GT = "Not in the Ground Truth";
 // qa-leftovers: an add chip reads "+ F-31 Alert routing by team" (or the name flagged when it has no code).
 const addChip = (name: string) => new RegExp(`^\\+ (F-\\d+[a-j]? )?${name}( ${NOT_IN_GT})?$`);
-// simple-home-qa-nov12 #2: a feature's code chip (F-06) leads its name; the order is read by names,
+// simple-home-qa-nov12 #2: a feature's code chip (F-79) leads its name; the order is read by names,
 // without the "Not in the Ground Truth" flag an uncoded feature carries (simple-home-qa-nov14 #1).
 const names = async (page: Page) =>
   (await rows(page).locator("p:first-child").allInnerTexts()).map((t) =>
@@ -63,8 +63,8 @@ test.describe("desktop", () => {
   test("the owner adds a topic and a feature, renames, reorders by arrows and drag, removes with Undo", async ({ page }) => {
     test.setTimeout(90_000);
     await startReview(page);
-    // BR (E): a code and its name read apart, "F-06 Weekly alert digest", never "F-06Weekly alert digest".
-    await expect(strip(page).getByTestId("agenda-now")).toHaveText("Now: F-06 Weekly alert digest");
+    // BR (E): a code and its name read apart, "F-79 Weekly alert digest", never "F-79Weekly alert digest".
+    await expect(strip(page).getByTestId("agenda-now")).toHaveText("Now: F-79 Weekly alert digest");
     await expect(strip(page)).toContainText("Next: Mobile alert push");
     await expect(strip(page)).toContainText("Item 2 of 5");
     await tap(strip(page).getByRole("button", { name: "Edit agenda" }));

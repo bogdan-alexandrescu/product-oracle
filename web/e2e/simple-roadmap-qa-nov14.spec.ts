@@ -58,7 +58,10 @@ test.describe("desktop", () => {
     // fails_when: a name is cut to "Te…" while the "Not in the Ground Truth" tag stays whole
     await open(page, "timeline");
     await expect(row(page, "setup-ideas")).toBeVisible();
-    const cut = await page.$$eval('[data-testid="timeline-row-name"]', (els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent));
+    // qa-nov17 #8: a name is cut only to keep its row's flags whole ("Draft", "Not in GT").
+    const cut = await page.$$eval('[data-testid="timeline-row-name"]', (els) =>
+      els.filter((e) => e.scrollWidth > e.clientWidth + 1 && !e.parentElement?.querySelector('[data-testid="not-in-gt"], [data-testid="draft-tag"]')).map((e) => e.textContent),
+    );
     expect(cut).toEqual([]);
     await expect(row(page, "setup-ideas").getByTestId("timeline-row-name")).toHaveText("Team invite nudges");
     await expect(row(page, "setup-ideas").getByTestId("not-in-gt")).toHaveAttribute("title", NOT_IN_GT);
@@ -90,7 +93,7 @@ test.describe("desktop", () => {
   });
 
   test("Now / Next / Later shows the track milestone its cards are measured against (#3)", async ({ page }) => {
-    // protects: QA Nov 14 #3: the Now column has the track's "Beta · Nov 30", the milestone F-06's red flag names
+    // protects: QA Nov 14 #3: the Now column has the track's "Beta · Nov 30", the milestone F-79's red flag names
     // fails_when: the Now column shows only the goal milestones, so Beta is nowhere on the page
     // By name, not number: the Goal map's milestones are numbered on this roadmap too, so Beta's code is not M1.
     await open(page, "board");

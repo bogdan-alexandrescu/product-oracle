@@ -40,12 +40,13 @@ test("a feature's parts are listed in roadmap order, a cut one where it stands",
   await expect(page.getByTestId("board")).toBeVisible();
   // Welcome video (open) first, then In-app tour (cut, before it on the roadmap).
   await tap(boardCard(page, "setup-video"));
-  await partOf(page, "Setup checklist");
+  // qa-nov17: Setup checklist is the Ground Truth's F-01, so it reads with its code.
+  await partOf(page, "F-01 Setup checklist");
   await page.keyboard.press("Escape");
   await tap(boardCard(page, "setup-tour"));
   await expect(panel(page).getByTestId("item-cut")).toBeVisible();
-  await partOf(page, "Setup checklist");
-  await tap(panel(page).getByTestId("card-part-of").getByRole("button", { name: "Setup checklist" }));
+  await partOf(page, "F-01 Setup checklist");
+  await tap(panel(page).getByTestId("card-part-of").getByRole("button", { name: "F-01 Setup checklist" }));
   const parts = panel(page).getByTestId("card-parts").getByTestId("card-part");
   await expect(parts).toHaveText([/^In-app tour\s*\(cut\)$/, /^Welcome video$/]);
 });

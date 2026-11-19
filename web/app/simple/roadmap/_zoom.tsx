@@ -25,7 +25,6 @@ import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { InfoTip } from "@/components/ds/InfoTip";
 import { addMonths, calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
-import { LINK_KINDS } from "@/lib/roadmap-links";
 
 import { FixButtons, fixCount, type Act } from "./_card";
 import {
@@ -266,6 +265,8 @@ const MS_CHIP_W = 30;
 const MS_FIT_W = 180;
 /** Short of All 3 years, a label steps at most this far (px) past its day to clear the diamonds. */
 const MS_FIT_STEP = 120;
+/** qa-nov17 #4: how far (px) a label may sit right of its day at All 3 years: beside its own line. */
+const MS_BESIDE = 24;
 const fullDay = (d: string) => calendarDay(d, { month: "short", day: "numeric", year: "numeric" });
 const ROW_H = 34;
 
@@ -278,6 +279,14 @@ export function ZoomTimeline(props: TimelineProps) {
     ? (data.items.find((i) => i.key === openKey) ?? null)
     : null;
   const side = !phone && !!openItem;
+  // qa-nov17 #9: an item opening in the side panel brings the chart's top into view (as the other
+  // formats do), so the panel opens full height, never a short strip at the foot of the screen.
+  const row = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = row.current;
+    if (!side || !el) return;
+    if (el.getBoundingClientRect().top > 12) el.scrollIntoView({ block: "start" });
+  }, [side, openKey]);
   return (
     // The page reads its chart (and its format) by simple-chart, as the other formats give it.
     <div data-testid="simple-chart" data-format="timeline" data-view="zoom">
@@ -286,7 +295,7 @@ export function ZoomTimeline(props: TimelineProps) {
           <Key data={data} />
         </div>
         <ConflictPanel {...props} onShow={onOpen} />
-        <div className={side ? "flex items-start gap-3" : ""}>
+        <div ref={row} className={`scroll-mt-3 ${side ? "flex items-start gap-3" : ""}`}>
           {/* The chart's bars, date words and today line stack inside its own context (isolate),
            * so they never paint over the item's panel, nor its talk widened over the chart. */}
           <div className="isolate min-w-0 flex-1">
@@ -322,6 +331,21 @@ export function ZoomTimeline(props: TimelineProps) {
   );
 }
 
+/** qa-nov17: a broken link's words after its feature's coded name: its own name dropped from
+ * their front, the other features they name by code and name ("‘F-12 Alert rules engine’"). */
+const REASON_WORDS: Record<string, string> = {
+  dependency_order: "starts before what it depends on ends",
+  outside_milestone: "ends after its milestone",
+  cut_with_dependents: "is cut, others depend on it",
+};
+
+export function shortReason(i: Item, f: Flag, items: ReadonlyMap<string, Item>): string {
+  const own = `‘${i.title}’ `;
+  let r = f.reason.startsWith(own) ? f.reason.slice(own.length) : f.reason;
+  for (const o of items.values()) if (o.id !== i.id && o.code && r.includes(`‘${o.title}’`)) r = r.replace(`‘${o.title}’`, `‘${itemName(o)}’`);
+  return r;
+}
+
 /** QR3 A: the broken links in a panel of their own above the chart (the Timeline's and the
  * Waterfall's), each with its words in full and its three fixes; Hide folds it to one line. */
 export function ConflictPanel({
@@ -355,27 +379,19 @@ export function ConflictPanel({
         data-item={i.key}
         className={`flex px-3 py-2 ${stacked ? "flex-col gap-1" : "flex-wrap items-center gap-3"}`}
       >
-        {LINK_KINDS.includes(f.kind) ? (
-          <button
-            type="button"
-            onClick={() => onShow(i.key)}
-            className={`text-left text-sm text-text hover:underline ${stacked ? "" : "min-w-[16rem] flex-1"}`}
-          >
-            {f.reason}
-          </button>
-        ) : (
-          // Pre-demo QA S-5: an end past its milestone counts here too; its feature's name
-          // shows, its sentence behind the (i) (no visible prose).
-          <span className={`flex items-center gap-1 text-sm text-text ${stacked ? "" : "min-w-[16rem] flex-1"}`}>
-            <button type="button" onClick={() => onShow(i.key)} className="text-left hover:underline">
-              {itemName(i)}
-            </button>
-            <InfoTip label={itemName(i)} align="start" testId="conflict-why">
-              {/* QA Nov 12 #5: the milestone by its code and name ("M1 Beta"). */}
-              {codedFlag(i, f, data.goal_milestones, data.milestones).reason}
-            </InfoTip>
-          </span>
-        )}
+        {/* qa-nov17: every row one form: the feature by its code and name (it opens it), then its
+            reason in short words, other features by code too; an end past its milestone (pre-demo
+            QA S-5) is said as a link is. QA Nov 12 #5: the milestone by its code and name ("M1 Beta"). */}
+        <span className={`text-sm text-text ${stacked ? "" : "min-w-[16rem] flex-1"}`}>
+          <button type="button" onClick={() => onShow(i.key)} className="text-left font-semibold hover:underline">
+            {itemName(i)}
+          </button>{" "}
+          {/* qa-nov17: a few words in sight, the whole reason behind its (i) (prose guard). */}
+          <span data-testid="conflict-short">{REASON_WORDS[f.kind] ?? "has a broken link"}</span>{" "}
+          <InfoTip label="what is broken" align="start" testId="conflict-reason-tip">
+            {shortReason(i, codedFlag(i, f, data.goal_milestones, data.milestones), byId)}
+          </InfoTip>
+        </span>
         <div className="max-w-full min-w-0">
           <FixButtons
             item={i}
@@ -585,6 +601,8 @@ function DayChart(props: TimelineProps) {
   // the diamonds that would cut it (while it stays inside the chart), and a label that would
   // cut the one before folds into that one's "+N" chip, as the 3 months' crowded labels do.
   const needOf = (words: string) => (fit ? Math.min(16 + words.length * 7, MS_FIT_W) : 56);
+  // qa-nov17 #4: where not even its code and name fit beside its day, its bare diamond (named in its tip), never a cut label.
+  const dotOnly = (bare: boolean, short: string, room: number) => bare || (fit && room < needOf(short));
   const marks = (data.milestones ?? [])
     .filter((m) => m.date && m.status !== "dropped" && m.date >= t0 && m.date <= t1)
     .sort((a, b) => (a.date as string).localeCompare(b.date as string))
@@ -593,12 +611,20 @@ function DayChart(props: TimelineProps) {
       const words = `◆ ${joinedWords(m, joined)} · ${shortDay(m.date as string)}`;
       // At All 3 years the whole chart is in sight (no slide can lose a label), so a label steps
       // past a row of diamonds (one a month) as far as it needs to read whole, inside the chart.
-      const whole = fit ? clear(at, needOf(words)) : null;
-      const need = whole != null && whole + 4 + needOf(words) <= trackW ? needOf(words) : 56;
-      const left = whole != null && need > 56 ? whole : near(fit ? at : Math.max(at, sl));
+      // qa-nov17 #4: a label stays beside its own day, never stepping on to another date's (at All 3
+      // years "M6 Beta · Nov 30" was drawn at Apr): with no room there, its line keeps a bare
+      // diamond chip, its words in its tip and its card.
+      const step = fit ? clear(at, needOf(words)) : null;
+      const whole = step != null && step - at <= MS_BESIDE ? step : null;
+      const need0 = whole != null && whole + 4 + needOf(words) <= trackW ? needOf(words) : 56;
+      const base = fit ? at : Math.max(at, sl);
+      const left0 = whole != null && need0 > 56 ? whole : near(base);
+      const bare = left0 - base > (fit ? MS_BESIDE : MS_FIT_STEP);
+      const left = bare ? base - 8 : left0;
+      const need = bare ? 16 : need0;
       const next = [...gems, ...(pill ? [pill[0] + 12] : [])].sort((a, b) => a - b).find((g) => g - 12 >= left + 4);
       // A label too short for its words at All 3 years keeps its code and name ("M1 Beta"), its day in its tip.
-      return { m, at, words, short: joinedWords(m, joined), left, need, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
+      return { m, at, words, short: joinedWords(m, joined), bare, left, need, gems: next == null ? Infinity : next - 12 - (left + 4) - 2, gone: !fit && at + 26 + words.length * 7 < sl };
     });
   const msGroups: { head: (typeof marks)[number]; more: (typeof marks)[number][]; room: number }[] = [];
   for (const k of marks) {
@@ -617,22 +643,25 @@ function DayChart(props: TimelineProps) {
   // past the milestone labels and the Today pill; with no room near its day, its diamond alone.
   const taken: [number, number][] = msGroups.map(({ head, more, room }) => [head.left + 4, head.left + 4 + Math.min(head.need, room) + (more.length ? MS_CHIP_W : 0)]);
   if (pill) taken.push(pill);
+  // qa-nov17 #4: a name never lies under a goal milestone's diamond ("…eting"); its own small
+  // diamond may sit by one.
+  const under: [number, number][] = gems.map((g) => [g - 8, g + 8]);
   const keyMarks = drawnKeyDates(data)
     .filter((k) => k.date >= t0 && k.date <= t1 && (fit || x(k.date) >= sl))
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((k) => {
       const at = x(k.date);
       const need = Math.min(24 + k.name.length * 7.5, 160);
-      const free = (a0: number, b0: number) => taken.every(([a, b]) => b + 2 <= a0 || a - 2 >= b0);
+      const free = (a0: number, b0: number, also: [number, number][] = []) => [...taken, ...also].every(([a, b]) => b + 2 <= a0 || a - 2 >= b0);
       let l = at + 2;
-      for (const [a, b] of [...taken].sort((p, q) => p[0] - q[0])) if (b + 2 > l && a - 2 < l + need) l = b + 2;
+      for (const [a, b] of [...taken, ...under].sort((p, q) => p[0] - q[0])) if (b + 2 > l && a - 2 < l + need) l = b + 2;
       let w = need;
       if (l - at > 140 || l + need > trackW) {
         // Else on its day, cut ("Customer conf…", whole in its tip) to the room before the next label.
         l = at + 2;
-        w = Math.min(need, trackW - l, ...taken.filter(([a]) => a >= l).map(([a]) => a - 4 - l));
+        w = Math.min(need, trackW - l, ...[...taken, ...under].filter(([a]) => a >= l).map(([a]) => a - 4 - l));
       }
-      const named = w >= 60 && free(l, l + w);
+      const named = w >= 60 && free(l, l + w, under);
       // Its diamond alone where its name has no room; none over another label or the Today pill.
       const gem = !named && free(at - 6, at + 6);
       if (named) taken.push([l, l + w]);
@@ -1022,7 +1051,7 @@ function DayChart(props: TimelineProps) {
               />
             ) : null,
           )}
-          {msGroups.map(({ head: { m, left, words, short }, more, room }) => (
+          {msGroups.map(({ head: { m, left, words, short, bare }, more, room }) => (
             <div
               key={m.id}
               // QA Nov 12 #8: a same-day count (the band's) keeps clear of a label and its chip.
@@ -1033,6 +1062,7 @@ function DayChart(props: TimelineProps) {
               <button
                 type="button"
                 data-testid="timeline-milestone"
+                data-day={m.date}
                 aria-label={msWords(m)}
                 aria-expanded={msCard === m.id}
                 onPointerEnter={(e) => setMsTip({ id: m.id, left: labelW + left + 4, top: 42 + (e.currentTarget.offsetHeight - 18) })}
@@ -1041,10 +1071,10 @@ function DayChart(props: TimelineProps) {
                 onBlur={() => setMsTip(null)}
                 onClick={(e) => openMs(m.id, e.currentTarget)}
                 className="min-w-0 cursor-pointer overflow-hidden rounded-full border border-line bg-surface px-2 text-xs leading-4 text-ellipsis whitespace-nowrap text-text hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
-                style={{ maxWidth: room < Infinity ? room : undefined }}
+                style={{ maxWidth: room < Infinity && !dotOnly(bare, short, room) ? room : undefined }}
               >
                 {/* QA Nov 12 #8: never "M1 B…" at All 3 years: its code and name where its words would be cut. */}
-                {fit && room < needOf(words) ? short : words}
+                {dotOnly(bare, short, room) ? "◆" : fit && room < needOf(words) ? short : words}
               </button>
               {more.length > 0 && (
                 <div className="group relative flex-none">
@@ -1436,7 +1466,8 @@ const TimelineRow = memo(function TimelineRow({
           )}
           {/* QA Nov 12 #1: the code before the name (F-06 Weekly alert digest), cut as the name was. */}
           {/* QA Nov 14 #1: the name has the row first, whole; the tags after it are cut instead. */}
-          <span data-testid="timeline-row-name" className="max-w-full shrink-0 truncate" style={lk.name}>
+          {/* qa-nov17 #8: its flags stay whole ("Draft", "Not in GT"); a long name is cut instead, whole in the row's title. */}
+          <span data-testid="timeline-row-name" className="max-w-full min-w-0 shrink truncate" style={lk.name}>
             {itemName(i)}
             {/* panel-menu: a merged feature says where it went, by code and name as its panel does. */}
             {i.merged_into && <span data-testid="row-merged" className="ml-1 text-text2">· Merged into {mergedName(i, (id) => byId.get(id))}</span>}
@@ -1445,7 +1476,7 @@ const TimelineRow = memo(function TimelineRow({
             <span
               data-testid="draft-tag"
               title={lk.chip}
-              className="min-w-0 shrink truncate rounded-full bg-surface2 px-1.5 text-[11px] text-text2"
+              className="flex-none rounded-full bg-surface2 px-1.5 text-[11px] text-text2"
             >
               {lk.chip}
             </span>
@@ -1456,7 +1487,7 @@ const TimelineRow = memo(function TimelineRow({
             </span>
           )}
           {/* QA Nov 12 #2: an item with no Ground Truth code says so on its row (small, after its name). */}
-          <NotInGt item={i} className="h-[18px]! min-w-0 shrink! px-1.5! text-[11px]!" />
+          <NotInGt item={i} short className="h-[18px]! px-1.5! text-[11px]!" />
         </button>
         <div className="relative" style={{ width: trackW }}>
           <div

@@ -110,7 +110,7 @@ for (const size of SIZES) {
         // Neither picker lets a loop through: the other PRD's search does not offer it as a choice.
         await openItem(page, "alert-rules");
         await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
-        await panel(page).getByLabel("Or a feature from another PRD").fill("F-06");
+        await panel(page).getByLabel("Or a feature from another PRD").fill("F-79");
         await expect(panel(page).getByTestId("card-depends-search").getByRole("button", { name: /Weekly alert digest/, disabled: false })).toHaveCount(0);
         await expect(panel(page).getByRole("button", { name: "Save" })).toBeDisabled();
         await expect(panel(page).getByTestId("card-depends")).not.toContainText("Weekly alert digest");

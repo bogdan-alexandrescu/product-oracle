@@ -186,13 +186,16 @@ function refs<T extends { id: string }>(
 function datesReason(item: Item): string {
   // roadmap-dates: an undated item's estimate is Oracle's suggestion, else the quarter it was added to.
   const picked = item.picked_quarter ? quarterOf(item.picked_quarter) : null;
-  if (item.estimated && item.suggestion) {
-    const out = picked && (item.start.date < picked.start || item.end.date >= nextQuarter(picked.start));
+  const out = picked && (item.start.date < picked.start || item.end.date >= nextQuarter(picked.start));
+  if (item.estimated && item.suggestion)
     return `Oracle suggested these dates: ${item.suggestion.basis}${out ? ` They fall outside ${picked.label}, the quarter it was added to: there is no room for it there.` : ""} Set dates to override them.`;
-  }
+  // qa-leftovers: dates accepted from Oracle's suggestion into an open draft.
   if (item.estimated && item.estimate_basis === "suggestion")
     return "These dates were accepted from Oracle's suggestion in a draft that is not published yet. Set dates to override them.";
-  if (item.estimated && picked)
+  // qa-nov17: the estimate after what it depends on can leave the quarter.
+  if (item.estimated && out)
+    return `Oracle estimated these dates after what it depends on. They fall outside ${picked.label}, the quarter it was added to. Set dates to override them.`;
+  if (item.estimated && item.estimate_basis === "quarter" && picked)
     return `Oracle estimated these dates as ${picked.label}, the quarter it was added to, until it suggests dates. Set dates to override them.`;
   if (item.estimated)
     return `Oracle estimated these dates from the ${item.horizon} window and what the feature depends on. Set dates to override them.`;

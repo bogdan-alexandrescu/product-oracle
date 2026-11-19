@@ -8,7 +8,7 @@ import { memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState
 
 import { FeatureMarks, markWords, type FeatureState } from "@/components/current-state/CurrentState";
 import { useMsBand } from "./_milestones";
-import { itemName, NOT_IN_GT, NotInGt } from "./_gtflag";
+import { itemName, NOT_IN_GT_SHORT, NotInGt } from "./_gtflag";
 import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
 import { joinedNames, joinedWords } from "@/lib/milestone-code";
 
@@ -157,13 +157,17 @@ export function layout(
   }
   const hs = rows.map((r) => {
     const base = r.kind === "item" ? (nameH.get(r.item.id) ?? rowH) : rowH;
-    if (!wrap) return base;
-    if (r.kind === "group") {
+    // qa-nov17 #5: a phone's band names wrap whole (never "Usage alerts t…"): the row is as tall as its lines.
+    if (r.kind === "group" && (wrap || compact)) {
+      const t = (data.tracks ?? []).find((x) => x.id === r.key);
       const count = r.count != null && !r.below ? `${r.count} ${r.count === 1 ? "item" : "items"}` : "";
       // (Its count wraps with it: measured in the name's type, a little wider than its own.)
-      const name = lines(count ? `${r.title}  ${count}` : r.title, 14, 600, room);
-      return Math.max(rowH, 8 + name * 16 + (r.metric ? lines(r.metric, 11, 400, room) * 13 : 0));
+      const name = lines(count ? `${r.title}  ${count}` : r.title, 14, 600, room - (t ? 22 : 0));
+      const sub = t ? (t.goal_name ? lines(t.goal_name, 12, 400, room) * 15 : 0) : r.metric ? lines(r.metric, 11, 400, room) * 13 : 0;
+      return Math.max(rowH, (wrap ? 8 : 4) + name * 16 + sub);
     }
+    if (!wrap) return base;
+    if (r.kind === "group") return base;
     const flag = closedItem(r.item) ? undefined : broken(r.item).find((f) => f.kind === "dependency_order");
     if (!flag) return base;
     // The callout: its words wrap at 220 px (or the chart's width, less its padding), 18 px a line.
@@ -187,7 +191,7 @@ export function layout(
 }
 
 /** QA Nov 12 #2: the row's "Not in the Ground Truth" mark's width (its 12 px words, padding, the gap before it). */
-const gtMarkW = (compact: boolean) => Math.ceil(textWidth(NOT_IN_GT, 12, 600) * 1.05) + 16 + (compact ? 4 : 8);
+const gtMarkW = (compact: boolean) => Math.ceil(textWidth(NOT_IN_GT_SHORT, 12, 600) * 1.05) + 16 + (compact ? 4 : 8);
 
 /** How many lines `s` takes at width `w`, broken between words as the browser breaks it. */
 function wordLines(s: string, size: number, weight: number, w: number): number {
@@ -528,12 +532,16 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
     // finding 18: pack rows in date order left to right, so a later mark never takes a lower
     // row an earlier one needed (the list above is built milestone-ends, then tracks, then key
     // dates, not by date).
-    return placeMarks([...list].sort((a, b) => a.x - b.x), chartW, flags);
+    // qa-nov17 #3/#6: Today first, so its pill (drawn on the first row) holds that row and a mark
+    // just before today (a key date's words) takes the next row, never under the pill.
+    return placeMarks([list[0], ...list.slice(1).sort((a, b) => a.x - b.x)], chartW, flags);
   }, [data, sc, chartW, compact, flags]);
-  // roadmap-milestone-codes: the Gantt's milestone band under the date axis.
+  // roadmap-milestone-codes: the Gantt's milestone band under the date axis. qa-nov17 #3: the
+  // Waterfall draws the same band, so it gets its own room too, never over the key dates' names.
   const band = useMsBand(compact);
-  const msBandH = format === "gantt" ? band : 0;
-  const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1))) + msBandH;
+  const msBandH = format === "gantt" || format === "waterfall" ? band : 0;
+  // qa-nov17 #3: the band's diamonds sit on the axis 4 px under the last row of names, never on them.
+  const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1))) + (msBandH ? 4 + msBandH : 0);
   // qa4-simple-roadmap-16: a phone's waterfall wraps its goals' names and gives each warning a band under its bar.
   const wrapRows = compact && format === "waterfall";
   // The names wrap beside the Current-state pill after them: the pill's width, by item.
@@ -805,26 +813,26 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
               className={`flex min-w-0 flex-col justify-center bg-surface2 px-3 ${r.below ? "text-text2" : ""}`}
             >
               {trackBands && lane === "track" && !r.below ? (
-                <TrackHead data={data} laneKey={r.key} title={r.title} stack />
+                <TrackHead data={data} laneKey={r.key} title={r.title} stack wrap={compact} />
               ) : gantt ? (
                 // D: the goal's name and, under it, its metric. The row's height must fit both
                 // lines (finding 6): a phone's tighter leading keeps the subtitle from being
                 // painted over by the next row.
                 <>
-                  <span className={`truncate font-semibold ${compact ? "text-sm leading-[16px]" : "text-[15px] leading-[18px]"}`} title={r.title}>
+                  <span className={`${compact ? "min-w-0 break-words text-sm leading-[16px]" : "truncate text-[15px] leading-[18px]"} font-semibold`} title={r.title}>
                     <GoalNum n={laneNum(r)} />
                     {r.title}
                   </span>
                   {r.metric && (
-                    <span className={`truncate text-text2 ${compact ? "text-[11px] leading-[13px]" : "text-xs leading-[15px]"}`} data-testid="group-metric" title={r.metric}>
+                    <span className={`${compact ? "break-words text-[11px] leading-[13px]" : "truncate text-xs leading-[15px]"} text-text2`} data-testid="group-metric" title={r.metric}>
                       {r.metric}
                     </span>
                   )}
                 </>
               ) : (
                 <>
-                  <span className={`flex min-w-0 items-baseline ${wrapRows ? "flex-wrap gap-x-2" : "gap-2"}`}>
-                    <span className={`${wrapRows ? "min-w-0 break-words" : "truncate"} font-semibold ${compact ? "text-sm leading-[16px]" : "text-[15px] leading-tight"}`} title={r.title}>
+                  <span className={`flex min-w-0 items-baseline ${compact ? "flex-wrap gap-x-2" : "gap-2"}`}>
+                    <span className={`${compact ? "min-w-0 break-words" : "truncate"} font-semibold ${compact ? "text-sm leading-[16px]" : "text-[15px] leading-tight"}`} title={r.title}>
                       <GoalNum n={laneNum(r)} />
                       {r.title}
                     </span>
@@ -835,7 +843,7 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
                     )}
                   </span>
                   {r.metric && (
-                    <span className={`${wrapRows ? "break-words" : "truncate"} text-text2 ${compact ? "text-[11px] leading-[13px]" : "text-xs"}`} data-testid="group-metric" title={r.metric}>
+                    <span className={`${compact ? "break-words" : "truncate"} text-text2 ${compact ? "text-[11px] leading-[13px]" : "text-xs"}`} data-testid="group-metric" title={r.metric}>
                       {r.metric}
                     </span>
                   )}
@@ -885,7 +893,7 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
                 <ItemMark f={states?.get(`item:${r.item.id}`)} compact={compact} today={data.today} />
                 {/* QA Nov 12 #2: an item with no Ground Truth code is flagged on its row (QA Nov 14 #5:
                     cut to the column on a phone, whole in its title). */}
-                <NotInGt item={r.item} className="h-5! max-w-full min-w-0 px-2! text-xs!" />
+                <NotInGt item={r.item} short className="h-5! px-2! text-xs!" />
                 {r.place != null && compact && (
                   <span className="tnum basis-full text-xs text-text2" data-testid="return-place" title={`${ordinal(r.place)} to come back if room opens`}>
                     {ordinal(r.place)} to return
@@ -893,7 +901,7 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
                 )}
               </span>
               {r.item.draft && !closedItem(r.item) && (
-                <span className="max-w-[48px] min-w-0 shrink truncate rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag" title="Draft">
+                <span className="flex-none rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag" title="Draft">
                   Draft
                 </span>
               )}
@@ -1042,7 +1050,7 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
                 if (!mk) return null;
                 const cy = baseline(mk.row) - 4;
                 return (
-                  <g key={m.id} data-testid="track-milestone" data-row={mk.row} transform={`translate(${mk.x}, ${cy})`}>
+                  <g key={m.id} data-testid="track-milestone" data-row={mk.row} data-keep-clear transform={`translate(${mk.x}, ${cy})`}>
                     <rect x={-5} y={-5} width={10} height={10} transform="rotate(45)" fill="var(--warn)" />
                     {/* QA Nov 12 #5: named by its roadmap code, as the Timeline and the board name it ("M1 Beta"). */}
                     <text data-testid="track-milestone-label" x={mk.side === "after" ? 9 : -9} y={4} fontSize={11} fontWeight={700} fill="var(--text2)" textAnchor={mk.side === "after" ? "start" : "end"}>
@@ -1060,8 +1068,8 @@ export function Chart({ data: given, format, unit, compact, canDrag, moved, open
                 <g key={k.id} data-testid="key-date-marker" data-name={k.name} data-date={k.date} data-draft={k.in_draft ? "true" : undefined} data-row={mk.row} pointerEvents="none">
                   <title>{`${k.name} · ${shortDay(k.date)}${k.note ? ` · ${k.note}` : ""} (${k.roadmap.title})`}</title>
                   <line x1={kx} x2={kx} y1={lineTop(kx, mk.row, cy + 5)} y2={l.height} stroke="var(--accent-ink)" strokeWidth={1} opacity={0.7} strokeDasharray={k.in_draft ? "3 3" : undefined} />
-                  <rect x={kx - 5} y={cy - 5} width={10} height={10} transform={`rotate(45 ${kx} ${cy})`} fill={k.in_draft ? "var(--surface)" : "var(--accent-ink)"} stroke="var(--accent-ink)" />
-                  <text x={mk.side === "after" ? kx + 9 : kx - 9} y={cy + 4} fontSize={11} fontWeight={700} fill="var(--accent-ink)" textAnchor={mk.side === "after" ? "start" : "end"} data-testid="key-date-label">
+                  <rect data-keep-clear x={kx - 5} y={cy - 5} width={10} height={10} transform={`rotate(45 ${kx} ${cy})`} fill={k.in_draft ? "var(--surface)" : "var(--accent-ink)"} stroke="var(--accent-ink)" />
+                  <text x={mk.side === "after" ? kx + 9 : kx - 9} y={cy + 4} fontSize={11} fontWeight={700} fill="var(--accent-ink)" textAnchor={mk.side === "after" ? "start" : "end"} data-testid="key-date-label" data-keep-clear>
                     {k.name}
                   </text>
                 </g>

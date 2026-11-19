@@ -15,7 +15,7 @@ const panel = (page: Page) => page.getByTestId("floating-card");
 async function betaGroup(page: Page): Promise<string | null> {
   await page.goto("/simple/priorities");
   await expect(page.getByTestId("simple-priorities")).toBeVisible();
-  const beta = page.locator("#prio-line option").filter({ hasText: /^Milestone: Beta · / });
+  const beta = page.locator("#prio-line option").filter({ hasText: /^Milestone: (M\d+ )?Beta · / });
   await expect(beta).toHaveCount(1);
   return beta.evaluate((o) => (o.parentElement instanceof HTMLOptGroupElement ? o.parentElement.label : null));
 }

@@ -131784,7 +131784,8 @@
                 "type": "string",
                 "enum": [
                   "suggestion",
-                  "quarter"
+                  "quarter",
+                  "dependencies"
                 ]
               },
               {
