@@ -88,6 +88,8 @@ test.describe("Goal map (GM2)", () => {
     await expect(panel(page)).toBeVisible();
     await expect(panel(page).getByTestId("card-milestone")).not.toHaveText("No milestone");
     await expect(panel(page).getByTestId("card-milestone")).toContainText("32 demos per rep");
+    // The flow loads last and grows the card above the Serves line: scroll once it has.
+    await expect(panel(page).getByText("Loading the flow…")).toHaveCount(0);
     const serves = panel(page).getByTestId("gm-panel-milestone");
     await serves.scrollIntoViewIfNeeded();
     await expect(serves).toBeInViewport();
