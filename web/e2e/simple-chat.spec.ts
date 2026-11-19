@@ -183,7 +183,7 @@ test.describe("desktop, dark", () => {
     await page.goto(MEETING);
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await say(page, "move Weekly alert digest to Q2");
-    const card = cardOf(page, "Move F-06 Weekly alert digest to");
+    const card = cardOf(page, "Move F-79 Weekly alert digest to");
     await tap(card.getByRole("button", { name: "Preview" }));
     await expect(card.getByRole("button", { name: "Hide preview" })).toHaveAttribute("aria-pressed", "true");
     await tap(card.getByRole("button", { name: "Discard" }));
