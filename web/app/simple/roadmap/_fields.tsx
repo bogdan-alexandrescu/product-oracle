@@ -195,6 +195,9 @@ function datesReason(item: Item): string {
   // qa-nov17: the estimate after what it depends on can leave the quarter.
   if (item.estimated && out)
     return `Oracle estimated these dates after what it depends on. They fall outside ${picked.label}, the quarter it was added to. Set dates to override them.`;
+  // flakes-dates: moved after what it depends on, still inside the quarter it was added to.
+  if (item.estimated && item.estimate_basis === "dependencies" && picked)
+    return `Oracle estimated these dates after what it depends on, inside ${picked.label}, the quarter it was added to. Set dates to override them.`;
   if (item.estimated && item.estimate_basis === "quarter" && picked)
     return `Oracle estimated these dates as ${picked.label}, the quarter it was added to, until it suggests dates. Set dates to override them.`;
   if (item.estimated)

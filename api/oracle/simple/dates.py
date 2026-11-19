@@ -306,10 +306,12 @@ def after_dependencies[K](
         if r.start.estimated and ends and max(ends) >= r.start.date:
             day = max(ends) + DAY
             if r.end.estimated:
+                # flakes-dates: dates accepted from a suggestion, once moved, follow what it
+                # depends on.
                 r = Resolved(
                     Dated(day, "estimated", True),
                     Dated(day + (r.end.date - r.start.date), "estimated", True),
-                    r.basis,
+                    "dependencies" if r.basis == "suggestion" else r.basis,
                 )
             else:
                 r = Resolved(Dated(min(day, r.end.date), "estimated", True), r.end)

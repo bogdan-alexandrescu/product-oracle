@@ -1227,9 +1227,10 @@ function afterDependencies(all: Map<string, { s: SeedItem; r: Resolved }>): void
     const latest = ends[ends.length - 1];
     if (!x.r.start.estimated || !latest || latest < x.r.start.date) return;
     const day = addDays(latest, 1);
+    // dates.after_dependencies (flakes-dates): dates accepted from a suggestion, once moved, follow what it depends on.
     if (x.r.end.estimated) {
       const end = addDays(day, span(x.r.start.date, x.r.end.date) - 1);
-      x.r = { start: { date: day, source: "estimated", estimated: true }, end: { date: end, source: "estimated", estimated: true }, basis: x.r.basis };
+      x.r = { start: { date: day, source: "estimated", estimated: true }, end: { date: end, source: "estimated", estimated: true }, basis: x.r.basis === "suggestion" ? "dependencies" : x.r.basis };
       return;
     }
     x.r = { start: { date: day < x.r.end.date ? day : x.r.end.date, source: "estimated", estimated: true }, end: x.r.end };
