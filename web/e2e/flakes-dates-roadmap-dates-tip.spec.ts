@@ -4,15 +4,15 @@ import { expect, test, type Locator, type Page } from "./test";
 /*
  * flakes-dates (datesReason, app/simple/roadmap/_fields.tsx ~186): once a suggestion is
  * accepted into a working draft that is not published yet, a dependency can still move the
- * item's estimate (dates.after_dependencies keeps the mover's old basis: see
- * api/tests/test_simple_honest_starts.py's test_accepted_suggestion_moved_by_a_dependency_
- * reads_its_dependencies). A reader who cannot see that draft (web/lib/api/mock/simple-
- * roadmap.ts's seesDraft/readerView, ~1766-1792) then reads dates moved by a dependency while
- * the Dates (i) still says they were "accepted from Oracle's suggestion in a draft": wrong,
- * because nothing in the draft set these particular (moved) dates. estimate_basis only turns
- * "suggestion" into "dependencies" while the open suggestion itself still exists (simple-
- * roadmap.ts ~1901), which an accepted one no longer does. fails_when=the (i) still reads
- * "accepted" once the dependency has moved the dates past what was accepted.
+ * item's estimate. dates.after_dependencies then turns the moved dates' basis from
+ * "suggestion" into "dependencies" (api/tests/test_simple_honest_starts.py's
+ * test_accepted_suggestion_moved_by_a_dependency_reads_its_dependencies; the mock's
+ * afterDependencies in web/lib/api/mock/simple-roadmap.ts ~1230 does the same). A reader who
+ * cannot see that draft (simple-roadmap.ts's seesDraft/readerView, ~1766-1792) reads dates
+ * moved past the dependency, and the Dates (i) says Oracle estimated them from the window and
+ * what the feature depends on, never that they were "accepted from Oracle's suggestion in a
+ * draft". fails_when=the (i) reads "accepted" once the dependency has moved the dates past
+ * what was accepted.
  */
 test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -62,7 +62,7 @@ async function publishWorkingDraft(page: Page, roadmap: string) {
   await expect(many ? lines.filter({ hasText: roadmap }) : banner).toHaveCount(0);
 }
 
-test("an accepted suggestion a dependency later moves still reads 'accepted ... in a draft' for a reader who cannot see that draft", async ({ page }) => {
+test("an accepted suggestion a dependency later moves reads as estimated after its dependencies, not accepted, for a reader who cannot see that draft", async ({ page }) => {
   await login(page);
   await openRoadmap(page);
 
