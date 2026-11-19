@@ -125,6 +125,6 @@ async def test_a_dependency_outdated_suggestion_is_no_estimate_basis(client):
     assert item["start"]["date"] == str(starts + timedelta(days=1))
     assert item["suggestion"] is None
     assert item["estimated"] is True
-    assert item["estimate_basis"] != "suggestion"
+    assert item["estimate_basis"] == "dependencies"
     # Its column is the one its moved estimate puts it in, as before.
     assert item["horizon"] == before["horizon"]

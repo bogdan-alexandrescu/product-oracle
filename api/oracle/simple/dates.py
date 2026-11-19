@@ -82,8 +82,9 @@ class Resolved:
     start: Dated
     end: Dated
     # roadmap-dates: where an undated bar's estimate comes from (Oracle's suggestion, the
-    # picked quarter); None: its column's window, or a bar a source dates.
-    basis: Literal["suggestion", "quarter"] | None = None
+    # picked quarter; qa-nov17: what it depends on, once that outdated the suggestion); None:
+    # its column's window, or a bar a source dates.
+    basis: Literal["suggestion", "quarter", "dependencies"] | None = None
 
     @property
     def estimated(self) -> bool:

@@ -1133,7 +1133,7 @@ function leadDays(db: SimpleDb, s: SeedItem): number {
 }
 
 /** roadmap-dates (dates.Resolved.basis): where an undated bar's estimate comes from. */
-type EstimateBasis = "suggestion" | "quarter";
+type EstimateBasis = "suggestion" | "quarter" | "dependencies";
 type Resolved = { start: Dated; end: Dated; basis?: EstimateBasis };
 
 function resolve(db: SimpleDb, s: SeedItem): Resolved {
@@ -1890,13 +1890,15 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const [code, title] = codedTitle(s.title, prdCode(s.section));
     const rm = ROADMAPS[s.roadmap];
     const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, "-"));
-    const suggestion = offered(own.get(s.key)!, itemSuggestion(db, db.ids[s.key]));
+    const open = itemSuggestion(db, db.ids[s.key]);
+    const suggestion = offered(own.get(s.key)!, open);
     return {
       id: db.ids[s.key], key: s.key, title, outcome: s.outcome ?? null, note: s.note ?? null, horizon: horizonOfDates(r, quarterWindows(today)),
       estimate_pending: !!s.estimate_pending,
       picked_quarter: s.quarter?.start ?? null,
-      // service.item_out: where an estimate's dates come from (dates.Resolved.basis).
-      estimate_basis: r.start.estimated && r.end.estimated ? (r.basis ?? null) : null,
+      // service.item_out: where an estimate's dates come from (dates.Resolved.basis); qa-nov17
+      // (service.load): what it depends on once that outdated its open suggestion.
+      estimate_basis: r.start.estimated && r.end.estimated ? (r.basis === "suggestion" && open && !suggestion ? "dependencies" : (r.basis ?? null)) : null,
       // Its feature's code (F-12), else its own (codedTitle: the title's, else its PRD section's), as service.load's Entry.code.
       code: (s.feature_id && db.feature_codes?.[s.feature_id]) || code,
       // every-field-editable (service.item_out): a code set_code may not change, and where it comes from.

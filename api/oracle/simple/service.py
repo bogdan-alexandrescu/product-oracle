@@ -28,7 +28,7 @@ from collections import defaultdict, deque
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -697,12 +697,16 @@ async def load(
         # qa-nov17: an open date suggestion is offered only while the item is undated and its
         # estimate (after what it depends on) still is the suggestion's: dates set here or a
         # new dependency outdate it, so its row, its panel block and the counts clear at once.
+        # Its estimate then is no longer the suggestion's but what it depends on's (its column,
+        # read above, stays).
         if e.suggestion is not None:
             s = e.suggestion
             span = e.suggestion_span or (s.start_date, s.end_date)
             r = e.resolved
             if not r.undated or (r.start.date, r.end.date) != span:
                 e.suggestion, e.suggestion_span = None, None
+                if r.basis == "suggestion":
+                    e.resolved = replace(r, basis="dependencies")
     # feature-parts: each part's ancestors; with no dates of its own, a part reads its
     # nearest dated ancestor's (a parent in Trash still lends its own typed dates).
     await _ancestors(db, entries)

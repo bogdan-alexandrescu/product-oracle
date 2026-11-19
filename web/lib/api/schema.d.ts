@@ -44502,7 +44502,7 @@ export interface components {
             /** Picked Quarter */
             picked_quarter?: string | null;
             /** Estimate Basis */
-            estimate_basis?: ("suggestion" | "quarter") | null;
+            estimate_basis?: ("suggestion" | "quarter" | "dependencies") | null;
             /** Date Basis */
             date_basis?: string | null;
             suggestion?: components["schemas"]["DateSuggestionOut"] | null;
