@@ -6,6 +6,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * 1. Dates a person sets close Oracle's old date suggestion at once: its panel block, its row
  *    in Needs a decision and the count; an Accept of the old one says why in plain words.
  * 2. A dependency that moves a feature's estimate leaves one estimate in its panel.
+ * 2b. Its Dates (i) then reads Oracle's estimate after what it depends on, never dates accepted into a draft.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -129,6 +130,36 @@ test("2: a dependency that moves a feature's estimate leaves one estimate in its
   await closePanel(page);
   await openTray(page);
   await expect(dateRow(page, "Alert routing by team")).toHaveCount(0);
+});
+
+test("2b: a dependency that outdates a suggestion leaves no word of dates accepted into a draft", async ({ page }) => {
+  // protects: an item with no picked quarter and an open suggestion comes to depend on a feature
+  // that ends later; its Dates (i) reads Oracle's estimate after what it depends on; fails_when:
+  // it says the dates were accepted from Oracle's suggestion in a draft (nothing was accepted)
+  await login(page);
+  await openRoadmap(page);
+  await openItem(page, "alert-digest");
+  await setDates(page, "2027-11-01", "2027-12-31");
+  await closePanel(page);
+
+  await openItem(page, "alert-sso");
+  const why = panel(page).getByTestId("card-dates-why");
+  await expect(why).toHaveAccessibleDescription(/Oracle suggested these dates/);
+  await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
+  const pick = panel(page).getByLabel("Feature it depends on");
+  const value = await pick.locator("option", { hasText: "Weekly alert digest" }).first().getAttribute("value");
+  await pick.selectOption(value!);
+  await tap(panel(page).getByRole("button", { name: "Save" }));
+  await expect(panel(page).getByTestId("card-depends")).toContainText("Weekly alert digest");
+  await expect(panel(page).getByTestId("card-suggestion")).toHaveCount(0);
+  await expect(why).not.toHaveAccessibleDescription(/accepted/);
+  await expect(why).toHaveAccessibleDescription(/Oracle estimated these dates from the .* window and what the feature depends on/);
+
+  await page.reload();
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await openItem(page, "alert-sso");
+  await expect(panel(page).getByTestId("card-dates")).toContainText("Jan 1");
+  await expect(why).not.toHaveAccessibleDescription(/accepted/);
 });
 
 test("11: Needs a decision keeps its count in sight and says what it counts behind an (i)", async ({ page }) => {
