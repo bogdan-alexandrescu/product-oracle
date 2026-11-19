@@ -45,6 +45,8 @@ import { expect, test, type Page } from "./test";
 type Call = { status: number; body: unknown };
 
 async function call(page: Page, method: string, path: string, body?: unknown): Promise<Call> {
+  // The mock defines its fetch on the page's first call: wait for it rather than call too soon.
+  await page.waitForFunction(() => typeof (globalThis as { __poMockFetch?: unknown }).__poMockFetch === "function");
   return page.evaluate(
     async ([method, path, body]) => {
       const w = globalThis as unknown as { __poMockFetch?: (r: Request) => Promise<Response> };
