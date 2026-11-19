@@ -108,6 +108,8 @@ for (const [where, size] of [
           const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
           // The picker can paint before its options on a cold page: read them once Now is offered.
           await expect(select.locator('option[value="now"]')).toHaveCount(1);
+          // qa-nov17 G8: a milestone's option reads its code once the roadmap's read is in: read the options then.
+          await expect(select.locator("option").filter({ hasText: /Beta · / }).first()).toHaveText(/^Milestone: M\d+ Beta · /);
           const list = page.getByRole("list", { name: "Ranked list" }).locator("..");
           const rows = page.getByTestId("prio-row");
           const title = (r: Locator) => r.getByTestId("prio-title");
