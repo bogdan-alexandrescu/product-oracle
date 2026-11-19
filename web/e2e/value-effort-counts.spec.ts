@@ -241,7 +241,7 @@ test("desktop: a mark moved onto another's spot with the arrow keys joins its co
   await page.keyboard.press("ArrowDown");
   await expect(sc).toHaveCount(0);
   const count = page.getByRole("button", { name: /^2 features at effort 2 weeks · goal value 3: / });
-  await expect(count).toHaveAccessibleName("2 features at effort 2 weeks · goal value 3: Setup checklist, Alert routing by team; show them");
+  await expect(count).toHaveAccessibleName("2 features at effort 2 weeks · goal value 3: F-01 Setup checklist, Alert routing by team; show them");
   await expect(count).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("vxe-crowd-sheet").getByTestId("vxe-crowd-row")).toHaveText([/Setup checklist/, /Alert routing by team/]);

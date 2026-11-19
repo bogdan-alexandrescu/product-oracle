@@ -344,10 +344,17 @@ for (const v of VIEWS) {
       await expect(page.locator("#prio-about-text")).toContainText("Each mark shows the feature's code when it has one (one with none is not in the Ground Truth); point at it for its name, its rank is in the list. Hollow: below the line (not this quarter).");
       await expect(page.locator("#prio-about-text")).toContainText("Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys)");
 
-      // B's Ranked rows: one line each (rank, code, the name cut with "…", the score), a row
-      // that misses the line carrying a small "Misses" chip (the line in its title).
-      const rowHeights = await page.getByTestId("side-row").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
-      for (const h of rowHeights) expect(h).toBeLessThanOrEqual(30);
+      // B's Ranked rows: one line each (rank, code, name, the score), the name alone wrapping to a
+      // second line rather than cut (qa-nov17 G4), a row that misses the line carrying a small
+      // "Misses" chip (the line in its title) on that same line.
+      const rowHeights = await page.getByTestId("side-row").evaluateAll((els) =>
+        els.map((e) => ({ row: e.getBoundingClientRect().height, name: e.querySelector('[data-testid="prio-title"]')!.getBoundingClientRect().height })),
+      );
+      for (const h of rowHeights) {
+        expect(h.name, "a name takes at most two lines").toBeLessThanOrEqual(44);
+        expect(h.row - h.name, "nothing in the row drops under its name").toBeLessThanOrEqual(8);
+        if (h.name <= 22) expect(h.row).toBeLessThanOrEqual(30);
+      }
       const misses = sideRow(page, "price-tiers").getByTestId("prio-misses");
       await expect(misses).toHaveText("Misses");
       await expect(misses).toHaveAttribute("title", "Misses this quarter");

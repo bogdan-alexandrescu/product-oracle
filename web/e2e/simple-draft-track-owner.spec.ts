@@ -33,7 +33,7 @@ test("a track owner sees the working draft of their track's roadmap", async ({ p
   const was = (await b.getAttribute("data-start"))!;
   await b.focus();
   await page.keyboard.press("ArrowLeft");
-  await expect(page.getByText(/^Moved 'Setup checklist' to /)).toBeVisible();
+  await expect(page.getByText(/^Moved 'F-01 Setup checklist' to /)).toBeVisible();
   await expect(b).not.toHaveAttribute("data-start", was);
   const start = (await b.getAttribute("data-start"))!;
   const end = (await b.getAttribute("data-end"))!;

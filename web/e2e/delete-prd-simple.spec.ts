@@ -83,7 +83,7 @@ for (const look of LOOKS) {
       // Roadmap, in another tab, no longer shows what went.
       const roadmap = await page.context().newPage();
       await roadmap.goto("/simple/roadmap");
-      await expect(roadmap.getByText("Setup checklist", { exact: true }).first()).toBeVisible();
+      await expect(roadmap.getByText("F-01 Setup checklist", { exact: true }).first()).toBeVisible();
       await expect(roadmap.getByText("Alert rules engine", { exact: true })).toHaveCount(0);
       // The mock's store is each tab's localStorage: a tab left open may write a stale read over Undo.
       await roadmap.close();
