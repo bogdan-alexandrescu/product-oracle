@@ -50,7 +50,6 @@ from oracle.runs.service import (
     _cancel_pending,
     _cause,
     _checkpoints,
-    _console_member,
     _detach,
     _drivable,
     _finish,
@@ -167,7 +166,9 @@ async def decide_checkpoint(
             if member_id is None and held.get("answered_by"):
                 # Held before its author's id was kept: matched by email, as when it was
                 # recorded.
-                member, _ = await _console_member(db, cp, held["answered_by"], flow=run.flow)
+                member, _ = await service._console_member(
+                    db, cp, held["answered_by"], flow=run.flow
+                )
                 if member is not None:
                     role, member_id = role or member.role, member.id
             decider = (role, "swarmcloud_console", member_id)

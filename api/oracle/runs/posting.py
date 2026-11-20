@@ -30,9 +30,7 @@ from oracle.runs.service import (
     _next,
     _not_found,
     _note,
-    _outside_note,
     _plan_entry,
-    _recorded,
     _rt,
     _segments,
     _set_art,
@@ -41,7 +39,6 @@ from oracle.runs.service import (
     _shown,
     _target_kind,
     _unconfirmed,
-    _unread_console,
 )
 from oracle.swarm import RecordedAnswer, RuntimeUnavailable
 from oracle.swarm.runtime import MERGE, NOT_YET
@@ -131,7 +128,7 @@ async def _hold_unread(
         await db.commit() if undone else await db.rollback()
         return
     why = "SwarmCloud did not serve it" if exc.needs == "unread" else "its verdict is unreadable"
-    console = _unread_console(
+    console = service._unread_console(
         run, segment, _live(run), wait, why, by=exc.by, at=exc.at, via=exc.via
     )
     if exc.needs == "unreadable":
@@ -435,9 +432,11 @@ async def _already_answered(
             via=via,
         )
     wait.pop("console", None)
-    wait["recorded"] = _recorded(record, by, at, via, ours)
+    wait["recorded"] = service._recorded(record, by, at, via, ours)
     if not ours:
-        _note(segment, _outside_note(cp, round_, replace(record, answered_by=by, via=via), at))
+        _note(
+            segment, service._outside_note(cp, round_, replace(record, answered_by=by, via=via), at)
+        )
     if record.verdict is None:
         _note(
             segment,

@@ -48,7 +48,6 @@ from oracle.runs.service import (
     _Cancelled,
     _ceiling,
     _checkpoints,
-    _console_record,
     _cost_on,
     _cost_unknown,
     _creator,
@@ -68,7 +67,6 @@ from oracle.runs.service import (
     _note_art,
     _overrun,
     _parse_at,
-    _said,
     _search_for,
     _segments,
     _set_art,
@@ -505,7 +503,7 @@ async def _hold_console_approval(
     "confirm"`` (so the run's token stays read-only, :func:`_holds_token`), nothing is
     posted to the workflow, and Confirm is refused like Approve until the problems are
     fixed or waived."""
-    console = _console_record(run, segment, record, at, revise)
+    console = service._console_record(run, segment, record, at, revise)
     console.update(
         counted=True,
         reason=CONSOLE_BLOCKED,
@@ -535,7 +533,7 @@ async def _hold_console_approval(
     _note(
         segment,
         f"{cp.kind} was approved in SwarmCloud by {record.answered_by or 'someone'}: "
-        f"{_said(record, at)}. The {CHECKPOINT_TITLES.get(cp.kind, cp.kind).lower()} has "
+        f"{service._said(record, at)}. The {CHECKPOINT_TITLES.get(cp.kind, cp.kind).lower()} has "
         "blocking problems, so Oracle recorded the "
         "approval and did not follow it: the checkpoint stays open in the Inbox, and an "
         "approver confirms it once the problems are fixed or waived, or requests changes.",
