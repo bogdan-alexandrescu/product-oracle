@@ -8,7 +8,8 @@ import { PageSkeleton } from '@/components/ds';
 
 function Picker() {
   const q = useSearchParams();
-  const k = q.get('kind') === 'roadmap' ? 'roadmap' : 'prd';
+  const kind = q.getAll('kind');
+  const k = kind.length === 1 && kind[0] === 'roadmap' ? 'roadmap' : 'prd';
   // C1 lane 2: Start a PRD on requests (`requests=<id,id>`) ticks them under "Requests behind it".
   const requests = q.getAll('requests');
   const ids = (requests.length === 1 ? requests[0].split(',') : []).filter(Boolean).slice(0, 50);
