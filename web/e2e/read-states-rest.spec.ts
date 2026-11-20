@@ -307,3 +307,64 @@ test("Decisions: Ground Truth items that could not be read say so, never no item
   await seesReason(page, linked, "the Ground Truth");
   await expect(linked).not.toContainText("No Ground Truth item matches");
 });
+
+test("Priorities: a ranking that could not be read says so, never no features ranked; answered none says so", async ({ page }) => {
+  await page.goto("/icon.svg");
+  await page.evaluate(() => {
+    localStorage.removeItem("po-mock-db-v2");
+    localStorage.setItem("po-mock-scenario", "empty");
+  });
+  await login(page);
+  await page.goto("/priorities");
+  const table = page.getByTestId("priority-table").filter({ visible: true });
+  await expect(table.getByTestId("table-empty")).toHaveText("No features ranked");
+
+  await failGets(page, "/v1/priorities");
+  await page.reload();
+  await expect(page.getByRole("alert").filter({ hasText: "Mock failure" }).first()).toBeVisible();
+  await expect(page.getByText("No features ranked")).toHaveCount(0);
+  await expect(page.getByTestId("table-empty")).toHaveCount(0);
+});
+
+test("Outcomes: outcomes that could not be read say so, never none in a filter; answered none in a filter says so", async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), ["po-mock-scenario", "outcomes"] as const);
+  await login(page);
+  await page.goto("/plan/outcomes");
+  const filters = page.getByTestId("outcome-filters");
+  await filters.getByRole("button", { name: /^Needs prediction/ }).click();
+  await page.getByTestId("outcome-row").filter({ hasText: "Guided setup checklist" }).click();
+  const form = page.getByTestId("outcome-inspector").filter({ visible: true }).getByTestId("prediction-form");
+  await form.getByLabel("Predicted").fill("45");
+  await form.getByRole("button", { name: "Save prediction" }).click();
+  await expect(page.getByTestId("table-empty")).toContainText("No outcomes in Needs prediction");
+
+  await failGets(page, "/v1/outcomes");
+  await page.reload();
+  await expect(page.getByRole("alert").filter({ hasText: "Mock failure" }).first()).toBeVisible();
+  await expect(page.getByText(/No outcomes in/)).toHaveCount(0);
+  await expect(page.getByTestId("table-empty")).toHaveCount(0);
+  await expect(filters.getByRole("button", { name: /^All/ })).toHaveText(/^\s*All\s*$/);
+});
+
+test("Quality: criteria that could not be read say so, never no criteria match; answered none in a filter says so", async ({ page }) => {
+  await page.addInitScript(
+    ([rk, sk]) => {
+      localStorage.setItem(rk, "commenter");
+      localStorage.setItem(sk, "quality");
+    },
+    ["po-mock-role", "po-mock-scenario"] as const,
+  );
+  await login(page);
+  await page.goto("/documents/team-invites/v/2/quality");
+  await page.locator('[data-testid="criterion-row"][data-key="scope_testability"]').click();
+  await page.getByTestId("quality-inspector").getByLabel("Hide rules, model and other people until I pick").check();
+  await page.getByRole("button", { name: /Model disagrees/ }).click();
+  await expect(page.getByTestId("criterion-row")).toHaveCount(0);
+  await expect(page.getByTestId("table-empty")).toHaveText("No criteria match this filter");
+
+  await failGets(page, "/v1/documents/team-invites/versions/2/readiness");
+  await page.reload();
+  await expect(page.getByTestId("quality-error")).toContainText("Mock failure");
+  await expect(page.getByTestId("table-empty")).toHaveCount(0);
+  await expect(page.getByText("No criteria match this filter")).toHaveCount(0);
+});
