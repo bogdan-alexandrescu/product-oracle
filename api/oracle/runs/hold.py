@@ -10,13 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.runs import service
 from oracle.runs.models import Checkpoint, Run
-from oracle.runs.service import (
-    CHECKPOINT_TITLES,
-    _art,
-    _checkpoints,
-    _segments,
-    log,
-)
+from oracle.runs.service import _art, log
 from oracle.swarm import RuntimeUnavailable
 from oracle.swarm.runtime import not_reached
 from oracle.tenancy import tenant_session
@@ -63,7 +57,7 @@ def _hold_reason(cp: Checkpoint) -> str:
     if service._owes(cp):
         why = "has a decision recorded in Oracle that is not delivered to the run yet"
     elif needs == "confirm" and console_blocked(cp):
-        what = CHECKPOINT_TITLES.get(cp.kind, cp.kind).lower()
+        what = service.CHECKPOINT_TITLES.get(cp.kind, cp.kind).lower()
         why = (
             f"was approved in SwarmCloud's console while the {what} has blocking "
             "problems; an Oracle approver confirms it once they are fixed or waived"
@@ -143,14 +137,14 @@ def _review_predecessors(entry: dict[str, Any]) -> list[tuple[str, str | None]]:
 
 
 async def _hold_plan(db: AsyncSession, run_id: uuid.UUID) -> _HoldPlan:
-    checkpoints = await _checkpoints(db, [run_id])
+    checkpoints = await service._checkpoints(db, [run_id])
     held = next((c for c in checkpoints if _holds_token(c)), None)
     if held is not None:
         return _HoldPlan(HOLD_DECISION, _hold_reason(held))
     run = await db.get(Run, run_id)
     if run is None:
         return _HoldPlan()
-    for s in await _segments(db, run_id):
+    for s in await service._segments(db, run_id):
         lost = _art(s).get("lost")
         if s.status == "pending" and isinstance(lost, dict):
             # Its answer was lost and its token kept alive: it may run, and a wait in it

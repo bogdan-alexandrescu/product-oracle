@@ -47,17 +47,10 @@ from oracle.runs.service import (
     Unavailable,
     _about,
     _art,
-    _checkpoints,
     _flow,
-    _open_questions,
-    _record_decider,
-    _segments,
     _set_art,
     _set_knob,
-    _staged_actions,
     _TickStats,
-    approve_gate_of,
-    blocking_open,
     log,
 )
 from oracle.runtokens import revoke_run_tokens
@@ -127,7 +120,7 @@ async def decide_checkpoint(
 
         raise await actions.review_changed(db, cp, expected_revision)
     # A run already waiting at the Engineering check is decided as the rules now are.
-    await eng_check.refresh(db, run, await _segments(db, run.id), [cp])
+    await eng_check.refresh(db, run, await service._segments(db, run.id), [cp])
     # The note defaults to the shared draft's (D8).
     note = (note if note is not None else cp.draft_note or "").strip() or None
     # D4: an Inbox send-back delivers a structured review of the shared draft (a console
@@ -182,9 +175,9 @@ async def decide_checkpoint(
     if decision == "approved" and cp.kind == "feature_set" and await service._recheck_scope(db, cp):
         # The scope as stored still has blocking problems: unless each is waived, the
         # refreshed check is kept for the run page and the Inbox, and nothing is decided.
-        if (shut := await approve_gate_of(db, cp)) and not shut.open:
+        if (shut := await service.approve_gate_of(db, cp)) and not shut.open:
             await db.commit()
-            raise blocking_open(shut)
+            raise service.blocking_open(shut)
     if (
         decision == "approved"
         and cp.kind == "priority_order"
@@ -192,9 +185,9 @@ async def decide_checkpoint(
     ):
         # A goal a new feature serves was rejected since the order was checked: the order
         # keeps the problem for the band and the Inbox, and nothing is decided.
-        if (shut := await approve_gate_of(db, cp)) and not shut.open:
+        if (shut := await service.approve_gate_of(db, cp)) and not shut.open:
             await db.commit()
-            error = blocking_open(shut)
+            error = service.blocking_open(shut)
             message = "; ".join(p["message"] for p in stale)
             error.args = (message,)
             error.detail["message"] = message  # type: ignore[attr-defined]
@@ -210,14 +203,14 @@ async def decide_checkpoint(
     if (
         decision == "approved"
         and edited is None
-        and (shut := await approve_gate_of(db, cp))
+        and (shut := await service.approve_gate_of(db, cp))
         and not shut.open
     ):
         # D3: the same for a blocking reason not fixed or waived (one gate for every path).
-        raise blocking_open(shut)
+        raise service.blocking_open(shut)
     # D7: a console approval never applies staged edits (its answerer did not see them).
     unapplied = (
-        apply_edits.edit_count((await _staged_actions(db, [cp])).get(cp.id, []))
+        apply_edits.edit_count((await service._staged_actions(db, [cp])).get(cp.id, []))
         if decision == "approved" and via == "swarmcloud_console"
         else 0
     )
@@ -252,7 +245,7 @@ async def decide_checkpoint(
             staged = await scope_review.edits_count(db, cp)
         if not staged:
             raise Invalid(NOTHING_TO_SEND)
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     seq = (cp.payload or {}).get("segment_seq")
     segment = next((s for s in segments if s.seq == seq), None)
     # Only a segment in the state its checkpoint expects is started: the checkpoint's
@@ -281,7 +274,7 @@ async def decide_checkpoint(
         _write_edits(run, cp, segment, edited)
     if unapplied:
         service._note(segment, _unapplied_note(unapplied))
-    _record_decider(cp, *decider)
+    service._record_decider(cp, *decider)
     data: dict[str, Any] = {"run_id": str(run.id), "kind": cp.kind}
     if edited is not None:
         data.update(edited.audit)
@@ -427,7 +420,7 @@ async def _apply_staged_edits(
             .order_by(CheckpointAction.created_at, CheckpointAction.id)
         )
     )
-    blocked = apply_edits.needs_agents(staged, await _open_questions(db, {cp.id: staged}))
+    blocked = apply_edits.needs_agents(staged, await service._open_questions(db, {cp.id: staged}))
     if blocked:
         raise _edits_refused(
             "needs_agents", apply_edits.refusal(blocked), actions=[str(a.id) for a in blocked]
@@ -618,7 +611,7 @@ def _owes(cp: Checkpoint) -> bool:
 async def _owed_decision(db: AsyncSession, run_id: uuid.UUID) -> uuid.UUID | None:
     """The run's checkpoint whose recorded decision is owed (:func:`_owes`), read without
     a lock."""
-    owed = next((c.id for c in await _checkpoints(db, [run_id]) if _owes(c)), None)
+    owed = next((c.id for c in await service._checkpoints(db, [run_id]) if _owes(c)), None)
     await db.rollback()
     return owed
 
@@ -696,7 +689,7 @@ async def _failed_try(
         }
         service._set_wait(cp, wait)
         if first:
-            segments = await _segments(db, run.id)
+            segments = await service._segments(db, run.id)
             seq = (cp.payload or {}).get("segment_seq")
             target = next((x for x in segments if x.seq == seq), None) or segments[0]
             service._note(
@@ -788,7 +781,7 @@ async def _deliver_decision(
     posting: dict[str, Any],
     stats: _TickStats,
 ) -> None:
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     seq = (cp.payload or {}).get("segment_seq")
     segment = next((x for x in segments if x.seq == seq), None)
     if segment is None:
@@ -891,7 +884,7 @@ async def _void_owed(
     # H1: a decision voided before it reached the run is not in the decision log.
     await decisions_capture.checkpoint_voided(db, cp.id)
     await service._scope_reopened(db, cp)
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     target = next((s for s in segments if s.seq == (cp.payload or {}).get("segment_seq")), None)
     if target is not None:
         service._note(

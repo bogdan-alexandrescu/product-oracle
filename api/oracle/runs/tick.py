@@ -27,8 +27,6 @@ from oracle.runs.service import (
     _ceiling,
     _flow,
     _known_sum,
-    _refs,
-    _segments,
     _set_art,
     _set_knob,
     _spent,
@@ -73,7 +71,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
     those reads. What a pass queued is submitted by the caller (:func:`submit_queued`)."""
     run_id = run.id
     runtime = service.get_runtime()
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     wf = service._live(run)
     if wf is not None and (wf.get("cancel_pending") or run.status in FINAL):
         if not await _retry_pending_cancel(db, run, wf, segments, stats) or run.status != "running":
@@ -527,7 +525,7 @@ async def _tick_searches(db: AsyncSession, run_id: uuid.UUID, stats: _TickStats)
     if run is None or not (run.knobs or {}).get("searches"):
         await db.rollback()
         return False
-    await service._search_earlier(db, run, await _segments(db, run_id), stats)
+    await service._search_earlier(db, run, await service._segments(db, run_id), stats)
     await db.commit()
     return True
 
@@ -561,7 +559,7 @@ async def _stamp_checked(db: AsyncSession, run_id: uuid.UUID, since: datetime) -
     if run is None or run.status != "running":
         await db.rollback()
         return
-    current = next((s for s in await _segments(db, run_id) if s.status == "running"), None)
+    current = next((s for s in await service._segments(db, run_id) if s.status == "running"), None)
     if current is None or not current.swarm_workflow_id:
         await db.rollback()
         return
@@ -606,7 +604,7 @@ async def _unchecked(db: AsyncSession, why: dict[uuid.UUID, str]) -> list[TickUn
     if not why:
         return []
     runs = list(await db.scalars(select(Run).where(Run.id.in_(why))))
-    refs = await _refs(db, runs)
+    refs = await service._refs(db, runs)
     # As the run's page heads it: "Team onboarding · Ground Truth to PRD".
     titles = {r.id: " · ".join(t for t in (refs.title(r), _flow(r).title) if t) for r in runs}
     await db.rollback()
@@ -619,7 +617,7 @@ async def _unchecked(db: AsyncSession, why: dict[uuid.UUID, str]) -> list[TickUn
 async def _has_waiting(db: AsyncSession, run_id: uuid.UUID) -> bool:
     """Whether a segment of the run waits to be submitted (:func:`_waiting`), read without
     a lock: :func:`submit_queued` locks the run and looks again."""
-    segments = await _segments(db, run_id)
+    segments = await service._segments(db, run_id)
     waiting = any(service._waiting(s) for s in segments)
     await db.rollback()
     return waiting

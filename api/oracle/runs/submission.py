@@ -20,16 +20,7 @@ from oracle.errors import exception_text
 from oracle.runs import flows, service, waits, workflow
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.schemas import QueueWait
-from oracle.runs.service import (
-    Unavailable,
-    _art,
-    _flow,
-    _knobs,
-    _segments,
-    _set_art,
-    _set_knob,
-    log,
-)
+from oracle.runs.service import Unavailable, _art, _flow, _knobs, _set_art, _set_knob, log
 from oracle.runtokens import mint_run_token, revoke_run_tokens
 from oracle.swarm import (
     AgentRuntime,
@@ -487,7 +478,7 @@ async def _apply_cancel(
         await _give_up(db, run, wf, state)
         return True
     if out.final is not None and wf.get("id"):
-        service._take_cost(run, wf, out.final, await _segments(db, run.id))
+        service._take_cost(run, wf, out.final, await service._segments(db, run.id))
     now = service._now().isoformat()
     if out.error is not None and not out.ended:
         log.warning("run %s: cancel of %s not confirmed: %s", run.id, wf.get("id"), out.error)
@@ -605,7 +596,7 @@ async def _give_up(db: AsyncSession, run: Run, wf: dict[str, Any], state: str) -
         "cancelling it; its cost is what Oracle last read."
     )
     log.warning("run %s: %s", run.id, gone)
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     target = next((s for s in segments if s.seq == wf.get("start_seq")), None)
     if target is not None or segments:
         _note(target or segments[0], gone)

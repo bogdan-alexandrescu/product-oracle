@@ -45,13 +45,10 @@ from oracle.runs.scope_models import PrdScope
 from oracle.runs.service import (
     ITEMS_FILE,
     _art,
-    _checkpoints,
     _flow,
     _knobs,
-    _segments,
     _set_art,
     _set_knob,
-    _source_id,
     _TickStats,
     log,
 )
@@ -181,7 +178,7 @@ async def _draft_source(db: AsyncSession, run: Run) -> uuid.UUID | None:
     """The provenance of the draft a run imports: the run's source version
     (prd_to_roadmap), else the document's latest version's (the feedback loop keeps the
     PRD version a roadmap came from)."""
-    source_id = _source_id(run)
+    source_id = service._source_id(run)
     if source_id is not None or not run.document_id:
         return source_id
     return await db.scalar(
@@ -1247,7 +1244,7 @@ async def _resume_failed(
     log.warning("run %s: advancing segment %s again failed (%s)", run_id, seq, error, exc_info=exc)
     await db.rollback()
     run = await service._get_run(db, run_id, lock=True)
-    segments = await _segments(db, run_id, fresh=True)
+    segments = await service._segments(db, run_id, fresh=True)
     segment = next((s for s in segments if s.seq == seq), None)
     if segment is None or _resuming(run, segments) is not segment:
         return run, segments
@@ -1279,7 +1276,7 @@ async def _resume_failed(
     await db.commit()
     # The commit released the run's row lock: taken again, read as they are now.
     run = await service._get_run(db, run_id, lock=True)
-    return run, await _segments(db, run_id, fresh=True)
+    return run, await service._segments(db, run_id, fresh=True)
 
 
 def _resume_error(run_id: uuid.UUID, segment: RunSegment, failed: dict[str, Any]) -> str:
@@ -1344,7 +1341,7 @@ async def prior_review(
         return None
     if attempt is not None and attempt <= number:
         return None
-    for cp in reversed(await _checkpoints(db, [run.id])):
+    for cp in reversed(await service._checkpoints(db, [run.id])):
         if (
             (cp.payload or {}).get("segment_seq") == segment.seq
             and cp.status == "changes_requested"
@@ -1401,7 +1398,9 @@ async def _section_keys(db: AsyncSession, version_id: uuid.UUID) -> list[str]:
 
 async def items_check(db: AsyncSession, run: Run, text: str) -> roadmap.ItemsCheck:
     """The check of a Roadmap items file, read once per Inbox call (oracle.runs.batch)."""
-    check, *_ = await once(("items_check", _source_id(run), text), lambda: _checked(db, run, text))
+    check, *_ = await once(
+        ("items_check", service._source_id(run), text), lambda: _checked(db, run, text)
+    )
     return check
 
 
@@ -1410,7 +1409,7 @@ async def _checked(
 ) -> tuple[roadmap.ItemsCheck, str | None, int | None, set[str] | None, tuple[Any, ...]]:
     slug = version = prd_id = markdown = title = None
     keys: set[str] | None = None
-    source_id = _source_id(run)
+    source_id = service._source_id(run)
     if source_id is not None:
         found = await _prd_source(db, source_id)
         if found is not None:
@@ -1463,7 +1462,7 @@ async def checked_items(
     db: AsyncSession, run: Run, text: str, prior: PriorReview | None = None
 ) -> CheckedItems:
     check, slug, version, keys, elsewhere = await once(
-        ("items_check", _source_id(run), text), lambda: _checked(db, run, text)
+        ("items_check", service._source_id(run), text), lambda: _checked(db, run, text)
     )
     if not check.items:
         return CheckedItems(check, [], None, False, keys)

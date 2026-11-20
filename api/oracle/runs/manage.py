@@ -25,21 +25,14 @@ from oracle.runs import feature_set, flows, rejection, service
 from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.scope_models import PrdScope
 from oracle.runs.service import (
-    CHECKPOINT_TITLES,
     FINAL,
     Forbidden,
     NotFound,
     RunError,
     Unavailable,
     _art,
-    _can_dismiss_overrun,
-    _cancel_again_ids,
     _ceiling,
-    _checkpoints,
-    _cost_unknown,
     _flow,
-    _import_failed,
-    _segments,
     _set_art,
     _set_knob,
     _TickStats,
@@ -127,7 +120,7 @@ async def _stop_cancelling(db: AsyncSession, run: Run) -> bool:
         workflow_id=wf["id"],
         cancel=False,
     )
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     target = next((s for s in segments if s.seq == wf.get("start_seq")), None)
     if target is not None or segments:
         service._note(target or segments[0], stopped)
@@ -158,7 +151,7 @@ async def _end_stopped(
             )
         s.status = "cancelled"
         s.finished_at = s.finished_at or service._now()
-    for cp in await _checkpoints(db, [run.id]):
+    for cp in await service._checkpoints(db, [run.id]):
         if cp.status == "pending":
             cp.status = "skipped"
             cp.note = "Run ended: an approver stopped cancelling its workflow."
@@ -205,7 +198,7 @@ async def retry_lookup(db: AsyncSession, principal: Principal, run_id: uuid.UUID
     run = await service._get_run(db, run_id, lock=True)
     if not await _may_manage(db, principal, run):
         raise Forbidden("Only an owner or the approver who created the run can retry this")
-    entry = _cost_unknown(run)
+    entry = service._cost_unknown(run)
     if entry is None:
         raise RunError("nothing to look up: no workflow of this run has an unknown cost")
     last = service._parse_at((run.knobs or {}).get("lookup_retried_at"))
@@ -225,7 +218,7 @@ async def retry_lookup(db: AsyncSession, principal: Principal, run_id: uuid.UUID
 
     # Under the gate and the lock, as the run and the caller are now.
     run = await _still_manages(db, principal, run_id, "retry this")
-    segments = await _segments(db, run.id, fresh=True)
+    segments = await service._segments(db, run.id, fresh=True)
     entries = copy.deepcopy((run.knobs or {}).get("searches") or [])
     e = next((x for x in entries if x.get("id") == wid), None)
     if e is not None:
@@ -250,10 +243,10 @@ async def retry_import(db: AsyncSession, principal: Principal, run_id: uuid.UUID
     if principal.role != "owner":
         raise Forbidden("Only an owner can retry importing a run's output")
     run = await service._get_run(db, run_id, lock=True)
-    failed = _import_failed(run)
+    failed = service._import_failed(run)
     if failed is None:
         raise RunError("nothing to retry: no import of this run has stopped")
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     segment = next((s for s in segments if s.seq == failed.get("seq")), None)
     art = _art(segment) if segment is not None else {}
     attempt = service._current_attempt(art, segment) if segment is not None else {}
@@ -498,7 +491,8 @@ async def _hold_console_approval(
     service._note(
         segment,
         f"{cp.kind} was approved in SwarmCloud by {record.answered_by or 'someone'}: "
-        f"{service._said(record, at)}. The {CHECKPOINT_TITLES.get(cp.kind, cp.kind).lower()} has "
+        f"{service._said(record, at)}. The "
+        f"{service.CHECKPOINT_TITLES.get(cp.kind, cp.kind).lower()} has "
         "blocking problems, so Oracle recorded the "
         "approval and did not follow it: the checkpoint stays open in the Inbox, and an "
         "approver confirms it once the problems are fixed or waived, or requests changes.",
@@ -688,11 +682,11 @@ async def _retry_checked(
 
     await publish.gate_lock(db, shared=True)
     run = await service._get_run(db, run_id, lock=True)
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     segment = next((s for s in segments if s.seq == seq), None)
     if segment is None:
         raise NotFound(f"run {run_id} has no segment {seq}")
-    checkpoints = await _checkpoints(db, [run.id])
+    checkpoints = await service._checkpoints(db, [run.id])
     review = _review_of(checkpoints, seq)
     role = _draft_retry_role(review)
     if not has_role(principal.role, role):  # type: ignore[arg-type]
@@ -816,7 +810,7 @@ async def cancel_again(
         raise RunError("nothing to cancel again: this run's overrun was dismissed")
     entries = copy.deepcopy((run.knobs or {}).get("searches") or [])
     e = next((x for x in entries if x.get("id") == workflow_id and x.get("cancel") is False), None)
-    if e is None or workflow_id not in _cancel_again_ids(run):
+    if e is None or workflow_id not in service._cancel_again_ids(run):
         raise RunError(
             "nothing to cancel again: that workflow is not one Oracle stopped cancelling for "
             "this run",
@@ -826,7 +820,7 @@ async def cancel_again(
         e.pop(key, None)
     e["cancel_again_at"] = service._now().isoformat()
     _set_knob(run, "searches", entries)
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     target = next((x for x in segments if x.seq == e.get("seq")), segments[0] if segments else None)
     if target is not None:
         service._note(
@@ -846,7 +840,7 @@ async def dismiss_overrun(db: AsyncSession, principal: Principal, run_id: uuid.U
     run = await service._get_run(db, run_id, lock=True)
     if not await _may_manage(db, principal, run):
         raise Forbidden("Only an owner or the approver who created the run can dismiss this")
-    if not _can_dismiss_overrun(run):
+    if not service._can_dismiss_overrun(run):
         raise RunError(
             "nothing to dismiss: no overrun of this run is shown, or a workflow of it is still read"
         )
@@ -866,7 +860,7 @@ async def end_as_oracle(db: AsyncSession, run_id: uuid.UUID, reason: str) -> boo
     run = await service._get_run(db, run_id, lock=True)
     if run.status in FINAL:
         return False
-    for segment in await _segments(db, run.id):
+    for segment in await service._segments(db, run.id):
         if segment.status in ("pending", "running"):
             service.unqueue(segment)
             segment.status = "cancelled"
@@ -896,7 +890,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     ids: list[str] = []
     # The segment each workflow is cancelled for (its follow-up's target).
     targets: dict[str, uuid.UUID] = {}
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     if wf is not None and wf.get("id") and run.status not in FINAL:
         ids.append(wf["id"])  # a stuck cancel too: one more try
         seg = next((x for x in segments if x.seq == wf.get("seq")), None) or next(
@@ -963,7 +957,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
         want_find: dict[tuple[str, str | None], str | None] = {}
         if now_wf is not None and now_wf.get("id"):
             want_cancel.append(now_wf["id"])
-        for seg in await _segments(db, run.id, fresh=True):
+        for seg in await service._segments(db, run.id, fresh=True):
             lost = _art(seg).get("lost")
             if seg.status == "running" and seg.swarm_workflow_id:
                 want_cancel.append(seg.swarm_workflow_id)
@@ -996,7 +990,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
         await audit.record(db, principal, "run.cancel_stopped", "run", run.id, {})
         await db.commit()
         return
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     wf = service._live(run)
     for s in segments:
         if s.status == "running" and wf is not None and s.swarm_workflow_id == wf["id"]:
@@ -1092,7 +1086,7 @@ async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
                             why="cancel",
                         )
             s.status = "cancelled"
-    for cp in await _checkpoints(db, [run.id]):
+    for cp in await service._checkpoints(db, [run.id]):
         if cp.status == "pending":
             cp.status = "skipped"
             cp.note = "Run cancelled."
@@ -1127,7 +1121,7 @@ async def stop_run(
     pending segments and checkpoints end, its tokens die. The run's live workflow (adapter
     v2) stays attached as a cancel not confirmed yet: the tick cancels it again and reads
     its cost until SwarmCloud confirms (:func:`_apply_cancel`)."""
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     for s in segments:
         if s.status == "running" and s.swarm_workflow_id:
             if deferred is not None:
@@ -1137,7 +1131,7 @@ async def stop_run(
         elif s.status == "pending":
             service.unqueue(s)
             s.status = "cancelled"
-    for cp in await _checkpoints(db, [run.id]):
+    for cp in await service._checkpoints(db, [run.id]):
         if cp.status == "pending":
             cp.status = "skipped"
             cp.note = "Run cancelled."
@@ -1183,7 +1177,7 @@ async def retry_segment(
     run = await service._get_run(db, run_id, lock=True)
     if not await _may_manage(db, principal, run):
         raise Forbidden("Only an owner or the approver who created the run can retry it")
-    segments = await _segments(db, run.id, fresh=True)
+    segments = await service._segments(db, run.id, fresh=True)
     segment = next((s for s in segments if s.seq == seq), None)
     if segment is None:
         raise NotFound("Segment not found")
@@ -1225,7 +1219,9 @@ async def retry(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
     stuck = (run.knobs or {}).get("stuck_lookup")
     if run.status != "running" or not isinstance(stuck, dict):
         raise RunError("nothing waits for a retry: no lost submission is past its lookup cap")
-    segment = next((s for s in await _segments(db, run.id) if s.seq == stuck.get("seq")), None)
+    segment = next(
+        (s for s in await service._segments(db, run.id) if s.seq == stuck.get("seq")), None
+    )
     lost = _art(segment).get("lost") if segment is not None else None
     if segment is None or segment.status != "pending" or not isinstance(lost, dict):
         # Resolved, as read without the lock: checked again under it before the marker
@@ -1233,7 +1229,11 @@ async def retry(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
         run = await service._get_run(db, run_id, lock=True)
         now = (run.knobs or {}).get("stuck_lookup")
         segment = next(
-            (s for s in await _segments(db, run.id, fresh=True) if s.seq == (now or {}).get("seq")),
+            (
+                s
+                for s in await service._segments(db, run.id, fresh=True)
+                if s.seq == (now or {}).get("seq")
+            ),
             None,
         )
         lost = _art(segment).get("lost") if segment is not None else None
@@ -1259,7 +1259,7 @@ async def retry(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> No
     # Under the gate and the lock, as the run and the caller are now.
     run = await _still_manages(db, principal, run_id, "retry it")
     stuck = (run.knobs or {}).get("stuck_lookup")
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     segment = next((s for s in segments if s.seq == (stuck or {}).get("seq")), None)
     art = _art(segment) if segment is not None else {}
     lost = art.get("lost")
@@ -1325,8 +1325,8 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     run.status = "running"
     await audit.record(db, principal, "run.resumed", "run", run.id, {"ceiling_usd": str(ceiling)})
     await webhooks.capture(db, "run.resumed", principal, run_id=run.id)
-    segments = await _segments(db, run.id)
-    checkpoints = await _checkpoints(db, [run.id])
+    segments = await service._segments(db, run.id)
+    checkpoints = await service._checkpoints(db, [run.id])
     if any(c.status == "pending" or service._owes(c) for c in checkpoints):
         # Paused while it waited on a checkpoint: it waits on it again, in the Inbox; or
         # on a decision recorded and not delivered yet, which the tick delivers now.

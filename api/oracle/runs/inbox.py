@@ -19,6 +19,7 @@ from oracle.review.models import FeedbackItem
 from oracle.runs import flows, service
 from oracle.runs.batch import batched
 from oracle.runs.models import Checkpoint, Run, RunSegment
+from oracle.runs.reads import _Refs
 from oracle.runs.schemas import (
     InboxAccessFailure,
     InboxAccessRequest,
@@ -35,24 +36,7 @@ from oracle.runs.schemas import (
     InboxStrategy,
     RunSummary,
 )
-from oracle.runs.service import (
-    DECIDED,
-    FINAL,
-    _checkpoint_out,
-    _decider_names,
-    _flow,
-    _import_failed,
-    _live_reasons,
-    _open_questions,
-    _pending_titles,
-    _Refs,
-    _refs,
-    _sent_back,
-    _staged_actions,
-    _stuck,
-    _summary,
-    recheck_briefs,
-)
+from oracle.runs.service import DECIDED, FINAL, _flow
 
 
 def _waits_for(item: FeedbackItem, suggestion: str | None) -> str:
@@ -205,14 +189,14 @@ async def _no_documents(db: AsyncSession) -> list[RunSummary]:
             )
         ).all()
     )
-    refs = await _refs(db, runs)
+    refs = await service._refs(db, runs)
     out: list[RunSummary] = []
     for run, segment in refused.values():
         kind = _flow(run).target_kind or kinds.get(run.document_id) or "prd"
         review = reviews.get((run.id, segment.seq))
         retry = service._draft_retry_refusal(run, segment, review, kind, None) is None
         out.append(
-            _summary(run, refs, None).model_copy(
+            service._summary(run, refs, None).model_copy(
                 update={"no_document": _no_document_text(run, refs, segment, retry)}
             )
         )
@@ -256,13 +240,13 @@ async def _revising(db: AsyncSession, principal: Principal) -> list[RunSummary]:
     for run, segment in rows:
         sdef = _flow(run).segment(segment.name)
         stop = SimpleNamespace(kind=sdef.checkpoint, approver_role=sdef.approver_role)
-        if _sent_back(run, segment) and may_decide(principal, stop, run.flow, leads):
+        if service._sent_back(run, segment) and may_decide(principal, stop, run.flow, leads):
             runs.setdefault(run.id, run)
     for run_id in await _hidden_runs(db, principal, runs.values()):
         runs.pop(run_id)
     if not runs:
         return []
-    refs = await _refs(db, list(runs.values()))
+    refs = await service._refs(db, list(runs.values()))
     segments: dict[uuid.UUID, list[RunSegment]] = {i: [] for i in runs}
     for seg in await db.scalars(
         select(RunSegment).where(RunSegment.run_id.in_(runs)).order_by(RunSegment.seq)
@@ -270,7 +254,7 @@ async def _revising(db: AsyncSession, principal: Principal) -> list[RunSummary]:
         segments[seg.run_id].append(seg)
     # Embedded in the Inbox: without its progress, as the Inbox's other run rows.
     return [
-        _summary(r, refs, None, segments[r.id]).model_copy(update={"progress": None})
+        service._summary(r, refs, None, segments[r.id]).model_copy(update={"progress": None})
         for r in runs.values()
     ]
 
@@ -341,7 +325,7 @@ async def waiting_stops(db: AsyncSession, principal: Principal) -> list[WaitingS
             select(Document.id, Document.slug, Document.title).where(Document.id.in_(ids))
         )
         docs = {i: (slug, title) for i, slug, title in rows.all()}
-    pending_titles = await _pending_titles(db, [runs[c.run_id] for c in mine])
+    pending_titles = await service._pending_titles(db, [runs[c.run_id] for c in mine])
     out = []
     for c in mine:
         run = runs[c.run_id]
@@ -433,10 +417,10 @@ async def _inbox(
     ]
     for c in mine:
         # Each row's gate counts the problems its stop's page shows.
-        await recheck_briefs(db, runs[c.run_id], [c])
-    names = await _decider_names(db, owed)
-    staged = await _staged_actions(db, mine)
-    asked = await _open_questions(db, staged)
+        await service.recheck_briefs(db, runs[c.run_id], [c])
+    names = await service._decider_names(db, owed)
+    staged = await service._staged_actions(db, mine)
+    asked = await service._open_questions(db, staged)
     owner = principal.role == "owner"
     # inbox-reads: the runs waiting for an owner's approval, those stuck (below) and, for owners,
     # those whose import failed, in one read; each row says which it is.
@@ -473,14 +457,14 @@ async def _inbox(
         hidden_waiting = await _hidden_runs(db, principal, waiting_runs)
         waiting_runs = [r for r in waiting_runs if r.id not in hidden_waiting]
     shown = {c.run_id for c in [*mine, *owed]}
-    refs = await _refs(db, [*(r for r in runs.values() if r.id in shown), *waiting_runs])
+    refs = await service._refs(db, [*(r for r in runs.values() if r.id in shown), *waiting_runs])
 
     def item(c: Checkpoint) -> InboxCheckpoint:
         run = runs[c.run_id]
         seq = (c.payload or {}).get("segment_seq")
         sdef = _flow(run).segments[seq - 1] if seq else None
         return InboxCheckpoint(
-            **_checkpoint_out(
+            **service._checkpoint_out(
                 c,
                 principal,
                 names,
@@ -504,7 +488,7 @@ async def _inbox(
 
     with batched():
         await actions.read_ahead(db, [c for c in mine if c.kind in actions.SUMMARIES], runs)
-        live = await _live_reasons(db, mine)
+        live = await service._live_reasons(db, mine)
         checkpoints = [item(c) for c in mine]
         deliveries = [item(c) for c in owed]
         for c, row in zip(mine, checkpoints, strict=True):
@@ -574,8 +558,12 @@ async def _inbox(
                 )
             feedback.sort(key=lambda d: d.items[0].created_at, reverse=True)
 
-    approvals = [_summary(r, refs, None) for r in waiting_runs if r.status == "awaiting_approval"]
-    overruns = [_summary(r, refs, None) for r in waiting_runs if r.status == "paused_overrun"]
+    approvals = [
+        service._summary(r, refs, None) for r in waiting_runs if r.status == "awaiting_approval"
+    ]
+    overruns = [
+        service._summary(r, refs, None) for r in waiting_runs if r.status == "paused_overrun"
+    ]
     revoke_failures = await _revoke_failures(db) if owner else []
     share_revocations: list[InboxShareRevocation] = []
     if owner:
@@ -592,18 +580,20 @@ async def _inbox(
         strategy = InboxStrategy.model_validate(row) if row else None
     # The stuck runs, from the runs' one read above.
     managed = [r for r, manages, _, _ in run_rows if manages and service._manages(principal, r)]
-    stuck_runs = [r for r in managed if _stuck(r)]
+    stuck_runs = [r for r in managed if service._stuck(r)]
     # Submissions given up on, still looked for (shown, nothing to do): from the same read.
     searching_runs = [r for r in managed if "searches" in (r.knobs or {})]
-    stuck_refs = await _refs(db, [*stuck_runs, *searching_runs])
-    lookups = [_summary(r, stuck_refs, None) for r in stuck_runs]
-    searches = [_summary(r, stuck_refs, None) for r in searching_runs]
+    stuck_refs = await service._refs(db, [*stuck_runs, *searching_runs])
+    lookups = [service._summary(r, stuck_refs, None) for r in stuck_runs]
+    searches = [service._summary(r, stuck_refs, None) for r in searching_runs]
     # Owners only: a run's output Oracle stopped trying to import (Retry).
     imports: list[RunSummary] = []
     if owner:
-        failed_runs = [r for r, _, _, fails in run_rows if fails and _import_failed(r) is not None]
-        failed_refs = await _refs(db, failed_runs)
-        imports = [_summary(r, failed_refs, None) for r in failed_runs]
+        failed_runs = [
+            r for r, _, _, fails in run_rows if fails and service._import_failed(r) is not None
+        ]
+        failed_refs = await service._refs(db, failed_runs)
+        imports = [service._summary(r, failed_refs, None) for r in failed_runs]
     no_documents = await service._no_documents(db) if owner else []
     revising = [] if counts_only else await _revising(db, principal)
     from oracle.decisions.service import inbox_rows as decision_rows

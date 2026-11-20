@@ -33,11 +33,9 @@ from oracle.runs.service import (
     _decide_member_view,
     _flow,
     _knobs,
-    _segments,
     _set_art,
     _set_knob,
     _skipped_off,
-    _source_id,
     _usd,
     log,
 )
@@ -289,7 +287,7 @@ def _resolve_knobs(flow: flows.FlowDef, knobs: KnobsIn) -> flows.Knobs:
 
 
 async def _reset_segments(db: AsyncSession, run: Run, flow: flows.FlowDef) -> None:
-    for s in await _segments(db, run.id):
+    for s in await service._segments(db, run.id):
         await db.delete(s)
     await db.flush()
     for i, sdef in enumerate(flow.segments, start=1):
@@ -510,7 +508,7 @@ async def _target_features(
 async def _current_inputs(db: AsyncSession, run: Run) -> _Inputs:
     knobs = run.knobs or {}
     source = number = None
-    source_id = _source_id(run)
+    source_id = service._source_id(run)
     if source_id:
         version = await db.get(DocumentVersion, source_id)
         if version is not None:
@@ -592,7 +590,7 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
         if reused or items_reused
         else company_time.DEFAULT_ZONE
     )
-    segments = {s.name: s for s in await _segments(db, run.id)}
+    segments = {s.name: s for s in await service._segments(db, run.id)}
     rows = []
     for i, sdef in enumerate(flow.segments, start=1):
         amount = flows.segment_estimate(sdef, knobs)
@@ -652,7 +650,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
     await _recheck_draft_items(db, run)
     await _one_build_at_a_time(db, _flow(run))
     knobs = _knobs(run)
-    source_id = _source_id(run)
+    source_id = service._source_id(run)
     if source_id is not None and await db.get(DocumentVersion, source_id) is None:
         raise Invalid("the PRD version this roadmap is built from no longer exists")
     # A run started from an intake (C5): a draft waits at the draft gate, and it reads
@@ -742,7 +740,7 @@ async def _launch(db: AsyncSession, run: Run, principal: Principal | str | None 
         base += flows.segment_estimate(_flow(run).segment("roadmap_items"), _knobs(run))
     ceiling = (base * flows.OVERRUN_FACTOR).quantize(Decimal("0.0001"))
     _set_knob(run, "spend_ceiling_usd", str(ceiling))
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     knobs = _knobs(run)
     for s in segments:
         if _skipped_off(_flow(run).segment(s.name), knobs):
@@ -787,7 +785,7 @@ async def _draft_items_to_reuse(db: AsyncSession, run: Run) -> dict[str, Any] | 
     items when they may be reused and the run does not derive them again; else None."""
     if run.flow != REUSES_DRAFT_ITEMS or (run.knobs or {}).get("reuse_draft_items") is False:
         return None
-    source_id = _source_id(run)
+    source_id = service._source_id(run)
     if source_id is None:
         return None
     from oracle.roadmap import draft_items
@@ -837,7 +835,7 @@ async def _reuse_draft_items(
     with the stop off, the roadmap draft is queued). False when they are gone."""
     from oracle.roadmap import draft_items
 
-    source_id = _source_id(run)
+    source_id = service._source_id(run)
     found = await draft_items.reusable(db, source_id) if source_id else None
     version = await db.get(DocumentVersion, source_id) if source_id else None
     prd = await db.get(Document, version.document_id) if version is not None else None

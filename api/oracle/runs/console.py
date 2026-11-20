@@ -15,16 +15,7 @@ from oracle.engineering import dates as eng_dates
 from oracle.members.leads import SPEC_FLOW, decides, engineering_leads, lead_stop
 from oracle.runs import apply_edits, service, stop_answers, workflow
 from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment
-from oracle.runs.service import (
-    _about,
-    _checkpoints,
-    _flow,
-    _record_decider,
-    _staged_actions,
-    _usd,
-    approve_gate_of,
-    log,
-)
+from oracle.runs.service import _about, _flow, _usd, log
 from oracle.swarm import RecordedAnswer, RuntimeUnavailable, WorkflowStatus
 from oracle.swarm.runtime import MERGE
 from oracle.tenancy import current_tenant
@@ -35,7 +26,7 @@ async def _waiting_on(db: AsyncSession, run: Run, wf: dict[str, Any]) -> Checkpo
     return next(
         (
             c
-            for c in await _checkpoints(db, [run.id])
+            for c in await service._checkpoints(db, [run.id])
             if c.status == "pending"
             and ((c.payload or {}).get("wait") or {}).get("workflow_id") == wf["id"]
         ),
@@ -175,14 +166,16 @@ async def _take_answer(
         await service._recheck_order_goals(db, cp)
     if counted and approved and not ours:
         # D3 "Console gate": held while a blocking reason is not fixed or waived.
-        shut = await approve_gate_of(db, cp)
+        shut = await service.approve_gate_of(db, cp)
         if shut is not None and not shut.open:
             await service._hold_console_approval(
                 db, run, cp, segment, record, wait, at, revise, member
             )
             return
         if cp.kind in apply_edits.FILES and (
-            unapplied := apply_edits.edit_count((await _staged_actions(db, [cp])).get(cp.id, []))
+            unapplied := apply_edits.edit_count(
+                (await service._staged_actions(db, [cp])).get(cp.id, [])
+            )
         ):
             service._note(segment, service._unapplied_note(unapplied))
     if not counted or (not approved and not revise):
@@ -246,7 +239,7 @@ async def _take_answer(
     await stop_answers.record(db, run, cp)
     cp.note = applied
     if not ours:
-        _record_decider(
+        service._record_decider(
             cp,
             member.role if member is not None else None,
             "swarmcloud_console",

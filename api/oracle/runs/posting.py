@@ -21,9 +21,7 @@ from oracle.runs.service import (
     Invalid,
     Unavailable,
     _art,
-    _console_findings,
     _flow,
-    _segments,
     _set_art,
     _set_knob,
 )
@@ -109,7 +107,7 @@ async def _hold_unread(
     if ((wait.get("console") or {}).get("needs")) not in (None, "unread"):
         await db.commit() if undone else await db.rollback()
         return
-    segments = await _segments(db, run.id)
+    segments = await service._segments(db, run.id)
     segment = next((s for s in segments if s.seq == (cp.payload or {}).get("segment_seq")), None)
     if segment is None:
         await db.commit() if undone else await db.rollback()
@@ -176,7 +174,7 @@ def _console_choice(
     with the findings; ``continue`` follows the workflow, which went on regardless."""
     console = wait.get("console") or {}
     needs = console.get("needs")
-    findings = "; ".join(_console_findings(console))
+    findings = "; ".join(service._console_findings(console))
     with_note = "\n\n".join(x for x in (findings, note) if x) or None
     if choice == "confirm":
         if needs != "confirm" or console.get("verdict") not in (MERGE, NOT_YET):

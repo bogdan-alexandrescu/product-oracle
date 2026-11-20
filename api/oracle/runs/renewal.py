@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.runs import service, workflow
 from oracle.runs.models import Run, RunSegment
-from oracle.runs.service import _art, _checkpoints, _set_art, _set_knob, log
+from oracle.runs.service import _art, _set_art, _set_knob, log
 from oracle.runtokens import RunToken, mint_run_token, revoke_run_tokens
 from oracle.swarm import Parked, RuntimeUnavailable, WorkflowStatus
 from oracle.swarm.runtime import MCP_SERVER
@@ -228,7 +228,7 @@ async def _pause_workflow(
                 "Paused on overrun before this segment finished: Oracle cancelled its "
                 "workflow, and resuming submits the segment again."
             )
-    for cp in await _checkpoints(db, [run.id]):
+    for cp in await service._checkpoints(db, [run.id]):
         wait = (cp.payload or {}).get("wait") or {}
         if cp.status == "pending" and wait.get("workflow_id") == wf["id"]:
             # Its wait goes with the workflow: the checkpoint stays open in the Inbox.

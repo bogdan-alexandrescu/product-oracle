@@ -27,11 +27,9 @@ from oracle.runs.models import Checkpoint, Run, RunSegment
 from oracle.runs.service import (
     COMPANY_QUEUE,
     ITEMS_FILE,
-    _checkpoints,
     _flow,
     _knobs,
     _set_knob,
-    _source_id,
     member_hidden,
     reads_as_member,
 )
@@ -221,7 +219,7 @@ async def _prompt_context(
     # decided and the decision record (stop_answers.prompt_lines).
     notes = [
         f"{c.kind}: {c.note}"
-        for c in await _checkpoints(db, [run.id])
+        for c in await service._checkpoints(db, [run.id])
         if c.status == "approved" and c.note and not (hidden and hidden.names(c.note))
         and segment.name not in stop_answers.WRITERS
     ]  # fmt: skip
@@ -412,7 +410,7 @@ async def _run_horizons(db: AsyncSession, run: Run) -> dict[str, int]:
 
 async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | None:
     """prd_to_roadmap: the approved PRD version, priorities, edges and goals."""
-    source_id = _source_id(run)
+    source_id = service._source_id(run)
     if source_id is None:
         return None
     version = await db.get(DocumentVersion, source_id)
