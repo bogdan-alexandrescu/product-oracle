@@ -1002,7 +1002,7 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
             </Button>
             {t.to === "AVAILABLE" && signInFirst && (
               // #1590: why Make available is disabled sits behind the (i).
-              <InfoTip label="Make available" align="start" testId="claude-account-signin-tip">
+              <InfoTip label="making it available" align="start" testId="claude-account-signin-tip">
                 {SIGN_IN_FIRST}
               </InfoTip>
             )}

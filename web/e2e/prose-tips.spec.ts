@@ -169,7 +169,7 @@ test("Public version: what it is sits behind a tip; why this document has none s
 test("Roadmap: how launches and changelog entries are made sit behind tips", async ({ page }) => {
   await login(page);
   await page.goto("/roadmap/launches");
-  await behindTip(page, "launches-empty-tip", "a launch groups items of an approved roadmap.");
+  await behindTip(page, "launches-empty-tip", "They are planned when a roadmap is approved.");
   await page.goto("/roadmap/changelog");
   await expect(page.getByText("No entries yet.").filter({ visible: true }).first()).toBeVisible();
   await behindTip(page, "changelog-empty-tip", "Oracle adds one when it drafts a launch's kit");

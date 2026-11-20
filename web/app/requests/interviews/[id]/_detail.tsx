@@ -246,7 +246,7 @@ export function InterviewDetail({ id }: { id: string }) {
                 "Oracle is writing the snapshot"
               ) : (
                 // #1590: when the snapshot appears sits behind the (i).
-                <InfoTip label="the snapshot" align="start" testId="interview-snapshot-tip">
+                <InfoTip label="when the snapshot comes" align="start" testId="interview-snapshot-tip">
                   {`Oracle writes a snapshot here once ${name} finishes the interview.`}
                 </InfoTip>
               )}
@@ -275,7 +275,7 @@ export function InterviewDetail({ id }: { id: string }) {
                 `Oracle found no requests in what ${name} said.`
               ) : (
                 // #1590: when the requests show sits behind the (i).
-                <InfoTip label="the requests" align="start" testId="interview-requests-tip">
+                <InfoTip label="when requests show" align="start" testId="interview-requests-tip">
                   {`The requests ${name} makes show here, to decide, once they finish the interview.`}
                 </InfoTip>
               )}

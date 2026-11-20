@@ -265,7 +265,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
               </Button>
               {detailsUnchanged && (
                 // #1590: why Save details is disabled sits behind the (i).
-                <InfoTip label="Save details" align="start" testId="template-meta-save-tip">
+                <InfoTip label="saving the details" align="start" testId="template-meta-save-tip">
                   Change the name or description to save them.
                 </InfoTip>
               )}
@@ -371,7 +371,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
               </Button>
               {saveUnchanged && (
                 // #1590: why Save as new version is disabled sits behind the (i).
-                <InfoTip label="Save as new version" align="start" testId="template-save-tip">
+                <InfoTip label="saving a new version" align="start" testId="template-save-tip">
                   Change the template to save a new version.
                 </InfoTip>
               )}
