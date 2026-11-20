@@ -12,12 +12,12 @@ no_claim=<what green does not prove>.
 
 import base64
 import email
+import hashlib
 import html
 import re
 import uuid
 from datetime import UTC, datetime
 from email import policy as email_policy
-from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -25,10 +25,20 @@ from sqlalchemy import select
 from oracle.members import delivery, mailer
 from oracle.members.models import Invite
 from oracle.tenancy import tenant_session
+from tests._own_tree_only import contract
 from tests.test_invite_delivery import PUBLIC, FakeMinter, iap, mail, owner  # noqa: F401
 from tests.test_members import token_with_role
 
-WEB_MARK = Path(__file__).resolve().parents[2] / "web" / "app" / "apple-icon.png"
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _web_mark() -> str:
+    """The sha256 of web/app/apple-icon.png, as the web publishes it (#1570)."""
+    return contract("web-app-icon")["sha256"]
+
+
 LINK = "https://oracle.example.test/"
 NOTE = "Excited to have you review the Q4 roadmap with us."
 
@@ -230,7 +240,7 @@ def test_the_mark_is_an_inline_cid_part_never_a_remote_image():
     assert image.get_content_type() == "image/png"
     cid = image["Content-ID"].strip("<>")
     assert image.get_content_disposition() == "inline"
-    assert image.get_content() == WEB_MARK.read_bytes()
+    assert _sha256(image.get_content()) == _web_mark()
     body = page.get_content()
     assert f'src="cid:{cid}"' in body
     assert not re.search(r'<img[^>]+src="(?!cid:)', body)
@@ -391,6 +401,7 @@ async def test_an_inviter_with_no_address_gets_no_reply_to(client, owner, iap, m
 
 
 def test_the_mark_beside_the_mailer_is_the_apps_icon():
-    """protects=the inline mark is web/app/apple-icon.png byte for byte; fails_when=the copy
-    beside the mailer drifts; no_claim=-."""
-    assert mailer.MARK_PNG.read_bytes() == WEB_MARK.read_bytes()
+    """protects=the inline mark is web/app/apple-icon.png byte for byte (its sha256, as the
+    web publishes it in docs/contracts/web-app-icon.json); fails_when=the copy beside the
+    mailer drifts; no_claim=-."""
+    assert _sha256(mailer.MARK_PNG.read_bytes()) == _web_mark()

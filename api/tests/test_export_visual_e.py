@@ -10,8 +10,6 @@ refusal names the PRD by its title.
 import io
 import json
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -22,6 +20,7 @@ from pypdf import PdfReader
 from oracle.export import deck as deck_module
 from oracle.export import pptx as pptx_module
 from oracle.export import render as render_module
+from tests._own_tree_only import contract
 from tests.test_brief import DETAIL_ONLY, DRAFT, _import, requires_pdf
 from tests.test_priorities import _token
 
@@ -513,32 +512,19 @@ def test_r4_a_line_that_only_looks_like_a_fence_is_text():
 
 
 CASES = Path(__file__).parent / "fixtures" / "code_left_out_cases.json"
-MOCK = Path(__file__).parents[2] / "web" / "lib" / "api" / "mock" / "code-left-out.ts"
-NODE_RUN = (
-    "const { codeLeftOut } = await import(process.argv[1]);"
-    "let s = ''; process.stdin.on('data', (d) => (s += d));"
-    "process.stdin.on('end', () => console.log("
-    "JSON.stringify(JSON.parse(s).map((b) => codeLeftOut(b, 'H')))));"
-)
 
 
-@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 def test_r4_the_mock_leaves_code_out_as_the_api_does():
-    """web/lib/api/mock/code-left-out.ts, run through node, gives what code_left_out gives
-    for every case in the shared fixture."""
+    """web/lib/api/mock/code-left-out.ts, as the web publishes it run on every case of the
+    shared fixture (docs/contracts/mock-code-left-out.json, #1570), gives what
+    code_left_out gives."""
     cases = json.loads(CASES.read_text(encoding="utf-8"))
-    run = subprocess.run(
-        ["node", "--input-type=module", "-e", NODE_RUN, MOCK.as_uri()],
-        input=json.dumps(cases),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    mock = json.loads(run.stdout)
+    mock = contract("mock-code-left-out")
+    assert [c["body"] for c in mock["cases"]] == cases, "the web has not published these cases"
     wrong = [
-        (body, api, got)
-        for body, got in zip(cases, mock, strict=True)
-        if got != (api := deck_module.code_left_out(body, "H"))
+        (c["body"], api, c["out"])
+        for c in mock["cases"]
+        if c["out"] != (api := deck_module.code_left_out(c["body"], mock["href"]))
     ]
     assert not wrong, "\n\n".join(f"{b!r}\n api: {a!r}\nmock: {m!r}" for b, a, m in wrong)
 

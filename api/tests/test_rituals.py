@@ -18,6 +18,7 @@ from oracle.rituals import service as rituals
 from oracle.runs.models import Run
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.tenancy import tenant_session
+from tests._own_tree_only import contract
 from tests.baseline_helpers import make_ctx
 from tests.ritual_helpers import (  # noqa: F401 - fixtures
     at,
@@ -843,31 +844,25 @@ def test_every_pre_read_link_opens_a_web_page():
     ``/roadmap`` redirect to ``/plan``); ``/v1/`` hrefs are the suggested_next buttons'
     API calls; fails_when=a link points at a page that does not exist, such as
     /company/decisions/<n>, /baseline/outcomes or /plan/changelog; no_claim=that the
-    page opens the linked row (the query string is not checked)."""
+    page opens the linked row (the query string is not checked). The web publishes its
+    pages in docs/contracts/web-pages.json (#1570)."""
     import re
     from pathlib import Path
 
-    root = Path(__file__).parents[2]
-    source = (root / "api/oracle/rituals/blocks.py").read_text()
+    source = (Path(__file__).parents[1] / "oracle/rituals/blocks.py").read_text()
     hrefs = re.findall(r'"href": f?"(/[^"?]*)', source)
     assert len(hrefs) > 15
-    app = root / "web/app"
+    pages = [page.split("/") if page else [] for page in contract("web-pages")["pages"]]
     redirects = {"/roadmap": "/plan"}
 
+    def fits(page: list[str], parts: list[str]) -> bool:
+        return len(page) == len(parts) and all(
+            w == p or ("{" in p and w.startswith("[")) for w, p in zip(page, parts, strict=True)
+        )
+
     def page_exists(path: str) -> bool:
-        path = redirects.get(path, path)
-        here = app
-        for part in [p for p in path.split("/") if p]:
-            if "{" in part:
-                dynamic = [d for d in here.iterdir() if d.name.startswith("[")]
-                if not dynamic:
-                    return False
-                here = dynamic[0]
-            elif (here / part).is_dir():
-                here = here / part
-            else:
-                return False
-        return (here / "page.tsx").exists()
+        parts = [p for p in redirects.get(path, path).split("/") if p]
+        return any(fits(page, parts) for page in pages)
 
     missing = sorted({h for h in hrefs if not h.startswith("/v1/") and not page_exists(h)})
     assert missing == []

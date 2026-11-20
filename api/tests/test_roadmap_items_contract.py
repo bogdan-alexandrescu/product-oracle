@@ -10,13 +10,12 @@ protects: the mock's item shape is the API's; fails_when: a field the tab reads 
 renamed, dropped or retyped on either side; no_claim: the values the real API computes
 (staleness, live dates: tests/test_roadmap_items.py, test_roadmap_dates.py)."""
 
-import json
-from pathlib import Path
 from typing import Any
 
 import yaml
 
 from oracle.roadmap.schemas import RoadmapItemOut
+from tests._own_tree_only import contract
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     ROADMAP,
     approved_prd,
@@ -25,7 +24,8 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
     runtime,
 )
 
-FIXTURE = Path(__file__).resolve().parents[2] / "web/lib/api/mock/roadmap-items.json"
+# The web publishes its fixture as docs/contracts/mock-roadmap-items.json (#1570).
+FIXTURE = "mock-roadmap-items"
 
 # Every field the Items tab reads (web/components/roadmap/item-row.ts and the inspector),
 # as dotted paths into one item.
@@ -70,7 +70,7 @@ PRD_SECTIONS = {"behaviour": "s-5-1", "metrics": "s-5-2"}
 
 
 def _fixture() -> dict[str, Any]:
-    return json.loads(FIXTURE.read_text())
+    return contract(FIXTURE)
 
 
 def _items_yaml(items: list[dict[str, Any]]) -> str:

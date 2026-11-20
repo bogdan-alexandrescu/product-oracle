@@ -241,9 +241,9 @@ jobs:
         run: node scripts/check-timing-tags.mjs
       - name: Repo tools pass their self-tests
         run: node scripts/replace.mjs --self-test && node scripts/mutate.mjs --self-test
-      # Node's own runner, no package: the repo tools' units, the deploy's containment check with them.
-      - name: Repo tools' unit tests
-        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test lib/*.test.ts
+      # #1570: the docs' published contracts (docs/contracts/docs-*.json) say what the docs say.
+      - name: Docs contracts match the docs
+        run: python3 ../docs/contracts/check.py
       - run: npm run build
 
   e2e:

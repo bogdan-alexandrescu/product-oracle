@@ -1,11 +1,9 @@
 """Built-in model jobs: review comments, reporting and refinement on a fake transport."""
 
 import json
-import re
 import uuid
 from datetime import timedelta
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -20,6 +18,7 @@ from oracle.llm.transports import LlmRequest, TransportResult
 from oracle.models import AuditEvent
 from oracle.seed import seed
 from oracle.tenancy import tenant_session
+from tests._own_tree_only import contract
 from tests.claude_account_helpers import add_account, window
 from tests.test_members import token_with_role
 
@@ -1043,7 +1042,6 @@ async def test_retrying_a_job_whose_switch_is_off_names_the_switch_plainly(clien
 
 # D15: the History fold names these four switches in plain words; the keys stay the API's.
 SETTING_KEYS = {"review_comments", "reporting", "refinement", "quality_review", "public_text"}
-MOCK_LLM_JOBS = Path(__file__).resolve().parents[2] / "web" / "lib" / "api" / "mock" / "llm-jobs.ts"
 
 
 async def test_the_settings_keys_the_plain_labels_map_to_are_the_apis_and_the_mocks(client, ctx):
@@ -1051,10 +1049,9 @@ async def test_the_settings_keys_the_plain_labels_map_to_are_the_apis_and_the_mo
     resp = await client.get(f"/v1/documents/{SLUG}/llm-jobs/settings", headers=ctx["headers"])
     assert resp.status_code == 200, resp.text
     assert set(resp.json()) == SETTING_KEYS
-    # The mock's per-document switches (its settings fixture) that the Playwright tests drive.
-    kinds = re.search(r"const KINDS[^=]*=\s*\[([^\]]*)\]", MOCK_LLM_JOBS.read_text())
-    assert kinds, "the mock's KINDS list moved"
-    assert set(re.findall(r'"([a-z_]+)"', kinds.group(1))) == SETTING_KEYS
+    # The mock's per-document switches (its settings fixture) that the Playwright tests drive,
+    # as the web publishes them (docs/contracts/mock-llm-job-settings.json, #1570).
+    assert set(contract("mock-llm-job-settings")["kinds"]) == SETTING_KEYS
 
 
 async def test_roles(client, ctx, pool, fake):

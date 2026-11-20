@@ -52,8 +52,9 @@ from oracle.tenancy import tenant_session, unscoped_session  # noqa: E402
 
 API_DIR = Path(__file__).resolve().parents[1]
 
-# --num-shards/--shard-id: CI's api shards (tests/_shard.py).
-pytest_plugins = ["tests._shard"]
+# --num-shards/--shard-id: CI's api shards (tests/_shard.py); tests/_own_tree_only.py: a
+# test reads only api/ and the contracts other trees publish in docs/contracts (#1570).
+pytest_plugins = ["tests._shard", "tests._own_tree_only"]
 
 
 async def _ensure_database(url: str) -> None:

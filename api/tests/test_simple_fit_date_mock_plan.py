@@ -22,7 +22,6 @@ Test cards (protects / fails_when / no_claim):
 import dataclasses
 import datetime as dt
 import json
-from pathlib import Path
 
 import pytest
 
@@ -30,8 +29,10 @@ from oracle.simple import fit_date as fd
 from oracle.simple import plan
 from oracle.simple.fit_date_router import FitBaselineGoalOut, _scale, _slice_pw, build_plan
 from oracle.simple.schemas import SimpleMilestoneTarget, SimplePlanMilestone, SimpleSlice
+from tests._own_tree_only import contract
 
-FIXTURE = Path(__file__).resolve().parents[2] / "web/lib/api/mock/fit-date-plan.json"
+# The web publishes its plan as docs/contracts/mock-fit-date-plan.json (#1570).
+FIXTURE = "mock-fit-date-plan"
 GOAL = "Replied threads"
 OTHER = "Reply time"
 # Levers the fixture names that build_plan does not derive from a plan view (a move of an item
@@ -160,7 +161,7 @@ CASES = [
 
 @pytest.mark.parametrize("case", CASES)
 def test_mock_plan_matches_the_engine(case):
-    raw = json.loads(FIXTURE.read_text())
+    raw = contract(FIXTURE)
     scenario, target = case.split("@")
     got = _measured(_plan(raw, float(target), hard=scenario == "fit-date-hard"))
     assert raw["expect"].get(case) == got, json.dumps(got)

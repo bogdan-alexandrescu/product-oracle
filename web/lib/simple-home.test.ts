@@ -1,6 +1,4 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-
+import { contract } from "./ownTreeOnly";
 import { planByMonth, type PlanInput } from "./simple-home";
 import { expect, test } from "vitest";
 
@@ -16,7 +14,8 @@ import { expect, test } from "vitest";
  */
 
 type Case = { name: string; today: string; coded?: boolean; items: PlanInput[]; expected: unknown };
-const CASES: Case[] = JSON.parse(readFileSync(path.join(__dirname, "../../api/tests/fixtures/plan_strip_cases.json"), "utf8"));
+// The API publishes its cases as docs/contracts/api-plan-strip-cases.json (#1570).
+const CASES = contract("api-plan-strip-cases") as Case[];
 
 for (const c of CASES) {
   test(`the plan strip as the API draws it: ${c.name}`, () => {

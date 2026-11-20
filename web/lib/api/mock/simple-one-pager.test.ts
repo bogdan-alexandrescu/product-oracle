@@ -1,7 +1,5 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-
 import { prdOnePager } from "./simple-one-pager";
+import { contract } from "../../ownTreeOnly";
 import { expect, test } from "vitest";
 
 /**
@@ -9,8 +7,9 @@ import { expect, test } from "vitest";
  * one_pager.mapping and one_pager.extract over the fallback blocks) reads a PRD as the API
  * does. api/tests/test_one_pager_contract.py parses the invented PRD in
  * api/tests/fixtures/one_pager_contract.md as an import does and writes the API's blocks,
- * with the parsed sections, to api/tests/fixtures/one_pager_contract.json; this spec runs the
- * mock over the same sections and compares, block for block and line for line (id, text,
+ * with the parsed sections, to api/tests/fixtures/one_pager_contract.json; the API publishes
+ * both as docs/contracts/api-one-pager-contract.json (#1570). This spec runs the mock over the
+ * same sections and compares, block for block and line for line (id, text,
  * source sections, whole text when cut, metric).
  *
  * protects = the mock's one-pager stays the API's; fails_when = either side changes how a
@@ -28,9 +27,9 @@ type Contract = {
   }[];
 };
 
-const FIXTURES = path.join(__dirname, "../../../../api/tests/fixtures");
-const PRD = readFileSync(path.join(FIXTURES, "one_pager_contract.md"), "utf8");
-const CONTRACT: Contract = JSON.parse(readFileSync(path.join(FIXTURES, "one_pager_contract.json"), "utf8"));
+const PUBLISHED = contract("api-one-pager-contract") as { prd: string; contract: Contract };
+const PRD = PUBLISHED.prd;
+const CONTRACT = PUBLISHED.contract;
 
 test("the contract was written from the shared PRD", () => {
   expect(CONTRACT.markdown).toBe(PRD);

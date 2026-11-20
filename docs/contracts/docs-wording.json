@@ -1,0 +1,15 @@
+{
+  "says": {
+    "build-brief.md": [
+      "against Oracle's changes until a person unlocks it"
+    ],
+    "mvp-app.md": [
+      "unset, this quarter (`now`)"
+    ]
+  },
+  "prompts": {
+    "product-oracle-v2/specs/spec-INT2.md": [
+      "intake_analysis.v4"
+    ]
+  }
+}
