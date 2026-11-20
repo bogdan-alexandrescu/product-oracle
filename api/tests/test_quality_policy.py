@@ -19,7 +19,11 @@ def test_the_ten_criteria_are_advisory_and_only_two_checks_are_hard():
     import oracle.main  # noqa: F401  (the app registers the checks at import)
 
     registered = {r.key: r.hard for r in readiness.checks()}
-    assert len(criteria.KEYS) == 10
+    assert set(criteria.KEYS) == {
+        "problem_clarity", "goal_alignment", "evidence_provenance", "alternatives_tradeoffs",
+        "blocker_feasibility", "scope_testability", "economics_scaling", "validation_plan",
+        "ownership_readiness", "downstream_consistency",
+    }  # fmt: skip
     for key in criteria.KEYS:
         assert registered[key] is False, key
     assert set(criteria.HARD_KEYS) == {"security_policy", "third_party_support"}

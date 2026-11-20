@@ -366,7 +366,7 @@ async def test_skipped_and_held_stops_are_not_recorded_until_confirmed(client, r
 class _DecisionLockProbe:
     """A runtime that checks, before each call it forwards to SwarmCloud, that the
     company's D-number lock (oracle.decisions.service.next_number) is free: tried from
-    another connection, as tests/test_runs_round7.py's Probe tries the gate."""
+    another connection, as tests/test_review_v2_security.py's Probe tries the gate."""
 
     def __init__(self, inner, tenant_id) -> None:
         self.inner, self.tenant_id, self.held, self.calls = inner, tenant_id, [], []

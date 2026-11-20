@@ -176,7 +176,9 @@ async def test_pull_failure_and_test_query(client, ctx, clock, fake_posthog):
     assert got["error"] is None
     assert len(fake_posthog.requests) == before + 4
     async with tenant_session(ctx.tenant_id) as s:
-        assert len(list(await s.scalars(select(MetricValue)))) == 12
+        # Test stores nothing: still just the creation pull's 12 weeks.
+        rows = list(await s.scalars(select(MetricValue)))
+        assert sorted(r.week_start for r in rows) == sorted(weeks_back(12))
     resp = await client.post("/v1/metrics/test", json={"query": QUERY},
                              headers=ctx.as_("commenter"))  # fmt: skip
     assert resp.status_code == 403
@@ -268,7 +270,7 @@ async def test_a_null_answer_stores_no_value(client, ctx, clock, fake_posthog):
     async with tenant_session(ctx.tenant_id) as s:
         stored = {r.week_start: float(r.value) for r in await s.scalars(select(MetricValue))}
     assert weeks[3] not in stored and LAST_WEEK not in stored
-    assert len(stored) == 10
+    assert set(stored) == set(weeks) - {weeks[3], LAST_WEEK}
     assert resp.json()["last_week"] is None or resp.json()["last_week"]["week_start"] != (
         LAST_WEEK.isoformat()
     )

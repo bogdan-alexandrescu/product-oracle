@@ -344,7 +344,7 @@ async def test_warnings_never_block(client):
     await approved(client, ctx)
     body = await check(client, ctx)
     assert body["can_publish"] is True
-    # A critical change request does block (T2; test_review_v2_security_2).
+    # A critical change request does block (T2; test_review_v2_security).
     assert "open_change_request" in [w["code"] for w in body["warnings"]]
     assert (await client.post(ctx.v(1, "/publish"), json={}, headers=ctx.auth)).status_code == 201
 

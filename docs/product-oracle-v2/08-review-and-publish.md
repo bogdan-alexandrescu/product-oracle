@@ -394,13 +394,13 @@ parallel sections, base version, CLI), `test_review_v2_publish.py` (§16.11 gate
 §16.17), `test_review_v2_routes.py` (§16.12, §16.22), `test_review_v2_legacy.py` (§16.1
 next to the legacy suite), `test_review_v2_security.py` (the security review fixes: real
 revocations, confined section edits, agent drafts, evidence in revisions, the minors),
-`test_review_v2_security_2.py` (round 2: approvals by current approvers only, member
+`test_review_v2_security.py` (round 2: approvals by current approvers only, member
 removal, the unclosed fence, revocation matching, links in the review revision, one
 markdown env per exported section, criticals gate, run resolutions),
-`test_review_v2_security_3.py` (round 3, C2: disable instead of delete on every sign-in
+`test_review_v2_security.py` (round 3, C2: disable instead of delete on every sign-in
 path, lapses for good, approvals by token, the fence with trailing blank lines and lost
 sections, a UUID citation as an external id, Google Docs and percent-encoded URLs, URLs
-with a user name), `test_review_v2_security_4.py` (round 4, C2 follow-ups: sessions end
+with a user name), `test_review_v2_security.py` (round 4, C2 follow-ups: sessions end
 at a disable, the caller re-read under the gate, outbound calls after the commit, OAuth
 grants, UUID refs in any spelling, credentials racing a disable, what else a disable
 reaches) and `test_member_disable_migration.py` (the backfill on a populated database).

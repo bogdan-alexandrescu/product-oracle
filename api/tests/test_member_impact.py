@@ -15,10 +15,11 @@ from oracle.auth.service import create_api_token
 from oracle.models import AuditEvent
 from oracle.tenancy import tenant_session
 from tests.review_v2_helpers import DOC, person, setup, states, verdict
-from tests.test_review_v2_security_4 import add_oauth_connection, oauth_grant
-from tests.test_review_v2_security_6 import (  # noqa: F401 (runtime: a fixture)
+from tests.test_review_v2_security import (  # noqa: F401 (runtime: a fixture)
     _at_checkpoint,
     _decide,
+    add_oauth_connection,
+    oauth_grant,
     runtime,
 )
 
