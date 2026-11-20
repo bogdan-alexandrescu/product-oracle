@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:unit": "vitest run --project logic --project render",
+    "test:timing": "vitest run --project timing --no-file-parallelism",
     "build:mock": "NEXT_PUBLIC_API_MOCKS=1 NEXT_DIST_DIR=.next-mock next build",
     "start:mock": "NEXT_PUBLIC_API_MOCKS=1 NEXT_DIST_DIR=.next-mock next start",
     "dev:mock": "NEXT_PUBLIC_API_MOCKS=1 next dev",
@@ -24,14 +26,22 @@
   "devDependencies": {
     "@playwright/test": "1.64.1",
     "@tailwindcss/turbopack": "4.3.3",
-    "@types/node": "20.19.43",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
+    "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.2.1",
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.6",
+    "happy-dom": "21.0.4",
     "openapi-typescript": "7.13.0",
     "pyright": "1.1.414",
     "tailwindcss": "4.3.3",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vite": "8.3.6",
+    "vitest": "5.1.0"
   }
 }

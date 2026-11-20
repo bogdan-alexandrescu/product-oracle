@@ -2,7 +2,7 @@
 
 Team and Engineering keep the written text without what they hide; the cases in
 ``fixtures/audience_redaction.json`` are shared with the web mock
-(web/e2e/audience-redaction.spec.ts runs the same table through
+(web/lib/api/mock/audience.test.ts runs the same table through
 web/lib/api/mock/audience.ts), so the mock and the API agree on every one.
 
 Board (owner decision 2026-10-26) renders from the roadmap items alone: each shown

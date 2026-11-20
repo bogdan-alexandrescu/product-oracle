@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { dateMarks, routeRoadmap, seedRoadmap, type RoadmapContext } from "../lib/api/mock/roadmap";
+import { dateMarks, routeRoadmap, seedRoadmap, type RoadmapContext } from "./roadmap";
 
 // The mock's roadmap alignment and track routes mirror the API's (CR-11). The Plan screen
 // (F1, e2e/plan.spec.ts) reads its own route, GET /v1/plan; these routes have no page yet.

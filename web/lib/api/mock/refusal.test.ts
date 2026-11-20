@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { moment } from "../lib/api/mock/refusal";
+import { moment } from "./refusal";
 
 /**
  * #604 re-review (minor): the mock reads a stored ISO moment as the API does

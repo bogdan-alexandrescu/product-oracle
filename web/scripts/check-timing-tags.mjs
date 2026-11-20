@@ -28,7 +28,13 @@
 // returns one unscaled), never one scaled ((performance.now() - t0) * 100) or moved by an offset
 // ((Date.now() + 0) - t0), in ns, or a timestamp.
 //
+// A Vitest test beside its module (app/, components/, lib/) that measures elapsed time lives in a
+// *.timing.test.ts file and is tagged @timing: npm run test:unit skips those files and CI's
+// e2e-timing job runs them alone (npm run test:timing); in any other *.test.ts(x) file the tag
+// does not help, so it is reported tagged or not.
+//
 //   node scripts/check-timing-tags.mjs              self-test, then every e2e spec (not e2e/real)
+//                                                   and every Vitest test file
 //   node scripts/check-timing-tags.mjs --self-test  the self-test only
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -788,7 +794,7 @@ function coarseGuard(body, sf, helpers, raw, clocks) {
  * gives an imported file's source, or null (the file system by default); `cache` keeps what
  * the files imported measure, for specs under the same root.
  */
-export function untaggedTimingTests(source, fileName = "spec.ts", { root = dirname(resolve(fileName)), read = readSource, cache = new Map() } = {}) {
+export function untaggedTimingTests(source, fileName = "spec.ts", { root = dirname(resolve(fileName)), read = readSource, cache = new Map(), tags = true } = {}) {
   const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const { helpers, raw, clocks } = analyse(sf, resolve(fileName), read, resolve(root), cache);
 
@@ -797,7 +803,7 @@ export function untaggedTimingTests(source, fileName = "spec.ts", { root = dirna
     const kind = testCallKind(n);
     if (kind) {
       const title = titleOf(n, sf);
-      const isTagged = tagged || title.includes(TAG);
+      const isTagged = tags && (tagged || title.includes(TAG));
       const body = n.arguments[n.arguments.length - 1];
       if (kind === "test") {
         const coarse = body && coarseGuard(body, sf, helpers, raw, clocks);
@@ -972,15 +978,23 @@ function selfTest() {
     const got = untaggedTimingTests(src, "/e2e/a.spec.ts", { root: "/e2e", read, cache: shared }).length;
     if (got !== want) failed.push([name, want, got]);
   }
+  // A Vitest file outside *.timing.test.ts runs in parallel: a tag does not excuse it.
+  for (const [name, src, want] of [
+    ["unit file, tagged", tagged, 1],
+    ["unit file, untimed", `test("parses @timing", () => { expect(parse("a")).toBe(1); });`, 0],
+  ]) {
+    const got = untaggedTimingTests(src, "/lib/a.test.ts", { tags: false }).length;
+    if (got !== want) failed.push([name, want, got]);
+  }
   for (const [name, want, got] of failed) console.error(`self-test "${name}": want ${want} untagged, got ${got}`);
   return failed.length === 0;
 }
 
-function specs(dir) {
+function specs(dir, ends = [".spec.ts"]) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((d) => {
     const p = join(dir, d.name);
-    if (d.isDirectory()) return d.name === "real" ? [] : specs(p);
-    return d.name.endsWith(".spec.ts") ? [p] : [];
+    if (d.isDirectory()) return d.name === "real" || d.name === "node_modules" ? [] : specs(p, ends);
+    return ends.some((e) => d.name.endsWith(e)) ? [p] : [];
   });
 }
 
@@ -993,9 +1007,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const web = join(fileURLToPath(import.meta.url), "..", "..");
   const cache = new Map();
   const bad = specs(join(web, "e2e")).flatMap((f) => untaggedTimingTests(readFileSync(f, "utf8"), f, { root: join(web, "e2e"), cache }).map((t) => `${relative(web, f)}:${t.line} ${t.title}`));
-  if (bad.length) {
-    console.error(`These tests measure elapsed time; add ${TAG} to their titles so they run alone in e2e-timing:\n${bad.join("\n")}`);
-    process.exit(1);
-  }
+  const units = ["app", "components", "lib"].flatMap((d) => specs(join(web, d), [".test.ts", ".test.tsx"]));
+  const badUnits = units.flatMap((f) =>
+    untaggedTimingTests(readFileSync(f, "utf8"), f, { root: web, cache, tags: f.endsWith(".timing.test.ts") }).map((t) => `${relative(web, f)}:${t.line} ${t.title}`),
+  );
+  if (bad.length) console.error(`These tests measure elapsed time; add ${TAG} to their titles so they run alone in e2e-timing:\n${bad.join("\n")}`);
+  if (badUnits.length) console.error(`These Vitest tests measure elapsed time; move them to a *.timing.test.ts file beside their module and add ${TAG} to their titles, so they run alone in e2e-timing:\n${badUnits.join("\n")}`);
+  if (bad.length || badUnits.length) process.exit(1);
   console.log("check-timing-tags: every timing test is tagged @timing");
 }

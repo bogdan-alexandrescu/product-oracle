@@ -1,5 +1,5 @@
-import { GOALS, knowManyPlans, seedSimpleMany, seedSimpleRoadmap } from "../lib/api/mock/simple-roadmap";
-import { expect, test } from "./test";
+import { GOALS, knowManyPlans, seedSimpleMany, seedSimpleRoadmap } from "./simple-roadmap";
+import { expect, test } from "vitest";
 
 /**
  * dod-perf review: the mock's 500-item scenario ("simple-500") adds its 12 roadmaps, 8 goals and

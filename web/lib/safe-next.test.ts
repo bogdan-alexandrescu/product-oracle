@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { safeNextPath } from "../lib/safe-next";
+import { safeNextPath } from "./safe-next";
 
 const ORIGIN = "https://oracle.example";
 

@@ -1,8 +1,8 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { sectionFor, toItemRow } from "../components/roadmap/item-row";
-import fixture from "../lib/api/mock/roadmap-items.json";
-import { routeRoadmap, seedRoadmap, type RoadmapContext } from "../lib/api/mock/roadmap";
+import { sectionFor, toItemRow } from "./item-row";
+import fixture from "../../lib/api/mock/roadmap-items.json";
+import { routeRoadmap, seedRoadmap, type RoadmapContext } from "../../lib/api/mock/roadmap";
 
 // E2 Items tab, without a page: the helper that finds the roadmap section naming an item
 // ("Open in document"), and the mock's roadmap-items scenario serving the shared fixture.

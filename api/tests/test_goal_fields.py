@@ -142,7 +142,7 @@ def test_goal_check_warnings():
 
 
 # protects=the text port reads goal text like Home does (parity cases from
-# web/e2e/goal-maths.spec.ts and _goals.ts); fails_when=a figure, unit, range or direction
+# web/app/home/_goals.test.ts and _goals.ts); fails_when=a figure, unit, range or direction
 # reads differently; no_claim=Home's distances.
 @pytest.mark.parametrize(
     ("raw", "value", "unit", "currency", "rng"),

@@ -1,6 +1,6 @@
-// #1557: node --test web/lib/agentSetup.test.ts (Node's own runner; no new package).
+// #1557: npm run test:unit (Vitest, #1583).
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import {
   BINARIES,
   GIT_CONFIG,

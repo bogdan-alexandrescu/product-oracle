@@ -30,7 +30,7 @@ Group E (Engineering alignment) · Size L · Verified against `f972c5e` (merge t
 | Connections | `api/oracle/connections/providers.py:270-345` (`PROVIDERS`: github, slack, notion, fireflies, google); `oauth.py` (`ORACLE_OAUTH_<PROVIDER>_CLIENT_ID/SECRET`) | Per user (S5). No Linear or Jira provider. No company-level connection |
 | Run tokens | `api/oracle/runtokens.py`, `api/oracle/mcp/scopes.py` | The `tracker` area is in no run-token scope (`router.py:171-175`): agents cannot post records. Keep it so |
 | Who verifies dates | SQ19 (`docs/questions.md:190`); `User.engineering_lead` (`api/oracle/setup.py:123`) | Engineering leads and owners verify a date basis; an approver's waits as Proposed |
-| Plan screen | `web/app/plan/_tracks.tsx:389-410`; mock `web/lib/api/mock/roadmap.ts:855-870`; e2e `web/e2e/roadmap-tracks-mock.spec.ts:91-92` | Push to tracker button, refused in mocks too |
+| Plan screen | `web/app/plan/_tracks.tsx:389-410`; mock `web/lib/api/mock/roadmap.ts:855-870`; test `web/lib/api/mock/roadmap.test.ts:91-92` | Push to tracker button, refused in mocks too |
 
 Counts: 0 tracker connections, 0 writes to any tracker, 0 records that Oracle pulled itself.
 
@@ -159,7 +159,7 @@ Migration `0055_tracker_two_way` (next free after `0054_reply_opened`): `tracker
 
 ## Acceptance criteria
 
-1. With the gate off, Push stays refused with today's 409 copy and nothing calls the tracker (existing `roadmap-tracks-mock.spec.ts:91-92` still passes).
+1. With the gate off, Push stays refused with today's 409 copy and nothing calls the tracker (existing `lib/api/mock/roadmap.test.ts:91-92` still passes).
 2. An owner connects Linear on Settings › Connections, sees the workspace name, and turns on "Oracle may create epics and issues" with a reason; the audit log shows `tracker.writes_enabled` with the reason.
 3. An approver maps a track to a team; the status map defaults by state type and saves.
 4. The push sheet lists every epic and issue with its action and the exact text sent; the text contains only title, outcome, the "Planned in Product Oracle" line and the Oracle link (a test asserts the outbound body against the allowlist of fields).

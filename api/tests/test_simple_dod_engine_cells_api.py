@@ -48,7 +48,7 @@ Test cards (protects / fails_when / no_claim):
   proposal made before the owner names another decider waits in the new decider's Inbox
   (not the old one's) and the new decider accepts it; fails_when=it stays in the old
   decider's Inbox, whose accept is refused, so nobody who can decide it sees it;
-  no_claim=the mock (web/e2e/simple-question-route-mock.spec.ts pins it).
+  no_claim=the mock (web/lib/api/mock/simple-questions.test.ts pins it).
 - test_add_key_date_accept_never_overwrites: protects=an add_key_date proposal names a
   fresh key date id, so it can never be "changed since"; accepted while the roadmap's
   draft is in review it is refused 409 writing nothing; accepted later beside an

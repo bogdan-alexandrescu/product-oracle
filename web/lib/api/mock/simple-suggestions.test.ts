@@ -1,8 +1,8 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { routeSimpleChanges } from "../lib/api/mock/simple-changes";
-import { goalId, seedSimpleRoadmap } from "../lib/api/mock/simple-roadmap";
-import { routeGoalSuggestions } from "../lib/api/mock/simple-suggestions";
+import { routeSimpleChanges } from "./simple-changes";
+import { goalId, seedSimpleRoadmap } from "./simple-roadmap";
+import { routeGoalSuggestions } from "./simple-suggestions";
 
 // The mock's goal-suggest routes check as the API's (additions.suggest): the role first, then
 // the goal (no page: the viewer never sees "Suggest", and no screen names an unknown goal).

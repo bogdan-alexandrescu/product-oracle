@@ -1,9 +1,9 @@
 import { readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "vitest";
 
-import { PAGE_CONTEXT, pageNameOnly } from "../lib/page-context";
+import { PAGE_CONTEXT, pageNameOnly } from "./page-context";
 
 /*
  * ask-page-context: every route says what Ask Oracle's "This page" reads (lib/page-context.ts).

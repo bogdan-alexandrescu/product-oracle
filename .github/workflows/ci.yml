@@ -233,6 +233,9 @@ jobs:
           make openapi
           git diff --exit-code -- web/lib/api || (echo "Run 'make openapi' and commit the result" && exit 1)
       - run: npm run lint
+      # Logic and render tests beside their module (#1583); Playwright keeps the flows a person drives.
+      - name: Unit tests (Vitest)
+        run: npm run test:unit
       # A spec that measures elapsed time is tagged @timing, so it runs alone in e2e-timing.
       - name: Timing specs are tagged @timing
         run: node scripts/check-timing-tags.mjs
@@ -323,6 +326,9 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: cd web && npm ci && for i in 1 2 3; do npx playwright install --with-deps chromium && break; [ "$i" = 3 ] && exit 1; echo "Playwright install failed (try $i of 3; an Ubuntu mirror is often down for a minute), retrying in 30 s"; sleep 30; done
       - run: cd web && E2E_TIMING=1 npx playwright test --grep @timing --workers=1
+      # The Vitest timing tests (*.timing.test.ts), alone and one file at a time.
+      - if: success() || failure()
+        run: cd web && npm run test:timing
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

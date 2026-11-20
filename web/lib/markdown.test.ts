@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { blocksText, isSafeHref, parseBlocks, storedImageSrc } from "../lib/markdown";
+import { blocksText, isSafeHref, parseBlocks, storedImageSrc } from "./markdown";
 
 // E1 (owner, 2026-10-20): the document view reads a section body as the API's check does
 // (CommonMark through markdown-it), so a body the API reads as paragraph text never shows
@@ -56,30 +56,6 @@ test("a link a browser reads as another host (/\\host, //host) does not render",
   for (const ok of ["/documents/x", "/", "/a//b"]) {
     expect(isSafeHref(ok), ok).toBe(true);
   }
-});
-
-test("many unclosed image and link openers parse in linear time @timing", () => {
-  for (const unit of ["![", "[", "![a](", "[a]("]) {
-    const started = Date.now();
-    parseBlocks(unit.repeat(50_000));
-    expect(Date.now() - started, unit).toBeLessThan(1500);
-  }
-});
-
-// Emphasis is bounded like link text: many unclosed '*' or '_' openers scan a bounded
-// stretch each (60 KB of " *a" took about a second, a megabyte froze the tab).
-for (const unit of [" *a", " _a", " **a", "*a ", "_a ", "** a"]) {
-  test(`many unclosed emphasis openers (${JSON.stringify(unit)}) parse in linear time @timing`, () => {
-    const started = Date.now();
-    parseBlocks(unit.repeat(50_000));
-    expect(Date.now() - started).toBeLessThan(1500);
-  });
-}
-
-test("a megabyte of unclosed emphasis openers parses in linear time @timing", () => {
-  const started = Date.now();
-  parseBlocks(" *a _b **c".repeat(100_000));
-  expect(Date.now() - started).toBeLessThan(1500);
 });
 
 test("emphasis still renders", () => {

@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { sortGoals } from "../lib/goal-order";
+import { sortGoals } from "./goal-order";
 
 /**
  * goal-order: goals tied on position and creation order by title, case-folded and then as

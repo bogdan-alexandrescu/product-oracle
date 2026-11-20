@@ -1,7 +1,7 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
-import { routeQuestionChanges, seedQuestions } from "../lib/api/mock/simple-questions";
-import { stableUuid } from "../lib/api/mock/ids";
+import { routeQuestionChanges, seedQuestions } from "./simple-questions";
+import { stableUuid } from "./ids";
 
 // The mock's PRD question changes route as the API's (changes.current_route): no page shows a
 // question proposal's route (the mock's Inbox lists roadmap proposals only).

@@ -1,6 +1,6 @@
-// #1560: node --test web/lib/coderabbitReviewStatus.test.ts (Node's own runner; no new package).
+// #1560: npm run test:unit (Vitest, #1583).
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import { reviewStatus } from "./coderabbitReviewStatus.ts";
 import type { PrView } from "./coderabbitReviewStatus.ts";
 

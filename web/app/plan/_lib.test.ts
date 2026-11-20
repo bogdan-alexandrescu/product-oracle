@@ -1,5 +1,5 @@
-import { wantedRow, type PlanItem } from "../app/plan/_lib";
-import { expect, test } from "./test";
+import { wantedRow, type PlanItem } from "./_lib";
+import { expect, test } from "vitest";
 
 /**
  * Card plan-open-from-simple (fix round): protects = a /plan?item= link that names a roadmap

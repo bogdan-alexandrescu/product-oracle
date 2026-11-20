@@ -1,4 +1,4 @@
-import { expect, test } from "./test";
+import { expect, test } from "vitest";
 
 /*
  * shared-reads-newer-read (lib/api/shared-reads): a shared read's first try that fails after a newer read
@@ -15,7 +15,7 @@ type Pending = { req: Request; answer: (res: Response) => void; fail: (err: Erro
 
 async function setup() {
   (globalThis as { window?: unknown }).window ??= new EventTarget();
-  const { sharedReads, forgetReads } = await import("../lib/api/shared-reads");
+  const { sharedReads, forgetReads } = await import("./shared-reads");
   forgetReads();
   const calls: Pending[] = [];
   const read = sharedReads(

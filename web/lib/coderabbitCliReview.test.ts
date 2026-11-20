@@ -1,6 +1,6 @@
-// #1560: node --test web/lib/coderabbitCliReview.test.ts (Node's own runner; no new package).
+// #1560: npm run test:unit (Vitest, #1583).
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import { adjudicate, exitCodeFor } from "./coderabbitCliReview.ts";
 
 const files = ["web/lib/example.ts", "api/oracle/example.py"];
